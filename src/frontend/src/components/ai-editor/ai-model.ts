@@ -1,0 +1,70 @@
+import Quill from 'quill';
+
+import aiIconUrl from '@images/ai.svg';
+import deleteIconUrl from '@images/delet.svg';
+import editorIconUrl from '@images/editor.svg';
+
+const Embed = Quill.import('blots/embed') as any;
+
+// AI智能体数据接口
+interface AIAgentData {
+  prompt: string;
+  id: string;
+}
+
+// 自定义AI智能体块 - 使用Embed blot以便insertEmbed可以工作
+class AIAgentBlot extends Embed {
+  static create(value: string | AIAgentData): HTMLElement {
+    const node = super.create() as HTMLElement;
+
+    // 处理value参数，确保是对象格式
+    const data: AIAgentData = typeof value === 'object'
+      ? value
+      : { prompt: value || '', id: Date.now().toString() };
+
+    node.setAttribute('data-type', 'ai-agent');
+    node.setAttribute('data-prompt', data.prompt || '');
+    node.setAttribute('data-id', data.id || Date.now().toString());
+    node.setAttribute('contenteditable', 'false');
+
+    // 转义HTML以防止XSS
+    const escapeHtml = (text: string): string => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    };
+
+    // 创建块内容
+    node.innerHTML = `
+      <div class="ai-agent-block">
+        <img class="ai-agent-ai" src="${aiIconUrl}" width="24" height="17" />
+        <div class="ai-agent-content">
+          <div class="ai-agent-label">AI智能体</div>
+          <div class="ai-agent-prompt">${escapeHtml(data.prompt || '点击编辑设置AI提示词')}</div>
+        </div>
+        <div class="ai-agent-actions">
+            <img class="ai-agent-edit" src="${editorIconUrl}" alt="编辑" width="16" height="16" />
+            <img class="ai-agent-delete" src="${deleteIconUrl}" alt="删除" width="16" height="16" />
+        </div>
+      </div>
+    `;
+
+    return node;
+  }
+
+  static value(node: HTMLElement): AIAgentData {
+    return {
+      id: node.getAttribute('data-id') || '',
+      prompt: node.getAttribute('data-prompt') || '',
+    };
+  }
+}
+
+AIAgentBlot.blotName = 'aiAgent';
+AIAgentBlot.tagName = 'span';
+AIAgentBlot.className = 'ql-ai-agent';
+
+Quill.register(AIAgentBlot);
+
+export default AIAgentBlot;
+
