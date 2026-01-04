@@ -7,6 +7,8 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AiEditor: typeof import('./src/components/ai-editor/index.vue')['default']
+    AiModel: typeof import('./src/components/ai-editor/ai-model.vue')['default']
     AnalysisList: typeof import('./src/components/skeleton-loading/components/analysis-list.vue')['default']
     ApplicationParameter: typeof import('./src/components/application-parameter/index.vue')['default']
     AuditCollapsePanel: typeof import('./src/components/audit-collapse-panel/index.vue')['default']
