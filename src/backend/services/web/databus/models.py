@@ -156,10 +156,18 @@ class CollectorConfig(SoftDeleteModel):
     auth_rt = models.BooleanField(gettext_lazy("已授权RT"), default=False)
 
     record_log_type = models.CharField(
-        gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True
+        gettext_lazy("记录日志方式"),
+        max_length=64,
+        choices=RecordLogTypeChoices.choices,
+        default=RecordLogTypeChoices.SDK,
+        blank=True,
     )
     select_sdk_type = models.CharField(
-        gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True
+        gettext_lazy('SDK类型'),
+        max_length=64,
+        choices=SelectSdkTypeChoices.choices,
+        default=SelectSdkTypeChoices.PYTHON_SDK,
+        blank=True,
     )
 
     class Meta:
