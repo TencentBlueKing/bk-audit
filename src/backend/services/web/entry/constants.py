@@ -82,6 +82,7 @@ PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
 BKVISION_WEB_URL_KEY = "bkvision_web_url"
 
 SDK_CONFIG_KEY = "sdk_config"
+AUDIT_DOC_CONFIG_KEY = "audit_doc_config"
 
 
 def get_manual_event_strategy_config(rt_id):
