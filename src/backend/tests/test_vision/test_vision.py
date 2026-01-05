@@ -27,6 +27,8 @@ from .constants import (
     GET_DATA,
     META_QUERY_PARAMS,
     META_QUERY_RESPONSE,
+    TEST_VARIABLE_PARAMS,
+    TEST_VARIABLE_RESPONSE,
 )
 
 
@@ -71,3 +73,13 @@ class TestVision(TestCase):
         self.assertTrue(result['result'])
         mock_cache_set.assert_called_once()
         mock_cache_get.assert_called_once()
+
+    @mock.patch(
+        "api.bk_vision.default.QueryTestVariable.perform_request",
+        mock.Mock(return_value=TEST_VARIABLE_RESPONSE['data']),
+    )
+    def test_variable(self):
+        """测试变量数据接口"""
+        result = self.resource.vision.query_test_variable(**TEST_VARIABLE_PARAMS)
+        self.assertIn("values", result)
+        self.assertEqual(len(result["values"]), 2)
