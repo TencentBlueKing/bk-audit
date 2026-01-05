@@ -33,9 +33,7 @@
               <template v-if="isHide">
                 <span class="auth-value">{{ data.token }}</span>
               </template>
-              <div
-                v-else
-                class="encryption-wrapper">
+              <div v-else>
                 <span
                   v-for="i in 7"
                   :key="i"
@@ -75,13 +73,52 @@
         </render-info-item>
       </render-info-block>
     </div>
+    <p
+      class="title"
+      style="margin-top: 24px;">
+      {{ t('日志记录信息') }}
+    </p>
+    <div class="log-record-content">
+      <render-info-block>
+        <render-info-item :label="t('SDK类型')">
+          <a
+            :href="selectedSdkUrl"
+            target="_blank">{{ selectedSdkUrl }}</a>
+        </render-info-item>
+      </render-info-block>
+      <render-info-block>
+        <render-info-item :label="t('上报日志须知')">
+          <div>
+            <div>
+              {{ t('我已阅读') }}
+              <a
+                :href="configData.audit_doc_config?.audit_access_guide"
+                target="_blank">{{ t('《审计中心接入要求》') }}</a>
+            </div>
+            <div>
+              {{ t('我已了解') }}
+              <a
+                :href="configData.audit_doc_config?.audit_operation_log_record_standards"
+                target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
+            </div>
+          </div>
+        </render-info-item>
+      </render-info-block>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
   import {
+    computed,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
+
+  import useRequest from '@hooks/use-request';
 
   import {
     execCopy,
@@ -95,13 +132,45 @@
       token: string;
       hosts: string[];
       collector_config_name: string;
+      select_sdk_type?: string;
     };
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
 
   const { t } = useI18n();
   const isHide = ref(false);
+
+  const selectSdkTypeList = [
+    {
+      label: 'PYTHON_SDK',
+      name: 'Python SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-python-sdk',
+    },
+    {
+      label: 'JAVA_SDK',
+      name: 'Java SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-java-sdk',
+    },
+    {
+      label: 'GO_SDK',
+      name: 'Go SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-go-sdk',
+    },
+  ];
+
+  // 根据选中的 SDK 类型获取对应的 URL
+  const selectedSdkUrl = computed(() => {
+    const selectedSdk = selectSdkTypeList.find(item => item.label === props.data.select_sdk_type);
+    return selectedSdk?.url || 'https://github.com/TencentBlueKing/bk-audit-python-sdk';
+  });
+
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 </script>
 <style lang="postcss" scoped>
 .log-collection-detail-box {
@@ -114,6 +183,12 @@
       .auth-field {
         width: 600px;
       }
+    }
+  }
+
+  .log-record-content {
+    :deep(.render-info-item) {
+      flex: 1;
     }
   }
 
@@ -148,10 +223,6 @@
         width: 251px;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-
-      .encryption-wrapper {
-        flex: 1;
       }
 
       .encryption-dot {
