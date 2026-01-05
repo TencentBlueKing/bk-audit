@@ -109,24 +109,20 @@ class StorageTest(TestCase):
                 "hot_attr_name": "",
                 "hot_attr_value": "",
                 "warm_attr_name": "",
-                "warm_attr_value": ""
+                "warm_attr_value": "",
             },
             "source_type": "other",
-            "visible_config": {
-                "visible_type": "current_biz",
-                "visible_bk_biz": [],
-                "bk_biz_labels": {}
-            },
+            "visible_config": {"visible_type": "current_biz", "visible_bk_biz": [], "bk_biz_labels": {}},
             "setup_config": {
                 "retention_days_default": 30,
                 "number_of_replicas_default": 1,
                 "retention_days_max": 30,
                 "number_of_replicas_max": 1,
                 "es_shards_default": 3,
-                "es_shards_max": 512
+                "es_shards_max": 512,
             },
             "admin": ["admin", ""],
-            "description": "审计中心存储集群"
+            "description": "审计中心存储集群",
         }
 
         serializer = StorageCustomOptionSerializer(data=test_data)
