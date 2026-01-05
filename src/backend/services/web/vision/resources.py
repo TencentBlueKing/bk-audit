@@ -116,8 +116,8 @@ class QueryShareDetail(BKVision):
         return VisionHandler().query_meta(params=validated_request_data)
 
 
-class TestVariable(QueryMixIn, BKVision):
+class QueryTestVariable(QueryMixIn, BKVision):
     name = gettext_lazy("测试变量数据")
-
-    def perform_request(self, validated_request_data):
-        return api.bk_vision.test_variable(**validated_request_data)
+    audit_action = ActionEnum.VIEW_BASE_PANEL
+    audit_resource_type = PANEL
+    query_method = 'query_test_variable'

@@ -101,7 +101,7 @@ class CheckShareAuth(BKVision):
     action = "/api/v1/share/check_share_auth/"
 
 
-class TestVariable(BKVision):
+class QueryTestVariable(BKVision):
     name = gettext_lazy("测试变量数据")
     method = "POST"
     action = "/api/v1/variable/test/"
