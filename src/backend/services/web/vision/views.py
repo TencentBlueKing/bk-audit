@@ -77,7 +77,7 @@ class ToolVisionPermission(BasePermission):
         with contextlib.suppress(Exception):
             for k, v in params.items():
                 if k.startswith("constants[") and k.endswith("]"):
-                    inner_key = k[len("constants[") : -1]
+                    inner_key = k[len("constants["): -1]
                     if inner_key:
                         extracted[inner_key] = v
         caller_params = [
@@ -193,6 +193,7 @@ class FieldViewSet(API200ViewSet, BKVisionInstanceViewSet):
 class VariableViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_variable_data, endpoint="query"),
+        ResourceRoute("POST", resource.vision.query_test_variable, endpoint="test"),
     ]
 
 

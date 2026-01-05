@@ -87,6 +87,9 @@ class VisionHandler:
     def query_variable_data(self, params: dict) -> dict:
         return api.bk_vision.query_variable_data(**params)
 
+    def query_test_variable(self, params: dict) -> dict:
+        return api.bk_vision.query_test_variable(**params)
+
 
 class BasicVisionHandlerMixIn(abc.ABC):
     """基础审计报表数据处理器，支持某种action的基础过滤"""
