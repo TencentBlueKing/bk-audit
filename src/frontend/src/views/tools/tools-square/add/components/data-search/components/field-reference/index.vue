@@ -639,15 +639,19 @@
   // 获取字段显示名称
   const getFieldDisplayName = (toolUid: string, sourceField: string) => {
     const fieldMap = toolInputVariableMap.value.get(toolUid);
+    // 如果sourceField 结尾是 body、path、query，显示时去掉结尾
+    let cleanedField = sourceField.replace(/(body|path|query)$/, '');
+    // 特殊处理：end_timestart_time 转换成 start_time/end_time
+    if (cleanedField === 'end_timestart_time') {
+      cleanedField = 'start_time/end_time';
+    }
     if (fieldMap && fieldMap.has(sourceField)) {
       const fieldInfo = fieldMap.get(sourceField);
       const displayName = fieldInfo?.display_name;
-      // 如果sourceField 结尾是 body、path、query，显示时去掉结尾
-      const cleanedField = sourceField.replace(/(body|path|query)$/, '');
       return displayName ? `${cleanedField}(${displayName})` : cleanedField;
     }
-    // 找不到时也清理后返回
-    return sourceField.replace(/(body|path|query)$/, '');
+    // 找不到时也返回清理后的字段名
+    return cleanedField;
   };
 
   const handleOpenTool = () => {
