@@ -186,7 +186,7 @@
                 enum_mappings: null,
                 field_config: {
                   field_type: 'table',
-                  output_fields: configItem?.list.map((listItem: any) => ({
+                  output_fields: configItem?.list?.map((listItem: any) => ({
                     raw_name: listItem.name,
                     json_path: listItem.json_path,
                     description: listItem?.description || '',

@@ -383,11 +383,12 @@
     changeMethod: (method: string) => void;
   }
   interface Emits {
-    (e: 'configChange',): void;
+    (e: 'configChange', isSame: boolean): void;
   }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const initList = ref<any[]>([]);
   const { t } = useI18n();
   const formData = ref();
   const rules = ref();
@@ -628,9 +629,39 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     return haveEmptyVarName || haveSameVarName || haveDefaultValueError;
   };
   const isSetConfigsSuccess = ref(false);
-  watch(() => paramList.value, () => {
+  watch(() => paramList.value, (newValue) => {
     if (isSetConfigsSuccess.value && props.isEditMode) {
-      emits('configChange');
+      // 增减了参数
+      if (newValue.length !== initList.value.length) {
+        emits('configChange', true);
+      } else {
+        // 判断特定字段是否改变
+        const hasChanged = newValue.some((item: any, index: number) => {
+          const oldItem = initList.value[index];
+          // 如果 oldItem 不存在，认为已改变
+          if (!oldItem) {
+            return true;
+          }
+          if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
+            // 时间范围选择器：检验split_config, position, time_range, field_category
+            return JSON.stringify(item.split_config) !== JSON.stringify(oldItem.split_config)
+              || item.position !== oldItem.position
+              || item.field_category !== oldItem.field_category
+              || JSON.stringify(item.time_range) !== JSON.stringify(oldItem.time_range);
+          }
+          // 普通字段：检验var_name, position, default_value, field_category
+          return item.var_name !== oldItem.var_name
+            || item.position !== oldItem.position
+            || item.field_category !== oldItem.field_category
+            || JSON.stringify(item.default_value) !== JSON.stringify(oldItem.default_value);
+        });
+
+        if (hasChanged) {
+          emits('configChange', true);
+        } else {
+          emits('configChange', false);
+        }
+      }
     }
   }, {
     deep: true,
@@ -670,6 +701,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       });
       setTimeout(() => {
         isSetConfigsSuccess.value = true;
+        initList.value = JSON.parse(JSON.stringify(paramList.value));
       }, 0);
     }
   });
