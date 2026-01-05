@@ -28,6 +28,7 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
+    AUDIT_DOC_CONFIG_KEY,
     BKBASE_WEB_URL_KEY,
     BKVISION_WEB_URL_KEY,
     DEFAULT_QUERY_STRING_HELP_ENV_KEY,
@@ -119,6 +120,7 @@ class EntryHandler(object):
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
             "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
+            "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
         }
         return data
 

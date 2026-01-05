@@ -45,6 +45,7 @@ from services.web.databus.storage.serializers import (
 )
 from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
+    AUDIT_DOC_CONFIG_KEY,
     INIT_ASSET_FINISHED_KEY,
     INIT_DORIS_FISHED_KEY,
     INIT_ES_FISHED_KEY,
@@ -119,6 +120,7 @@ class SystemInitHandler:
         self.init_system()
         self.init_asset()
         self.init_sdk_config()
+        self.init_doc_config()
         self.init_system_rule_audit()
         print("[Main] Init Finished")
 
@@ -242,6 +244,13 @@ class SystemInitHandler:
             "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
         }
         GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
+
+    def init_doc_config(self):
+        audit_doc_config = {
+            "audit_access_guide": "https://iwiki.woa.com/p/4013675599 ",
+            "audit_operation_log_recording_standards": "https://iwiki.woa.com/p/4016811346 ",
+        }
+        GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""
