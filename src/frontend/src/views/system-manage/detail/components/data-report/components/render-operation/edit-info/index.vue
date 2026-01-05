@@ -135,14 +135,14 @@
                 :label="Boolean(true)">
                 {{ t('我已阅读') }}
                 <a
-                  :href="configData.audit_doc_config.audit_access_guide"
+                  :href="configData.audit_doc_config?.audit_access_guide"
                   target="_blank">{{ t('《审计中心接入要求》') }}</a>
               </div>
               <div
                 :label="Boolean(true)">
                 {{ t('我已了解') }}
                 <a
-                  :href="configData.audit_doc_config.audit_operation_log_record_standards"
+                  :href="configData.audit_doc_config?.audit_operation_log_record_standards"
                   target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
               </div>
             </div>

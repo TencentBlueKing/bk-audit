@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -228,9 +228,6 @@
     manual: true,
   });
 
-  onMounted(() => {
-    console.log(route.params);
-  });
 
   const handleNextStep = () => {
     emits('change', 2, formData.value);

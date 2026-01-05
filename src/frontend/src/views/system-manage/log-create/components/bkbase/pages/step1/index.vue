@@ -22,7 +22,8 @@
       <audit-form
         ref="formRef"
         class="bkbase-form"
-        :model="localFormData">
+        :model="localFormData"
+        :rules="formRules">
         <!-- 源日志信息 -->
         <div class="content-section">
           <div class="section-header">
@@ -137,20 +138,12 @@
           <bk-form-item
             :label="t('上报日志须知')"
             property="notice"
-            required
-            :rules="[
-              {
-                message: t('请先阅读上报日志须知'),
-                trigger: 'change',
-                validator: (value: any) => {
-                  return !!value.read_requirement && !!value.read_standard;
-                },
-              },
-            ]">
+            required>
             <div class="log-create-notice">
               <bk-radio
                 v-model="localFormData.notice.read_requirement"
-                :label="Boolean(true)">
+                label="true"
+                @change="handleNoticeChange">
                 {{ t('我已阅读') }}
                 <a
                   :href="configData?.audit_doc_config?.audit_access_guide"
@@ -159,7 +152,8 @@
               <div>
                 <bk-radio
                   v-model="localFormData.notice.read_standard"
-                  :label="Boolean(true)">
+                  label="true"
+                  @change="handleNoticeChange">
                   {{ t('我已了解') }}
                   <a
                     :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
@@ -240,6 +234,21 @@
   const initBizList = ref<Array<BizModel>>([]);
   const isMouseWheelMoving = ref(false);
   const isSubmiting = ref(false);
+
+  const formRules = {
+    notice: [
+      {
+        message: t('请先阅读上报日志须知'),
+        trigger: 'change',
+        validator: (value: any) => !!value.read_requirement && !!value.read_standard,
+      },
+    ],
+  };
+
+  // 手动触发 notice 表单项校验
+  const handleNoticeChange = () => {
+    formRef.value?.validate('notice');
+  };
 
   const dataSourceBizList = computed(() => bizList.value.filter(item => item.space_type_id === 'bkcc'));
 
