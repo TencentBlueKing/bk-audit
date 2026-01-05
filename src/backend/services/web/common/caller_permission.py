@@ -249,6 +249,8 @@ def validate_tool_variables_with_risk(
         match_result = []
         for rule in rules:
             if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
+                if rule["target"] in (None, ""):
+                    continue
                 if value != rule["target"]:
                     match_result.append(False)
                     continue
