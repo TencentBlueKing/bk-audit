@@ -200,14 +200,17 @@
   }
 
   interface Emits {
-    (e: 'getIsDoneDeBug', val: boolean, isEditInfo: boolean, isSuccess: boolean): void;
+    (e: 'getIsDoneDeBug', val: boolean, isEditInfo: boolean, isSuccess: boolean, isSame: boolean): void;
   }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const deDugRef = ref();
+  const isSameInitApiConfig = ref(true); // 是否与ApiConfig初始化数据相同
+  const isSameInitParamsConfig = ref(true); // 是否与ParamsConfig初始化数据相同
   const formRef = ref();
+  const initformData = ref();
   const isSetConfigsSuccess = ref(false);
   const editModeIseditInfo = ref(false); // 编辑模式是否编辑信息
   const resultConfigRef = ref();
@@ -361,7 +364,8 @@
       resultData.value = res;
       isSuccess.value = isSucc;
       isDoneDeBug.value = true;
-      emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value);
+      isSameInitParamsConfig.value = isSucc;
+      emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
     });
   };
 
@@ -378,19 +382,66 @@
   };
 
   // 参数配置改变
-  const handleParamsConfigChange = () => {
+  const handleParamsConfigChange = (isNOSame: boolean) => {
+    console.log('参数配置改变',  isNOSame);
+    // isNOSame 为 false 时，表示参数配置没有改变，不需要重新调试
+    isSameInitParamsConfig.value = !isNOSame;
     isSuccess.value = false;
     isDoneDeBug.value = false;
     editModeIseditInfo.value = true;
-    emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value);
+    emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
   };
 
-  watch(() => formData.value.api_config, () => {
+  // 判断是否只是改变了headers的description字段
+  const isOnlyHeadersDescriptionChanged = (newValue: any, initValue: any): boolean => {
+    if (!initValue) return false;
+
+    // 比较除了headers之外的所有字段
+    const newConfigWithoutHeaders = { ...newValue };
+    const initConfigWithoutHeaders = { ...initValue };
+    delete newConfigWithoutHeaders.headers;
+    delete initConfigWithoutHeaders.headers;
+
+    if (JSON.stringify(newConfigWithoutHeaders) !== JSON.stringify(initConfigWithoutHeaders)) {
+      return false;
+    }
+
+    // 比较headers数组的长度
+    if (newValue.headers?.length !== initValue.headers?.length) {
+      return false;
+    }
+
+    // 比较headers数组中每一项的key和value，忽略description
+    return newValue.headers.every((newHeader: any, index: number) => {
+      const initHeader = initValue.headers[index];
+      if (!initHeader) return false;
+      return newHeader.key === initHeader.key && newHeader.value === initHeader.value;
+    });
+  };
+
+  watch(() => formData.value.api_config, (newValue) => {
     isSuccess.value = false;
     isDoneDeBug.value = false;
     if (isSetConfigsSuccess.value) {
-      editModeIseditInfo.value = true;
-      emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value);
+      console.log('newValue', newValue, initformData.value.api_config);
+      console.log('>>', JSON.stringify(newValue) === JSON.stringify(initformData.value?.api_config));
+      // 判断newValue 与initformData.value是否完全相同
+      if (initformData.value && JSON.stringify(newValue) === JSON.stringify(initformData.value.api_config)) {
+        editModeIseditInfo.value = false;
+        isSameInitApiConfig.value = true;
+        emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
+      } else {
+        // 如果只是改变了headers数组每一项的description，那么不需要重新调试
+        if (isOnlyHeadersDescriptionChanged(newValue, initformData.value?.api_config)) {
+          isSameInitApiConfig.value = true;
+          editModeIseditInfo.value = false;
+          emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
+        } else {
+          isSameInitApiConfig.value = false;
+          editModeIseditInfo.value = true;
+          emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
+        }
+      }
     }
   }, {
     deep: true,
@@ -400,7 +451,7 @@
     fetchGlobalChoices();
     // 初始化调试结果
     if (!props.isEditMode) {
-      emits('getIsDoneDeBug', false, false, false);
+      emits('getIsDoneDeBug', false, false, false,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
     }
   });
   defineExpose<Exposes>({
@@ -435,7 +486,8 @@
           };
         }
         setTimeout(() => {
-          emits('getIsDoneDeBug', false, false, true);
+          emits('getIsDoneDeBug', false, false, true,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
+          initformData.value = JSON.parse(JSON.stringify(formData.value));
           isSetConfigsSuccess.value = true;
         }, 0);
         initResultConfig(data);
