@@ -22,7 +22,8 @@
       <audit-form
         ref="formRef"
         class="collector-form"
-        :model="localFormData">
+        :model="localFormData"
+        :rules="formRules">
         <div class="content-section">
           <div class="section-header">
             <span class="section-title">{{ t('前置：记录日志') }}</span>
@@ -77,20 +78,12 @@
           <bk-form-item
             :label="t('上报日志须知')"
             property="notice"
-            required
-            :rules="[
-              {
-                message: t('请先阅读上报日志须知'),
-                trigger: 'change',
-                validator: (value: any) => {
-                  return !!value.read_requirement && !!value.read_standard;
-                },
-              },
-            ]">
+            required>
             <div class="log-create-notice">
               <bk-radio
                 v-model="localFormData.notice.read_requirement"
-                :label="Boolean(true)">
+                :label="Boolean(true)"
+                @change="handleNoticeChange">
                 {{ t('我已阅读') }}
                 <a
                   :href="configData?.audit_doc_config?.audit_access_guide"
@@ -99,7 +92,8 @@
               <div>
                 <bk-radio
                   v-model="localFormData.notice.read_standard"
-                  :label="Boolean(true)">
+                  :label="Boolean(true)"
+                  @change="handleNoticeChange">
                   {{ t('我已了解') }}
                   <a
                     :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
@@ -112,17 +106,11 @@
           <bk-form-item
             :label="t('是否已上报')"
             property="is_reported"
-            required
-            :rules="[
-              {
-                message: t('请先选择是否已上报'),
-                trigger: 'change',
-                validator: (value: boolean) => !!value,
-              },
-            ]">
+            required>
             <bk-radio
               v-model="localFormData.is_reported"
-              :label="Boolean(true)">
+              :label="Boolean(true)"
+              @change="handleReportedChange">
               {{ t('已按照标准记录日志') }}
             </bk-radio>
           </bk-form-item>
@@ -186,6 +174,33 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.step1-action');
 
   const localFormData = ref({ ...props.formData });
+
+  const formRules = {
+    notice: [
+      {
+        message: t('请先阅读上报日志须知'),
+        trigger: 'change',
+        validator: (value: any) => !!value.read_requirement && !!value.read_standard,
+      },
+    ],
+    is_reported: [
+      {
+        message: t('请先选择是否已上报'),
+        trigger: 'change',
+        validator: (value: boolean) => !!value,
+      },
+    ],
+  };
+
+  // 手动触发 notice 表单项校验
+  const handleNoticeChange = () => {
+    formRef.value?.validate('notice');
+  };
+
+  // 手动触发 is_reported 表单项校验
+  const handleReportedChange = () => {
+    formRef.value?.validate('is_reported');
+  };
 
   const isEditMode = route.name === 'logCollectorEdit';
 

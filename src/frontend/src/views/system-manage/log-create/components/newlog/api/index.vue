@@ -21,7 +21,8 @@
     <bk-form
       ref="formRef"
       class="api-form"
-      :model="formData">
+      :model="formData"
+      :rules="formRules">
       <!-- 新建数据上报 -->
       <div class="content-section">
         <div class="log-create-header">
@@ -43,9 +44,9 @@
                 <auth-button
                   v-if="!data.enabled"
                   action-id="edit_system"
-                  outline
                   :resource="route.params.systemId"
                   style="margin-left: 19px;"
+                  text
                   theme="primary">
                   {{ t('点击创建后，立即生成token') }}
                 </auth-button>
@@ -174,20 +175,12 @@
         <bk-form-item
           :label="t('上报日志须知')"
           property="notice"
-          required
-          :rules="[
-            {
-              message: t('请先阅读上报日志须知'),
-              trigger: 'change',
-              validator: (value: any) => {
-                return !!value.read_requirement && !!value.read_standard;
-              },
-            },
-          ]">
+          required>
           <div class="log-create-notice">
             <bk-radio
               v-model="formData.notice.read_requirement"
-              label="true">
+              label="true"
+              @change="handleNoticeChange">
               {{ t('我已阅读') }}
               <a
                 :href="configData?.audit_doc_config?.audit_access_guide"
@@ -196,7 +189,8 @@
             <div>
               <bk-radio
                 v-model="formData.notice.read_standard"
-                label="true">
+                label="true"
+                @change="handleNoticeChange">
                 {{ t('我已了解') }}
                 <a
                   :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
@@ -227,7 +221,7 @@
   <data-inspection v-else />
 </template>
 <script setup lang="ts">
-  import { computed, inject, onBeforeUnmount, type Ref, ref } from 'vue';
+  import { computed, inject, type Ref, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -261,6 +255,16 @@
       read_standard: '',
     },
   });
+
+  const formRules = {
+    notice: [
+      {
+        message: t('请先阅读上报日志须知'),
+        trigger: 'change',
+        validator: (value: any) => !!value.read_requirement && !!value.read_standard,
+      },
+    ],
+  };
 
   const selectSdkTypeList = ref([
     {
@@ -320,6 +324,9 @@
       data.value.enabled = res;
       // 用于创建表单校验
       formData.value.enabled = res;
+
+      isCreating.value = false;
+      currentStep.value = 2;
     },
   });
 
@@ -376,20 +383,17 @@
     }
   };
 
-  const handleCreate = () => {
-    isCreating.value = true;
-    formRef.value.validate().then(() => {
-      handleToken();
-    })
-      .finally(() => {
-        isCreating.value = false;
-        currentStep.value = 2;
-      });
+  // 手动触发 notice 表单项校验
+  const handleNoticeChange = () => {
+    formRef.value?.validate('notice');
   };
 
-  onBeforeUnmount(() => {
-    clearInterval(timer.value);
-  });
+  const handleCreate = () => {
+    formRef.value.validate().then(() => {
+      isCreating.value = true;
+      handleToken();
+    });
+  };
 </script>
 <style scoped lang="postcss">
 .log-create-api-push {
