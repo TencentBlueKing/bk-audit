@@ -114,3 +114,10 @@ class QueryShareDetail(BKVision):
 
     def perform_request(self, validated_request_data):
         return VisionHandler().query_meta(params=validated_request_data)
+
+
+class TestVariable(BKVision):
+    name = gettext_lazy("测试变量数据")
+
+    def perform_request(self, validated_request_data):
+        return api.bk_vision.test_variable(**validated_request_data)

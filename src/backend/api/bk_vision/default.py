@@ -99,3 +99,9 @@ class CheckShareAuth(BKVision):
     name = gettext_lazy("检查分享权限")
     method = "GET"
     action = "/api/v1/share/check_share_auth/"
+
+
+class TestVariable(BKVision):
+    name = gettext_lazy("测试变量数据")
+    method = "POST"
+    action = "/api/v1/variable/test/"
