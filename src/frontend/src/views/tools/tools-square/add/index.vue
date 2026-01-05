@@ -355,6 +355,13 @@
       }>
       sql: string;
       uid: string;
+      output_config: {
+        enable_grouping: boolean;
+        groups: Array<{
+          name: string;
+          output_fields: any[];
+        }>;
+      };
     };
   }
 
@@ -440,6 +447,10 @@
           mappings: [],
         },
       }],
+      output_config: {
+        enable_grouping: false,
+        groups: [],
+      },
       sql: '',
       uid: '',  // BKVision图表uid
     },
@@ -805,8 +816,6 @@
     }
 
     Promise.all(tastQueue).then(() => {
-      isCreating.value = true;
-
       // 获取组件配置
       if (comRef.value?.getFields) {
         if (formData.value.tool_type === 'bk_vision') {
@@ -819,6 +828,27 @@
         }
       }
       const data = _.cloneDeep(formData.value);
+      const groups = data.config.output_config?.groups || [];
+      const enableGrouping = data.config.output_config?.enable_grouping || false;
+      // 判断 groups 数组中的output_fields数组是否有空的output_fields
+      let hasEmptyOutputFields = false;
+      if (groups.length > 0) {
+        groups.forEach((item: any) => {
+          if (item.output_fields.length === 0) {
+            hasEmptyOutputFields = true;
+            if (enableGrouping) {
+              messageWarn(item.name + t(' 查询结果设置未设置'));
+            } else {
+              messageWarn(t('查询结果设置未设置'));
+            }
+          }
+        });
+
+        if (hasEmptyOutputFields) {
+          return;
+        }
+      }
+      isCreating.value = true;
 
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
@@ -841,7 +871,7 @@
   };
   const isApiDoneDeBug = ref(false);
   // api工具获取是否调试成功
-  const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean) => {
+  const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean, isSame: boolean) => {
     // 创建时 api 判断是否调试成功
     if (!isEditMode) {
       if (!val) {
@@ -850,14 +880,19 @@
         isApiDoneDeBug.value = !isSuccess;
       }
     } else {
-      // 编辑时 api 判断是否调试成功
-      if (!isEditInfo) { // 没有修改参数
+      // isSame 为 true 时，表示参数配置没有改变，不需要重新调试
+      if (isSame) {
         isApiDoneDeBug.value = false;
       } else { // 修改了参数
-        if (!val) {
-          isApiDoneDeBug.value = true;
-        } else {
-          isApiDoneDeBug.value = !isSuccess;
+        // 编辑时 api 判断是否调试成功
+        if (!isEditInfo) { // 没有修改参数
+          isApiDoneDeBug.value = false;
+        } else { // 修改了参数
+          if (!val) {
+            isApiDoneDeBug.value = true;
+          } else {
+            isApiDoneDeBug.value = !isSuccess;
+          }
         }
       }
     }
