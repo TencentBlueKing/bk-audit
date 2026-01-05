@@ -3,14 +3,47 @@
 from django.db import migrations, models
 
 
-class Migration(migrations.Migration):
+class AddFieldIfNotExists(migrations.AddField):
+    """
+    自定义操作：仅当字段不存在时才执行 AddField
+    """
 
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        # 获取目标模型和表名
+        to_model = to_state.apps.get_model(app_label, self.model_name)
+        table_name = to_model._meta.db_table
+
+        # 检查字段是否在数据库中存在
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) 
+                FROM information_schema.columns 
+                WHERE table_schema = DATABASE() 
+                AND table_name = %s 
+                AND column_name = %s
+            """,
+                [table_name, self.name],
+            )
+
+            column_exists = cursor.fetchone()[0] > 0
+
+            if not column_exists:
+                # 字段不存在，执行父类的添加操作
+                super().database_forwards(app_label, schema_editor, from_state, to_state)
+                print(f"字段 '{self.name}' 不存在，已添加")
+            else:
+                # 字段已存在，跳过操作
+                print(f"字段 '{self.name}' 已存在，跳过")
+
+
+class Migration(migrations.Migration):
     dependencies = [
         ('databus', '0020_snapshot_custom_config'),
     ]
 
     operations = [
-        migrations.AddField(
+        AddFieldIfNotExists(
             model_name='collectorconfig',
             name='record_log_type',
             field=models.CharField(
@@ -21,7 +54,7 @@ class Migration(migrations.Migration):
                 verbose_name='记录日志方式',
             ),
         ),
-        migrations.AddField(
+        AddFieldIfNotExists(
             model_name='collectorconfig',
             name='select_sdk_type',
             field=models.CharField(
