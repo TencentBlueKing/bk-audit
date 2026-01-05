@@ -160,13 +160,13 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
 
     def _collect(mapping: _Mapping):
         for variable in (
-            "current_type",
-            "current_object_id",
-            "event_start_time",
-            "event_end_time",
-            "drill_field",
-            "tool_variables",
-            "caller_validated",
+                "current_type",
+                "current_object_id",
+                "event_start_time",
+                "event_end_time",
+                "drill_field",
+                "tool_variables",
+                "caller_validated",
         ):
             extra[variable] = mapping.get(variable)
 
@@ -209,12 +209,12 @@ def _list_to_tuple(iterable: list) -> Tuple[str, ...]:
 
 
 def validate_tool_variables_with_risk(
-    risk_id: str,
-    tool_uid: str,
-    variable_values: Dict[str, Any],
-    drill_field: Optional[str] = None,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+        risk_id: str,
+        tool_uid: str,
+        variable_values: Dict[str, Any],
+        drill_field: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
 ) -> bool:
     """
     基于策略字段 drill_config(DrillConfig) 与风险 event_data，对工具执行变量进行值校验：
@@ -261,7 +261,7 @@ def validate_tool_variables_with_risk(
                     expected = event_record.get("event_data", {}).get(rule["target"])
                 value_to_match = collection_to_tuple(value)
                 single_value = (
-                    value_to_match[0] if (len(value_to_match) == 1 and isinstance(value_to_match, tuple)) else None
+                    value_to_match[0] if (isinstance(value_to_match, tuple) and len(value_to_match) == 1) else None
                 )
                 combined_expected = {','.join(str(per) for per in item) for item in expected if isinstance(item, tuple)}
                 if not expected or (
