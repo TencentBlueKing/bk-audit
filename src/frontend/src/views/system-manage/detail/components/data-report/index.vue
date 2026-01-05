@@ -37,105 +37,187 @@
         class="log-report-skeleton"
         :loading="isListLoading"
         :style="{ height: `${listHeight}px` }">
-        <scroll-faker class="data-list">
-          <!-- 如果有采集任务或api推送才显示 -->
-          <template
-            v-if="hasCollectorData || data.enabled">
-            <!-- 有api推送才显示 -->
+        <!-- 如果有采集任务或api推送才显示 -->
+        <scroll-faker
+          v-if="hasCollectorData || data.enabled"
+          class="data-list">
+          <!-- 有api推送才显示 -->
+          <div
+            v-if="data.enabled"
+            class="data-card">
+            <div class="card-main">
+              <audit-icon
+                class="card-icon"
+                svg
+                type="api-4" />
+              <div class="card-info">
+                <div class="card-title">
+                  <span class="name">{{ token.collector_config_name }}</span>
+                  <span class="sub-name">{{ token.collector_config_name_en }}</span>
+                </div>
+                <div class="card-api-push-info">
+                  <!-- token -->
+                  <div class="field-token">
+                    <span class="field-label">Token：</span>
+                    <template v-if="isHide">
+                      <span
+                        v-bk-tooltips="{content: token.token, placement: 'top', extCls:'token-tooltips'}"
+                        class="field-value">{{ token.token }}</span>
+                    </template>
+                    <div v-else>
+                      <span
+                        v-for="i in 7"
+                        :key="i"
+                        class="encryption" />
+                    </div>
+                    <span
+                      class="operation-icon">
+                      <auth-component
+                        action-id="edit_system"
+                        :resource="route.params.id">
+                        <audit-icon
+                          :type="isHide?'view':'hide'"
+                          @click.stop="() => isHide = !isHide" />
+                      </auth-component>
+                      <auth-component
+                        action-id="edit_system"
+                        :resource="route.params.id">
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="ml12"
+                          type="copy"
+                          @click.stop="() => execCopy(token.token, t('复制成功'))" />
+                      </auth-component>
+                    </span>
+                  </div>
+                  <!-- endpoint -->
+                  <div
+                    v-if="data.hosts.length"
+                    class="field-endpoint">
+                    <span class="field-label">EndPoint：</span>
+                    <div class="endpoint-list">
+                      <div
+                        v-for="value in data.hosts"
+                        :key="value"
+                        class="endpoint-item">
+                        {{ value }}
+                      </div>
+                    </div>
+                    <div class="operation-icon">
+                      <audit-icon
+                        v-bk-tooltips="t('复制')"
+                        class="ml12"
+                        type="copy"
+                        @click.stop="execCopy(data.hosts.map((item: string)=>item).join('\n'))" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              <!-- 只有成功和失败 -->
+              <div
+                class="card-status"
+                :class="[
+                  apiPushStatusMap[token.collector_config_id]?.icon === 'cuo' ? 'status-danger' : 'status-success'
+                ]">
+                <audit-icon
+                  style="font-size: 14px;"
+                  svg
+                  :type="apiPushStatusMap[token.collector_config_id]?.icon" />
+                <span
+                  class="status-text">
+                  {{ statusTextMap[apiPushStatusMap[token.collector_config_id]?.icon] }}
+                </span>
+              </div>
+              <!-- 最新一条数据 -->
+              <div class="card-extra">
+                <template v-if="token.tail_log_time">
+                  <span class="latest-label">最新一条数据 {{ token.tail_log_time }}</span>
+                  <bk-button
+                    style="font-size: 12px;"
+                    text
+                    theme="primary"
+                    @click="handleApiPushTaillog()">
+                    {{ t('查看') }}
+                  </bk-button>
+                </template>
+                <template v-else>
+                  <span class="latest-label">{{ t('无最新数据') }}</span>
+                </template>
+              </div>
+            </div>
+            <div class="collector-item-operation">
+              <api-push-render-operation
+                :data="{
+                  token: token.token,
+                  hosts: data.hosts,
+                  collector_config_name: token.collector_config_name,
+                }" />
+            </div>
+            <recent-data
+              v-if="showRecentDataMap['api']"
+              :data="collectorDataMap['api']"
+              @fold="showRecentDataMap['api'] = false" />
+          </div>
+
+          <!-- log 列表 -->
+          <template v-if="collectorLists.length">
             <div
-              v-if="data.enabled"
+              v-for="item in collectorLists"
+              :key="item.collector_config_id"
               class="data-card">
               <div class="card-main">
                 <audit-icon
                   class="card-icon"
                   svg
-                  type="api-4" />
+                  type="pull" />
                 <div class="card-info">
                   <div class="card-title">
-                    <span class="name">{{ token.collector_config_name }}</span>
-                    <span class="sub-name">{{ token.collector_config_name_en }}</span>
-                  </div>
-                  <div class="card-api-push-info">
-                    <!-- token -->
-                    <div class="field-token">
-                      <span class="field-label">Token：</span>
-                      <template v-if="isHide">
-                        <span
-                          v-bk-tooltips="{content: token.token, placement: 'top', extCls:'token-tooltips'}"
-                          class="field-value">{{ token.token }}</span>
-                      </template>
-                      <div v-else>
-                        <span
-                          v-for="i in 7"
-                          :key="i"
-                          class="encryption" />
-                      </div>
-                      <span
-                        class="operation-icon">
-                        <auth-component
-                          action-id="edit_system"
-                          :resource="route.params.id">
-                          <audit-icon
-                            :type="isHide?'view':'hide'"
-                            @click.stop="() => isHide = !isHide" />
-                        </auth-component>
-                        <auth-component
-                          action-id="edit_system"
-                          :resource="route.params.id">
-                          <audit-icon
-                            v-bk-tooltips="t('复制')"
-                            class="ml12"
-                            type="copy"
-                            @click.stop="() => execCopy(token.token, t('复制成功'))" />
-                        </auth-component>
-                      </span>
-                    </div>
-                    <!-- endpoint -->
-                    <div
-                      v-if="data.hosts.length"
-                      class="field-endpoint">
-                      <span class="field-label">EndPoint：</span>
-                      <div style="display: flex; gap: 6px;">
-                        <span
-                          v-for="value in data.hosts"
-                          :key="value">{{ value }}</span>
-                      </div>
-                      <div class="operation-icon">
-                        <audit-icon
-                          v-bk-tooltips="t('复制')"
-                          class="ml12"
-                          type="copy"
-                          @click.stop="execCopy(data.hosts.map((item: string)=>item).join('\n'))" />
-                      </div>
-                    </div>
+                    <span class="name">{{ item.custom_type }}</span>
+                    <span class="sub-name">{{ item.collector_config_name }}</span>
                   </div>
                 </div>
               </div>
               <div class="card-footer">
-                <!-- 只有成功和失败 -->
+                <!-- 失败、成功、未完成 -->
                 <div
                   class="card-status"
                   :class="[
-                    apiPushStatusMap[token.collector_config_id]?.icon === 'cuo' ? 'status-danger' : 'status-success'
+                    statusMap[item.collector_config_id]?.icon === 'cuo'
+                      ? 'status-danger'
+                      : statusMap[item.collector_config_id]?.icon === 'completed'
+                        ? 'status-success'
+                        : 'status-warning',
                   ]">
                   <audit-icon
+                    :class="{
+                      'rotate-loading': statusMap[item.collector_config_id]?.isRunning,
+                    }"
                     style="font-size: 14px;"
                     svg
-                    :type="apiPushStatusMap[token.collector_config_id]?.icon" />
+                    :type="statusMap[item.collector_config_id]?.icon" />
                   <span
                     class="status-text">
-                    {{ statusTextMap[apiPushStatusMap[token.collector_config_id]?.icon] }}
+                    {{ statusTextMap[statusMap[item.collector_config_id]?.icon] }}
                   </span>
+                  <bk-button
+                    v-if="statusMap[item.collector_config_id]?.icon === 'weiwancheng'"
+                    text
+                    theme="primary"
+                    @click="handleCollectorConfig(item.collector_config_id)">
+                    {{ t('继续配置') }}
+                  </bk-button>
                 </div>
                 <!-- 最新一条数据 -->
                 <div class="card-extra">
-                  <template v-if="token.tail_log_time">
-                    <span class="latest-label">最新一条数据 {{ token.tail_log_time }}</span>
+                  <template v-if="item.tail_log_time">
+                    <span class="latest-label">最新一条数据 {{ item.tail_log_time }}</span>
                     <bk-button
                       style="font-size: 12px;"
                       text
                       theme="primary"
-                      @click="handleApiPushTaillog()">
+                      @click="handleCollectorTaillog(item.collector_config_id, item.collector_config_name)">
                       {{ t('查看') }}
                     </bk-button>
                   </template>
@@ -145,180 +227,100 @@
                 </div>
               </div>
               <div class="collector-item-operation">
-                <api-push-render-operation
-                  :data="{
-                    token: token.token,
-                    hosts: data.hosts,
-                    collector_config_name: token.collector_config_name,
-                  }" />
+                <component
+                  :is="statusCom[statusMap[item.collector_config_id]?.operation]"
+                  :data="item"
+                  @get-collector-lists="handleFetchLists" />
               </div>
               <recent-data
-                v-if="showRecentDataMap['api']"
-                :data="collectorDataMap['api']"
-                @fold="showRecentDataMap['api'] = false" />
+                v-if="showRecentDataMap[`collector_${item.collector_config_id}`]"
+                :data="collectorDataMap[`collector_${item.collector_config_id}`]"
+                @fold="showRecentDataMap[`collector_${item.collector_config_id}`] = false" />
             </div>
-
-            <!-- log 列表 -->
-            <template v-if="collectorLists.length">
-              <div
-                v-for="item in collectorLists"
-                :key="item.collector_config_id"
-                class="data-card">
-                <div class="card-main">
-                  <audit-icon
-                    class="card-icon"
-                    svg
-                    type="pull" />
-                  <div class="card-info">
-                    <div class="card-title">
-                      <span class="name">{{ item.custom_type }}</span>
-                      <span class="sub-name">{{ item.collector_config_name }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="card-footer">
-                  <!-- 失败、成功、未完成 -->
-                  <div
-                    class="card-status"
-                    :class="[
-                      statusMap[item.collector_config_id]?.icon === 'cuo'
-                        ? 'status-danger'
-                        : statusMap[item.collector_config_id]?.icon === 'completed'
-                          ? 'status-success'
-                          : 'status-warning',
-                    ]">
-                    <audit-icon
-                      :class="{
-                        'rotate-loading': statusMap[item.collector_config_id]?.isRunning,
-                      }"
-                      style="font-size: 14px;"
-                      svg
-                      :type="statusMap[item.collector_config_id]?.icon" />
-                    <span
-                      class="status-text">
-                      {{ statusTextMap[statusMap[item.collector_config_id]?.icon] }}
-                    </span>
-                    <bk-button
-                      v-if="statusMap[item.collector_config_id]?.icon === 'weiwancheng'"
-                      text
-                      theme="primary"
-                      @click="handleCollectorConfig(item.collector_config_id)">
-                      {{ t('继续配置') }}
-                    </bk-button>
-                  </div>
-                  <!-- 最新一条数据 -->
-                  <div class="card-extra">
-                    <template v-if="item.tail_log_time">
-                      <span class="latest-label">最新一条数据 {{ item.tail_log_time }}</span>
-                      <bk-button
-                        style="font-size: 12px;"
-                        text
-                        theme="primary"
-                        @click="handleCollectorTaillog(item.collector_config_id, item.collector_config_name)">
-                        {{ t('查看') }}
-                      </bk-button>
-                    </template>
-                    <template v-else>
-                      <span class="latest-label">{{ t('无最新数据') }}</span>
-                    </template>
-                  </div>
-                </div>
-                <div class="collector-item-operation">
-                  <component
-                    :is="statusCom[statusMap[item.collector_config_id]?.operation]"
-                    :data="item"
-                    @get-collector-lists="handleFetchLists" />
-                </div>
-                <recent-data
-                  v-if="showRecentDataMap[`collector_${item.collector_config_id}`]"
-                  :data="collectorDataMap[`collector_${item.collector_config_id}`]"
-                  @fold="showRecentDataMap[`collector_${item.collector_config_id}`] = false" />
-              </div>
-            </template>
-
-            <!-- bkbase 列表 -->
-            <template v-if="dataIdList.length">
-              <div
-                v-for="item in dataIdList"
-                :key="item.bk_data_id"
-                class="data-card">
-                <div class="card-main">
-                  <audit-icon
-                    class="card-icon"
-                    svg
-                    type="pull" />
-                  <div class="card-info">
-                    <div class="card-title">
-                      <span class="name">bkbase</span>
-                      <span class="sub-name">{{ item.collector_config_name }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="card-footer">
-                  <!-- 只有成功和未完成 -->
-                  <div
-                    class="card-status"
-                    :class="[
-                      dataIdStatusMap[item.bk_data_id]?.icon === 'completed'
-                        ? 'status-success'
-                        : 'status-warning',
-                    ]">
-                    <audit-icon
-                      style="font-size: 14px;"
-                      svg
-                      :type="dataIdStatusMap[item.bk_data_id]?.icon" />
-                    <span
-                      class="status-text">
-                      {{ statusTextMap[dataIdStatusMap[item.bk_data_id]?.icon] }}
-                    </span>
-                    <bk-button
-                      v-if="dataIdStatusMap[item.bk_data_id]?.icon === 'weiwancheng'"
-                      text
-                      theme="primary"
-                      @click="handleDataIdConfig(item.bk_data_id)">
-                      {{ t('继续配置') }}
-                    </bk-button>
-                  </div>
-                  <!-- 最新一条数据 -->
-                  <div class="card-extra">
-                    <template v-if="item.tail_log_time">
-                      <span class="latest-label">最新一条数据 {{ item.tail_log_time }}</span>
-                      <bk-button
-                        style="font-size: 12px;"
-                        text
-                        theme="primary"
-                        @click="handleDataIdTaillog(item.bk_data_id, item.collector_config_name, 'bkbase')">
-                        {{ t('查看') }}
-                      </bk-button>
-                    </template>
-                    <template v-else>
-                      <span class="latest-label">{{ t('无最新数据') }}</span>
-                    </template>
-                  </div>
-                </div>
-                <div class="collector-item-operation">
-                  <component
-                    :is="dataIdStatusCom[dataIdStatusMap[item.bk_data_id].operation]"
-                    ref="dataIdStatusComRef"
-                    :data="item"
-                    @get-collector-lists="handleDataIdList" />
-                </div>
-                <recent-data
-                  v-if="showRecentDataMap[`dataid_${item.bk_data_id}`]"
-                  :data="collectorDataMap[`dataid_${item.bk_data_id}`]"
-                  @fold="showRecentDataMap[`dataid_${item.bk_data_id}`] = false" />
-              </div>
-            </template>
           </template>
-          <!-- 暂无数据 -->
-          <div
-            v-else
-            class="empty-content">
-            <bk-exception
-              description="暂无数据"
-              type="empty" />
-          </div>
+
+          <!-- bkbase 列表 -->
+          <template v-if="dataIdList.length">
+            <div
+              v-for="item in dataIdList"
+              :key="item.bk_data_id"
+              class="data-card">
+              <div class="card-main">
+                <audit-icon
+                  class="card-icon"
+                  svg
+                  type="pull" />
+                <div class="card-info">
+                  <div class="card-title">
+                    <span class="name">bkbase</span>
+                    <span class="sub-name">{{ item.collector_config_name }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <!-- 只有成功和未完成 -->
+                <div
+                  class="card-status"
+                  :class="[
+                    dataIdStatusMap[item.bk_data_id]?.icon === 'completed'
+                      ? 'status-success'
+                      : 'status-warning',
+                  ]">
+                  <audit-icon
+                    style="font-size: 14px;"
+                    svg
+                    :type="dataIdStatusMap[item.bk_data_id]?.icon" />
+                  <span
+                    class="status-text">
+                    {{ statusTextMap[dataIdStatusMap[item.bk_data_id]?.icon] }}
+                  </span>
+                  <bk-button
+                    v-if="dataIdStatusMap[item.bk_data_id]?.icon === 'weiwancheng'"
+                    text
+                    theme="primary"
+                    @click="handleDataIdConfig(item.bk_data_id)">
+                    {{ t('继续配置') }}
+                  </bk-button>
+                </div>
+                <!-- 最新一条数据 -->
+                <div class="card-extra">
+                  <template v-if="item.tail_log_time">
+                    <span class="latest-label">最新一条数据 {{ item.tail_log_time }}</span>
+                    <bk-button
+                      style="font-size: 12px;"
+                      text
+                      theme="primary"
+                      @click="handleDataIdTaillog(item.bk_data_id, item.collector_config_name, 'bkbase')">
+                      {{ t('查看') }}
+                    </bk-button>
+                  </template>
+                  <template v-else>
+                    <span class="latest-label">{{ t('无最新数据') }}</span>
+                  </template>
+                </div>
+              </div>
+              <div class="collector-item-operation">
+                <component
+                  :is="dataIdStatusCom[dataIdStatusMap[item.bk_data_id].operation]"
+                  ref="dataIdStatusComRef"
+                  :data="item"
+                  @get-collector-lists="handleDataIdList" />
+              </div>
+              <recent-data
+                v-if="showRecentDataMap[`dataid_${item.bk_data_id}`]"
+                :data="collectorDataMap[`dataid_${item.bk_data_id}`]"
+                @fold="showRecentDataMap[`dataid_${item.bk_data_id}`] = false" />
+            </div>
+          </template>
         </scroll-faker>
+        <!-- 暂无数据 -->
+        <div
+          v-else
+          class="empty-content">
+          <bk-exception
+            description="暂无数据"
+            type="empty" />
+        </div>
       </bk-loading>
     </div>
   </div>
@@ -681,8 +683,9 @@
 
 
 .empty-content {
-  flex: 1;
   display: flex;
+  height: 100%;
+  flex: 1;
   align-items: center;
   justify-content: center;
 }
@@ -753,7 +756,6 @@
             color: #63656e;
             background-color: #f5f7fa;
             align-items: center;
-            flex-wrap: wrap;
             gap: 6px;
 
             .encryption {
@@ -794,6 +796,16 @@
 
           .field-endpoint {
             flex: 1;
+
+            .endpoint-item {
+              margin-bottom: 4px;
+              line-height: 20px;
+              color: #313238;
+
+              &:last-child {
+                margin-bottom: 0;
+              }
+            }
           }
         }
       }
