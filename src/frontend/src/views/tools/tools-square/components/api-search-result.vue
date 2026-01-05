@@ -18,14 +18,14 @@
   <div v-if="toolExecuteData?.data?.status_code === 200 && groupData.length > 0">
     <!-- 使用动态组件，单分组用 div，多分组用 bk-card -->
     <component
-      :is="groupData.length === 1 ? 'div' : AuditCollapsePanel"
+      :is="(groupData.length === 1 && !isGrouping) ? 'div' : AuditCollapsePanel"
       v-for="(group, groupIndex) in groupData"
       :key="groupIndex"
       style="margin-bottom: 16px;"
       v-bind="{ label: group.name, isActive: true }">
       <div
         class="card-content"
-        :class="[groupData.length === 1 ? 'single-group' : '']">
+        :class="[groupData.length === 1 && !isGrouping ? 'single-content' : '']">
         <!-- KV 字段展示 -->
         <template v-if="group.kv_fields && group.kv_fields.length > 0">
           <render-info-block
@@ -302,6 +302,8 @@
 
   const linkUsers = computed(() => [...new Set([props.toolDetails.created_by, props.toolDetails.updated_by]
     .filter(Boolean))]);
+
+  const isGrouping = computed(() => props.toolDetails.config.output_config?.enable_grouping);
 
   // 获取工具执行结果
   const {
@@ -662,6 +664,7 @@
     }
 
     key.value += 1;
+    console.log(props.toolDetails);
     groupData.value = createGroupData(props.toolDetails);
 
     // 异步更新 groupData，填充数据
@@ -721,7 +724,7 @@
   }
 }
 
-.single-group {
+.single-content {
   padding: 0;
   background-color: #fff;
 }
