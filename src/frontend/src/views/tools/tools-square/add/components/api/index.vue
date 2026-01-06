@@ -366,6 +366,10 @@
       isDoneDeBug.value = true;
       isSameInitParamsConfig.value = isSucc;
       emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
+      // 编辑模式下，重新调试更改查询结果设置 删除已经不存在的字段
+      if (isSucc && props.isEditMode) {
+        resultConfigRef.value.deleteNotExistedFields();
+      }
     });
   };
 
@@ -383,7 +387,6 @@
 
   // 参数配置改变
   const handleParamsConfigChange = (isNOSame: boolean) => {
-    console.log('参数配置改变',  isNOSame);
     // isNOSame 为 false 时，表示参数配置没有改变，不需要重新调试
     isSameInitParamsConfig.value = !isNOSame;
     isSuccess.value = false;
@@ -423,8 +426,6 @@
     isSuccess.value = false;
     isDoneDeBug.value = false;
     if (isSetConfigsSuccess.value) {
-      console.log('newValue', newValue, initformData.value.api_config);
-      console.log('>>', JSON.stringify(newValue) === JSON.stringify(initformData.value?.api_config));
       // 判断newValue 与initformData.value是否完全相同
       if (initformData.value && JSON.stringify(newValue) === JSON.stringify(initformData.value.api_config)) {
         editModeIseditInfo.value = false;

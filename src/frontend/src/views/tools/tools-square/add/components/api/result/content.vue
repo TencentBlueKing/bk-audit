@@ -119,6 +119,7 @@
     handleGetResultConfig: () => void;
     handleGetGroupResultConfig: () => void;
     setConfigs: (data: any) => void;
+    deleteNotExistedFields: () => void;
   }
   interface Emits {
     (e: 'groupContentChange', data: any, id: string | number): void
@@ -134,6 +135,8 @@
   const treeData = ref<any[]>([]);
   const outputFields = ref<any[]>([]);
   const initTreeDatas = ref<any[]>([]);
+
+  const noGroupfields = ref<any[]>([]); // 无分组记录选择的字段
 
   // 递归查找节点并勾选（公共函数）
   const findAndCheckNode = (nodes: any[], targetJsonPath: string): boolean => {
@@ -325,8 +328,80 @@
     setConfigs(data: any) {
       nextTick(() => {
         const fields = data[0].output_fields || [];
+        noGroupfields.value = fields;
         restoreCheckedNodes(fields);
         outputFields.value = fields;
+      });
+    },
+    deleteNotExistedFields() {
+      nextTick(() => {
+        // 遍历出 treeData.value 树形结构的所有json_path
+        const getAllJsonPaths = (nodes: any[]): string[] => {
+          let paths: string[] = [];
+
+          nodes.forEach((node: any) => {
+            // 添加当前节点的json_path
+            if (node.json_path) {
+              paths.push(node.json_path);
+            }
+
+            // 递归遍历children
+            if (node.children && node.children.length > 0) {
+              paths = paths.concat(getAllJsonPaths(node.children));
+            }
+
+            // 递归遍历list
+            if (node.list && node.list.length > 0) {
+              paths = paths.concat(getAllJsonPaths(node.list));
+            }
+          });
+
+          return paths;
+        };
+
+        const allJsonPaths = getAllJsonPaths(treeData.value);
+        // 通用的过滤函数
+        const filterFields = (fields: any[]): any[] => fields.map((field: any) => {
+          // 深拷贝字段，避免直接修改原对象
+          const filteredField = JSON.parse(JSON.stringify(field));
+
+          // 如果有field_config.output_fields，检查其中的json_path是否存在
+          if (filteredField.field_config?.output_fields && Array.isArray(filteredField.field_config.output_fields)) {
+            // 过滤output_fields，只保留存在的json_path
+            const outputFields = filteredField.field_config.output_fields;
+            // eslint-disable-next-line max-len
+            filteredField.field_config.output_fields = outputFields.filter((outputField: any) => allJsonPaths.includes(outputField.json_path));
+          }
+
+          return filteredField;
+        }).filter((field: any) => {
+          // 检查主json_path是否存在
+          const mainPathExists = allJsonPaths.includes(field.json_path);
+
+          // 如果有field_config.output_fields，检查过滤后是否还有项
+          if (field.field_config?.output_fields && Array.isArray(field.field_config.output_fields)) {
+            // 如果主路径存在，或者output_fields过滤后不为空，则保留该项
+            return mainPathExists || field.field_config.output_fields.length > 0;
+          }
+
+          // 如果没有output_fields，只检查主路径是否存在
+          return mainPathExists;
+        });
+
+        // 判断是分组模式还是非分组模式
+        if (props.isGrouping && props.groupOutputFields) {
+          // 分组模式：处理 groupOutputFields
+          const filteredFields = filterFields(props.groupOutputFields);
+          restoreCheckedNodes(filteredFields);
+          outputFields.value = filteredFields;
+          // 通过事件更新分组数据
+          emits('groupContentChange', filteredFields, props.groupKey || '');
+        } else {
+          // 非分组模式：处理 noGroupfields
+          const filteredFields = filterFields(noGroupfields.value);
+          restoreCheckedNodes(filteredFields);
+          outputFields.value = filteredFields;
+        }
       });
     },
   });
