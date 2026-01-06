@@ -117,16 +117,15 @@
                       v-show="item?.is_show !== false"
                       :key="index"
                       class="formref-item-item"
-                      :label="item?.display_name"
                       :property="item?.raw_name"
                       :required="item?.required">
                       <template #label>
                         <span
                           v-bk-tooltips="{
-                            disabled: item?.description === '',
-                            content: item?.description,
+                            disabled: !item?.description && !item?.raw_name,
+                            content: item?.description || item?.raw_name,
                           }">
-                          {{ item?.display_name }}
+                          {{ item?.display_name || item?.raw_name }}
                         </span>
                       </template>
                       <tool-form-item
