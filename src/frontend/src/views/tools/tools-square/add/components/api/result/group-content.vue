@@ -86,7 +86,7 @@
         </div>
         <content
           v-if="element.isOpen"
-          ref="contentRef"
+          :ref="(el: any) => setContentRef(el, element.key)"
           :group-key="element.key"
           :group-output-fields="element.output_fields"
           :is-edit-mode="isEditMode"
@@ -98,7 +98,7 @@
   </vuedraggable>
 </template>
 <script setup lang='ts'>
-  import { ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -116,10 +116,11 @@
     openGroup:(val: boolean) => void,
     handleGetResultConfig: () => void;
     setConfigs:(data: any) => void;
+    deleteNotExistedFields: () => void;
   }
 
   defineProps<Props>();
-  const contentRef = ref();
+  const contentRefs = ref<Map<string, any>>(new Map());
   const { t } = useI18n();
   const popoverDeleteRef = ref();
   const localValue = ref([
@@ -132,6 +133,15 @@
       output_fields: [],
     },
   ]);
+
+  // 设置 content 组件引用
+  const setContentRef = (el: any, key: string) => {
+    if (el) {
+      contentRefs.value.set(key, el);
+    } else {
+      contentRefs.value.delete(key);
+    }
+  };
   // 拖拽
   const handelValueDragChange = (dragEvent: any) => {
     console.log('dragEvent', dragEvent);
@@ -248,6 +258,16 @@
         config: null,
         output_fields: item.output_fields,
       }));
+    },
+    deleteNotExistedFields() {
+      nextTick(() => {
+        // 遍历所有分组，调用每个分组的 content 组件的 deleteNotExistedFields 方法
+        contentRefs.value.forEach((contentRef) => {
+          if (contentRef && typeof contentRef.deleteNotExistedFields === 'function') {
+            contentRef.deleteNotExistedFields();
+          }
+        });
+      });
     },
   });
 </script>
