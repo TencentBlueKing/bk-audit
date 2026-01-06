@@ -664,7 +664,6 @@
     }
 
     key.value += 1;
-    console.log(props.toolDetails);
     groupData.value = createGroupData(props.toolDetails);
 
     // 异步更新 groupData，填充数据

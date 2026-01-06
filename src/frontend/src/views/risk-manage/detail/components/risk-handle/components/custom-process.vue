@@ -124,7 +124,6 @@
 
     return images;
   });
-  console.log('editorImages', editorImages);
 
   const processPackageDetail = computed(() => {
     if (props.data && props.processDetail) {

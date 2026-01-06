@@ -885,13 +885,17 @@
         isApiDoneDeBug.value = false;
       } else { // 修改了参数
         // 编辑时 api 判断是否调试成功
-        if (!isEditInfo) { // 没有修改参数
-          isApiDoneDeBug.value = false;
-        } else { // 修改了参数
-          if (!val) {
-            isApiDoneDeBug.value = true;
-          } else {
-            isApiDoneDeBug.value = !isSuccess;
+        if (!isEditInfo && !isSuccess && !isSame) {
+          isApiDoneDeBug.value = true;
+        } else {
+          if (!isEditInfo) { // 没有修改参数
+            isApiDoneDeBug.value = false;
+          } else { // 修改了参数
+            if (!val) {
+              isApiDoneDeBug.value = true;
+            } else {
+              isApiDoneDeBug.value = !isSuccess;
+            }
           }
         }
       }
