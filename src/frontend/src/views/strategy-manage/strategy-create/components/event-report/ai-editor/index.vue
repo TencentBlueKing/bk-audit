@@ -29,36 +29,11 @@
       v-model:visible="showAIModal"
       :initial-prompt="editingPrompt"
       @confirm="handleAIAgentConfirm" />
-    <bk-dialog
-      v-model:is-show="showDeleteDialog"
-      footer-align="center"
-      :quick-close="false"
-      theme="primary"
-      :width="400">
-      <div class="delete-dialog-title">
-        {{ t('是否删除该智能体?') }}
-      </div>
-      <div class="delete-dialog-content">
-        <div class="delete-dialog-name">
-          {{ t('名称') }}: {{ deletingAgentName }}
-        </div>
-        <div class="delete-dialog-warning">
-          {{ t('删除该智能体后将无法恢复,请谨慎操作') }}
-        </div>
-      </div>
-      <template #footer>
-        <bk-button
-          class="mr8"
-          theme="danger"
-          @click="handleDeleteConfirm">
-          {{ t('删除') }}
-        </bk-button>
-        <bk-button
-          @click="handleDeleteCancel">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
+    <delete-dialog
+      v-model:visible="showDeleteDialog"
+      :agent-name="deletingAgentName"
+      @cancel="handleDeleteCancel"
+      @confirm="handleDeleteConfirm" />
   </div>
 </template>
 
@@ -73,6 +48,7 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import AIAgentBlot from './ai-model';
   import AIAgentModal from './ai-model.vue';
+  import DeleteDialog from './delete-dialog.vue';
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
@@ -128,33 +104,6 @@
     showAIModal.value = true;
   };
 
-  const editorOptions = {
-    theme: 'snow',
-    modules: {
-      toolbar: {
-        container: [
-          [{ header: [1, 2, 3, 4, 5, 6, false] }],
-          [{ font: [] }],
-          [{ size: [] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ color: [] }, { background: [] }],
-          [{ script: 'sub' }, { script: 'super' }],
-          [{ header: 1 }, { header: 2 }, 'blockquote', 'code-block'],
-          [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
-          [{ direction: 'rtl' }, { align: [] }],
-          ['link', 'image', 'video'],
-          ['clean'],
-          ['variable', 'aiAgent'], // 自定义按钮
-        ],
-        handlers: {
-          variable: insertVariable,
-          aiAgent: openAIAgentModal,
-        },
-      },
-    },
-    placeholder: '开始输入...',
-  };
-
   const onEditorReady = (quillInstance: QuillInstance) => {
     quill = quillInstance;
 
@@ -191,7 +140,32 @@
     // 保存初始内容状态
     previousContent.value = quill.getContents();
   };
-
+  const editorOptions = {
+    theme: 'snow',
+    modules: {
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, 4, 5, 6, false] }],
+          [{ font: [] }],
+          [{ size: [] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { background: [] }],
+          [{ script: 'sub' }, { script: 'super' }],
+          [{ header: 1 }, { header: 2 }, 'blockquote', 'code-block'],
+          [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
+          [{ direction: 'rtl' }, { align: [] }],
+          ['link', 'image', 'video'],
+          ['clean'],
+          ['variable', 'aiagent'], // 自定义按钮
+        ],
+        handlers: {
+          variable: insertVariable,
+          aiagent: openAIAgentModal,
+        },
+      },
+    },
+    placeholder: '开始输入...',
+  };
   onBeforeUnmount(() => {
     if (quill && quill.root) {
       quill.root.removeEventListener('click', handleEditorClick);
@@ -581,31 +555,5 @@
   position: absolute;
 }
 
-/* 删除确认弹窗样式 */
-.delete-dialog-title {
-  margin-bottom: 20px;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 24px;
-  color: #313238;
-  text-align: center;
-}
-
-.delete-dialog-content {
-  padding: 0 20px;
-}
-
-.delete-dialog-name {
-  margin-bottom: 12px;
-  font-size: 14px;
-  line-height: 22px;
-  color: #313238;
-}
-
-.delete-dialog-warning {
-  font-size: 12px;
-  line-height: 20px;
-  color: #63656e;
-}
 
 </style>
