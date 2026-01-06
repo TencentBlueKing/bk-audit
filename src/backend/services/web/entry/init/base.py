@@ -248,7 +248,7 @@ class SystemInitHandler:
     def init_doc_config(self):
         audit_doc_config = {
             "audit_access_guide": "https://iwiki.woa.com/p/4013675599 ",
-            "audit_operation_log_recording_standards": "https://iwiki.woa.com/p/4016811346 ",
+            "audit_operation_log_record_standards": "https://iwiki.woa.com/p/4016811346 ",
         }
         GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
 
