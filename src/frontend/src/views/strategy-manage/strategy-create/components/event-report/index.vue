@@ -69,7 +69,7 @@
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import AiEditor from '@components/ai-editor/index.vue';
+  import AiEditor from './ai-editor/index.vue';
 
   interface IFormData {
     processor_groups: Array<number>,
