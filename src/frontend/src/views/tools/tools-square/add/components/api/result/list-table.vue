@@ -703,6 +703,7 @@
     text-align: center;
     background: #fafbfd;
     border-right: .5px solid #c4c6cc;
+    border-bottom: .5px solid #c4c6cc;
     border-radius: 2px 0 0 2px;
   }
 
