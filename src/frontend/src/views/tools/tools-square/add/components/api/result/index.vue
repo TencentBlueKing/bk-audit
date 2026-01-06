@@ -82,6 +82,7 @@
   interface Exposes {
     handleGetResultConfig: () => void;
     setConfigs: (data: any) => void;
+    deleteNotExistedFields: () => void;
   }
 
   defineProps<Props>();
@@ -281,6 +282,16 @@
         contentRef.value?.setConfigs(data.groups);
         groupContentRef.value?.setConfigs(data.groups);
       });
+    },
+    deleteNotExistedFields() {
+      // 根据是否分组模式调用不同的过滤方法
+      if (outputConfigEnableGrouping.value.enable_grouping) {
+        // 分组模式
+        groupContentRef.value?.deleteNotExistedFields();
+      } else {
+        // 非分组模式
+        contentRef.value?.deleteNotExistedFields();
+      }
     },
   });
 </script>
