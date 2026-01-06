@@ -881,6 +881,8 @@ class ApplyDataIdSource(DataIdResource):
             "description": raw_data["description"],
             "etl_config": EtlConfigEnum.BK_BASE_JSON.value,
             "is_deleted": False,
+            "record_log_type": validated_request_data["record_log_type"],
+            "select_sdk_type": validated_request_data["select_sdk_type"],
         }
         # 存在则更新
         if collector is not None:
