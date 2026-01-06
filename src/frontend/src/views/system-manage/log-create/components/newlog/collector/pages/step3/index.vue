@@ -130,7 +130,7 @@
               class="rotate-loading"
               svg
             type={data.statusIconType} />
-            <span>{ t(data.statusText) }</span>
+            <span>{ data.statusText }</span>
           </>
         ),
     },
@@ -182,7 +182,9 @@
     if (!collectorTaskStatus.value.task_ready) {
       return false;
     }
-    return allList.length < 1 || (allList.length > 0 && runningList.length < 1);
+    // 只有在有任务数据且没有运行中的任务时，才认为任务完成
+    // child = [] 时继续轮询，等待任务数据
+    return allList.length > 0 && runningList.length < 1;
   });
   // 下发任务是否为空
   const isEmpty = computed(() => collectorTaskStatus.value.task_ready
@@ -198,6 +200,32 @@
   const taskIdList = searchParams.task_id_list;
   const collectorConfigId = ~~searchParams.collector_config_id;
 
+  // 轮询取消函数
+  let cancelLoop: (() => void) | null = null;
+  let statusWatchStop: (() => void) | null = null;
+
+  // 开启轮询并监听任务状态
+  const startLoopAndWatch = () => {
+    if (!cancelLoop) {
+      cancelLoop = loopCollectorTaskStatus();
+      // 只创建一次 watch
+      if (!statusWatchStop) {
+        statusWatchStop = watch(collectorTaskStatus, () => {
+          // setTimeout 保证轮询判断在 isFinished 计算完成之后
+          setTimeout(() => {
+            // 没有执行中的任务，关闭轮询
+            if (isFinished.value && cancelLoop) {
+              cancelLoop();
+              cancelLoop = null;
+            }
+          });
+        }, {
+          immediate: true,
+        });
+      }
+    }
+  };
+
   // 获取任务状态
   const {
     data: collectorTaskStatus,
@@ -209,20 +237,10 @@
     },
     defaultValue: new CollectorTaskStatusModel(),
     manual: true,
-    onSuccess() {
-      // 有执行中的任务，开启轮询
-      const cancelLoop = loopCollectorTaskStatus();
-      watch(collectorTaskStatus, () => {
-        // setTimeout 保证轮询判断在 isFinished 计算完成之后
-        setTimeout(() => {
-          // 没有执行中的任务，关闭轮询
-          if (isFinished.value) {
-            cancelLoop();
-          }
-        });
-      }, {
-        immediate: true,
-      });
+    loopOnError: true, // 轮询时错误也继续轮询
+    onFinally() {
+      // 请求完成时（无论成功还是失败）开启轮询
+      startLoopAndWatch();
     },
   });
 
