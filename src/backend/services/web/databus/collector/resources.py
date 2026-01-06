@@ -674,10 +674,13 @@ class CreateApiPushResource(GetApiPushBaseResource):
         if collector:
             return {"collector_config_id": collector.collector_config_id}
 
+        # 固定中文任务名称
+        collector_config_name_ch = "API Push任务"
+
         # 创建自定义上报
         custom_params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
-            "collector_config_name": collector_config_name,
+            "collector_config_name": collector_config_name_ch,
             "collector_config_name_en": collector_config_name,
             "custom_type": CustomTypeEnum.OTLP_LOG.value,
             "category_id": DEFAULT_CATEGORY_ID,
@@ -692,7 +695,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
             bk_data_id=result["bk_data_id"],
             collector_plugin_id=plugin_id,
             collector_config_id=result["collector_config_id"],
-            collector_config_name=collector_config_name,
+            collector_config_name=collector_config_name_ch,
             collector_config_name_en=collector_config_name,
             custom_type=CustomTypeEnum.OTLP_LOG.value,
             description=collector_config_name,

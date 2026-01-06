@@ -31,10 +31,6 @@ class AddFieldIfNotExists(migrations.AddField):
             if not column_exists:
                 # 字段不存在，执行父类的添加操作
                 super().database_forwards(app_label, schema_editor, from_state, to_state)
-                print(f"字段 '{self.name}' 不存在，已添加")
-            else:
-                # 字段已存在，跳过操作
-                print(f"字段 '{self.name}' 已存在，跳过")
 
 
 class Migration(migrations.Migration):
