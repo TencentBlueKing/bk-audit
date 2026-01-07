@@ -362,6 +362,7 @@
 
   // 调试
   const handleDebug = () => {
+    result.value = null;
     if (list.value.length === 0) {
       executeDebugRequest();
       return;

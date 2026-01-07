@@ -20,7 +20,7 @@
       <audit-icon
         class="move"
         type="move" />
-      <span class="head-text">{{ data.name }}</span>
+      <span class="head-text">{{ `${data.name}(${data.json_path})` }}</span>
       <bk-tag
         style="margin-left: 10px;background-color: #e1ecff;"
         theme="info">
