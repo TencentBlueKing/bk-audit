@@ -242,6 +242,7 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
     has_report = serializers.SerializerMethodField()
+    report_enabled = serializers.BooleanField(source="strategy.report_enabled", default=False, read_only=True)
     report = RiskReportSerializer(read_only=True)
 
     def get_has_report(self, obj: Risk) -> bool:
@@ -541,6 +542,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
     has_report = serializers.SerializerMethodField()
+    report_enabled = serializers.BooleanField(source="strategy.report_enabled", default=False, read_only=True)
 
     def get_has_report(self, obj: Risk):
         """
@@ -614,6 +616,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "last_operate_time",
             "title",
             "has_report",
+            "report_enabled",
         ]
 
     def to_representation(self, instance: Risk):
