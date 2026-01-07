@@ -59,6 +59,8 @@ COLLECTOR_DATA = {
     "collector_config_id": COLLECTOR_ID,
     "collector_config_name": COLLECTOR_NAME,
     "collector_config_name_en": COLLECTOR_NAME,
+    "record_log_type": "SDK",
+    "select_sdk_type": "PYTHON_SDK",
 }
 RESULT_TABLE = f"{settings.DEFAULT_BK_BIZ_ID}_bklog_{COLLECTOR_NAME}"
 
@@ -89,6 +91,22 @@ GET_COLLECTOR_INFO_DATA = {
     **GET_COLLECTOR_RESULT_DATA,
     **API_BK_LOG_GET_COLLECTOR_DATA,
     "fields": [],
+}
+
+CREATE_API_PUSH_DATA = {
+    "namespace": settings.DEFAULT_NAMESPACE,
+    "system_id": COLLECTOR_DATA.get("system_id"),
+}
+CREATE_API_PUSH_RESP = {"bk_data_id": None, "collector_config_id": COLLECTOR_ID + 1}
+GET_API_PUSH_DATA = {
+    "system_id": COLLECTOR_DATA.get("system_id"),
+}
+GET_API_PUSH_RESP = {
+    "bk_data_token": "gjqguan_test_token",
+    "bk_data_id": None,
+    "collector_config_id": None,
+    "collector_config_name": None,
+    "collector_config_name_en": None,
 }
 
 # Create Collector
