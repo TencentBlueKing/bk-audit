@@ -77,7 +77,7 @@ class ToolVisionPermission(BasePermission):
         with contextlib.suppress(Exception):
             for k, v in params.items():
                 if k.startswith("constants[") and k.endswith("]"):
-                    inner_key = k[len("constants["): -1]
+                    inner_key = k[len("constants[") : -1]
                     if inner_key:
                         extracted[inner_key] = v
         caller_params = [

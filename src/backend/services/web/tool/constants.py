@@ -435,7 +435,10 @@ class ApiJsonField(TableOutputField):
     API JSON 字段
     """
 
-    json_path: str = PydanticField(title=gettext_lazy("字段路径"))
+    json_path: str = PydanticField(
+        title=gettext_lazy("字段路径"),
+        description=gettext_lazy("完整的 JSON 路径，例如：'data.items.status'，用于唯一标识字段位置"),
+    )
 
 
 class ApiTableOutputField(ApiJsonField):
