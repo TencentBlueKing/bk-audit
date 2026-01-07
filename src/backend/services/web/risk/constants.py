@@ -705,3 +705,99 @@ class EventFilterOperator(TextChoices):
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+
+
+class RenderTaskStatus(TextChoices):
+    """
+    渲染任务状态
+    """
+
+    PENDING = "pending", gettext_lazy("待处理")
+    PROCESSING = "processing", gettext_lazy("处理中")
+    COMPLETED = "completed", gettext_lazy("已完成")
+    FAILED = "failed", gettext_lazy("失败")
+    ABANDONED = "abandoned", gettext_lazy("已放弃")
+
+
+class RiskReportStatus(TextChoices):
+    """
+    风险报告状态
+    """
+
+    AUTO = "auto", gettext_lazy("自动生成")
+    MANUAL = "manual", gettext_lazy("人工编辑")
+
+
+@register_choices("aggregation_function")
+class AggregationFunction(TextChoices):
+    """
+    聚合函数枚举
+
+    用于报告模板中事件变量的聚合计算。
+    """
+
+    SUM = "sum", gettext_lazy("求和")
+    AVG = "avg", gettext_lazy("平均值")
+    MAX = "max", gettext_lazy("最大值")
+    MIN = "min", gettext_lazy("最小值")
+    COUNT = "count", gettext_lazy("计数")
+    COUNT_DISTINCT = "count_distinct", gettext_lazy("去重计数")
+    LATEST = "latest", gettext_lazy("最新值")
+    FIRST = "first", gettext_lazy("首次值")
+    LIST = "list", gettext_lazy("列表")
+    LIST_DISTINCT = "list_distinct", gettext_lazy("去重列表")
+
+    @classmethod
+    def get_supported_field_types(cls, agg_func: str) -> List[str]:
+        """
+        获取聚合函数支持的字段类型
+
+        Args:
+            agg_func: 聚合函数名称
+
+        Returns:
+            支持的字段类型列表，空列表表示支持所有类型
+        """
+        from api.bk_base.constants import BkBaseFieldType
+
+        numeric_types = [
+            BkBaseFieldType.INT,
+            BkBaseFieldType.LONG,
+            BkBaseFieldType.FLOAT,
+            BkBaseFieldType.DOUBLE,
+        ]
+        numeric_and_timestamp_types = numeric_types + [BkBaseFieldType.TIMESTAMP]
+
+        type_mapping = {
+            cls.SUM: numeric_types,
+            cls.AVG: numeric_types,
+            cls.MAX: numeric_and_timestamp_types,
+            cls.MIN: numeric_and_timestamp_types,
+            # 以下函数支持所有类型，返回空列表
+            cls.COUNT: [],
+            cls.COUNT_DISTINCT: [],
+            cls.LATEST: [],
+            cls.FIRST: [],
+            cls.LIST: [],
+            cls.LIST_DISTINCT: [],
+        }
+        return type_mapping.get(agg_func, [])
+
+
+# 报告风险变量列表
+# 用于模板中引用风险字段，如 {{ risk.risk_id }}
+REPORT_RISK_VARIABLES = [
+    {"field": "risk_id", "name": gettext_lazy("风险ID"), "description": gettext_lazy("风险单唯一标识")},
+    {"field": "title", "name": gettext_lazy("风险标题"), "description": gettext_lazy("风险单标题")},
+    {"field": "risk_level", "name": gettext_lazy("风险等级"), "description": gettext_lazy("风险等级标签")},
+    {"field": "event_time", "name": gettext_lazy("首次发现时间"), "description": ""},
+    {"field": "event_end_time", "name": gettext_lazy("最后发现时间"), "description": ""},
+    {"field": "event_content", "name": gettext_lazy("事件内容"), "description": gettext_lazy("首个事件的内容摘要")},
+    {"field": "operator", "name": gettext_lazy("责任人"), "description": gettext_lazy("风险相关的责任人列表")},
+    {"field": "status", "name": gettext_lazy("风险状态"), "description": ""},
+    {"field": "risk_label", "name": gettext_lazy("风险标签"), "description": ""},
+    {"field": "strategy_id", "name": gettext_lazy("命中策略ID"), "description": ""},
+    {"field": "strategy_name", "name": gettext_lazy("命中策略名称"), "description": ""},
+    {"field": "risk_hazard", "name": gettext_lazy("风险危害"), "description": gettext_lazy("来自策略配置")},
+    {"field": "risk_guidance", "name": gettext_lazy("处理指引"), "description": gettext_lazy("来自策略配置")},
+]

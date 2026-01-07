@@ -40,7 +40,9 @@ from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
+    RenderTaskStatus,
     RiskLabel,
+    RiskReportStatus,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -166,6 +168,11 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
     manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=True)
+    auto_generate_report = models.BooleanField(
+        gettext_lazy("是否开启自动生成报告"),
+        default=True,
+        help_text=gettext_lazy("开启后策略产生新风险时会自动生成报告"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Risk")
@@ -614,3 +621,99 @@ class RiskEventSubscription(SoftDeleteModel):
         将 WhereCondition 序列化为 JSON 存储；没有条件时写入空 dict。
         """
         self.condition = where.model_dump(exclude_none=True) if where else {}
+
+
+class RenderTask(OperateRecordModel):
+    """
+    渲染任务队列表
+
+    用于记录需要渲染的报告任务，通过定时任务扫描并批量处理。
+    """
+
+    risk = models.ForeignKey(
+        Risk,
+        on_delete=models.CASCADE,
+        related_name="render_tasks",
+        verbose_name=gettext_lazy("关联风险"),
+        db_index=True,
+    )
+
+    status = models.CharField(
+        verbose_name=gettext_lazy("任务状态"),
+        max_length=20,
+        choices=RenderTaskStatus.choices,
+        default=RenderTaskStatus.PENDING,
+        db_index=True,
+    )
+
+    version = models.IntegerField(
+        verbose_name=gettext_lazy("版本号"),
+        default=1,
+        help_text=gettext_lazy("用于控制并发，确保同一版本的渲染任务一致性"),
+    )
+
+    render_task_id = models.CharField(
+        verbose_name=gettext_lazy("渲染器服务任务ID"),
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text=gettext_lazy("调用渲染器服务后返回的任务ID，用于查询结果"),
+    )
+
+    error_message = models.TextField(
+        verbose_name=gettext_lazy("错误信息"),
+        blank=True,
+        default="",
+    )
+
+    retry_count = models.IntegerField(
+        verbose_name=gettext_lazy("重试次数"),
+        default=0,
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("渲染任务")
+        verbose_name_plural = verbose_name
+        ordering = ["risk", "-version"]
+        unique_together = [["risk", "version"]]
+        index_together = [
+            ["risk", "status", "version"],
+            ["status", "created_at"],
+        ]
+
+    def __str__(self):
+        return f"RenderTask({self.risk_id}, {self.status}, v{self.version})"
+
+
+class RiskReport(OperateRecordModel):
+    """
+    风险报告表
+    """
+
+    risk = models.OneToOneField(
+        Risk,
+        on_delete=models.CASCADE,
+        related_name="report",
+        verbose_name=gettext_lazy("关联风险"),
+        primary_key=True,
+    )
+
+    content = models.TextField(
+        verbose_name=gettext_lazy("报告内容"),
+        blank=True,
+        default="",
+    )
+
+    status = models.CharField(
+        verbose_name=gettext_lazy("报告状态"),
+        max_length=20,
+        choices=RiskReportStatus.choices,
+        default=RiskReportStatus.AUTO,
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("风险报告")
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f"RiskReport({self.risk_id})"
