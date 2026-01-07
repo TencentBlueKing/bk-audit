@@ -35,8 +35,7 @@ class TestRetrieveStrategy(TestCase):
                 "template": "Test template {{ risk.title }}",
                 "ai_variables": [
                     {
-                        "raw_name": "summary",
-                        "name": "风险摘要",
+                        "name": "summary",
                         "prompt_template": "请总结风险",
                     }
                 ],
@@ -74,8 +73,7 @@ class TestPreviewRiskReportSerializer(TestCase):
                 "template": "Risk: {{ risk.title }}",
                 "ai_variables": [
                     {
-                        "raw_name": "summary",
-                        "name": "摘要",
+                        "name": "summary",
                         "prompt_template": "请总结",
                     }
                 ],
@@ -92,7 +90,7 @@ class TestPreviewRiskReportSerializer(TestCase):
             "risk_id": "test-risk-id",
             "report_config": {
                 "template": "test",
-                "ai_variables": [{"prompt_template": "test"}],  # 缺少必填的 raw_name
+                "ai_variables": [{"prompt_template": "test"}],  # 缺少必填的 name
             },
         }
         serializer = PreviewReportRequestSerializer(data=data)

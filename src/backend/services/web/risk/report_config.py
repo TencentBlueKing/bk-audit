@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from drf_pydantic import BaseModel
 from pydantic import Field
@@ -29,13 +29,8 @@ class AIVariableConfig(BaseModel):
     用于配置 AI 生成的变量。
     """
 
-    raw_name: str = Field(..., description="模板变量名，用于 {{ ai.xxx }} 模板引用")
-    name: Optional[str] = Field(None, description="前端展示名，给用户看的友好名称")
+    name: str = Field(..., description="变量名，用于 {{ ai.xxx }} 模板引用，同时也作为前端展示名")
     prompt_template: str = Field("", description="AI 提示词模板")
-
-    def get_var_name(self) -> str:
-        """获取模板变量名称（用于模板引用）"""
-        return self.raw_name
 
 
 class ReportConfig(BaseModel):
@@ -54,6 +49,7 @@ class ReportConfig(BaseModel):
     """
 
     template: str = Field("", description="Jinja2 模板内容")
+    frontend_template: str = Field("", description="前端报告模板，仅用于前端存储展示")
     ai_variables: List[AIVariableConfig] = Field(default_factory=list, description="AI 变量配置列表")
 
     def get_ai_var_names(self) -> Dict[str, AIVariableConfig]:
@@ -61,6 +57,6 @@ class ReportConfig(BaseModel):
         获取 AI 变量名称映射
 
         Returns:
-            {"summary": AIVariableConfig, ...}  # key 是 raw_name
+            {"summary": AIVariableConfig, ...}  # key 是 name
         """
-        return {var.raw_name: var for var in self.ai_variables}
+        return {var.name: var for var in self.ai_variables}

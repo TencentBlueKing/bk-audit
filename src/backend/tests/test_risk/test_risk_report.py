@@ -352,3 +352,70 @@ class TestListRiskBrief(TestCase):
         )
 
         self.assertEqual(len(result), 0)
+
+
+class TestReportEnabled(TestCase):
+    """测试 report_enabled 字段序列化"""
+
+    def setUp(self):
+        super().setUp()
+        self.strategy_enabled = Strategy.objects.create(
+            namespace="default",
+            strategy_name="strategy-report-enabled",
+            risk_level=RiskLevel.HIGH.value,
+            report_enabled=True,
+            report_config={"template": "Test"},
+        )
+        self.strategy_disabled = Strategy.objects.create(
+            namespace="default",
+            strategy_name="strategy-report-disabled",
+            risk_level=RiskLevel.LOW.value,
+            report_enabled=False,
+        )
+        self.risk_with_enabled = Risk.objects.create(
+            risk_id="risk-report-enabled",
+            raw_event_id="raw-enabled",
+            strategy=self.strategy_enabled,
+            status=RiskStatus.NEW,
+            title="Risk with report enabled",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        self.risk_with_disabled = Risk.objects.create(
+            risk_id="risk-report-disabled",
+            raw_event_id="raw-disabled",
+            strategy=self.strategy_disabled,
+            status=RiskStatus.NEW,
+            title="Risk with report disabled",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+
+    def test_report_enabled_true_when_strategy_enabled(self):
+        """测试策略启用报告时，风险的 report_enabled 为 True"""
+        from services.web.risk.serializers import RiskInfoSerializer
+
+        # 使用 select_related 预加载策略
+        risk = Risk.objects.select_related("strategy").get(risk_id=self.risk_with_enabled.risk_id)
+        serializer = RiskInfoSerializer(risk)
+        self.assertTrue(serializer.data["report_enabled"])
+
+    def test_report_enabled_false_when_strategy_disabled(self):
+        """测试策略禁用报告时，风险的 report_enabled 为 False"""
+        from services.web.risk.serializers import RiskInfoSerializer
+
+        risk = Risk.objects.select_related("strategy").get(risk_id=self.risk_with_disabled.risk_id)
+        serializer = RiskInfoSerializer(risk)
+        self.assertFalse(serializer.data["report_enabled"])
+
+    def test_multiple_risks_report_enabled(self):
+        """测试多个风险的 report_enabled 字段正确序列化"""
+        from services.web.risk.serializers import RiskInfoSerializer
+
+        # 使用 select_related 预加载策略
+        risks = Risk.objects.select_related("strategy").filter(
+            risk_id__in=[self.risk_with_enabled.risk_id, self.risk_with_disabled.risk_id]
+        )
+        serializer = RiskInfoSerializer(risks, many=True)
+        data_map = {item["risk_id"]: item for item in serializer.data}
+
+        self.assertTrue(data_map[self.risk_with_enabled.risk_id]["report_enabled"])
+        self.assertFalse(data_map[self.risk_with_disabled.risk_id]["report_enabled"])

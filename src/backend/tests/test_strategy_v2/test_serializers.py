@@ -188,8 +188,7 @@ class TestReportConfigValidation(TestCase):
             "template": "Test template {{ risk.title }}",
             "ai_variables": [
                 {
-                    "raw_name": "summary",
-                    "name": "风险摘要",
+                    "name": "summary",
                     "prompt_template": "请总结风险",
                 }
             ],
@@ -254,8 +253,7 @@ class TestReportConfigValidation(TestCase):
             "template": "Updated template {{ risk.title }}",
             "ai_variables": [
                 {
-                    "raw_name": "summary",
-                    "name": "风险摘要",
+                    "name": "summary",
                     "prompt_template": "请总结风险",
                 }
             ],
