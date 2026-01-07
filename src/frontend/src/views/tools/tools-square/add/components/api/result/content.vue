@@ -395,6 +395,11 @@
         if (props.isGrouping && props.groupOutputFields) {
           // 分组模式：处理 groupOutputFields
           const filteredFields = filterFields(props.groupOutputFields);
+          // 先清理所有选中状态
+          selectedId.value = [];
+          selectValue.value = [];
+          selectedItems.value = [];
+          // 然后恢复勾选状态
           restoreCheckedNodes(filteredFields);
           outputFields.value = filteredFields;
           // 通过事件更新分组数据
@@ -402,6 +407,11 @@
         } else {
           // 非分组模式：处理 noGroupfields
           const filteredFields = filterFields(noGroupfields.value);
+          // 先清理所有选中状态
+          selectedId.value = [];
+          selectValue.value = [];
+          selectedItems.value = [];
+          // 然后恢复勾选状态
           restoreCheckedNodes(filteredFields);
           outputFields.value = filteredFields;
         }
