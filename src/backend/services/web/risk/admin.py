@@ -31,9 +31,11 @@ from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQL
 from services.web.risk.models import (
     ManualEvent,
     ProcessApplication,
+    RenderTask,
     Risk,
     RiskEventSubscription,
     RiskExperience,
+    RiskReport,
     RiskRule,
     TicketNode,
     TicketPermission,
@@ -74,11 +76,12 @@ class RiskAdmin(admin.ModelAdmin):
         "notice_users",
         "risk_label",
         "manual_synced",
+        "auto_generate_report",
     ]
     # 支持按策略名搜索
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
-    list_filter = ["status", "risk_label", "manual_synced", StrategyFilter]
+    list_filter = ["status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
     list_per_page = 100  # 设置每页显示100条记录
 
     def get_queryset(self, request):
@@ -237,3 +240,43 @@ class RiskEventSubscriptionAdmin(admin.ModelAdmin):
             "page": 1,
             "page_size": 10,
         }
+
+
+@admin.register(RenderTask)
+class RenderTaskAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "risk",
+        "status",
+        "version",
+        "render_task_id",
+        "retry_count",
+        "created_at",
+        "updated_at",
+    ]
+    search_fields = ["risk__risk_id", "render_task_id"]
+    list_filter = ["status"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    list_per_page = 100
+
+
+@admin.register(RiskReport)
+class RiskReportAdmin(admin.ModelAdmin):
+    list_display = [
+        "risk",
+        "status",
+        "content_short",
+        "created_at",
+        "updated_at",
+    ]
+    search_fields = ["risk__risk_id"]
+    list_filter = ["status"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+
+    def content_short(self, obj: RiskReport):
+        """显示报告内容的前100个字符"""
+        if obj.content:
+            return obj.content[:100] + "..." if len(obj.content) > 100 else obj.content
+        return ""
+
+    content_short.short_description = _("报告内容摘要")
