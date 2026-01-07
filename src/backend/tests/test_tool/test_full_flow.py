@@ -135,7 +135,7 @@ class TestToolFullFlow(TestCase):
         # 创建工具，使用丰富的 input_variable 示例
         self.api_config_data = {
             "api_config": {
-                "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent",
+                "url": "https://example.com/api/test",
                 "method": "GET",
                 "auth_config": {
                     "method": "bk_app_auth",
@@ -209,26 +209,31 @@ class TestToolFullFlow(TestCase):
         uid = resp["uid"]
         self.assertTrue(Tool.objects.filter(uid=uid).exists())
 
-        # 执行工具
-        result = self.resource.tool.execute_tool(
-            {
-                "uid": uid,
-                "params": {
-                    "tool_variables": [
-                        {
-                            "raw_name": "pageIndex",
-                            "value": "2",
-                            "position": "query",
-                        },
-                        {
-                            "raw_name": "pageSize",
-                            "value": "30",
-                            "position": "query",
-                        },
-                    ]
-                },
-            }
-        )
+        # 执行工具 (mock HTTP 请求，避免真实网络调用)
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": True, "data": {"pageIndex": 2, "pageSize": 30}}
+
+        with mock.patch("requests.request", return_value=mock_response):
+            result = self.resource.tool.execute_tool(
+                {
+                    "uid": uid,
+                    "params": {
+                        "tool_variables": [
+                            {
+                                "raw_name": "pageIndex",
+                                "value": "2",
+                                "position": "query",
+                            },
+                            {
+                                "raw_name": "pageSize",
+                                "value": "30",
+                                "position": "query",
+                            },
+                        ]
+                    },
+                }
+            )
         self.assertEqual(result["tool_type"], ToolTypeEnum.API.value)
 
         # 删除工具

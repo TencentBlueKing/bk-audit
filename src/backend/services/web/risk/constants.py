@@ -705,7 +705,3 @@ class EventFilterOperator(TextChoices):
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
-# 启用 events mock
-ENABLE_EVENTS_MOCK_KEY = "ENABLE_EVENTS_MOCK"
-# events 接口 mock 数据
-EVENTS_MOCK_DATA_KEY = "EVENTS_MOCK_DATA"
