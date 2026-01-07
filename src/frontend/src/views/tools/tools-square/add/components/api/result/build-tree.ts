@@ -27,19 +27,15 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
         ? `${parentId}.${key}`
         : `${key}`;
 
-      // 检测节点名称是否重复
-      const currentCount = nameCountMap.get(key) || 0;
-      nameCountMap.set(key, currentCount + 1);
-
       // 根据重复情况设置显示名称
-      const displayName = `${key} (${currentId})`;
 
       const node = {
-        name: displayName,
+        name: key,
         json_path: currentId,
         isChecked: false,
         isChild,
         children: [] as any[],
+        value: currentId,
         list: [] as any[],
         type,
         config: null,
