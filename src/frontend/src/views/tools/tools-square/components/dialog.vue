@@ -793,7 +793,7 @@
       // eslint-disable-next-line no-nested-ternary
       dialogTableHeight.value = val ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.57}px` : '40%') : '300px';
       // eslint-disable-next-line no-nested-ternary
-      dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`) : `${window.innerHeight * 0.50}px`;
+      dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.85}px` : `${window.innerHeight * 0.60}px`) : `${window.innerHeight * 0.50}px`;
     });
   });
 
