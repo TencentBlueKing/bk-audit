@@ -46,3 +46,18 @@ class UserAuthActionEnum(TextChoices):
     """
 
     RT_QUERY = "result_table.query_data", gettext_lazy("结果表查询")
+
+
+class BkBaseFieldType(TextChoices):
+    """
+    BKBase 字段类型枚举
+    用于报告聚合函数接口的字段类型匹配
+    """
+
+    INT = "int", gettext_lazy("整数")
+    LONG = "long", gettext_lazy("长整数")
+    FLOAT = "float", gettext_lazy("浮点数")
+    DOUBLE = "double", gettext_lazy("双精度浮点数")
+    STRING = "string", gettext_lazy("字符串")
+    TIMESTAMP = "timestamp", gettext_lazy("时间戳")
+    TEXT = "text", gettext_lazy("文本")

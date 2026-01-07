@@ -40,6 +40,7 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
+from services.web.risk.report_config import ReportConfig
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
@@ -69,6 +70,9 @@ from services.web.strategy_v2.exceptions import (
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
 from services.web.tool.constants import DrillConfig
+
+# 从 Pydantic BaseModel 生成的 DRF 序列化器类
+ReportConfigSerializer = type(ReportConfig.drf_serializer())
 
 
 def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
@@ -238,6 +242,18 @@ class StrategySerializer(serializers.Serializer):
                 raise serializers.ValidationError(gettext("%s Need to configure mapping") % field.description)
         return validated_request_data
 
+    def _validate_report_config(self, validated_request_data: dict):
+        """
+        校验报告配置
+
+        规则：如果 report_enabled 开启，则必须有 report_config
+        """
+        report_enabled = validated_request_data.get("report_enabled", False)
+        report_config = validated_request_data.get("report_config")
+
+        if report_enabled and not report_config:
+            raise serializers.ValidationError(gettext("report_config is required when report_enabled is True"))
+
 
 class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
     """
@@ -278,6 +294,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
         allow_empty=False,
     )
+    report_config = ReportConfigSerializer(required=False, allow_null=True)
 
     class Meta:
         model = Strategy
@@ -302,6 +319,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_evidence_field_configs",
             "risk_meta_field_config",
             "source",
+            "report_enabled",
+            "report_config",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -315,6 +334,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_configs(data)
         # check event_basic_field_configs
         self._validate_event_basic_field_configs(data)
+        # check report_config
+        self._validate_report_config(data)
         return data
 
 
@@ -368,6 +389,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         allow_empty=False,
     )
     risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
+    report_config = ReportConfigSerializer(required=False, allow_null=True)
 
     class Meta:
         model = Strategy
@@ -394,6 +416,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_evidence_field_configs",
             "risk_meta_field_config",
             "source",
+            "report_enabled",
+            "report_config",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -411,6 +435,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_configs(data)
         # check event_basic_field_configs
         self._validate_event_basic_field_configs(data)
+        # check report_config
+        self._validate_report_config(data)
         return data
 
 
@@ -525,7 +551,39 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
             "risk_guidance",
             "risk_title",
             "processor_groups",
+            "report_enabled",
+            "report_config",
         ]
+
+
+class StrategyDetailSerializer(serializers.ModelSerializer):
+    """
+    策略详情序列化器
+
+    返回策略全量配置（包含 report_config），用于策略编辑页面。
+    与 ListStrategyResponseSerializer 保持返回逻辑一致。
+    """
+
+    tags = serializers.SerializerMethodField()
+    tools = StrategyToolSerializer(many=True, read_only=True)
+
+    def get_tags(self, obj):
+        """
+        从预加载的策略标签关系中获取 tag_id 列表
+        """
+        if hasattr(obj, 'prefetched_tags'):
+            return [tag_rel.tag_id for tag_rel in obj.prefetched_tags]
+        else:
+            return list(obj.tags.values_list('tag_id', flat=True))
+
+    class Meta:
+        model = Strategy
+        fields = "__all__"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
+        return data
 
 
 class StrategyProviderSerializer(serializers.ModelSerializer):
@@ -1404,3 +1462,52 @@ class RunningStatusSerializer(serializers.Serializer):
 
 class StrategyRunningStatusListRespSerializer(serializers.Serializer):
     strategy_running_status = RunningStatusSerializer(many=True)
+
+
+# ============== 报告相关序列化器 ==============
+
+
+class RetrieveStrategyRequestSerializer(serializers.Serializer):
+    """
+    获取策略详情请求序列化器
+    """
+
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
+
+
+class PreviewReportRequestSerializer(serializers.Serializer):
+    """
+    报告预览请求序列化器
+    """
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    report_config = ReportConfigSerializer()
+
+
+class PreviewReportResponseSerializer(serializers.Serializer):
+    """
+    报告预览响应序列化器
+    """
+
+    task_id = serializers.CharField(label=gettext_lazy("任务ID"))
+    status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+class RiskVariableResponseSerializer(serializers.Serializer):
+    """
+    风险变量响应序列化器
+    """
+
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    description = serializers.CharField(label=gettext_lazy("字段描述"), allow_blank=True)
+
+
+class AggregationFunctionResponseSerializer(serializers.Serializer):
+    """
+    聚合函数响应序列化器
+    """
+
+    id = serializers.CharField(label=gettext_lazy("聚合函数标识"))
+    name = serializers.CharField(label=gettext_lazy("聚合函数显示名"))
+    supported_field_types = serializers.ListField(label=gettext_lazy("支持的字段类型"), child=serializers.CharField())

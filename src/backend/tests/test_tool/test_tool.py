@@ -369,10 +369,13 @@ class ToolResourceTestCase(TestCase):
         mock_authed_tool_filter.return_value = Q()
         recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
 
-        with patch(
-            "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
-            return_value=recent_uids,
-        ), patch("services.web.tool.resources.get_request_username", return_value=self.uid):
+        with (
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                return_value=recent_uids,
+            ),
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+        ):
             data = {
                 "keyword": "",
                 "tags": [],

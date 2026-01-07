@@ -26,7 +26,7 @@ class Tool(SoftDeleteModel):
     name = models.CharField(gettext_lazy("工具名称"), max_length=255, db_index=True)
     uid = UUIDField(gettext_lazy("工具UID"), db_index=True)
     version = models.IntegerField(gettext_lazy("版本"), db_index=True)
-    description = models.TextField(gettext_lazy("工具描述"), null=True, blank=True, db_index=True)
+    description = models.TextField(gettext_lazy("工具描述"), null=True, blank=True)
     tool_type = models.CharField(gettext_lazy("工具类型"), choices=ToolTypeEnum.choices, max_length=16)
     config = models.JSONField(gettext_lazy("工具配置"), default=dict, blank=True)
     permission_owner = models.CharField(gettext_lazy("权限负责人"), max_length=255, help_text="用于工具的权限认证")

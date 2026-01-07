@@ -86,6 +86,8 @@ from services.web.risk.constants import (
 )
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
+from services.web.risk.serializers import RiskInfoSerializer
+from services.web.risk.utils.renderer_client import renderer_client
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -134,6 +136,7 @@ from services.web.strategy_v2.models import (
     StrategyTool,
 )
 from services.web.strategy_v2.serializers import (
+    AggregationFunctionResponseSerializer,
     BulkGetRTFieldsRequestSerializer,
     BulkGetRTFieldsResponseSerializer,
     CreateLinkTableRequestSerializer,
@@ -166,9 +169,14 @@ from services.web.strategy_v2.serializers import (
     ListStrategyResponseSerializer,
     ListStrategyTagsResponseSerializer,
     ListTablesRequestSerializer,
+    PreviewReportRequestSerializer,
+    PreviewReportResponseSerializer,
+    RetrieveStrategyRequestSerializer,
     RetryStrategyRequestSerializer,
+    RiskVariableResponseSerializer,
     RuleAuditSourceTypeCheckReqSerializer,
     RuleAuditSourceTypeCheckRespSerializer,
+    StrategyDetailSerializer,
     StrategyInfoSerializer,
     StrategyRunningStatusListReqSerializer,
     StrategyRunningStatusListRespSerializer,
@@ -1654,3 +1662,113 @@ class StrategyRunningStatusList(StrategyV2Base):
             return {"strategy_running_status": []}
         strategy_running_status = h.get_strategy_running_status()
         return {"strategy_running_status": strategy_running_status}
+
+
+# ============== 报告相关接口 ==============
+
+
+class ReportBase(AuditMixinResource, abc.ABC):
+    """报告相关接口基类"""
+
+    tags = ["Report"]
+
+
+class ListRiskVariables(ReportBase):
+    """
+    获取报告风险变量列表
+
+    返回可用于报告模板的风险字段列表，前端使用时需加 `risk.` 前缀。
+    """
+
+    name = gettext_lazy("获取报告风险变量列表")
+    ResponseSerializer = RiskVariableResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.constants import REPORT_RISK_VARIABLES
+
+        # 将 lazy 对象转换为字符串，避免序列化校验失败
+        return [
+            {
+                "field": item["field"],
+                "name": str(item["name"]),
+                "description": str(item["description"] or ""),
+            }
+            for item in REPORT_RISK_VARIABLES
+        ]
+
+
+class ListAggregationFunctions(ReportBase):
+    """
+    获取聚合函数列表
+
+    返回可用的聚合函数列表，包含每个函数适用的 BKBase 字段类型。
+    """
+
+    name = gettext_lazy("获取聚合函数列表")
+    ResponseSerializer = AggregationFunctionResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.constants import AggregationFunction
+
+        return [
+            {
+                "id": func.value,
+                "name": str(func.label),
+                "supported_field_types": AggregationFunction.get_supported_field_types(func.value),
+            }
+            for func in AggregationFunction
+        ]
+
+
+class RetrieveStrategy(StrategyV2Base):
+    """
+    获取策略详情
+
+    返回策略全量配置（包含 report_config），用于策略编辑页面。
+    复用 LIST_STRATEGY 权限。
+    """
+
+    name = gettext_lazy("获取策略详情")
+    audit_action = ActionEnum.LIST_STRATEGY
+    RequestSerializer = RetrieveStrategyRequestSerializer
+    ResponseSerializer = StrategyDetailSerializer
+
+    def perform_request(self, validated_request_data):
+        strategy_id = validated_request_data["strategy_id"]
+        strategy = get_object_or_404(Strategy, strategy_id=strategy_id)
+        return strategy
+
+
+class PreviewRiskReport(StrategyV2Base):
+    """
+    报告预览（异步）
+
+    根据传入的 report_config，使用指定风险单数据进行渲染预览。
+    用于策略配置页面预览模板效果。
+    权限：通过 ViewSet 的 InstanceActionPermission 校验策略编辑权限。
+    """
+
+    name = gettext_lazy("报告预览")
+    RequestSerializer = PreviewReportRequestSerializer
+    ResponseSerializer = PreviewReportResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        report_config = validated_request_data["report_config"]
+
+        # 获取风险
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+
+        # 构建渲染参数
+        risk_data = RiskInfoSerializer(risk).data
+
+        # 调用渲染器服务
+        result = renderer_client.render_preview(
+            risk_data=risk_data,
+            template=report_config.get("template", ""),
+            ai_variables=report_config.get("ai_variables", []),
+        )
+
+        return result
