@@ -104,10 +104,8 @@ class TestToolViewPermissions(TestCase):
 
     def test_execute_without_caller_and_not_owner_denied(self):
         # 非调用方上下文，且无图标使用权限 -> 应抛权限异常
-        with (
-            mock.patch(
-                "services.web.tool.permissions.api.bk_vision.check_share_auth", return_value={"check_result": False}
-            )
+        with mock.patch(
+            "services.web.tool.permissions.api.bk_vision.check_share_auth", return_value={"check_result": False}
         ):
             with self.assertRaises(BkVisionSearchPermissionProhibited):
                 self.resource.tool.execute_tool({"uid": self.other_tool.uid, "params": {}})

@@ -1,6 +1,7 @@
 import inspect
 
 from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import OpenApiParameter
 
 
 class BKResourceAutoSchema(AutoSchema):
@@ -44,6 +45,31 @@ class BKResourceAutoSchema(AutoSchema):
                     if serializer:
                         return serializer
         return super().get_response_serializers()
+
+    def get_override_parameters(self):
+        params = super().get_override_parameters()
+        view = self.view
+        if hasattr(view, 'resource_routes'):
+            for route in view.resource_routes:
+                if view.action == self._get_action_for_route(route):
+                    # 如果是 GET 请求，且 Resource 定义了 RequestSerializer，将其添加到参数列表中
+                    if route.method.upper() == "GET":
+                        serializer = route.resource_class.RequestSerializer
+                        if serializer:
+                            params.append(serializer)
+                    # 如果开启了分页，添加分页参数
+                    if route.enable_paginate:
+                        params.extend(
+                            [
+                                OpenApiParameter(
+                                    "page", type=int, location=OpenApiParameter.QUERY, description="Page number"
+                                ),
+                                OpenApiParameter(
+                                    "page_size", type=int, location=OpenApiParameter.QUERY, description="Page size"
+                                ),
+                            ]
+                        )
+        return params
 
     def get_tags(self):
         # 尝试从 Resource 类获取 tags
