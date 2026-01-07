@@ -413,6 +413,15 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .audit-icon-sql:before {
 	content: "\e1a4";
 }
+.audit-icon-apixiao:before {
+	content: "\e1a5";
+}
+.audit-icon-sqlxiao:before {
+	content: "\e1a6";
+}
+.audit-icon-bkvisonxiao:before {
+	content: "\e1a7";
+}
 .audit-icon-lock:before {
 	content: "\e1a8";
 }
@@ -442,19 +451,4 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 }
 .audit-icon-shijian:before {
 	content: "\e1b1";
-}
-.audit-icon-pull:before {
-	content: "\e1b3";
-}
-.audit-icon-weiwancheng:before {
-	content: "\e1b4";
-}
-.audit-icon-api-4:before {
-	content: "\e1b5";
-}
-.audit-icon-cuo:before {
-	content: "\e1b6";
-}
-.audit-icon-play-fill:before {
-	content: "\e1b7";
 }
