@@ -20,7 +20,7 @@
       <audit-icon
         class="move"
         type="move" />
-      <span class="head-text">{{ data.name }}</span>
+      <span class="head-text">{{ `${data.name}(${data.json_path})` }}</span>
       <bk-tag
         style="margin-left: 10px;background-color: #fdeed8;"
         theme="warning">
@@ -269,8 +269,7 @@
               ext-cls="field-required-pop"
               placement="top"
               theme="light"
-              trigger="click"
-              width="200">
+              trigger="click">
               <span>
                 <audit-icon
                   class="plus-circle"
