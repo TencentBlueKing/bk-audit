@@ -46,22 +46,46 @@
           <ai-editor />
         </div>
       </div>
+      <div class="risks-select">
+        <bk-select
+          v-model="selectedValue"
+          class="risks-bk-select"
+          :prefix="t('审计风险工单')">
+          <bk-option
+            v-for="(item, index) in datasource"
+            :id="item.value"
+            :key="index"
+            :name="item.label" />
+        </bk-select>
+        <bk-button
+          class="ml8"
+          outline
+          theme="primary">
+          {{ t('报告预览') }}
+        </bk-button>
+        <audit-icon
+          class="info-fill ml8"
+          type="info-fill" />
+        <span class="ml8 select-tip-text">{{ t('关联审计风险工单，用于预览报告渲染效果') }}</span>
+      </div>
     </div>
     <template #action>
-      <bk-button @click="handlePrevious">
-        {{ t('上一步') }}
-      </bk-button>
-      <bk-button
-        class="ml8"
-        theme="primary"
-        @click="handleNext">
-        {{ t('下一步') }}
-      </bk-button>
-      <bk-button
-        class="ml8"
-        @click="handleCancel">
-        {{ t('取消') }}
-      </bk-button>
+      <div class="action-button">
+        <bk-button @click="handlePrevious">
+          {{ t('上一步') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          theme="primary"
+          @click="handleNext">
+          {{ t('下一步') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          @click="handleCancel">
+          {{ t('取消') }}
+        </bk-button>
+      </div>
     </template>
   </smart-action>
 </template>
@@ -85,7 +109,33 @@
   const { t } = useI18n();
   const isEnvent = ref(false);
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
-
+  const selectedValue = ref(1);
+  const datasource = ref([
+    {
+      value: 1,
+      label: '爬山',
+    },
+    {
+      value: 2,
+      label: '跑步',
+    },
+    {
+      value: 3,
+      label: '未知',
+    },
+    {
+      value: 4,
+      label: '健身',
+    },
+    {
+      value: 5,
+      label: '骑车',
+    },
+    {
+      value: 6,
+      label: '跳舞',
+    },
+  ]);
 
   const handlePrevious = () => {
     console.log('handlePrevious');
@@ -129,6 +179,7 @@
   }
 
   .event-box {
+    height: auto;
     margin-top: 16px;
     background: #fff;
     border-radius: 2px;
@@ -183,6 +234,32 @@
     .editor-box {
       margin-top: 5px;
     }
+
+    .risks-select {
+      display: flex;
+      padding-bottom: 20px;
+      margin-left: 16px;
+      align-items: center;
+
+      .risks-bk-select {
+        width: 520px;
+      }
+    }
+  }
+
+  .info-fill {
+    font-size: 14px;
+    color: #c4c6cc;
+  }
+
+  .select-tip-text {
+    font-size: 12px;
+    letter-spacing: 0;
+    color: #4d4f56;
+  }
+
+  .action-button {
+    margin-top: 20px;
   }
 }
 </style>
