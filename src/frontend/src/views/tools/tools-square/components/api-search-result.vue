@@ -674,7 +674,9 @@
         groupData.value.forEach((group) => {
           group.kv_fields.forEach((kvField) => {
             // eslint-disable-next-line no-param-reassign
-            kvField.resolvePathValue = extractDataByPath(result, kvField.path);
+            kvField.resolvePathValue = extractDataByPath(result, kvField.path) === null
+              || extractDataByPath(result, kvField.path) === undefined ? '--'
+              : extractDataByPath(result, kvField.path);
           });
           group.table_fields.forEach((tableField) => {
             const tableData = extractDataByPath(result, tableField.path);
