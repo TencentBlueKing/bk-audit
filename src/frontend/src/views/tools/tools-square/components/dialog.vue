@@ -122,10 +122,10 @@
                       <template #label>
                         <span
                           v-bk-tooltips="{
-                            disabled: !item?.description && !item?.raw_name,
-                            content: item?.description || item?.raw_name,
+                            disabled: !item?.description && !item?.raw_name.replace(/(body|path|query)$/, ''),
+                            content: item?.description || item?.raw_name.replace(/(body|path|query)$/, ''),
                           }">
-                          {{ item?.display_name || item?.raw_name }}
+                          {{ item?.display_name || item?.raw_name.replace(/(body|path|query)$/, '') }}
                         </span>
                       </template>
                       <tool-form-item
