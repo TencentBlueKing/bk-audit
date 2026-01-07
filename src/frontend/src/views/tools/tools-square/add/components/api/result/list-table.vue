@@ -608,7 +608,7 @@
     if (val && val.length > 0) {
       nextTick(() => {
         // 查找匹配的元素
-        const matchedEl = val.find((el: any) => el.raw_name === props.data.name);
+        const matchedEl = val.find((el: any) => el.json_path === props.data.json_path);
         if (matchedEl) {
           listInfo.value.name = matchedEl.display_name || '';
           listInfo.value.desc = matchedEl.description || '';
@@ -656,6 +656,7 @@
 <style lang="postcss" scoped>
 .list-table {
   position: relative;
+  margin-top: 6px;
   border: 1px solid #dcdee5;
   border-radius: 2px;
 

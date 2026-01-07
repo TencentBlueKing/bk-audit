@@ -81,9 +81,9 @@
                 required>
                 <bk-input
                   v-model.trim="formData.description"
-                  autosize
                   :maxlength="100"
                   :placeholder="t('请输入说明')"
+                  :resize="false"
                   show-word-limit
                   style="width: 50%;"
                   type="textarea" />
