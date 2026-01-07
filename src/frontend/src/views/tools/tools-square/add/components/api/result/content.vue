@@ -60,6 +60,9 @@
                 @change="(val: any) => handleCheckboxChange(val, node)" />
             </span>
           </template>
+          <template #default="{ data }">
+            <span>{{ `${data.name}(${data.json_path})` }}</span>
+          </template>
         </bk-tree>
       </bk-select>
     </div>
@@ -208,7 +211,7 @@
       // 选中时添加name到selectValue
       if (!selectedId.value.includes(node.json_path)) {
         selectedId.value.push(node.json_path);
-        selectValue.value.push(node.name);
+        selectValue.value.push(`${node.name}(${node.json_path})`);
         selectedItems.value.push(node);
       }
     } else {
