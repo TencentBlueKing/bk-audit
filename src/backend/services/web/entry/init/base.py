@@ -239,16 +239,16 @@ class SystemInitHandler:
 
     def init_sdk_config(self):
         sdk_config = {
-            "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk",
-            "java_sdk": "https://github.com/TencentBlueKing/bk-audit-java-sdk",
-            "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
+            "go_sdk": os.getenv("GO_SDK_CONFIG", ""),
+            "java_sdk": os.getenv("JAVA_SDK_CONFIG", ""),
+            "python_sdk": os.getenv("PYTHON_SDK_CONFIG", ""),
         }
         GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
 
     def init_doc_config(self):
         audit_doc_config = {
-            "audit_access_guide": "https://iwiki.woa.com/p/4013675599 ",
-            "audit_operation_log_record_standards": "https://iwiki.woa.com/p/4016811346 ",
+            "audit_access_guide": os.getenv("AUDIT_ACCESS_GUIDE", ""),
+            "audit_operation_log_record_standards": os.getenv("AUDIT_OPERATION_LOG_RECORD_STANDARDS", ""),
         }
         GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
 
