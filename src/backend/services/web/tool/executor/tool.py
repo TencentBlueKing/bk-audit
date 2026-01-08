@@ -36,7 +36,6 @@ from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
-    TimeRangeInputVariable,
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import (
@@ -48,6 +47,7 @@ from services.web.tool.exceptions import (
 )
 from services.web.tool.executor.auth import AuthHandlerFactory
 from services.web.tool.executor.model import (
+    ApiRequestParam,
     ApiToolErrorType,
     APIToolExecuteParams,
     ApiToolExecuteResult,
@@ -274,12 +274,15 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         """
         return APIToolExecuteParams.model_validate(params)
 
-    def _render_request_params(self, params: APIToolExecuteParams) -> List[Dict[str, Any]]:
+    def _render_request_params(self, params: APIToolExecuteParams) -> List["ApiRequestParam"]:
         """
-        渲染请求参数：校验、格式化、拆分时间范围
+        渲染请求参数：校验、格式化、转换为请求参数
+
+        各变量类型通过多态方法 to_request_params 自行处理转换逻辑
         """
+
         tool_vars_map = {var.raw_name: var.value for var in params.tool_variables}
-        final_params = []
+        final_params: List[ApiRequestParam] = []
 
         for var_config in self.config.input_variable:
             # 1. 获取值
@@ -295,31 +298,8 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             # 3. 格式化值
             parsed_value = ApiVariableParser(var_config).parse(value)
 
-            # 4. 特殊处理：时间范围拆分
-            if isinstance(var_config, TimeRangeInputVariable):
-                final_params.extend(
-                    [
-                        {
-                            "name": var_config.split_config.start_field,
-                            "value": parsed_value.start,
-                            "position": var_config.position,
-                        },
-                        {
-                            "name": var_config.split_config.end_field,
-                            "value": parsed_value.end,
-                            "position": var_config.position,
-                        },
-                    ]
-                )
-            else:
-                # 5. 普通参数直接添加
-                final_params.append(
-                    {
-                        "name": var_config.var_name,
-                        "value": parsed_value,
-                        "position": var_config.position,
-                    }
-                )
+            # 4. 通过多态方法转换为请求参数
+            final_params.extend(var_config.to_request_params(parsed_value))
 
         return final_params
 
@@ -333,16 +313,12 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         body_params = {}
 
         for param in request_params:
-            position = param["position"]
-            name = param["name"]
-            value = param["value"]
-
-            if position == ApiVariablePosition.PATH:
-                path_params[name] = value
-            elif position == ApiVariablePosition.QUERY:
-                query_params[name] = value
-            elif position == ApiVariablePosition.BODY:
-                body_params[name] = value
+            if param.position == ApiVariablePosition.PATH:
+                path_params[param.name] = param.value
+            elif param.position == ApiVariablePosition.QUERY:
+                query_params[param.name] = param.value
+            elif param.position == ApiVariablePosition.BODY:
+                body_params[param.name] = param.value
 
         # 3. 准备 URL 和 Headers
         api_config = self.config.api_config

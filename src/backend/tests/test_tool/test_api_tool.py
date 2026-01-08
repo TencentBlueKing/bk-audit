@@ -493,6 +493,8 @@ class ApiToolExecutorTestCase(TestCase):
         params = APIToolExecuteParams.model_validate(params_data)
         rendered_params = self.executor._render_request_params(params)
 
+        # 转换为字典列表进行比较
+        rendered_dicts = [{'name': p.name, 'value': p.value, 'position': p.position} for p in rendered_params]
         expected_params = [
             {'name': 'path_id', 'value': '1', 'position': ApiVariablePosition.PATH},
             {'name': 'body_param', 'value': 'value', 'position': ApiVariablePosition.BODY},
@@ -502,13 +504,13 @@ class ApiToolExecutorTestCase(TestCase):
 
         # Convert to set of frozensets for order-insensitive comparison of dicts
         self.assertEqual(
-            {frozenset(d.items()) for d in rendered_params},
+            {frozenset(d.items()) for d in rendered_dicts},
             {frozenset(d.items()) for d in expected_params},
         )
 
         # 确认可选参数 query_param 和 multiselect_param 不存在
-        self.assertFalse(any(p['name'] == 'query_param' for p in rendered_params))
-        self.assertFalse(any(p['name'] == 'multiselect_param' for p in rendered_params))
+        self.assertFalse(any(p.name == 'query_param' for p in rendered_params))
+        self.assertFalse(any(p.name == 'multiselect_param' for p in rendered_params))
 
     def test_render_request_params_multiselect(self):
         params_data = {
@@ -530,8 +532,8 @@ class ApiToolExecutorTestCase(TestCase):
         params = APIToolExecuteParams.model_validate(params_data)
         rendered_params = self.executor._render_request_params(params)
 
-        multiselect_param = next(p for p in rendered_params if p['name'] == 'multiselect_param')
-        self.assertEqual(multiselect_param['value'], ['val1', 'val2'])
+        multiselect_param = next(p for p in rendered_params if p.name == 'multiselect_param')
+        self.assertEqual(multiselect_param.value, ['val1', 'val2'])
 
     def test_render_request_params_optional_missing(self):
         # query_param and multiselect_param are optional and not provided
@@ -550,8 +552,8 @@ class ApiToolExecutorTestCase(TestCase):
         rendered_params = self.executor._render_request_params(params)
 
         # Optional params should NOT be present
-        self.assertFalse(any(p['name'] == 'query_param' for p in rendered_params))
-        self.assertFalse(any(p['name'] == 'multiselect_param' for p in rendered_params))
+        self.assertFalse(any(p.name == 'query_param' for p in rendered_params))
+        self.assertFalse(any(p.name == 'multiselect_param' for p in rendered_params))
 
     def test_render_request_params_time_range_optional_missing(self):
         # time_range_optional is optional and not provided
@@ -572,8 +574,8 @@ class ApiToolExecutorTestCase(TestCase):
 
         # Check for split_config fields of time_range_optional
         # These should NOT be present
-        self.assertFalse(any(p['name'] == 'body_start' for p in rendered_params))
-        self.assertFalse(any(p['name'] == 'body_end' for p in rendered_params))
+        self.assertFalse(any(p.name == 'body_start' for p in rendered_params))
+        self.assertFalse(any(p.name == 'body_end' for p in rendered_params))
 
     def test_render_request_params_person_select(self):
         """测试 API 工具中人员选择器转换为逗号拼接的字符串"""
@@ -596,9 +598,9 @@ class ApiToolExecutorTestCase(TestCase):
         params = APIToolExecuteParams.model_validate(params_data)
         rendered_params = self.executor._render_request_params(params)
 
-        person_select_param = next(p for p in rendered_params if p['name'] == 'person_select_param')
+        person_select_param = next(p for p in rendered_params if p.name == 'person_select_param')
         # 验证人员选择器被转换为逗号拼接的字符串
-        self.assertEqual(person_select_param['value'], "user1,user2,user3")
+        self.assertEqual(person_select_param.value, "user1,user2,user3")
 
     def test_render_request_params_person_select_single_value(self):
         """测试 API 工具中人员选择器单值情况"""
@@ -621,9 +623,9 @@ class ApiToolExecutorTestCase(TestCase):
         params = APIToolExecuteParams.model_validate(params_data)
         rendered_params = self.executor._render_request_params(params)
 
-        person_select_param = next(p for p in rendered_params if p['name'] == 'person_select_param')
+        person_select_param = next(p for p in rendered_params if p.name == 'person_select_param')
         # 验证单个值被转换为字符串
-        self.assertEqual(person_select_param['value'], "user1")
+        self.assertEqual(person_select_param.value, "user1")
 
     @patch('requests.request')
     def test_execute_with_person_select(self, mock_requests_request):

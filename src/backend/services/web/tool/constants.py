@@ -110,7 +110,10 @@ class EnumMappingConfig(BaseModel):
     """工具枚举映射配置"""
 
     collection_id: Optional[str] = PydanticField(
-        default="auto-generate", description="枚举集合ID（自动生成，无需手动指定）", max_length=255, allow_mutation=False
+        default="auto-generate",
+        description="枚举集合ID（自动生成，无需手动指定）",
+        max_length=255,
+        allow_mutation=False,
     )
     mappings: List[Dict[str, str]] = PydanticField(
         default_factory=list, description="枚举键值对列表，格式：[{'key': '1', 'name': 'Active'}]"
@@ -361,6 +364,23 @@ class ApiInputVariableBase(DataSearchBaseField):
     is_show: bool = PydanticField(title=gettext_lazy("用户是否可见"))
     position: ApiVariablePosition = PydanticField(title=gettext_lazy("变量位置"))
 
+    def to_request_params(self, parsed_value: Any):
+        """
+        将解析后的值转换为请求参数列表
+
+        :param parsed_value: 经过 ApiVariableParser 解析后的值
+        :return: 请求参数条目列表
+        """
+        from services.web.tool.executor.model import ApiRequestParam
+
+        return [
+            ApiRequestParam(
+                name=self.var_name,
+                value=parsed_value,
+                position=self.position,
+            )
+        ]
+
 
 class ApiStandardInputVariable(ApiInputVariableBase):
     """
@@ -411,6 +431,29 @@ class TimeRangeInputVariable(ApiInputVariableBase):
     var_name: Optional[str] = None
     # 时间范围分割配置
     split_config: TimeRangeSplitConfig = PydanticField(title=gettext_lazy("时间范围分割配置"))
+
+    def to_request_params(self, parsed_value: Any):
+        """
+        时间范围变量会拆分为开始时间和结束时间两个参数
+
+        :param parsed_value: 包含 start 和 end 属性的时间范围值
+        :return: 包含开始时间和结束时间的请求参数列表
+        """
+
+        from services.web.tool.executor.model import ApiRequestParam
+
+        return [
+            ApiRequestParam(
+                name=self.split_config.start_field,
+                value=parsed_value.start,
+                position=self.position,
+            ),
+            ApiRequestParam(
+                name=self.split_config.end_field,
+                value=parsed_value.end,
+                position=self.position,
+            ),
+        ]
 
 
 class ApiOutputFieldType(TextChoices):
