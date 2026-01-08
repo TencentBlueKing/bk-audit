@@ -77,6 +77,7 @@ declare module 'vue' {
     SystemDetailRecentData: typeof import('./src/components/skeleton-loading/components/system-detail-recent-data.vue')['default']
     SystemList: typeof import('./src/components/skeleton-loading/components/system-list.vue')['default']
     Tag: typeof import('./src/components/edit-box/tag.vue')['default']
+    TdesignList: typeof import('./src/components/tdesign-list/index.vue')['default']
     TypeTab: typeof import('./src/components/ip-selector/selector-box/components/type-tab.vue')['default']
     UserSelector: typeof import('./src/components/search-box/components/render-field-config/components/user-selector.vue')['default']
     ValueTag: typeof import('./src/components/search-box/components/render-value/value-tag.vue')['default']
