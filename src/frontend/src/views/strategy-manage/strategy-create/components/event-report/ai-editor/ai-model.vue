@@ -1,7 +1,23 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <bk-sideslider
     v-model:isShow="isShowRight"
-    class="ai-agent-drawer"
+    :class="isPreviewExpanded ? 'ai-agent-drawer ai-agent-drawer-preview' : 'ai-agent-drawer'"
     quick-close
     :title="t('引用 AI 智能体')"
     transfer
@@ -78,15 +94,28 @@
       </div>
     </template>
     <template #footer>
-      <div
-        class="preview"
-        @click="handlePreviewFooter">
-        <audit-icon
-          class="preview-angle-line-up"
-          :class="{ 'rotated': isPreviewExpanded }"
-          type="angle-line-up" />
-        <div class="preview-title">
-          <span>{{ t('AI 生成内容预览') }}</span>
+      <div :class="isPreviewExpanded ? 'footer': ''">
+        <div
+          class="preview"
+          :class="{ 'expanded': isPreviewExpanded }"
+          @click="handlePreviewFooter">
+          <audit-icon
+            class="preview-angle-line-up"
+            :class="{ 'rotated': isPreviewExpanded }"
+            type="angle-line-up" />
+          <div class="preview-title">
+            <span>{{ t('AI 生成内容预览') }}</span>
+          </div>
+        </div>
+        <div
+          v-if="isPreviewExpanded"
+          class="preview-div" />
+        <div
+          v-if="isPreviewExpanded"
+          class="preview-concent">
+          <div class="preview-concent-box">
+            {{ concent }}
+          </div>
         </div>
       </div>
     </template>
@@ -147,7 +176,7 @@
       label: '跳舞',
     },
   ]);
-
+  const concent = ref('暂无内容');
   const handleClose = () => {
     isShowRight.value = false;
   };
@@ -288,25 +317,25 @@
   }
 }
 
+.footer {
+  position: relative;
+  width: 765px;
+  height: 55vh;
+  margin-left: -25px;
+}
+
 .preview {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  margin-top: 20px;
-  line-height: 52px;
+  width: 700px;
+  height: 48px;
+  margin-left: 20px;
+  line-height: 48px;
   cursor: pointer;
-  background: #fff;
   border-top: 1px solid #dde4eb;
   transition: background-color .2s ease;
 
-  &:hover {
-    background-color: #f5f7fa;
-  }
-
   .preview-angle-line-up {
     position: absolute;
-    left: -10px;
+    left: 20px;
     font-size: 14px;
     line-height: 52px;
     transition: transform .4s cubic-bezier(.4, 0, .2, 1);
@@ -326,6 +355,40 @@
   }
 }
 
+.preview-div {
+  width: 765px;
+  height: 20px;
+  margin-left: -25px;
+  background-color: #fff;
+}
+
+.preview-concent {
+  width: 765px;
+  height: 100%;
+  padding-bottom: 20px;
+  margin-left: -25px;
+  background-color: #fff;
+}
+
+.preview-concent-box {
+  width: 740px;
+  height: calc( 100% - 70px);
+  padding: 0 40px;
+  margin-left: 25px;
+  overflow-y: auto;
+}
+
+.ai-agent-drawer-preview {
+  :deep(.bk-modal-footer) {
+    height: 52px;
+    background-color: rgb(255 86 245 / 8%) !important;
+
+    .bk-sideslider-footer {
+      background-color: rgb(255 86 245 / 8%) !important;
+    }
+  }
+}
+
 .ai-agent-drawer {
   :deep(.bk-modal-body) {
     position: relative;
@@ -335,9 +398,11 @@
 
   :deep(.bk-modal-footer) {
     height: 52px;
+    margin-top: -5px;
     background-color: #fff ;
 
     .bk-sideslider-footer {
+      margin-top: -5px;
       background-color: #fff ;
     }
   }
