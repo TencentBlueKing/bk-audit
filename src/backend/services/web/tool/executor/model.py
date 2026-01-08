@@ -22,7 +22,7 @@ from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 from rest_framework.fields import JSONField
 
-from services.web.tool.constants import ApiToolErrorType
+from services.web.tool.constants import ApiToolErrorType, ApiVariablePosition
 
 DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE = 100
 AnyValue = Annotated[Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)]
@@ -92,3 +92,15 @@ class APIToolExecuteParams(BaseModel):
     """
 
     tool_variables: List[ToolVariable] = PydanticField(default_factory=list, title="工具使用的变量列表")
+
+
+class ApiRequestParam(BaseModel):
+    """
+    API 请求参数条目
+
+    用于表示渲染后的单个请求参数，包含参数名、值和位置信息
+    """
+
+    name: str = PydanticField(..., title="参数名")
+    value: AnyValue = PydanticField(..., title="参数值")
+    position: ApiVariablePosition = PydanticField(..., title="参数位置")
