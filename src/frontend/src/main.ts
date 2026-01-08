@@ -40,6 +40,7 @@ import AuthCollapsePanel from '@components/audit-collapse-panel/index.vue';
 import DatePicker from '@blueking/date-picker';
 import RelationShip from '@components/relation-ship/index.vue';
 import RenderList from '@components/render-list/index.vue';
+import TdesignList from '@components/tdesign-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
@@ -96,6 +97,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('AuthCollapsePanel', AuthCollapsePanel);
     BKApp.component('RelationShip', RelationShip);
     BKApp.component('RenderList', RenderList);
+    BKApp.component('TdesignList', TdesignList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);
     BKApp.component('SkeletonLoading', SkeletonLoading);

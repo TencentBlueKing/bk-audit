@@ -34,6 +34,9 @@
       :agent-name="deletingAgentName"
       @cancel="handleDeleteCancel"
       @confirm="handleDeleteConfirm" />
+    <inset-var
+      v-model:visible="showInsetVarModal"
+      @confirm="handleInsetVarConfirm" />
   </div>
 </template>
 
@@ -49,6 +52,7 @@
   import AIAgentBlot from './ai-model';
   import AIAgentModal from './ai-model.vue';
   import DeleteDialog from './delete-dialog.vue';
+  import InsetVar from './inset-var.vue';
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
@@ -82,16 +86,27 @@
   const deletingNode = ref<HTMLElement | null>(null);
   const previousContent = ref<any>(null);
   const pendingDeleteAgent = ref<{ node: HTMLElement; name: string } | null>(null);
+  const showInsetVarModal = ref(false);
 
   // 定义处理函数
   const insertVariable = () => {
     if (!quill) return;
-
+    // 保存当前光标位置
     const range = quill.getSelection(true);
-    if (!range) return;
-    const variableText = '{{变量名}}';
+    savedSelection.value = range || { index: quill.getLength(), length: 0 };
+    showInsetVarModal.value = true;
+  };
+
+  const handleInsetVarConfirm = (variableText: string) => {
+    if (!quill) return;
+    // 使用保存的光标位置插入变量
+    const range = savedSelection.value || quill.getSelection() || { index: quill.getLength(), length: 0 };
     quill.insertText(range.index, variableText, 'user', true);
     quill.setSelection(range.index + variableText.length);
+    // 清除保存的选择
+    savedSelection.value = null;
+    // 更新保存的内容状态
+    previousContent.value = quill.getContents();
   };
 
   const openAIAgentModal = () => {
