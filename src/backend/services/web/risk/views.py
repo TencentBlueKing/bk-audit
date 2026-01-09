@@ -272,3 +272,27 @@ class RiskEventSubscriptionAdminViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.risk.query_risk_event_subscription, endpoint="preview"),
     ]
+
+
+class RiskReportViewSet(ResourceViewSet):
+    """风险报告 ViewSet
+
+    提供以下接口：
+    - POST /risks/report/{risk_id}/ai_preview/ - AI 智能体预览
+    - GET /risks/report/{risk_id}/task/?task_id=xxx - 查询任务结果 (task_id 通过查询参数传递)
+    """
+
+    def get_permissions(self):
+        """获取权限配置"""
+        if self.action in ["ai_preview"]:
+            return [
+                RiskViewPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
+            ]
+        return []
+
+    resource_routes = [
+        # AI 智能体预览
+        ResourceRoute("POST", resource.risk.ai_preview, pk_field="risk_id", endpoint="ai_preview"),
+        # 查询任务结果 (task_id 通过查询参数传递: ?task_id=xxx)
+        ResourceRoute("GET", resource.risk.get_task_result, endpoint="task"),
+    ]

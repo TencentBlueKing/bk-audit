@@ -16,10 +16,22 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from services.web.risk.resources.event import *  # noqa
-from services.web.risk.resources.experience import *  # noqa
-from services.web.risk.resources.process_application import *  # noqa
-from services.web.risk.resources.risk import *  # noqa
-from services.web.risk.resources.rule import *  # noqa
-from services.web.risk.resources.subscription import *  # noqa
-from services.web.risk.resources.report import *  # noqa
+# 智能体对话请求参数
+CHAT_COMPLETION_PARAMS = {
+    "user": "admin",  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
+    "input": "你好，请介绍一下自己",
+    "chat_history": [
+        {"role": "user", "content": "你是谁？"},
+        {"role": "assistant", "content": "我是AI审计报告智能助手，可以帮助您进行审计相关的分析和报告。"},
+    ],
+    "execute_kwargs": {"stream": False},
+}
+
+# 智能体对话响应（非流式）
+CHAT_COMPLETION_RESPONSE = {
+    "result": True,
+    "data": {
+        "content": "您好！我是AI审计报告智能助手，专门用于协助您进行审计相关的工作。",
+    },
+    "message": "success",
+}

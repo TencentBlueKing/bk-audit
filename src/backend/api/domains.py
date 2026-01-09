@@ -73,3 +73,8 @@ if not BK_VISION_API_URL:
 
 # BK IAM V4
 BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="dev")
+
+# AI Audit Report (智能体插件)
+AI_AUDIT_REPORT_API_URL = getattr(settings, "AI_AUDIT_REPORT_API_URL", "") or get_endpoint(
+    getattr(settings, "AI_AUDIT_REPORT_APIGW_NAME", "bp-ai-audit-report"), APIProvider.APIGW, stage="prod"
+)
