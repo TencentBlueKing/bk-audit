@@ -24,92 +24,240 @@
         {{ t('一个审计风险工单可能关联多条事件,可以使用聚合函数对数据进行处理;若不使用聚合函数,系统将默认提取最后一个事件的数据') }}
       </span>
     </div>
+    <div class="event-info-table">
+      <div class="table-header">
+        <div class="table-cell header-cell table-cell-right-border w1">
+          {{ t('变量名称') }}
+        </div>
+        <div class="table-cell header-cell table-cell-right-border w2">
+          {{ t('聚合函数') }}
+        </div>
+        <div class="table-cell header-cell table-cell-right-border w3">
+          {{ t('引用方式') }}
+        </div>
+        <div class="table-cell header-cell table-cell-right-border w4">
+          {{ t('变量说明') }}
+        </div>
+        <div class="table-cell header-cell w5">
+          {{ t('操作') }}
+        </div>
+      </div>
+      <div
+        v-for="(row, index) in tableData"
+        :key="index"
+        class="table-row">
+        <div class="table-cell table-cell-right-border w1">
+          {{ row.name }}
+        </div>
 
-    <tdesign-list
-      ref="tableRef"
-      :border="false"
-      :columns="columns"
-      :data-source="dataSource"
-      :need-empty-search-tip="false" />
+        <div class="table-cell table-cell-right-border w2 pn">
+          <bk-select
+            v-model="row.aggregation"
+            class="event-info-aggregation-select">
+            <bk-option
+              v-for="item in aggregationLists"
+              :id="item.value"
+              :key="item.value"
+              :name="item.label" />
+          </bk-select>
+        </div>
+        <div class="table-cell table-cell-right-border w3">
+          <span>{{ row.reference }}</span>
+          <audit-icon
+            class="copy-icon"
+            type="copy"
+            @click="handleCopy(row.reference)" />
+        </div>
+        <div class="table-cell table-cell-right-border w4">
+          {{ row.description }}
+        </div>
+        <div class="table-cell w5">
+          <span
+            class="insert-link"
+            @click="handleInsert(row.reference)">
+            {{ t('插入') }}
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { computed, ref } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import TdesignList from '@components/tdesign-list/index.vue';
+  import { execCopy } from '@utils/assist';
 
-  // interface Props {
-  // }
+  interface Emits {
+    (e: 'insert', value: string): void;
+  }
 
-  // interface Emits {
-  //   (e: 'insert', value: string): void;
-  // }
-
-  // const props = defineProps<Props>();
-  // const emits = defineEmits<Emits>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const tableRef = ref();
-  const variableList = ref<any[]>([]);
-
-  // 定义列配置
-  const columns = computed(() => [
+  // 表格数据
+  const tableData = ref([
     {
-      title: t('字段名称'),
-      colKey: 'field_name',
-      width: 200,
+      name: '责任人',
+      aggregation: '1',
+      reference: '{{ event.operator }}',
+      description: '-',
     },
     {
-      title: t('字段显示名'),
-      colKey: 'display_name',
-      width: 200,
+      name: '账号',
+      aggregation: '2',
+      reference: '{{ latest(event.account)}}',
+      description: '-',
     },
   ]);
 
-  // 数据源函数
-  const dataSource = async (params: any) =>
-    // TODO: 替换为实际的数据获取接口
-    // 目前返回静态数据，实际使用时需要调用对应的API
-    // eslint-disable-next-line implicit-arrow-linebreak
-    ({
-      results: variableList.value,
-      total: variableList.value.length,
-      page: params.page || 1,
-      num_pages: 1,
-    })
-  ;
+  // 聚合函数
+  const aggregationLists = ref([
+    {
+      label: '不聚合',
+      value: '1',
+    },
+    {
+      label: 'latest（取最新事件值）',
+      value: '2',
+    },
+  ]);
 
-  // const handleInsert = (row: any) => {
-  //   const variableText = `{{ event.${row.field_name} }}`;
-  //   emits('insert', variableText);
-  // };
+  // 复制
+  const handleCopy = (text: string) => {
+    execCopy(text, t('复制成功'));
+  };
+  // 插入
+  const handleInsert = (reference: string) => {
+    emits('insert', reference);
+  };
+
 </script>
 
 <style lang="postcss" scoped>
 .event-info {
   .tips-banner {
     display: flex;
-    align-items: flex-start;
-    padding: 12px 16px;
-    margin-bottom: 16px;
+    width: 880px;
+    height: 32px;
+    padding: 0 9px;
+    margin: 24px 0 0 40px;
+    line-height: 32px;
     background: #f0f5ff;
     border: 1px solid #a3c5fd;
     border-radius: 2px;
+    align-items: center;
 
     .info-icon {
-      margin-top: 2px;
-      margin-right: 8px;
       font-size: 14px;
       color: #3a84ff;
-      flex-shrink: 0;
     }
 
     .tips-text {
       font-size: 12px;
       line-height: 20px;
       color: #4d4f56;
+    }
+  }
+
+  .event-info-table {
+    margin: 24px 40px;
+    background: #fff;
+    border-bottom: 1px solid #dcdee5;
+    border-radius: 2px;
+
+    .table-header {
+      display: flex;
+      background: #f0f1f5;
+      border-bottom: 1px solid #dcdee5;
+    }
+
+    .table-row {
+      display: flex;
+      border-bottom: 1px solid #dcdee5;
+      transition: background-color .2s;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &:hover {
+        background: #f5f7fa;
+      }
+    }
+
+    .table-cell {
+      display: flex;
+      height: 42px;
+      padding-left: 16px;
+      font-size: 12px;
+      color: #4d4f56;
+      align-items: center;
+      flex-shrink: 0;
+
+      &.header-cell {
+        font-weight: 500;
+        color: #313238;
+      }
+
+      &.table-cell-right-border {
+        border-right: 1px solid #dcdee5;
+      }
+
+      &.w1 {
+        width: 164px;
+      }
+
+      &.w2 {
+        width: 201px;
+      }
+
+      &.w3 {
+        width: 237px;
+      }
+
+      &.w4 {
+        width: 148px;
+      }
+
+      &.w5 {
+        width: 100px;
+      }
+
+      &.pn {
+        padding: 0;
+      }
+
+      .copy-icon,
+      .expand-icon {
+        font-size: 14px;
+        cursor: pointer;
+        transition: color .2s;
+      }
+
+      .copy-icon {
+        margin-left: 5px;
+        color: #4d4f56;
+
+        &:hover {
+          color: #3a84ff;
+        }
+      }
+
+      .expand-icon {
+        color: #979ba5;
+      }
+
+      .insert-link {
+        color: #3a84ff;
+        cursor: pointer;
+        transition: opacity .2s;
+
+        &:hover {
+          opacity: 80%;
+        }
+      }
     }
   }
 
@@ -165,6 +313,14 @@
   font-size: 14px;
   color: #979ba5;
   text-align: center;
+}
+
+.event-info-aggregation-select {
+  :deep(.bk-input) {
+    width: 201px;
+    height: 42px;
+    border: none;
+  }
 }
 </style>
 
