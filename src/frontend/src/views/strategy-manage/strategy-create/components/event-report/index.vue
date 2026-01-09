@@ -43,7 +43,7 @@
           {{ t('事件调查报告模版') }}
         </div>
         <div class="editor-box">
-          <ai-editor />
+          <ai-editor ref="aiEditorRef" />
         </div>
       </div>
       <div class="risks-select">
@@ -60,7 +60,8 @@
         <bk-button
           class="ml8"
           outline
-          theme="primary">
+          theme="primary"
+          @click="handlePreview">
           {{ t('报告预览') }}
         </bk-button>
         <audit-icon
@@ -88,12 +89,17 @@
       </div>
     </template>
   </smart-action>
+  <preview-report
+    ref="previewReportRef"
+    v-model:visible="showPreview"
+    :risk-id="selectedValue" />
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import AiEditor from './ai-editor/index.vue';
+  import PreviewReport from './preview-report.vue';
 
   interface IFormData {
     processor_groups: Array<number>,
@@ -108,6 +114,9 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const isEnvent = ref(false);
+  const showPreview = ref(false);
+  const aiEditorRef = ref();
+  const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
   const selectedValue = ref(1);
   const datasource = ref([
@@ -150,6 +159,14 @@
   };
   const handleCancel = () => {
     console.log('handleCancel');
+  };
+
+  const handlePreview = () => {
+    showPreview.value = true;
+    nextTick(() => {
+      console.log('aiEditorRef', aiEditorRef.value.getContent());
+      previewReportRef.value.setContent(aiEditorRef.value.getContent());
+    });
   };
 </script>
 

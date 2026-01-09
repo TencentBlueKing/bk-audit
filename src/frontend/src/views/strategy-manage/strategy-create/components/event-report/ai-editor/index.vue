@@ -418,6 +418,14 @@
 
     return blocks;
   };
+
+  // 获取编辑器内容
+  const getContent = () => content.value;
+
+  // 暴露方法给父组件
+  defineExpose({
+    getContent,
+  });
 </script>
 
 <style lang="postcss" scoped>
