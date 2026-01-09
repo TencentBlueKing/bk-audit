@@ -136,6 +136,7 @@ from services.web.strategy_v2.models import (
     StrategyTool,
 )
 from services.web.strategy_v2.serializers import (
+    AggregationFunctionResponseSerializer,
     BulkGetRTFieldsRequestSerializer,
     BulkGetRTFieldsResponseSerializer,
     CreateLinkTableRequestSerializer,
@@ -172,6 +173,7 @@ from services.web.strategy_v2.serializers import (
     PreviewReportResponseSerializer,
     RetrieveStrategyRequestSerializer,
     RetryStrategyRequestSerializer,
+    RiskVariableResponseSerializer,
     RuleAuditSourceTypeCheckReqSerializer,
     RuleAuditSourceTypeCheckRespSerializer,
     StrategyDetailSerializer,
@@ -1679,11 +1681,21 @@ class ListRiskVariables(ReportBase):
     """
 
     name = gettext_lazy("获取报告风险变量列表")
+    ResponseSerializer = RiskVariableResponseSerializer
+    many_response_data = True
 
     def perform_request(self, validated_request_data):
         from services.web.risk.constants import REPORT_RISK_VARIABLES
 
-        return REPORT_RISK_VARIABLES
+        # 将 lazy 对象转换为字符串，避免序列化校验失败
+        return [
+            {
+                "field": item["field"],
+                "name": str(item["name"]),
+                "description": str(item["description"] or ""),
+            }
+            for item in REPORT_RISK_VARIABLES
+        ]
 
 
 class ListAggregationFunctions(ReportBase):
@@ -1694,6 +1706,8 @@ class ListAggregationFunctions(ReportBase):
     """
 
     name = gettext_lazy("获取聚合函数列表")
+    ResponseSerializer = AggregationFunctionResponseSerializer
+    many_response_data = True
 
     def perform_request(self, validated_request_data):
         from services.web.risk.constants import AggregationFunction

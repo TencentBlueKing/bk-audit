@@ -1194,7 +1194,8 @@ class ListRiskBrief(RiskMeta):
         queryset = queryset.filter(created_at__gte=start_time, created_at__lte=end_time)
 
         # 只返回精简字段，不限制数量
-        return queryset.order_by("-created_at")
+        # 优化：使用 values 减少数据传输量
+        return queryset.values("risk_id", "title", "strategy_id", "created_at").order_by("-created_at")
 
 
 class UpdateRisk(RiskMeta):
