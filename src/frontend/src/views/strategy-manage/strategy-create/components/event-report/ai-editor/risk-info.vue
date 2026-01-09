@@ -22,7 +22,8 @@
       :columns="columns"
       :data-source="dataSource"
       max-height="80vh"
-      :need-empty-search-tip="false" />
+      :need-empty-search-tip="false"
+      :sync-pagination-to-url="false" />
   </div>
 </template>
 
@@ -33,6 +34,8 @@
   import RiskManageService from '@service/risk-manage';
 
   import TdesignList from '@components/tdesign-list/index.vue';
+
+  import { execCopy } from '@utils/assist';
 
   // interface Props {
   // }
@@ -51,45 +54,57 @@
   // 定义列配置
   const columns = computed(() => [
     {
-      title: t('字段名称'),
+      title: t('变量名称'),
       colKey: 'name',
       width: 200,
       cell: () => (
-        <span>
-          fdadadada
-        </span>
-        ),
+      <span>
+        ID
+      </span>
+    ),
     },
     {
-      title: t('字段显示名'),
+      title: t('应用方式'),
+      colKey: 'name',
+      width: 200,
+      cell: (h: any, { row }: { row: { title: string } }) => (
+      <span>
+        {row.title}
+        <audit-icon
+          class="risk-info-copy-icon"
+          onClick={() => handleCopy(row)}
+          type="copy" />
+      </span>
+
+    ),
+    },
+    {
+      title: t('变量说明'),
       colKey: 'name',
       width: 200,
       cell: () => (
-        <span>
-          fxxxxx
-        </span>
-        ),
+      <span>
+        fxxxxx
+      </span>
+    ),
     },
     {
       title: t('操作'),
       colKey: 'action',
       width: 100,
-      cell: (h: any, { row }: { row: { title: string } })  => (
-          <span
-            class="insert-link"
-            onClick={() => handleInsert(row)}>
-            {t('插入')}
-          </span>
-        ),
+      cell: (h: any, { row }: { row: { title: string } }) => (
+      <span
+        class="insert-link"
+        onClick={() => handleInsert(row)}>
+        {t('插入')}
+      </span>
+    ),
     },
   ]);
-
-  // 数据源函数
-
-
+  const handleCopy = (row: any) => {
+    execCopy(row.title, t('复制成功'));
+  };
   const handleInsert = (row: any) => {
-    console.log('row', row);
-
     const variableText = `{{ risk }}${row.title}`;
     emits('insert', variableText);
   };
@@ -110,6 +125,17 @@
         opacity: 80%;
       }
     }
+
+    .risk-info-copy-icon {
+      margin-left: 5px;
+      color: #4d4f56;
+      cursor: pointer;
+      transition: color .2s;
+
+      &:hover {
+        color: #3a84ff;
+      }
+    }
   }
 }
 
@@ -120,4 +146,3 @@
   text-align: center;
 }
 </style>
-
