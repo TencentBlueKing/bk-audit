@@ -204,7 +204,7 @@ class RiskReportViewSet(ResourceViewSet):
         # POST /api/v1/risk_report/{risk_id}/ai_preview/ -> AI 智能体预览
         ResourceRoute("POST", resource.risk.ai_preview, pk_field="risk_id", endpoint="ai_preview"),
         # GET /api/v1/risk_report/{risk_id}/task/ -> 查询任务结果
-        ResourceRoute("GET", resource.risk.get_task_result, pk_field="risk_id", endpoint="task"),
+        ResourceRoute("GET", resource.risk.get_task_result, endpoint="task"),
     ]
 
 

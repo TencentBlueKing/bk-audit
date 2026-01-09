@@ -1132,21 +1132,13 @@ class GenerateRiskReportResponseSerializer(serializers.Serializer):
 class AIVariableSerializer(serializers.Serializer):
     """AI 变量配置序列化器"""
 
-    name = serializers.CharField(
-        label=gettext_lazy("AI变量名"),
-        help_text=gettext_lazy("必须以 ai. 开头，如 ai.risk_summary")
-    )
-    prompt_template = serializers.CharField(
-        label=gettext_lazy("AI提示词模板"),
-        help_text=gettext_lazy("可以包含风险变量和事件变量")
-    )
+    name = serializers.CharField(label=gettext_lazy("AI变量名"), help_text=gettext_lazy("必须以 ai. 开头，如 ai.risk_summary"))
+    prompt_template = serializers.CharField(label=gettext_lazy("AI提示词模板"), help_text=gettext_lazy("可以包含风险变量和事件变量"))
 
     def validate_name(self, value: str) -> str:
         """验证 AI 变量名必须以 ai. 开头"""
         if not value.startswith("ai."):
-            raise serializers.ValidationError(
-                gettext_lazy("AI变量名必须以 'ai.' 开头")
-            )
+            raise serializers.ValidationError(gettext_lazy("AI变量名必须以 'ai.' 开头"))
         return value
 
 
@@ -1158,7 +1150,7 @@ class AIPreviewRequestSerializer(serializers.Serializer):
         child=AIVariableSerializer(),
         label=gettext_lazy("AI变量配置列表"),
         min_length=1,
-        help_text=gettext_lazy("至少需要配置一个 AI 变量")
+        help_text=gettext_lazy("至少需要配置一个 AI 变量"),
     )
 
 
@@ -1167,15 +1159,13 @@ class AsyncTaskResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(
-        label=gettext_lazy("任务状态"),
-        help_text=gettext_lazy("PENDING / RUNNING / SUCCESS / FAILURE")
+        label=gettext_lazy("任务状态"), help_text=gettext_lazy("PENDING / RUNNING / SUCCESS / FAILURE")
     )
 
 
 class TaskResultRequestSerializer(serializers.Serializer):
     """查询任务结果请求序列化器"""
 
-    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
 
 
@@ -1184,12 +1174,11 @@ class TaskResultResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(
-        label=gettext_lazy("任务状态"),
-        help_text=gettext_lazy("PENDING / RUNNING / SUCCESS / FAILURE")
+        label=gettext_lazy("任务状态"), help_text=gettext_lazy("PENDING / RUNNING / SUCCESS / FAILURE")
     )
     result = serializers.JSONField(
         label=gettext_lazy("任务结果"),
         help_text=gettext_lazy("SUCCESS 时返回结果，FAILURE 时返回错误信息"),
         allow_null=True,
-        required=False
+        required=False,
     )

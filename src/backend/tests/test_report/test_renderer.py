@@ -36,21 +36,19 @@ from .constants import (
 
 class MockEventProvider(Provider):
     """Mock实现的EventProvider，用于测试
-    
+
     实现了完整的match和get逻辑，供测试使用
-    
+
     call_args格式：
     - 对于Call节点：{"function": "first", "args": ["event.account"], "kwargs": {}}
     """
 
     # 支持的聚合函数列表
-    SUPPORTED_FUNCTIONS = frozenset([
-        "first", "last", "count", "sum", "avg", "max", "min", "unique_list", "list"
-    ])
+    SUPPORTED_FUNCTIONS = frozenset(["first", "last", "count", "sum", "avg", "max", "min", "unique_list", "list"])
 
     def __init__(self, events: list[dict] = None, key: str = "event"):
         """初始化Mock事件Provider
-        
+
         Args:
             events: 事件列表
             key: Provider的key，默认为 event
@@ -60,7 +58,7 @@ class MockEventProvider(Provider):
 
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是事件聚合函数调用
-        
+
         匹配形如 first(event.account) 的函数调用
         返回 call_args 格式: {"function": "first", "args": ["event.account"], "kwargs": {}}
         """
@@ -98,7 +96,7 @@ class MockEventProvider(Provider):
             return ProviderMatchResult(matched=False)
 
         original_expr = f"{function_name}({provider_key}.{field_name})"
-        
+
         # 构建统一格式的call_args
         # args: 位置参数列表，这里是 ["event.account"]
         # kwargs: 关键字参数字典，这里为空
@@ -107,27 +105,23 @@ class MockEventProvider(Provider):
             original_expr=original_expr,
             provider=self,
             node_type=nodes.Call,
-            call_args={
-                "function": function_name,
-                "args": [f"{provider_key}.{field_name}"],
-                "kwargs": {}
-            }
+            call_args={"function": function_name, "args": [f"{provider_key}.{field_name}"], "kwargs": {}},
         )
 
     def get(self, function: str = None, args: list = None, kwargs: dict = None, **extra) -> Any:
         """获取事件聚合数据
-        
+
         Args:
             function: 聚合函数名，如 first, count, sum 等
             args: 位置参数列表，如 ["event.account"]
             kwargs: 关键字参数字典
-            
+
         Returns:
             聚合结果
         """
         args = args or []
         kwargs = kwargs or {}
-        
+
         if not self.events:
             return self._get_default_value(function)
 
@@ -138,7 +132,7 @@ class MockEventProvider(Provider):
             field_name = field_path.split(".")[-1] if "." in field_path else field_path
         else:
             return self._get_default_value(function)
-        
+
         # 提取字段值列表
         values = [event.get(field_name) for event in self.events if event.get(field_name) is not None]
 
@@ -179,7 +173,7 @@ class MockEventProvider(Provider):
                 except (ValueError, TypeError):
                     return None
             case "unique_list":
-                return list(set(v for v in values if v is not None))
+                return list({v for v in values if v is not None})
             case "list":
                 return values
             case _:
@@ -299,12 +293,11 @@ class TestAIProvider(TestCase):
         from services.web.risk.report.providers import AIProvider
 
         # 使用ai_executor参数注入mock执行器
-        mock_executor = lambda prompt: MOCK_AI_RESPONSE["content"]
+        def mock_executor(prompt):
+            return MOCK_AI_RESPONSE["content"]
 
         provider = AIProvider(
-            context={"risk_id": "123"},
-            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
-            ai_executor=mock_executor
+            context={"risk_id": "123"}, ai_variables_config=MOCK_AI_VARIABLES_CONFIG, ai_executor=mock_executor
         )
         result = provider.get(name="summary")
         self.assertIn("2025年12月17日", result)
@@ -313,10 +306,7 @@ class TestAIProvider(TestCase):
         """测试AI变量未配置prompt的情况"""
         from services.web.risk.report.providers import AIProvider
 
-        provider = AIProvider(
-            context={"risk_id": "123"},
-            ai_variables_config=[]
-        )
+        provider = AIProvider(context={"risk_id": "123"}, ai_variables_config=[])
         result = provider.get(name="unknown_var")
         self.assertIn("未配置prompt", result)
 
@@ -366,10 +356,7 @@ class TestTemplateParser(TestCase):
         """获取默认的providers列表（使用MockEventProvider）"""
         from services.web.risk.report.providers import AIProvider
 
-        return [
-            MockEventProvider(events=MOCK_EVENTS),
-            AIProvider(context={})
-        ]
+        return [MockEventProvider(events=MOCK_EVENTS), AIProvider(context={})]
 
     def test_parse_function_calls(self):
         """测试解析函数调用"""
@@ -457,11 +444,11 @@ class TestTemplateParser(TestCase):
         {% if show_summary %}
         {{ ai.summary }}
         {% endif %}
-        
+
         {% for item in items %}
         - {{ item.name }}: {{ first(event.value) }}
         {% endfor %}
-        
+
         {{ count(event.event_id) }}
         """
         calls = _parse_template(template, self._get_default_providers())
@@ -517,11 +504,7 @@ class TestRenderTemplate(TestCase):
         """测试渲染简单变量（无Provider调用）"""
         from services.web.risk.report.renderer import _render_template
 
-        result = _render_template(
-            template=SIMPLE_TEMPLATE,
-            providers=[],
-            variables={"risk": MOCK_RISK}
-        )
+        result = _render_template(template=SIMPLE_TEMPLATE, providers=[], variables={"risk": MOCK_RISK})
 
         self.assertIn("虚拟资源发放异常检测", result)
         self.assertIn("高危", result)
@@ -532,9 +515,7 @@ class TestRenderTemplate(TestCase):
         from services.web.risk.report.renderer import _render_template
 
         result = _render_template(
-            template=EVENT_ONLY_TEMPLATE,
-            providers=[MockEventProvider(events=MOCK_EVENTS)],
-            variables={}
+            template=EVENT_ONLY_TEMPLATE, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={}
         )
 
         self.assertIn("事件数量：3", result)
@@ -547,7 +528,8 @@ class TestRenderTemplate(TestCase):
         from services.web.risk.report.renderer import _render_template
 
         # 使用ai_executor参数注入mock执行器
-        mock_executor = lambda prompt: MOCK_AI_RESPONSE["content"]
+        def mock_executor(prompt):
+            return MOCK_AI_RESPONSE["content"]
 
         result = _render_template(
             template=TEST_TEMPLATE,
@@ -556,10 +538,10 @@ class TestRenderTemplate(TestCase):
                 AIProvider(
                     context={"risk_id": MOCK_RISK["risk_id"]},
                     ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
-                    ai_executor=mock_executor
-                )
+                    ai_executor=mock_executor,
+                ),
             ],
-            variables={"risk": MOCK_RISK}
+            variables={"risk": MOCK_RISK},
         )
 
         # 验证普通变量渲染
@@ -581,11 +563,7 @@ class TestRenderTemplate(TestCase):
         # 模板中使用unknown.field，但providers中只有event
         # 由于unknown没有对应的provider，解析时不会匹配，Jinja2渲染时会报错
         template = "{{ first(unknown.field) }}"
-        result = _render_template(
-            template=template,
-            providers=[MockEventProvider(events=[])],
-            variables={}
-        )
+        result = _render_template(template=template, providers=[MockEventProvider(events=[])], variables={})
 
         # 由于unknown没有provider，Jinja2渲染失败，返回错误信息
         self.assertIn("Render Error", result)
@@ -595,11 +573,7 @@ class TestRenderTemplate(TestCase):
         from services.web.risk.report.renderer import _render_template
 
         template = "{{ first(event.account) }}"
-        result = _render_template(
-            template=template,
-            providers=[MockEventProvider(events=[])],  # 空事件列表
-            variables={}
-        )
+        result = _render_template(template=template, providers=[MockEventProvider(events=[])], variables={})  # 空事件列表
 
         # Provider注册了，但事件列表为空，first返回None，Jinja2渲染为字符串"None"
         self.assertEqual(result.strip(), "None")
@@ -618,10 +592,7 @@ class TestRenderTemplate(TestCase):
         """
 
         result = _render_template(
-            template=template,
-            providers=[MockEventProvider(events=MOCK_EVENTS)],
-            variables={},
-            max_workers=5
+            template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={}, max_workers=5
         )
 
         self.assertIn("game_admin_001", result)
@@ -638,11 +609,7 @@ class TestRenderTemplate(TestCase):
         第一个用户名：{{ first(event.username) }}
         """
 
-        result = _render_template(
-            template=template,
-            providers=[MockEventProvider(events=MOCK_EVENTS)],
-            variables={}
-        )
+        result = _render_template(template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={})
 
         self.assertIn("第一个账号：game_admin_001", result)
         self.assertIn("第一个用户名：zhangsan", result)
@@ -657,11 +624,7 @@ class TestRenderTemplate(TestCase):
         账号2：{{ first(event.account) }}
         """
 
-        result = _render_template(
-            template=template,
-            providers=[MockEventProvider(events=MOCK_EVENTS)],
-            variables={}
-        )
+        result = _render_template(template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={})
 
         # 两个位置都应该渲染相同的结果
         self.assertEqual(result.count("game_admin_001"), 2)
@@ -678,8 +641,8 @@ class TestAIPreviewResource(TestCase):
             "risk_id": "test_risk_123",
             "ai_variables": [
                 {"name": "ai.summary", "prompt_template": "请总结风险"},
-                {"name": "ai.suggestion", "prompt_template": "请给出建议"}
-            ]
+                {"name": "ai.suggestion", "prompt_template": "请给出建议"},
+            ],
         }
         serializer = AIPreviewRequestSerializer(data=data)
         self.assertTrue(serializer.is_valid())
@@ -692,9 +655,7 @@ class TestAIPreviewResource(TestCase):
 
         data = {
             "risk_id": "test_risk_123",
-            "ai_variables": [
-                {"name": "invalid_name", "prompt_template": "请总结风险"}  # 不以 ai. 开头
-            ]
+            "ai_variables": [{"name": "invalid_name", "prompt_template": "请总结风险"}],  # 不以 ai. 开头
         }
         serializer = AIPreviewRequestSerializer(data=data)
         self.assertFalse(serializer.is_valid())
@@ -704,10 +665,7 @@ class TestAIPreviewResource(TestCase):
         """测试 AIPreviewRequestSerializer 验证空的AI变量列表"""
         from services.web.risk.serializers import AIPreviewRequestSerializer
 
-        data = {
-            "risk_id": "test_risk_123",
-            "ai_variables": []  # 空列表
-        }
+        data = {"risk_id": "test_risk_123", "ai_variables": []}  # 空列表
         serializer = AIPreviewRequestSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("ai_variables", serializer.errors)
@@ -769,7 +727,7 @@ class TestAIPreviewResource(TestCase):
                 risk_id=self.risk.risk_id,
                 ai_variables=[
                     {"name": "ai.summary", "prompt_template": "请总结风险"},
-                ]
+                ],
             )
 
             # 验证返回结果
@@ -781,7 +739,7 @@ class TestAIPreviewResource(TestCase):
                 risk_id=self.risk.risk_id,
                 ai_variables=[
                     {"name": "ai.summary", "prompt_template": "请总结风险"},
-                ]
+                ],
             )
 
     def test_ai_preview_task_execution_with_mock_ai(self):
@@ -803,15 +761,9 @@ class TestAIPreviewResource(TestCase):
                 return "这是AI生成的处理建议"
             return f"Mock AI response for: {prompt}"
 
-        with patch(
-            "services.web.risk.tasks.AIProvider._execute_ai_agent",
-            mock_ai_executor
-        ):
+        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", mock_ai_executor):
             # 直接调用任务函数（同步执行）
-            result = render_ai_variable(
-                risk_id=self.risk.risk_id,
-                ai_variables=ai_variables
-            )
+            result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             # 验证返回结果结构
             self.assertIn("ai", result)
@@ -833,14 +785,8 @@ class TestAIPreviewResource(TestCase):
         ]
 
         # Mock AIProvider._execute_ai_agent 方法
-        with patch(
-            "services.web.risk.tasks.AIProvider._execute_ai_agent",
-            return_value="这是AI生成的风险分析"
-        ):
-            result = render_ai_variable(
-                risk_id=self.risk.risk_id,
-                ai_variables=ai_variables
-            )
+        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value="这是AI生成的风险分析"):
+            result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             self.assertIn("ai", result)
             self.assertIn("analysis", result["ai"])
@@ -855,10 +801,7 @@ class TestAIPreviewResource(TestCase):
         ]
 
         with self.assertRaises(ValueError) as context:
-            render_ai_variable(
-                risk_id="non_existent_risk_id",
-                ai_variables=ai_variables
-            )
+            render_ai_variable(risk_id="non_existent_risk_id", ai_variables=ai_variables)
 
         self.assertIn("风险单不存在", str(context.exception))
 
@@ -871,7 +814,7 @@ class TestAIPreviewResource(TestCase):
                 risk_id="non_existent_risk_id",
                 ai_variables=[
                     {"name": "ai.summary", "prompt_template": "请总结风险"},
-                ]
+                ],
             )
 
 
@@ -882,24 +825,16 @@ class TestGetTaskResultResource(TestCase):
         """测试 TaskResultRequestSerializer 验证有效数据"""
         from services.web.risk.serializers import TaskResultRequestSerializer
 
-        data = {
-            "risk_id": "test_risk_123",
-            "task_id": "task_abc_123"
-        }
+        data = {"task_id": "task_abc_123"}
         serializer = TaskResultRequestSerializer(data=data)
         self.assertTrue(serializer.is_valid())
-        self.assertEqual(serializer.validated_data["risk_id"], "test_risk_123")
         self.assertEqual(serializer.validated_data["task_id"], "task_abc_123")
 
     def test_task_result_response_serializer(self):
         """测试 TaskResultResponseSerializer 序列化响应"""
         from services.web.risk.serializers import TaskResultResponseSerializer
 
-        data = {
-            "task_id": "task_abc_123",
-            "status": "SUCCESS",
-            "result": {"ai": {"summary": "风险摘要"}}
-        }
+        data = {"task_id": "task_abc_123", "status": "SUCCESS", "result": {"ai": {"summary": "风险摘要"}}}
         serializer = TaskResultResponseSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
@@ -907,11 +842,7 @@ class TestGetTaskResultResource(TestCase):
         """测试 TaskResultResponseSerializer 序列化PENDING状态"""
         from services.web.risk.serializers import TaskResultResponseSerializer
 
-        data = {
-            "task_id": "task_abc_123",
-            "status": "PENDING",
-            "result": None
-        }
+        data = {"task_id": "task_abc_123", "status": "PENDING", "result": None}
         serializer = TaskResultResponseSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
@@ -919,11 +850,7 @@ class TestGetTaskResultResource(TestCase):
         """测试 TaskResultResponseSerializer 序列化FAILURE状态"""
         from services.web.risk.serializers import TaskResultResponseSerializer
 
-        data = {
-            "task_id": "task_abc_123",
-            "status": "FAILURE",
-            "result": {"error": "任务执行失败"}
-        }
+        data = {"task_id": "task_abc_123", "status": "FAILURE", "result": {"error": "任务执行失败"}}
         serializer = TaskResultResponseSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
@@ -931,10 +858,7 @@ class TestGetTaskResultResource(TestCase):
         """测试 AsyncTaskResponseSerializer 序列化异步任务提交响应"""
         from services.web.risk.serializers import AsyncTaskResponseSerializer
 
-        data = {
-            "task_id": "task_abc_123",
-            "status": "PENDING"
-        }
+        data = {"task_id": "task_abc_123", "status": "PENDING"}
         serializer = AsyncTaskResponseSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
@@ -999,10 +923,7 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="test_task_id_pending"
-            )
+            result = self.resource.risk.get_task_result(task_id="test_task_id_pending")
 
             # 验证返回结果
             self.assertEqual(result["task_id"], "test_task_id_pending")
@@ -1019,20 +940,12 @@ class TestGetTaskResultResource(TestCase):
         # Mock AsyncResult
         mock_async_result = MagicMock()
         mock_async_result.status = "SUCCESS"
-        mock_async_result.result = {
-            "ai": {
-                "summary": "AI生成的风险摘要",
-                "suggestion": "AI生成的处理建议"
-            }
-        }
+        mock_async_result.result = {"ai": {"summary": "AI生成的风险摘要", "suggestion": "AI生成的处理建议"}}
 
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="test_task_id_success"
-            )
+            result = self.resource.risk.get_task_result(task_id="test_task_id_success")
 
             # 验证返回结果
             self.assertEqual(result["task_id"], "test_task_id_success")
@@ -1052,10 +965,7 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="test_task_id_failure"
-            )
+            result = self.resource.risk.get_task_result(task_id="test_task_id_failure")
 
             # 验证返回结果
             self.assertEqual(result["task_id"], "test_task_id_failure")
@@ -1075,25 +985,12 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="test_task_id_running"
-            )
+            result = self.resource.risk.get_task_result(task_id="test_task_id_running")
 
             # 验证返回结果
             self.assertEqual(result["task_id"], "test_task_id_running")
             self.assertEqual(result["status"], "RUNNING")  # STARTED 映射为 RUNNING
             self.assertIsNone(result["result"])
-
-    def test_get_task_result_resource_risk_not_found(self):
-        """测试 GetTaskResult Resource 风险单不存在的情况"""
-        from django.http import Http404
-
-        with self.assertRaises(Http404):
-            self.resource.risk.get_task_result(
-                risk_id="non_existent_risk_id",
-                task_id="test_task_id"
-            )
 
     def test_get_task_result_with_real_task_execution(self):
         """测试真实执行 render_ai_variable 任务后获取结果"""
@@ -1106,15 +1003,9 @@ class TestGetTaskResultResource(TestCase):
         ]
 
         # Mock AIProvider._execute_ai_agent 方法
-        with patch(
-            "services.web.risk.tasks.AIProvider._execute_ai_agent",
-            return_value="这是AI生成的风险摘要"
-        ):
+        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value="这是AI生成的风险摘要"):
             # 直接调用任务函数获取结果（同步执行）
-            task_result = render_ai_variable(
-                risk_id=self.risk.risk_id,
-                ai_variables=ai_variables
-            )
+            task_result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
         # 模拟 AsyncResult 返回任务执行结果
         mock_async_result = MagicMock()
@@ -1124,10 +1015,7 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="test_real_task_id"
-            )
+            result = self.resource.risk.get_task_result(task_id="test_real_task_id")
 
             # 验证返回结果
             self.assertEqual(result["status"], "SUCCESS")
@@ -1152,10 +1040,7 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.render_ai_variable") as mock_render:
             mock_render.delay.return_value = mock_task
 
-            submit_result = self.resource.risk.ai_preview(
-                risk_id=self.risk.risk_id,
-                ai_variables=ai_variables
-            )
+            submit_result = self.resource.risk.ai_preview(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             self.assertEqual(submit_result["task_id"], "workflow_task_id")
             self.assertEqual(submit_result["status"], "PENDING")
@@ -1168,14 +1053,8 @@ class TestGetTaskResultResource(TestCase):
                 return "建议：立即进行安全审查"
             return "默认响应"
 
-        with patch(
-            "services.web.risk.tasks.AIProvider._execute_ai_agent",
-            mock_ai_executor
-        ):
-            task_result = render_ai_variable(
-                risk_id=self.risk.risk_id,
-                ai_variables=ai_variables
-            )
+        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", mock_ai_executor):
+            task_result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
         # Step 3: 获取任务结果
         mock_async_result = MagicMock()
@@ -1185,10 +1064,7 @@ class TestGetTaskResultResource(TestCase):
         with patch("services.web.risk.resources.report.AsyncResult") as mock_ar:
             mock_ar.return_value = mock_async_result
 
-            get_result = self.resource.risk.get_task_result(
-                risk_id=self.risk.risk_id,
-                task_id="workflow_task_id"
-            )
+            get_result = self.resource.risk.get_task_result(task_id="workflow_task_id")
 
             # 验证完整工作流结果
             self.assertEqual(get_result["status"], "SUCCESS")

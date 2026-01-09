@@ -24,8 +24,12 @@ from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
 from services.web.risk.models import Risk
-from services.web.risk.serializers import AIPreviewRequestSerializer, AsyncTaskResponseSerializer, \
-    TaskResultRequestSerializer, TaskResultResponseSerializer
+from services.web.risk.serializers import (
+    AIPreviewRequestSerializer,
+    AsyncTaskResponseSerializer,
+    TaskResultRequestSerializer,
+    TaskResultResponseSerializer,
+)
 from services.web.risk.tasks import render_ai_variable
 
 
@@ -54,15 +58,9 @@ class AIPreview(RiskReportMeta):
         risk = get_object_or_404(Risk, risk_id=risk_id)
 
         # 提交异步任务
-        task = render_ai_variable.delay(
-            risk_id=risk.risk_id,
-            ai_variables=ai_variables
-        )
+        task = render_ai_variable.delay(risk_id=risk.risk_id, ai_variables=ai_variables)
 
-        return {
-            "task_id": task.id,
-            "status": "PENDING"
-        }
+        return {"task_id": task.id, "status": "PENDING"}
 
 
 class GetTaskResult(RiskReportMeta):
@@ -87,22 +85,14 @@ class GetTaskResult(RiskReportMeta):
     }
 
     def perform_request(self, validated_request_data):
-        risk_id = validated_request_data["risk_id"]
         task_id = validated_request_data["task_id"]
-
-        # 验证风险单存在
-        get_object_or_404(Risk, risk_id=risk_id)
 
         # 获取任务结果
         async_result = AsyncResult(task_id)
         celery_status = async_result.status
         status = self.STATUS_MAP.get(celery_status, "PENDING")
 
-        response = {
-            "task_id": task_id,
-            "status": status,
-            "result": None
-        }
+        response = {"task_id": task_id, "status": status, "result": None}
 
         if status == "SUCCESS":
             response["result"] = async_result.result
