@@ -16,10 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from services.web.risk.resources.event import *  # noqa
-from services.web.risk.resources.experience import *  # noqa
-from services.web.risk.resources.process_application import *  # noqa
-from services.web.risk.resources.risk import *  # noqa
-from services.web.risk.resources.rule import *  # noqa
-from services.web.risk.resources.subscription import *  # noqa
-from services.web.risk.resources.report import *  # noqa
+from services.web.risk.report.providers import AIProvider, Provider, ProviderMatchResult
+from services.web.risk.report.renderer import render_template
+
+__all__ = ["render_template", "Provider", "ProviderMatchResult", "AIProvider"]

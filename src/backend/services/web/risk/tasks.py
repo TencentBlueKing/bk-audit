@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import os
+from typing import Any
 
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
@@ -61,6 +62,7 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import ManualEvent, Risk, TicketNode
+from services.web.risk.report import AIProvider
 from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 
@@ -155,15 +157,15 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
 
     try:
         resp = (
-            EventHandler.search_event(
-                namespace=settings.DEFAULT_NAMESPACE,
-                start_time=search_start,
-                end_time=search_end,
-                page=1,
-                page_size=page_size,
-                manual_event_id=manual_event_id_param,
-            )
-            or {}
+                EventHandler.search_event(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    start_time=search_start,
+                    end_time=search_end,
+                    page=1,
+                    page_size=page_size,
+                    manual_event_id=manual_event_id_param,
+                )
+                or {}
         )
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
         logger_celery.warning(
@@ -405,12 +407,12 @@ def sync_auto_result(node_id: str = None):
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["current_status"]
-                            in [
-                                TicketStatus.TERMINATED,
-                                TicketStatus.FINISHED,
-                                TicketStatus.FAILED,
-                                TicketStatus.REVOKED,
-                            ]
+                               in [
+                                   TicketStatus.TERMINATED,
+                                   TicketStatus.FINISHED,
+                                   TicketStatus.FAILED,
+                                   TicketStatus.REVOKED,
+                               ]
                             else TicketNodeStatus.RUNNING
                         )
                     else:
@@ -424,12 +426,12 @@ def sync_auto_result(node_id: str = None):
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
-                            in [
-                                SOPSTaskStatus.EXPIRED,
-                                SOPSTaskStatus.FINISHED,
-                                SOPSTaskStatus.FAILED,
-                                SOPSTaskStatus.REVOKED,
-                            ]
+                               in [
+                                   SOPSTaskStatus.EXPIRED,
+                                   SOPSTaskStatus.FINISHED,
+                                   SOPSTaskStatus.FAILED,
+                                   SOPSTaskStatus.REVOKED,
+                               ]
                             else TicketNodeStatus.RUNNING
                         )
                     else:
@@ -440,9 +442,73 @@ def sync_auto_result(node_id: str = None):
                     last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
-                        risk and risk.status == RiskStatus.CLOSED
+                            risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
                 node.save(update_fields=["process_result", "status"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
+
+
+@celery_app.task(queue="risk")
+def render_ai_variable(
+        risk_id: str,
+        ai_variables: list[dict]
+) -> dict[str, Any]:
+    """Celery任务：渲染 AI 变量
+
+    用于「AI 智能体预览」接口，单独预览 AI 变量的输出
+
+    Args:
+        risk_id: 风险ID
+        ai_variables: AI 变量配置列表，格式：
+            [
+                {"name": "ai.risk_summary", "prompt_template": "..."},
+                {"name": "ai.suggestion", "prompt_template": "..."}
+            ]
+
+    Returns:
+        {
+            "ai": {
+                "risk_summary": "AI 生成的风险摘要...",
+                "suggestion": "AI 生成的建议..."
+            }
+        }
+    """
+    try:
+        # 获取风险实例
+        risk = Risk.objects.get(risk_id=risk_id)
+
+        # 构建 AI Provider
+        ai_provider = AIProvider(
+            context={"risk_id": risk_id},
+            ai_variables_config=ai_variables
+        )
+
+        # 执行 AI 调用，收集结果
+        ai_results = {}
+        for var_config in ai_variables:
+            var_name = var_config["name"]
+            # 提取变量名（去掉 ai. 前缀）
+            field_name = var_name.replace("ai.", "") if var_name.startswith("ai.") else var_name
+
+            try:
+                result = ai_provider.get(name=var_name)
+                ai_results[field_name] = result
+            except Exception as e:
+                logger_celery.exception(
+                    "[RenderAIVariable] Failed to get AI variable %s: %s",
+                    var_name, e
+                )
+                ai_results[field_name] = f"[Error: {e}]"
+
+        return {
+            "ai": ai_results
+        }
+
+    except Risk.DoesNotExist:
+        logger_celery.error("[RenderAIVariable] Risk not found: %s", risk_id)
+        raise ValueError(f"风险单不存在: {risk_id}")
+    except Exception as e:
+        logger_celery.exception("[RenderAIVariable] Failed to render AI variables: %s", e)
+        raise
