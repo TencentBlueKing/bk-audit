@@ -182,15 +182,6 @@ class RiskReportViewSet(ResourceViewSet):
     """
 
     def get_permissions(self):
-        # 任务结果查询只需要 LIST_RISK 权限
-        if self.action == "task":
-            return [
-                RiskViewPermission(
-                    actions=[ActionEnum.LIST_RISK],
-                    resource_meta=ResourceEnum.RISK,
-                    lookup_field="pk",
-                )
-            ]
         # 所有报告相关操作都需要风险编辑权限
         return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
 
