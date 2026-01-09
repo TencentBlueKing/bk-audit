@@ -104,7 +104,7 @@ class RisksViewSet(ResourceViewSet):
         if self.action in ["bulk_trans"]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
         # 风险编辑相关权限
-        if self.action in ["update", "create_report", "update_report", "generate_report"]:
+        if self.action in ["update"]:
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
         return []
 
@@ -166,13 +166,32 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.reopen_risk, endpoint="reopen", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.process_risk_ticket, endpoint="process_risk_ticket", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.risk_export, endpoint="export"),
-        # 风险编辑和报告接口
+        # 风险编辑
         ResourceRoute("PUT", resource.risk.update_risk, pk_field="risk_id"),
-        ResourceRoute("POST", resource.risk.create_risk_report, pk_field="risk_id", endpoint="report"),
-        ResourceRoute("PUT", resource.risk.update_risk_report, pk_field="risk_id", endpoint="report"),
-        ResourceRoute("POST", resource.risk.generate_risk_report, pk_field="risk_id", endpoint="report/generate"),
         # 风险简要列表（用于策略配置时选择风险单进行预览）
-        ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief"),
+        ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief", enable_paginate=True),
+    ]
+
+
+class RiskReportViewSet(ResourceViewSet):
+    """
+    风险报告管理
+
+    提供风险报告的创建、编辑、生成等功能。
+    路由前缀：/api/v1/risk_report/{risk_id}/
+    """
+
+    def get_permissions(self):
+        # 所有报告相关操作都需要风险编辑权限
+        return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
+
+    resource_routes = [
+        # POST /api/v1/risk_report/{risk_id}/save/ -> 创建报告
+        ResourceRoute("POST", resource.risk.create_risk_report, pk_field="risk_id", endpoint="save"),
+        # PUT /api/v1/risk_report/{risk_id}/ -> 编辑报告
+        ResourceRoute("PUT", resource.risk.update_risk_report, pk_field="risk_id"),
+        # POST /api/v1/risk_report/{risk_id}/generate/ -> 生成报告
+        ResourceRoute("POST", resource.risk.generate_risk_report, pk_field="risk_id", endpoint="generate"),
     ]
 
 

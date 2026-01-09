@@ -695,7 +695,8 @@
           "list_strategy",
           "list_notice_group",
           "list_link_table",
-          "generate_strategy_risk"
+          "generate_strategy_risk",
+          "process_risk"
         ],
         "description": "",
         "description_en": ""

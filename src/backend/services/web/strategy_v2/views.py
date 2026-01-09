@@ -179,16 +179,14 @@ class ReportViewSet(ResourceViewSet):
     风险报告配置相关接口
 
     提供报告模板配置所需的风险变量和聚合函数列表。
-    以及报告预览接口（需要策略编辑权限）。
+    以及报告预览接口。
     """
 
     def get_permissions(self):
-        if self.action in ["preview"]:
-            return [InstanceActionPermission(actions=[ActionEnum.EDIT_STRATEGY], resource_meta=ResourceEnum.STRATEGY)]
         return []
 
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_risk_variables, endpoint="risk_variables"),
         ResourceRoute("GET", resource.strategy_v2.list_aggregation_functions, endpoint="aggregation_functions"),
-        ResourceRoute("POST", resource.strategy_v2.preview_risk_report, pk_field="strategy_id", endpoint="preview"),
+        ResourceRoute("POST", resource.strategy_v2.preview_risk_report, endpoint="preview"),
     ]

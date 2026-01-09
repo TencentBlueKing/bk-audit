@@ -69,7 +69,6 @@ class TestPreviewRiskReportSerializer(TestCase):
         from services.web.strategy_v2.serializers import PreviewReportRequestSerializer
 
         data = {
-            "strategy_id": 1,
             "risk_id": "test-risk-id",
             "report_config": {
                 "template": "Risk: {{ risk.title }}",
@@ -90,7 +89,6 @@ class TestPreviewRiskReportSerializer(TestCase):
         from services.web.strategy_v2.serializers import PreviewReportRequestSerializer
 
         data = {
-            "strategy_id": 1,
             "risk_id": "test-risk-id",
             "report_config": {
                 "template": "test",
@@ -168,3 +166,63 @@ class TestListAggregationFunctions(TestCase):
             self.assertIn("id", func)
             self.assertIn("name", func)
             self.assertIn("supported_field_types", func)
+
+
+class TestPreviewRiskReport(TestCase):
+    """测试报告预览接口"""
+
+    def setUp(self):
+        super().setUp()
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+
+        self.risk = Risk.objects.create(
+            risk_id="test-risk-for-preview",
+            title="测试风险",
+            strategy_id=1,
+            event_time=timezone.now(),
+        )
+
+    def test_preview_risk_report_success(self):
+        """测试报告预览成功"""
+        from unittest.mock import patch
+
+        from services.web.risk.utils.renderer_client import renderer_client
+
+        mock_result = {
+            "task_id": "mock_task_123",
+            "status": "PENDING",
+        }
+
+        with patch.object(renderer_client, "render_preview", return_value=mock_result) as mock_render:
+            result = self.resource.strategy_v2.preview_risk_report(
+                {
+                    "risk_id": self.risk.risk_id,
+                    "report_config": {
+                        "template": "风险标题: {{ risk.title }}",
+                        "ai_variables": [],
+                    },
+                }
+            )
+
+            self.assertEqual(result["task_id"], "mock_task_123")
+            self.assertEqual(result["status"], "PENDING")
+
+            # 验证渲染器被正确调用
+            mock_render.assert_called_once()
+
+    def test_preview_risk_report_risk_not_found(self):
+        """测试预览不存在的风险"""
+        from django.http import Http404
+
+        with self.assertRaises(Http404):
+            self.resource.strategy_v2.preview_risk_report(
+                {
+                    "risk_id": "non-existent-risk",
+                    "report_config": {
+                        "template": "test",
+                        "ai_variables": [],
+                    },
+                }
+            )
