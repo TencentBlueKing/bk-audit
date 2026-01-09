@@ -26,7 +26,7 @@ from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
-from django.db.models import Field, Max, Q, QuerySet
+from django.db.models import Exists, Field, Max, OuterRef, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
 from pydantic import ValidationError as PydanticValidationError
@@ -210,10 +210,13 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     def annotated_queryset(cls) -> QuerySet["Risk"]:
         """
         返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
+        以及 _has_report 标记（用于避免 N+1 查询）
         """
-        return cls.objects.annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH)).defer(
-            "event_content"
-        )
+
+        return cls.objects.annotate(
+            event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
+            _has_report=Exists(RiskReport.objects.filter(risk_id=OuterRef("risk_id"))),
+        ).defer("event_content")
 
     @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:

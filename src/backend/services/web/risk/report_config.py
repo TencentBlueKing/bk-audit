@@ -18,7 +18,8 @@ to the current version of the project delivered to anyone in the future.
 
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from drf_pydantic import BaseModel
+from pydantic import Field
 
 
 class AIVariableConfig(BaseModel):
@@ -63,27 +64,3 @@ class ReportConfig(BaseModel):
             {"summary": AIVariableConfig, ...}  # key 是 raw_name
         """
         return {var.raw_name: var for var in self.ai_variables}
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ReportConfig":
-        """
-        从字典创建 ReportConfig 实例
-
-        Args:
-            data: 配置字典
-
-        Returns:
-            ReportConfig 实例
-        """
-        if not data:
-            return cls()
-        return cls.model_validate(data)
-
-    def to_dict(self) -> dict:
-        """
-        转换为字典
-
-        Returns:
-            配置字典
-        """
-        return self.model_dump(exclude_none=True)
