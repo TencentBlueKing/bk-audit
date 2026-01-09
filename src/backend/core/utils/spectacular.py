@@ -45,6 +45,18 @@ class BKResourceAutoSchema(AutoSchema):
                         return serializer
         return super().get_response_serializers()
 
+    def get_override_parameters(self):
+        params = super().get_override_parameters()
+        view = self.view
+        if hasattr(view, 'resource_routes'):
+            for route in view.resource_routes:
+                if view.action == self._get_action_for_route(route):
+                    if route.method.upper() == "GET":
+                        serializer = route.resource_class.RequestSerializer
+                        if serializer:
+                            params.append(serializer)
+        return params
+
     def get_tags(self):
         # 尝试从 Resource 类获取 tags
         view = self.view

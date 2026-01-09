@@ -1480,7 +1480,6 @@ class PreviewReportRequestSerializer(serializers.Serializer):
     报告预览请求序列化器
     """
 
-    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
     report_config = ReportConfigSerializer()
 
