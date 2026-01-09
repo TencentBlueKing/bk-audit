@@ -258,6 +258,7 @@ class RenderTaskAdmin(admin.ModelAdmin):
     list_filter = ["status"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
     list_per_page = 100
+    raw_id_fields = ["risk"]
 
 
 @admin.register(RiskReport)
@@ -272,6 +273,7 @@ class RiskReportAdmin(admin.ModelAdmin):
     search_fields = ["risk__risk_id"]
     list_filter = ["status"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    raw_id_fields = ["risk"]
 
     def content_short(self, obj: RiskReport):
         """显示报告内容的前100个字符"""

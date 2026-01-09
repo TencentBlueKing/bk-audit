@@ -1491,3 +1491,23 @@ class PreviewReportResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("任务ID"))
     status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+class RiskVariableResponseSerializer(serializers.Serializer):
+    """
+    风险变量响应序列化器
+    """
+
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    description = serializers.CharField(label=gettext_lazy("字段描述"), allow_blank=True)
+
+
+class AggregationFunctionResponseSerializer(serializers.Serializer):
+    """
+    聚合函数响应序列化器
+    """
+
+    id = serializers.CharField(label=gettext_lazy("聚合函数标识"))
+    name = serializers.CharField(label=gettext_lazy("聚合函数显示名"))
+    supported_field_types = serializers.ListField(label=gettext_lazy("支持的字段类型"), child=serializers.CharField())
