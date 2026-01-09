@@ -21,7 +21,11 @@ from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission, insert_permission_field
+from apps.permission.handlers.drf import (
+    IAMPermission,
+    InstanceActionPermission,
+    insert_permission_field,
+)
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
@@ -99,6 +103,9 @@ class RisksViewSet(ResourceViewSet):
             ]
         if self.action in ["bulk_trans"]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
+        # 风险编辑相关权限
+        if self.action in ["update", "create_report", "update_report", "generate_report"]:
+            return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
         return []
 
     def get_bulk_risk_ids(self) -> List[str]:
@@ -112,7 +119,7 @@ class RisksViewSet(ResourceViewSet):
             resource.risk.list_risk,
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -124,7 +131,7 @@ class RisksViewSet(ResourceViewSet):
             endpoint="todo",
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -136,7 +143,7 @@ class RisksViewSet(ResourceViewSet):
             endpoint="watch",
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -159,6 +166,13 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.reopen_risk, endpoint="reopen", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.process_risk_ticket, endpoint="process_risk_ticket", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.risk_export, endpoint="export"),
+        # 风险编辑和报告接口
+        ResourceRoute("PUT", resource.risk.update_risk, pk_field="risk_id"),
+        ResourceRoute("POST", resource.risk.create_risk_report, pk_field="risk_id", endpoint="report"),
+        ResourceRoute("PUT", resource.risk.update_risk_report, pk_field="risk_id", endpoint="report"),
+        ResourceRoute("POST", resource.risk.generate_risk_report, pk_field="risk_id", endpoint="report/generate"),
+        # 风险简要列表（用于策略配置时选择风险单进行预览）
+        ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief"),
     ]
 
 

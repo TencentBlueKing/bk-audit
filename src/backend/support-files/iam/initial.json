@@ -936,6 +936,35 @@
     {
       "operation": "upsert_action",
       "data": {
+        "id": "process_risk",
+        "name": "处理审计风险",
+        "name_en": "Process Risk",
+        "type": "manage",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "risk",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "risk_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_risk"
+        ],
+        "description": "处理风险单，包含状态流转等操作",
+        "description_en": "Process risk ticket, including status transition"
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
         "id": "list_notice_group",
         "name": "通知组列表",
         "name_en": "List Notice Group",
@@ -1494,6 +1523,9 @@
                 },
                 {
                   "id": "edit_risk_v2"
+                },
+                {
+                  "id": "process_risk"
                 }
               ]
             },

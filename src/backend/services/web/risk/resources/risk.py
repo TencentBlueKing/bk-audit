@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from bk_resource import CacheResource, api, resource
+from bk_resource.base import Empty
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
@@ -65,6 +66,7 @@ from services.web.risk.constants import (
     RiskExportField,
     RiskFields,
     RiskLabel,
+    RiskReportStatus,
     RiskStatus,
     RiskViewType,
     TicketNodeStatus,
@@ -103,20 +105,26 @@ from services.web.risk.models import (
     Risk,
     RiskAuditInstance,
     RiskExperience,
+    RiskReport,
     TicketNode,
     TicketPermission,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
+    CreateRiskReportRequestSerializer,
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
     ForceRevokeApproveTicketReqSerializer,
     ForceRevokeAutoProcessReqSerializer,
+    GenerateRiskReportRequestSerializer,
+    GenerateRiskReportResponseSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
     GetRiskFieldsByStrategyResponseSerializer,
     ListEventFieldsByStrategyRequestSerializer,
     ListEventFieldsByStrategyResponseSerializer,
+    ListRiskBriefRequestSerializer,
+    ListRiskBriefResponseSerializer,
     ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
@@ -130,14 +138,18 @@ from services.web.risk.serializers import (
     RetryAutoProcessReqSerializer,
     RiskExportReqSerializer,
     RiskInfoSerializer,
+    RiskReportModelSerializer,
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
+    UpdateRiskReportRequestSerializer,
+    UpdateRiskRequestSerializer,
 )
 from services.web.risk.tasks import (
     _build_manual_event_time_range,
     process_one_risk,
     sync_auto_result,
 )
+from services.web.risk.utils.renderer_client import renderer_client
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -158,7 +170,10 @@ class RetrieveRisk(RiskMeta):
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk_obj))
         data = RiskInfoSerializer(risk_obj).data
         data = wrapper_permission_field(
-            data, actions=[ActionEnum.EDIT_RISK], id_field=lambda risk: risk["risk_id"], many=False
+            data,
+            actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
+            id_field=lambda risk: risk["risk_id"],
+            many=False,
         )
         risk = data[0]
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
@@ -1147,3 +1162,188 @@ class ListEventFieldsByStrategy(RiskMeta):
             {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
             for field_name, display_name in results
         ]
+
+
+# ============== 风险报告相关接口 ==============
+
+
+class ListRiskBrief(RiskMeta):
+    """
+    获取风险简要列表
+
+    用于策略配置时选择风险单进行预览。
+    无权限控制，返回精简数据。
+    """
+
+    name = gettext_lazy("获取风险简要列表")
+    RequestSerializer = ListRiskBriefRequestSerializer
+    ResponseSerializer = ListRiskBriefResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        queryset = Risk.objects.all()
+
+        # 策略过滤
+        strategy_id = validated_request_data.get("strategy_id")
+        if strategy_id:
+            queryset = queryset.filter(strategy_id=strategy_id)
+
+        # 时间范围过滤（必填）
+        start_time = validated_request_data["start_time"]
+        end_time = validated_request_data["end_time"]
+        queryset = queryset.filter(created_at__gte=start_time, created_at__lte=end_time)
+
+        # 只返回精简字段，不限制数量
+        return queryset.order_by("-created_at")
+
+
+class UpdateRisk(RiskMeta):
+    """
+    编辑风险
+
+    目前支持编辑风险单标题。
+    """
+
+    name = gettext_lazy("编辑风险")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = UpdateRiskRequestSerializer
+
+    # 允许更新的字段
+    UPDATABLE_FIELDS = ["title"]
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data.pop("risk_id")
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 动态更新字段
+        update_fields = []
+        for key in self.UPDATABLE_FIELDS:
+            if key not in validated_request_data:
+                continue
+            new_val = validated_request_data[key]
+            old_val = getattr(risk, key, Empty())
+            if isinstance(old_val, Empty) or old_val == new_val:
+                continue
+            setattr(risk, key, new_val)
+            update_fields.append(key)
+
+        if update_fields:
+            risk.save(update_fields=update_fields)
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return RiskInfoSerializer(risk).data
+
+
+class CreateRiskReport(RiskMeta):
+    """
+    创建风险报告
+    """
+
+    name = gettext_lazy("创建风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = CreateRiskReportRequestSerializer
+    ResponseSerializer = RiskReportModelSerializer
+
+    @transaction.atomic()
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        content = validated_request_data["content"]
+        auto_generate = validated_request_data["auto_generate"]
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 创建报告
+        report, created = RiskReport.objects.get_or_create(
+            risk=risk,
+            defaults={
+                "content": content,
+                "status": RiskReportStatus.MANUAL,
+            },
+        )
+
+        if not created:
+            report.content = content
+            report.status = RiskReportStatus.MANUAL
+            report.save(update_fields=["content", "status"])
+
+        # 更新风险的自动生成标记
+        risk.auto_generate_report = auto_generate
+        risk.save(update_fields=["auto_generate_report"])
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return report
+
+
+class UpdateRiskReport(RiskMeta):
+    """
+    编辑风险报告
+    """
+
+    name = gettext_lazy("编辑风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = UpdateRiskReportRequestSerializer
+    ResponseSerializer = RiskReportModelSerializer
+
+    @transaction.atomic()
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        content = validated_request_data["content"]
+        auto_generate = validated_request_data.get("auto_generate")
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        report = get_object_or_404(RiskReport, risk=risk)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 更新报告
+        report.content = content
+        report.status = RiskReportStatus.MANUAL
+        report.save(update_fields=["content", "status"])
+
+        # 更新风险的自动生成标记（如果提供了）
+        if auto_generate is not None:
+            risk.auto_generate_report = auto_generate
+            risk.save(update_fields=["auto_generate_report"])
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return report
+
+
+class GenerateRiskReport(RiskMeta):
+    """
+    生成风险报告（异步）
+
+    提交异步任务生成风险报告内容。
+    注意：此接口仅生成报告内容返回给前端，不会保存到数据库。
+    """
+
+    name = gettext_lazy("生成风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = GenerateRiskReportRequestSerializer
+    ResponseSerializer = GenerateRiskReportResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        strategy = risk.strategy
+
+        # 检查策略是否启用报告
+        if not strategy.report_enabled:
+            raise ValueError(gettext("该策略未启用报告功能"))
+
+        # 构建渲染参数
+        risk_data = RiskInfoSerializer(risk).data
+        template_config = strategy.report_config
+
+        # 调用渲染器服务
+        result = renderer_client.render_full_report(
+            risk_data=risk_data,
+            template_config=template_config,
+        )
+
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return result

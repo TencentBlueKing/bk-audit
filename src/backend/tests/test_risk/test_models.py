@@ -14,9 +14,13 @@ def test_authed_risk_filter_enabled(settings):
     ticket_queryset = mock.Mock()
     ticket_queryset.values.return_value = []
 
-    with mock.patch("services.web.risk.models.get_request_username", return_value="tester"), mock.patch(
-        "services.web.risk.models.TicketPermission.objects.filter", return_value=ticket_queryset
-    ) as ticket_filter, mock.patch("services.web.risk.models.Permission") as permission_cls:
+    with (
+        mock.patch("services.web.risk.models.get_request_username", return_value="tester"),
+        mock.patch(
+            "services.web.risk.models.TicketPermission.objects.filter", return_value=ticket_queryset
+        ) as ticket_filter,
+        mock.patch("services.web.risk.models.Permission") as permission_cls,
+    ):
         permission_instance = mock.Mock()
         permission_instance.make_request.return_value = mock.sentinel.request
         permission_instance.iam_client = mock.Mock()
