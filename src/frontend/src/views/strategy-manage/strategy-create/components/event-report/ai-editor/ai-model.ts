@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import Quill from 'quill';
 
 import aiIconUrl from '@images/ai.svg';
@@ -28,11 +29,7 @@ class AIAgentBlot extends Embed {
     node.setAttribute('contenteditable', 'false');
 
     // 转义HTML以防止XSS
-    const escapeHtml = (text: string): string => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
+    const escapeHtml = (text: string): string => DOMPurify.sanitize(text, { ALLOWED_TAGS: [] });
 
     // 创建块内容
     node.innerHTML = `
