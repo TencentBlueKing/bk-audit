@@ -732,6 +732,8 @@ class TestAIPreviewResource(TestCase):
     @classmethod
     def setUpTestData(cls):
         """创建测试数据"""
+        from django.utils import timezone
+
         from services.web.risk.models import Risk
         from services.web.strategy_v2.models import Strategy
 
@@ -747,7 +749,9 @@ class TestAIPreviewResource(TestCase):
             risk_id="test_risk_for_ai_preview",
             strategy_id=cls.strategy.strategy_id,
             event_content="测试事件内容",
-            risk_label="测试标签",
+            risk_label="normal",
+            event_time=timezone.now(),
+            raw_event_id="test_raw_event_id_ai_preview",
         )
 
     def test_ai_preview_resource_submit_task(self):
@@ -961,6 +965,8 @@ class TestGetTaskResultResource(TestCase):
     @classmethod
     def setUpTestData(cls):
         """创建测试数据"""
+        from django.utils import timezone
+
         from services.web.risk.models import Risk
         from services.web.strategy_v2.models import Strategy
 
@@ -976,7 +982,9 @@ class TestGetTaskResultResource(TestCase):
             risk_id="test_risk_for_task_result",
             strategy_id=cls.strategy.strategy_id,
             event_content="测试事件内容",
-            risk_label="测试标签",
+            risk_label="normal",
+            event_time=timezone.now(),
+            raw_event_id="test_raw_event_id_task_result",
         )
 
     def test_get_task_result_resource_pending(self):

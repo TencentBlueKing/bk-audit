@@ -259,8 +259,8 @@ class RiskReportViewSet(ResourceViewSet):
     """风险报告 ViewSet
     
     提供以下接口：
-    - POST /risks/{risk_id}/report/ai_preview/ - AI 智能体预览
-    - GET /risks/{risk_id}/report/task/{task_id}/ - 查询任务结果
+    - POST /risks/report/{risk_id}/ai_preview/ - AI 智能体预览
+    - GET /risks/report/{risk_id}/task/?task_id=xxx - 查询任务结果 (task_id 通过查询参数传递)
     """
 
     def get_permissions(self):
@@ -292,11 +292,11 @@ class RiskReportViewSet(ResourceViewSet):
             pk_field="risk_id",
             endpoint="ai_preview"
         ),
-        # 查询任务结果
+        # 查询任务结果 (task_id 通过查询参数传递: ?task_id=xxx)
         ResourceRoute(
             "GET",
             resource.risk.get_task_result,
             pk_field="risk_id",
-            endpoint="task/<str:task_id>"
+            endpoint="task"
         ),
     ]
