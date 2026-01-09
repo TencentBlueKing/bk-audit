@@ -45,6 +45,7 @@ from services.web.risk.models import (
     ProcessApplication,
     Risk,
     RiskExperience,
+    RiskReport,
     RiskRule,
     TicketNode,
     TicketPermission,
@@ -226,10 +227,26 @@ class ListEventResponseSerializer(serializers.Serializer):
         return results
 
 
+class RiskReportSerializer(serializers.ModelSerializer):
+    """
+    风险报告序列化器
+    """
+
+    class Meta:
+        model = RiskReport
+        fields = "__all__"
+
+
 class RiskInfoSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
+    has_report = serializers.SerializerMethodField()
+    report = RiskReportSerializer(read_only=True)
+
+    def get_has_report(self, obj: Risk) -> bool:
+        """检查风险是否有报告"""
+        return hasattr(obj, "report")
 
     def to_representation(self, instance: Risk):
         data = super().to_representation(instance)
@@ -396,7 +413,11 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
     use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
     order_field = serializers.CharField(
-        label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
+        label=gettext_lazy("排序字段"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text="risk_level:根据风险等级排序",
     )
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
@@ -519,6 +540,14 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
+    has_report = serializers.SerializerMethodField()
+
+    def get_has_report(self, obj: Risk):
+        """
+        检查风险是否有报告
+        使用 annotated 属性避免 N+1 查询
+        """
+        return getattr(obj, "_has_report", False)
 
     def get_event_data(self, obj: Risk):
         """
@@ -584,6 +613,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "experiences",
             "last_operate_time",
             "title",
+            "has_report",
         ]
 
     def to_representation(self, instance: Risk):
@@ -1004,3 +1034,96 @@ class RiskExportReqSerializer(serializers.Serializer):
     risk_view_type = serializers.ChoiceField(
         label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
     )
+
+
+# ============ 风险报告相关序列化器 ============
+
+
+class ListRiskBriefRequestSerializer(serializers.Serializer):
+    """
+    获取风险简要列表请求序列化器
+    """
+
+    strategy_id = serializers.IntegerField(required=False, label=gettext_lazy("策略ID"))
+    start_time = serializers.DateTimeField(required=True, label=gettext_lazy("开始时间"))
+    end_time = serializers.DateTimeField(required=True, label=gettext_lazy("结束时间"))
+
+
+class ListRiskBriefResponseSerializer(serializers.ModelSerializer):
+    """
+    获取风险简要列表响应序列化器
+    """
+
+    class Meta:
+        model = Risk
+        fields = ["risk_id", "title", "strategy_id", "created_at"]
+
+
+class UpdateRiskRequestSerializer(serializers.Serializer):
+    """
+    编辑风险请求序列化器
+    """
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    title = serializers.CharField(required=False, label=gettext_lazy("风险标题"), max_length=256)
+
+
+class RiskReportModelSerializer(serializers.ModelSerializer):
+    """
+    风险报告 ModelSerializer（用于创建/编辑响应）
+    """
+
+    auto_generate = serializers.BooleanField(
+        label=gettext_lazy("是否开启自动生成报告"),
+        source="risk.auto_generate_report",
+        read_only=True,
+    )
+
+    class Meta:
+        model = RiskReport
+        fields = ["content", "status", "auto_generate", "created_at", "updated_at"]
+
+
+class CreateRiskReportRequestSerializer(serializers.Serializer):
+    """
+    创建风险报告请求序列化器
+    """
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    content = serializers.CharField(label=gettext_lazy("报告内容"))
+    auto_generate = serializers.BooleanField(
+        required=False,
+        default=False,
+        label=gettext_lazy("是否开启自动生成报告"),
+    )
+
+
+class UpdateRiskReportRequestSerializer(serializers.Serializer):
+    """
+    编辑风险报告请求序列化器
+    """
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    content = serializers.CharField(label=gettext_lazy("报告内容"))
+    auto_generate = serializers.BooleanField(
+        required=False,
+        default=False,
+        label=gettext_lazy("是否开启自动生成报告"),
+    )
+
+
+class GenerateRiskReportRequestSerializer(serializers.Serializer):
+    """
+    生成风险报告请求序列化器
+    """
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+
+
+class GenerateRiskReportResponseSerializer(serializers.Serializer):
+    """
+    生成风险报告响应序列化器
+    """
+
+    task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
+    status = serializers.CharField(label=gettext_lazy("任务状态"))

@@ -836,8 +836,9 @@ class TestListMineAndNoticingRisk(TestCase):
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk_owned.risk_id, "strategy_id": self.strategy.strategy_id}]}
 
-        with mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked, mock.patch(
-            "bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync
+        with (
+            mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked,
+            mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync),
         ):
             mocked.return_value = Risk.annotated_queryset().filter(risk_id=self.risk_owned.risk_id)
             response = ListMineRisk().request(

@@ -360,7 +360,8 @@ def process_one_risk(*, risk_id: str):
         if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
             cache.delete(key=cache_key)
             TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
-                new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
+                new_operators=TransOperator.load_security_person(),
+                description=gettext("风险自动流转失败，转为安全接口人处理"),
             )
         else:
             cache.set(
