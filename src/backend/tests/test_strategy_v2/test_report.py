@@ -125,6 +125,33 @@ class TestListRiskVariables(TestCase):
             self.assertIn("field", var)
             self.assertIn("name", var)
 
+    def test_list_risk_variables_expected_fields(self):
+        """测试风险变量列表包含预期的字段"""
+        result = self.resource.strategy_v2.list_risk_variables({})
+
+        # 按确认清单，预期的风险变量字段列表
+        expected_fields = {
+            "risk_id",
+            "title",
+            "risk_level",
+            "event_time",
+            "event_end_time",
+            "operator",
+            "risk_label",
+            "strategy_id",
+            "risk_hazard",
+            "risk_guidance",
+            "event_type",
+            "current_operator",
+            "notice_users",
+            "last_operate_time",
+            "created_at",
+            "updated_at",
+        }
+
+        actual_fields = {var["field"] for var in result}
+        self.assertEqual(actual_fields, expected_fields)
+
 
 class TestListAggregationFunctions(TestCase):
     """测试获取聚合函数列表接口"""
