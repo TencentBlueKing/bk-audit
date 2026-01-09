@@ -16,10 +16,26 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from services.web.risk.resources.event import *  # noqa
-from services.web.risk.resources.experience import *  # noqa
-from services.web.risk.resources.process_application import *  # noqa
-from services.web.risk.resources.risk import *  # noqa
-from services.web.risk.resources.rule import *  # noqa
-from services.web.risk.resources.subscription import *  # noqa
-from services.web.risk.resources.report import *  # noqa
+import abc
+
+from bk_resource import BkApiResource
+from django.utils.translation import gettext_lazy
+
+from api.domains import AI_AUDIT_REPORT_API_URL
+
+
+class AIAuditReport(BkApiResource, abc.ABC):
+    """AI审计报告智能体API基类"""
+
+    module_name = "bk_plugins_ai_audit_report"
+    base_url = AI_AUDIT_REPORT_API_URL
+    platform_authorization = True
+    tags = ["AIAuditReport"]
+
+
+class ChatCompletion(AIAuditReport):
+    """智能体对话接口（应用态）"""
+
+    name = gettext_lazy("智能体对话")
+    method = "POST"
+    action = "/bk_plugin/openapi/agent/chat_completion/"

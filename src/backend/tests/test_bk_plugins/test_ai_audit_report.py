@@ -16,10 +16,24 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from services.web.risk.resources.event import *  # noqa
-from services.web.risk.resources.experience import *  # noqa
-from services.web.risk.resources.process_application import *  # noqa
-from services.web.risk.resources.risk import *  # noqa
-from services.web.risk.resources.rule import *  # noqa
-from services.web.risk.resources.subscription import *  # noqa
-from services.web.risk.resources.report import *  # noqa
+from unittest import mock
+
+from bk_resource import api
+
+from tests.base import TestCase
+
+from .constants import CHAT_COMPLETION_PARAMS, CHAT_COMPLETION_RESPONSE
+
+
+class TestAIAuditReport(TestCase):
+    """测试AI审计报告智能体API接口"""
+
+    @mock.patch(
+        "api.bk_plugins_ai_audit_report.default.ChatCompletion.perform_request",
+        mock.Mock(return_value=CHAT_COMPLETION_RESPONSE["data"]),
+    )
+    def test_chat_completion(self):
+        """测试智能体对话接口"""
+        result = api.bk_plugins_ai_audit_report.chat_completion(**CHAT_COMPLETION_PARAMS)
+        self.assertIn("content", result)
+        self.assertIsInstance(result["content"], str)
