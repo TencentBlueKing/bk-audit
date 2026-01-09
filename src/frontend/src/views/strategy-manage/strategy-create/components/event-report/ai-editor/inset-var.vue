@@ -21,11 +21,12 @@
     quick-close
     :title="t('引用变量')"
     transfer
-    :width="740">
+    :width="960">
     <template #default>
       <div class="inset-var-content">
         <bk-tab
           v-model:active="active"
+          class="inset-var-tab"
           type="card-grid">
           <bk-tab-panel
             :label="t('风险信息')"
@@ -89,9 +90,7 @@
 
 <style lang="postcss" scoped>
 .inset-var-content {
-  /* width: calc(100% - 100px); */
-
-  /* margin-left: 50px; */
+  margin-top: 10px;
 }
 
 .inset-var {
@@ -106,7 +105,18 @@
 }
 
 .risk-panel {
-  margin-left: 25px;
+  margin-left: 30px;
   background-color: #f5f7fa;
 }
+
+.inset-var-tab {
+  :deep(.bk-tab-header) {
+    margin-left: 40px;
+  }
+
+  :deep(.t-table__header--fixed:not(.t-table__header--multiple) > tr > th) {
+    background-color: #f0f1f5;
+  }
+}
+
 </style>
