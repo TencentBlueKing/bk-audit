@@ -227,4 +227,12 @@ export default {
     return RiskManageSource.addEvent(params)
       .then(({ data }) => data);
   },
+
+  /**
+   * @desc 获取报告风险变量列表
+   */
+  getReportRiskVar(params:  Record<string, any>) {
+    return RiskManageSource.getReportRiskVar(params)
+      .then(({ data }) => data);
+  },
 };

@@ -23,6 +23,7 @@
       :data-source="dataSource"
       max-height="80vh"
       :need-empty-search-tip="false"
+      no-use-rresults
       :sync-pagination-to-url="false" />
   </div>
 </template>
@@ -49,7 +50,7 @@
   const { t } = useI18n();
 
   const tableRef = ref();
-  const dataSource = RiskManageService.fetchTodoRiskList;
+  const dataSource = RiskManageService.getReportRiskVar;
 
   // 定义列配置
   const columns = computed(() => [
@@ -57,19 +58,14 @@
       title: t('变量名称'),
       colKey: 'name',
       width: 200,
-      cell: () => (
-      <span>
-        ID
-      </span>
-    ),
     },
     {
       title: t('应用方式'),
-      colKey: 'name',
+      colKey: 'field',
       width: 200,
-      cell: (h: any, { row }: { row: { title: string } }) => (
+      cell: (h: any, { row }: { row: { field: string } }) => (
       <span>
-        {row.title}
+        {`{{ risk.${row.field} }}`}
         <audit-icon
           class="risk-info-copy-icon"
           onClick={() => handleCopy(row)}
@@ -80,13 +76,8 @@
     },
     {
       title: t('变量说明'),
-      colKey: 'name',
+      colKey: 'description',
       width: 200,
-      cell: () => (
-      <span>
-        fxxxxx
-      </span>
-    ),
     },
     {
       title: t('操作'),
@@ -105,7 +96,7 @@
     execCopy(row.title, t('复制成功'));
   };
   const handleInsert = (row: any) => {
-    const variableText = `{{ risk }}${row.title}`;
+    const variableText = `{{ risk.${row.field} }}`;
     emits('insert', variableText);
   };
 

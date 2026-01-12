@@ -35,46 +35,44 @@
         <div class="table-cell header-cell table-cell-right-border w3">
           {{ t('引用方式') }}
         </div>
-        <div class="table-cell header-cell table-cell-right-border w4">
-          {{ t('变量说明') }}
-        </div>
         <div class="table-cell header-cell w5">
           {{ t('操作') }}
         </div>
       </div>
       <div
-        v-for="(row, index) in tableData"
+        v-for="(row, index) in localTableData"
         :key="index"
         class="table-row">
         <div class="table-cell table-cell-right-border w1">
-          {{ row.name }}
+          <tool-tip-text
+            :data="nameTiptext(row)"
+            :line="1"
+            placement="top" />
         </div>
 
         <div class="table-cell table-cell-right-border w2 pn">
           <bk-select
-            v-model="row.aggregation"
+            v-model="row.aggregate"
             class="event-info-aggregation-select">
             <bk-option
-              v-for="item in aggregationLists"
-              :id="item.value"
-              :key="item.value"
-              :name="item.label" />
+              v-for="item in handlerAggregationLists(row.field_type)"
+              :id="item.id"
+              :key="item.id"
+              :name="`${item.name}(${item.id})`" />
           </bk-select>
         </div>
         <div class="table-cell table-cell-right-border w3">
-          <span>{{ row.reference }}</span>
+          <span>{{ referenceModeText(row) }}</span>
           <audit-icon
             class="copy-icon"
             type="copy"
-            @click="handleCopy(row.reference)" />
+            @click="handleCopy(row)" />
         </div>
-        <div class="table-cell table-cell-right-border w4">
-          {{ row.description }}
-        </div>
+
         <div class="table-cell w5">
           <span
             class="insert-link"
-            @click="handleInsert(row.reference)">
+            @click="handleInsert(row)">
             {{ t('插入') }}
           </span>
         </div>
@@ -84,55 +82,117 @@
 </template>
 
 <script setup lang="tsx">
-  import { ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import StrategyManageService from '@service/strategy-manage';
+
+  import useRequest from '@hooks/use-request';
+
   import { execCopy } from '@utils/assist';
+
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
+
+
+  interface aggregation {
+    id: string | undefined;
+    name: string;
+    supported_field_types: string[];
+  }
+
+  interface Props {
+    tableData?: any[];
+  }
 
   interface Emits {
     (e: 'insert', value: string): void;
   }
 
+  const props = withDefaults(defineProps<Props>(), {
+    tableData: () => [],
+  });
+
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  // 表格数据
-  const tableData = ref([
-    {
-      name: '责任人',
-      aggregation: '1',
-      reference: '{{ event.operator }}',
-      description: '-',
-    },
-    {
-      name: '账号',
-      aggregation: '2',
-      reference: '{{ latest(event.account)}}',
-      description: '-',
-    },
-  ]);
+  // 创建响应式的表格数据
+  const localTableData = ref<any[]>([]);
 
+  // 初始化表格数据
+  const initTableData = () => {
+    if (props.tableData && props.tableData.length > 0) {
+      localTableData.value = props.tableData.map((item: any) => ({
+        ...item,
+        aggregate: item.aggregate === null ? 'null' : item.aggregate,
+      }));
+    } else {
+      localTableData.value = [];
+    }
+  };
+
+  // 监听 props.tableData 变化，同步到本地数据
+  watch(() => props.tableData, () => {
+    initTableData();
+  }, { deep: true, immediate: true });
+
+  // 变量名称
+  const nameTiptext = (item: any) => {
+    if (item.display_name !== '') {
+      return `${item.display_name}(${item.raw_name})`;
+    }
+    return item.raw_name;
+  };
+  const referenceModeText = (item: any) => {
+    if (item.aggregate === 'null') {
+      return `{{ event.${item.raw_name} }}`;
+    }
+    return  `{{ ${item.aggregate}(event.${item.raw_name}) }}`;
+  };
+  const aggregationLists = ref<aggregation[]>([]);
   // 聚合函数
-  const aggregationLists = ref([
-    {
-      label: '不聚合',
-      value: '1',
-    },
-    {
-      label: 'latest（取最新事件值）',
-      value: '2',
-    },
-  ]);
+  const handlerAggregationLists = (fieldType: string) => {
+    const list = aggregationLists.value.map((aggregationItem: aggregation) => {
+      if (aggregationItem.supported_field_types.length === 0) {
+        return aggregationItem;
+      }
+      if (aggregationItem.supported_field_types.includes(fieldType)) {
+        return aggregationItem;
+      }
+      return null;
+    }).filter((item: aggregation | null) => item !== null) as aggregation[];
+    return list;
+  };
 
+  // 获取聚合函数列表
+  const {
+    run: fetchAggregationFunctions,
+  } = useRequest(StrategyManageService.fetchAggregationFunctions, {
+    defaultValue: [],
+    onSuccess(data) {
+      const nullAggregation = [{
+        id: 'null',
+        name: '不聚合',
+        supported_field_types: [],
+      }];
+      aggregationLists.value = nullAggregation.concat(data);
+    },
+  });
   // 复制
-  const handleCopy = (text: string) => {
-    execCopy(text, t('复制成功'));
+  const handleCopy = (item: any) => {
+    execCopy(`{{ event.${item.raw_name} }}`, t('复制成功'));
   };
   // 插入
-  const handleInsert = (reference: string) => {
-    emits('insert', reference);
+  const handleInsert = (item: any) => {
+    if (item.aggregate === 'null') {
+      emits('insert', `{{ event.${item.raw_name} }}`);
+    } else {
+      emits('insert', `{{ ${item.aggregate}(event.${item.raw_name}) }}`);
+    }
   };
 
+  onMounted(() => {
+    fetchAggregationFunctions();
+  });
 </script>
 
 <style lang="postcss" scoped>
@@ -194,7 +254,6 @@
       font-size: 12px;
       color: #4d4f56;
       align-items: center;
-      flex-shrink: 0;
 
       &.header-cell {
         font-weight: 500;
@@ -214,11 +273,7 @@
       }
 
       &.w3 {
-        width: 237px;
-      }
-
-      &.w4 {
-        width: 148px;
+        width: 290px;
       }
 
       &.w5 {
@@ -317,7 +372,7 @@
 
 .event-info-aggregation-select {
   :deep(.bk-input) {
-    width: 201px;
+    width: 200px;
     height: 42px;
     border: none;
   }

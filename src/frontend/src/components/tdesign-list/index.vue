@@ -24,7 +24,7 @@
         :border="border"
         class="tdesign-list"
         :columns="columns"
-        :data="listData.results"
+        :data="tableData"
         :height="height"
         :max-height="maxHeight"
         v-bind="$attrs"
@@ -101,6 +101,7 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import _ from 'lodash';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -135,6 +136,7 @@
     needEmptySearchTip?:boolean,
     height?: number | string,
     maxHeight?: number | string
+    noUseRresults?:boolean
   }
 
   interface ISettings{
@@ -167,6 +169,7 @@
     isNeedHideClearSearchTip: false,
     height: 'auto',
     maxHeight: 'auto',
+    noUseRresults: false,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -218,6 +221,16 @@
         pagination.count = data.total;
       }
     },
+  });
+
+  // 计算表格数据，处理 noUseRresults 的情况
+  const tableData = computed(() => {
+    if (props.noUseRresults) {
+      // 当 noUseRresults 为 true 时，如果 listData 是数组则直接返回，否则返回空数组
+      return Array.isArray(listData.value) ? listData.value : [];
+    }
+    // 当 noUseRresults 为 false 时，返回 listData.results
+    return listData.value?.results || [];
   });
 
   watch(listData, (newData) => {
