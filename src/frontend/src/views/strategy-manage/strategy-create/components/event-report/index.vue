@@ -18,7 +18,9 @@
   <smart-action
     class="create-strategy-page"
     :offset-target="getSmartActionOffsetTarget">
-    <div class="event-tips">
+    <div
+      v-if="riskLisks.length === 0"
+      class="event-tips">
       <audit-icon
         class="info-fill-icon"
         type="info-fill" />
@@ -43,22 +45,29 @@
           {{ t('事件调查报告模版') }}
         </div>
         <div class="editor-box">
-          <ai-editor ref="aiEditorRef" />
+          <ai-editor
+            ref="aiEditorRef"
+            :disabled="!isEnvent"
+            :event-info-data="eventInfoData"
+            :risk-lisks="riskLisks" />
         </div>
       </div>
-      <div class="risks-select">
+      <div
+        v-if="isEnvent && riskLisks.length > 0"
+        class="risks-select">
         <bk-select
           v-model="selectedValue"
           class="risks-bk-select"
           :prefix="t('审计风险工单')">
           <bk-option
-            v-for="(item, index) in datasource"
-            :id="item.value"
+            v-for="(item, index) in riskLisks"
+            :id="item?.risk_id"
             :key="index"
-            :name="item.label" />
+            :name="`${item?.title}(${item?.risk_id})`" />
         </bk-select>
         <bk-button
           class="ml8"
+          :disabled="!hasEditorContent"
           outline
           theme="primary"
           @click="handlePreview">
@@ -79,7 +88,7 @@
           class="ml8"
           theme="primary"
           @click="handleNext">
-          {{ t('下一步') }}
+          {{ t( isEnvent ? '下一步' : '跳过') }}
         </bk-button>
         <bk-button
           class="ml8"
@@ -95,8 +104,16 @@
     :risk-id="selectedValue" />
 </template>
 <script setup lang="ts">
-  import { nextTick, ref } from 'vue';
+  import dayjs from 'dayjs';
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import StrategyManageService from '@service/strategy-manage';
+
+  import StrategyModel from '@model/strategy/strategy';
+
+  import useRequest from '@hooks/use-request';
 
   import AiEditor from './ai-editor/index.vue';
   import PreviewReport from './preview-report.vue';
@@ -105,12 +122,24 @@
     processor_groups: Array<number>,
     notice_groups: Array<number>,
   }
+
+  interface riskItem {
+    risk_id: string,
+    title: string,
+    strategy_id: number,
+    created_at: string,
+  }
+
+  interface Props {
+    editData: StrategyModel
+  }
   interface Emits {
     (e: 'previousStep', step: number): void;
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'submitData'): void;
   }
 
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const isEnvent = ref(false);
@@ -118,34 +147,58 @@
   const aiEditorRef = ref();
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
-  const selectedValue = ref(1);
-  const datasource = ref([
-    {
-      value: 1,
-      label: '爬山',
-    },
-    {
-      value: 2,
-      label: '跑步',
-    },
-    {
-      value: 3,
-      label: '未知',
-    },
-    {
-      value: 4,
-      label: '健身',
-    },
-    {
-      value: 5,
-      label: '骑车',
-    },
-    {
-      value: 6,
-      label: '跳舞',
-    },
-  ]);
+  const selectedValue = ref('');
+  const riskLisks = ref<Array<riskItem>>([]);
+  const editorContent = ref('');
+  // 从 editData 中获取 expectedResultList (step1 中的 configs.select)
+  const eventInfoData = computed(() => props.editData?.configs?.select || []);
 
+  // 检查编辑器是否有内容
+  const hasEditorContent = computed(() => {
+    if (!editorContent.value) return false;
+    // 移除 HTML 标签和空白字符后检查是否为空
+    const textContent = editorContent.value.replace(/<[^>]*>/g, '').trim();
+    return textContent && textContent.length > 0;
+  });
+
+  // 定期检查编辑器内容变化
+  let contentCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+  const startContentCheck = () => {
+    if (contentCheckInterval) return;
+    contentCheckInterval = setInterval(() => {
+      if (aiEditorRef.value) {
+        try {
+          const content = aiEditorRef.value.getContent();
+          editorContent.value = content || '';
+        } catch {
+          editorContent.value = '';
+        }
+      }
+    }, 300);
+  };
+
+  const stopContentCheck = () => {
+    if (contentCheckInterval) {
+      clearInterval(contentCheckInterval);
+      contentCheckInterval = null;
+    }
+  };
+
+  // 当编辑器引用可用时开始检查
+  nextTick(() => {
+    if (aiEditorRef.value) {
+      startContentCheck();
+    }
+  });
+
+  onBeforeUnmount(() => {
+    stopContentCheck();
+  });
+
+  const route = useRoute();
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
   const handlePrevious = () => {
     console.log('handlePrevious');
     emits('previousStep', 2);
@@ -168,6 +221,39 @@
       previewReportRef.value.setContent(aiEditorRef.value.getContent());
     });
   };
+  // 获取风险简要列表
+  const {
+    run: fetchRisksBriefList,
+  } = useRequest(StrategyManageService.fetchRisksBrief, {
+    defaultValue: [],
+    onSuccess(data) {
+      console.log('获取风险简要列表', data);
+      // 如果返回的数据包含 results 字段，则使用 results，否则直接使用 data
+      riskLisks.value = data?.results || data || [];
+    },
+  });
+
+
+  onMounted(() => {
+    console.log('加载', isEditMode, isCloneMode, route, props.editData);
+    if (isEditMode || isCloneMode) {
+      isEnvent.value =  props.editData.report_enabled;
+      const strategyId = route.params.id;
+      // 默认当前时间往前6个月（6个月前到现在）
+      const now = dayjs();
+      const sixMonthsAgo = dayjs().subtract(6, 'month');
+      const params = {
+        page: 1,
+        page_size: 10,
+        strategy_id: String(strategyId),
+        start_time: sixMonthsAgo.format('YYYY-MM-DD'),
+        end_time: now.format('YYYY-MM-DD'),
+      };
+
+      fetchRisksBriefList(params);
+    }
+  });
+
 </script>
 
 <style lang="postcss" scoped>

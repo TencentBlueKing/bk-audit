@@ -312,4 +312,26 @@ export default {
     return StrategySource.getRisksRunning(params)
       .then(({ data }) => data);
   },
+
+  /**
+  * @desc 获取风险简要列表
+  */
+  fetchRisksBrief(params: {
+    page: number,
+    page_size: number,
+    strategy_id: string
+    end_time: string,
+    start_time: string,
+  }) {
+    return StrategySource.getRisksBrief(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+  * @desc 获取聚合函数列表
+  */
+  fetchAggregationFunctions() {
+    return StrategySource.getAggregationFunctions()
+      .then(({ data }) => data);
+  },
 };

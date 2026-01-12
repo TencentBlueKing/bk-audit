@@ -215,5 +215,10 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  getReportRiskVar(params:  Record<string, any>) {
+    return Request.get(`${this.path}/report/risk_variables/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();
