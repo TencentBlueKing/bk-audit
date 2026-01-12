@@ -25,7 +25,9 @@
     <template #default>
       <div
         :class="isPreviewExpanded ? `ai-agent-drawer-content-preview` : `ai-agent-drawer-content`">
-        <div class="tips-title">
+        <div
+          v-if="riskLisks.length === 0"
+          class="tips-title">
           <audit-icon
             class="info-fill-icon"
             type="info-fill" />
@@ -129,6 +131,7 @@
   interface Props {
     visible: boolean;
     initialPrompt?: string;
+    riskLisks: any;
   }
   interface Emits {
     (e: 'update:visible', value: boolean): void;

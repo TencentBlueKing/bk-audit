@@ -28,6 +28,7 @@
       :is="renderCom"
       ref="comRef"
       :edit-data="editData"
+      :form-data="formData"
       :is-edit-data-loading="isEditDataLoading"
       :select="formData.configs.select"
       :strategy-name="formData.strategy_name"
