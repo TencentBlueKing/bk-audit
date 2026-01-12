@@ -17,6 +17,9 @@
 <template>
   <div class="rich-text-editor-container">
     <div class="editor-wrapper">
+      <div
+        v-if="disabled"
+        class="editor-wrapper-disabled" />
       <quill-editor
         ref="quillEditorRef"
         v-model:content="content"
@@ -28,6 +31,7 @@
     <a-i-agent-modal
       v-model:visible="showAIModal"
       :initial-prompt="editingPrompt"
+      :risk-lisks="riskLisks"
       @confirm="handleAIAgentConfirm" />
     <delete-dialog
       v-model:visible="showDeleteDialog"
@@ -36,13 +40,14 @@
       @confirm="handleDeleteConfirm" />
     <inset-var
       v-model:visible="showInsetVarModal"
+      :event-info-data="eventInfoData"
       @confirm="handleInsetVarConfirm" />
   </div>
 </template>
 
 <script lang="ts" setup>
   import Quill from 'quill';
-  import { nextTick, onBeforeUnmount, ref } from 'vue';
+  import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import aiIconUrl from '@images/ai.svg';
@@ -56,8 +61,18 @@
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
-  const { t } = useI18n();
 
+  interface Props {
+    disabled?: boolean;
+    riskLisks: any;
+    eventInfoData?: any[];
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    disabled: false,
+    eventInfoData: () => [],
+  });
+  const { t } = useI18n();
   // 定义 Quill 实例类型
   interface QuillInstance {
     root: HTMLElement;
@@ -128,6 +143,11 @@
       // 添加自定义工具栏按钮文本
       const toolbar = quill.getModule('toolbar');
       if (toolbar && toolbar.container) {
+        // 如果 disabled，给工具栏容器添加 disabled class
+        if (props.disabled) {
+          toolbar.container.classList.add('toolbar-disabled');
+        }
+
         // 设置"引用变量"按钮
         const variableButton = toolbar.container.querySelector('.ql-variable');
         if (variableButton) {
@@ -419,6 +439,21 @@
     return blocks;
   };
 
+  // 监听 disabled 变化，更新工具栏按钮状态
+  watch(() => props.disabled, (isDisabled) => {
+    nextTick(() => {
+      if (!quill) return;
+      const toolbar = quill.getModule('toolbar');
+      if (toolbar && toolbar.container) {
+        if (isDisabled) {
+          toolbar.container.classList.add('toolbar-disabled');
+        } else {
+          toolbar.container.classList.remove('toolbar-disabled');
+        }
+      }
+    });
+  });
+
   // 获取编辑器内容
   const getContent = () => content.value;
 
@@ -439,7 +474,18 @@
 }
 
 .editor-wrapper {
+  position: relative;
   min-height: 400px;
+}
+
+.editor-wrapper-disabled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  background-color: rgb(250 251 253 / 40%)
 }
 
 .editor-wrapper :deep(.quill-editor) {
@@ -572,6 +618,19 @@
   color: #3a84ff !important;
   background-color: transparent !important;
   opacity: 80%;
+}
+
+/* disabled 状态下自定义按钮样式 */
+:deep(.ql-toolbar.toolbar-disabled .ql-variable),
+:deep(.ql-toolbar.toolbar-disabled .ql-aiagent) {
+  color: #c4c6cc !important;
+  cursor: not-allowed !important;
+}
+
+:deep(.ql-toolbar.toolbar-disabled .ql-variable:hover),
+:deep(.ql-toolbar.toolbar-disabled .ql-aiagent:hover) {
+  color: #c4c6cc !important;
+  opacity: 100% !important;
 }
 
 :deep(.ai-agent-ai) {

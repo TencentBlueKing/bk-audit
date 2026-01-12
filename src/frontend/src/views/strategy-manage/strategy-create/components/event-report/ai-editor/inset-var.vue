@@ -40,6 +40,7 @@
             :label="t('事件信息')"
             name="event">
             <event-info
+              :table-data="eventInfoData"
               @insert="handleInsert" />
           </bk-tab-panel>
         </bk-tab>
@@ -57,6 +58,7 @@
 
   interface Props {
     visible: boolean;
+    eventInfoData?: any[];
   }
 
   interface Emits {
@@ -64,7 +66,9 @@
     (e: 'confirm', value: string): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    eventInfoData: () => [],
+  });
   const emits = defineEmits<Emits>();
   const isShowRight = ref(false);
   const { t } = useI18n();
@@ -73,7 +77,6 @@
 
   const handleInsert = (variableText: string) => {
     emits('confirm', variableText);
-    isShowRight.value = false;
   };
 
   // 同步 visible 和 isShowRight
