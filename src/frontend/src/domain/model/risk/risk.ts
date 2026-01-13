@@ -81,6 +81,14 @@ export default class Event {
   notice_users: string[];
   tags: string[];
   risk_label: string;
+  has_report: boolean;
+  report: {
+    content: string;
+    status: string;
+    auto_generate: boolean;
+    create_at: string;
+    update_at: string;
+  } | null;
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
   title: string;
@@ -101,7 +109,8 @@ export default class Event {
     this.operator = payload.operator;
     this.status = payload.status;
     this.event_type = payload.event_type;
-
+    this.has_report = payload.has_report;
+    this.report = payload.report;
     this.rule_id = payload.rule_id;
     this.rule_version = payload.rule_version;
     this.origin_operator = payload.origin_operator;

@@ -31,6 +31,9 @@
         <div
           id="teleport-nav-step"
           style="flex: 1;" />
+        <div
+          id="teleport-generate-report"
+          style="align-self: flex-end;" />
       </template>
       <template #headerRight>
         <bk-dropdown class="site-top-dropdown-menu">
