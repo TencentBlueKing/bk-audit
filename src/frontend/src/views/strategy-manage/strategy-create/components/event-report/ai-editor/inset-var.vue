@@ -40,6 +40,7 @@
             :label="t('事件信息')"
             name="event">
             <event-info
+              ref="eventInfoRef"
               :table-data="eventInfoData"
               @insert="handleInsert" />
           </bk-tab-panel>
@@ -66,11 +67,15 @@
     (e: 'confirm', value: string): void;
   }
 
+  interface expose {
+  }
+
   const props = withDefaults(defineProps<Props>(), {
     eventInfoData: () => [],
   });
   const emits = defineEmits<Emits>();
   const isShowRight = ref(false);
+  const eventInfoRef = ref();
   const { t } = useI18n();
   const active = ref('risk');
 
@@ -88,6 +93,9 @@
     if (!newVal) {
       emits('update:visible', false);
     }
+  });
+
+  defineExpose<expose>({
   });
 </script>
 
