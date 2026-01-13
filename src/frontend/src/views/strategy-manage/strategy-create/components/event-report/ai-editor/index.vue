@@ -39,6 +39,7 @@
       @cancel="handleDeleteCancel"
       @confirm="handleDeleteConfirm" />
     <inset-var
+      ref="insetVarRef"
       v-model:visible="showInsetVarModal"
       :event-info-data="eventInfoData"
       @confirm="handleInsetVarConfirm" />
@@ -62,10 +63,27 @@
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
 
 
+  interface info {
+    name: string,
+    prompt_template: string,
+    result: string,
+  }
+  interface riskItem {
+    risk_id: string,
+    title: string,
+    strategy_id: number,
+    created_at: string,
+  }
+
   interface Props {
     disabled?: boolean;
-    riskLisks: any;
+    riskLisks: Array<riskItem>;
     eventInfoData?: any[];
+  }
+
+  interface expose {
+    getAiLists: () => any[];
+    getContent: () => string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -93,7 +111,7 @@
   const content = ref('');
   let quill: QuillInstance | null = null;
   const showAIModal = ref(false);
-  const editingPrompt = ref('');
+  const editingPrompt = ref<info | null>(null);
   const editingNode = ref<HTMLElement | null>(null);
   const savedSelection = ref<{ index: number; length: number } | null>(null);
   const showDeleteDialog = ref(false);
@@ -102,6 +120,8 @@
   const previousContent = ref<any>(null);
   const pendingDeleteAgent = ref<{ node: HTMLElement; name: string } | null>(null);
   const showInsetVarModal = ref(false);
+  const insetVarRef = ref();
+  const aiList = ref<info[]>([]); // AI列表
 
   // 定义处理函数
   const insertVariable = () => {
@@ -129,7 +149,7 @@
     // 保存当前光标位置
     const range = quill.getSelection(true);
     savedSelection.value = range || { index: quill.getLength(), length: 0 };
-    editingPrompt.value = '';
+    editingPrompt.value = null;
     editingNode.value = null;
     showAIModal.value = true;
   };
@@ -217,8 +237,26 @@
       e.stopPropagation();
       const block = target.closest('.ql-ai-agent') as HTMLElement | null;
       if (block) {
-        const prompt = block.getAttribute('data-prompt') || '';
-        editingPrompt.value = prompt;
+        const promptTemplate = block.getAttribute('data-prompt') || '';
+        const name = block.getAttribute('data-name') || '';
+        const result = block.getAttribute('data-result') || '';
+        // 从 aiList 中查找对应的完整 info 对象
+        let promptInfo: info | null = null;
+        if (name || promptTemplate) {
+          promptInfo = aiList.value.find(item => item.name === name && item.prompt_template === promptTemplate) || null;
+        }
+
+        // 如果找到了，使用完整的 info 对象；否则从 DOM 属性创建
+        if (promptInfo) {
+          editingPrompt.value = { ...promptInfo };
+        } else {
+          // 从 DOM 属性创建 info 对象（fallback）
+          editingPrompt.value = {
+            name,
+            prompt_template: promptTemplate,
+            result,
+          };
+        }
         editingNode.value = block;
         showAIModal.value = true;
       }
@@ -231,10 +269,10 @@
       e.stopPropagation();
       const block = target.closest('.ql-ai-agent') as HTMLElement | null;
       if (block) {
-        // 获取智能体的提示词作为名称
-        const prompt = block.getAttribute('data-prompt') || '';
-        // 如果提示词为空，使用默认名称，否则使用提示词（如果太长则截断）
-        deletingAgentName.value = prompt || t('AI智能体');
+        // 获取智能体的名称
+        const name = block.getAttribute('data-name') || '';
+        // 如果名称为空，使用默认名称
+        deletingAgentName.value = name || t('AI智能体');
         deletingNode.value = block;
         showDeleteDialog.value = true;
       }
@@ -242,16 +280,48 @@
     }
   };
 
-  const handleAIAgentConfirm = (prompt: string) => {
+  const handleAIAgentConfirm = (promptInfo: info) => {
     if (!quill) return;
+
+    // 提取数据
+    const promptText = promptInfo?.prompt_template || '';
+    const name = promptInfo?.name || '';
+    const result = promptInfo?.result || '';
 
     if (editingNode.value) {
       // 编辑现有块
-      editingNode.value.setAttribute('data-prompt', prompt);
-      const promptElement = editingNode.value.querySelector('.ai-agent-prompt') as HTMLElement | null;
-      if (promptElement) {
-        promptElement.textContent = prompt || '点击编辑设置AI提示词';
+      // 获取旧的 name 和 prompt_template 用于匹配 aiList 中的项
+      const oldName = editingNode.value.getAttribute('data-name') || '';
+      const oldPromptTemplate = editingNode.value.getAttribute('data-prompt') || '';
+
+      editingNode.value.setAttribute('data-prompt', promptText);
+      if (name) {
+        editingNode.value.setAttribute('data-name', name);
       }
+      if (result) {
+        editingNode.value.setAttribute('data-result', result);
+      }
+
+      // 更新显示内容
+      const labelElement = editingNode.value.querySelector('.ai-agent-label') as HTMLElement | null;
+      const promptElement = editingNode.value.querySelector('.ai-agent-prompt') as HTMLElement | null;
+      if (labelElement) {
+        labelElement.textContent = name || '';
+      }
+      if (promptElement) {
+        promptElement.textContent = result || promptText || '';
+      }
+
+      // 更新 aiList 中对应的项
+      if (oldName || oldPromptTemplate) {
+        // eslint-disable-next-line max-len
+        const index = aiList.value.findIndex(item => item.name === oldName && item.prompt_template === oldPromptTemplate);
+        if (index !== -1) {
+          aiList.value[index] = promptInfo;
+          console.log('更新后的 aiList.value', aiList.value);
+        }
+      }
+
       editingNode.value = null;
     } else {
       // 插入新块 - 使用保存的光标位置
@@ -260,7 +330,9 @@
       const id = Date.now().toString();
       quill.insertEmbed(range.index, 'aiAgent', {
         id,
-        prompt,
+        prompt: promptText,
+        name,
+        result,
       });
       // 在插入的块后面插入换行符
       quill.insertText(range.index + 1, '\n', 'user', true);
@@ -268,6 +340,10 @@
       quill.setSelection(range.index + 2);
       // 清除保存的选择
       savedSelection.value = null;
+
+      // 添加到 aiList
+      aiList.value.push(promptInfo);
+      console.log('新增后的 aiList.value', aiList.value);
     }
 
     // 更新保存的内容状态
@@ -276,6 +352,16 @@
 
   const handleDeleteConfirm = () => {
     if (!quill || !deletingNode.value) return;
+
+    // 获取要删除的节点的信息
+    const name = deletingNode.value.getAttribute('data-name') || '';
+    const promptTemplate = deletingNode.value.getAttribute('data-prompt') || '';
+
+    // 从 aiList 中删除对应的项
+    if (name || promptTemplate) {
+      aiList.value = aiList.value.filter(item => !(item.name === name && item.prompt_template === promptTemplate));
+      console.log('删除后的 aiList.value', aiList.value);
+    }
 
     // 使用Quill的find方法找到对应的blot
     const blot = Quill.find(deletingNode.value);
@@ -397,8 +483,8 @@
 
             if (targetNode) {
               // 显示确认弹窗
-              const prompt = targetNode.getAttribute('data-prompt') || '';
-              deletingAgentName.value = prompt || t('AI智能体');
+              const name = targetNode.getAttribute('data-name') || '';
+              deletingAgentName.value = name || t('AI智能体');
               deletingNode.value = targetNode;
               pendingDeleteAgent.value = { node: targetNode, name: deletingAgentName.value };
               showDeleteDialog.value = true;
@@ -457,9 +543,13 @@
   // 获取编辑器内容
   const getContent = () => content.value;
 
+  // 获取 getAiLists 数据
+  const getAiLists = () => aiList.value;
+
   // 暴露方法给父组件
-  defineExpose({
+  defineExpose<expose>({
     getContent,
+    getAiLists,
   });
 </script>
 
@@ -537,12 +627,18 @@
 }
 
 :deep(.ai-agent-prompt) {
+  display: -webkit-box;
+  overflow: hidden;
   font-family: MicrosoftYaHei, sans-serif;
   font-size: 12px;
   line-height: 20px;
   letter-spacing: 0;
   color: #4d4f56;
   text-align: justify;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 :deep(.ai-agent-actions) {

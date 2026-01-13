@@ -235,4 +235,18 @@ export default {
     return RiskManageSource.getReportRiskVar(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc AI智能体预览
+   */
+  getAiPreview(params: {
+    id: string,
+    risk_id: string,
+    ai_variables: Array<{
+      name: string,
+      prompt_template: string
+    }>
+  }) {
+    return RiskManageSource.getAiPreview(params)
+      .then(({ data }) => data);
+  },
 };

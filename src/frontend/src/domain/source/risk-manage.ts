@@ -220,5 +220,17 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  getAiPreview(params: {
+    id: string,
+    risk_id: string,
+    ai_variables: Array<{
+      name: string,
+      prompt_template: string
+    }>
+  }) {
+    return Request.post(`${this.api}/risk_report/${params.id}/ai_preview/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();

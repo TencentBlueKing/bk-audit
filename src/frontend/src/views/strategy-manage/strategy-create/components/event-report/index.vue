@@ -19,7 +19,7 @@
     class="create-strategy-page"
     :offset-target="getSmartActionOffsetTarget">
     <div
-      v-if="riskLisks.length === 0"
+      v-if="isShowTips"
       class="event-tips">
       <audit-icon
         class="info-fill-icon"
@@ -121,6 +121,8 @@
   interface IFormData {
     processor_groups: Array<number>,
     notice_groups: Array<number>,
+    report_enabled: boolean,
+    report_config: Record<string, any>,
   }
 
   interface riskItem {
@@ -129,9 +131,14 @@
     strategy_id: number,
     created_at: string,
   }
+  interface aiVariables {
+    name: string,
+    prompt_template: string,
+  }
 
   interface Props {
-    editData: StrategyModel
+    editData: StrategyModel;
+    select?: any[]; // 从父组件传递的 formData.configs.select
   }
   interface Emits {
     (e: 'previousStep', step: number): void;
@@ -139,7 +146,9 @@
     (e: 'submitData'): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    select: () => [],
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const isEnvent = ref(false);
@@ -150,15 +159,38 @@
   const selectedValue = ref('');
   const riskLisks = ref<Array<riskItem>>([]);
   const editorContent = ref('');
-  // 从 editData 中获取 expectedResultList (step1 中的 configs.select)
-  const eventInfoData = computed(() => props.editData?.configs?.select || []);
-
+  const reportInfo = ref({ // 报告信息
+    enabled: false,
+    config: {},
+  });
+  // 从 editData 或 select prop 中获取 expectedResultList (step1 中的 configs.select)
+  // 优先使用 select prop（创建模式），否则使用 editData.configs.select（编辑模式）
+  const eventInfoData = computed(() => {
+    const data = props.select && props.select.length > 0
+      ? props.select
+      : (props.editData?.configs?.select || []);
+    return data;
+  });
+  // 是否显示提示
+  const isShowTips = ref(false);
   // 检查编辑器是否有内容
   const hasEditorContent = computed(() => {
     if (!editorContent.value) return false;
-    // 移除 HTML 标签和空白字符后检查是否为空
-    const textContent = editorContent.value.replace(/<[^>]*>/g, '').trim();
-    return textContent && textContent.length > 0;
+    // 使用 DOMParser 安全地提取文本内容，避免 HTML 注入风险
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(editorContent.value, 'text/html');
+      const textContent = doc.body.textContent || doc.body.innerText || '';
+      return textContent.trim().length > 0;
+    } catch {
+      // 如果解析失败，使用更安全的正则表达式作为后备方案
+      // 移除所有 HTML 标签（包括 script 标签）和空白字符
+      const textContent = editorContent.value
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+      return textContent.length > 0;
+    }
   });
 
   // 定期检查编辑器内容变化
@@ -204,10 +236,70 @@
     emits('previousStep', 2);
   };
   const handleNext = () => {
-    console.log('handleNext');
+    reportInfo.value.enabled = isEnvent.value;
+    const frontendContent = aiEditorRef.value.getContent();
+
+    // 处理 template：将 AI Agent 块替换为模板变量
+    let templateContent = frontendContent;
+
+    // 使用 DOMParser 解析 HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${templateContent}</div>`, 'text/html');
+    const container = doc.body.firstElementChild as HTMLElement;
+
+    if (container) {
+      // 先收集所有需要替换的节点信息（避免在遍历时修改 DOM 导致的问题）
+      const aiAgentNodes: Array<{ node: HTMLElement; name: string }> = [];
+      const nodes = container.querySelectorAll('.ql-ai-agent');
+
+      nodes.forEach((node) => {
+        const htmlNode = node as HTMLElement;
+        const name = htmlNode.getAttribute('data-name') || '';
+        if (name) {
+          aiAgentNodes.push({ node: htmlNode, name });
+        }
+      });
+
+      // 从后往前替换，避免索引问题
+      for (let i = aiAgentNodes.length - 1; i >= 0; i--) {
+        const { node, name } = aiAgentNodes[i];
+        // 创建模板变量文本节点
+        const templateVar = doc.createTextNode(`{{ ai.${name} }}`);
+        // 替换整个节点（包括所有子元素）
+        if (node.parentNode) {
+          node.parentNode.replaceChild(templateVar, node);
+        }
+      }
+
+      // 清理可能残留的 AI Agent 相关元素（以防万一）
+      const selectors = ['.ai-agent-block', '.ai-agent-content', '.ai-agent-actions', '.ai-agent-label', '.ai-agent-prompt'];
+      selectors.forEach((selector) => {
+        const elements = container.querySelectorAll(selector);
+        elements.forEach((element) => {
+          if (element.parentNode) {
+            element.parentNode.removeChild(element);
+          }
+        });
+      });
+
+      // 获取处理后的 HTML 内容（移除包装的 div）
+      templateContent = container.innerHTML;
+    }
+    const aiVariables = aiEditorRef.value.getAiLists().map((item: aiVariables) => ({
+      name: item.name,
+      prompt_template: item.prompt_template,
+    }));
+    reportInfo.value.config = {
+      frontend_template: frontendContent,
+      template: templateContent,
+      ai_variables: aiVariables,
+    };
+    console.log('handleNext>>>', reportInfo.value);
     emits('nextStep', 4, {
       processor_groups: [],
       notice_groups: [],
+      report_enabled: reportInfo.value.enabled,
+      report_config: reportInfo.value.config,
     });
   };
   const handleCancel = () => {
@@ -230,12 +322,12 @@
       console.log('获取风险简要列表', data);
       // 如果返回的数据包含 results 字段，则使用 results，否则直接使用 data
       riskLisks.value = data?.results || data || [];
+      isShowTips.value = !(riskLisks.value.length > 0);
     },
   });
 
 
   onMounted(() => {
-    console.log('加载', isEditMode, isCloneMode, route, props.editData);
     if (isEditMode || isCloneMode) {
       isEnvent.value =  props.editData.report_enabled;
       const strategyId = route.params.id;
