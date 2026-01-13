@@ -98,6 +98,8 @@
     risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'],
     processor_groups: [],
     notice_groups: []
+    report_enabled: boolean,
+    report_config: Record<string, any>,
   }
 
   const router = useRouter();
@@ -147,6 +149,8 @@
     risk_meta_field_config: [],
     processor_groups: [],
     notice_groups: [],
+    report_enabled: false,
+    report_config: {},
   });
 
   // 编辑状态获取数据
@@ -292,7 +296,7 @@
   // 提交
   const handleSubmit = () => {
     const params = _.cloneDeep(formData.value);
-
+    console.log('params', params);
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
