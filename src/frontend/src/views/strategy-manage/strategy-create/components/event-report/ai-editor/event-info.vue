@@ -107,7 +107,9 @@
   interface Emits {
     (e: 'insert', value: string): void;
   }
-
+  interface expose {
+    getEventVariables: () => any[];
+  }
   const props = withDefaults(defineProps<Props>(), {
     tableData: () => [],
   });
@@ -115,22 +117,34 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  // 创建响应式的表格数据
+  // localTableData 来自 expected-results/index.vue 中的 expectedResultList
+  // 数据流：
+  // 1. expected-results/index.vue 中的 <vuedraggable :list="expectedResultList">
+  // 2. expectedResultList 通过 handleUpdateExpectedResult 保存到 formData.configs.select
+  // 3. formData.configs.select 保存到 editData.configs.select
+  // 4. event-report/index.vue: eventInfoData = computed(() => props.editData?.configs?.select || [])
+  // 5. eventInfoData -> ai-editor -> inset-var -> event-info (作为 tableData prop)
+  // 6. tableData -> localTableData
   const localTableData = ref<any[]>([]);
 
   // 初始化表格数据
   const initTableData = () => {
+    console.log('event-info initTableData, props.tableData:', props.tableData);
     if (props.tableData && props.tableData.length > 0) {
+      // props.tableData 就是 expected-results/index.vue 中 vuedraggable 的 expectedResultList
       localTableData.value = props.tableData.map((item: any) => ({
         ...item,
         aggregate: item.aggregate === null ? 'null' : item.aggregate,
       }));
+      console.log('event-info localTableData.value:', localTableData.value);
     } else {
       localTableData.value = [];
+      console.log('event-info tableData 为空或未定义');
     }
   };
 
   // 监听 props.tableData 变化，同步到本地数据
+  // props.tableData 来自 expected-results/index.vue 的 expectedResultList (vuedraggable 的 :list)
   watch(() => props.tableData, () => {
     initTableData();
   }, { deep: true, immediate: true });
@@ -189,9 +203,15 @@
       emits('insert', `{{ ${item.aggregate}(event.${item.raw_name}) }}`);
     }
   };
+  // 获取事件变量
+  const getEventVariables = () => localTableData.value ;
 
   onMounted(() => {
     fetchAggregationFunctions();
+  });
+
+  defineExpose<expose>({
+    getEventVariables,
   });
 </script>
 
