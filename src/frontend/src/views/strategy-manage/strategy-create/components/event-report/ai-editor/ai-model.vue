@@ -35,6 +35,7 @@
         </div>
 
         <bk-form
+          ref="formRef"
           class="example"
           form-type="vertical"
           :model="formData"
@@ -50,10 +51,10 @@
           </bk-form-item>
           <bk-form-item
             :label="t('AI 提示词')"
-            property="dec"
+            property="prompt_template"
             required>
             <bk-input
-              v-model="formData.dec"
+              v-model="formData.prompt_template"
               class="ai-prompt-textarea"
               :placeholder="t('请输入 AI 提示词，指导 AI 如何生成这部分内容')"
               :resize="false"
@@ -62,26 +63,40 @@
               type="textarea" />
           </bk-form-item>
 
-          <bk-form-item :label="t('关联审计风险单')">
+          <bk-form-item
+            v-if="riskLisks.length > 0"
+            :label="t('关联审计风险单')">
             <bk-select
-              v-model="formData.risk"
+              v-model="formData.risk_id"
               class="risks-bk-select">
               <bk-option
-                v-for="(item, index) in datasource"
-                :id="item.value"
-                :key="index"
-                :name="item.label" />
+                v-for="item in riskLisks"
+                :id="item.risk_id"
+                :key="item.risk_id"
+                :name="`${item.title}(${item.risk_id})`" />
             </bk-select>
           </bk-form-item>
         </bk-form>
         <div class="ai-agent-drawer-footer">
           <div
+            v-if="isShowConfirm"
             class="ai-agent-insert-btn mr8"
             @click="handleConfirm">
             {{ t('插入') }}
           </div>
+          <div
+            v-else
+            class="ai-disabled-btn mr8">
+            {{ t('插入') }}
+          </div>
           <bk-button
+            v-if="riskLisks.length > 0"
+            v-bk-tooltips="{
+              disabled: formData.risk_id !== '',
+              content: t('请选择关联审计风险单'),
+            }"
             class="mr8"
+            :disabled="formData.risk_id === ''"
             outline
             theme="primary"
             @click="handlePreview">
@@ -115,9 +130,11 @@
         <div
           v-if="isPreviewExpanded"
           class="preview-concent">
-          <div class="preview-concent-box">
-            {{ concent }}
-          </div>
+          <bk-loading :loading="isLoading">
+            <div class="preview-concent-box">
+              {{ concent }}
+            </div>
+          </bk-loading>
         </div>
       </div>
     </template>
@@ -127,72 +144,105 @@
 <script setup lang="ts">
   import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
+  import RiskManageService from '@service/risk-manage';
+
+  import useRequest from '@hooks/use-request';
+
+  interface riskItem {
+    risk_id: string,
+    title: string,
+    strategy_id: number,
+    created_at: string,
+  }
+  interface info {
+    name: string,
+    prompt_template: string,
+    result: string,
+  }
   interface Props {
     visible: boolean;
-    initialPrompt?: string;
-    riskLisks: any;
+    initialPrompt?: info | null;
+    riskLisks: Array<riskItem>;
   }
   interface Emits {
     (e: 'update:visible', value: boolean): void;
-    (e: 'confirm', value: string): void;
+    (e: 'confirm', value: info): void;
   }
   const props = withDefaults(defineProps<Props>(), {
-    initialPrompt: '',
+    initialPrompt: (): info => ({
+      name: '',
+      prompt_template: '',
+      result: '',
+    }),
   });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const route = useRoute();
+  // const isEditMode = route.name === 'strategyEdit';
   const isShowRight = ref(false);
-  const prompt = ref('');
+  const formRef = ref();
   const textareaRows = ref(6);
   const isPreviewExpanded = ref(false);
+  const isShowConfirm = ref(true);
+  const isLoading = ref(true);
   const formData = ref({
     name: '',
-    dec: '',
-    risk: '',
+    prompt_template: '',
+    risk_id: '',
   });
   const rules = ref({});
-  const datasource = ref([
-    {
-      value: 1,
-      label: '爬山',
-    },
-    {
-      value: 2,
-      label: '跑步',
-    },
-    {
-      value: 3,
-      label: '未知',
-    },
-    {
-      value: 4,
-      label: '健身',
-    },
-    {
-      value: 5,
-      label: '骑车',
-    },
-    {
-      value: 6,
-      label: '跳舞',
-    },
-  ]);
-  const concent = ref('暂无内容');
+
+  const concent = ref('');
+  const aiInfo = ref({
+    name: '',
+    prompt_template: '',
+    result: '',
+  });
   const handleClose = () => {
     isShowRight.value = false;
   };
 
   const handleConfirm = () => {
-    emit('confirm', prompt.value);
+    // 如果不是编辑模式
+    aiInfo.value = {
+      name: formData.value.name,
+      prompt_template: formData.value.prompt_template,
+      result: '',
+    };
+
+    emit('confirm', aiInfo.value);
     isShowRight.value = false;
   };
 
   const handlePreview = () => {
+    formRef.value.validate().then(() => {
+      isLoading.value = true;
+      isPreviewExpanded.value = true;
+      // 延迟计算 rows，让高度过渡动画先完成，使过渡更平滑
+      nextTick(() => {
+        setTimeout(() => {
+          calculateTextareaRows();
+          getAiPreview({
+            id: route.params.id,
+            risk_id: formData.value.risk_id,
+            ai_variables: [{
+              name: `ai.${formData.value.name}`,
+              prompt_template: formData.value.prompt_template,
+            }],
+          }).finally(() => {
+            isLoading.value = false;
+            concent.value = '我是内容++++我是内容++++我是内容++++我是内容++++我是内容++++我是内容++++';
+          });
+        }, 0);
+      });
+    });
   };
 
   const handlePreviewFooter = () => {
+    isLoading.value = false;
     isPreviewExpanded.value = !isPreviewExpanded.value;
     // 延迟计算 rows，让高度过渡动画先完成，使过渡更平滑
     nextTick(() => {
@@ -226,25 +276,59 @@
     calculateTextareaRows();
   };
 
-
-  // 组件挂载时计算并监听窗口大小变化
-  onMounted(() => {
-    calculateTextareaRows();
-    window.addEventListener('resize', handleResize);
+  // Ai预览
+  const {
+    run: getAiPreview,
+  } = useRequest(RiskManageService.getAiPreview, {
+    defaultValue: [],
+    onSuccess(data) {
+      console.log('getAiPreview', data);
+    },
   });
 
-  // 组件卸载时移除事件监听
-  onUnmounted(() => {
-    window.removeEventListener('resize', handleResize);
-  });
+  // 初始化表单数据的函数
+  const initializeFormData = () => {
+    if (props.initialPrompt) {
+      formData.value = {
+        name: props.initialPrompt.name || '',
+        prompt_template: props.initialPrompt.prompt_template || '',
+        risk_id: '',
+      };
+      aiInfo.value = { ...props.initialPrompt };
+    } else {
+      // 重置为默认值
+      formData.value = {
+        name: '',
+        prompt_template: '',
+        risk_id: '',
+      };
+      aiInfo.value = {
+        name: '',
+        prompt_template: '',
+        result: '',
+      };
+    }
+    // 重置预览状态
+    isPreviewExpanded.value = false;
+  };
 
   // 同步 visible 和 isShowRight
   watch(() => props.visible, (newVal) => {
     isShowRight.value = newVal;
     if (newVal) {
-      prompt.value = props.initialPrompt || '';
+      initializeFormData();
+      nextTick(() => {
+        formRef.value.clearValidate();
+      });
     }
   }, { immediate: true });
+
+  // 监听 initialPrompt 变化，确保编辑时表单能正确更新
+  watch(() => props.initialPrompt, () => {
+    if (props.visible && isShowRight.value) {
+      initializeFormData();
+    }
+  }, { deep: true });
 
   watch(() => isShowRight.value, (newVal) => {
     if (!newVal) {
@@ -255,6 +339,20 @@
         calculateTextareaRows();
       }, 100);
     }
+  });
+
+  // 组件挂载时计算并监听窗口大小变化
+  onMounted(() => {
+    calculateTextareaRows();
+    window.addEventListener('resize', handleResize);
+    nextTick(() => {
+      formRef.value.clearValidate();
+    });
+  });
+
+  // 组件卸载时移除事件监听
+  onUnmounted(() => {
+    window.removeEventListener('resize', handleResize);
   });
 </script>
 
@@ -314,6 +412,20 @@
     text-align: center;
     cursor: pointer;
     background: linear-gradient(117deg, #235dfa 26%, #eb8cec 100%);
+    border: none;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  }
+
+  .ai-disabled-btn {
+    width: 88px;
+    height: 32px;
+    font-size: 14px;
+    line-height: 32px;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+    background-color: #dcdee5;
     border: none;
     border-radius: 2px;
     box-shadow: 0 1px 2px rgb(0 0 0 / 8%);

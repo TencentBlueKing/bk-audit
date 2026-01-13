@@ -11,6 +11,8 @@ const Embed = Quill.import('blots/embed') as any;
 interface AIAgentData {
   prompt: string;
   id: string;
+  name?: string;
+  result?: string;
 }
 
 // 自定义AI智能体块 - 使用Embed blot以便insertEmbed可以工作
@@ -26,18 +28,25 @@ class AIAgentBlot extends Embed {
     node.setAttribute('data-type', 'ai-agent');
     node.setAttribute('data-prompt', data.prompt || '');
     node.setAttribute('data-id', data.id || Date.now().toString());
+    if (data.name) {
+      node.setAttribute('data-name', data.name);
+    }
+    if (data.result) {
+      node.setAttribute('data-result', data.result);
+    }
     node.setAttribute('contenteditable', 'false');
 
     // 转义HTML以防止XSS
     const escapeHtml = (text: string): string => DOMPurify.sanitize(text, { ALLOWED_TAGS: [] });
+    console.log('data', data);
 
     // 创建块内容
     node.innerHTML = `
       <div class="ai-agent-block">
         <img class="ai-agent-ai" src="${aiIconUrl}" width="24" height="17" />
         <div class="ai-agent-content">
-          <div class="ai-agent-label">AI智能体</div>
-          <div class="ai-agent-prompt">${escapeHtml(data.prompt || '点击编辑设置AI提示词')}</div>
+          <div class="ai-agent-label">${escapeHtml(data.name || '')}</div>
+          <div class="ai-agent-prompt">${escapeHtml(data.prompt || '')}</div>
         </div>
         <div class="ai-agent-actions">
             <img class="ai-agent-edit" src="${editorIconUrl}" alt="编辑" width="16" height="16" />
@@ -53,6 +62,8 @@ class AIAgentBlot extends Embed {
     return {
       id: node.getAttribute('data-id') || '',
       prompt: node.getAttribute('data-prompt') || '',
+      name: node.getAttribute('data-name') || undefined,
+      result: node.getAttribute('data-result') || undefined,
     };
   }
 }
