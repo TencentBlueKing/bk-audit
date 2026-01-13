@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from unittest.mock import patch
 
+from django.test import SimpleTestCase
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -48,10 +49,9 @@ from core.sql.model import (
 )
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
-from tests.base import TestCase
 
 
-class TestSQLGenerator(TestCase):
+class TestSQLGenerator(SimpleTestCase):
     def setUp(self):
         self.query_builder = QueryBuilder()
 
@@ -202,6 +202,77 @@ class TestSQLGenerator(TestCase):
             'AND CAST(GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\') AS STRING)=\'Dublin\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+    def test_where_with_empty_conditions(self):
+        """测试包含空条件的 WHERE 子句处理"""
+        # 1. 正常条件
+        valid_condition_1 = WhereCondition(
+            condition=Condition(
+                field=Field(table="users", raw_name="age", display_name="user_age", field_type=FieldType.INT),
+                operator=Operator.EQ,
+                filter=18,
+            )
+        )
+
+        # 2. 空条件 (没有 condition 也没有 conditions)
+        empty_condition = WhereCondition(conditions=[], condition=None)
+
+        # 3. 组合: valid AND empty -> 应该只剩下 valid
+        config = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    valid_condition_1,
+                    empty_condition,
+                ],
+            ),
+        )
+
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_query = 'SELECT "users"."id" "user_id" FROM "users" "users" WHERE "users"."age"=18'
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+        # 4. 组合: valid OR empty -> 应该只剩下 valid
+        config_or = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.OR,
+                conditions=[
+                    valid_condition_1,
+                    empty_condition,
+                ],
+            ),
+        )
+        query_or = generator.generate(config_or)
+        self.assertEqual(str(query_or), expected_query, f"Expected: {expected_query}, but got: {query_or}")
+
+        # 5. 全是空条件 -> 不应该有 WHERE 子句
+        config_empty = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    empty_condition,
+                    empty_condition,
+                ],
+            ),
+        )
+        query_empty = generator.generate(config_empty)
+        expected_query_no_where = 'SELECT "users"."id" "user_id" FROM "users" "users"'
+        self.assertEqual(
+            str(query_empty), expected_query_no_where, f"Expected: {expected_query_no_where}, but got: {query_empty}"
+        )
 
     def test_invalid_field_source(self):
         """测试无效字段来源的捕获"""
@@ -1058,7 +1129,7 @@ class TestSQLGenerator(TestCase):
         self.assertEqual(str(query), expected_sql, msg=f"\nExpected:\n{expected_sql}\nGot:\n{str(query)}")
 
 
-class TestSQLFunctions(TestCase):
+class TestSQLFunctions(SimpleTestCase):
     """核心函数输出验证"""
 
     def test_json_contains_function(self):
@@ -1076,7 +1147,7 @@ class TestSQLFunctions(TestCase):
         self.assertEqual(str(expr), "CONCAT('a','b')")
 
 
-class TestDorisVariantFieldSanitize(TestCase):
+class TestDorisVariantFieldSanitize(SimpleTestCase):
     def test_sanitize_variant_key_type_and_empty(self):
         """_sanitize_variant_key 对类型和空字符串做校验"""
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
