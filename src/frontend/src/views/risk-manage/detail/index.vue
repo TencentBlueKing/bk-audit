@@ -30,13 +30,35 @@
           :risk-status-common="riskStatusCommon"
           :strategy-list="strategyList" />
         <!-- 关联事件 -->
-        <div class="link-event-wrap">
+        <div
+          v-if="!detailData.has_report"
+          class="link-event-wrap">
           <link-event
             :data="detailData"
             :strategy-list="strategyList"
             @get-event-data="handleGetEventData"
             @updated-data="handleUpdatedData" />
         </div>
+        <bk-tab
+          v-else
+          v-model:active="active"
+          style="margin-top: 16px;"
+          type="card-grid">
+          <bk-tab-panel
+            v-for="item in panels"
+            :key="item.name"
+            :label="item.label"
+            :name="item.name">
+            <scroll-faker>
+              <component
+                :is="renderCom"
+                :data="detailData"
+                :strategy-list="strategyList"
+                @get-event-data="handleGetEventData"
+                @updated-data="handleUpdatedData" />
+            </scroll-faker>
+          </bk-tab-panel>
+        </bk-tab>
       </div>
       <!-- 事件处理 -->
       <scroll-faker
@@ -72,7 +94,23 @@
           type="link" />
       </bk-button>
     </teleport>
+    <teleport
+      v-if="detailData.permission?.edit_risk_v2 && !detailData.has_report"
+      to="#teleport-generate-report">
+      <bk-button
+        v-bk-tooltips="t('生成调查报告')"
+        theme="primary"
+        @click="handleGenerateReport">
+        <audit-icon
+          style="margin-right: 8px;font-size: 14px;"
+          type="add" />
+        {{ t('创建调查报告') }}
+      </bk-button>
+    </teleport>
   </bk-loading>
+  <edit-event-report
+    v-model:isShowEditEventReport="isShowEditEventReport"
+    :status="detailData.report?.status" />
 </template>
 
 <script setup lang='ts'>
@@ -102,6 +140,8 @@
   } from '@utils/assist';
 
   import BaseInfo from './components/base-info.vue';
+  import EditEventReport from './components/event-report/edit-event-report.vue';
+  import EventReport from './components/event-report/index.vue';
   import LinkEvent from './components/link-event.vue';
   import RiskHandle from './components/risk-handle/index.vue';
 
@@ -110,11 +150,26 @@
   const { t } = useI18n();
   const eventDataList = ref();
   const isShowSide = ref(true);
+  const isShowEditEventReport = ref(false);
 
   let timeout: undefined | number = undefined;
   const handleOpenRight = () => {
     isShowSide.value = !isShowSide.value;
   };
+
+  const renderCom = computed(() => comMap[active.value]);
+  const comMap: Record<string, any> = {
+    eventReport: EventReport,
+    linkEvent: LinkEvent,
+  };
+
+  const panels = [
+    { name: 'eventReport', label: t('事件调查报告') },
+    { name: 'linkEvent', label: t('关联事件列表') },
+  ];
+
+  const active = ref<keyof typeof comMap>('eventReport');
+
   const {
     loading: strategyLoading,
     data: strategyList,
@@ -177,6 +232,10 @@
   const handleCopyLink = () => {
     const route = window.location.href;
     execCopy(route, t('复制成功'));
+  };
+
+  const handleGenerateReport = () => {
+    isShowEditEventReport.value = true;
   };
 
   // 合并数据（包含事件信息配置）
