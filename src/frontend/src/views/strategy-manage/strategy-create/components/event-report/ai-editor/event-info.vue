@@ -129,17 +129,14 @@
 
   // 初始化表格数据
   const initTableData = () => {
-    console.log('event-info initTableData, props.tableData:', props.tableData);
     if (props.tableData && props.tableData.length > 0) {
       // props.tableData 就是 expected-results/index.vue 中 vuedraggable 的 expectedResultList
       localTableData.value = props.tableData.map((item: any) => ({
         ...item,
         aggregate: item.aggregate === null ? 'null' : item.aggregate,
       }));
-      console.log('event-info localTableData.value:', localTableData.value);
     } else {
       localTableData.value = [];
-      console.log('event-info tableData 为空或未定义');
     }
   };
 
