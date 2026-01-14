@@ -218,7 +218,9 @@
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
-          run(params);
+          run(params).finally(() => {
+            isLoading.value = false;
+          });
           replaceSearchParams(params);
         }
       });

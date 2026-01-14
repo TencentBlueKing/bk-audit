@@ -83,13 +83,21 @@
 
   interface expose {
     getAiLists: () => any[];
-    getContent: () => string;
+    setQuillContent: (content: string) => void;
+    getContentVal: () => string;
+    getQuillContent: () => string;
+    hasContent: () => boolean;
+  }
+
+  interface emits {
+    (e: 'isHasContent', value: boolean): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     disabled: false,
     eventInfoData: () => [],
   });
+  const emit = defineEmits<emits>();
   const { t } = useI18n();
   // 定义 Quill 实例类型
   interface QuillInstance {
@@ -105,6 +113,10 @@
     getContents: () => any;
     setContents: (delta: any, source?: string) => void;
     updateContents: (delta: any, source?: string) => any;
+    clipboard: {
+      convert: (html: string) => any;
+      dangerouslyPasteHTML: (index: number, html: string) => void;
+    };
   }
 
   const quillEditorRef = ref<InstanceType<typeof QuillEditor> | null>(null);
@@ -318,7 +330,6 @@
         const index = aiList.value.findIndex(item => item.name === oldName && item.prompt_template === oldPromptTemplate);
         if (index !== -1) {
           aiList.value[index] = promptInfo;
-          console.log('更新后的 aiList.value', aiList.value);
         }
       }
 
@@ -343,7 +354,6 @@
 
       // 添加到 aiList
       aiList.value.push(promptInfo);
-      console.log('新增后的 aiList.value', aiList.value);
     }
 
     // 更新保存的内容状态
@@ -360,7 +370,6 @@
     // 从 aiList 中删除对应的项
     if (name || promptTemplate) {
       aiList.value = aiList.value.filter(item => !(item.name === name && item.prompt_template === promptTemplate));
-      console.log('删除后的 aiList.value', aiList.value);
     }
 
     // 使用Quill的find方法找到对应的blot
@@ -539,17 +548,104 @@
       }
     });
   });
+  // 判断编辑器是否有实际内容
+  const hasContent = (html: string): boolean => {
+    if (!html || html.trim() === '') {
+      return false;
+    }
 
+    // 解析 HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    // eslint-disable-next-line prefer-destructuring
+    const body = doc.body;
+
+    // 检查是否有 AI Agent 块（即使没有文本，有 AI Agent 也算有内容）
+    const aiAgentNodes = body.querySelectorAll('.ql-ai-agent');
+    if (aiAgentNodes.length > 0) {
+      return true;
+    }
+
+    // 获取所有文本内容（去除 HTML 标签）
+    const textContent = body.textContent || body.innerText || '';
+    const trimmedText = textContent.trim();
+
+    // 如果有实际文本内容，返回 true
+    if (trimmedText.length > 0) {
+      return true;
+    }
+
+    // 检查是否有图片
+    const images = body.querySelectorAll('img');
+    if (images.length > 0) {
+      return true;
+    }
+
+    // 检查是否有其他嵌入内容（如视频、链接等）
+    const embeds = body.querySelectorAll('iframe, video, embed, object');
+    if (embeds.length > 0) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // 监听 content 变化
+  watch(() => content.value, (newVal) => {
+    const hasActualContent = hasContent(newVal);
+    emit('isHasContent', hasActualContent);
+  }, {
+    immediate: true,
+    deep: true,
+  });
   // 获取编辑器内容
-  const getContent = () => content.value;
+  const getQuillContent = () => {
+    if (!quill) return '';
+    return JSON.stringify(quill.getContents());
+  };
+  const getContentVal = () => {
+    if (!quill) return '';
+    // 直接从 Quill 实例的 DOM 获取 HTML 内容
+    return quill.root.innerHTML;
+  };
 
   // 获取 getAiLists 数据
   const getAiLists = () => aiList.value;
 
+  const initValue = (data: string) => {
+    if (!quill) return;
+    const delta = JSON.parse(data);
+    quill.setContents(delta, 'silent');
+
+    // 从 Delta 内容中提取 AI Agent 信息并恢复 aiList
+    const aiAgents: info[] = [];
+    if (delta && delta.ops) {
+      delta.ops.forEach((op: any) => {
+        if (op.insert && typeof op.insert === 'object' && op.insert.aiAgent) {
+          const aiAgentData = op.insert.aiAgent;
+          aiAgents.push({
+            name: aiAgentData.name || '',
+            prompt_template: aiAgentData.prompt || '',
+            result: aiAgentData.result || '',
+          });
+        }
+      });
+    }
+    aiList.value = aiAgents;
+
+    // 更新保存的内容状态
+    previousContent.value = quill.getContents();
+    emit('isHasContent', true);
+  };
   // 暴露方法给父组件
   defineExpose<expose>({
-    getContent,
+    getQuillContent,
+    getContentVal,
     getAiLists,
+    setQuillContent(data: string) {
+      initValue(data);
+    },
+    hasContent: () => hasContent(content.value),
   });
 </script>
 

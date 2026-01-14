@@ -156,6 +156,20 @@
     strategy_id: number,
     created_at: string,
   }
+
+  interface aiPreviewData {
+    task_id: string,
+    status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE'
+  }
+
+  interface RiskReport {
+    task_id: string,
+    status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE'
+    result: {
+      description: string;
+    },
+  }
+
   interface info {
     name: string,
     prompt_template: string,
@@ -186,7 +200,7 @@
   const formRef = ref();
   const textareaRows = ref(6);
   const isPreviewExpanded = ref(false);
-  const isShowConfirm = ref(true);
+  const isShowConfirm = ref(false);
   const isLoading = ref(true);
   const formData = ref({
     name: '',
@@ -196,6 +210,7 @@
   const rules = ref({});
 
   const concent = ref('');
+  const timerId = ref<number | null>(null);
   const aiInfo = ref({
     name: '',
     prompt_template: '',
@@ -217,6 +232,68 @@
     isShowRight.value = false;
   };
 
+  // 查询任务结果
+  const {
+    run: getTaskRiskReport,
+  } = useRequest(RiskManageService.getTaskRiskReport, {
+    defaultValue: null as any,
+    onSuccess(data: RiskReport) {
+      isLoading.value = false;
+      isShowConfirm.value = false;
+      concent.value = data.result.description;
+    },
+  });
+
+  // Ai预览
+  const {
+    run: getAiPreview,
+  } = useRequest(RiskManageService.getAiPreview, {
+    defaultValue: null as any,
+    onSuccess(data: aiPreviewData) {
+      // eslint-disable-next-line no-param-reassign
+      data =  {
+        task_id: '1',
+        status: 'SUCCESS',
+      };
+      if (data.status === 'PENDING' || data.status === 'RUNNING') {
+        isLoading.value = true;
+        // 清除之前的定时器（如果存在）
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+        }
+        // 创建定时器 3秒后重试
+        timerId.value = window.setTimeout(() => {
+          getAiPreview({
+            id: route.params.id,
+            risk_id: formData.value.risk_id,
+            ai_variables: [{
+              name: `ai.${formData.value.name}`,
+              prompt_template: formData.value.prompt_template,
+            }],
+          });
+          timerId.value = null;
+        }, 3000);
+      } else if (data.status === 'SUCCESS') {
+        // 清除定时器
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+          timerId.value = null;
+        }
+        // 成功
+        getTaskRiskReport({ task_id: '1' });
+      } else if (data.status === 'FAILURE') {
+        // 清除定时器
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+          timerId.value = null;
+        }
+        isLoading.value = false;
+        // 失败
+        concent.value = '失败';
+      }
+    },
+  });
+
   const handlePreview = () => {
     formRef.value.validate().then(() => {
       isLoading.value = true;
@@ -234,7 +311,9 @@
             }],
           }).finally(() => {
             isLoading.value = false;
-            concent.value = '我是内容++++我是内容++++我是内容++++我是内容++++我是内容++++我是内容++++';
+            // 模拟获取任务风险报告
+            getTaskRiskReport({ task_id: '1' });
+            isShowConfirm.value = true;
           });
         }, 0);
       });
@@ -268,23 +347,12 @@
     const calculatedRows = Math.floor(targetHeight / lineHeight);
     // 设置最小和最大行数限制
     textareaRows.value = Math.max(10, Math.min(calculatedRows, 50));
-    console.log('textareaRows', textareaRows.value);
   };
 
   // 窗口大小变化时重新计算
   const handleResize = () => {
     calculateTextareaRows();
   };
-
-  // Ai预览
-  const {
-    run: getAiPreview,
-  } = useRequest(RiskManageService.getAiPreview, {
-    defaultValue: [],
-    onSuccess(data) {
-      console.log('getAiPreview', data);
-    },
-  });
 
   // 初始化表单数据的函数
   const initializeFormData = () => {
@@ -346,13 +414,19 @@
     calculateTextareaRows();
     window.addEventListener('resize', handleResize);
     nextTick(() => {
-      formRef.value.clearValidate();
+      formRef.value?.clearValidate();
+      isShowConfirm.value = !(props.riskLisks.length > 0);
     });
   });
 
-  // 组件卸载时移除事件监听
+  // 组件卸载时移除事件监听和清除定时器
   onUnmounted(() => {
     window.removeEventListener('resize', handleResize);
+    // 清除定时器
+    if (timerId.value !== null) {
+      clearTimeout(timerId.value);
+      timerId.value = null;
+    }
   });
 </script>
 
