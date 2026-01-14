@@ -80,6 +80,16 @@ class RisksAPIGWViewSet(ResourceViewSet):
     ]
 
 
+class EventAPIGWViewSet(APIGWViewSet):
+    """
+    Event APIGW - 托管事件相关的 APIGW 接口，校验 app 信息
+    """
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.list_event_apigw),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks
@@ -183,7 +193,9 @@ class RiskReportViewSet(ResourceViewSet):
 
     def get_permissions(self):
         # 所有报告相关操作都需要风险编辑权限
-        return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
+        if self.action not in ["task"]:
+            return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
+        return []
 
     resource_routes = [
         # POST /api/v1/risk_report/{risk_id}/save/ -> 创建报告
@@ -192,6 +204,10 @@ class RiskReportViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.risk.update_risk_report, pk_field="risk_id"),
         # POST /api/v1/risk_report/{risk_id}/generate/ -> 生成报告
         ResourceRoute("POST", resource.risk.generate_risk_report, pk_field="risk_id", endpoint="generate"),
+        # AI 智能体预览
+        ResourceRoute("POST", resource.risk.ai_preview, pk_field="risk_id", endpoint="ai_preview"),
+        # 查询任务结果 (task_id 通过查询参数传递: ?task_id=xxx)
+        ResourceRoute("GET", resource.risk.get_task_result, endpoint="task"),
     ]
 
 
@@ -271,28 +287,4 @@ class RiskEventSubscriptionApigwViewSet(APIGWViewSet):
 class RiskEventSubscriptionAdminViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.risk.query_risk_event_subscription, endpoint="preview"),
-    ]
-
-
-class RiskReportViewSet(ResourceViewSet):
-    """风险报告 ViewSet
-
-    提供以下接口：
-    - POST /risks/report/{risk_id}/ai_preview/ - AI 智能体预览
-    - GET /risks/report/{risk_id}/task/?task_id=xxx - 查询任务结果 (task_id 通过查询参数传递)
-    """
-
-    def get_permissions(self):
-        """获取权限配置"""
-        if self.action in ["ai_preview"]:
-            return [
-                RiskViewPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
-            ]
-        return []
-
-    resource_routes = [
-        # AI 智能体预览
-        ResourceRoute("POST", resource.risk.ai_preview, pk_field="risk_id", endpoint="ai_preview"),
-        # 查询任务结果 (task_id 通过查询参数传递: ?task_id=xxx)
-        ResourceRoute("GET", resource.risk.get_task_result, endpoint="task"),
     ]
