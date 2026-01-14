@@ -249,4 +249,30 @@ export default {
     return RiskManageSource.getAiPreview(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 报告预览
+   */
+  getReportPreview(params: {
+    risk_id: string,
+    report_config: {
+      template: string,
+      frontend_template: string,
+      ai_variables: Array<{
+        name: string,
+        prompt_template: string
+      }>
+    }
+  }) {
+    return RiskManageSource.getReportPreview(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 查询任务结果
+   */
+  getTaskRiskReport(params: {
+    task_id: string,
+  }) {
+    return RiskManageSource.getTaskRiskReport(params)
+      .then(({ data }) => data);
+  },
 };
