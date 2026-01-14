@@ -49,7 +49,8 @@
             ref="aiEditorRef"
             :disabled="!isEnvent"
             :event-info-data="eventInfoData"
-            :risk-lisks="riskLisks" />
+            :risk-lisks="riskLisks"
+            @is-has-content="handleHasContent" />
         </div>
       </div>
       <div
@@ -66,8 +67,12 @@
             :name="`${item?.title}(${item?.risk_id})`" />
         </bk-select>
         <bk-button
+          v-bk-tooltips="{
+            disabled: !(!hasEditorContent || selectedValue ===''),
+            content: previewTooltips,
+          }"
           class="ml8"
-          :disabled="!hasEditorContent"
+          :disabled="!hasEditorContent || selectedValue ===''"
           outline
           theme="primary"
           @click="handlePreview">
@@ -105,7 +110,6 @@
 </template>
 <script setup lang="ts">
   import dayjs from 'dayjs';
-  import DOMPurify from 'dompurify';
   import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -172,24 +176,9 @@
       : (props.editData?.configs?.select || []);
     return data;
   });
+
   // 是否显示提示
   const isShowTips = ref(false);
-  // 检查编辑器是否有内容
-  const hasEditorContent = computed(() => {
-    if (!editorContent.value) return false;
-    // 使用 DOMPurify 安全地提取文本内容，避免 HTML 注入风险
-    try {
-      // 使用 DOMPurify 清理 HTML，只保留纯文本（移除所有标签）
-      // ALLOWED_TAGS: [] 表示不允许任何 HTML 标签，只保留纯文本
-      const sanitized = DOMPurify.sanitize(editorContent.value, { ALLOWED_TAGS: [] });
-      const textContent = sanitized.trim();
-      return textContent.length > 0;
-    } catch {
-      // 如果 DOMPurify 失败，返回 false 以确保安全
-      return false;
-    }
-  });
-
   // 定期检查编辑器内容变化
   let contentCheckInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -206,38 +195,22 @@
       }
     }, 300);
   };
+  // 检查编辑器是否有内容
+  const hasEditorContent = ref(false);
+  const handleHasContent = (hasContent: boolean) => {
+    console.log('1', hasContent);
 
-  const stopContentCheck = () => {
-    if (contentCheckInterval) {
-      clearInterval(contentCheckInterval);
-      contentCheckInterval = null;
-    }
+    hasEditorContent.value = hasContent;
   };
 
-  // 当编辑器引用可用时开始检查
-  nextTick(() => {
-    if (aiEditorRef.value) {
-      startContentCheck();
-    }
-  });
-
-  onBeforeUnmount(() => {
-    stopContentCheck();
-  });
-
-  const route = useRoute();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const handlePrevious = () => {
-    console.log('handlePrevious');
-    emits('previousStep', 2);
-  };
-  const handleNext = () => {
-    reportInfo.value.enabled = isEnvent.value;
-    const frontendContent = aiEditorRef.value.getContent();
+  // 构建报告配置
+  const buildReportConfig = () => {
+    const frontendContent = aiEditorRef.value.getQuillContent();
+    const template = aiEditorRef?.value.getContentVal();
+    console.log('>>>', template);
 
     // 处理 template：将 AI Agent 块替换为模板变量
-    let templateContent = frontendContent;
+    let templateContent = template;
 
     // 使用 DOMParser 解析 HTML
     const parser = new DOMParser();
@@ -282,16 +255,64 @@
       // 获取处理后的 HTML 内容（移除包装的 div）
       templateContent = container.innerHTML;
     }
+
     const aiVariables = aiEditorRef.value.getAiLists().map((item: aiVariables) => ({
       name: item.name,
       prompt_template: item.prompt_template,
     }));
-    reportInfo.value.config = {
+    return {
       frontend_template: frontendContent,
       template: templateContent,
       ai_variables: aiVariables,
     };
-    console.log('handleNext>>>', reportInfo.value);
+  };
+  const previewTooltips = computed(() => {
+    // 当编辑器有内容且选中了风险工单时，不显示提示
+    if (hasEditorContent.value && selectedValue.value !== '') {
+      return '';
+    }
+
+    // 当编辑器有内容但是没有选中风险工单时，提示 请选择审计风险工单
+    if (hasEditorContent.value && selectedValue.value === '') {
+      return t('请选择审计风险工单');
+    }
+
+    // 当编辑器没有内容但是选中了风险工单时，提示 请填写报告内容
+    if (!hasEditorContent.value && selectedValue.value !== '') {
+      return t('请填写报告内容');
+    }
+
+    // 当编辑器没有内容且没有选中风险工单时，提示 请填写报告内容并选择审计风险工单
+    return t('请填写报告内容并选择审计风险工单');
+  });
+
+
+  const stopContentCheck = () => {
+    if (contentCheckInterval) {
+      clearInterval(contentCheckInterval);
+      contentCheckInterval = null;
+    }
+  };
+
+  // 当编辑器引用可用时开始检查
+  nextTick(() => {
+    if (aiEditorRef.value) {
+      startContentCheck();
+    }
+  });
+
+
+  const route = useRoute();
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const handlePrevious = () => {
+    emits('previousStep', 2);
+  };
+  const handleNext = () => {
+    reportInfo.value.enabled = isEnvent.value;
+    if (isEnvent.value) {
+      reportInfo.value.config = buildReportConfig();
+    }
     emits('nextStep', 4, {
       processor_groups: [],
       notice_groups: [],
@@ -306,8 +327,10 @@
   const handlePreview = () => {
     showPreview.value = true;
     nextTick(() => {
-      console.log('aiEditorRef', aiEditorRef.value.getContent());
-      previewReportRef.value.setContent(aiEditorRef.value.getContent());
+      previewReportRef.value?.setContent({
+        risk_id: selectedValue.value,
+        report_config: buildReportConfig(),
+      });
     });
   };
   // 获取风险简要列表
@@ -316,7 +339,6 @@
   } = useRequest(StrategyManageService.fetchRisksBrief, {
     defaultValue: [],
     onSuccess(data) {
-      console.log('获取风险简要列表', data);
       // 如果返回的数据包含 results 字段，则使用 results，否则直接使用 data
       riskLisks.value = data?.results || data || [];
       isShowTips.value = !(riskLisks.value.length > 0);
@@ -326,21 +348,31 @@
 
   onMounted(() => {
     if (isEditMode || isCloneMode) {
+      console.log('editData', props.editData);
       isEnvent.value =  props.editData.report_enabled;
       const strategyId = route.params.id;
       // 默认当前时间往前6个月（6个月前到现在）
       const now = dayjs();
       const sixMonthsAgo = dayjs().subtract(6, 'month');
       const params = {
-        page: 1,
-        page_size: 10,
         strategy_id: String(strategyId),
         start_time: sixMonthsAgo.format('YYYY-MM-DD'),
         end_time: now.format('YYYY-MM-DD'),
       };
-
       fetchRisksBriefList(params);
+      if (props.editData.report_enabled && props.editData.report_config?.frontend_template) {
+        // 使用 nextTick 确保编辑器已经准备好
+        nextTick(() => {
+          if (aiEditorRef.value) {
+            aiEditorRef.value.setQuillContent(props.editData.report_config.frontend_template);
+          }
+        });
+      }
     }
+  });
+
+  onBeforeUnmount(() => {
+    stopContentCheck();
   });
 
 </script>
