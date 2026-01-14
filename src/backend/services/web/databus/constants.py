@@ -171,6 +171,17 @@ class TargetNodeTypeChoices(TextChoices):
     INSTANCE = "INSTANCE", gettext_lazy("静态拓扑")
 
 
+class RecordLogTypeChoices(TextChoices):
+    SDK = "SDK", gettext_lazy("SDK接入")
+    LOG = "LOG", gettext_lazy("LOG接入")
+
+
+class SelectSdkTypeChoices(TextChoices):
+    PYTHON_SDK = "PYTHON_SDK", gettext_lazy("Python SDK")
+    JAVA_SDK = "JAVA_SDK", gettext_lazy("JAVA SDK")
+    GO_SDK = "GO_SDK", gettext_lazy("Go SDK")
+
+
 LogReportStatus = _LogReportStatus
 
 
