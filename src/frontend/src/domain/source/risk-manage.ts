@@ -220,6 +220,24 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+
+  getReportPreview(params: {
+    risk_id: string,
+    report_config: {
+      template: string,
+      frontend_template: string,
+      ai_variables: Array<{
+        name: string,
+        prompt_template: string
+      }>
+    }
+  }) {
+    return Request.post(`${this.path}/report/preview/`, {
+      params,
+    });
+  }
+
+
   getAiPreview(params: {
     id: string,
     risk_id: string,
@@ -229,6 +247,13 @@ class RiskManage extends ModuleBase {
     }>
   }) {
     return Request.post(`${this.api}/risk_report/${params.id}/ai_preview/`, {
+      params,
+    });
+  }
+  getTaskRiskReport(params: {
+    task_id: string,
+  }) {
+    return Request.get(`${this.api}/risk_report/task/`, {
       params,
     });
   }
