@@ -105,6 +105,7 @@
 </template>
 <script setup lang="ts">
   import dayjs from 'dayjs';
+  import DOMPurify from 'dompurify';
   import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -176,20 +177,16 @@
   // 检查编辑器是否有内容
   const hasEditorContent = computed(() => {
     if (!editorContent.value) return false;
-    // 使用 DOMParser 安全地提取文本内容，避免 HTML 注入风险
+    // 使用 DOMPurify 安全地提取文本内容，避免 HTML 注入风险
     try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(editorContent.value, 'text/html');
-      const textContent = doc.body.textContent || doc.body.innerText || '';
-      return textContent.trim().length > 0;
-    } catch {
-      // 如果解析失败，使用更安全的正则表达式作为后备方案
-      // 移除所有 HTML 标签（包括 script 标签）和空白字符
-      const textContent = editorContent.value
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<[^>]*>/g, '')
-        .trim();
+      // 使用 DOMPurify 清理 HTML，只保留纯文本（移除所有标签）
+      // ALLOWED_TAGS: [] 表示不允许任何 HTML 标签，只保留纯文本
+      const sanitized = DOMPurify.sanitize(editorContent.value, { ALLOWED_TAGS: [] });
+      const textContent = sanitized.trim();
       return textContent.length > 0;
+    } catch {
+      // 如果 DOMPurify 失败，返回 false 以确保安全
+      return false;
     }
   });
 
