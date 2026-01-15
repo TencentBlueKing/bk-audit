@@ -21,7 +21,8 @@
     quick-close
     :title="t('引用 AI 智能体')"
     transfer
-    :width="740">
+    :width="740"
+    @closed="handleClose">
     <template #default>
       <div
         :class="isPreviewExpanded ? `ai-agent-drawer-content-preview` : `ai-agent-drawer-content`">
@@ -218,6 +219,10 @@
   });
   const handleClose = () => {
     isShowRight.value = false;
+    if (timerId.value !== null) {
+      clearTimeout(timerId.value);
+      timerId.value = null;
+    }
   };
 
   const handleConfirm = () => {
@@ -250,11 +255,6 @@
   } = useRequest(RiskManageService.getAiPreview, {
     defaultValue: null as any,
     onSuccess(data: aiPreviewData) {
-      // eslint-disable-next-line no-param-reassign
-      data =  {
-        task_id: '1',
-        status: 'SUCCESS',
-      };
       if (data.status === 'PENDING' || data.status === 'RUNNING') {
         isLoading.value = true;
         // 清除之前的定时器（如果存在）
@@ -280,16 +280,16 @@
           timerId.value = null;
         }
         // 成功
-        getTaskRiskReport({ task_id: '1' });
+        getTaskRiskReport({ task_id: data.task_id });
       } else if (data.status === 'FAILURE') {
+        isLoading.value = false;
+        // 失败
+        concent.value = '失败';
         // 清除定时器
         if (timerId.value !== null) {
           clearTimeout(timerId.value);
           timerId.value = null;
         }
-        isLoading.value = false;
-        // 失败
-        concent.value = '失败';
       }
     },
   });
@@ -311,9 +311,6 @@
             }],
           }).finally(() => {
             isLoading.value = false;
-            // 模拟获取任务风险报告
-            getTaskRiskReport({ task_id: '1' });
-            isShowConfirm.value = true;
           });
         }, 0);
       });
@@ -379,7 +376,6 @@
     // 重置预览状态
     isPreviewExpanded.value = false;
   };
-
   // 同步 visible 和 isShowRight
   watch(() => props.visible, (newVal) => {
     isShowRight.value = newVal;

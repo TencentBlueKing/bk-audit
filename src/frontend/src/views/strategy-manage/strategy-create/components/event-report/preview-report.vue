@@ -97,29 +97,29 @@
       ai_variables: [],
     },
   });
-  // 使用 DOMPurify 清理 HTML 内容以防止 XSS
-  const sanitizedContent = computed(() => DOMPurify.sanitize(concent.value));
+  // 使用 DOMPurify 清理 HTML 内容以防止 XSS（允许插入图片）
+  const sanitizedContent = computed(() => DOMPurify.sanitize(concent.value, {
+    ADD_TAGS: ['img'],
+    ADD_ATTR: ['src', 'alt', 'width', 'height', 'title', 'style'],
+  }));
   // 查询任务结果
   const {
     run: getTaskRiskReport,
   } = useRequest(RiskManageService.getTaskRiskReport, {
     defaultValue: null as any,
     onSuccess(data: RiskReport) {
-      console.log('查询任务结果', data);
-
       isLoading.value = false;
       concent.value = data.result.description;
     },
   });
+
   // 报告预览
   const {
     run: getReportPreview,
   } = useRequest(RiskManageService.getReportPreview, {
     defaultValue: null as any,
     onSuccess(data: aiPreviewData) {
-      console.log('报告预览', data);
       if (data.status === 'PENDING' || data.status === 'RUNNING') {
-        console.log('重试');
         isLoading.value = true;
         // 清除之前的定时器（如果存在）
         if (timerId.value !== null) {
@@ -152,7 +152,6 @@
   });
   // 关闭
   const handleClose = () => {
-    console.log('关闭');
     isShow.value = false;
     isLoading.value = false;
 
@@ -174,7 +173,6 @@
   });
   defineExpose<Exposes>({
     setContent: (params: aiPreviewParams) => {
-      console.log('参数', params);
       paramsInfo.value = params;
       isLoading.value = true;
       // 清除定时器
@@ -214,103 +212,38 @@
     background: #fff;
     border: 1px solid #dcdee5;
     border-radius: 2px;
-
-    :deep(.ql-ai-agent) {
-      position: relative;
-      display: block;
-      width: 100%;
-      height: 90px;
-      padding: 0;
-      margin: 10px 0;
-      line-height: 1;
-    }
-
-    :deep(.ai-agent-block) {
-      position: absolute;
-      top: 0;
-      display: flex;
-      width: 100%;
-      min-height: auto;
-      padding: 4px 12px;
-      margin: 0;
-      background: #f5f7fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      align-items: center;
-    }
-
-    :deep(.ai-agent-content) {
-      display: flex;
-      height: 80px;
-      padding-top: 10px;
-      margin-left: 35px;
-      flex: 1;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    :deep(.ai-agent-label) {
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 22px;
-      letter-spacing: 0;
-      color: #313238;
-    }
-
-    :deep(.ai-agent-prompt) {
-      font-size: 12px;
-      line-height: 20px;
-      letter-spacing: 0;
-      color: #4d4f56;
-      text-align: justify;
-    }
-
-    :deep(p) {
-      margin: 0 0 10px;
-      line-height: 1.5;
-    }
   }
 }
 
 </style>
 <style lang="postcss">
 .report-preview-slider-preview-content {
-  .ai-agent-block {
+  .ai-concent {
     position: relative;
     width: 100%;
+    padding: 8px 12px 8px 36px;
     margin-top: 10px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #4d4f56;
     background: #f5f7fa;
     border-radius: 4px;
+    box-sizing: border-box;
 
-    .ai-agent-ai {
+    &::before {
       position: absolute;
       top: 10px;
-      left: 10px;
-      width: 25px;
-      height: 25px;
+      left: 12px;
+      width: 18px;
+      height: 18px;
+      background: url('@images/ai.svg') center center / contain no-repeat;
+      content: '';
     }
 
-    .ai-agent-content {
-      padding: 10px 10px 10px 50px;
-
-      .ai-agent-label {
-        font-size: 14px;
-        font-weight: 700;
-        line-height: 22px;
-        letter-spacing: 0;
-        color: #313238;
-      }
-
-      .ai-agent-prompt {
-        font-size: 12px;
-        line-height: 20px;
-        letter-spacing: 0;
-        color: #4d4f56;
-      }
-    }
-
-    .ai-agent-actions {
-      display: none;
+    img {
+      display: block;
+      height: auto;
+      max-width: 100%;
     }
   }}
 </style>
