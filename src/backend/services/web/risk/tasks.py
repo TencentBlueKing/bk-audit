@@ -53,7 +53,11 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
+from services.web.risk.handlers import (
+    BKMAlertSyncHandler,
+    EventHandler,
+    RiskReportHandler,
+)
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -67,6 +71,36 @@ from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
+
+
+@celery_app.task(
+    bind=True,
+    queue="risk_report",
+    time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
+    max_retries=settings.RENDER_MAX_RETRY,
+)
+def render_risk_report(self, risk_id: str, task_id: str):
+    """
+    渲染风险报告任务（尾部触发机制）
+
+    工作流：
+    1. 获取 Redis 锁
+    2. 执行渲染
+    3. 检查任务期间是否有新事件
+    4. 有新事件 -> 递归触发新任务
+    5. 无新事件 -> 释放锁
+    """
+    handler = RiskReportHandler(risk_id=risk_id, task_id=task_id)
+    try:
+        handler.run()
+    except Exception as exc:
+        try:
+            # 失败重试，倒计时 10s
+            self.retry(exc=exc, countdown=10)
+        except Exception:  # NOCC:broad-except(需要处理所有异常)
+            # 达到最大重试次数 (MaxRetriesExceededError)
+            logger_celery.exception("[RenderRiskReportFailed] %s", exc)
+            handler.handle_max_retries_exceeded(exc)
 
 
 @periodic_task(run_every=crontab(minute="*/10"), queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)

@@ -246,20 +246,29 @@ class TestGenerateRiskReport(TestCase):
         )
 
     def test_generate_risk_report(self):
-        """测试生成报告"""
-        mock_result = {
-            "task_id": "mock_task_123",
-            "status": "PENDING",
-        }
+        """测试生成报告返回任务ID"""
+        with mock.patch("services.web.risk.resources.report.submit_render_task") as mock_submit:
+            mock_async_result = mock.MagicMock()
+            mock_async_result.id = "new_task_id_456"
+            mock_submit.return_value = mock_async_result
 
-        with mock.patch(
-            "services.web.risk.resources.risk.renderer_client.render_full_report",
-            return_value=mock_result,
-        ):
             result = self.resource.risk.generate_risk_report({"risk_id": self.risk.risk_id})
 
-        self.assertEqual(result["task_id"], "mock_task_123")
+        self.assertEqual(result["task_id"], "new_task_id_456")
         self.assertEqual(result["status"], "PENDING")
+
+    def test_generate_risk_report_calls_submit_render_task(self):
+        """测试生成报告调用 submit_render_task"""
+        with mock.patch("services.web.risk.resources.report.submit_render_task") as mock_submit:
+            mock_submit.return_value = mock.MagicMock(id="task_123")
+
+            self.resource.risk.generate_risk_report({"risk_id": self.risk.risk_id})
+
+            mock_submit.assert_called_once()
+            call_kwargs = mock_submit.call_args[1]
+            # 新签名使用 risk 和 report_config 参数
+            self.assertEqual(call_kwargs["risk"].risk_id, self.risk.risk_id)
+            self.assertIsNotNone(call_kwargs["report_config"])
 
     def test_generate_risk_report_disabled(self):
         """测试策略未启用报告时生成报告"""

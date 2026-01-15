@@ -184,16 +184,14 @@ class TestPreviewRiskReport(TestCase):
 
     def test_preview_risk_report_success(self):
         """测试报告预览成功"""
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
-        from services.web.risk.utils.renderer_client import renderer_client
+        mock_async_result = MagicMock()
+        mock_async_result.id = "mock_task_123"
 
-        mock_result = {
-            "task_id": "mock_task_123",
-            "status": "PENDING",
-        }
+        with patch("services.web.risk.report.task_submitter.render_template") as mock_task:
+            mock_task.delay.return_value = mock_async_result
 
-        with patch.object(renderer_client, "render_preview", return_value=mock_result) as mock_render:
             result = self.resource.strategy_v2.preview_risk_report(
                 {
                     "risk_id": self.risk.risk_id,
@@ -207,8 +205,8 @@ class TestPreviewRiskReport(TestCase):
             self.assertEqual(result["task_id"], "mock_task_123")
             self.assertEqual(result["status"], "PENDING")
 
-            # 验证渲染器被正确调用
-            mock_render.assert_called_once()
+            # 验证渲染任务被调用
+            mock_task.delay.assert_called_once()
 
     def test_preview_risk_report_risk_not_found(self):
         """测试预览不存在的风险"""

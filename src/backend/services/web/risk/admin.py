@@ -31,7 +31,6 @@ from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQL
 from services.web.risk.models import (
     ManualEvent,
     ProcessApplication,
-    RenderTask,
     Risk,
     RiskEventSubscription,
     RiskExperience,
@@ -240,25 +239,6 @@ class RiskEventSubscriptionAdmin(admin.ModelAdmin):
             "page": 1,
             "page_size": 10,
         }
-
-
-@admin.register(RenderTask)
-class RenderTaskAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "risk",
-        "status",
-        "version",
-        "render_task_id",
-        "retry_count",
-        "created_at",
-        "updated_at",
-    ]
-    search_fields = ["risk__risk_id", "render_task_id"]
-    list_filter = ["status"]
-    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
-    list_per_page = 100
-    raw_id_fields = ["risk"]
 
 
 @admin.register(RiskReport)
