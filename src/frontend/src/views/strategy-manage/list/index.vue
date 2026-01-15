@@ -1349,7 +1349,7 @@
     total.value = data.total > total.value ? data.total : total.value;
 
     const { strategy_id: strategyId } = getSearchParams();
-    if (strategyId.split(',').length === 1  && isNeedShowDetail.value) {
+    if (strategyId && strategyId.split(',').length === 1  && isNeedShowDetail.value) {
       handleDetail(data.results[0]);
       isNeedShowDetail.value = false;
       strategyLabelList.value = [];
