@@ -94,12 +94,13 @@ def render_risk_report(self, risk_id: str, task_id: str):
     try:
         handler.run()
     except Exception as exc:
+        logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        # 注意：handler.run() 的 finally 块已经释放了锁，这里不需要再释放
         try:
             # 失败重试，倒计时 10s
             self.retry(exc=exc, countdown=10)
         except Exception:  # NOCC:broad-except(需要处理所有异常)
             # 达到最大重试次数 (MaxRetriesExceededError)
-            logger_celery.exception("[RenderRiskReportFailed] %s", exc)
             handler.handle_max_retries_exceeded(exc)
 
 

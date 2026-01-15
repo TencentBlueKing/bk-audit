@@ -6,9 +6,8 @@ from typing import Optional
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
-from django.utils.translation import gettext
+from django.db import IntegrityError
 
-from apps.notice.handlers import ErrorMsgHandler
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
@@ -43,23 +42,25 @@ class RiskReportHandler:
         3. finally 释放锁
         4. 正常完成后检查尾部触发
         """
-        logger.info(f"[RiskReportHandler] Start rendering for risk_id={self.risk_id}, task_id={self.task_id}")
+        logger.info("[RiskReportHandler] Start rendering for risk_id=%s, task_id=%s", self.risk_id, self.task_id)
 
         try:
             # 1. 验证/获取锁
             if not self._ensure_lock_ownership():
-                logger.info(f"[RiskReportHandler] Failed to acquire lock. risk_id={self.risk_id}")
+                logger.info(
+                    "[RiskReportHandler] Failed to acquire lock. risk_id=%s, task_id=%s", self.risk_id, self.task_id
+                )
                 return
 
             # 2. 获取风险单
             risk = self._get_risk()
             if not risk:
-                logger.info(f"[RiskReportHandler] Risk not found. risk_id={self.risk_id}")
+                logger.info("[RiskReportHandler] Risk not found. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
                 return
 
             # 3. 校验风险单 (策略开启、报告开启)
             if not risk.can_generate_report():
-                logger.info(f"[RiskReportHandler] Render disabled. risk_id={self.risk_id}")
+                logger.info("[RiskReportHandler] Render disabled. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
                 return
 
             # 4. 执行渲染
@@ -69,16 +70,25 @@ class RiskReportHandler:
             try:
                 risk.refresh_from_db()
             except Risk.DoesNotExist:
-                logger.info(f"[RiskReportHandler] Risk not found during execution. risk_id={self.risk_id}")
+                logger.info(
+                    "[RiskReportHandler] Risk not found during execution. risk_id=%s, task_id=%s",
+                    self.risk_id,
+                    self.task_id,
+                )
                 return
 
             if not risk.can_generate_report():
-                logger.info(f"[RiskReportHandler] Render disabled during execution. risk_id={self.risk_id}")
+                logger.info(
+                    "[RiskReportHandler] Render disabled during execution. risk_id=%s, task_id=%s",
+                    self.risk_id,
+                    self.task_id,
+                )
                 return
 
             # 6. 更新报告
             self._update_report(content=report_content)
 
+            logger.info("[RiskReportHandler] End rendering for risk_id=%s, task_id=%s", self.risk_id, self.task_id)
         finally:
             # 统一释放锁
             self._release_lock()
@@ -92,8 +102,10 @@ class RiskReportHandler:
 
         即使当前任务失败，也需要检查是否有新事件等待处理
         """
-        logger.error(f"[RiskReportHandler] Max retries reached. risk_id={self.risk_id}, error={exc}")
-        ErrorMsgHandler(gettext("Render Risk Report Failed"), f"RiskID: {self.risk_id}\nError: {exc}").send()
+        logger.error(
+            "[RiskReportHandler] Max retries reached. risk_id=%s, task_id=%s, error=%s", self.risk_id, self.task_id, exc
+        )
+        # TODO: 上报监控
 
         # 检查是否需要尾部触发（让新事件有机会被处理）
         self._handle_tail_trigger()
@@ -125,16 +137,21 @@ class RiskReportHandler:
         current_lock = cache.get(self.lock_key)
         if current_lock == self.task_id:
             cache.delete(self.lock_key)
-            logger.info(f"[RiskReportHandler] Lock released. risk_id={self.risk_id}")
+            logger.info("[RiskReportHandler] Lock released. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
         else:
-            logger.info(f"[RiskReportHandler] Lock not owned. risk_id={self.risk_id}")
+            logger.info(
+                "[RiskReportHandler] Lock not owned. risk_id=%s, task_id=%s, current_lock=%s",
+                self.risk_id,
+                self.task_id,
+                current_lock,
+            )
 
     def _get_risk(self) -> Optional[Risk]:
         """获取风险单"""
         try:
             return Risk.objects.select_related("strategy").get(risk_id=self.risk_id)
         except Risk.DoesNotExist:
-            logger.error(f"[RiskReportHandler] Risk not found. risk_id={self.risk_id}")
+            logger.error("[RiskReportHandler] Risk not found. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
             return None
 
     def _render_report(self, risk: Risk) -> str:
@@ -152,17 +169,28 @@ class RiskReportHandler:
         # 同步等待渲染结果（阻塞直到完成）
         try:
             result = async_result.get(timeout=settings.RENDER_TASK_TIMEOUT)
+            logger.info("[RiskReportHandler] Render task completed. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
             return result if isinstance(result, str) else str(result)
         except Exception as e:
-            logger.exception(f"[RiskReportHandler] Render task failed: {e}")
+            logger.exception(
+                "[RiskReportHandler] Render task failed: risk_id=%s, task_id=%s, error=%s",
+                self.risk_id,
+                self.task_id,
+                e,
+            )
             raise
 
     def _update_report(self, content: str):
         """更新报告内容"""
-        RiskReport.objects.update_or_create(
-            risk_id=self.risk_id, defaults={"content": content, "status": RiskReportStatus.AUTO}
-        )
-        logger.info(f"[RiskReportHandler] Render success. risk_id={self.risk_id}")
+        try:
+            # 1. 尝试直接创建（最快，且原子）
+            # 使用 atomic 包裹，确保 IntegrityError 只回滚这个 savepoint，不破坏外层事务
+            RiskReport.objects.create(risk_id=self.risk_id, content=content, status=RiskReportStatus.AUTO)
+            logger.info("[RiskReportHandler] Report created. risk_id=%s", self.risk_id)
+        except IntegrityError:
+            # 2. 如果已存在（违反唯一约束），则更新
+            RiskReport.objects.filter(risk_id=self.risk_id).update(content=content, status=RiskReportStatus.AUTO)
+            logger.info("[RiskReportHandler] Report updated. risk_id=%s", self.risk_id)
 
     def _handle_tail_trigger(self):
         """
@@ -171,11 +199,22 @@ class RiskReportHandler:
         latest_event_time = cache.get(self.latest_event_time_key)
 
         if latest_event_time and float(latest_event_time) > self.task_start_time:
-            logger.info(f"[RiskReportHandler] New events arrived. Triggering new task. risk_id={self.risk_id}")
+            new_task_id = str(uuid.uuid4())
+            logger.info(
+                "[RiskReportHandler] New events arrived. Triggering new task. "
+                "risk_id=%s, current_task_id=%s, new_task_id=%s",
+                self.risk_id,
+                self.task_id,
+                new_task_id,
+            )
 
             # 直接触发新任务，新任务会自己获取锁
             from services.web.risk.tasks import render_risk_report
 
-            render_risk_report.delay(risk_id=self.risk_id, task_id=str(uuid.uuid4()))
+            render_risk_report.delay(risk_id=self.risk_id, task_id=new_task_id)
         else:
-            logger.info(f"[RiskReportHandler] No new events. Task completed. risk_id={self.risk_id}")
+            logger.info(
+                "[RiskReportHandler] No new events. Task completed. risk_id=%s, task_id=%s",
+                self.risk_id,
+                self.task_id,
+            )
