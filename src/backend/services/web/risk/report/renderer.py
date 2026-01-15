@@ -31,7 +31,7 @@ from services.web.risk.report.providers import Provider
 
 class ProviderNamespace:
     """Provider命名空间，用于支持 provider.field 语法
-    
+
     支持任意层级的属性访问，如 event.account.name
     在Jinja2渲染时，会被转换为字符串路径用于查找预计算的结果
     """
@@ -50,27 +50,28 @@ class ProviderNamespace:
 @dataclass
 class ProviderCall:
     """Provider调用信息
-    
+
     简化设计：存储原始表达式、Provider实例和调用参数
     执行时直接使用存储的provider实例
     """
 
     original_expr: str  # 原始表达式，如 first(event.account) 或 ai.summary
     provider: Provider  # 匹配到的Provider实例
-    call_args: dict  # 调用参数，若node_type是nodes.Call： {"function": "first", "args": ["event.account"], "kwargs": {"mode":"quick"}}，
+    call_args: dict  # 调用参数，若node_type是nodes.Call：
+    # {"function": "first", "args": ["event.account"], "kwargs": {"mode":"quick"}}，
     # 若是GetAttr： {"name": "ai.summary"}
     node_type: Type[nodes.Expr]
 
 
 class TemplateParser:
     """使用Jinja2 AST解析模板，提取Provider调用
-    
+
     与具体Provider实现解耦，通过Provider.match()方法判断节点是否由某个Provider处理
     """
 
     def __init__(self, template: str, providers: list[Provider]):
         """初始化模板解析器
-        
+
         Args:
             template: Jinja2模板字符串
             providers: Provider列表
@@ -83,7 +84,7 @@ class TemplateParser:
 
     def parse(self) -> list[ProviderCall]:
         """解析模板，提取所有Provider调用
-        
+
         Returns:
             ProviderCall列表
         """
@@ -97,7 +98,7 @@ class TemplateParser:
 
     def _visit_node(self, node: nodes.Node) -> None:
         """递归遍历AST节点
-        
+
         Args:
             node: Jinja2 AST节点
         """
@@ -110,7 +111,7 @@ class TemplateParser:
 
     def _try_match_providers(self, node: nodes.Node) -> None:
         """尝试用所有Provider匹配当前节点
-        
+
         Args:
             node: Jinja2 AST节点
         """
@@ -126,12 +127,14 @@ class TemplateParser:
 
                 self._processed_exprs.add(match_result.original_expr)
 
-                self.provider_calls.append(ProviderCall(
-                    original_expr=match_result.original_expr,
-                    provider=match_result.provider,
-                    call_args=match_result.call_args,
-                    node_type=type(node)
-                ))
+                self.provider_calls.append(
+                    ProviderCall(
+                        original_expr=match_result.original_expr,
+                        provider=match_result.provider,
+                        call_args=match_result.call_args,
+                        node_type=type(node),
+                    )
+                )
 
                 # 找到匹配的Provider后，不再尝试其他Provider
                 break
@@ -139,13 +142,13 @@ class TemplateParser:
 
 def _parse_template(template: str, providers: list[Provider] = None) -> list[ProviderCall]:
     """解析模板，提取所有需要通过Provider获取的变量/函数调用
-    
+
     使用Jinja2 AST语法树解析，通过Provider.match()方法判断匹配
-    
+
     Args:
         template: Jinja2模板字符串
         providers: Provider列表
-        
+
     Returns:s
         ProviderCall列表
     """
@@ -158,10 +161,10 @@ def _parse_template(template: str, providers: list[Provider] = None) -> list[Pro
 
 def _execute_provider_call(call: ProviderCall) -> tuple[ProviderCall, Any]:
     """执行单个Provider调用
-    
+
     Args:
         call: Provider调用信息（包含provider实例和调用参数）
-        
+
     Returns:
         (调用信息, 结果) 元组
     """
@@ -170,20 +173,17 @@ def _execute_provider_call(call: ProviderCall) -> tuple[ProviderCall, Any]:
         result = call.provider.get(**call.call_args)
         return call, result
     except Exception as e:
-        logger_celery.exception(
-            "[RenderTemplate] Provider call failed: %s - %s",
-            call.original_expr, e
-        )
+        logger_celery.exception("[RenderTemplate] Provider call failed: %s - %s", call.original_expr, e)
         return call, f"[Error: {e}]"
 
 
 def _compute_args_hash(args: list, kwargs: dict) -> str:
     """计算args和kwargs的哈希值
-    
+
     Args:
         args: 位置参数列表
         kwargs: 关键字参数字典
-        
+
     Returns:
         哈希字符串
     """
@@ -193,19 +193,17 @@ def _compute_args_hash(args: list, kwargs: dict) -> str:
 
 
 def _build_render_context(
-        provider_calls: list[ProviderCall],
-        results: dict[str, Any],
-        variables: dict[str, Any]
+    provider_calls: list[ProviderCall], results: dict[str, Any], variables: dict[str, Any]
 ) -> dict[str, Any]:
     """构建Jinja2渲染上下文
-    
+
     将Provider调用的结果转换为可被Jinja2直接渲染的变量和函数
-    
+
     Args:
         provider_calls: Provider调用列表
         results: Provider调用结果，key为original_expr
         variables: 用户提供的普通变量
-        
+
     Returns:
         Jinja2渲染上下文
     """
@@ -230,7 +228,7 @@ def _build_render_context(
 
             if function_name not in function_results:
                 function_results[function_name] = {}
-            
+
             # 使用args和kwargs生成的hash作为key
             args_hash = _compute_args_hash(args, kwargs)
             function_results[function_name][args_hash] = results.get(call.original_expr, "")
@@ -257,15 +255,11 @@ def _build_render_context(
         def make_wrapper(results_map):
             def wrapper(*args, **kwargs):
                 # 将参数转换为可序列化的形式（ProviderNamespace对象转为字符串路径）
-                serializable_args = [
-                    arg._name if isinstance(arg, ProviderNamespace) else str(arg)
-                    for arg in args
-                ]
+                serializable_args = [arg._name if isinstance(arg, ProviderNamespace) else str(arg) for arg in args]
                 serializable_kwargs = {
-                    k: v._name if isinstance(v, ProviderNamespace) else str(v)
-                    for k, v in kwargs.items()
+                    k: v._name if isinstance(v, ProviderNamespace) else str(v) for k, v in kwargs.items()
                 }
-                
+
                 # 计算args_hash并查找结果
                 args_hash = _compute_args_hash(serializable_args, serializable_kwargs)
                 return results_map.get(args_hash, "")
@@ -284,26 +278,21 @@ def _build_render_context(
     return context
 
 
-def _render_template(
-        template: str,
-        providers: list[Provider],
-        variables: dict[str, Any],
-        max_workers: int = 10
-) -> str:
+def _render_template(template: str, providers: list[Provider], variables: dict[str, Any], max_workers: int = 10) -> str:
     """渲染模板
-    
+
     该函数会：
     1. 使用Jinja2 AST解析模板，通过Provider.match()识别Provider变量/函数调用
     2. 使用线程池并发调用Provider.get获取数据
     3. 构建渲染上下文，将结果注入为函数和变量
     4. 使用Jinja2渲染最终结果
-    
+
     Args:
         template: Jinja2模板字符串
         providers: Provider列表
         variables: 普通变量字典，会直接传递给Jinja2渲染
         max_workers: 线程池最大工作线程数
-        
+
     Returns:
         渲染后的字符串
     """
@@ -326,8 +315,7 @@ def _render_template(
     with ThreadPoolExecutor(max_workers=min(max_workers, len(provider_calls))) as executor:
         # 提交所有任务，直接使用call中的provider实例
         future_to_call: dict[Future, ProviderCall] = {
-            executor.submit(_execute_provider_call, call): call
-            for call in provider_calls
+            executor.submit(_execute_provider_call, call): call for call in provider_calls
         }
 
         # 收集结果
@@ -340,9 +328,7 @@ def _render_template(
                 results[call.original_expr] = result
             except Exception as e:
                 call = future_to_call[future]
-                logger_celery.exception(
-                    "[RenderTemplate] Future failed for %s: %s", call.original_expr, e
-                )
+                logger_celery.exception("[RenderTemplate] Future failed for %s: %s", call.original_expr, e)
                 results[call.original_expr] = f"[Error: {e}]"
 
     # 3. 构建渲染上下文
@@ -362,10 +348,10 @@ def _render_template(
 @celery_app.task(queue="risk")
 def render_template(*args, **kwargs) -> str:
     """Celery任务：渲染报告模板
-    
+
     Args:
         *args, **kwargs: 传递给_render_template的参数
-        
+
     Returns:
         渲染后的字符串
     """

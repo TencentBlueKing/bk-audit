@@ -19,16 +19,27 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from celery.result import AsyncResult
+from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
-from services.web.risk.models import Risk
+from apps.permission.handlers.actions import ActionEnum
+from services.web.risk.constants import RiskReportStatus
+from services.web.risk.models import Risk, RiskAuditInstance, RiskReport
+from services.web.risk.report.task_submitter import submit_render_task
+from services.web.risk.report_config import ReportConfig
 from services.web.risk.serializers import (
     AIPreviewRequestSerializer,
     AsyncTaskResponseSerializer,
+    CreateRiskReportRequestSerializer,
+    GenerateRiskReportRequestSerializer,
+    GenerateRiskReportResponseSerializer,
+    RiskInfoSerializer,
+    RiskReportModelSerializer,
     TaskResultRequestSerializer,
     TaskResultResponseSerializer,
+    UpdateRiskReportRequestSerializer,
 )
 from services.web.risk.tasks import render_ai_variable
 
@@ -102,3 +113,112 @@ class GetTaskResult(RiskReportMeta):
             response["result"] = {"error": error_msg}
 
         return response
+
+
+class CreateRiskReport(RiskReportMeta):
+    """
+    创建风险报告
+    """
+
+    name = gettext_lazy("创建风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = CreateRiskReportRequestSerializer
+    ResponseSerializer = RiskReportModelSerializer
+
+    @transaction.atomic()
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        content = validated_request_data["content"]
+        auto_generate = validated_request_data["auto_generate"]
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 创建报告
+        report, created = RiskReport.objects.get_or_create(
+            risk=risk,
+            defaults={
+                "content": content,
+                "status": RiskReportStatus.MANUAL,
+            },
+        )
+
+        if not created:
+            report.content = content
+            report.status = RiskReportStatus.MANUAL
+            report.save(update_fields=["content", "status"])
+
+        # 更新风险的自动生成标记
+        risk.auto_generate_report = auto_generate
+        risk.save(update_fields=["auto_generate_report"])
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return report
+
+
+class UpdateRiskReport(RiskReportMeta):
+    """
+    编辑风险报告
+    """
+
+    name = gettext_lazy("编辑风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = UpdateRiskReportRequestSerializer
+    ResponseSerializer = RiskReportModelSerializer
+
+    @transaction.atomic()
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        content = validated_request_data["content"]
+        auto_generate = validated_request_data.get("auto_generate")
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        report = get_object_or_404(RiskReport, risk=risk)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 更新报告
+        report.content = content
+        report.status = RiskReportStatus.MANUAL
+        report.save(update_fields=["content", "status"])
+
+        # 更新风险的自动生成标记（如果提供了）
+        if auto_generate is not None:
+            risk.auto_generate_report = auto_generate
+            risk.save(update_fields=["auto_generate_report"])
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return report
+
+
+class GenerateRiskReport(RiskReportMeta):
+    """
+    生成风险报告（异步）
+
+    提交异步任务生成风险报告内容。
+    注意：此接口仅生成报告内容返回给前端，不会保存到数据库。
+    """
+
+    name = gettext_lazy("生成风险报告")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = GenerateRiskReportRequestSerializer
+    ResponseSerializer = GenerateRiskReportResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        strategy = risk.strategy
+
+        # 检查策略是否启用报告
+        if not strategy.report_enabled:
+            raise ValueError(gettext("该策略未启用报告功能"))
+
+        # 解析报告配置
+        report_config = ReportConfig.model_validate(strategy.report_config)
+
+        # 提交渲染任务（简化调用）
+        async_result = submit_render_task(risk=risk, report_config=report_config)
+
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return {"task_id": async_result.id, "status": "PENDING"}

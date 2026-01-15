@@ -20,11 +20,13 @@ import datetime
 import json
 import math
 import re
+import uuid
 from typing import List, Optional, Set, Tuple, Union
 
 from bk_resource import resource
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
@@ -39,6 +41,8 @@ from core.render import Jinja2Renderer, VariableUndefined
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
+    RISK_EVENT_LATEST_TIME_KEY,
+    RISK_RENDER_LOCK_KEY,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
     RiskStatus,
@@ -75,6 +79,9 @@ class RiskHandler:
         """
         try:
             is_create, risk = self.create_risk(event, eligible_strategy_ids, manual=manual)
+            if risk:
+                # 触发渲染任务
+                self.trigger_render_task(risk)
             if is_create:
                 self.send_risk_notice(risk)
 
@@ -251,6 +258,37 @@ class RiskHandler:
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
         return True, risk
+
+    def trigger_render_task(self, risk: Risk):
+        """
+        触发渲染任务
+        """
+        from services.web.risk.tasks import render_risk_report
+
+        # 检查触发条件：策略开启报告 + 风险开启自动生成
+        if not risk.can_generate_report():
+            return
+
+        risk_id = risk.risk_id
+        current_time = datetime.datetime.now().timestamp()
+
+        # 1. 更新最新事件时间
+        latest_time_key = RISK_EVENT_LATEST_TIME_KEY.format(risk_id=risk_id)
+        cache.set(latest_time_key, current_time, timeout=settings.RENDER_TASK_TIMEOUT)
+
+        # 2. 尝试获取锁 (Value = UUID)
+        lock_key = RISK_RENDER_LOCK_KEY.format(risk_id=risk_id)
+        task_id = str(uuid.uuid4())
+
+        # NX=True (set if not exists), EX=timeout
+        # 如果获取成功，说明当前没有任务在运行，立即触发
+        if cache.set(lock_key, task_id, nx=True, timeout=settings.RENDER_TASK_TIMEOUT):
+            logger.info("[TriggerRender] Acquired lock, triggering task. risk_id=%s, task_id=%s", risk_id, task_id)
+            render_risk_report.delay(risk_id=risk_id, task_id=task_id)
+        else:
+            # 如果获取失败，说明已有任务在运行
+            # 只需更新 latest_event_time (步骤1已做)，运行中的任务会在结束前检查该时间并决定是否递归触发
+            logger.info("[TriggerRender] Lock exists, updated latest time. risk_id=%s", risk_id)
 
     def parse_operator(self, operator: str) -> List[str]:
         operator = operator or ""

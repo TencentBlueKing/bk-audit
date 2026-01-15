@@ -82,6 +82,11 @@ RISK_SHOW_FIELDS = [
     "operator",
 ]
 
+# 风险渲染锁
+RISK_RENDER_LOCK_KEY = "risk:render:lock:{risk_id}"
+# 风险事件最新时间
+RISK_EVENT_LATEST_TIME_KEY = "risk:event:latest:{risk_id}"
+
 
 @dataclass
 class TicketField:
@@ -707,18 +712,6 @@ class EventFilterOperator(TextChoices):
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
 
 
-class RenderTaskStatus(TextChoices):
-    """
-    渲染任务状态
-    """
-
-    PENDING = "pending", gettext_lazy("待处理")
-    PROCESSING = "processing", gettext_lazy("处理中")
-    COMPLETED = "completed", gettext_lazy("已完成")
-    FAILED = "failed", gettext_lazy("失败")
-    ABANDONED = "abandoned", gettext_lazy("已放弃")
-
-
 class RiskReportStatus(TextChoices):
     """
     风险报告状态
@@ -782,25 +775,3 @@ class AggregationFunction(TextChoices):
             cls.LIST_DISTINCT: [],
         }
         return type_mapping.get(agg_func, [])
-
-
-# 报告风险变量列表
-# 用于模板中引用风险字段，如 {{ risk.risk_id }}
-REPORT_RISK_VARIABLES = [
-    {"field": "risk_id", "name": gettext_lazy("风险ID"), "description": gettext_lazy("风险单唯一标识")},
-    {"field": "title", "name": gettext_lazy("风险标题"), "description": gettext_lazy("风险单标题")},
-    {"field": "risk_level", "name": gettext_lazy("风险等级"), "description": gettext_lazy("风险等级标签")},
-    {"field": "event_time", "name": gettext_lazy("首次发现时间"), "description": gettext_lazy("风险首次发现时间")},
-    {"field": "event_end_time", "name": gettext_lazy("最后发现时间"), "description": gettext_lazy("风险最后发现时间")},
-    {"field": "operator", "name": gettext_lazy("责任人"), "description": gettext_lazy("风险相关的责任人列表")},
-    {"field": "risk_label", "name": gettext_lazy("风险标签"), "description": ""},
-    {"field": "strategy_id", "name": gettext_lazy("命中策略ID"), "description": gettext_lazy("触发风险的策略ID")},
-    {"field": "risk_hazard", "name": gettext_lazy("风险危害"), "description": gettext_lazy("来自策略配置")},
-    {"field": "risk_guidance", "name": gettext_lazy("处理指引"), "description": gettext_lazy("来自策略配置")},
-    {"field": "event_type", "name": gettext_lazy("风险类型"), "description": gettext_lazy("事件类型标签列表")},
-    {"field": "current_operator", "name": gettext_lazy("当前处理人"), "description": gettext_lazy("当前负责处理的人员")},
-    {"field": "notice_users", "name": gettext_lazy("关注人"), "description": gettext_lazy("关注该风险的用户列表")},
-    {"field": "last_operate_time", "name": gettext_lazy("最后处理时间"), "description": gettext_lazy("最后一次操作时间")},
-    {"field": "created_at", "name": gettext_lazy("创建时间"), "description": gettext_lazy("风险单创建时间")},
-    {"field": "updated_at", "name": gettext_lazy("更新时间"), "description": gettext_lazy("风险单更新时间")},
-]
