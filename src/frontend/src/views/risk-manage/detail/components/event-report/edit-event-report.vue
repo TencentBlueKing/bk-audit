@@ -23,6 +23,7 @@
     :width="1100">
     <div class="edit-event-report-content">
       <bk-button
+        v-if="reportEnabled"
         class="mb16"
         outline
         theme="primary"
@@ -32,7 +33,7 @@
 
       <bk-loading
         class="edit-event-report-editor"
-        :loading="riskReportGenerateLoading || fetchRiskReportLoading">
+        :loading="riskReportGenerateLoading || isPollingLoading">
         <quill-editor
           ref="quillEditorRef"
           v-model:content="localeReportContent"
@@ -82,6 +83,7 @@
   interface Props {
     reportContent?: string;
     status: string | undefined;
+    reportEnabled: boolean;
   }
 
   const props = defineProps<Props>();
@@ -128,7 +130,7 @@
   }, { immediate: true });
 
   const isShowEditEventReport = defineModel<boolean>('isShowEditEventReport', {
-    required: !true,
+    required: true,
   });
 
   const {
@@ -142,6 +144,7 @@
   let pollTimer: number | null = null;
   let isPolling = false;
   let currentTaskId: string | null = null;
+  const isPollingLoading = ref(false); // 轮询过程中的 loading 状态
 
   const {
     run: riskReportGenerate,
@@ -160,7 +163,6 @@
   });
 
   const {
-    loading: fetchRiskReportLoading,
     run: fetchRiskReport,
   } = useRequest(RiskReportService.fetchRiskReport, {
     defaultValue: {
@@ -205,6 +207,7 @@
       stopPolling();
     }
     isPolling = true;
+    isPollingLoading.value = true; // 开始轮询时设置 loading
     currentTaskId = taskId;
 
     // 立即查询一次
@@ -236,6 +239,7 @@
   // 停止轮询
   const stopPolling = () => {
     isPolling = false;
+    isPollingLoading.value = false; // 停止轮询时取消 loading
     currentTaskId = null;
     if (pollTimer) {
       clearTimeout(pollTimer);

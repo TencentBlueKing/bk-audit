@@ -52,6 +52,7 @@
     <edit-event-report
       v-model:isShowEditEventReport="isShowEditEventReport"
       :report-content="content"
+      :report-enabled="data.report_enabled"
       :status="data.report?.status" />
   </div>
 </template>

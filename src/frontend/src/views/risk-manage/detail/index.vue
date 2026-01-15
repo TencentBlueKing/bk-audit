@@ -110,6 +110,7 @@
   </bk-loading>
   <edit-event-report
     v-model:isShowEditEventReport="isShowEditEventReport"
+    :report-enabled="detailData.report_enabled"
     :status="detailData.report?.status" />
 </template>
 
