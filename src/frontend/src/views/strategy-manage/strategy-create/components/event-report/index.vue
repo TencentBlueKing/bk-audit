@@ -198,8 +198,6 @@
   // 检查编辑器是否有内容
   const hasEditorContent = ref(false);
   const handleHasContent = (hasContent: boolean) => {
-    console.log('1', hasContent);
-
     hasEditorContent.value = hasContent;
   };
 
@@ -207,7 +205,6 @@
   const buildReportConfig = () => {
     const frontendContent = aiEditorRef.value.getQuillContent();
     const template = aiEditorRef?.value.getContentVal();
-    console.log('>>>', template);
 
     // 处理 template：将 AI Agent 块替换为模板变量
     let templateContent = template;
@@ -348,7 +345,6 @@
 
   onMounted(() => {
     if (isEditMode || isCloneMode) {
-      console.log('editData', props.editData);
       isEnvent.value =  props.editData.report_enabled;
       const strategyId = route.params.id;
       // 默认当前时间往前6个月（6个月前到现在）
