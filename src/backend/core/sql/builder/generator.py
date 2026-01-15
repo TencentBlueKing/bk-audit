@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import operator
+from functools import reduce
 from typing import Dict, Optional, Type, Union
 
 from pypika import Table
@@ -223,18 +225,24 @@ class SQLGenerator:
 
     def _apply_filter_conditions(self, condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
         """递归构建 WHERE/HAVING 子句"""
-        sql_condition = EmptyCriterion()
         if condition.condition:
             return self.handle_condition(condition.condition)
 
         if condition.conditions:
+            # 过滤掉空的查询条件，避免出现 Criterion.get_sql() got an unexpected keyword argument 'subcriterion'
+            sub_criterions = []
             for sub_condition in condition.conditions:
-                sub_condition = self._apply_filter_conditions(sub_condition)
-                if condition.connector == FilterConnector.AND:
-                    sql_condition &= sub_condition
-                elif condition.connector == FilterConnector.OR:
-                    sql_condition |= sub_condition
-        return sql_condition
+                criterion = self._apply_filter_conditions(sub_condition)
+                if not isinstance(criterion, EmptyCriterion):
+                    sub_criterions.append(criterion)
+
+            if not sub_criterions:
+                return EmptyCriterion()
+
+            op = operator.and_ if condition.connector == FilterConnector.AND else operator.or_
+            return reduce(op, sub_criterions)
+
+        return EmptyCriterion()
 
     def _build_group_by(self, query: QueryBuilder) -> QueryBuilder:
         """添加 GROUP BY 子句"""
