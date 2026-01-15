@@ -86,8 +86,8 @@ from services.web.risk.constants import (
 )
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
-from services.web.risk.serializers import RiskInfoSerializer
-from services.web.risk.utils.renderer_client import renderer_client
+from services.web.risk.report.task_submitter import submit_render_task
+from services.web.risk.report_config import ReportConfig
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -1685,17 +1685,9 @@ class ListRiskVariables(ReportBase):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        from services.web.risk.constants import REPORT_RISK_VARIABLES
+        from services.web.risk.report.serializers import ReportRiskVariableSerializer
 
-        # 将 lazy 对象转换为字符串，避免序列化校验失败
-        return [
-            {
-                "field": item["field"],
-                "name": str(item["name"]),
-                "description": str(item["description"] or ""),
-            }
-            for item in REPORT_RISK_VARIABLES
-        ]
+        return ReportRiskVariableSerializer.get_field_definitions()
 
 
 class ListAggregationFunctions(ReportBase):
@@ -1756,19 +1748,15 @@ class PreviewRiskReport(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         risk_id = validated_request_data["risk_id"]
-        report_config = validated_request_data["report_config"]
+        report_config_data = validated_request_data["report_config"]
 
         # 获取风险
         risk = get_object_or_404(Risk, risk_id=risk_id)
 
-        # 构建渲染参数
-        risk_data = RiskInfoSerializer(risk).data
+        # 解析报告配置（预览使用前端传入的配置）
+        report_config = ReportConfig.model_validate(report_config_data)
 
-        # 调用渲染器服务
-        result = renderer_client.render_preview(
-            risk_data=risk_data,
-            template=report_config.get("template", ""),
-            ai_variables=report_config.get("ai_variables", []),
-        )
+        # 提交渲染任务（简化调用）
+        async_result = submit_render_task(risk=risk, report_config=report_config)
 
-        return result
+        return {"task_id": async_result.id, "status": "PENDING"}

@@ -197,9 +197,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
-        RetrieveRiskStrategyInfoAPIGW().perform_request(
-            {"risk_id": self.risk.risk_id, "prohibit_enum_mappings": False}
-        )
+        RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "prohibit_enum_mappings": False})
 
         # 验证 get_app_info 被调用
         mock_get_app_info.assert_called_once()
@@ -340,11 +338,11 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
         """
         测试序列化器 prohibit_enum_mappings=False 时包含 enum_mappings
         """
-        from services.web.risk.serializers import RetrieveRiskStrategyInfoAPIGWResponseSerializer
-
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
-            self.strategy, prohibit_enum_mappings=False
+        from services.web.risk.serializers import (
+            RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
+
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=False)
         data = serializer.data
 
         # 验证所有字段配置都包含 enum_mappings
@@ -361,11 +359,11 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
         """
         测试序列化器 prohibit_enum_mappings=True 时移除 enum_mappings
         """
-        from services.web.risk.serializers import RetrieveRiskStrategyInfoAPIGWResponseSerializer
-
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
-            self.strategy, prohibit_enum_mappings=True
+        from services.web.risk.serializers import (
+            RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
+
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=True)
         data = serializer.data
 
         # 验证所有字段配置都不包含 enum_mappings
@@ -386,11 +384,11 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
         """
         测试序列化器在移除 enum_mappings 时保留其他字段
         """
-        from services.web.risk.serializers import RetrieveRiskStrategyInfoAPIGWResponseSerializer
-
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
-            self.strategy, prohibit_enum_mappings=True
+        from services.web.risk.serializers import (
+            RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
+
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=True)
         data = serializer.data
 
         # 验证基本字段存在
