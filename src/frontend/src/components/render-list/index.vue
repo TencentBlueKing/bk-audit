@@ -27,6 +27,7 @@
         :columns="columns"
         :data="listData.results"
         :max-height="tableMaxHeight"
+        :min-height="300"
         :pagination="pagination"
         :pagination-heihgt="60"
         remote-pagination
@@ -333,7 +334,7 @@
     nextTick(() => {
       const dimensions = calculateTableDimensions();
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8 < 300 ? 300 : dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
     });
   };
 
@@ -349,7 +350,7 @@
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
       }
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8 < 300 ? 300 : dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
     });
   };
 
