@@ -38,7 +38,6 @@ class AIAgentBlot extends Embed {
 
     // 转义HTML以防止XSS
     const escapeHtml = (text: string): string => DOMPurify.sanitize(text, { ALLOWED_TAGS: [] });
-    console.log('data', data);
 
     // 创建块内容
     node.innerHTML = `
