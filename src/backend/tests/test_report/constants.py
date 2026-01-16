@@ -66,7 +66,7 @@ TEST_TEMPLATE = """# {{ risk.strategy_name }}：{{ risk.operator }} 存在疑似
 | 首次发现 | {{ risk.event_time }} |
 
 ### 涉事人员列表
-{{ unique_list(event.username) }}
+{{ list_distinct(event.username) }}
 
 ## 三、发现策略
 - 策略名称：{{ risk.strategy_name }}
@@ -83,9 +83,9 @@ SIMPLE_TEMPLATE = """# {{ risk.strategy_name }}
 # 仅事件聚合函数模板
 EVENT_ONLY_TEMPLATE = """事件数量：{{ count(event.event_id) }}
 第一个账号：{{ first(event.account) }}
-最后一个账号：{{ last(event.account) }}
+最后一个账号：{{ latest(event.account) }}
 总金额：{{ sum(event.amount) }}
-唯一用户：{{ unique_list(event.username) }}
+唯一用户：{{ list_distinct(event.username) }}
 """
 
 # AI变量配置
