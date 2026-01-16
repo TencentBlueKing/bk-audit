@@ -34,6 +34,7 @@ class AIAuditReport(BkApiResource, abc.ABC):
     base_url = AI_AUDIT_REPORT_API_URL
     platform_authorization = True
     tags = ["AIAuditReport"]
+    timeout = 300  # 执行超时时间（秒）
 
     @property
     def app_code(self) -> str:
