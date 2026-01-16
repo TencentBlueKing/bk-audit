@@ -25,6 +25,8 @@ from typing import Any, Callable, Optional, Type
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
+from services.web.risk.constants import AggregationFunction
+
 
 @dataclass
 class ProviderMatchResult:
@@ -190,36 +192,90 @@ class EventProvider(Provider):
 
     用于处理事件相关的聚合函数，如 first(event.account), count(event.event_id) 等
 
-    注意：具体实现由其他同事完成，这里只定义接口规范
+    架构：
+    1. match() 解析 Jinja2 AST，识别 count(event.field) 等语法
+    2. get() 返回聚合数据（TODO: 后续实现 SQL 查询）
     """
 
     # Provider的唯一标识key
     key: str = "event"
 
-    def __init__(self, risk_id: str = None, **kwargs):
+    def __init__(self, risk=None, risk_id: str = None, **kwargs):
         """初始化事件Provider
 
         Args:
+            risk: Risk 对象
             risk_id: 风险ID，用于获取关联的事件数据
             **kwargs: 其他参数
         """
-        self.risk_id = risk_id
+        self.risk = risk
+        self.risk_id = risk_id or (risk.risk_id if risk else None)
 
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是事件聚合函数调用
 
-        由子类实现具体的匹配逻辑
+        匹配形如 count(event.field) 的函数调用
         """
-        raise NotImplementedError
+        # 只处理函数调用节点
+        if not isinstance(node, nodes.Call):
+            return ProviderMatchResult(matched=False)
 
-    def get(self, function: str = None, args: list = None, kwargs: dict = None, **extra) -> Any:
-        """获取事件聚合数据
+        # 检查是否是简单的函数调用（函数名是 Name 节点）
+        if not isinstance(node.node, nodes.Name):
+            return ProviderMatchResult(matched=False)
 
-        由子类实现具体的数据获取逻辑
+        func_name = node.node.name
+
+        # 检查是否是 AggregationFunction 枚举中支持的函数
+        if func_name not in AggregationFunction.values:
+            return ProviderMatchResult(matched=False)
+
+        # 检查是否有参数
+        if not node.args:
+            return ProviderMatchResult(matched=False)
+
+        # 第一个参数应该是 event.field 形式的属性访问
+        first_arg = node.args[0]
+        if not isinstance(first_arg, nodes.Getattr):
+            return ProviderMatchResult(matched=False)
+
+        # 检查 base 是否是 'event'
+        if not isinstance(first_arg.node, nodes.Name):
+            return ProviderMatchResult(matched=False)
+
+        if first_arg.node.name != self.key:
+            return ProviderMatchResult(matched=False)
+
+        field_name = first_arg.attr
+        original_expr = f"{func_name}({self.key}.{field_name})"
+
+        return ProviderMatchResult(
+            matched=True,
+            original_expr=original_expr,
+            provider=self,
+            node_type=nodes.Call,
+            call_args={
+                "function": func_name,
+                "field_name": field_name,
+            },
+        )
+
+    def get(self, function: str = None, field_name: str = None, **extra) -> Any:
+        """获取事件聚合数据（Mock 实现，后续完善）
 
         Args:
             function: 聚合函数名，如 first, count, sum 等
-            args: 位置参数列表
-            kwargs: 关键字参数字典
+            field_name: 字段名
+
+        Returns:
+            Mock 值，格式为 "mock_{function}_{field_name}"
         """
-        raise NotImplementedError
+        if not function or not field_name:
+            return None
+
+        # 验证函数名是否合法
+        if function not in AggregationFunction.values:
+            return None
+
+        # TODO: 后续实现真实的 SQL 查询逻辑
+        return f"mock_{function}_{field_name}"

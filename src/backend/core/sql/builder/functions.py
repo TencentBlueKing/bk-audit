@@ -125,6 +125,33 @@ class GroupConcat(Function):
         super().__init__("GROUP_CONCAT", term, alias=alias)
 
 
+class DisGroupConcat(Function):
+    """
+    GROUP_CONCAT DISTINCT 函数
+
+    注意：由于需要重写 get_sql 来插入 DISTINCT 关键字，
+    别名通过 PyPika 的 as_() 方法在 generator._build_select 中处理。
+    """
+
+    def __init__(self, term: Term, alias: Optional[str] = None):
+        super().__init__("GROUP_CONCAT", term, alias=alias)
+        self._term = term
+
+    def get_function_sql(self, **kwargs) -> str:
+        """仅返回函数部分，不含别名"""
+        term_sql = self._term.get_sql(**kwargs) if hasattr(self._term, "get_sql") else str(self._term)
+        return f"GROUP_CONCAT(DISTINCT {term_sql})"
+
+    def get_sql(self, **kwargs) -> str:
+        """返回完整 SQL，包含别名（如果有）"""
+        sql = self.get_function_sql(**kwargs)
+        # 检查是否有别名（通过 as_() 设置）
+        if hasattr(self, "alias") and self.alias:
+            quote_char = kwargs.get("alias_quote_char") or "`"
+            sql = f"{sql} {quote_char}{self.alias}{quote_char}"
+        return sql
+
+
 class Concat(Function):
     """
     CONCAT 函数

@@ -53,7 +53,11 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
+from services.web.risk.handlers import (
+    BKMAlertSyncHandler,
+    EventHandler,
+    RiskReportHandler,
+)
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -67,6 +71,37 @@ from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
+
+
+@celery_app.task(
+    bind=True,
+    queue="risk_report",
+    time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
+    max_retries=settings.RENDER_MAX_RETRY,
+)
+def render_risk_report(self, risk_id: str, task_id: str):
+    """
+    渲染风险报告任务（尾部触发机制）
+
+    工作流：
+    1. 获取 Redis 锁
+    2. 执行渲染
+    3. 检查任务期间是否有新事件
+    4. 有新事件 -> 递归触发新任务
+    5. 无新事件 -> 释放锁
+    """
+    handler = RiskReportHandler(risk_id=risk_id, task_id=task_id)
+    try:
+        handler.run()
+    except Exception as exc:
+        logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        # 注意：handler.run() 的 finally 块已经释放了锁，这里不需要再释放
+        try:
+            # 失败重试，倒计时 10s
+            self.retry(exc=exc, countdown=10)
+        except Exception:  # NOCC:broad-except(需要处理所有异常)
+            # 达到最大重试次数 (MaxRetriesExceededError)
+            handler.handle_max_retries_exceeded(exc)
 
 
 @periodic_task(run_every=crontab(minute="*/10"), queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -157,15 +192,15 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
 
     try:
         resp = (
-                EventHandler.search_event(
-                    namespace=settings.DEFAULT_NAMESPACE,
-                    start_time=search_start,
-                    end_time=search_end,
-                    page=1,
-                    page_size=page_size,
-                    manual_event_id=manual_event_id_param,
-                )
-                or {}
+            EventHandler.search_event(
+                namespace=settings.DEFAULT_NAMESPACE,
+                start_time=search_start,
+                end_time=search_end,
+                page=1,
+                page_size=page_size,
+                manual_event_id=manual_event_id_param,
+            )
+            or {}
         )
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
         logger_celery.warning(
@@ -188,11 +223,10 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
-@lock(lock_name="celery:sync_manual_event_status")
 def sync_manual_event_status():
     """同步已入 ES 的手工事件状态"""
 
@@ -230,11 +264,10 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
-@lock(lock_name="celery:sync_manual_risk_status")
 def sync_manual_risk_status():
     """同步已入 BKBase 的手工风险状态"""
 
@@ -407,12 +440,12 @@ def sync_auto_result(node_id: str = None):
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["current_status"]
-                               in [
-                                   TicketStatus.TERMINATED,
-                                   TicketStatus.FINISHED,
-                                   TicketStatus.FAILED,
-                                   TicketStatus.REVOKED,
-                               ]
+                            in [
+                                TicketStatus.TERMINATED,
+                                TicketStatus.FINISHED,
+                                TicketStatus.FAILED,
+                                TicketStatus.REVOKED,
+                            ]
                             else TicketNodeStatus.RUNNING
                         )
                     else:
@@ -426,12 +459,12 @@ def sync_auto_result(node_id: str = None):
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
-                               in [
-                                   SOPSTaskStatus.EXPIRED,
-                                   SOPSTaskStatus.FINISHED,
-                                   SOPSTaskStatus.FAILED,
-                                   SOPSTaskStatus.REVOKED,
-                               ]
+                            in [
+                                SOPSTaskStatus.EXPIRED,
+                                SOPSTaskStatus.FINISHED,
+                                SOPSTaskStatus.FAILED,
+                                SOPSTaskStatus.REVOKED,
+                            ]
                             else TicketNodeStatus.RUNNING
                         )
                     else:
@@ -442,7 +475,7 @@ def sync_auto_result(node_id: str = None):
                     last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
-                            risk and risk.status == RiskStatus.CLOSED
+                        risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
                 node.save(update_fields=["process_result", "status"])
@@ -451,10 +484,7 @@ def sync_auto_result(node_id: str = None):
 
 
 @celery_app.task(queue="risk")
-def render_ai_variable(
-        risk_id: str,
-        ai_variables: list[dict]
-) -> dict[str, Any]:
+def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
 
     用于「AI 智能体预览」接口，单独预览 AI 变量的输出
@@ -477,13 +507,10 @@ def render_ai_variable(
     """
     try:
         # 获取风险实例
-        risk = Risk.objects.get(risk_id=risk_id)
+        _ = Risk.objects.get(risk_id=risk_id)
 
         # 构建 AI Provider
-        ai_provider = AIProvider(
-            context={"risk_id": risk_id},
-            ai_variables_config=ai_variables
-        )
+        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables)
 
         # 执行 AI 调用，收集结果
         ai_results = {}
@@ -496,15 +523,10 @@ def render_ai_variable(
                 result = ai_provider.get(name=var_name)
                 ai_results[field_name] = result
             except Exception as e:
-                logger_celery.exception(
-                    "[RenderAIVariable] Failed to get AI variable %s: %s",
-                    var_name, e
-                )
+                logger_celery.exception("[RenderAIVariable] Failed to get AI variable %s: %s", var_name, e)
                 ai_results[field_name] = f"[Error: {e}]"
 
-        return {
-            "ai": ai_results
-        }
+        return {"ai": ai_results}
 
     except Risk.DoesNotExist:
         logger_celery.error("[RenderAIVariable] Risk not found: %s", risk_id)
