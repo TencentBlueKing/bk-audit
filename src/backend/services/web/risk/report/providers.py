@@ -20,12 +20,32 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Dict, Optional, Type
 
+from bk_resource import api
+from blueapps.utils.logger import logger
+from django.conf import settings
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
-from services.web.risk.constants import AggregationFunction
+from api.bk_base.constants import StorageType
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig
+from core.sql.constants import FieldType
+from core.utils.time import ceil_to_second
+from services.web.databus.constants import DORIS_EVENT_BKBASE_RT_ID_KEY
+from services.web.risk.constants import (
+    AGGREGATION_FUNCTION_TO_SQL_TYPE,
+    DEFAULT_FIELD_TYPE_BY_AGGREGATE,
+    EVENT_QUERY_FAILED,
+    AggregationFunction,
+)
+from services.web.risk.handlers.event_provider_sql import (
+    EventFieldConfig,
+    EventProviderSqlBuilder,
+)
+from services.web.risk.models import Risk
+from services.web.strategy_v2.models import Strategy
 
 
 @dataclass
@@ -194,27 +214,162 @@ class EventProvider(Provider):
 
     架构：
     1. match() 解析 Jinja2 AST，识别 count(event.field) 等语法
-    2. get() 返回聚合数据（TODO: 后续实现 SQL 查询）
+    2. get() 构造 SQL 查询 BKBase Doris 表并返回聚合数据
+
+    初始化：只接受 risk_id，内部惰性加载 Risk 对象。
     """
 
     # Provider的唯一标识key
     key: str = "event"
+    # Doris 存储后缀
+    STORAGE_SUFFIX: str = StorageType.DORIS.value
 
-    def __init__(self, risk=None, risk_id: str = None, **kwargs):
+    def __init__(self, risk_id: str, **kwargs):
         """初始化事件Provider
 
         Args:
-            risk: Risk 对象
-            risk_id: 风险ID，用于获取关联的事件数据
+            risk_id: 风险ID，用于惰性加载 Risk 对象
             **kwargs: 其他参数
         """
-        self.risk = risk
-        self.risk_id = risk_id or (risk.risk_id if risk else None)
+        self._risk_id: str = risk_id
+        self._risk: Risk = None
+
+    @property
+    def risk_id(self) -> str:
+        """获取风险ID"""
+        return self._risk_id
+
+    @property
+    def risk(self) -> Risk:
+        """惰性加载 Risk 对象"""
+        if self._risk is None and self._risk_id:
+            self._risk = Risk.objects.select_related("strategy").filter(risk_id=self._risk_id).first()
+        return self._risk
+
+    @classmethod
+    def _apply_storage_suffix(cls, table_name: str) -> str:
+        """给 BKBase 表追加 Doris 后缀"""
+        cleaned = (table_name or "").strip()
+        if not cleaned:
+            return cleaned
+        if cleaned.endswith(f".{cls.STORAGE_SUFFIX}"):
+            return cleaned
+        return f"{cleaned}.{cls.STORAGE_SUFFIX}"
+
+    def _get_field_type_from_strategy(self, field_name: str) -> Optional[str]:
+        """从策略 configs.select 获取字段的真实类型
+
+        Args:
+            field_name: 字段名（对应 select.display_name）
+
+        Returns:
+            field_type 字符串，如 'string', 'long' 等；不存在则返回 None
+        """
+        strategy: Strategy = getattr(self.risk, "strategy", None)
+        if not strategy:
+            logger.warning("No strategy found for risk: %s", self.risk_id)
+            return None
+
+        configs = strategy.configs
+        if not configs or not isinstance(configs, dict):
+            logger.info("No configs found for strategy: %s", strategy.strategy_id)
+            return None
+
+        select_fields = configs.get("select", [])
+        if not select_fields:
+            logger.info("No select fields found for strategy: %s", strategy.strategy_id)
+            return None
+
+        field_type_map = {
+            select["display_name"]: select["field_type"] for select in select_fields if select.get("field_type")
+        }
+
+        return field_type_map.get(field_name)
+
+    def _get_rt_id(self) -> str:
+        """获取事件结果表 ID（带 doris 后缀）"""
+        rt_id = GlobalMetaConfig.get(
+            config_key=DORIS_EVENT_BKBASE_RT_ID_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+            default="",
+        )
+        return self._apply_storage_suffix(rt_id)
+
+    def _get_field_type(self, field_name: str, aggregate: str) -> FieldType:
+        """获取字段类型：优先从策略获取，fallback 根据聚合类型"""
+        field_type_str = self._get_field_type_from_strategy(field_name)
+        if field_type_str:
+            try:
+                return FieldType(field_type_str.lower())
+            except ValueError:
+                logger.error("Invalid field type: %s", field_type_str)
+                pass
+        # fallback: 根据聚合类型取默认值
+        logger.debug("No field type found for field: %s", field_name)
+        return DEFAULT_FIELD_TYPE_BY_AGGREGATE.get(aggregate, FieldType.STRING)
+
+    def _build_sql(self, key: str, spec: Dict[str, Any]) -> Optional[str]:
+        """构建查询 SQL"""
+        aggregate = spec.get("aggregate", "")
+        field_name = spec.get("field", key)
+        field_type = self._get_field_type(field_name, aggregate)
+
+        # end_time 向上取整到秒，避免因微秒精度导致的边界丢失
+        end_time = ceil_to_second(self.risk.event_end_time)
+
+        builder = EventProviderSqlBuilder(
+            table_name=self._get_rt_id(),
+            strategy_id=self.risk.strategy_id,
+            raw_event_id=self.risk.raw_event_id,
+            start_time=int(self.risk.event_time.timestamp() * 1000),
+            end_time=int(end_time.timestamp() * 1000),
+        )
+
+        field_config = EventFieldConfig(
+            raw_name=field_name,
+            display_name=key,
+            field_type=field_type,
+        )
+
+        sql: Optional[str] = None
+        if aggregate == AggregationFunction.FIRST:
+            sql = builder.build_first_sql([field_config])
+        elif aggregate == AggregationFunction.LATEST:
+            sql = builder.build_latest_sql([field_config])
+        else:
+            # 聚合查询
+            sql_aggregate = AGGREGATION_FUNCTION_TO_SQL_TYPE.get(aggregate)
+            if sql_aggregate:
+                field_config.aggregate = sql_aggregate
+            sql = builder.build_aggregate_sql([field_config])
+
+        return sql
+
+    def _parse_result(self, result: Dict[str, Any], key: str, aggregate: str) -> Any:
+        """解析查询结果
+
+        Args:
+            result: BKBase 查询结果
+            key: 字段名（用于取值）
+            aggregate: 聚合函数名
+
+        Returns:
+            查询结果值，list/list_distinct 返回逗号拼接的字符串
+        """
+        data_list = result.get("list", [])
+        if not data_list:
+            return None
+        row = data_list[0]
+        return row.get(key)
 
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是事件聚合函数调用
 
         匹配形如 count(event.field) 的函数调用
+
+        返回的 call_args 格式需与渲染器兼容：
+        {"function": "count", "args": ["event.field"], "kwargs": {}, "field_name": "field"}
         """
         # 只处理函数调用节点
         if not isinstance(node, nodes.Call):
@@ -257,18 +412,21 @@ class EventProvider(Provider):
             call_args={
                 "function": func_name,
                 "field_name": field_name,
+                # 以下字段用于渲染器的 hash 计算
+                "args": [f"{self.key}.{field_name}"],
+                "kwargs": {},
             },
         )
 
     def get(self, function: str = None, field_name: str = None, **extra) -> Any:
-        """获取事件聚合数据（Mock 实现，后续完善）
+        """获取事件聚合数据
 
         Args:
             function: 聚合函数名，如 first, count, sum 等
             field_name: 字段名
 
         Returns:
-            Mock 值，格式为 "mock_{function}_{field_name}"
+            查询结果单值，失败返回占位符
         """
         if not function or not field_name:
             return None
@@ -277,5 +435,29 @@ class EventProvider(Provider):
         if function not in AggregationFunction.values:
             return None
 
-        # TODO: 后续实现真实的 SQL 查询逻辑
-        return f"mock_{function}_{field_name}"
+        # 构建 spec 供内部方法使用
+        spec = {"aggregate": function, "field": field_name}
+
+        try:
+            sql = self._build_sql(field_name, spec)
+            logger.info(
+                "[EventProvider] Build SQL. risk_id=%s, field=%s, function=%s, sql=%s",
+                self.risk_id,
+                field_name,
+                function,
+                sql,
+            )
+            if not sql:
+                return EVENT_QUERY_FAILED
+
+            result = api.bk_base.query_sync(sql=sql)
+            return self._parse_result(result, field_name, function)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.exception(
+                "[EventProvider] Query failed. risk_id=%s, field=%s, function=%s, error=%s",
+                self.risk_id,
+                field_name,
+                function,
+                e,
+            )
+            return EVENT_QUERY_FAILED

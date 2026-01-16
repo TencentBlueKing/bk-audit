@@ -202,8 +202,9 @@ class RiskReportHandler:
         if latest_event_time and float(latest_event_time) > self.task_start_time:
             new_task_id = str(uuid.uuid4())
             logger.info(
-                "[RiskReportHandler] New events arrived. Triggering new task. "
+                "[RiskReportHandler] New events arrived. Triggering new task with %ds delay. "
                 "risk_id=%s, current_task_id=%s, new_task_id=%s",
+                settings.RENDER_TASK_DELAY,
                 self.risk_id,
                 self.task_id,
                 new_task_id,
@@ -212,7 +213,10 @@ class RiskReportHandler:
             # 直接触发新任务，新任务会自己获取锁
             from services.web.risk.tasks import render_risk_report
 
-            render_risk_report.delay(risk_id=self.risk_id, task_id=new_task_id)
+            render_risk_report.apply_async(
+                kwargs={"risk_id": self.risk_id, "task_id": new_task_id},
+                countdown=settings.RENDER_TASK_DELAY,
+            )
         else:
             logger.info(
                 "[RiskReportHandler] No new events. Task completed. risk_id=%s, task_id=%s",

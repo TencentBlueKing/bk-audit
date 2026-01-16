@@ -171,7 +171,7 @@ class UpdateRiskReport(RiskReportMeta):
     def perform_request(self, validated_request_data):
         risk_id = validated_request_data["risk_id"]
         content = validated_request_data["content"]
-        auto_generate = validated_request_data.get("auto_generate")
+        auto_generate = validated_request_data["auto_generate"]
 
         risk = get_object_or_404(Risk, risk_id=risk_id)
         report = get_object_or_404(RiskReport, risk=risk)
@@ -179,13 +179,12 @@ class UpdateRiskReport(RiskReportMeta):
 
         # 更新报告
         report.content = content
-        report.status = RiskReportStatus.MANUAL
+        report.status = RiskReportStatus.AUTO if auto_generate else RiskReportStatus.MANUAL
         report.save(update_fields=["content", "status"])
 
-        # 更新风险的自动生成标记（如果提供了）
-        if auto_generate is not None:
-            risk.auto_generate_report = auto_generate
-            risk.save(update_fields=["auto_generate_report"])
+        # 更新风险的自动生成标记
+        risk.auto_generate_report = auto_generate
+        risk.save(update_fields=["auto_generate_report"])
 
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
