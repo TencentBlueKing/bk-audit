@@ -53,7 +53,8 @@
       v-model:isShowEditEventReport="isShowEditEventReport"
       :report-content="content"
       :report-enabled="data.report_enabled"
-      :status="data.report?.status" />
+      :status="data.report?.status"
+      @update="handleUpdate" />
   </div>
 </template>
 <script setup lang="ts">
@@ -76,6 +77,9 @@
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<{
+    'updated-data': [];
+  }>();
   const { t } = useI18n();
 
   const isShowEditEventReport = ref(false);
@@ -93,6 +97,10 @@
 
   const handleEditReport = () => {
     isShowEditEventReport.value = true;
+  };
+
+  const handleUpdate = () => {
+    emits('updated-data');
   };
 </script>
 <style lang="postcss" scoped>
