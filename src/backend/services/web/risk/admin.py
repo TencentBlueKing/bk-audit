@@ -20,7 +20,9 @@ import datetime
 
 from django import forms
 from django.contrib import admin
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models.functions import Substr
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils import timezone
@@ -45,14 +47,26 @@ from services.web.risk.widgets import WhereConditionWidget
 class StrategyFilter(admin.SimpleListFilter):
     title = _("命中策略")
     parameter_name = "strategy"
+    # 缓存键和超时时间
+    CACHE_KEY = "risk_admin:strategy_filter:lookups"
+    CACHE_TIMEOUT = 300  # 5 分钟缓存
 
     def lookups(self, request, model_admin):
+        # 使用缓存避免每次加载页面都执行全表 distinct() 查询
+        cached_lookups = cache.get(self.CACHE_KEY)
+        if cached_lookups is not None:
+            return cached_lookups
+
         # 仅展示当前风险单中实际命中的策略，避免全量策略过多
         strategy_ids = list(Risk.objects.values_list("strategy_id", flat=True).distinct().order_by())
         from services.web.strategy_v2.models import Strategy
 
         strategies = Strategy.objects.filter(strategy_id__in=strategy_ids).only("strategy_id", "strategy_name")
-        return [(str(s.strategy_id), s.strategy_name or str(s.strategy_id)) for s in strategies]
+        lookups = [(str(s.strategy_id), s.strategy_name or str(s.strategy_id)) for s in strategies]
+
+        # 缓存结果
+        cache.set(self.CACHE_KEY, lookups, self.CACHE_TIMEOUT)
+        return lookups
 
     def queryset(self, request, queryset):
         value = self.value()
@@ -81,10 +95,23 @@ class RiskAdmin(admin.ModelAdmin):
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
     list_filter = ["status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
-    list_per_page = 100  # 设置每页显示100条记录
+    list_per_page = 50  # 减少每页数量以提升性能
 
     def get_queryset(self, request):
-        qs = Risk.annotated_queryset().select_related("strategy")
+        """
+        Admin 专用的轻量级 queryset，不使用 annotated_queryset() 中的 Exists 子查询，
+        避免对全表执行子查询导致的性能问题。
+        """
+        # 仅保留 Substr 用于截取 event_content，移除 Exists 子查询
+        from services.web.risk.constants import LIST_RISK_FIELD_MAX_LENGTH
+
+        qs = (
+            Risk.objects.annotate(
+                event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
+            )
+            .defer("event_content")  # 延迟加载大字段
+            .select_related("strategy")
+        )
         return qs
 
     def event_content_short(self, obj: Risk):

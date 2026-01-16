@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type
 
 from bk_resource import api
-from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
 from jinja2 import nodes
@@ -273,12 +272,12 @@ class EventProvider(Provider):
 
         configs = strategy.configs
         if not configs or not isinstance(configs, dict):
-            logger.warning("No configs found for strategy: %s", strategy.strategy_id)
+            logger.info("No configs found for strategy: %s", strategy.strategy_id)
             return None
 
         select_fields = configs.get("select", [])
         if not select_fields:
-            logger.warning("No select fields found for strategy: %s", strategy.strategy_id)
+            logger.info("No select fields found for strategy: %s", strategy.strategy_id)
             return None
 
         field_type_map = {
@@ -453,19 +452,12 @@ class EventProvider(Provider):
 
             result = api.bk_base.query_sync(sql=sql)
             return self._parse_result(result, field_name, function)
-        except APIRequestError:
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
-                "[EventProvider] API request failed. risk_id=%s, field=%s, function=%s",
+                "[EventProvider] Query failed. risk_id=%s, field=%s, function=%s, error=%s",
                 self.risk_id,
                 field_name,
                 function,
-            )
-            return EVENT_QUERY_FAILED
-        except Exception:  # NOCC:broad-except(需要处理所有异常)
-            logger.exception(
-                "[EventProvider] Unexpected error. risk_id=%s, field=%s, function=%s",
-                self.risk_id,
-                field_name,
-                function,
+                e,
             )
             return EVENT_QUERY_FAILED

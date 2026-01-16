@@ -94,7 +94,7 @@ from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_SORT_FIELD,
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
-    LOCAL_UPDATE_FIELDS,
+    REMOTE_UPDATE_FIELDS,
     STRATEGY_RISK_DEFAULT_INTERVAL,
     EventInfoField,
     LinkTableJoinType,
@@ -464,8 +464,8 @@ class UpdateStrategy(StrategyV2Base):
         # 如果两个值都为空，则不需要更新，避免 None 和 空值 的比较异常
         elif not origin_value and not new_value:
             need_update_remote = False
-        # 不同且不在本地更新清单中的字段才触发远程flow更新
-        elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
+        # 不同且在远程更新清单中的字段才触发远程flow更新
+        elif origin_value != new_value and key in REMOTE_UPDATE_FIELDS:
             need_update_remote = True
         logger.info(
             "[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, "

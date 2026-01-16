@@ -1164,7 +1164,6 @@ class UpdateRiskReportRequestSerializer(serializers.Serializer):
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
     content = serializers.CharField(label=gettext_lazy("报告内容"))
     auto_generate = serializers.BooleanField(
-        required=False,
         default=False,
         label=gettext_lazy("是否开启自动生成报告"),
     )

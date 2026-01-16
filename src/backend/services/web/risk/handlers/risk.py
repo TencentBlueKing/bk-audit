@@ -267,6 +267,7 @@ class RiskHandler:
 
         # 检查触发条件：策略开启报告 + 风险开启自动生成
         if not risk.can_generate_report():
+            logger.info("[TriggerRender] Render disabled. risk_id=%s", risk.risk_id)
             return
 
         risk_id = risk.risk_id
@@ -283,8 +284,16 @@ class RiskHandler:
         # NX=True (set if not exists), EX=timeout
         # 如果获取成功，说明当前没有任务在运行，立即触发
         if cache.set(lock_key, task_id, nx=True, timeout=settings.RENDER_TASK_TIMEOUT):
-            logger.info("[TriggerRender] Acquired lock, triggering task. risk_id=%s, task_id=%s", risk_id, task_id)
-            render_risk_report.delay(risk_id=risk_id, task_id=task_id)
+            logger.info(
+                "[TriggerRender] Acquired lock, triggering task with %ds delay. risk_id=%s, task_id=%s",
+                settings.RENDER_TASK_DELAY,
+                risk_id,
+                task_id,
+            )
+            render_risk_report.apply_async(
+                kwargs={"risk_id": risk_id, "task_id": task_id},
+                countdown=settings.RENDER_TASK_DELAY,
+            )
         else:
             # 如果获取失败，说明已有任务在运行
             # 只需更新 latest_event_time (步骤1已做)，运行中的任务会在结束前检查该时间并决定是否递归触发
