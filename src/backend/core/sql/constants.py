@@ -116,6 +116,8 @@ class AggregateType(TextChoices):
     MAX = "MAX", gettext_lazy("最大值")
     MIN = "MIN", gettext_lazy("最小值")
     DISCOUNT = "DISCOUNT", gettext_lazy("去重计数")
+    LIST = "LIST", gettext_lazy("列表")
+    LIST_DISTINCT = "LIST_DISTINCT", gettext_lazy("去重列表")
 
     @cached_property
     def result_data_type(self):
@@ -124,6 +126,8 @@ class AggregateType(TextChoices):
         """
         if self.value in {self.COUNT, self.DISCOUNT}:
             return FieldType.LONG
+        if self.value in {self.LIST, self.LIST_DISTINCT}:
+            return FieldType.STRING
 
 
 DORIS_FIELD_KEY_QUOTE = "'"

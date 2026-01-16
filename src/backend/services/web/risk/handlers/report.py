@@ -6,7 +6,7 @@ from typing import Optional
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
@@ -185,7 +185,8 @@ class RiskReportHandler:
         try:
             # 1. 尝试直接创建（最快，且原子）
             # 使用 atomic 包裹，确保 IntegrityError 只回滚这个 savepoint，不破坏外层事务
-            RiskReport.objects.create(risk_id=self.risk_id, content=content, status=RiskReportStatus.AUTO)
+            with transaction.atomic():
+                RiskReport.objects.create(risk_id=self.risk_id, content=content, status=RiskReportStatus.AUTO)
             logger.info("[RiskReportHandler] Report created. risk_id=%s", self.risk_id)
         except IntegrityError:
             # 2. 如果已存在（违反唯一约束），则更新

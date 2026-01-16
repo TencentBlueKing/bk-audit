@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 from celery.result import AsyncResult
 
 from services.web.risk.models import Risk
-from services.web.risk.report.providers import AIProvider
+from services.web.risk.report.providers import AIProvider, EventProvider
 from services.web.risk.report_config import AIVariableConfig, ReportConfig
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -81,9 +81,11 @@ class TestSubmitRenderTask(TestCase):
 
         call_kwargs = mock_task.delay.call_args[1]
         providers = call_kwargs["providers"]
-        # 即使没有 AI 变量，也应该有一个空的 AIProvider
-        self.assertEqual(len(providers), 1)
-        self.assertIsInstance(providers[0], AIProvider)
+        # 应该有 AIProvider 和 EventProvider
+        self.assertEqual(len(providers), 2)
+        provider_types = {type(p) for p in providers}
+        self.assertIn(AIProvider, provider_types)
+        self.assertIn(EventProvider, provider_types)
 
     @patch("services.web.risk.report.task_submitter.render_template")
     def test_submit_render_task_ai_variable_prefix_handling(self, mock_task):
@@ -137,9 +139,9 @@ class TestSubmitRenderTask(TestCase):
         # 1. 验证 template
         self.assertEqual(call_kwargs["template"], "# 风险报告\n\n{{ risk.title }}\n\n{{ ai.summary }}")
 
-        # 2. 验证 providers
-        self.assertEqual(len(call_kwargs["providers"]), 1)
-        ai_provider = call_kwargs["providers"][0]
+        # 2. 验证 providers（应该有 AIProvider 和 EventProvider）
+        self.assertEqual(len(call_kwargs["providers"]), 2)
+        ai_provider = next(p for p in call_kwargs["providers"] if isinstance(p, AIProvider))
         self.assertIsInstance(ai_provider, AIProvider)
         self.assertEqual(ai_provider.context, {"risk_id": self.risk.risk_id})
         # AIProvider 内部将 list 转为 dict 格式

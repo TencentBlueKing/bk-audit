@@ -16,7 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from services.web.risk.report.providers import AIProvider, Provider, ProviderMatchResult
+from services.web.risk.report.providers import (
+    AIProvider,
+    EventProvider,
+    Provider,
+    ProviderMatchResult,
+)
 from services.web.risk.report.renderer import render_template
 
-__all__ = ["render_template", "Provider", "ProviderMatchResult", "AIProvider"]
+__all__ = ["render_template", "Provider", "ProviderMatchResult", "AIProvider", "EventProvider"]

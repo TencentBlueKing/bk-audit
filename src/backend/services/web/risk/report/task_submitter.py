@@ -21,7 +21,7 @@ from typing import Any
 from celery.result import AsyncResult
 
 from services.web.risk.models import Risk
-from services.web.risk.report.providers import AIProvider
+from services.web.risk.report.providers import AIProvider, EventProvider
 from services.web.risk.report.renderer import render_template
 from services.web.risk.report.serializers import ReportRiskVariableSerializer
 from services.web.risk.report_config import ReportConfig
@@ -61,6 +61,8 @@ def submit_render_task(
             context={"risk_id": risk.risk_id},
             ai_variables_config=ai_variables_config,
         ),
+        # EventProvider 用于处理 count(event.field) 等聚合函数
+        EventProvider(risk=risk),
     ]
 
     # 构建普通变量
