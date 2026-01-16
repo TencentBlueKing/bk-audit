@@ -28,8 +28,8 @@ class TestEventProviderSqlBuilder(TestCase):
     TABLE_NAME = "591_test_table.doris"
     STRATEGY_ID = 1001
     RAW_EVENT_ID = "raw_event_abc"
-    START_TIME = 1735689600000  # 2025-01-01 00:00:00 UTC
-    END_TIME = 1735776000000  # 2025-01-02 00:00:00 UTC
+    START_TIME = 1735689600000  # 2025-01-01 00:00:00 UTC (TestEventProviderSqlBuilder 专用)
+    END_TIME = 1735776000000  # 2025-01-02 00:00:00 UTC (TestEventProviderSqlBuilder 专用)
 
     # 基础 WHERE 条件（复用）
     BASE_WHERE = (
@@ -46,6 +46,49 @@ class TestEventProviderSqlBuilder(TestCase):
             start_time=self.START_TIME,
             end_time=self.END_TIME,
         )
+
+    # --- LIST/LIST_DISTINCT 非 STRING 字段跳过 CAST 验证 ---
+
+    def test_aggregate_sql_list_distinct_long_field_no_cast(self):
+        """测试 LIST_DISTINCT 聚合对 LONG 类型字段不做 CAST
+
+        GROUP_CONCAT 要求参数是 STRING 类型，即使 field_type 是 LONG，
+        也应跳过 CAST，直接使用 JSON_EXTRACT_STRING 输出。
+        """
+        fields = [
+            EventFieldConfig(
+                raw_name="gse索引",
+                display_name="gse索引",
+                field_type=FieldType.LONG,  # 字段类型是 LONG
+                aggregate=AggregateType.LIST_DISTINCT,  # 但聚合是 LIST_DISTINCT
+            )
+        ]
+        sql = self.builder.build_aggregate_sql(fields)
+
+        # 验证：不应出现 CAST ... AS BIGINT，应保持 STRING
+        self.assertNotIn("CAST", sql)
+        self.assertNotIn("BIGINT", sql)
+        # 应使用 GROUP_CONCAT(DISTINCT ...)
+        self.assertIn("GROUP_CONCAT(DISTINCT", sql)
+        self.assertIn("JSON_EXTRACT_STRING", sql)
+
+    def test_aggregate_sql_list_long_field_no_cast(self):
+        """测试 LIST 聚合对 LONG 类型字段不做 CAST"""
+        fields = [
+            EventFieldConfig(
+                raw_name="event_count",
+                display_name="event_count",
+                field_type=FieldType.LONG,
+                aggregate=AggregateType.LIST,
+            )
+        ]
+        sql = self.builder.build_aggregate_sql(fields)
+
+        # 验证：不应出现 CAST
+        self.assertNotIn("CAST", sql)
+        # 应使用 GROUP_CONCAT(...)（无 DISTINCT）
+        self.assertIn("GROUP_CONCAT(JSON_EXTRACT_STRING", sql)
+        self.assertNotIn("DISTINCT", sql)
 
     # --- 聚合查询 SQL 完整验证 ---
 
@@ -68,11 +111,7 @@ class TestEventProviderSqlBuilder(TestCase):
         self.assertEqual(sql, expected)
 
     def test_aggregate_sql_count_distinct(self):
-        """测试 COUNT_DISTINCT 聚合 SQL
-
-        注意：AggregateType.DISCOUNT 在当前 SQL 生成器中映射为 COUNT()，
-        而不是 COUNT(DISTINCT)。这是底层框架行为。
-        """
+        """测试 COUNT_DISTINCT 聚合 SQL"""
         fields = [
             EventFieldConfig(
                 raw_name="user_id",
@@ -85,7 +124,7 @@ class TestEventProviderSqlBuilder(TestCase):
 
         # DISCOUNT 当前映射为 COUNT（非 COUNT DISTINCT）
         expected = (
-            "SELECT COUNT(JSON_EXTRACT_STRING(`t`.`event_data`,'$.user_id')) `user_id` "
+            "SELECT COUNT(DISTINCT JSON_EXTRACT_STRING(`t`.`event_data`,'$.user_id')) `user_id` "
             f"FROM {self.TABLE_NAME} `t` {self.BASE_WHERE}"
         )
         self.assertEqual(sql, expected)

@@ -713,6 +713,7 @@ class EventFilterOperator(TextChoices):
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
 
 
+@register_choices("risk_report_status")
 class RiskReportStatus(TextChoices):
     """
     风险报告状态
