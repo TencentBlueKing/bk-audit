@@ -38,6 +38,8 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     LogReportStatus,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
 )
@@ -86,6 +88,14 @@ class CollectorCreateRequestSerializer(serializers.Serializer):
     target_nodes = TargetNodeSerializer(label=gettext_lazy("目标节点"), many=True)
     data_encoding = serializers.CharField(label=gettext_lazy("日志字符集"))
     params = PluginParamSerializer()
+
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
 
 
 class CollectorCreateResponseSerializer(serializers.ModelSerializer):
@@ -170,6 +180,14 @@ class UpdateCollectorRequestSerializer(serializers.Serializer):
         label=gettext_lazy("备注说明"), max_length=64, required=False, allow_null=True, allow_blank=True
     )
     params = PluginParamSerializer()
+
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
 
 
 class CollectorEtlFieldsSerializer(serializers.ModelSerializer):
@@ -285,6 +303,14 @@ class BcsCollectorBaseSerializer(serializers.Serializer):
     bcs_cluster_id = serializers.CharField(label=gettext_lazy("bcs集群id"))
     yaml_config = serializers.CharField(label=gettext_lazy("yaml配置内容"), default="", allow_blank=True)
 
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
+
     def validate_yaml_config(self, value):
         try:
             base64.b64decode(value).decode("utf-8")
@@ -309,6 +335,7 @@ class CreateApiPushRequestSerializer(serializers.Serializer):
 
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    custom_collector_config_name = serializers.CharField(label=gettext_lazy("用户自定义名称"), required=False)
 
 
 class GetApiPushRequestSerializer(serializers.Serializer):
@@ -412,6 +439,15 @@ class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     bk_data_id = serializers.IntegerField(label=gettext_lazy("DataID"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    custom_collector_en_name = serializers.CharField(label=gettext_lazy("自定义英文名"), required=False)
+    custom_collector_ch_name = serializers.CharField(label=gettext_lazy("自定义中文名"), required=False)
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
 
 
 class DataIdEtlStorageRequestSerializer(serializers.Serializer):
