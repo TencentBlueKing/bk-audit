@@ -38,7 +38,7 @@ modules:
       risk-report:
         command: python manage.py celery worker -O fair -l info -Q risk_report -P gevent -c 64 -E
         plan: 2C2G5R
-        replicas: 5
+        replicas: 3
     scripts:
       pre_release_hook: sh -c "python manage.py migrate --no-input && python manage.py createcachetable && python manage.py init_system && python manage.py init_fields && python manage.py sync_apigw"
     svc_discovery:

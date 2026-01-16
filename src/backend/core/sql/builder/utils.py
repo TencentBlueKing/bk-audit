@@ -55,7 +55,7 @@ def operate(operator: str, field: Field, value: str | int | float, values: List[
 def get_function(aggregate_type: str):
     """根据聚合类型返回 PyPika 对应的函数"""
 
-    from core.sql.builder.functions import DisCount
+    from core.sql.builder.functions import DisCount, DisGroupConcat, GroupConcat
 
     cls = AggregateType
 
@@ -66,6 +66,8 @@ def get_function(aggregate_type: str):
         cls.MAX.value: fn.Max,
         cls.MIN.value: fn.Min,
         cls.DISCOUNT.value: DisCount,
+        cls.LIST.value: GroupConcat,
+        cls.LIST_DISTINCT.value: DisGroupConcat,
     }
     if aggregate_type not in aggregate_mapping:
         raise ValueError(f"不支持的聚合类型: {aggregate_type}")
