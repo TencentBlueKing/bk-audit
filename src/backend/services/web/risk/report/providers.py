@@ -182,7 +182,7 @@ class AIProvider(Provider):
                 chat_history=[],
                 execute_kwargs={"stream": False},
             )
-            return result.get("content", "")
+            return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
         except Exception as e:
             return f"[AI生成失败: {e}]"
 
