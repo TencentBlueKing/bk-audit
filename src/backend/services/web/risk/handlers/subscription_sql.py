@@ -80,6 +80,9 @@ class RiskEventSubscriptionSqlGenerator(BkBaseComputeSqlGenerator):
     专用于风险事件订阅的 SQL 生成器，支持 Doris JSON 字段下钻。
     """
 
+    # GROUP_CONCAT 要求参数是 STRING 类型，这些聚合类型不做 CAST
+    _STRING_ONLY_AGGREGATES = {AggregateType.LIST.value, AggregateType.LIST_DISTINCT.value}
+
     def _get_pypika_field(self, field: Field):
         if not field.keys:
             return super()._get_pypika_field(field)
@@ -87,6 +90,11 @@ class RiskEventSubscriptionSqlGenerator(BkBaseComputeSqlGenerator):
         table = self._get_table(field.table)
         base_field = self.field_type_cls.get_field(table, field)
         json_value = DorisJsonTypeExtractFunction(base_field, field.keys, FieldType.STRING)
+
+        # GROUP_CONCAT (LIST/LIST_DISTINCT) 要求参数是 STRING，跳过 CAST
+        if field.aggregate in self._STRING_ONLY_AGGREGATES:
+            return json_value
+
         target_type = field.field_type or FieldType.STRING
         if target_type in (FieldType.STRING, FieldType.TEXT):
             return json_value

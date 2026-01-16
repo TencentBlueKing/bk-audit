@@ -37,8 +37,8 @@ class TestRiskRenderTask(TestCase):
         cache.delete(self.lock_key)
         cache.delete(self.latest_time_key)
 
-    @mock.patch("services.web.risk.tasks.render_risk_report.delay")
-    def test_trigger_render_task_success(self, mock_delay):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_trigger_render_task_success(self, mock_apply_async):
         """测试：正常触发渲染任务"""
         handler = RiskHandler()
         handler.trigger_render_task(self.risk)
@@ -47,11 +47,14 @@ class TestRiskRenderTask(TestCase):
         assert cache.get(self.lock_key) is not None
         assert cache.get(self.latest_time_key) is not None
 
-        # 验证任务触发 (task_id 是随机 UUID)
-        mock_delay.assert_called_once_with(risk_id=self.risk.risk_id, task_id=mock.ANY)
+        # 验证任务触发 (使用 apply_async 和 countdown)
+        mock_apply_async.assert_called_once()
+        call_kwargs = mock_apply_async.call_args.kwargs
+        assert call_kwargs["kwargs"]["risk_id"] == self.risk.risk_id
+        assert "countdown" in call_kwargs
 
-    @mock.patch("services.web.risk.tasks.render_risk_report.delay")
-    def test_trigger_render_task_debounce(self, mock_delay):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_trigger_render_task_debounce(self, mock_apply_async):
         """测试：防抖逻辑（已有锁时不触发）"""
         # 先手动上锁
         cache.set(self.lock_key, "some-other-uuid")
@@ -63,10 +66,10 @@ class TestRiskRenderTask(TestCase):
         assert cache.get(self.latest_time_key) is not None
 
         # 验证任务未再次触发
-        mock_delay.assert_not_called()
+        mock_apply_async.assert_not_called()
 
-    @mock.patch("services.web.risk.tasks.render_risk_report.delay")
-    def test_trigger_render_task_disabled(self, mock_delay):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_trigger_render_task_disabled(self, mock_apply_async):
         """测试：功能关闭时不触发"""
         self.risk.auto_generate_report = False
         self.risk.save()
@@ -74,7 +77,7 @@ class TestRiskRenderTask(TestCase):
         handler = RiskHandler()
         handler.trigger_render_task(self.risk)
 
-        mock_delay.assert_not_called()
+        mock_apply_async.assert_not_called()
         assert cache.get(self.lock_key) is None
 
     @mock.patch("services.web.risk.handlers.report.submit_render_task")
@@ -119,9 +122,9 @@ class TestRiskRenderTask(TestCase):
         # 我们可以验证锁没有被释放（依然是别人的）
         assert cache.get(self.lock_key) == "other-task-uuid"
 
-    @mock.patch("services.web.risk.tasks.render_risk_report.delay")
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
     @mock.patch("services.web.risk.handlers.report.submit_render_task")
-    def test_render_task_tail_trigger(self, mock_submit, mock_delay):
+    def test_render_task_tail_trigger(self, mock_submit, mock_apply_async):
         """测试：尾部触发逻辑"""
         mock_async_result = mock.MagicMock()
         mock_async_result.get.return_value = "report content"
@@ -138,11 +141,12 @@ class TestRiskRenderTask(TestCase):
         # 执行任务
         render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
 
-        # 验证递归触发 (传入新的 UUID)
-        mock_delay.assert_called_once()
-        args, kwargs = mock_delay.call_args
-        assert kwargs['risk_id'] == self.risk.risk_id
-        assert kwargs['task_id'] != task_id  # 应该是新的 UUID
+        # 验证递归触发 (使用 apply_async 和 countdown)
+        mock_apply_async.assert_called_once()
+        call_kwargs = mock_apply_async.call_args.kwargs
+        assert call_kwargs['kwargs']['risk_id'] == self.risk.risk_id
+        assert call_kwargs['kwargs']['task_id'] != task_id  # 应该是新的 UUID
+        assert 'countdown' in call_kwargs
 
         # 验证锁已释放（新任务会自己获取锁）
         assert cache.get(self.lock_key) is None
@@ -276,38 +280,39 @@ class TestRiskReportHandlerUnit(TestCase):
         # 他人的锁应该仍然存在
         self.assertEqual(cache.get(self.lock_key), "other-task-id")
 
-    @mock.patch("services.web.risk.tasks.render_risk_report")
-    def test_handle_tail_trigger_new_events(self, mock_task):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_handle_tail_trigger_new_events(self, mock_apply_async):
         """测试尾部触发逻辑 - 有新事件"""
         self.handler.task_start_time = 1000.0
         cache.set(self.latest_time_key, "1500.0")  # 有新事件
 
         self.handler._handle_tail_trigger()
 
-        mock_task.delay.assert_called_once()
-        call_kwargs = mock_task.delay.call_args.kwargs
-        self.assertEqual(call_kwargs["risk_id"], self.handler.risk_id)
-        self.assertNotEqual(call_kwargs["task_id"], self.handler.task_id)
+        mock_apply_async.assert_called_once()
+        call_kwargs = mock_apply_async.call_args.kwargs
+        self.assertEqual(call_kwargs["kwargs"]["risk_id"], self.handler.risk_id)
+        self.assertNotEqual(call_kwargs["kwargs"]["task_id"], self.handler.task_id)
+        self.assertIn("countdown", call_kwargs)
 
-    @mock.patch("services.web.risk.tasks.render_risk_report")
-    def test_handle_tail_trigger_no_new_events(self, mock_task):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_handle_tail_trigger_no_new_events(self, mock_apply_async):
         """测试尾部触发逻辑 - 无新事件"""
         self.handler.task_start_time = 1000.0
         cache.set(self.latest_time_key, "500.0")  # 无新事件
 
         self.handler._handle_tail_trigger()
 
-        mock_task.delay.assert_not_called()
+        mock_apply_async.assert_not_called()
 
-    @mock.patch("services.web.risk.tasks.render_risk_report")
-    def test_handle_tail_trigger_no_cache(self, mock_task):
+    @mock.patch("services.web.risk.tasks.render_risk_report.apply_async")
+    def test_handle_tail_trigger_no_cache(self, mock_apply_async):
         """测试尾部触发逻辑 - 无缓存记录"""
         self.handler.task_start_time = 1000.0
         cache.delete(self.latest_time_key)
 
         self.handler._handle_tail_trigger()
 
-        mock_task.delay.assert_not_called()
+        mock_apply_async.assert_not_called()
 
     def test_update_report_create_new(self):
         """测试创建新报告"""
