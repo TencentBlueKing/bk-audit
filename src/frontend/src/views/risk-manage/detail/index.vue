@@ -111,7 +111,8 @@
   <edit-event-report
     v-model:isShowEditEventReport="isShowEditEventReport"
     :report-enabled="detailData.report_enabled"
-    :status="detailData.report?.status" />
+    :status="detailData.report?.status"
+    @update="handleUpdate" />
 </template>
 
 <script setup lang='ts'>
