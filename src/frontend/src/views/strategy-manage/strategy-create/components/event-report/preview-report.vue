@@ -47,9 +47,7 @@
   interface RiskReport {
     task_id: string,
     status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE'
-    result: {
-      description: string;
-    },
+    result: string,
   }
 
   interface aiPreviewParams {
@@ -89,6 +87,7 @@
   const concent = ref('');
   const isLoading = ref(false);
   const timerId = ref<number | null>(null);
+  const taskId = ref('');
   const paramsInfo = ref<aiPreviewParams>({
     risk_id: '',
     report_config: {
@@ -108,8 +107,36 @@
   } = useRequest(RiskManageService.getTaskRiskReport, {
     defaultValue: null as any,
     onSuccess(data: RiskReport) {
-      isLoading.value = false;
-      concent.value = data.result.description;
+      if (data.status === 'PENDING' || data.status === 'RUNNING') {
+        isLoading.value = true;
+        // 清除之前的定时器（如果存在）
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+        }
+        // 创建定时器 3秒后重试
+        timerId.value = window.setTimeout(() => {
+          getTaskRiskReport({ task_id: taskId.value  });
+          timerId.value = null;
+        }, 3000);
+      } else if (data.status === 'SUCCESS') {
+        // 清除定时器
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+          timerId.value = null;
+        }
+        isLoading.value = false;
+        concent.value = data.result;
+        // 成功
+      } else if (data.status === 'FAILURE') {
+        isLoading.value = false;
+        // 失败
+        concent.value = '失败';
+        // 清除定时器
+        if (timerId.value !== null) {
+          clearTimeout(timerId.value);
+          timerId.value = null;
+        }
+      }
     },
   });
 
@@ -119,35 +146,8 @@
   } = useRequest(RiskManageService.getReportPreview, {
     defaultValue: null as any,
     onSuccess(data: aiPreviewData) {
-      if (data.status === 'PENDING' || data.status === 'RUNNING') {
-        isLoading.value = true;
-        // 清除之前的定时器（如果存在）
-        if (timerId.value !== null) {
-          clearTimeout(timerId.value);
-        }
-        // 创建定时器 3秒后重试
-        timerId.value = window.setTimeout(() => {
-          getReportPreview(paramsInfo.value);
-          timerId.value = null;
-        }, 3000);
-      } else if (data.status === 'SUCCESS') {
-        // 清除定时器
-        if (timerId.value !== null) {
-          clearTimeout(timerId.value);
-          timerId.value = null;
-        }
-        // 成功
-        getTaskRiskReport({ task_id: data.task_id });
-      } else if (data.status === 'FAILURE') {
-        // 清除定时器
-        if (timerId.value !== null) {
-          clearTimeout(timerId.value);
-          timerId.value = null;
-        }
-        isLoading.value = false;
-        // 失败
-        concent.value = '失败';
-      }
+      taskId.value = data.task_id;
+      getTaskRiskReport({ task_id: data.task_id });
     },
   });
   // 关闭

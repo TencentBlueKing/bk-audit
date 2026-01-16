@@ -53,7 +53,8 @@
         <div class="table-cell table-cell-right-border w2 pn">
           <bk-select
             v-model="row.aggregate"
-            class="event-info-aggregation-select">
+            class="event-info-aggregation-select"
+            :clearable="false">
             <bk-option
               v-for="item in handlerAggregationLists(row.field_type)"
               :id="item.id"
@@ -136,7 +137,7 @@
       // props.tableData 就是 expected-results/index.vue 中 vuedraggable 的 expectedResultList
       localTableData.value = props.tableData.map((item: any) => ({
         ...item,
-        aggregate: item.aggregate === null ? 'latest' : item.aggregate,
+        aggregate: 'latest',
       }));
     } else {
       localTableData.value = [];

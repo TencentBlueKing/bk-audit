@@ -145,7 +145,6 @@
 <script setup lang="ts">
   import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
 
@@ -167,7 +166,7 @@
     task_id: string,
     status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE'
     result: {
-      description: string;
+      ai: any;
     },
   }
 
@@ -195,7 +194,7 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const route = useRoute();
+  const taskId = ref('');
   // const isEditMode = route.name === 'strategyEdit';
   const isShowRight = ref(false);
   const formRef = ref();
@@ -243,18 +242,6 @@
   } = useRequest(RiskManageService.getTaskRiskReport, {
     defaultValue: null as any,
     onSuccess(data: RiskReport) {
-      isLoading.value = false;
-      isShowConfirm.value = false;
-      concent.value = data.result.description;
-    },
-  });
-
-  // Ai预览
-  const {
-    run: getAiPreview,
-  } = useRequest(RiskManageService.getAiPreview, {
-    defaultValue: null as any,
-    onSuccess(data: aiPreviewData) {
       if (data.status === 'PENDING' || data.status === 'RUNNING') {
         isLoading.value = true;
         // 清除之前的定时器（如果存在）
@@ -263,14 +250,7 @@
         }
         // 创建定时器 3秒后重试
         timerId.value = window.setTimeout(() => {
-          getAiPreview({
-            id: route.params.id,
-            risk_id: formData.value.risk_id,
-            ai_variables: [{
-              name: `ai.${formData.value.name}`,
-              prompt_template: formData.value.prompt_template,
-            }],
-          });
+          getTaskRiskReport({ task_id: taskId.value  });
           timerId.value = null;
         }, 3000);
       } else if (data.status === 'SUCCESS') {
@@ -279,8 +259,12 @@
           clearTimeout(timerId.value);
           timerId.value = null;
         }
+        isLoading.value = false;
+        isShowConfirm.value = false;
+        const aiResult = data.result?.ai || {};
+        const namedKey = `ai.${formData.value.name}`;
+        concent.value =  aiResult[namedKey] || '暂无数据  ';
         // 成功
-        getTaskRiskReport({ task_id: data.task_id });
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;
         // 失败
@@ -294,6 +278,17 @@
     },
   });
 
+  // Ai预览
+  const {
+    run: getAiPreview,
+  } = useRequest(RiskManageService.getAiPreview, {
+    defaultValue: null as any,
+    onSuccess(data: aiPreviewData) {
+      taskId.value = data.task_id;
+      getTaskRiskReport({ task_id: data.task_id });
+    },
+  });
+
   const handlePreview = () => {
     formRef.value.validate().then(() => {
       isLoading.value = true;
@@ -303,7 +298,7 @@
         setTimeout(() => {
           calculateTextareaRows();
           getAiPreview({
-            id: route.params.id,
+            id: formData.value.risk_id,
             risk_id: formData.value.risk_id,
             ai_variables: [{
               name: `ai.${formData.value.name}`,
