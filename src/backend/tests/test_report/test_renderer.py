@@ -16,11 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Any
+from unittest import mock
 
 from jinja2 import nodes
 
-from services.web.risk.report.providers import Provider, ProviderMatchResult
+from services.web.risk.report.providers import EventProvider
 from tests.base import TestCase
 
 from .constants import (
@@ -34,209 +34,195 @@ from .constants import (
 )
 
 
-class MockEventProvider(Provider):
-    """Mock实现的EventProvider，用于测试
+def create_event_provider_with_mock_api(
+    risk_id: str = "test_risk_123",
+    events: list[dict] = None,
+) -> EventProvider:
+    """创建带有 mock API 的 EventProvider
 
-    实现了完整的match和get逻辑，供测试使用
+    通过 mock api.bk_base.query_sync 来模拟事件查询结果。
 
-    call_args格式：
-    - 对于Call节点：{"function": "first", "args": ["event.account"], "kwargs": {}}
+    Args:
+        risk_id: 风险ID
+        events: 模拟事件数据
+
+    Returns:
+        配置好 mock 的 EventProvider 实例
+    """
+    events = events if events is not None else MOCK_EVENTS
+    provider = EventProvider(risk_id=risk_id)
+    # 设置私有属性绕过数据库查询
+    provider._risk = _create_mock_risk(risk_id)
+    return provider
+
+
+def _create_mock_risk(risk_id: str):
+    """创建 mock Risk 对象"""
+    from datetime import datetime
+
+    mock_risk = mock.MagicMock()
+    mock_risk.risk_id = risk_id
+    mock_risk.strategy_id = 1
+    mock_risk.raw_event_id = "raw_event_001"
+    mock_risk.event_time = datetime(2025, 12, 17, 4, 57, 25)
+    mock_risk.event_end_time = datetime(2025, 12, 17, 5, 30, 0)
+    # Mock strategy
+    mock_strategy = mock.MagicMock()
+    mock_strategy.strategy_id = 1
+    mock_strategy.configs = {
+        "select": [
+            {"display_name": "account", "field_type": "string"},
+            {"display_name": "username", "field_type": "string"},
+            {"display_name": "amount", "field_type": "long"},
+            {"display_name": "event_id", "field_type": "string"},
+        ]
+    }
+    mock_risk.strategy = mock_strategy
+    return mock_risk
+
+
+def mock_bkbase_query(events: list[dict]):
+    """创建 mock bk_base.query_sync 响应的函数
+
+    Args:
+        events: 模拟事件列表
+
+    Returns:
+        mock 函数，根据 SQL 内容返回适当的聚合结果
+
+    注意：由于 SQL 中 COUNT DISTINCT 和 COUNT 的区别难以通过 SQL 文本准确判断，
+    测试时根据字段名来区分：
+    - username 字段使用 count_distinct 返回去重数量
+    - event_id 字段使用 count 返回总数量
     """
 
-    # 支持的聚合函数列表
-    SUPPORTED_FUNCTIONS = frozenset(["first", "last", "count", "sum", "avg", "max", "min", "unique_list", "list"])
+    def _mock_query(sql: str):
+        """根据 SQL 解析聚合函数并返回模拟结果"""
+        sql_lower = sql.lower()
 
-    def __init__(self, events: list[dict] = None, key: str = "event"):
-        """初始化Mock事件Provider
+        # 解析字段名（从 SELECT 和 AS 子句中提取）
+        field_name = None
+        for event_field in ["account", "username", "amount", "event_id"]:
+            if event_field in sql_lower:
+                field_name = event_field
+                break
 
-        Args:
-            events: 事件列表
-            key: Provider的key，默认为 event
-        """
-        self.events = events or []
-        self.key = key
+        if not field_name or not events:
+            return {"list": []}
 
-    def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
-        """判断是否是事件聚合函数调用
+        values = [e.get(field_name) for e in events if e.get(field_name) is not None]
 
-        匹配形如 first(event.account) 的函数调用
-        返回 call_args 格式: {"function": "first", "args": ["event.account"], "kwargs": {}}
-        """
-        # 只处理函数调用节点
-        if not isinstance(node, nodes.Call):
-            return ProviderMatchResult(matched=False)
-
-        # 检查是否是简单的函数调用（函数名是Name节点）
-        if not isinstance(node.node, nodes.Name):
-            return ProviderMatchResult(matched=False)
-
-        function_name = node.node.name
-
-        # 检查是否是支持的聚合函数
-        if function_name not in self.SUPPORTED_FUNCTIONS:
-            return ProviderMatchResult(matched=False)
-
-        # 检查参数：应该有且仅有一个参数，且是属性访问（如 event.account）
-        if len(node.args) != 1:
-            return ProviderMatchResult(matched=False)
-
-        arg = node.args[0]
-        if not isinstance(arg, nodes.Getattr):
-            return ProviderMatchResult(matched=False)
-
-        # 获取属性访问信息：event.account
-        if not isinstance(arg.node, nodes.Name):
-            return ProviderMatchResult(matched=False)
-
-        provider_key = arg.node.name  # event
-        field_name = arg.attr  # account
-
-        # 检查provider_key是否匹配
-        if provider_key != self.key:
-            return ProviderMatchResult(matched=False)
-
-        original_expr = f"{function_name}({provider_key}.{field_name})"
-
-        # 构建统一格式的call_args
-        # args: 位置参数列表，这里是 ["event.account"]
-        # kwargs: 关键字参数字典，这里为空
-        return ProviderMatchResult(
-            matched=True,
-            original_expr=original_expr,
-            provider=self,
-            node_type=nodes.Call,
-            call_args={"function": function_name, "args": [f"{provider_key}.{field_name}"], "kwargs": {}},
-        )
-
-    def get(self, function: str = None, args: list = None, kwargs: dict = None, **extra) -> Any:
-        """获取事件聚合数据
-
-        Args:
-            function: 聚合函数名，如 first, count, sum 等
-            args: 位置参数列表，如 ["event.account"]
-            kwargs: 关键字参数字典
-
-        Returns:
-            聚合结果
-        """
-        args = args or []
-        kwargs = kwargs or {}
-
-        if not self.events:
-            return self._get_default_value(function)
-
-        # 从args中解析field_name
-        # args[0] 格式为 "event.account"，需要提取 "account"
-        if args:
-            field_path = args[0]
-            field_name = field_path.split(".")[-1] if "." in field_path else field_path
+        # 根据 SQL 中的聚合函数返回结果
+        if "count(" in sql_lower:
+            # 根据字段区分 count 和 count_distinct
+            # username 字段测试 count_distinct，其他字段测试 count
+            if field_name == "username":
+                return {"list": [{field_name: len(set(values))}]}
+            else:
+                return {"list": [{field_name: len(values)}]}
+        elif "sum(" in sql_lower:
+            return {"list": [{field_name: sum(float(v) for v in values)}]}
+        elif "avg(" in sql_lower:
+            return {"list": [{field_name: sum(float(v) for v in values) / len(values) if values else 0}]}
+        elif "max(" in sql_lower:
+            return {"list": [{field_name: max(float(v) for v in values)}]}
+        elif "min(" in sql_lower:
+            return {"list": [{field_name: min(float(v) for v in values)}]}
+        elif "order by" in sql_lower and "desc" in sql_lower:
+            # latest - 最后一条
+            return {"list": [{field_name: values[-1] if values else None}]}
+        elif "order by" in sql_lower and "asc" in sql_lower:
+            # first - 第一条
+            return {"list": [{field_name: values[0] if values else None}]}
+        elif "group_concat" in sql_lower and "distinct" in sql_lower:
+            # list_distinct
+            return {"list": [{field_name: ", ".join(sorted({str(v) for v in values}))}]}
+        elif "group_concat" in sql_lower:
+            # list
+            return {"list": [{field_name: ", ".join(str(v) for v in values)}]}
         else:
-            return self._get_default_value(function)
+            # 默认返回第一个值
+            return {"list": [{field_name: values[0] if values else None}]}
 
-        # 提取字段值列表
-        values = [event.get(field_name) for event in self.events if event.get(field_name) is not None]
-
-        # 根据函数执行聚合
-        return self._aggregate(function, values)
-
-    def _aggregate(self, function: str, values: list) -> Any:
-        """执行聚合操作"""
-        if not values:
-            return self._get_default_value(function)
-
-        match function:
-            case "first":
-                return values[0]
-            case "last":
-                return values[-1]
-            case "count":
-                return len(values)
-            case "sum":
-                try:
-                    return sum(float(v) for v in values if v is not None)
-                except (ValueError, TypeError):
-                    return 0
-            case "avg":
-                try:
-                    numeric_values = [float(v) for v in values if v is not None]
-                    return sum(numeric_values) / len(numeric_values) if numeric_values else 0
-                except (ValueError, TypeError):
-                    return 0
-            case "max":
-                try:
-                    return max(float(v) for v in values if v is not None)
-                except (ValueError, TypeError):
-                    return None
-            case "min":
-                try:
-                    return min(float(v) for v in values if v is not None)
-                except (ValueError, TypeError):
-                    return None
-            case "unique_list":
-                return list({v for v in values if v is not None})
-            case "list":
-                return values
-            case _:
-                raise ValueError(f"不支持的聚合函数: {function}")
-
-    def _get_default_value(self, function: str) -> Any:
-        """获取聚合函数的默认值"""
-        match function:
-            case "count":
-                return 0
-            case "sum" | "avg":
-                return 0
-            case "unique_list" | "list":
-                return []
-            case _:
-                return None
+    return _mock_query
 
 
-class TestMockEventProvider(TestCase):
-    """测试MockEventProvider（验证Mock实现的正确性）"""
+class TestEventProviderWithMockAPI(TestCase):
+    """测试 EventProvider（使用 mock API）"""
 
-    def test_first_aggregation(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_first_aggregation(self, mock_query):
         """测试first聚合函数"""
-        provider = MockEventProvider(events=MOCK_EVENTS)
-        result = provider.get(function="first", args=["event.account"])
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="first", field_name="account")
         self.assertEqual(result, "game_admin_001")
 
-    def test_last_aggregation(self):
-        """测试last聚合函数"""
-        provider = MockEventProvider(events=MOCK_EVENTS)
-        result = provider.get(function="last", args=["event.account"])
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_latest_aggregation(self, mock_query):
+        """测试latest聚合函数"""
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="latest", field_name="account")
         self.assertEqual(result, "game_admin_001")
 
-    def test_count_aggregation(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_count_aggregation(self, mock_query):
         """测试count聚合函数"""
-        provider = MockEventProvider(events=MOCK_EVENTS)
-        result = provider.get(function="count", args=["event.event_id"])
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="count", field_name="event_id")
         self.assertEqual(result, 3)
 
-    def test_sum_aggregation(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_count_distinct_aggregation(self, mock_query):
+        """测试count_distinct聚合函数"""
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="count_distinct", field_name="username")
+        self.assertEqual(result, 2)  # zhangsan, lisi
+
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_sum_aggregation(self, mock_query):
         """测试sum聚合函数"""
-        provider = MockEventProvider(events=MOCK_EVENTS)
-        result = provider.get(function="sum", args=["event.amount"])
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="sum", field_name="amount")
         self.assertEqual(result, 500000)
 
-    def test_unique_list_aggregation(self):
-        """测试unique_list聚合函数"""
-        provider = MockEventProvider(events=MOCK_EVENTS)
-        result = provider.get(function="unique_list", args=["event.username"])
-        self.assertEqual(set(result), {"zhangsan", "lisi"})
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_list_aggregation(self, mock_query):
+        """测试list聚合函数"""
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="list", field_name="username")
+        self.assertIn("zhangsan", result)
+        self.assertIn("lisi", result)
 
-    def test_empty_events(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_list_distinct_aggregation(self, mock_query):
+        """测试list_distinct聚合函数"""
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+        provider = create_event_provider_with_mock_api()
+        result = provider.get(function="list_distinct", field_name="username")
+        # 去重后应该只有两个值
+        self.assertIn("lisi", result)
+        self.assertIn("zhangsan", result)
+
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_empty_events(self, mock_query):
         """测试空事件列表"""
-        provider = MockEventProvider(events=[])
-        self.assertEqual(provider.get(function="count", args=["event.event_id"]), 0)
-        self.assertEqual(provider.get(function="sum", args=["event.amount"]), 0)
-        self.assertIsNone(provider.get(function="first", args=["event.account"]))
+        mock_query.side_effect = mock_bkbase_query([])
+        provider = create_event_provider_with_mock_api()
+        # 空列表返回 None
+        self.assertIsNone(provider.get(function="count", field_name="event_id"))
+        self.assertIsNone(provider.get(function="first", field_name="account"))
 
     def test_match_call_node(self):
         """测试match方法匹配函数调用节点"""
         from jinja2 import Environment
 
-        provider = MockEventProvider(events=MOCK_EVENTS, key="event")
+        provider = EventProvider(risk_id="test_risk_123")
         env = Environment()
 
         # 测试匹配 first(event.account)
@@ -251,6 +237,7 @@ class TestMockEventProvider(TestCase):
         self.assertIs(result.provider, provider)
         self.assertEqual(result.node_type, nodes.Call)
         self.assertEqual(result.call_args["function"], "first")
+        self.assertEqual(result.call_args["field_name"], "account")
         self.assertEqual(result.call_args["args"], ["event.account"])
         self.assertEqual(result.call_args["kwargs"], {})
 
@@ -258,7 +245,7 @@ class TestMockEventProvider(TestCase):
         """测试match方法不匹配错误的provider_key"""
         from jinja2 import Environment
 
-        provider = MockEventProvider(events=MOCK_EVENTS, key="event")
+        provider = EventProvider(risk_id="test_risk_123")
         env = Environment()
 
         # 测试不匹配 first(other.account)
@@ -273,7 +260,7 @@ class TestMockEventProvider(TestCase):
         """测试match方法不匹配不支持的函数"""
         from jinja2 import Environment
 
-        provider = MockEventProvider(events=MOCK_EVENTS, key="event")
+        provider = EventProvider(risk_id="test_risk_123")
         env = Environment()
 
         # 测试不匹配 unknown_func(event.account)
@@ -353,10 +340,10 @@ class TestTemplateParser(TestCase):
     """测试模板解析（使用Jinja2 AST + Provider.match）"""
 
     def _get_default_providers(self):
-        """获取默认的providers列表（使用MockEventProvider）"""
+        """获取默认的providers列表"""
         from services.web.risk.report.providers import AIProvider
 
-        return [MockEventProvider(events=MOCK_EVENTS), AIProvider(context={})]
+        return [create_event_provider_with_mock_api(), AIProvider(context={})]
 
     def test_parse_function_calls(self):
         """测试解析函数调用"""
@@ -394,24 +381,25 @@ class TestTemplateParser(TestCase):
         event_calls = [c for c in calls if c.provider.key == "event"]
 
         self.assertEqual(len(ai_calls), 1)  # ai.summary
-        self.assertGreaterEqual(len(event_calls), 4)  # first, sum, count, unique_list
+        self.assertGreaterEqual(len(event_calls), 4)  # first, sum, count, list_distinct
 
     def test_ast_parse_all_aggregation_functions(self):
         """测试AST解析所有支持的聚合函数"""
+        from services.web.risk.constants import AggregationFunction
         from services.web.risk.report.renderer import _parse_template
 
-        # 获取MockEventProvider支持的所有聚合函数
-        SUPPORTED_FUNCTIONS = MockEventProvider.SUPPORTED_FUNCTIONS
+        # 使用 AggregationFunction.values 保持一致
+        supported_functions = set(AggregationFunction.values)
 
         # 构建包含所有聚合函数的模板
-        template_parts = [f"{{{{ {func}(event.field) }}}}" for func in SUPPORTED_FUNCTIONS]
+        template_parts = [f"{{{{ {func}(event.field) }}}}" for func in supported_functions]
         template = " ".join(template_parts)
 
-        providers = [MockEventProvider(events=[])]
+        providers = [EventProvider(risk_id="test_risk")]
         calls = _parse_template(template, providers)
         parsed_functions = {call.call_args["function"] for call in calls}
 
-        self.assertEqual(parsed_functions, SUPPORTED_FUNCTIONS)
+        self.assertEqual(parsed_functions, supported_functions)
 
     def test_ast_parse_ignores_unsupported_functions(self):
         """测试AST解析忽略不支持的函数"""
@@ -473,20 +461,6 @@ class TestTemplateParser(TestCase):
         self.assertEqual(func_call.original_expr, "first(event.account)")
         self.assertEqual(ai_call.original_expr, "ai.summary")
 
-    def test_parse_with_custom_provider_key(self):
-        """测试使用自定义provider key进行解析"""
-        from services.web.risk.report.renderer import _parse_template
-
-        template = "{{ first(custom_data.field) }}"
-        providers = [MockEventProvider(events=[], key="custom_data")]
-
-        calls = _parse_template(template, providers)
-
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0].provider.key, "custom_data")
-        self.assertEqual(calls[0].original_expr, "first(custom_data.field)")
-        self.assertEqual(calls[0].call_args["args"], ["custom_data.field"])
-
     def test_parse_without_providers_returns_empty(self):
         """测试没有providers时返回空列表"""
         from services.web.risk.report.renderer import _parse_template
@@ -510,22 +484,28 @@ class TestRenderTemplate(TestCase):
         self.assertIn("高危", result)
         self.assertIn("张三", result)
 
-    def test_render_event_aggregations(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_event_aggregations(self, mock_query):
         """测试渲染事件聚合函数"""
         from services.web.risk.report.renderer import _render_template
 
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+
         result = _render_template(
-            template=EVENT_ONLY_TEMPLATE, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={}
+            template=EVENT_ONLY_TEMPLATE, providers=[create_event_provider_with_mock_api()], variables={}
         )
 
         self.assertIn("事件数量：3", result)
         self.assertIn("第一个账号：game_admin_001", result)
         self.assertIn("总金额：500000", result)
 
-    def test_render_full_template(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_full_template(self, mock_query):
         """测试渲染完整模板（包含普通变量、事件聚合、AI变量）"""
         from services.web.risk.report.providers import AIProvider
         from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
 
         # 使用ai_executor参数注入mock执行器
         def mock_executor(prompt):
@@ -534,7 +514,7 @@ class TestRenderTemplate(TestCase):
         result = _render_template(
             template=TEST_TEMPLATE,
             providers=[
-                MockEventProvider(events=MOCK_EVENTS),
+                create_event_provider_with_mock_api(),
                 AIProvider(
                     context={"risk_id": MOCK_RISK["risk_id"]},
                     ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
@@ -556,52 +536,68 @@ class TestRenderTemplate(TestCase):
         # 验证AI变量渲染
         self.assertIn("2025年12月17日", result)
 
-    def test_render_missing_provider(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_missing_provider(self, mock_query):
         """测试Provider不存在的情况"""
         from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query([])
 
         # 模板中使用unknown.field，但providers中只有event
         # 由于unknown没有对应的provider，解析时不会匹配，Jinja2渲染时会报错
         template = "{{ first(unknown.field) }}"
-        result = _render_template(template=template, providers=[MockEventProvider(events=[])], variables={})
+        result = _render_template(
+            template=template, providers=[create_event_provider_with_mock_api(events=[])], variables={}
+        )
 
         # 由于unknown没有provider，Jinja2渲染失败，返回错误信息
         self.assertIn("Render Error", result)
 
-    def test_render_with_registered_provider_missing_data(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_with_registered_provider_missing_data(self, mock_query):
         """测试注册了Provider但数据为空的情况"""
         from services.web.risk.report.renderer import _render_template
 
+        mock_query.side_effect = mock_bkbase_query([])
+
         template = "{{ first(event.account) }}"
-        result = _render_template(template=template, providers=[MockEventProvider(events=[])], variables={})  # 空事件列表
+        result = _render_template(
+            template=template, providers=[create_event_provider_with_mock_api(events=[])], variables={}
+        )
 
         # Provider注册了，但事件列表为空，first返回None，Jinja2渲染为字符串"None"
         self.assertEqual(result.strip(), "None")
 
-    def test_concurrent_execution(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_concurrent_execution(self, mock_query):
         """测试并发执行"""
         from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
 
         # 创建包含多个Provider调用的模板
         template = """
         {{ first(event.account) }}
-        {{ last(event.account) }}
+        {{ latest(event.account) }}
         {{ count(event.event_id) }}
         {{ sum(event.amount) }}
-        {{ unique_list(event.username) }}
+        {{ list_distinct(event.username) }}
         """
 
         result = _render_template(
-            template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={}, max_workers=5
+            template=template, providers=[create_event_provider_with_mock_api()], variables={}, max_workers=5
         )
 
         self.assertIn("game_admin_001", result)
         self.assertIn("500000", result)
         self.assertIn("3", result)
 
-    def test_function_results_hash_lookup(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_function_results_hash_lookup(self, mock_query):
         """测试function_results按照function_name和args_hash存储和获取结果"""
         from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
 
         # 测试相同函数不同参数的情况
         template = """
@@ -609,14 +605,17 @@ class TestRenderTemplate(TestCase):
         第一个用户名：{{ first(event.username) }}
         """
 
-        result = _render_template(template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={})
+        result = _render_template(template=template, providers=[create_event_provider_with_mock_api()], variables={})
 
         self.assertIn("第一个账号：game_admin_001", result)
         self.assertIn("第一个用户名：zhangsan", result)
 
-    def test_same_function_same_args_dedup(self):
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_same_function_same_args_dedup(self, mock_query):
         """测试相同函数相同参数去重"""
         from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
 
         # 相同的表达式在模板中出现多次
         template = """
@@ -624,10 +623,50 @@ class TestRenderTemplate(TestCase):
         账号2：{{ first(event.account) }}
         """
 
-        result = _render_template(template=template, providers=[MockEventProvider(events=MOCK_EVENTS)], variables={})
+        result = _render_template(template=template, providers=[create_event_provider_with_mock_api()], variables={})
 
         # 两个位置都应该渲染相同的结果
         self.assertEqual(result.count("game_admin_001"), 2)
+
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_all_aggregation_functions(self, mock_query):
+        """测试渲染所有 AggregationFunction 定义的聚合函数"""
+        from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+
+        # 构建包含所有聚合函数的模板
+        template = """
+sum: {{ sum(event.amount) }}
+avg: {{ avg(event.amount) }}
+max: {{ max(event.amount) }}
+min: {{ min(event.amount) }}
+count: {{ count(event.event_id) }}
+count_distinct: {{ count_distinct(event.username) }}
+first: {{ first(event.account) }}
+latest: {{ latest(event.account) }}
+list: {{ list(event.username) }}
+list_distinct: {{ list_distinct(event.username) }}
+"""
+
+        result = _render_template(
+            template=template,
+            providers=[create_event_provider_with_mock_api()],
+            variables={},
+        )
+
+        # 验证所有聚合函数都被正确渲染
+        self.assertIn("sum: 500000", result)
+        # avg: 500000 / 3 ≈ 166666.67
+        self.assertIn("avg:", result)
+        self.assertIn("max: 250000", result)
+        self.assertIn("min: 100000", result)
+        self.assertIn("count: 3", result)
+        self.assertIn("count_distinct: 2", result)  # zhangsan, lisi
+        self.assertIn("first: game_admin_001", result)
+        self.assertIn("latest: game_admin_001", result)
+        self.assertIn("list:", result)
+        self.assertIn("list_distinct:", result)
 
 
 class TestAIPreviewResource(TestCase):

@@ -62,7 +62,7 @@ def submit_render_task(
             ai_variables_config=ai_variables_config,
         ),
         # EventProvider 用于处理 count(event.field) 等聚合函数
-        EventProvider(risk=risk),
+        EventProvider(risk_id=risk.risk_id),
     ]
 
     # 构建普通变量
