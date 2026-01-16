@@ -43,35 +43,6 @@ from services.web.risk.handlers.subscription_sql import (
 )
 
 
-def get_field_type_from_strategy(strategy, field_name: str) -> Optional[str]:
-    """
-    从策略 configs.select 获取字段的真实类型
-
-    Args:
-        strategy: 策略对象
-        field_name: 字段名（对应 select.display_name）
-
-    Returns:
-        field_type 字符串，如 'string', 'long' 等；不存在则返回 None
-    """
-    if not strategy:
-        return None
-
-    configs = getattr(strategy, 'configs', None)
-    if not configs or not isinstance(configs, dict):
-        return None
-
-    select_fields = configs.get("select", [])
-    if not select_fields:
-        return None
-
-    field_type_map = {
-        select["display_name"]: select["field_type"] for select in select_fields if select.get("field_type")
-    }
-
-    return field_type_map.get(field_name)
-
-
 @dataclass
 class EventFieldConfig:
     """事件字段配置"""

@@ -32,6 +32,7 @@ from apps.meta.utils.fields import (
 )
 from core.choices import TextChoices, register_choices
 from core.exporter.constants import ExportField
+from core.sql.constants import AggregateType, FieldType
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
 BKM_ALERT_SYNC_HOURS = int(os.getenv("BKAPP_BKM_ALERT_SYNC_HOURS", 3))
@@ -775,3 +776,29 @@ class AggregationFunction(TextChoices):
             cls.LIST_DISTINCT: [],
         }
         return type_mapping.get(agg_func, [])
+
+
+# ===== EventProvider 相关常量 =====
+
+# 查询失败占位符
+EVENT_QUERY_FAILED = gettext_lazy("查询失败")
+
+# AggregationFunction → AggregateType 映射
+# first/latest 不走聚合 SQL，不在此映射
+AGGREGATION_FUNCTION_TO_SQL_TYPE = {
+    AggregationFunction.SUM: AggregateType.SUM,
+    AggregationFunction.AVG: AggregateType.AVG,
+    AggregationFunction.MAX: AggregateType.MAX,
+    AggregationFunction.MIN: AggregateType.MIN,
+    AggregationFunction.COUNT: AggregateType.COUNT,
+    AggregationFunction.COUNT_DISTINCT: AggregateType.DISCOUNT,
+    AggregationFunction.LIST: AggregateType.LIST,
+    AggregationFunction.LIST_DISTINCT: AggregateType.LIST_DISTINCT,
+}
+
+# 聚合类型 → 默认字段类型映射
+# sum/avg 默认 LONG，其他默认 STRING
+DEFAULT_FIELD_TYPE_BY_AGGREGATE = {
+    AggregationFunction.SUM: FieldType.LONG,
+    AggregationFunction.AVG: FieldType.LONG,
+}
