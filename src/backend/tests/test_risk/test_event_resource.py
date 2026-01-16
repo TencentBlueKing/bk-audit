@@ -192,7 +192,12 @@ class CreateEventResourceTest(TestCase):
         )
         event_payload = {
             "strategy_id": strategy.strategy_id,
-            "event_data": {"原始事件ID": "mapped-raw", "事件描述": "mapped content", "事件类型": "a;b", "责任人": "alice,bob"},
+            "event_data": {
+                "原始事件ID": "mapped-raw",
+                "事件描述": "mapped content",
+                "事件类型": "a;b",
+                "责任人": "alice,bob",
+            },
             "event_time": int(datetime.datetime.now().timestamp() * 1000),
         }
         request = self._build_request(username="super", is_superuser=True)

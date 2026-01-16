@@ -35,20 +35,16 @@ BKMONITOR_AGG_INTERVAL_MIN = 60  # s
 HAS_UPDATE_TAG_ID = "-1"
 HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
 
-# 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
-LOCAL_UPDATE_FIELDS = [
-    "strategy_name",
-    "tags",
-    "notice_groups",
-    "description",
-    "risk_level",
-    "risk_hazard",
-    "risk_guidance",
-    "risk_title",
-    "processor_groups",
-    "event_data_field_configs",
-    "event_evidence_field_configs",
-    "risk_meta_field_config",
+# 远程更新字段（白名单），这些字段变化会传递给后端策略，会导致策略输出变化
+# 只有在此列表中的字段变更时，才会触发远程 Flow 更新
+REMOTE_UPDATE_FIELDS = [
+    "control_id",
+    "control_version",
+    "sql",
+    "configs",
+    "link_table_uid",
+    "link_table_version",
+    "strategy_type",
 ]
 
 # 事件基本配置字段
