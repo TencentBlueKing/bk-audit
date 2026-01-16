@@ -62,7 +62,10 @@
           </bk-select>
         </div>
         <div class="table-cell table-cell-right-border w3">
-          <span>{{ referenceModeText(row) }}</span>
+          <tool-tip-text
+            :data="referenceModeText(row)"
+            :line="1"
+            placement="top" />
           <audit-icon
             class="copy-icon"
             type="copy"
@@ -133,7 +136,7 @@
       // props.tableData 就是 expected-results/index.vue 中 vuedraggable 的 expectedResultList
       localTableData.value = props.tableData.map((item: any) => ({
         ...item,
-        aggregate: item.aggregate === null ? 'null' : item.aggregate,
+        aggregate: item.aggregate === null ? 'latest' : item.aggregate,
       }));
     } else {
       localTableData.value = [];
@@ -180,12 +183,7 @@
   } = useRequest(StrategyManageService.fetchAggregationFunctions, {
     defaultValue: [],
     onSuccess(data) {
-      const nullAggregation = [{
-        id: 'null',
-        name: '不聚合',
-        supported_field_types: [],
-      }];
-      aggregationLists.value = nullAggregation.concat(data);
+      aggregationLists.value = data;
     },
   });
   // 复制
@@ -194,11 +192,7 @@
   };
   // 插入
   const handleInsert = (item: any) => {
-    if (item.aggregate === 'null') {
-      emits('insert', `{{ event.${item.raw_name} }}`);
-    } else {
-      emits('insert', `{{ ${item.aggregate}(event.${item.raw_name}) }}`);
-    }
+    emits('insert', `{{ ${item.aggregate}(event.${item.raw_name}) }}`);
   };
   // 获取事件变量
   const getEventVariables = () => localTableData.value ;
