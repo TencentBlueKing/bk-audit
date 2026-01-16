@@ -80,6 +80,8 @@
 
   import { QuillEditor } from '@vueup/vue-quill';
 
+  import useMessage from '@/hooks/use-message';
+
   interface Props {
     reportContent?: string;
     status: string | undefined;
@@ -87,8 +89,12 @@
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<{
+    update: [];
+  }>();
   const { t } = useI18n();
   const route = useRoute();
+  const { messageSuccess } = useMessage();
 
   const editorOptions = {
     theme: 'snow',
@@ -138,6 +144,13 @@
     loading: saveRiskReportLoading,
   } = useRequest(props.reportContent ? RiskReportService.updateRiskReport : RiskReportService.saveRiskReport, {
     defaultValue: {},
+    onSuccess: () => {
+      props.reportEnabled ? messageSuccess(t('编辑成功')) : messageSuccess(t('创建成功'));
+      // 通知父组件刷新数据
+      emits('update');
+      // 关闭对话框
+      closeDialog();
+    },
   });
 
   // 轮询控制
