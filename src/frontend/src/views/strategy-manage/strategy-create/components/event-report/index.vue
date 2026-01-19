@@ -123,6 +123,8 @@
   import AiEditor from './ai-editor/index.vue';
   import PreviewReport from './preview-report.vue';
 
+  import { formatDate } from '@/utils/assist/timestamp-conversion';
+
   interface IFormData {
     processor_groups: Array<number>,
     notice_groups: Array<number>,
@@ -352,8 +354,8 @@
       const sixMonthsAgo = dayjs().subtract(6, 'month');
       const params = {
         strategy_id: String(strategyId),
-        start_time: sixMonthsAgo.format('YYYY-MM-DD'),
-        end_time: now.format('YYYY-MM-DD'),
+        start_time: formatDate(sixMonthsAgo.valueOf()),
+        end_time: formatDate(now.valueOf()),
       };
       fetchRisksBriefList(params);
       if (props.editData.report_enabled && props.editData.report_config?.frontend_template) {

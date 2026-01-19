@@ -32,6 +32,8 @@ export default class Event {
   rule_version: number;
   origin_operator: string[];
   current_operator: string[];
+  updated_at: string;
+  updated_by: string;
   unsynced_events?: Array<Record<string, any>>;
   event_end_time: string;
   ticket_history: Array<{
@@ -89,6 +91,7 @@ export default class Event {
     auto_generate: boolean;
     create_at: string;
     update_at: string;
+    updated_by: string;
   } | null;
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
@@ -99,6 +102,8 @@ export default class Event {
 
   constructor(payload = {} as Event) {
     this.risk_id = payload.risk_id;
+    this.updated_at = payload.updated_at;
+    this.updated_by = payload.updated_by;
     this.event_content = payload.event_content;
     this.raw_event_id = payload.raw_event_id;
     this.strategy_id = payload.strategy_id;

@@ -262,8 +262,7 @@
         isLoading.value = false;
         isShowConfirm.value = false;
         const aiResult = data.result?.ai || {};
-        const namedKey = `ai.${formData.value.name}`;
-        concent.value =  aiResult[namedKey] || '暂无数据  ';
+        concent.value =   Object.values(aiResult).length === 0 ? '暂无数据' : String(Object.values(aiResult)[0]);
         // 成功
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;

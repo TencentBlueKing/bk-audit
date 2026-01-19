@@ -159,9 +159,9 @@
   };
   const referenceModeText = (item: any) => {
     if (item.aggregate === 'null') {
-      return `{{ event.${item.raw_name} }}`;
+      return `{{ event.${item.display_name} }}`;
     }
-    return  `{{ ${item.aggregate}(event.${item.raw_name}) }}`;
+    return  `{{ ${item.aggregate}(event.${item.display_name}) }}`;
   };
   const aggregationLists = ref<aggregation[]>([]);
   // 聚合函数
@@ -189,11 +189,11 @@
   });
   // 复制
   const handleCopy = (item: any) => {
-    execCopy(`{{ event.${item.raw_name} }}`, t('复制成功'));
+    execCopy(`{{ event.${item.display_name} }}`, t('复制成功'));
   };
   // 插入
   const handleInsert = (item: any) => {
-    emits('insert', `{{ ${item.aggregate}(event.${item.raw_name}) }}`);
+    emits('insert', `{{ ${item.aggregate}(event.${item.display_name}) }}`);
   };
   // 获取事件变量
   const getEventVariables = () => localTableData.value ;

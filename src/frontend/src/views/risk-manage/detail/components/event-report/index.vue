@@ -18,18 +18,19 @@
   <div class="event-report">
     <render-info-block class="flex mt16">
       <render-info-item label="状态">
-        {{ data.report?.status }}
+        {{ (data.report?.status === 'auto' ? t('自动生成') : t('人工编辑') ) || '--' }}
       </render-info-item>
       <render-info-item label="更新人">
-        {{ data.report?.update_at }}
+        {{ data?.updated_by || '--' }}
       </render-info-item>
     </render-info-block>
     <render-info-block class="flex mt16">
       <render-info-item label="状态说明">
-        {{ data.report?.status === 'auto' ? t('自动生成') : t('人工编辑') }}
+        {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
+          t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
       </render-info-item>
       <render-info-item label="更新时间">
-        {{ data.report?.update_at }}
+        {{ data?.updated_at || '--' }}
       </render-info-item>
     </render-info-block>
 
