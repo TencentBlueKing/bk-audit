@@ -46,6 +46,7 @@
     <template #footer>
       <bk-button
         class="w88"
+        :disabled="isApiLoading"
         :loading="saveRiskReportLoading"
         theme="primary"
         @click="handleSubmit">
@@ -95,7 +96,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const { messageSuccess } = useMessage();
-
+  const isApiLoading = ref(false);
   const editorOptions = {
     theme: 'snow',
     modules: {
@@ -252,8 +253,13 @@
   // 停止轮询
   const stopPolling = () => {
     isPolling = false;
+    isApiLoading.value = false;
     isPollingLoading.value = false; // 停止轮询时取消 loading
     currentTaskId = null;
+    console.log('status', props.status);
+    setTimeout(() => {
+      quillEditFlag.value = false;
+    }, 0);
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -263,8 +269,8 @@
   const handleGenerateReport = () => {
     const typeText = props.reportContent ? '重新生成' : '自动生成';
     const titleText = `确认${typeText}报告`;
-    const subTitleText = `系统将根据最新的审计策略配置和风险信息${typeText}报告，
-在自动生成之前，当前报告内容将被清空，请谨慎操作`;
+    const subTitleText =  props.reportContent ? t('系统将根据最新的审计策略配置和风险信息重新生成报告，在重新生成之前，当前报告内容将被清空，请谨慎操作')
+      : t('系统将根据最新的审计策略配置和风险信息自动生成报告，在自动生成之前，当前报告内容将被清空，请谨慎操作');
 
     InfoBox({
       type: 'warning',
@@ -290,6 +296,8 @@
         if (quillEditorRef.value) {
           quillEditorRef.value.setHTML('');
         }
+        isApiLoading.value = true;
+        quillEditFlag.value = false;
         // 获取task_id
         riskReportGenerate({
           risk_id: route.params.riskId,
@@ -308,9 +316,9 @@
 
     // 人工编辑后，则提示用户
     const subTitleText = quillEditFlag.value
-      ? t('保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统将自动更新该报表内容')
+      ? t('保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告')
       : t('保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容');
-
+    // 不是自动生成的单子，并且点了自动生成
     InfoBox({
       type: 'warning',
       title: t('确认保存更改?'),
@@ -372,7 +380,6 @@
         });
       },
       onClose() {
-        closeDialog();
       },
     });
   };

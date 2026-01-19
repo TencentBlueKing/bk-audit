@@ -1,5 +1,5 @@
 // 添加日期格式化方法
-export const formatDate = (dateString: string) => {
+export const formatDate = (dateString: string | number): string => {
   const date = new Date(dateString);
   return date.toLocaleString('zh-CN', {
     year: 'numeric',

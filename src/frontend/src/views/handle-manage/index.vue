@@ -354,7 +354,30 @@
                 userInfo={userInfo.value}
                 data={data} />
           }
-
+          <bk-dropdown
+            trigger="click"
+            style="margin-left: 8px">
+            {{
+              default: () => <bk-button text>
+                <audit-icon type="more" />
+              </bk-button>,
+              content: () => (
+                <bk-dropdown-menu>
+                  <bk-dropdown-item>
+                    <auth-button
+                      style="width: 100%;"
+                      actionId="edit_risk_v2"
+                      permission={data.permission.edit_risk_v2}
+                      resource={data.strategy_id}
+                      onClick={() => handleGenerateReport(data)}
+                      text>
+                      {data.has_report ? t('编辑调查报告') : t('生成调查报告')}
+                    </auth-button>
+                  </bk-dropdown-item>
+                </bk-dropdown-menu>
+              ),
+            }}
+          </bk-dropdown>
           </p>,
     },
   ] as Column[];
@@ -417,7 +440,14 @@
     new_operators: [],
     description: '',
   });
-
+  const handleGenerateReport = (data: RiskManageModel) => {
+    router.push({
+      name: 'riskManageDetail',
+      params: {
+        riskId: data.risk_id,
+      },
+    });
+  };
   const formRef = ref();
   const rules = ref<Record<string, any>>({});
   const handleConfirm = () => {
