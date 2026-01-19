@@ -218,7 +218,7 @@
 </style>
 <style lang="postcss">
 .report-preview-slider-preview-content {
-  .ai-concent {
+  .ai-content {
     position: relative;
     width: 100%;
     padding: 8px 12px 8px 36px;
