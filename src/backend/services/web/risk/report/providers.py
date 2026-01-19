@@ -198,7 +198,7 @@ class AIProvider(Provider):
         try:
             result = api.bk_plugins_ai_audit_report.chat_completion(
                 user=self.context.get("user", "admin"),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
-                input=f'当前分析的Risk ID是{self.context["risk_id"]}\n' + prompt,
+                input=f'当前分析的Risk ID是{self.context["risk_id"]}。若后续无其他要求，返回标准的Markdown格式。\n' + prompt,
                 chat_history=[],
                 execute_kwargs={"stream": False},
             )

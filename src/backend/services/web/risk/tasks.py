@@ -124,7 +124,6 @@ def add_event(data: list):
     EventHandler().add_event(data)
 
 
-@lock(lock_name="celery:manual_add_event")
 def manual_add_event(data: list):
     """将事件写入 ManualEvent 表"""
 
@@ -223,11 +222,11 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=30,
 )
-@lock(lock_name="celery:sync_manual_event_status")
+@lock(lock_name="celery:sync_manual_event_status", timeout=30)
 def sync_manual_event_status():
     """同步已入 ES 的手工事件状态"""
 
@@ -265,11 +264,11 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=30,
 )
-@lock(lock_name="celery:sync_manual_risk_status")
+@lock(lock_name="celery:sync_manual_risk_status", timeout=30)
 def sync_manual_risk_status():
     """同步已入 BKBase 的手工风险状态"""
 
