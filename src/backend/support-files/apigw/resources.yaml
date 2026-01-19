@@ -860,14 +860,6 @@ paths:
                     type: integer
                     description: 每页数量（仅 data_search 类型）
                     default: 100
-              caller_resource_type:
-                type: string
-                description: 调用方资源类型（可选，当前支持 risk）
-                enum:
-                  - risk
-              caller_resource_id:
-                type: string
-                description: 调用方资源实例 ID（如风险ID）
               drill_field:
                 type: string
                 description: 指定使用哪个字段的 drill_config 进行变量值校验
