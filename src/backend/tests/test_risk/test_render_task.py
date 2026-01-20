@@ -186,9 +186,10 @@ class TestRiskRenderTask(TestCase):
         assert isinstance(call_kwargs["exc"], Exception)
         assert "Render service unavailable" in str(call_kwargs["exc"])
 
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
     @mock.patch("services.web.risk.tasks.render_risk_report.retry")
     @mock.patch("services.web.risk.handlers.report.submit_render_task")
-    def test_render_task_max_retries_exceeded(self, mock_submit, mock_retry):
+    def test_render_task_max_retries_exceeded(self, mock_submit, mock_retry, mock_report_event):
         """测试：达到最大重试次数后正确处理"""
         mock_async_result = mock.MagicMock()
         mock_async_result.get.side_effect = Exception("Persistent failure")
@@ -207,6 +208,9 @@ class TestRiskRenderTask(TestCase):
 
         # 验证锁被释放
         assert cache.get(self.lock_key) is None
+
+        # 验证监控事件被上报
+        mock_report_event.assert_called_once()
 
 
 class TestRiskReportHandlerUnit(TestCase):
