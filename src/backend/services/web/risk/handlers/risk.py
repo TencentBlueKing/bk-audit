@@ -266,7 +266,7 @@ class RiskHandler:
         from services.web.risk.tasks import render_risk_report
 
         # 检查触发条件：策略开启报告 + 风险开启自动生成
-        if not risk.can_generate_report():
+        if not risk.can_auto_generate_report():
             logger.info("[TriggerRender] Render disabled. risk_id=%s", risk.risk_id)
             return
 

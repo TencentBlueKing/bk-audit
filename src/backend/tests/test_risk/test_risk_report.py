@@ -428,3 +428,153 @@ class TestReportEnabled(TestCase):
 
         self.assertTrue(data_map[self.risk_with_enabled.risk_id]["report_enabled"])
         self.assertFalse(data_map[self.risk_with_disabled.risk_id]["report_enabled"])
+
+
+class TestRiskReportRenderFailedEvent(TestCase):
+    """测试风险报告渲染失败事件"""
+
+    def test_event_attributes(self):
+        """测试事件类属性定义正确"""
+        from services.web.common.monitor import RiskReportRenderFailedEvent
+
+        self.assertEqual(RiskReportRenderFailedEvent.name, "risk_report_render_failed")
+        self.assertEqual(RiskReportRenderFailedEvent.documentation, "风险报告渲染失败")
+        self.assertEqual(RiskReportRenderFailedEvent.labelnames, ["risk_id", "task_id"])
+
+    def test_event_to_json(self):
+        """测试事件 to_json 方法返回正确结构"""
+        from services.web.common.monitor import RiskReportRenderFailedEvent
+
+        event = RiskReportRenderFailedEvent(
+            target="risk_test123",
+            context={"risk_id": "test123", "task_id": "task456"},
+            extra={"error": "Test error message"},
+        )
+        result = event.to_json()
+
+        # to_json 返回包含 data_id, access_token, data 的字典
+        self.assertIn("data_id", result)
+        self.assertIn("access_token", result)
+        self.assertIn("data", result)
+        self.assertEqual(len(result["data"]), 1)
+
+        # 实际事件数据在 data[0] 中
+        event_data = result["data"][0]
+        self.assertEqual(event_data["target"], "risk_test123")
+        self.assertEqual(event_data["event_name"], "risk_report_render_failed")
+        self.assertIn("dimension", event_data)
+        self.assertEqual(event_data["dimension"]["risk_id"], "test123")
+        self.assertEqual(event_data["dimension"]["task_id"], "task456")
+        self.assertIn("event", event_data)
+        self.assertIn("error", event_data["event"]["content"])
+
+
+class TestRiskReportHandlerMaxRetries(TestCase):
+    """测试风险报告处理器最大重试次数处理"""
+
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="test-strategy",
+            risk_level=RiskLevel.HIGH.value,
+            report_enabled=True,
+            report_config={"template": "Test template"},
+        )
+        self.risk = Risk.objects.create(
+            risk_id="risk-max-retries-test",
+            raw_event_id="raw-max-retries",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="Risk for Max Retries Test",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+
+    def test_handle_max_retries_exceeded_reports_event(self):
+        """测试达到最大重试次数时上报监控事件"""
+        from services.web.risk.handlers.report import RiskReportHandler
+
+        handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-123")
+        test_exception = Exception("Test render error")
+
+        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+            handler.handle_max_retries_exceeded(test_exception)
+
+            # 验证 report_event 被调用
+            mock_report_event.assert_called_once()
+
+            # 验证调用参数（to_json 返回的结构）
+            call_args = mock_report_event.call_args[0][0]
+            self.assertIn("data", call_args)
+            event_data = call_args["data"][0]
+            self.assertEqual(event_data["target"], f"risk_{self.risk.risk_id}")
+            self.assertEqual(event_data["event_name"], "risk_report_render_failed")
+            self.assertEqual(event_data["dimension"]["risk_id"], self.risk.risk_id)
+            self.assertEqual(event_data["dimension"]["task_id"], "test-task-123")
+
+    def test_handle_max_retries_exceeded_logs_error(self):
+        """测试达到最大重试次数时记录错误日志"""
+        from services.web.risk.handlers.report import RiskReportHandler
+
+        handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-456")
+        test_exception = ValueError("Specific error")
+
+        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event"):
+            with mock.patch("services.web.risk.handlers.report.logger") as mock_logger:
+                handler.handle_max_retries_exceeded(test_exception)
+
+                # 验证错误日志被记录
+                mock_logger.error.assert_called()
+                error_call = mock_logger.error.call_args_list[0]
+                self.assertIn("Max retries reached", error_call[0][0])
+                self.assertIn(self.risk.risk_id, error_call[0][1:])
+
+    def test_handle_max_retries_exceeded_continues_on_report_failure(self):
+        """测试上报失败时不影响后续处理"""
+        from core.exceptions import ApiRequestError
+        from services.web.risk.handlers.report import RiskReportHandler
+
+        handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-789")
+        test_exception = Exception("Render failed")
+
+        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+            # 模拟上报失败
+            mock_report_event.side_effect = ApiRequestError("API error")
+
+            with mock.patch("services.web.risk.handlers.report.logger") as mock_logger:
+                # 不应该抛出异常
+                handler.handle_max_retries_exceeded(test_exception)
+
+                # 验证上报失败的错误日志被记录
+                error_calls = [call for call in mock_logger.error.call_args_list if "Report event failed" in call[0][0]]
+                self.assertEqual(len(error_calls), 1)
+
+    def test_handle_max_retries_exceeded_triggers_tail_check(self):
+        """测试达到最大重试次数后检查尾部触发"""
+        from services.web.risk.handlers.report import RiskReportHandler
+
+        handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-tail")
+        test_exception = Exception("Render failed")
+
+        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event"):
+            with mock.patch.object(handler, "_handle_tail_trigger") as mock_tail:
+                handler.handle_max_retries_exceeded(test_exception)
+
+                # 验证尾部触发检查被调用
+                mock_tail.assert_called_once()
+
+    def test_handle_max_retries_exceeded_event_contains_error_info(self):
+        """测试事件包含错误信息"""
+        from services.web.risk.handlers.report import RiskReportHandler
+
+        handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-error")
+        error_message = "Connection timeout to render service"
+        test_exception = TimeoutError(error_message)
+
+        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+            handler.handle_max_retries_exceeded(test_exception)
+
+            call_args = mock_report_event.call_args[0][0]
+            event_data = call_args["data"][0]
+            # 验证事件内容包含错误信息
+            self.assertIn(error_message, event_data["event"]["content"])

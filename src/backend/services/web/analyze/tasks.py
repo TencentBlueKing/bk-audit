@@ -47,8 +47,8 @@ from services.web.analyze.controls.auth import (
     AssetAuthHandler,
     CollectorPluginAuthHandler,
 )
-from services.web.analyze.controls.monitor import LostSceneDetectedEvent
 from services.web.analyze.models import ControlVersion
+from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 

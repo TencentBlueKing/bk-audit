@@ -98,6 +98,11 @@ class Strategy(SoftDeleteModel):
         default=False,
         help_text=gettext_lazy("启用后，风险单会自动生成事件调查报告"),
     )
+    report_auto_render = models.BooleanField(
+        gettext_lazy("是否启用自动渲染报告"),
+        default=True,
+        help_text=gettext_lazy("启用后，新事件触发时会自动渲染报告"),
+    )
     report_config = models.JSONField(
         gettext_lazy("报告配置"),
         default=dict,

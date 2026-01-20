@@ -18,6 +18,8 @@ to the current version of the project delivered to anyone in the future.
 测试 ReportRiskVariableSerializer
 """
 import datetime
+from datetime import timezone as dt_timezone
+from unittest.mock import MagicMock
 
 from services.web.risk.models import Risk
 from services.web.risk.report.serializers import ReportRiskVariableSerializer
@@ -56,6 +58,7 @@ class TestReportRiskVariableSerializer(TestCase):
         expected_fields = [
             "risk_id",
             "title",
+            "status",
             "risk_level",
             "event_time",
             "event_end_time",
@@ -88,7 +91,7 @@ class TestReportRiskVariableSerializer(TestCase):
         definitions = ReportRiskVariableSerializer.get_field_definitions()
 
         self.assertIsInstance(definitions, list)
-        self.assertEqual(len(definitions), 16)  # 共 16 个字段
+        self.assertEqual(len(definitions), 17)  # 共 17 个字段（新增 status）
 
         # 验证每个定义包含必要的键
         for field_def in definitions:
@@ -104,6 +107,7 @@ class TestReportRiskVariableSerializer(TestCase):
         expected_order = [
             "risk_id",
             "title",
+            "status",
             "risk_level",
             "event_time",
             "event_end_time",
@@ -121,3 +125,69 @@ class TestReportRiskVariableSerializer(TestCase):
         ]
 
         self.assertEqual(fields, expected_order)
+
+
+class TestReportRiskVariableSerializerFriendlyDisplay:
+    """测试 ReportRiskVariableSerializer 用户友好显示（无数据库依赖）"""
+
+    def test_risk_label_displays_chinese_label(self):
+        """测试 risk_label 显示中文标签"""
+        risk = MagicMock()
+        risk.risk_id = "20250119210000123456"
+        risk.title = "测试风险"
+        risk.risk_label = "normal"
+        risk.status = "new"
+        risk.event_time = datetime.datetime(2025, 1, 19, 13, 0, 0, tzinfo=dt_timezone.utc)
+        risk.event_end_time = None
+        risk.operator = []
+        risk.event_type = []
+        risk.current_operator = []
+        risk.notice_users = []
+        risk.last_operate_time = datetime.datetime(2025, 1, 19, 14, 0, 0, tzinfo=dt_timezone.utc)
+        risk.created_at = datetime.datetime(2025, 1, 19, 12, 0, 0, tzinfo=dt_timezone.utc)
+        risk.updated_at = datetime.datetime(2025, 1, 19, 14, 0, 0, tzinfo=dt_timezone.utc)
+        risk.strategy = MagicMock()
+        risk.strategy.strategy_id = 1
+        risk.strategy.risk_level = "HIGH"
+        risk.strategy.risk_hazard = "危害描述"
+        risk.strategy.risk_guidance = "处理指引"
+
+        serializer = ReportRiskVariableSerializer(risk)
+        data = serializer.data
+
+        # 验证枚举字段翻译
+        assert data["risk_label"] == "正常"
+        assert data["risk_level"] == "高"
+        assert data["status"] == "新"
+
+    def test_datetime_fields_display_cst_format(self):
+        """测试时间字段显示 +8 时区标准格式"""
+        risk = MagicMock()
+        risk.risk_id = "20250119210000123456"
+        risk.title = "测试风险"
+        risk.risk_label = "normal"
+        risk.status = "new"
+        risk.event_time = datetime.datetime(2025, 1, 19, 13, 0, 0, tzinfo=dt_timezone.utc)
+        risk.event_end_time = datetime.datetime(2025, 1, 19, 14, 30, 0, tzinfo=dt_timezone.utc)
+        risk.operator = []
+        risk.event_type = []
+        risk.current_operator = []
+        risk.notice_users = []
+        risk.last_operate_time = datetime.datetime(2025, 1, 19, 15, 0, 0, tzinfo=dt_timezone.utc)
+        risk.created_at = datetime.datetime(2025, 1, 19, 12, 0, 0, tzinfo=dt_timezone.utc)
+        risk.updated_at = datetime.datetime(2025, 1, 19, 16, 0, 0, tzinfo=dt_timezone.utc)
+        risk.strategy = MagicMock()
+        risk.strategy.strategy_id = 1
+        risk.strategy.risk_level = "MIDDLE"
+        risk.strategy.risk_hazard = "危害描述"
+        risk.strategy.risk_guidance = "处理指引"
+
+        serializer = ReportRiskVariableSerializer(risk)
+        data = serializer.data
+
+        # 验证时间格式 (UTC+8)
+        assert data["event_time"] == "2025-01-19 21:00:00"
+        assert data["event_end_time"] == "2025-01-19 22:30:00"
+        assert data["last_operate_time"] == "2025-01-19 23:00:00"
+        assert data["created_at"] == "2025-01-19 20:00:00"
+        assert data["updated_at"] == "2025-01-20 00:00:00"

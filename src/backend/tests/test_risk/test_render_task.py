@@ -17,6 +17,60 @@ from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
 
+class TestCanAutoGenerateReport(TestCase):
+    """测试 Risk.can_auto_generate_report 方法"""
+
+    def setUp(self):
+        self.strategy = Strategy.objects.create(
+            strategy_id=100,
+            strategy_name="Test Strategy",
+            report_enabled=True,
+            report_auto_render=True,
+            report_config={"template": "default"},
+        )
+        self.risk = Risk.objects.create(
+            risk_id="test_can_auto_001",
+            strategy=self.strategy,
+            raw_event_id="evt_can_auto_001",
+            event_time=datetime.datetime.now(),
+            auto_generate_report=True,
+        )
+
+    def test_can_auto_generate_report_all_enabled(self):
+        """测试所有条件都满足时返回 True"""
+        self.assertTrue(self.risk.can_auto_generate_report())
+
+    def test_can_auto_generate_report_report_enabled_false(self):
+        """测试 report_enabled=False 时返回 False"""
+        self.strategy.report_enabled = False
+        self.strategy.save()
+        self.risk.refresh_from_db()
+        self.assertFalse(self.risk.can_auto_generate_report())
+
+    def test_can_auto_generate_report_auto_render_false(self):
+        """测试 report_auto_render=False 时返回 False"""
+        self.strategy.report_auto_render = False
+        self.strategy.save()
+        self.risk.refresh_from_db()
+        self.assertFalse(self.risk.can_auto_generate_report())
+
+    def test_can_auto_generate_report_risk_auto_generate_false(self):
+        """测试 risk.auto_generate_report=False 时返回 False"""
+        self.risk.auto_generate_report = False
+        self.risk.save()
+        self.assertFalse(self.risk.can_auto_generate_report())
+
+    def test_can_auto_generate_report_multiple_disabled(self):
+        """测试多个条件同时关闭时返回 False"""
+        self.strategy.report_enabled = False
+        self.strategy.report_auto_render = False
+        self.strategy.save()
+        self.risk.auto_generate_report = False
+        self.risk.save()
+        self.risk.refresh_from_db()
+        self.assertFalse(self.risk.can_auto_generate_report())
+
+
 class TestRiskRenderTask(TestCase):
     def setUp(self):
         # Setup strategy and risk
@@ -186,9 +240,10 @@ class TestRiskRenderTask(TestCase):
         assert isinstance(call_kwargs["exc"], Exception)
         assert "Render service unavailable" in str(call_kwargs["exc"])
 
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
     @mock.patch("services.web.risk.tasks.render_risk_report.retry")
     @mock.patch("services.web.risk.handlers.report.submit_render_task")
-    def test_render_task_max_retries_exceeded(self, mock_submit, mock_retry):
+    def test_render_task_max_retries_exceeded(self, mock_submit, mock_retry, mock_report_event):
         """测试：达到最大重试次数后正确处理"""
         mock_async_result = mock.MagicMock()
         mock_async_result.get.side_effect = Exception("Persistent failure")
@@ -207,6 +262,9 @@ class TestRiskRenderTask(TestCase):
 
         # 验证锁被释放
         assert cache.get(self.lock_key) is None
+
+        # 验证监控事件被上报
+        mock_report_event.assert_called_once()
 
 
 class TestRiskReportHandlerUnit(TestCase):
@@ -342,7 +400,7 @@ class TestRiskReportHandlerUnit(TestCase):
     def test_run_success_flow(self, mock_tail, mock_release, mock_update, mock_render, mock_get_risk, mock_lock):
         """测试正常执行流程"""
         mock_risk = mock.MagicMock()
-        mock_risk.can_generate_report.return_value = True
+        mock_risk.can_auto_generate_report.return_value = True
         mock_get_risk.return_value = mock_risk
         mock_render.return_value = "渲染内容"
 
@@ -384,7 +442,7 @@ class TestRiskReportHandlerUnit(TestCase):
     def test_run_risk_cannot_generate(self, mock_release, mock_render, mock_get_risk, mock_lock):
         """测试风险不满足生成条件时退出"""
         mock_risk = mock.MagicMock()
-        mock_risk.can_generate_report.return_value = False
+        mock_risk.can_auto_generate_report.return_value = False
         mock_get_risk.return_value = mock_risk
 
         self.handler.run()
@@ -400,7 +458,7 @@ class TestRiskReportHandlerUnit(TestCase):
     def test_run_render_exception(self, mock_tail, mock_release, mock_render, mock_get_risk, mock_lock):
         """测试渲染异常时正确释放锁"""
         mock_risk = mock.MagicMock()
-        mock_risk.can_generate_report.return_value = True
+        mock_risk.can_auto_generate_report.return_value = True
         mock_get_risk.return_value = mock_risk
 
         with self.assertRaises(Exception) as context:

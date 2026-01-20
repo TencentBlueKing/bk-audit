@@ -74,7 +74,7 @@ class RiskTicketPermission(IAMPermission):
     """
 
     def __init__(self):
-        super().__init__(actions=[ActionEnum.EDIT_RISK])
+        super().__init__(actions=[ActionEnum.PROCESS_RISK])
 
     def has_permission(self, request, view):
         # 校验风险处理人
@@ -94,7 +94,7 @@ class BatchRiskTicketPermission(IAMPermission):
     """
 
     def __init__(self, get_risk_ids: Callable):
-        super().__init__(actions=[ActionEnum.EDIT_RISK])
+        super().__init__(actions=[ActionEnum.PROCESS_RISK])
         self.get_risk_ids = get_risk_ids
 
     def has_permission(self, request, view):

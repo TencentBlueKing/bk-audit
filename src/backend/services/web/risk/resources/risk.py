@@ -661,7 +661,7 @@ class UpdateRiskLabel(RiskMeta):
     name = gettext_lazy("更新风险标记")
     RequestSerializer = UpdateRiskLabelReqSerializer
     ResponseSerializer = RiskInfoSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -775,7 +775,7 @@ class ListRiskStrategy(ListRiskBase):
 class CustomCloseRisk(RiskMeta):
     name = gettext_lazy("人工关单")
     RequestSerializer = CustomCloseRiskRequestSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -793,7 +793,7 @@ class CustomCloseRisk(RiskMeta):
 class CustomTransRisk(RiskMeta):
     name = gettext_lazy("人工转单")
     RequestSerializer = CustomTransRiskReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -829,7 +829,7 @@ class BulkCustomTransRisk(RiskMeta):
 class CustomAutoProcess(RiskMeta):
     name = gettext_lazy("人工执行处理套餐")
     RequestSerializer = CustomAutoProcessReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -864,7 +864,7 @@ class CustomAutoProcess(RiskMeta):
 class ForceRevokeApproveTicket(RiskMeta):
     name = gettext_lazy("强制撤销审批单据")
     RequestSerializer = ForceRevokeApproveTicketReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -893,7 +893,7 @@ class ForceRevokeApproveTicket(RiskMeta):
 class ForceRevokeAutoProcess(RiskMeta):
     name = gettext_lazy("强制终止处理套餐")
     RequestSerializer = ForceRevokeAutoProcessReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -954,7 +954,7 @@ class RetryAutoProcess(RiskMeta):
 class ReopenRisk(RiskMeta):
     name = gettext_lazy("重开单据")
     RequestSerializer = ReopenRiskReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])

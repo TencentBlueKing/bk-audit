@@ -21,7 +21,10 @@ from typing import List
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from core.serializers import ChoiceDisplayField, FriendlyDateTimeField
+from services.web.risk.constants import RiskLabel, RiskStatus
 from services.web.risk.models import Risk
+from services.web.strategy_v2.constants import RiskLevel
 
 
 class ReportRiskVariableSerializer(serializers.ModelSerializer):
@@ -30,6 +33,10 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
 
     用于定义报告模板中可引用的风险字段，替代 REPORT_RISK_VARIABLES 常量。
     每个字段通过 label 和 help_text 提供元信息，支持通过 get_field_definitions() 获取字段定义列表。
+
+    特性：
+    - 枚举字段自动翻译为中文 label（如 "HIGH" -> "高"）
+    - 时间字段自动转换为本地时区标准格式（如 "2025-01-19 21:00:00"）
     """
 
     # Risk 模型自有字段
@@ -41,11 +48,16 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         label=gettext_lazy("风险标题"),
         help_text=gettext_lazy("风险单标题"),
     )
-    event_time = serializers.DateTimeField(
+    status = ChoiceDisplayField(
+        choices=RiskStatus,
+        label=gettext_lazy("风险状态"),
+        help_text=gettext_lazy("当前风险处理状态"),
+    )
+    event_time = FriendlyDateTimeField(
         label=gettext_lazy("首次发现时间"),
         help_text=gettext_lazy("风险首次发现时间"),
     )
-    event_end_time = serializers.DateTimeField(
+    event_end_time = FriendlyDateTimeField(
         label=gettext_lazy("最后发现时间"),
         help_text=gettext_lazy("风险最后发现时间"),
     )
@@ -53,9 +65,10 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         label=gettext_lazy("责任人"),
         help_text=gettext_lazy("风险相关的责任人列表"),
     )
-    risk_label = serializers.CharField(
+    risk_label = ChoiceDisplayField(
+        choices=RiskLabel,
         label=gettext_lazy("风险标签"),
-        help_text="",
+        help_text=gettext_lazy("风险标签（正常/误报）"),
     )
     strategy_id = serializers.IntegerField(
         label=gettext_lazy("命中策略ID"),
@@ -75,23 +88,24 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         label=gettext_lazy("关注人"),
         help_text=gettext_lazy("关注该风险的用户列表"),
     )
-    last_operate_time = serializers.DateTimeField(
+    last_operate_time = FriendlyDateTimeField(
         label=gettext_lazy("最后处理时间"),
         help_text=gettext_lazy("最后一次操作时间"),
     )
-    created_at = serializers.DateTimeField(
+    created_at = FriendlyDateTimeField(
         label=gettext_lazy("创建时间"),
         help_text=gettext_lazy("风险单创建时间"),
     )
-    updated_at = serializers.DateTimeField(
+    updated_at = FriendlyDateTimeField(
         label=gettext_lazy("更新时间"),
         help_text=gettext_lazy("风险单更新时间"),
     )
 
     # 来自关联的 Strategy 模型的字段
-    risk_level = serializers.CharField(
+    risk_level = ChoiceDisplayField(
+        choices=RiskLevel,
         label=gettext_lazy("风险等级"),
-        help_text=gettext_lazy("风险等级标签"),
+        help_text=gettext_lazy("风险等级标签（高/中/低）"),
         source="strategy.risk_level",
     )
     risk_hazard = serializers.CharField(
@@ -110,6 +124,7 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         fields = [
             "risk_id",
             "title",
+            "status",
             "risk_level",
             "event_time",
             "event_end_time",
