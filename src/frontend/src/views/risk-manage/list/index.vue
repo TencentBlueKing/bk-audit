@@ -36,7 +36,6 @@
       </div>
       <render-list
         ref="listRef"
-        :border="['col', 'row', ]"
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"

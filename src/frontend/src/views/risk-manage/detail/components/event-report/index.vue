@@ -21,7 +21,7 @@
         {{ (data.report?.status === 'auto' ? t('自动生成') : t('人工编辑') ) || '--' }}
       </render-info-item>
       <render-info-item label="更新人">
-        {{ data?.updated_by || '--' }}
+        {{ data.report?.updated_by || '--' }}
       </render-info-item>
     </render-info-block>
     <render-info-block class="flex mt16">
@@ -30,7 +30,7 @@
           t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
       </render-info-item>
       <render-info-item label="更新时间">
-        {{ data?.updated_at || '--' }}
+        {{ data.report?.updated_at || '--' }}
       </render-info-item>
     </render-info-block>
 
@@ -49,12 +49,12 @@
       @click="handleEditReport">
       {{ t('编辑') }}
     </bk-button>
-
     <edit-event-report
       v-model:isShowEditEventReport="isShowEditEventReport"
       :report-content="content"
       :report-enabled="data.report_enabled"
       :status="data.report?.status"
+      :strategy-id="data.strategy_id"
       @update="handleUpdate" />
   </div>
 </template>
