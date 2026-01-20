@@ -62,7 +62,7 @@ class RiskReportHandler:
                 return
 
             # 3. 校验风险单 (策略开启、报告开启)
-            if not risk.can_generate_report():
+            if not risk.can_auto_generate_report():
                 logger.info("[RiskReportHandler] Render disabled. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
                 return
 
@@ -80,7 +80,7 @@ class RiskReportHandler:
                 )
                 return
 
-            if not risk.can_generate_report():
+            if not risk.can_auto_generate_report():
                 logger.info(
                     "[RiskReportHandler] Render disabled during execution. risk_id=%s, task_id=%s",
                     self.risk_id,
