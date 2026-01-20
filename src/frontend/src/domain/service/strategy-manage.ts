@@ -43,6 +43,16 @@ export default {
       }));
   },
   /**
+   * @desc 策略详情
+   * @param { Object } params
+   */
+  fetchStrategyInfo(params: {
+    strategy_id : number
+  }) {
+    return StrategySource.getStrategyInfo(params)
+      .then(({ data }) => new StrategyModel(data));
+  },
+  /**
    * @desc 新建策略
    * @param { Object } params
    */

@@ -22,8 +22,24 @@
     :title="reportContent ? '编辑事件调查报告' : '创建事件调查报告'"
     :width="1100">
     <div class="edit-event-report-content">
+      <bk-popover
+        v-if="!reportEnabled"
+        placement="top"
+        theme="dark">
+        <bk-button
+          class="mb16"
+          disabled
+          outline
+          theme="primary"
+          @click="handleGenerateReport">
+          {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
+        </bk-button>
+        <template #content>
+          <component :is="reportEnabledTeps" />
+        </template>
+      </bk-popover>
       <bk-button
-        v-if="reportEnabled"
+        v-else
         class="mb16"
         outline
         theme="primary"
@@ -58,28 +74,34 @@
         {{ t('取消') }}
       </bk-button>
     </template>
+    <save-report-dialog
+      ref="saveReportDialogRef"
+      :status="status"
+      @submit="handleSaveReportSubmit" />
   </audit-sideslider>
 </template>
-<script setup lang="ts">
+<script setup lang="tsx">
   import {
-    Checkbox as BkCheckbox,
     InfoBox,
   } from 'bkui-vue';
   import {
-    computed,
     h,
+    nextTick,
     onBeforeUnmount,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import RiskReportService from '@service/risk-report';
+  import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
 
   import { QuillEditor } from '@vueup/vue-quill';
+
+  import saveReportDialog from './save-report-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
 
@@ -87,6 +109,7 @@
     reportContent?: string;
     status: string | undefined;
     reportEnabled: boolean;
+    strategyId: number | string;
   }
 
   const props = defineProps<Props>();
@@ -95,8 +118,10 @@
   }>();
   const { t } = useI18n();
   const route = useRoute();
+  const router = useRouter();
   const { messageSuccess } = useMessage();
   const isApiLoading = ref(false);
+  const saveReportDialogRef = ref();
   const editorOptions = {
     theme: 'snow',
     modules: {
@@ -122,12 +147,6 @@
   const quillEditFlag = ref(false);
   const quillEditorRef = ref<InstanceType<typeof QuillEditor>>();
   const localeReportContent = ref(props.reportContent || '');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const autoGenerateChecked = ref(false); // checkbox 状态，默认 false 表示 auto_generate 为 false
-
-  // 判断是否显示 checkbox：当 !quillEditFlag.value && (status === 'auto' || status === undefined) 时显示
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const showAutoGenerateCheckbox = computed(() => !quillEditFlag.value && (props.status === 'auto' || props.status === undefined));
 
   // 监听 props 变化，更新本地内容
   watch(() => props.reportContent, (newContent) => {
@@ -311,86 +330,76 @@
   };
 
   const handleSubmit = () => {
-    // 重置 checkbox 状态
-    autoGenerateChecked.value = false;
-
     // 人工编辑后，则提示用户
     const subTitleText = quillEditFlag.value
       ? t('保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告')
       : t('保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容');
-    // 不是自动生成的单子，并且点了自动生成
-    InfoBox({
-      type: 'warning',
-      title: t('确认保存更改?'),
-      subTitle: () => {
-        const children: any[] = [t(subTitleText)];
-
-        // 如果满足条件，添加 checkbox
-        if (showAutoGenerateCheckbox.value) {
-          const checkboxDiv = h('div', {
-            style: {
-              marginTop: '12px',
-              display: 'flex',
-              alignItems: 'center',
-            },
-          }, [
-            h(BkCheckbox, {
-              modelValue: autoGenerateChecked.value,
-              'onUpdate:modelValue': (val: boolean) => {
-                autoGenerateChecked.value = val;
-              },
-            }),
-            h('span', {
-              style: {
-                marginLeft: '8px',
-                fontSize: '14px',
-                color: '#4D4F56',
-              },
-            }, t('保持人工编辑')),
-          ]);
-          children.push(checkboxDiv);
-        }
-
-        return h('div', {
-          style: {
-            color: '#4D4F56',
-            backgroundColor: '#f5f6fa',
-            padding: '12px 16px',
-            borderRadius: '2px',
-            fontSize: '14px',
-            textAlign: 'left',
-          },
-        }, children);
-      },
-      confirmText: t('确认'),
-      cancelText: t('取消'),
-      headerAlign: 'center',
-      contentAlign: 'center',
-      footerAlign: 'center',
-      onConfirm() {
-        // 如果显示 checkbox 且未选中，则 auto_generate 为 true；否则根据 quillEditFlag 判断
-        const autoGenerate = showAutoGenerateCheckbox.value
-          ? !autoGenerateChecked.value
-          : !quillEditFlag.value;
-
+    nextTick(() => {
+      console.log('saveReportDialogRef', saveReportDialogRef.value);
+      saveReportDialogRef.value?.show(subTitleText, quillEditFlag.value);
+    });
+  };
+  const handleSaveReportSubmit = (isAuto: boolean) => {
+    console.log('handleSaveReportSubmit', isAuto,  quillEditFlag.value, props.status);
+    if (props.status === 'auto') { // 自动生成的单子
+      if (quillEditFlag.value) { // 没有点击自动生成
         saveOrUpdateRiskReport({
           risk_id: route.params.riskId,
           content: localeReportContent.value,
-          auto_generate: autoGenerate,
+          auto_generate: false,
         });
-      },
-      onClose() {
-      },
-    });
-  };
+      } else { // 点击自动生成
+        saveOrUpdateRiskReport({
+          risk_id: route.params.riskId,
+          content: localeReportContent.value,
+          auto_generate: true,
+        });
+      }
+    } else { // 人工编辑的单子
+      if (quillEditFlag.value) { // 人工编辑
+        saveOrUpdateRiskReport({
+          risk_id: route.params.riskId,
+          content: localeReportContent.value,
+          auto_generate: false,
+        });
+      } else { // 自动生成
+        saveOrUpdateRiskReport({
+          risk_id: route.params.riskId,
+          content: localeReportContent.value,
+          auto_generate: isAuto,
+        });
+      }
+    }
 
+
+    saveReportDialogRef.value?.hide();
+    closeDialog();
+  };
   const closeDialog = () => {
     // 停止轮询
     stopPolling();
     isShowEditEventReport.value = false;
     quillEditFlag.value = false;
   };
-
+  const reportEnabledTeps = () => <div>
+        <span>{t('该审计风险所属策略未启用事件调查报告自动生成功能，请编辑 ')}</span>
+        <span onClick={handleTostrategyId}  style="color: #4d93fa;cursor: pointer;">{`${strategyList.value.find(item => item.value === props.strategyId)?.label}(${props.strategyId})`}</span>
+        <span>{t(' 启用此功能')}</span>
+        </div>;
+  const {
+    data: strategyList,
+  } = useRequest(StrategyManageService.fetchAllStrategyList, {
+    manual: true,
+    defaultValue: [],
+  });
+  const handleTostrategyId = () => {
+    router.push({
+      name: 'strategyList',
+      query: {
+        strategy_id: props.strategyId,
+      },
+    });
+  };
   // 组件卸载时清理轮询
   onBeforeUnmount(() => {
     stopPolling();
