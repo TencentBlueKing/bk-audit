@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
+from rest_framework.settings import api_settings
 
 from core.constants import OrderTypeChoices
 from core.utils.params import parse_nested_params
@@ -70,6 +71,59 @@ class AnyValueField(serializers.Field):
 
     def to_representation(self, value):
         return value
+
+
+class ChoiceDisplayField(serializers.Field):
+    """
+    枚举字段，自动将值翻译为 label 显示
+
+    Usage:
+        risk_label = ChoiceDisplayField(choices=RiskLabel, label="风险标签")
+    """
+
+    def __init__(self, choices, **kwargs):
+        """
+        Args:
+            choices: Django TextChoices 或 IntegerChoices 枚举类
+        """
+        self.choices = choices
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        # 使用标准 Django Choices 获取 label
+        choices_dict = dict(self.choices.choices)
+        return str(choices_dict.get(value, value))
+
+    def to_internal_value(self, data):
+        raise NotImplementedError("ChoiceDisplayField is read-only and does not support input")
+
+
+class FriendlyDateTimeField(serializers.DateTimeField):
+    """
+    友好时间字段，输出本地时区的标准格式时间
+
+    默认格式: "2025-01-19 21:00:00"
+
+    Usage:
+        event_time = FriendlyDateTimeField(label="首次发现时间")
+        # 或自定义格式
+        event_time = FriendlyDateTimeField(format="%Y年%m月%d日 %H:%M", label="首次发现时间")
+    """
+
+    def __init__(self, **kwargs):
+        # 默认格式: 标准可读格式
+        kwargs.setdefault("format", api_settings.DATETIME_FORMAT)
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        # 转换为本地时区
+        if hasattr(value, "astimezone"):
+            value = value.astimezone(timezone.get_default_timezone())
+        return super().to_representation(value)
 
 
 class TimestampIntegerField(serializers.IntegerField):

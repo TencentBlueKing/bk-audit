@@ -3,11 +3,14 @@ import datetime
 import uuid
 from typing import Optional
 
+from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
+from core.exceptions import ApiRequestError
+from services.web.common.monitor import RiskReportRenderFailedEvent
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
@@ -59,7 +62,7 @@ class RiskReportHandler:
                 return
 
             # 3. 校验风险单 (策略开启、报告开启)
-            if not risk.can_generate_report():
+            if not risk.can_auto_generate_report():
                 logger.info("[RiskReportHandler] Render disabled. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
                 return
 
@@ -77,7 +80,7 @@ class RiskReportHandler:
                 )
                 return
 
-            if not risk.can_generate_report():
+            if not risk.can_auto_generate_report():
                 logger.info(
                     "[RiskReportHandler] Render disabled during execution. risk_id=%s, task_id=%s",
                     self.risk_id,
@@ -105,7 +108,23 @@ class RiskReportHandler:
         logger.error(
             "[RiskReportHandler] Max retries reached. risk_id=%s, task_id=%s, error=%s", self.risk_id, self.task_id, exc
         )
-        # TODO: 上报监控
+
+        # 上报监控事件
+        event = RiskReportRenderFailedEvent(
+            target=f"risk_{self.risk_id}",
+            context={"risk_id": self.risk_id, "task_id": self.task_id},
+            extra={"error": str(exc)},
+        )
+        try:
+            api.bk_monitor.report_event(event.to_json())
+            logger.info("[RiskReportHandler] Report event success. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
+        except ApiRequestError as e:
+            logger.error(
+                "[RiskReportHandler] Report event failed. risk_id=%s, task_id=%s, error=%s",
+                self.risk_id,
+                self.task_id,
+                e,
+            )
 
         # 检查是否需要尾部触发（让新事件有机会被处理）
         self._handle_tail_trigger()

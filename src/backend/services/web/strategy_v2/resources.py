@@ -643,7 +643,7 @@ class ListStrategyAll(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         if not ActionPermission(
-            actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.EDIT_RISK]
+            actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
         strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)

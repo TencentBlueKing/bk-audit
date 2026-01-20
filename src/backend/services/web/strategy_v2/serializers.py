@@ -320,6 +320,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "risk_meta_field_config",
             "source",
             "report_enabled",
+            "report_auto_render",
             "report_config",
         ]
 
@@ -417,6 +418,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "risk_meta_field_config",
             "source",
             "report_enabled",
+            "report_auto_render",
             "report_config",
         ]
 
@@ -522,7 +524,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Strategy
-        exclude = ["backend_data"]
+        exclude = ["backend_data", "report_config"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -552,6 +554,7 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
             "risk_title",
             "processor_groups",
             "report_enabled",
+            "report_auto_render",
             "report_config",
         ]
 

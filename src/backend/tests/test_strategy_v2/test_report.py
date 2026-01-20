@@ -129,6 +129,7 @@ class TestListRiskVariables(TestCase):
         expected_fields = {
             "risk_id",
             "title",
+            "status",
             "risk_level",
             "event_time",
             "event_end_time",

@@ -22,7 +22,6 @@ from django import forms
 from django.contrib import admin
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models.functions import Substr
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils import timezone
@@ -77,16 +76,20 @@ class StrategyFilter(admin.SimpleListFilter):
 
 @admin.register(Risk)
 class RiskAdmin(admin.ModelAdmin):
+    # 截断展示的最大长度
+    TRUNCATE_MAX_LENGTH = 100
+    # JSONField 展示的最大元素数量
+    JSON_MAX_ITEMS = 3
+
     list_display = [
         "risk_id",
-        "title",
+        "title_short",
         "strategy",
-        "event_content_short",
-        "operator",
+        "operator_short",
         "event_time",
         "status",
-        "current_operator",
-        "notice_users",
+        "current_operator_short",
+        "notice_users_short",
         "risk_label",
         "manual_synced",
         "auto_generate_report",
@@ -99,25 +102,52 @@ class RiskAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         """
-        Admin 专用的轻量级 queryset，不使用 annotated_queryset() 中的 Exists 子查询，
-        避免对全表执行子查询导致的性能问题。
+        Admin 专用的轻量级 queryset：
+        1. defer 所有不在 list_display 中直接使用的大字段
+        2. 使用 select_related 避免 N+1 查询
         """
-        # 仅保留 Substr 用于截取 event_content，移除 Exists 子查询
-        from services.web.risk.constants import LIST_RISK_FIELD_MAX_LENGTH
+        return Risk.objects.defer("event_content", "event_evidence", "event_data").select_related("strategy")
 
-        qs = (
-            Risk.objects.annotate(
-                event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
-            )
-            .defer("event_content")  # 延迟加载大字段
-            .select_related("strategy")
-        )
-        return qs
+    def _truncate_text_field(self, value: str, max_length: int = None) -> str:
+        """截断 TextField 展示"""
+        if not value:
+            return ""
+        max_len = max_length or self.TRUNCATE_MAX_LENGTH
+        return value[:max_len] + "..." if len(value) > max_len else value
 
-    def event_content_short(self, obj: Risk):
-        return getattr(obj, "event_content_short", "")
+    def _truncate_json_field(self, value, max_items: int = None, max_length: int = None) -> str:
+        """截断 JSONField 展示"""
+        if not value:
+            return ""
+        max_items = max_items or self.JSON_MAX_ITEMS
+        max_len = max_length or self.TRUNCATE_MAX_LENGTH
+        if isinstance(value, list):
+            display = ", ".join(str(v) for v in value[:max_items])
+            if len(value) > max_items:
+                display += f" (+{len(value) - max_items})"
+        else:
+            display = str(value)
+        return display[:max_len] + "..." if len(display) > max_len else display
 
-    event_content_short.short_description = "Event Content Short"
+    def title_short(self, obj: Risk) -> str:
+        return self._truncate_text_field(obj.title)
+
+    title_short.short_description = _("风险标题")
+
+    def operator_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.operator)
+
+    operator_short.short_description = _("责任人")
+
+    def current_operator_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.current_operator)
+
+    current_operator_short.short_description = _("当前处理人")
+
+    def notice_users_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.notice_users)
+
+    notice_users_short.short_description = _("关注人")
 
 
 @admin.register(ProcessApplication)
