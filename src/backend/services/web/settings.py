@@ -19,5 +19,5 @@ INSTALLED_APPS = (
 RENDER_MAX_RETRY = int(os.getenv("BKAPP_RENDER_MAX_RETRY", "3"))
 # 渲染任务超时时间（秒），默认 30 分钟
 RENDER_TASK_TIMEOUT = int(os.getenv("BKAPP_RENDER_TASK_TIMEOUT", str(30 * 60)))
-# 渲染任务延迟触发时间（秒），默认 30 秒
-RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", "30"))
+# 渲染任务延迟触发时间（秒），默认 60 秒
+RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", "60"))
