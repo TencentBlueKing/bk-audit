@@ -170,15 +170,18 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     auto_generate_report = models.BooleanField(
         gettext_lazy("是否开启自动生成报告"),
         default=True,
-        help_text=gettext_lazy("开启后策略产生新风险时会自动生成报告"),
+        help_text=gettext_lazy("开启后风险产生新事件时会自动生成报告"),
     )
 
-    def can_generate_report(self) -> bool:
+    def can_auto_generate_report(self) -> bool:
         """
         判断是否可以自动生成报告
-        条件：策略开启报告 + 风险开启自动生成
+        条件：
+        1. 策略开启报告功能 (report_enabled)
+        2. 策略开启自动渲染 (report_auto_render)
+        3. 风险开启自动生成 (auto_generate_report)
         """
-        return bool(self.strategy.report_enabled and self.auto_generate_report)
+        return bool(self.strategy.report_enabled and self.strategy.report_auto_render and self.auto_generate_report)
 
     class Meta:
         verbose_name = gettext_lazy("Risk")
