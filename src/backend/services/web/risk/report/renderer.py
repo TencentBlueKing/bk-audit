@@ -350,7 +350,7 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
     return final_result
 
 
-@celery_app.task(queue="risk")
+@celery_app.task(queue="risk_render")
 def render_template(*args, **kwargs) -> str:
     """Celery任务：渲染报告模板
 

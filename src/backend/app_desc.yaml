@@ -34,8 +34,12 @@ modules:
       log-export:
         command: python manage.py celery worker -O fair -l info -Q log_export -P gevent -c 128 -E
         plan: 2C2G5R
-        replicas: 5
+        replicas: 1
       risk-report:
+        command: python manage.py celery worker -O fair -l info -Q risk_report -P gevent -c 64 -E
+        plan: 2C2G5R
+        replicas: 3
+      risk-render:
         command: python manage.py celery worker -O fair -l info -Q risk_report -P gevent -c 64 -E
         plan: 2C2G5R
         replicas: 3
