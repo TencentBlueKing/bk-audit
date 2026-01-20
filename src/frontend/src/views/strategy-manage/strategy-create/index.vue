@@ -155,18 +155,13 @@
 
   // 编辑状态获取数据
   const {
-    run: fetchStrategyList,
+    run: fetchStrategyInfo,
     loading: isEditDataLoading,
-  } = useRequest(StrategyManageService.fetchStrategyList, {
-    defaultValue: {
-      results: [],
-      page: 1,
-      num_pages: 1,
-      total: 1,
-    },
+  } = useRequest(StrategyManageService.fetchStrategyInfo, {
+    defaultValue: new StrategyModel(),
     onSuccess: (data) => {
-      // eslint-disable-next-line prefer-destructuring
-      editData.value = data.results[0];
+      // // eslint-disable-next-line prefer-destructuring
+      editData.value = data;
       editData.value.event_basic_field_configs = editData.value.event_basic_field_configs.map((item) => {
         if (item.drill_config && !Array.isArray(item.drill_config)) {
           // eslint-disable-next-line no-param-reassign
@@ -330,9 +325,7 @@
 
   onMounted(() => {
     if (isEditMode || isCloneMode) {
-      fetchStrategyList({
-        page: 1,
-        page_size: 1,
+      fetchStrategyInfo({
         strategy_id: route.params.id,
       });
     }

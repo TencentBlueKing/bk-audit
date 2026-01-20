@@ -92,6 +92,7 @@ export default class Event {
     create_at: string;
     update_at: string;
     updated_by: string;
+    updated_at: string;
   } | null;
   permission: Record<string, boolean>;
   experiences: number;// 风险总结

@@ -50,6 +50,14 @@ class Strategy extends ModuleBase {
       payload,
     });
   }
+  // 获取策略详情
+  getStrategyInfo(params: {
+    strategy_id : number
+  }) {
+    return Request.get(`${this.path}/strategy/${params.strategy_id}/`, {
+      params,
+    });
+  }
   // 新建策略
   saveStrategy(params: Record<string, any>) {
     return Request.post(`${this.path}/strategy/`, {
