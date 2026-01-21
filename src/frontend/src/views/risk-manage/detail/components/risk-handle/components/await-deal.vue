@@ -173,7 +173,7 @@
         <auth-button
           action-id="edit_risk_v2"
           :loading="loading"
-          :permission="detailData.permission.edit_risk_v2 || detailData.current_operator.includes(userInfo.username)"
+          :permission="detailData.permission.process_risk || detailData.current_operator.includes(userInfo.username)"
           :resource="detailData.risk_id"
           style="min-width: 72px;"
           theme="primary"
