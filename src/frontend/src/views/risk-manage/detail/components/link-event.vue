@@ -41,31 +41,32 @@
           class="add-fill-event"
           type="add-fill" />{{ t('新建关联事件') }}</span>
     </div>
-    <div
-      :key="detailRenderKey"
-      class="body">
-      <template v-if="linkEventList.length">
-        <div
-          class="list"
-          :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
-          <scroll-faker @scroll="handleScroll">
-            <transition name="draw">
-              <div>
-                <div
-                  v-for="(item, index) in linkEventList"
-                  v-show="!isShowSide"
-                  :key="index"
-                  class="list-item"
-                  :class="[
-                    { active: active === index },
-                  ]"
-                  @click="handlerSelect(item, index)">
-                  {{ item?.event_time }}
+    <bk-loading :loading="loading">
+      <div
+        :key="detailRenderKey"
+        class="body">
+        <template v-if="linkEventList.length">
+          <div
+            class="list"
+            :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
+            <scroll-faker @scroll="handleScroll">
+              <transition name="draw">
+                <div>
+                  <div
+                    v-for="(item, index) in linkEventList"
+                    v-show="!isShowSide"
+                    :key="index"
+                    class="list-item"
+                    :class="[
+                      { active: active === index },
+                    ]"
+                    @click="handlerSelect(item, index)">
+                    {{ item?.event_time }}
+                  </div>
                 </div>
-              </div>
-            </transition>
-          </scroll-faker>
-        </div>
+              </transition>
+            </scroll-faker>
+          </div>
 
         <!-- detail -->
         <div v-if="activeStatus === 'new' && newIndex.includes(active)">
@@ -688,6 +689,7 @@
   let timeout: number| undefined = undefined;
 
   const activeStatus = ref('');
+  const loading = ref(false);
   const newIndex = ref<number[]>([]);
   const addEventRef = ref();
   const router = useRouter();
@@ -942,6 +944,7 @@
         id: props.data.risk_id,
       }).then(() => {
         // 触底加载，拼接 - 使用动态去重字段
+        loading.value = false;
         linkEventList.value = [];
         newIndex.value = [];
         if (linkEventData.value.results.length) {
@@ -1165,6 +1168,7 @@
   });
 
   onMounted(() => {
+    loading.value = true;
     const observer = new MutationObserver(() => {
       const detail = document.querySelector('.list-item-detail');
       const list = document.querySelector('.list') as HTMLDivElement;

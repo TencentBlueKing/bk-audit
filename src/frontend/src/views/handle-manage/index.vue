@@ -332,8 +332,8 @@
           text
           theme='primary'
           class='mr16'
-          permission={data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.value.username)}
-          action-id='edit_risk_v2'
+          permission={data.permission.process_risk || data.current_operator.includes(userInfo.value.username)}
+          action-id=' process_risk'
           resource={data.risk_id}
           onClick={() => handleToDetail(data)}>
           {t('处理')}

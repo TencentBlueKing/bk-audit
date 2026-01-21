@@ -19,7 +19,23 @@
     class="detail-base-info"
     :style="borderStyle">
     <div class="title">
-      {{ data.title }}
+      <template v-if="isEditingTitle">
+        <bk-input
+          v-model="draftTitle"
+          class="title-input"
+          size="small"
+          @blur="handleTitleSave"
+          @keydown.enter.prevent="handleTitleSave"
+          @keydown.esc.prevent="handleTitleCancel" />
+      </template>
+      <template v-else>
+        {{ data.title }}
+        <audit-icon
+          v-if="data.permission.edit_risk_v2"
+          class="edit-fill"
+          type="edit-fill"
+          @click="handleTitleEdit" />
+      </template>
     </div>
     <base-info-form
       v-if="priorityFieldNames.length"
@@ -59,10 +75,16 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RiskManageService from '@service/risk-manage';
+
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
 
+  import useRequest from '@hooks/use-request';
+
   import BaseInfoForm from './base-info-form.vue';
+
+  import useMessage from '@/hooks/use-message';
 
   interface Props{
     data: RiskManageModel & StrategyInfo
@@ -77,7 +99,11 @@
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<{
+    'updated-data': [];
+  }>();
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
 
   // 重点展示字段的 field_name 数组
   const priorityFieldNames = computed(() => props.data.risk_meta_field_config
@@ -106,11 +132,44 @@
   };
 
   const isShowMore = ref(false);
+  const isEditingTitle = ref(false);
+  const draftTitle = ref('');
+
+  const handleTitleEdit = () => {
+    isEditingTitle.value = true;
+    draftTitle.value = props.data.title || '';
+  };
+
+  const handleTitleSave = () => {
+    console.log('draftTitle>>', draftTitle.value);
+    updateRiskTitle({
+      risk_id: props.data.risk_id,
+      title: draftTitle.value,
+    });
+    isEditingTitle.value = false;
+  };
+
+  const handleTitleCancel = () => {
+    isEditingTitle.value = false;
+  };
 
   const borderStyle = computed(() => ({
     'border-top': `6px solid ${riskLevelMap[props.data.risk_level]?.color}`,
   }));
 
+  const {
+    run: updateRiskTitle,
+  } = useRequest(RiskManageService.updateRiskTitle, {
+    defaultValue: {},
+    defaultParams: {
+      risk_id: props.data.risk_id,
+      title: draftTitle.value,
+    },
+    onSuccess() {
+      messageSuccess(t('修改成功'));
+      emits('updated-data');
+    },
+  });
 </script>
 <style lang="postcss" scoped>
 .detail-base-info {
@@ -126,6 +185,19 @@
     font-weight: 700;
     line-height: 22px;
     color: #313238;
+
+    .title-input {
+      max-width: 320px;
+    }
+
+    .edit-fill {
+      margin-left: 10px;
+      cursor: pointer;
+
+      &:hover {
+        color: #3a84ff;
+      }
+    }
   }
 
   .show-more-condition-btn {
