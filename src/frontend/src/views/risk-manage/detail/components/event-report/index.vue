@@ -33,14 +33,14 @@
         {{ data.report?.updated_at || '--' }}
       </render-info-item>
     </render-info-block>
-
     <quill-editor
       ref="editorRef"
       v-model:content="content"
       content-type="html"
       disabled
       :options="options"
-      theme="snow" />
+      theme="snow"
+      @ready="handleEditorReady" />
 
     <bk-button
       class="event-report-edit-button"
@@ -59,7 +59,8 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, reactive, ref } from 'vue';
+  import Quill from 'quill';
+  import { computed, nextTick, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import type RiskManageModel from '@model/risk/risk';
@@ -71,6 +72,8 @@
 
   import RenderInfoItem from '../render-info-item.vue';
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import AIAgentBlot from './ai-model';
   import EditEventReport from './edit-event-report.vue';
 
   interface Props {
@@ -84,9 +87,29 @@
   const { t } = useI18n();
 
   const isShowEditEventReport = ref(false);
+  const editorRef = ref<InstanceType<typeof QuillEditor>>();
+  interface QuillInstance {
+    root: HTMLElement;
+    getIndex: (blot: any) => number | null;
+    getText: () => string;
+    deleteText: (index: number, length: number, source?: string) => void;
+    insertText: (index: number, text: string, source?: string) => void;
+    insertEmbed: (index: number, type: string, value: any, source?: string) => void;
+    setText: (text: string, source?: string) => void;
+    clipboard: {
+      addMatcher: (selector: string, matcher: (node: Node) => any) => void;
+      dangerouslyPasteHTML: (index: number, html: string) => void;
+    };
+  }
+  const quill = ref<QuillInstance | null>(null);
+  const Delta = Quill.import('delta') as any;
 
   // 事件调查报告内容
-  const content = computed(() => props.data.report?.content);
+  const content = ref('');
+  const rawContent =  computed(() => props.data.report?.content);
+  const aiAgentData = ref<Array<{ id: string; name: string; prompt: string }>>([]);
+  const aiBlockToken = '[[AI_AGENT_BLOCK]]';
+  const isEditorReady = ref(false);
 
   // 配置编辑器选项：不显示工具栏，只用于渲染
   const options = reactive({
@@ -95,6 +118,141 @@
     },
     readOnly: true, // 只读模式
   });
+
+  const normalizeContentWithAiBlock = (html: string) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+    const container = doc.body.firstElementChild as HTMLElement | null;
+    if (!container) {
+      return { html, aiAgent: [] as typeof aiAgentData.value };
+    }
+
+    const targets = Array.from(container.querySelectorAll('.ql-ai-agent, .ai-content')) as HTMLElement[];
+    if (!targets.length) {
+      return { html: container.innerHTML, aiAgent: [] as typeof aiAgentData.value };
+    }
+
+    const aiAgents: Array<{ id: string; name: string; prompt: string }> = [];
+    targets.forEach((targetNode, index) => {
+      const prompt = targetNode.getAttribute('data-prompt') || targetNode.textContent || '';
+      const name = targetNode.getAttribute('data-name') || t('完整AI总结');
+      const id = targetNode.getAttribute('data-id') || `ai-summary-${index + 1}`;
+      const placeholder = doc.createElement('span');
+      placeholder.setAttribute('data-ai-placeholder', 'true');
+      placeholder.setAttribute('data-ai-embed', 'true');
+      placeholder.setAttribute('data-id', id);
+      placeholder.setAttribute('data-name', name);
+      placeholder.setAttribute('data-prompt', prompt);
+      placeholder.setAttribute('data-ai-index', String(index));
+      placeholder.textContent = aiBlockToken;
+      targetNode.parentNode?.replaceChild(placeholder, targetNode);
+      aiAgents.push({ id, name, prompt });
+    });
+    return {
+      html: container.innerHTML,
+      aiAgent: aiAgents,
+    };
+  };
+
+  const insertAiAgentBlock = (retries = 6) => {
+    if (!aiAgentData.value.length) return;
+    if (!quill.value) {
+      if (retries > 0) {
+        setTimeout(() => insertAiAgentBlock(retries - 1), 0);
+      }
+      return;
+    }
+    const placeholders = Array.from(quill.value.root.querySelectorAll('[data-ai-placeholder="true"]')) as HTMLElement[];
+    if (placeholders.length) {
+      for (let i = placeholders.length - 1; i >= 0; i--) {
+        const placeholder = placeholders[i];
+        const dataIndex = Number(placeholder.getAttribute('data-ai-index') || i);
+        const data = aiAgentData.value[dataIndex];
+        if (!data) continue;
+        const blot = Quill.find(placeholder);
+        if (!blot) continue;
+        const blotIndex = quill.value.getIndex(blot);
+        if (typeof blotIndex !== 'number') continue;
+        quill.value.deleteText(blotIndex, aiBlockToken.length, 'api');
+        quill.value.insertEmbed(blotIndex, 'aiAgent', {
+          id: data.id,
+          name: data.name,
+          prompt: data.prompt,
+          result: '',
+        }, 'api');
+        quill.value.insertText(blotIndex + 1, '\n', 'api');
+      }
+      return;
+    }
+    let searchIndex = quill.value.getText().lastIndexOf(aiBlockToken);
+    if (searchIndex === -1) {
+      if (retries > 0) {
+        setTimeout(() => insertAiAgentBlock(retries - 1), 0);
+      }
+      return;
+    }
+    for (let i = aiAgentData.value.length - 1; i >= 0 && searchIndex !== -1; i--) {
+      const data = aiAgentData.value[i];
+      quill.value.deleteText(searchIndex, aiBlockToken.length, 'api');
+      quill.value.insertEmbed(searchIndex, 'aiAgent', {
+        id: data.id,
+        name: data.name,
+        prompt: data.prompt,
+        result: '',
+      }, 'api');
+      quill.value.insertText(searchIndex + 1, '\n', 'api');
+      searchIndex = quill.value.getText().lastIndexOf(aiBlockToken, searchIndex - 1);
+    }
+  };
+
+  const applyEditorContent = (html?: string) => {
+    if (!html) {
+      content.value = '';
+      aiAgentData.value = [];
+      return;
+    }
+    const normalized = normalizeContentWithAiBlock(html);
+    content.value = normalized.html;
+    aiAgentData.value = normalized.aiAgent;
+    if (!isEditorReady.value) {
+      return;
+    }
+    nextTick(() => {
+      if (quill.value) {
+        quill.value.setText('', 'api');
+        quill.value.clipboard.dangerouslyPasteHTML(0, normalized.html);
+      }
+      if (normalized.aiAgent.length) {
+        insertAiAgentBlock();
+      }
+    });
+  };
+
+  const handleEditorReady = (quillInstance: QuillInstance) => {
+    quill.value = quillInstance;
+    quill.value.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
+      const element = node as HTMLElement;
+      const id = element.getAttribute('data-id') || Date.now().toString();
+      const name = element.getAttribute('data-name') || t('完整AI总结');
+      const prompt = element.getAttribute('data-prompt') || '';
+      return new Delta()
+        .insert({
+          aiAgent: {
+            id,
+            name,
+            prompt,
+            result: '',
+          },
+        })
+        .insert('\n');
+    });
+    isEditorReady.value = true;
+    applyEditorContent(rawContent.value);
+  };
+
+  watch(rawContent, (newContent) => {
+    applyEditorContent(newContent);
+  }, { immediate: true });
 
   const handleEditReport = () => {
     isShowEditEventReport.value = true;
@@ -123,6 +281,70 @@
 
   :deep(.ql-disabled) {
     background-color: #fff !important;
+  }
+
+  /* AI智能体块样式 */
+  :deep(.ql-ai-agent) {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+  }
+
+  :deep(.ai-agent-block) {
+    display: flex;
+    width: 100%;
+    min-height: auto;
+    padding: 4px 12px;
+    margin: 0;
+    background: #f5f7fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    align-items: flex-start;
+  }
+
+  :deep(.ai-agent-ai) {
+    align-self: flex-start;
+    margin-top: 12px;
+  }
+
+  :deep(.ai-agent-content) {
+    display: flex;
+    padding: 10px 0;
+    margin-left: 5px;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  :deep(.ai-agent-label) {
+    font-family: MicrosoftYaHei-Bold, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    letter-spacing: 0;
+    color: #313238;
+  }
+
+  :deep(.ai-agent-prompt) {
+    display: block;
+    overflow: visible;
+    font-family: MicrosoftYaHei, sans-serif;
+    font-size: 12px;
+    line-height: 20px;
+    letter-spacing: 0;
+    color: #4d4f56;
+    text-align: justify;
+    word-break: break-word;
+  }
+
+  /* 移除AI智能体块周围的默认间距 */
+  :deep(.ql-editor .ql-ai-agent) {
+    padding: 0;
+    margin: 0;
   }
 }
 </style>

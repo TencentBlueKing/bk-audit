@@ -46,7 +46,6 @@
         @click="handleGenerateReport">
         {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
       </bk-button>
-
       <bk-loading
         class="edit-event-report-editor"
         :loading="riskReportGenerateLoading || isPollingLoading">
@@ -56,6 +55,7 @@
           content-type="html"
           :options="editorOptions"
           style="height: 1000px;"
+          @ready="handleEditorReady"
           @text-change="handleTextChange" />
       </bk-loading>
     </div>
@@ -84,6 +84,7 @@
   import {
     InfoBox,
   } from 'bkui-vue';
+  import Quill from 'quill';
   import {
     h,
     nextTick,
@@ -101,6 +102,8 @@
 
   import { QuillEditor } from '@vueup/vue-quill';
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import AIAgentBlot from './ai-model';
   import saveReportDialog from './save-report-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
@@ -145,18 +148,215 @@
   };
 
   const quillEditFlag = ref(false);
+  const isProgrammaticUpdate = ref(false);
   const quillEditorRef = ref<InstanceType<typeof QuillEditor>>();
-  const localeReportContent = ref(props.reportContent || '');
+  const aiAgentData = ref<Array<{ id: string; name: string; prompt: string }>>([]);
+  const aiBlockToken = '[[AI_AGENT_BLOCK]]';
+  const localeReportContent = ref<string>('');
+  const isEditorReady = ref(false);
+
+  const getQuillInstance = () => (quillEditorRef.value as any)?.getQuill?.();
+
+  const normalizeContentWithAiBlock = (content: string) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+    const container = doc.body.firstElementChild as HTMLElement | null;
+    if (!container) {
+      return { html: content, aiAgent: [] as typeof aiAgentData.value };
+    }
+
+    const targets = Array.from(container.querySelectorAll('.ql-ai-agent, .ai-content')) as HTMLElement[];
+    if (!targets.length) {
+      return { html: container.innerHTML, aiAgent: [] as typeof aiAgentData.value };
+    }
+
+    const aiAgents: Array<{ id: string; name: string; prompt: string }> = [];
+    targets.forEach((targetNode, index) => {
+      const prompt = targetNode.getAttribute('data-prompt') || targetNode.textContent || '';
+      const name = targetNode.getAttribute('data-name') || t('完整AI总结');
+      const id = targetNode.getAttribute('data-id') || `ai-summary-${index + 1}`;
+      const placeholder = doc.createElement('span');
+      placeholder.setAttribute('data-ai-placeholder', 'true');
+      placeholder.setAttribute('data-ai-embed', 'true');
+      placeholder.setAttribute('data-id', id);
+      placeholder.setAttribute('data-name', name);
+      placeholder.setAttribute('data-prompt', prompt);
+      placeholder.setAttribute('data-ai-index', String(index));
+      placeholder.textContent = aiBlockToken;
+      targetNode.parentNode?.replaceChild(placeholder, targetNode);
+      aiAgents.push({ id, name, prompt });
+    });
+
+    return {
+      html: container.innerHTML,
+      aiAgent: aiAgents,
+    };
+  };
+
+  const insertAiAgentBlock = (retries = 6) => {
+    if (!aiAgentData.value.length) return;
+    const quill = getQuillInstance();
+    if (!quill) {
+      if (retries > 0) {
+        setTimeout(() => insertAiAgentBlock(retries - 1), 0);
+      }
+      return;
+    }
+    const placeholders = Array.from(quill.root.querySelectorAll('[data-ai-placeholder="true"]')) as HTMLElement[];
+    isProgrammaticUpdate.value = true;
+    if (placeholders.length) {
+      for (let i = placeholders.length - 1; i >= 0; i--) {
+        const placeholder = placeholders[i];
+        const dataIndex = Number(placeholder.getAttribute('data-ai-index') || i);
+        const data = aiAgentData.value[dataIndex];
+        if (!data) continue;
+        const blot = Quill.find(placeholder);
+        if (!blot) continue;
+        const blotIndex = quill.getIndex(blot);
+        if (typeof blotIndex !== 'number') continue;
+        quill.deleteText(blotIndex, aiBlockToken.length, 'api');
+        quill.insertEmbed(blotIndex, 'aiAgent', {
+          id: data.id,
+          name: data.name,
+          prompt: data.prompt,
+          result: '',
+        }, 'api');
+        quill.insertText(blotIndex + 1, '\n', 'api');
+      }
+    } else {
+      let searchIndex = quill.getText().lastIndexOf(aiBlockToken);
+      if (searchIndex === -1) {
+        if (retries > 0) {
+          setTimeout(() => insertAiAgentBlock(retries - 1), 0);
+        }
+        return;
+      }
+      for (let i = aiAgentData.value.length - 1; i >= 0 && searchIndex !== -1; i--) {
+        const data = aiAgentData.value[i];
+        quill.deleteText(searchIndex, aiBlockToken.length, 'api');
+        quill.insertEmbed(searchIndex, 'aiAgent', {
+          id: data.id,
+          name: data.name,
+          prompt: data.prompt,
+          result: '',
+        }, 'api');
+        quill.insertText(searchIndex + 1, '\n', 'api');
+        searchIndex = quill.getText().lastIndexOf(aiBlockToken, searchIndex - 1);
+      }
+    }
+    nextTick(() => {
+      isProgrammaticUpdate.value = false;
+      quillEditFlag.value = false;
+    });
+  };
+
+  const applyEditorContent = (content: string) => {
+    const normalized = normalizeContentWithAiBlock(content);
+    localeReportContent.value = normalized.html;
+    aiAgentData.value = normalized.aiAgent;
+    if (!isEditorReady.value) return;
+    nextTick(() => {
+      if (normalized.aiAgent.length) {
+        insertAiAgentBlock();
+      } else {
+        nextTick(() => {
+          isProgrammaticUpdate.value = false;
+          quillEditFlag.value = false;
+        });
+      }
+    });
+  };
+
+  const restoreAiContentBlocks = (content: string) => {
+    if (!content) return content;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+    const container = doc.body.firstElementChild as HTMLElement | null;
+    if (!container) return content;
+    const legacyBlocks = Array.from(container.querySelectorAll('.ai-agent-block')) as HTMLElement[];
+    legacyBlocks.forEach((block) => {
+      block.parentNode?.removeChild(block);
+    });
+    const targets = Array.from(container.querySelectorAll('.ql-ai-agent')) as HTMLElement[];
+    targets.forEach((targetNode) => {
+      const prompt = targetNode.getAttribute('data-prompt') || targetNode.textContent || '';
+      const block = doc.createElement('div');
+      block.className = 'ai-content';
+      block.textContent = prompt;
+      targetNode.parentNode?.replaceChild(block, targetNode);
+    });
+    const normalizedChildren = Array.from(container.children) as HTMLElement[];
+    let pendingBreak = false;
+    normalizedChildren.forEach((node) => {
+      const isEmptyParagraph = node.tagName.toLowerCase() === 'p'
+        && node.innerHTML
+          .replace(/<br\s*\/?>/gi, '')
+          .replace(/\uFEFF/g, '')
+          .trim() === '';
+      if (!isEmptyParagraph) {
+        pendingBreak = false;
+        return;
+      }
+      if (pendingBreak) {
+        node.parentNode?.removeChild(node);
+      } else {
+        pendingBreak = true;
+      }
+    });
+    return container.innerHTML;
+  };
+
+  const handleEditorReady = () => {
+    const quill = getQuillInstance();
+    if (quill) {
+      const Delta = Quill.import('delta') as any;
+      quill.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
+        const element = node as HTMLElement;
+        const id = element.getAttribute('data-id') || Date.now().toString();
+        const name = element.getAttribute('data-name') || t('完整AI总结');
+        const prompt = element.getAttribute('data-prompt') || '';
+        return new Delta()
+          .insert({
+            aiAgent: {
+              id,
+              name,
+              prompt,
+              result: '',
+            },
+          })
+          .insert('\n');
+      });
+    }
+    isEditorReady.value = true;
+    nextTick(() => {
+      if (aiAgentData.value.length) {
+        insertAiAgentBlock();
+      }
+    });
+  };
 
   // 监听 props 变化，更新本地内容
   watch(() => props.reportContent, (newContent) => {
+    console.log('newContent',  newContent);
     if (newContent !== undefined) {
-      localeReportContent.value = newContent;
+      nextTick(() => {
+        applyEditorContent(newContent);
+      });
     }
   }, { immediate: true });
 
   const isShowEditEventReport = defineModel<boolean>('isShowEditEventReport', {
     required: true,
+  });
+  watch(isShowEditEventReport, (show) => {
+    if (!show) return;
+    nextTick(() => {
+      if (props.reportContent !== undefined) {
+        applyEditorContent(props.reportContent);
+      } else {
+        applyEditorContent('');
+      }
+    });
   });
 
   const {
@@ -213,11 +413,7 @@
 
         if (status === 'SUCCESS' && result) {
           // 更新报告内容
-          localeReportContent.value = result;
-          // 如果编辑器已初始化，同步更新编辑器内容
-          if (quillEditorRef.value) {
-            quillEditorRef.value.setHTML(result);
-          }
+          applyEditorContent(result);
         } else if (status === 'FAILURE') {
           // 任务失败，提示用户
           InfoBox({
@@ -275,7 +471,6 @@
     isApiLoading.value = false;
     isPollingLoading.value = false; // 停止轮询时取消 loading
     currentTaskId = null;
-    console.log('status', props.status);
     setTimeout(() => {
       quillEditFlag.value = false;
     }, 0);
@@ -311,10 +506,7 @@
       footerAlign: 'center',
       onConfirm() {
         // 清空当前报告内容
-        localeReportContent.value = '';
-        if (quillEditorRef.value) {
-          quillEditorRef.value.setHTML('');
-        }
+        applyEditorContent('');
         isApiLoading.value = true;
         quillEditFlag.value = false;
         // 获取task_id
@@ -326,7 +518,9 @@
   };
 
   const handleTextChange = () => {
-    quillEditFlag.value = true;
+    if (!isProgrammaticUpdate.value) {
+      quillEditFlag.value = true;
+    }
   };
 
   const handleSubmit = () => {
@@ -335,23 +529,22 @@
       ? t('保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告')
       : t('保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容');
     nextTick(() => {
-      console.log('saveReportDialogRef', saveReportDialogRef.value);
       saveReportDialogRef.value?.show(subTitleText, quillEditFlag.value);
     });
   };
   const handleSaveReportSubmit = (isAuto: boolean) => {
-    console.log('handleSaveReportSubmit', isAuto,  quillEditFlag.value, props.status);
+    const restoredContent = restoreAiContentBlocks(localeReportContent.value);
     if (props.status === 'auto') { // 自动生成的单子
       if (quillEditFlag.value) { // 没有点击自动生成
         saveOrUpdateRiskReport({
           risk_id: route.params.riskId,
-          content: localeReportContent.value,
+          content: restoredContent,
           auto_generate: false,
         });
       } else { // 点击自动生成
         saveOrUpdateRiskReport({
           risk_id: route.params.riskId,
-          content: localeReportContent.value,
+          content: restoredContent,
           auto_generate: true,
         });
       }
@@ -359,18 +552,17 @@
       if (quillEditFlag.value) { // 人工编辑
         saveOrUpdateRiskReport({
           risk_id: route.params.riskId,
-          content: localeReportContent.value,
+          content: restoredContent,
           auto_generate: false,
         });
       } else { // 自动生成
         saveOrUpdateRiskReport({
           risk_id: route.params.riskId,
-          content: localeReportContent.value,
+          content: restoredContent,
           auto_generate: isAuto,
         });
       }
     }
-
 
     saveReportDialogRef.value?.hide();
     closeDialog();
@@ -415,5 +607,94 @@
   .edit-event-report-editor {
     background-color: #fff;
   }
+}
+
+/* AI智能体块样式 */
+:deep(.ql-ai-agent) {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+}
+
+:deep(.ai-agent-block) {
+  display: flex;
+  width: 100%;
+  min-height: auto;
+  padding: 4px 12px;
+  margin: 0;
+  background: #f5f7fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  align-items: flex-start;
+}
+
+:deep(.ai-agent-content) {
+  display: flex;
+  padding: 10px 0;
+  margin-left: 35px;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:deep(.ai-agent-label) {
+  font-family: MicrosoftYaHei-Bold, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0;
+  color: #313238;
+}
+
+:deep(.ai-agent-prompt) {
+  display: block;
+  overflow: visible;
+  font-family: MicrosoftYaHei, sans-serif;
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: #4d4f56;
+  text-align: justify;
+  word-break: break-word;
+}
+
+:deep(.ai-agent-actions) {
+  top: 20px;
+  right: 8px;
+  display: flex;
+  margin-top: 12px;
+  align-self: flex-start;
+  gap: 8px;
+}
+
+:deep(.ai-agent-edit),
+:deep(.ai-agent-delete) {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  transition: all .2s;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+:deep(.ai-agent-edit:hover),
+:deep(.ai-agent-delete:hover) {
+  opacity: 70%;
+}
+
+:deep(.ai-agent-ai) {
+  position: absolute;
+  margin-top: 12px;
+}
+
+/* 移除AI智能体块周围的默认间距 */
+:deep(.ql-editor .ql-ai-agent) {
+  padding: 0;
+  margin: 0;
 }
 </style>
