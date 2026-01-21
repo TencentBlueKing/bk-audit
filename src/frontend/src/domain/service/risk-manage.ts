@@ -46,6 +46,15 @@ export default {
       }));
   },
   /**
+   * @desc 编辑风险标题
+   */
+  updateRiskTitle(params: {
+    risk_id: number | string,
+    title: string
+  }) {
+    return RiskManageSource.updateRiskTitle(params).then(({ data }) => data);
+  },
+  /**
    * @desc 获取待我处理风险列表
    */
   fetchTodoRiskList(params: {

@@ -28,7 +28,8 @@
         <base-info
           :data="detailData"
           :risk-status-common="riskStatusCommon"
-          :strategy-list="strategyList" />
+          :strategy-list="strategyList"
+          @updated-data="handleUpdatedData" />
         <!-- 关联事件 -->
         <div
           v-if="!detailData.has_report"
