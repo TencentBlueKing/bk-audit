@@ -41,483 +41,485 @@
           class="add-fill-event"
           type="add-fill" />{{ t('新建关联事件') }}</span>
     </div>
-    <div
-      :key="detailRenderKey"
-      class="body">
-      <template v-if="linkEventList.length">
-        <div
-          class="list"
-          :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
-          <scroll-faker @scroll="handleScroll">
-            <transition name="draw">
-              <div>
-                <div
-                  v-for="(item, index) in linkEventList"
-                  v-show="!isShowSide"
-                  :key="index"
-                  class="list-item"
-                  :class="[
-                    { active: active === index },
-                  ]"
-                  @click="handlerSelect(item, index)">
-                  {{ item?.event_time }}
+    <bk-loading :loading="loading">
+      <div
+        :key="detailRenderKey"
+        class="body">
+        <template v-if="linkEventList.length">
+          <div
+            class="list"
+            :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
+            <scroll-faker @scroll="handleScroll">
+              <transition name="draw">
+                <div>
+                  <div
+                    v-for="(item, index) in linkEventList"
+                    v-show="!isShowSide"
+                    :key="index"
+                    class="list-item"
+                    :class="[
+                      { active: active === index },
+                    ]"
+                    @click="handlerSelect(item, index)">
+                    {{ item?.event_time }}
+                  </div>
                 </div>
-              </div>
-            </transition>
-          </scroll-faker>
-        </div>
-
-        <!-- detail -->
-        <div v-if="activeStatus === 'new' && newIndex.includes(active)">
-          <div class="frontend-create">
-            <audit-icon
-              class="create-icon"
-              type="loading" />
-            {{ t('事件创建中') }}
+              </transition>
+            </scroll-faker>
           </div>
-        </div>
-        <div
-          v-else
-          class="list-item-detail"
-          :style="{
-            width: isShowSide ? '100%' : 'calc(100% - 164px)',
-          }">
-          <div style=" height: auto;padding-left: 12px;">
-            <!-- 基本信息 -->
-            <template v-if="basicInfo.length">
-              <div class="title mt16">
-                {{ t('基本信息') }}
-              </div>
-              <div class="base-info">
-                <render-info-block
-                  v-for="(basicArr, basicIndex) in basicInfo"
-                  :key="basicIndex"
-                  class="flex mt16"
-                  style="justify-content: space-between; gap: 24px;">
-                  <render-info-item
-                    v-for="(basicItem, itemIndex) in basicArr"
-                    :key="itemIndex"
-                    :description="basicItem.description"
-                    :label="basicItem.display_name"
-                    :label-width="labelWidth"
-                    :label-width-percent="25"
-                    style="flex-basis: 50%;">
-                    <!-- 策略id -->
-                    <template v-if="basicItem.field_name === 'strategy_id'">
-                      <bk-button
-                        v-if="strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label"
-                        text
-                        theme="primary"
-                        @click="handlerStrategy()">
-                        {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
-                      </bk-button>
-                      <span v-else> -- </span>
-                    </template>
-                    <!-- 其他字段 -->
-                    <template v-else>
-                      <!-- 有字段映射或者有证据下探 -->
-                      <bk-popover
-                        v-if="displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
-                          || drillMap.get(basicItem.field_name)"
-                        placement="top"
-                        theme="black">
-                        <span
-                          :class="[
-                            displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
-                              ? 'tips' : ''
-                          ]"
-                          :style="{
-                            color: drillMap.get(basicItem.field_name) ? '#3a84ff' : '#313238',
-                            cursor: drillMap.get(basicItem.field_name) ? 'pointer' : 'default',
-                          }"
-                          @click="handleUseTool(
-                            drillMap.get(basicItem.field_name),
-                            basicItem.field_name
-                          )">
+
+          <!-- detail -->
+          <div v-if="activeStatus === 'new' && newIndex.includes(active)">
+            <div class="frontend-create">
+              <audit-icon
+                class="create-icon"
+                type="loading" />
+              {{ t('事件创建中') }}
+            </div>
+          </div>
+          <div
+            v-else
+            class="list-item-detail"
+            :style="{
+              width: isShowSide ? '100%' : 'calc(100% - 164px)',
+            }">
+            <div style=" height: auto;padding-left: 12px;">
+              <!-- 基本信息 -->
+              <template v-if="basicInfo.length">
+                <div class="title mt16">
+                  {{ t('基本信息') }}
+                </div>
+                <div class="base-info">
+                  <render-info-block
+                    v-for="(basicArr, basicIndex) in basicInfo"
+                    :key="basicIndex"
+                    class="flex mt16"
+                    style="justify-content: space-between; gap: 24px;">
+                    <render-info-item
+                      v-for="(basicItem, itemIndex) in basicArr"
+                      :key="itemIndex"
+                      :description="basicItem.description"
+                      :label="basicItem.display_name"
+                      :label-width="labelWidth"
+                      :label-width-percent="25"
+                      style="flex-basis: 50%;">
+                      <!-- 策略id -->
+                      <template v-if="basicItem.field_name === 'strategy_id'">
+                        <bk-button
+                          v-if="strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label"
+                          text
+                          theme="primary"
+                          @click="handlerStrategy()">
+                          {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
+                        </bk-button>
+                        <span v-else> -- </span>
+                      </template>
+                      <!-- 其他字段 -->
+                      <template v-else>
+                        <!-- 有字段映射或者有证据下探 -->
+                        <bk-popover
+                          v-if="displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
+                            || drillMap.get(basicItem.field_name)"
+                          placement="top"
+                          theme="black">
+                          <span
+                            :class="[
+                              displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
+                                ? 'tips' : ''
+                            ]"
+                            :style="{
+                              color: drillMap.get(basicItem.field_name) ? '#3a84ff' : '#313238',
+                              cursor: drillMap.get(basicItem.field_name) ? 'pointer' : 'default',
+                            }"
+                            @click="handleUseTool(
+                              drillMap.get(basicItem.field_name),
+                              basicItem.field_name
+                            )">
+                            <edit-tag
+                              v-if="basicItem.field_name === 'operator'"
+                              :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
+                              :max="99"
+                              :show-copy="false"
+                              style="display: inline-block;"
+                              @click="handleUseTool(
+                                drillMap.get(basicItem.field_name),
+                                basicItem.field_name
+                              )" />
+                            <span v-else>
+                              {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                            </span>
+                          </span>
+                          <template #content>
+                            <div>
+                              <div
+                                v-if="
+                                  displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
+                                ">
+                                <span>{{ t('存储值: ') }}</span>
+                                <span>
+                                  {{
+                                    displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key
+                                  }}
+                                </span>
+                                <br>
+                                <span>{{ t('展示文本: ') }}</span>
+                                <span>
+                                  {{
+                                    displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name
+                                  }}
+                                </span>
+                              </div>
+                              <div
+                                v-if="drillMap.get(basicItem.field_name)"
+                                :style="{
+                                  // eslint-disable-next-line max-len
+                                  marginTop: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
+                                    ? '8px' : '0'
+                                }">
+                                {{ t('点击查看此字段的证据下探') }}
+                              </div>
+                            </div>
+                          </template>
+                        </bk-popover>
+                        <!-- 没有字段映射或者没有证据下探 -->
+                        <span v-else>
                           <edit-tag
                             v-if="basicItem.field_name === 'operator'"
                             :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                             :max="99"
-                            :show-copy="false"
-                            style="display: inline-block;"
-                            @click="handleUseTool(
-                              drillMap.get(basicItem.field_name),
-                              basicItem.field_name
-                            )" />
+                            style="display: inline-block;" />
                           <span v-else>
                             {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
                           </span>
                         </span>
+                      </template>
+                      <!-- 证据下探按钮 -->
+                      <template v-if="drillMap.get(basicItem.field_name)">
+                        <bk-popover
+                          placement="top"
+                          theme="black">
+                          <bk-button
+                            class="ml8"
+                            text
+                            theme="primary"
+                            @click="handleUseTool(
+                              drillMap.get(basicItem.field_name),
+                              basicItem.field_name
+                            )">
+                            <span
+                              style="
+                              padding: 2px 10px;
+                              color: #3a84ff;
+                              cursor: pointer;
+                              background-color: #cddffe;
+                              border-radius: 8px;
+                            ">
+                              {{ drillMap.get(basicItem.field_name).drill_config.length }}
+                            </span>
+                          </bk-button>
+                          <template #content>
+                            <div>
+                              <div
+                                v-for="config in drillMap.get(basicItem.field_name).drill_config"
+                                :key="config.tool.uid">
+                                {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                                <bk-button
+                                  class="ml8"
+                                  text
+                                  theme="primary"
+                                  @click="(e: any) => {
+                                    e.stopPropagation(); // 阻止事件冒泡
+                                    handleUseTool(drillMap.get(basicItem.field_name),
+                                                  basicItem.field_name, config.tool.uid);
+                                  }">
+                                  {{ t('去查看') }}
+                                  <audit-icon
+                                    class="mr-18"
+                                    type="jump-link" />
+                                </bk-button>
+                              </div>
+                            </div>
+                          </template>
+                        </bk-popover>
+                      </template>
+                    </render-info-item>
+                  </render-info-block>
+                </div>
+              </template>
+
+              <!-- 事件数据 -->
+              <div class="title">
+                {{ t('事件数据') }}
+              </div>
+              <template v-if="eventDataKeyArr.length || eventDataKeyArrNormal.length">
+                <div
+                  v-if="eventDataKeyArr.length"
+                  class="data-info"
+                  style="background-color: #f5f7fa;">
+                  <render-info-block
+                    v-for="(keyArr, keyIndex) in eventDataKeyArr"
+                    :key="keyIndex"
+                    class="flex mt16"
+                    style="justify-content: space-between; gap: 24px;">
+                    <render-info-item
+                      v-for="(key, index) in keyArr"
+                      :key="index"
+                      :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                      :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
+                      :label-width="labelWidth"
+                      :label-width-percent="25"
+                      style="flex-basis: 50%;">
+                      <!-- 有字段映射或者有证据下探 -->
+                      <bk-popover
+                        v-if="displayValueDict.eventData[key]?.isMappings
+                          || drillMap.get(key)"
+                        placement="top"
+                        theme="black">
+                        <span
+                          :class="[
+                            displayValueDict.eventData[key]?.isMappings
+                              ? 'tips space' : 'space'
+                          ]"
+                          :style="{
+                            color: drillMap.get(key) ? '#3a84ff' : '#313238',
+                            cursor: drillMap.get(key) ? 'pointer' : 'default',
+                          }"
+                          @click="handleUseTool(
+                            drillMap.get(key),
+                            key
+                          )">
+                          {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                        </span>
                         <template #content>
                           <div>
                             <div
-                              v-if="
-                                displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
-                              ">
+                              v-if="displayValueDict.eventData[key]?.isMappings">
                               <span>{{ t('存储值: ') }}</span>
                               <span>
-                                {{
-                                  displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key
-                                }}
+                                {{ displayValueDict.eventData[key]?.dict?.key }}
                               </span>
                               <br>
                               <span>{{ t('展示文本: ') }}</span>
-                              <span>
-                                {{
-                                  displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name
-                                }}
+                              <span class="space">
+                                {{ handleShowText(displayValueDict.eventData[key]?.dict?.name) }}
                               </span>
                             </div>
                             <div
-                              v-if="drillMap.get(basicItem.field_name)"
-                              :style="{
-                                // eslint-disable-next-line max-len
-                                marginTop: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
-                                  ? '8px' : '0'
-                              }">
+                              v-if="drillMap.get(key)"
+                              style="margin-top: 8px;">
                               {{ t('点击查看此字段的证据下探') }}
                             </div>
                           </div>
                         </template>
                       </bk-popover>
                       <!-- 没有字段映射或者没有证据下探 -->
-                      <span v-else>
-                        <edit-tag
-                          v-if="basicItem.field_name === 'operator'"
-                          :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
-                          :max="99"
-                          style="display: inline-block;" />
-                        <span v-else>
-                          {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                      <span
+                        v-else
+                        class="space">
+                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                      </span>
+                      <!-- 证据下探按钮 -->
+                      <template v-if="drillMap.get(key)">
+                        <bk-popover
+                          placement="top"
+                          theme="black">
+                          <bk-button
+                            class="ml8"
+                            text
+                            theme="primary"
+                            @click="handleUseTool(
+                              drillMap.get(key),
+                              key
+                            )">
+                            <span
+                              style="
+                              padding: 2px 10px;
+                              color: #3a84ff;
+                              cursor: pointer;
+                              background-color: #cddffe;
+                              border-radius: 8px;
+                            ">
+                              {{ drillMap.get(key).drill_config.length }}
+                            </span>
+                          </bk-button>
+                          <template #content>
+                            <div>
+                              <div
+                                v-for="config in drillMap.get(key).drill_config"
+                                :key="config.tool.uid">
+                                {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                                <bk-button
+                                  class="ml8"
+                                  text
+                                  theme="primary"
+                                  @click="(e: any) => {
+                                    e.stopPropagation(); // 阻止事件冒泡
+                                    handleUseTool(drillMap.get(key), key, config.tool.uid);
+                                  }">
+                                  {{ t('去查看') }}
+                                  <audit-icon
+                                    class="mr-18"
+                                    type="jump-link" />
+                                </bk-button>
+                              </div>
+                            </div>
+                          </template>
+                        </bk-popover>
+                      </template>
+                    </render-info-item>
+                  </render-info-block>
+                </div>
+                <div
+                  v-if="(eventDataKeyArrNormal.length && isShowMore) || !eventDataKeyArr.length"
+                  class="data-info"
+                  style="margin-top: 0;">
+                  <render-info-block
+                    v-for="(keyArr, keyIndex) in eventDataKeyArrNormal"
+                    :key="keyIndex"
+                    class="flex mt16">
+                    <render-info-item
+                      v-for="(key, index) in keyArr"
+                      :key="index"
+                      :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                      :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
+                      :label-width="labelWidth"
+                      :label-width-percent="25"
+                      style="width: 50%;">
+                      <!-- 有字段映射或者有证据下探 -->
+                      <bk-popover
+                        v-if="displayValueDict.eventData[key]?.isMappings
+                          || drillMap.get(key)"
+                        placement="top"
+                        theme="black">
+                        <span
+                          :class="[
+                            displayValueDict.eventData[key]?.isMappings
+                              ? 'tips space' : 'space'
+                          ]"
+                          :style="{
+                            color: drillMap.get(key) ? '#3a84ff' : '#313238',
+                            cursor: drillMap.get(key) ? 'pointer' : 'default',
+                          }"
+                          @click="handleUseTool(
+                            drillMap.get(key),
+                            key
+                          )">
+                          {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                         </span>
+                        <template #content>
+                          <div>
+                            <div
+                              v-if="displayValueDict.eventData[key]?.isMappings">
+                              <span>{{ t('存储值: ') }}</span>
+                              <span>
+                                {{ displayValueDict.eventData[key]?.dict?.key }}
+                              </span>
+                              <br>
+                              <span>{{ t('展示文本: ') }}</span>
+                              <span class="space">
+                                {{ displayValueDict.eventData[key]?.dict?.name }}
+                              </span>
+                            </div>
+                            <div
+                              v-if="drillMap.get(key)"
+                              style="margin-top: 8px;">
+                              {{ t('点击查看此字段的证据下探') }}
+                            </div>
+                          </div>
+                        </template>
+                      </bk-popover>
+                      <!-- 没有字段映射或者没有证据下探 -->
+                      <span
+                        v-else
+                        class="space">
+                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                       </span>
-                    </template>
-                    <!-- 证据下探按钮 -->
-                    <template v-if="drillMap.get(basicItem.field_name)">
-                      <bk-popover
-                        placement="top"
-                        theme="black">
-                        <bk-button
-                          class="ml8"
-                          text
-                          theme="primary"
-                          @click="handleUseTool(
-                            drillMap.get(basicItem.field_name),
-                            basicItem.field_name
-                          )">
-                          <span
-                            style="
+                      <!-- 证据下探按钮 -->
+                      <template v-if="drillMap.get(key)">
+                        <bk-popover
+                          placement="top"
+                          theme="black">
+                          <bk-button
+                            class="ml8"
+                            text
+                            theme="primary"
+                            @click="handleUseTool(
+                              drillMap.get(key),
+                              key
+                            )">
+                            <span
+                              style="
                               padding: 2px 10px;
                               color: #3a84ff;
                               cursor: pointer;
                               background-color: #cddffe;
                               border-radius: 8px;
                             ">
-                            {{ drillMap.get(basicItem.field_name).drill_config.length }}
-                          </span>
-                        </bk-button>
-                        <template #content>
-                          <div>
-                            <div
-                              v-for="config in drillMap.get(basicItem.field_name).drill_config"
-                              :key="config.tool.uid">
-                              {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
-                              <bk-button
-                                class="ml8"
-                                text
-                                theme="primary"
-                                @click="(e: any) => {
-                                  e.stopPropagation(); // 阻止事件冒泡
-                                  handleUseTool(drillMap.get(basicItem.field_name),
-                                                basicItem.field_name, config.tool.uid);
-                                }">
-                                {{ t('去查看') }}
-                                <audit-icon
-                                  class="mr-18"
-                                  type="jump-link" />
-                              </bk-button>
+                              {{ drillMap.get(key).drill_config.length }}
+                            </span>
+                          </bk-button>
+                          <template #content>
+                            <div>
+                              <div
+                                v-for="config in drillMap.get(key).drill_config"
+                                :key="config.tool.uid">
+                                {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                                <bk-button
+                                  class="ml8"
+                                  text
+                                  theme="primary"
+                                  @click="(e: any) => {
+                                    e.stopPropagation(); // 阻止事件冒泡
+                                    handleUseTool(drillMap.get(key), key, config.tool.uid);
+                                  }">
+                                  {{ t('去查看') }}
+                                  <audit-icon
+                                    class="mr-18"
+                                    type="jump-link" />
+                                </bk-button>
+                              </div>
                             </div>
-                          </div>
-                        </template>
-                      </bk-popover>
-                    </template>
-                  </render-info-item>
-                </render-info-block>
-              </div>
-            </template>
-
-            <!-- 事件数据 -->
-            <div class="title">
-              {{ t('事件数据') }}
+                          </template>
+                        </bk-popover>
+                      </template>
+                    </render-info-item>
+                  </render-info-block>
+                </div>
+                <div
+                  v-if="eventDataKeyArr.length && eventDataKeyArrNormal.length"
+                  style="height: 20px; margin-top: 10px;">
+                  <bk-button
+                    style="float: right;"
+                    text
+                    theme="primary"
+                    @click="handleToggleShowMore">
+                    <audit-icon
+                      :class="{ active: isShowMore }"
+                      style=" margin-right: 5px;"
+                      type="angle-double-down" />
+                    {{ isShowMore ? t('收起字段') : t('展开更多字段') }}
+                  </bk-button>
+                </div>
+              </template>
+              <bk-exception
+                v-else
+                class="exception-part"
+                scene="part"
+                type="empty">
+                {{ t('暂无数据') }}
+              </bk-exception>
             </div>
-            <template v-if="eventDataKeyArr.length || eventDataKeyArrNormal.length">
-              <div
-                v-if="eventDataKeyArr.length"
-                class="data-info"
-                style="background-color: #f5f7fa;">
-                <render-info-block
-                  v-for="(keyArr, keyIndex) in eventDataKeyArr"
-                  :key="keyIndex"
-                  class="flex mt16"
-                  style="justify-content: space-between; gap: 24px;">
-                  <render-info-item
-                    v-for="(key, index) in keyArr"
-                    :key="index"
-                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
-                    :label-width="labelWidth"
-                    :label-width-percent="25"
-                    style="flex-basis: 50%;">
-                    <!-- 有字段映射或者有证据下探 -->
-                    <bk-popover
-                      v-if="displayValueDict.eventData[key]?.isMappings
-                        || drillMap.get(key)"
-                      placement="top"
-                      theme="black">
-                      <span
-                        :class="[
-                          displayValueDict.eventData[key]?.isMappings
-                            ? 'tips space' : 'space'
-                        ]"
-                        :style="{
-                          color: drillMap.get(key) ? '#3a84ff' : '#313238',
-                          cursor: drillMap.get(key) ? 'pointer' : 'default',
-                        }"
-                        @click="handleUseTool(
-                          drillMap.get(key),
-                          key
-                        )">
-                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
-                      </span>
-                      <template #content>
-                        <div>
-                          <div
-                            v-if="displayValueDict.eventData[key]?.isMappings">
-                            <span>{{ t('存储值: ') }}</span>
-                            <span>
-                              {{ displayValueDict.eventData[key]?.dict?.key }}
-                            </span>
-                            <br>
-                            <span>{{ t('展示文本: ') }}</span>
-                            <span class="space">
-                              {{ handleShowText(displayValueDict.eventData[key]?.dict?.name) }}
-                            </span>
-                          </div>
-                          <div
-                            v-if="drillMap.get(key)"
-                            style="margin-top: 8px;">
-                            {{ t('点击查看此字段的证据下探') }}
-                          </div>
-                        </div>
-                      </template>
-                    </bk-popover>
-                    <!-- 没有字段映射或者没有证据下探 -->
-                    <span
-                      v-else
-                      class="space">
-                      {{ handleShowText(displayValueDict.eventData[key]?.value) }}
-                    </span>
-                    <!-- 证据下探按钮 -->
-                    <template v-if="drillMap.get(key)">
-                      <bk-popover
-                        placement="top"
-                        theme="black">
-                        <bk-button
-                          class="ml8"
-                          text
-                          theme="primary"
-                          @click="handleUseTool(
-                            drillMap.get(key),
-                            key
-                          )">
-                          <span
-                            style="
-                              padding: 2px 10px;
-                              color: #3a84ff;
-                              cursor: pointer;
-                              background-color: #cddffe;
-                              border-radius: 8px;
-                            ">
-                            {{ drillMap.get(key).drill_config.length }}
-                          </span>
-                        </bk-button>
-                        <template #content>
-                          <div>
-                            <div
-                              v-for="config in drillMap.get(key).drill_config"
-                              :key="config.tool.uid">
-                              {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
-                              <bk-button
-                                class="ml8"
-                                text
-                                theme="primary"
-                                @click="(e: any) => {
-                                  e.stopPropagation(); // 阻止事件冒泡
-                                  handleUseTool(drillMap.get(key), key, config.tool.uid);
-                                }">
-                                {{ t('去查看') }}
-                                <audit-icon
-                                  class="mr-18"
-                                  type="jump-link" />
-                              </bk-button>
-                            </div>
-                          </div>
-                        </template>
-                      </bk-popover>
-                    </template>
-                  </render-info-item>
-                </render-info-block>
-              </div>
-              <div
-                v-if="(eventDataKeyArrNormal.length && isShowMore) || !eventDataKeyArr.length"
-                class="data-info"
-                style="margin-top: 0;">
-                <render-info-block
-                  v-for="(keyArr, keyIndex) in eventDataKeyArrNormal"
-                  :key="keyIndex"
-                  class="flex mt16">
-                  <render-info-item
-                    v-for="(key, index) in keyArr"
-                    :key="index"
-                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
-                    :label-width="labelWidth"
-                    :label-width-percent="25"
-                    style="width: 50%;">
-                    <!-- 有字段映射或者有证据下探 -->
-                    <bk-popover
-                      v-if="displayValueDict.eventData[key]?.isMappings
-                        || drillMap.get(key)"
-                      placement="top"
-                      theme="black">
-                      <span
-                        :class="[
-                          displayValueDict.eventData[key]?.isMappings
-                            ? 'tips space' : 'space'
-                        ]"
-                        :style="{
-                          color: drillMap.get(key) ? '#3a84ff' : '#313238',
-                          cursor: drillMap.get(key) ? 'pointer' : 'default',
-                        }"
-                        @click="handleUseTool(
-                          drillMap.get(key),
-                          key
-                        )">
-                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
-                      </span>
-                      <template #content>
-                        <div>
-                          <div
-                            v-if="displayValueDict.eventData[key]?.isMappings">
-                            <span>{{ t('存储值: ') }}</span>
-                            <span>
-                              {{ displayValueDict.eventData[key]?.dict?.key }}
-                            </span>
-                            <br>
-                            <span>{{ t('展示文本: ') }}</span>
-                            <span class="space">
-                              {{ displayValueDict.eventData[key]?.dict?.name }}
-                            </span>
-                          </div>
-                          <div
-                            v-if="drillMap.get(key)"
-                            style="margin-top: 8px;">
-                            {{ t('点击查看此字段的证据下探') }}
-                          </div>
-                        </div>
-                      </template>
-                    </bk-popover>
-                    <!-- 没有字段映射或者没有证据下探 -->
-                    <span
-                      v-else
-                      class="space">
-                      {{ handleShowText(displayValueDict.eventData[key]?.value) }}
-                    </span>
-                    <!-- 证据下探按钮 -->
-                    <template v-if="drillMap.get(key)">
-                      <bk-popover
-                        placement="top"
-                        theme="black">
-                        <bk-button
-                          class="ml8"
-                          text
-                          theme="primary"
-                          @click="handleUseTool(
-                            drillMap.get(key),
-                            key
-                          )">
-                          <span
-                            style="
-                              padding: 2px 10px;
-                              color: #3a84ff;
-                              cursor: pointer;
-                              background-color: #cddffe;
-                              border-radius: 8px;
-                            ">
-                            {{ drillMap.get(key).drill_config.length }}
-                          </span>
-                        </bk-button>
-                        <template #content>
-                          <div>
-                            <div
-                              v-for="config in drillMap.get(key).drill_config"
-                              :key="config.tool.uid">
-                              {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
-                              <bk-button
-                                class="ml8"
-                                text
-                                theme="primary"
-                                @click="(e: any) => {
-                                  e.stopPropagation(); // 阻止事件冒泡
-                                  handleUseTool(drillMap.get(key), key, config.tool.uid);
-                                }">
-                                {{ t('去查看') }}
-                                <audit-icon
-                                  class="mr-18"
-                                  type="jump-link" />
-                              </bk-button>
-                            </div>
-                          </div>
-                        </template>
-                      </bk-popover>
-                    </template>
-                  </render-info-item>
-                </render-info-block>
-              </div>
-              <div
-                v-if="eventDataKeyArr.length && eventDataKeyArrNormal.length"
-                style="height: 20px; margin-top: 10px;">
-                <bk-button
-                  style="float: right;"
-                  text
-                  theme="primary"
-                  @click="handleToggleShowMore">
-                  <audit-icon
-                    :class="{ active: isShowMore }"
-                    style=" margin-right: 5px;"
-                    type="angle-double-down" />
-                  {{ isShowMore ? t('收起字段') : t('展开更多字段') }}
-                </bk-button>
-              </div>
-            </template>
-            <bk-exception
-              v-else
-              class="exception-part"
-              scene="part"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
           </div>
-        </div>
-      </template>
-      <bk-exception
-        v-else
-        class="exception-part"
-        scene="part"
-        type="empty">
-        {{ t('暂无数据') }}
-      </bk-exception>
-    </div>
+        </template>
+        <bk-exception
+          v-else
+          class="exception-part"
+          scene="part"
+          type="empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
+      </div>
+    </bk-loading>
   </div>
   <!-- 循环所有工具 -->
   <div
@@ -639,6 +641,7 @@
   let timeout: number| undefined = undefined;
 
   const activeStatus = ref('');
+  const loading = ref(false);
   const newIndex = ref<number[]>([]);
   const addEventRef = ref();
   const router = useRouter();
@@ -885,6 +888,7 @@
         id: props.data.risk_id,
       }).then(() => {
         // 触底加载，拼接 - 使用动态去重字段
+        loading.value = false;
         linkEventList.value = [];
         newIndex.value = [];
         if (linkEventData.value.results.length) {
@@ -1108,6 +1112,7 @@
   });
 
   onMounted(() => {
+    loading.value = true;
     const observer = new MutationObserver(() => {
       const detail = document.querySelector('.list-item-detail');
       const list = document.querySelector('.list') as HTMLDivElement;
