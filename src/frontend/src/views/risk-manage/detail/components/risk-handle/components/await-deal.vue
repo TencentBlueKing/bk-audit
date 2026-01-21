@@ -171,7 +171,7 @@
       </template>
       <bk-form-item label="">
         <auth-button
-          action-id="edit_risk_v2"
+          action-id="process_risk"
           :loading="loading"
           :permission="detailData.permission.process_risk || detailData.current_operator.includes(userInfo.username)"
           :resource="detailData.risk_id"

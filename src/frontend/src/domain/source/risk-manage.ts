@@ -49,6 +49,15 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 编辑风险标题
+  updateRiskTitle(params: {
+    risk_id: string | number,
+    title: string
+  }) {
+    return Request.put(`${this.module}/${params.risk_id}/`, {
+      params,
+    });
+  }
   // 获取待我处理的风险列表
   getTodoRiskList(params: {
       page: number,
