@@ -31,7 +31,7 @@
       <template v-else>
         {{ data.title }}
         <audit-icon
-          v-if="data.permission.edit_risk_v2"
+          v-if="data.permission?.edit_risk_v2"
           class="edit-fill"
           type="edit-fill"
           @click="handleTitleEdit" />
