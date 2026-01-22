@@ -141,7 +141,6 @@
   };
 
   const handleTitleSave = () => {
-    console.log('draftTitle>>', draftTitle.value);
     updateRiskTitle({
       risk_id: props.data.risk_id,
       title: draftTitle.value,

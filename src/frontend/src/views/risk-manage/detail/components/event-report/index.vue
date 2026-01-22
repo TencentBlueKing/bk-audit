@@ -34,6 +34,7 @@
       </render-info-item>
     </render-info-block>
     <quill-editor
+      :key="reportRenderKey"
       ref="editorRef"
       v-model:content="content"
       content-type="html"
@@ -41,8 +42,8 @@
       :options="options"
       theme="snow"
       @ready="handleEditorReady" />
-
     <bk-button
+      v-if="data.permission?.edit_risk_v2"
       class="event-report-edit-button"
       outline
       theme="primary"
@@ -50,8 +51,9 @@
       {{ t('编辑') }}
     </bk-button>
     <edit-event-report
+      :key="editReportKey"
       v-model:isShowEditEventReport="isShowEditEventReport"
-      :report-content="content"
+      :report-content="data.report?.content || ''"
       :report-enabled="data.report_enabled"
       :status="data.report?.status"
       :strategy-id="data.strategy_id"
@@ -75,6 +77,11 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import AIAgentBlot from './ai-model';
   import EditEventReport from './edit-event-report.vue';
+
+  interface expose {
+    showReport: () => void;
+  }
+
 
   interface Props {
     data: RiskManageModel & StrategyInfo
@@ -106,7 +113,9 @@
 
   // 事件调查报告内容
   const content = ref('');
-  const rawContent =  computed(() => props.data.report?.content);
+  const rawContent = computed(() => props.data.report?.content);
+  const reportRenderKey = computed(() => props.data.report?.updated_at || props.data.report?.content || 'empty');
+  const editReportKey = computed(() => props.data.report?.updated_at || props.data.report?.content || 'empty');
   const aiAgentData = ref<Array<{ id: string; name: string; prompt: string }>>([]);
   const aiBlockToken = '[[AI_AGENT_BLOCK]]';
   const isEditorReady = ref(false);
@@ -254,13 +263,19 @@
     applyEditorContent(newContent);
   }, { immediate: true });
 
-  const handleEditReport = () => {
+  const  handleEditReport = () => {
     isShowEditEventReport.value = true;
   };
 
   const handleUpdate = () => {
     emits('updated-data');
   };
+
+  defineExpose<expose>({
+    showReport() {
+      handleEditReport();
+    },
+  });
 </script>
 <style lang="postcss" scoped>
 .event-report {

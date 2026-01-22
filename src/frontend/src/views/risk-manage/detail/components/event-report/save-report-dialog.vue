@@ -29,7 +29,7 @@
         {{ t('确认') }}
       </bk-button>
       <bk-button
-        v-if="status !== 'auto' && !quillEditFlag "
+        v-if="isShowButton"
         class="ml8"
         @click="handleSubmit(false)">
         {{ t('保持人工编辑') }}
@@ -47,11 +47,11 @@
   import { useI18n } from 'vue-i18n';
 
   interface expose {
-    show: (tips: string, quillEditFlagVal: boolean) => void;
+    show: (tips: string, isRegetVal: boolean) => void;
     hide: () => void;
   }
   interface Props {
-    status: string | undefined ;
+    // status: string | undefined ;
   }
   interface Emits {
     (e: 'submit', isAuto: boolean): void;
@@ -59,19 +59,19 @@
   defineProps<Props>();
   const emit = defineEmits<Emits>();
   const isShow = ref(false);
-  const quillEditFlag = ref(true);
+  const isShowButton = ref(false);
   const tips = ref('');
   const { t } = useI18n();
 
-  const show = (tip: string, quillEditFlagVal: boolean) => {
-    quillEditFlag.value = quillEditFlagVal;
+  const show = (tip: string, isShowButtonVal: boolean) => {
+    isShowButton.value = isShowButtonVal;
     tips.value = tip;
     isShow.value = true;
   };
   const hide = () => {
     tips.value = '';
     isShow.value = false;
-    quillEditFlag.value = false;
+    isShowButton.value = false;
   };
   const handleCancel = () => {
     isShow.value = false;
