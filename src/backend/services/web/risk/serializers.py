@@ -931,7 +931,7 @@ class GetRiskFieldsByStrategyResponseSerializer(serializers.Serializer):
 
 class RetrieveRiskStrategyInfoAPIGWRequestSerializer(serializers.Serializer):
     risk_id = serializers.CharField()
-    prohibit_enum_mappings = serializers.BooleanField(required=False, default=True)
+    lite_mode = serializers.BooleanField(required=False, default=True)
 
 
 class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
@@ -1010,12 +1010,12 @@ class RetrieveRiskStrategyInfoAPIGWResponseSerializer(RetrieveRiskStrategyInfoRe
     )
 
     def __init__(self, *args, **kwargs):
-        self.prohibit_enum_mappings = kwargs.pop("prohibit_enum_mappings", False)
+        self.lite_mode = kwargs.pop("lite_mode", True)
         super().__init__(*args, **kwargs)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if not self.prohibit_enum_mappings:
+        if not self.lite_mode:
             return data
         for field_key in (
             "event_basic_field_configs",
@@ -1023,9 +1023,17 @@ class RetrieveRiskStrategyInfoAPIGWResponseSerializer(RetrieveRiskStrategyInfoRe
             "event_evidence_field_configs",
             "risk_meta_field_config",
         ):
-            for field_config in data.get(field_key, []):
+            field_configs = data.get(field_key, [])
+            # lite_mode 模式下：移除 enum_mappings，并过滤掉没有 drill_config 的字段
+            filtered_configs = []
+            for field_config in field_configs:
                 if isinstance(field_config, dict):
                     field_config.pop("enum_mappings", None)
+                    # 只保留有 drill_config 配置的字段
+                    drill_config = field_config.get("drill_config")
+                    if drill_config:
+                        filtered_configs.append(field_config)
+            data[field_key] = filtered_configs
         return data
 
 

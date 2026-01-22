@@ -263,10 +263,8 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
         if not strategy:
             return {}
 
-        prohibit_enum_mappings = validated_request_data.get("prohibit_enum_mappings", True)
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
-            strategy, prohibit_enum_mappings=prohibit_enum_mappings
-        )
+        lite_mode = validated_request_data.get("lite_mode", True)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(strategy, lite_mode=lite_mode)
         return serializer.data
 
 
