@@ -244,6 +244,7 @@
     onSuccess(data: RiskReport) {
       if (data.status === 'PENDING' || data.status === 'RUNNING') {
         isLoading.value = true;
+        isShowConfirm.value = false;
         // 清除之前的定时器（如果存在）
         if (timerId.value !== null) {
           clearTimeout(timerId.value);
@@ -260,12 +261,13 @@
           timerId.value = null;
         }
         isLoading.value = false;
-        isShowConfirm.value = false;
+        isShowConfirm.value = true;
         const aiResult = data.result?.ai || {};
         concent.value =   Object.values(aiResult).length === 0 ? '暂无数据' : String(Object.values(aiResult)[0]);
         // 成功
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;
+        isShowConfirm.value = true;
         // 失败
         concent.value = '失败';
         // 清除定时器
@@ -292,6 +294,7 @@
     formRef.value.validate().then(() => {
       isLoading.value = true;
       isPreviewExpanded.value = true;
+      isShowConfirm.value = false;
       // 延迟计算 rows，让高度过渡动画先完成，使过渡更平滑
       nextTick(() => {
         setTimeout(() => {
