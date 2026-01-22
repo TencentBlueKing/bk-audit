@@ -77,7 +77,7 @@
     isShow.value = false;
   };
   const handleSubmit = (isAuto: boolean) => {
-    // isShow.value = false;
+    isShow.value = false;
     emit('submit', isAuto);
   };
 
