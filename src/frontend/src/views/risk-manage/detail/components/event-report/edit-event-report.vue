@@ -89,6 +89,7 @@
     h,
     nextTick,
     onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -99,6 +100,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
+  import useUrlSearch from '@hooks/use-url-search';
 
   import { QuillEditor } from '@vueup/vue-quill';
 
@@ -107,6 +109,7 @@
   import saveReportDialog from './save-report-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
+
 
   interface Props {
     reportContent?: string;
@@ -120,10 +123,15 @@
     update: [];
   }>();
   const { t } = useI18n();
+  const {
+    replaceSearchParams,
+  } = useUrlSearch();
   const route = useRoute();
   const router = useRouter();
   const { messageSuccess } = useMessage();
   const isApiLoading = ref(false);
+  const isRegetVal = ref(false);
+  const isChangeVal = ref(false);
   const saveReportDialogRef = ref();
   const editorOptions = {
     theme: 'snow',
@@ -337,10 +345,10 @@
 
   // 监听 props 变化，更新本地内容
   watch(() => props.reportContent, (newContent) => {
-    console.log('newContent',  newContent);
     if (newContent !== undefined) {
       nextTick(() => {
         applyEditorContent(newContent);
+        isChangeVal.value = false;
       });
     }
   }, { immediate: true });
@@ -473,7 +481,8 @@
     currentTaskId = null;
     setTimeout(() => {
       quillEditFlag.value = false;
-    }, 0);
+      isChangeVal.value = false;
+    }, 1000);
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -509,27 +518,61 @@
         applyEditorContent('');
         isApiLoading.value = true;
         quillEditFlag.value = false;
+        isRegetVal.value = true;
+        isChangeVal.value = false;
         // 获取task_id
         riskReportGenerate({
           risk_id: route.params.riskId,
+        }).finally(() => {
+          isChangeVal.value = false;
         });
       },
     });
   };
 
   const handleTextChange = () => {
+    isChangeVal.value = true;
     if (!isProgrammaticUpdate.value) {
       quillEditFlag.value = true;
     }
   };
 
   const handleSubmit = () => {
+    let subTitleText = '';
+    let isShowButton = false;
+    if (props.status === 'auto') { // 自动生成的单子
+      if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
+        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+      }
+      if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
+        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+      }
+      if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
+        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+      }
+      if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
+        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+      }
+    } else { // 人工编辑的单子
+      if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
+        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+      }
+      if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
+        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+      }
+      if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
+        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+        isShowButton = true;
+      }
+      if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
+        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+      }
+    }
+
     // 人工编辑后，则提示用户
-    const subTitleText = quillEditFlag.value
-      ? t('保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告')
-      : t('保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容');
+
     nextTick(() => {
-      saveReportDialogRef.value?.show(subTitleText, quillEditFlag.value);
+      saveReportDialogRef.value?.show(subTitleText, isShowButton);
     });
   };
   const handleSaveReportSubmit = (isAuto: boolean) => {
@@ -568,10 +611,14 @@
     closeDialog();
   };
   const closeDialog = () => {
+    isChangeVal.value = false;
     // 停止轮询
     stopPolling();
     isShowEditEventReport.value = false;
     quillEditFlag.value = false;
+    // 重置url
+    replaceSearchParams({
+    });
   };
   const reportEnabledTeps = () => <div>
         <span>{t('该审计风险所属策略未启用事件调查报告自动生成功能，请编辑 ')}</span>
@@ -597,6 +644,13 @@
     stopPolling();
   });
 
+  onMounted(() => {
+    nextTick(() => {
+      setTimeout(() => {
+        isChangeVal.value = false;
+      }, 1000);
+    });
+  });
 </script>
 
 <style lang="postcss" scoped>

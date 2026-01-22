@@ -52,7 +52,8 @@
             :name="item.name">
             <scroll-faker>
               <component
-                :is="renderCom"
+                :is="comMap[item.name]"
+                ref="renderComRef"
                 :data="detailData"
                 :strategy-list="strategyList"
                 @get-event-data="handleGetEventData"
@@ -120,9 +121,11 @@
 <script setup lang='ts'>
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -155,13 +158,14 @@
   const eventDataList = ref();
   const isShowSide = ref(true);
   const isShowEditEventReport = ref(false);
+  const renderComRef = ref();
+  const hasAutoOpenedReport = ref(false);
 
   let timeout: undefined | number = undefined;
   const handleOpenRight = () => {
     isShowSide.value = !isShowSide.value;
   };
 
-  const renderCom = computed(() => comMap[active.value]);
   const comMap: Record<string, any> = {
     eventReport: EventReport,
     linkEvent: LinkEvent,
@@ -268,7 +272,36 @@
       query: rest,
     });
   });
+  const tryOpenEditReport = () => {
+    if (hasAutoOpenedReport.value) {
+      return;
+    }
+    if (route.query.openEditReport !== 'true' || active.value !== 'eventReport') {
+      return;
+    }
+    nextTick(() => {
+      const refs = renderComRef.value;
+      const reportRef = Array.isArray(refs)
+        ? refs.find((item: any) => typeof item?.showReport === 'function')
+        : refs;
+      if (reportRef?.showReport) {
+        reportRef.showReport();
+        hasAutoOpenedReport.value = true;
+      }
+    });
+  };
 
+  watch(
+    () => [detailData.value, active.value, route.query.openEditReport],
+    (val) => {
+      if (val[0]) {
+        tryOpenEditReport();
+      }
+    },
+    {
+      immediate: true,
+    },
+  );
   onMounted(() => {
     const observer = new MutationObserver(() => {
       const left = document.querySelector('.left');
@@ -283,7 +316,11 @@
       characterData: true,
       attributes: true,
     });
-
+    nextTick(() => {
+      if (route.query.openEditReport === 'false') {
+        handleGenerateReport();
+      }
+    });
     onBeforeUnmount(() => {
       observer.takeRecords();
       observer.disconnect();
