@@ -536,36 +536,44 @@
       quillEditFlag.value = true;
     }
   };
-
+  const isAutoGenerate = ref(false);
   const handleSubmit = () => {
     let subTitleText = '';
     let isShowButton = false;
     if (props.status === 'auto') { // 自动生成的单子
       if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
         subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+        isAutoGenerate.value  = false;
       }
       if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
         subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+        isAutoGenerate.value  = false;
       }
       if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
         subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+        isAutoGenerate.value  = true;
       }
       if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
         subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+        isAutoGenerate.value  = true;
       }
     } else { // 人工编辑的单子
       if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
         subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+        isAutoGenerate.value  = false;
       }
       if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
         subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+        isAutoGenerate.value  = false;
       }
       if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
         subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+        isAutoGenerate.value  = true;
         isShowButton = true;
       }
       if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
         subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+        isAutoGenerate.value  = true;
       }
     }
 
@@ -577,35 +585,12 @@
   };
   const handleSaveReportSubmit = (isAuto: boolean) => {
     const restoredContent = restoreAiContentBlocks(localeReportContent.value);
-    if (props.status === 'auto') { // 自动生成的单子
-      if (quillEditFlag.value) { // 没有点击自动生成
-        saveOrUpdateRiskReport({
-          risk_id: route.params.riskId,
-          content: restoredContent,
-          auto_generate: false,
-        });
-      } else { // 点击自动生成
-        saveOrUpdateRiskReport({
-          risk_id: route.params.riskId,
-          content: restoredContent,
-          auto_generate: true,
-        });
-      }
-    } else { // 人工编辑的单子
-      if (quillEditFlag.value) { // 人工编辑
-        saveOrUpdateRiskReport({
-          risk_id: route.params.riskId,
-          content: restoredContent,
-          auto_generate: false,
-        });
-      } else { // 自动生成
-        saveOrUpdateRiskReport({
-          risk_id: route.params.riskId,
-          content: restoredContent,
-          auto_generate: isAuto,
-        });
-      }
-    }
+    saveOrUpdateRiskReport({
+      risk_id: route.params.riskId,
+      content: restoredContent,
+      auto_generate: isAuto ? isAutoGenerate.value : false,
+    });
+
 
     saveReportDialogRef.value?.hide();
     closeDialog();
