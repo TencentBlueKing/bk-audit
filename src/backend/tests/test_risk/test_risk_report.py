@@ -107,12 +107,12 @@ class TestCreateRiskReport(TestCase):
         )
 
         self.assertEqual(result["content"], content)
-        self.assertEqual(result["status"], RiskReportStatus.MANUAL.value)
+        self.assertEqual(result["status"], RiskReportStatus.AUTO.value)
 
         # 验证报告已创建
         report = RiskReport.objects.get(risk=self.risk)
         self.assertEqual(report.content, content)
-        self.assertEqual(report.status, RiskReportStatus.MANUAL)
+        self.assertEqual(report.status, RiskReportStatus.AUTO)
 
         # 验证风险的 auto_generate_report 已更新
         self.risk.refresh_from_db()
