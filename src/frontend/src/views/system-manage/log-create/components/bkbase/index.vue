@@ -106,7 +106,6 @@
   };
 
   const handlePrevious = () => {
-    console.log('handlePrevious', currentStep.value);
     if (currentStep.value > 1) {
       currentStep.value -= 1;
       appendSearchParams({

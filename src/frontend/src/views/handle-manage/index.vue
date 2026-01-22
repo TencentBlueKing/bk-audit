@@ -446,6 +446,9 @@
       params: {
         riskId: data.risk_id,
       },
+      query: {
+        openEditReport: data.has_report ? 'true' : 'false',
+      },
     });
   };
   const formRef = ref();

@@ -68,7 +68,6 @@
       return standardFieldRef.value.clearFiledDebug();
     },
     getFieldHistory() {
-      console.log('getFieldHistory');
       return standardFieldRef.value.getFieldHistory();
     },
   });
