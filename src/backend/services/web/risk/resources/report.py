@@ -134,18 +134,21 @@ class CreateRiskReport(RiskReportMeta):
         risk = get_object_or_404(Risk, risk_id=risk_id)
         origin_data = RiskInfoSerializer(risk).data
 
+        # 自动生成标记为自动，否则标记为手动
+        status = RiskReportStatus.AUTO if auto_generate else RiskReportStatus.MANUAL
+
         # 创建报告
         report, created = RiskReport.objects.get_or_create(
             risk=risk,
             defaults={
                 "content": content,
-                "status": RiskReportStatus.MANUAL,
+                "status": status,
             },
         )
 
         if not created:
             report.content = content
-            report.status = RiskReportStatus.MANUAL
+            report.status = status
             report.save(update_fields=["content", "status"])
 
         # 更新风险的自动生成标记
