@@ -76,11 +76,12 @@
     defaultValue: [],
     onSuccess: (menuData) => {
       emit('statement-menuData', menuData);
-      if (!(route.params?.id)) {
+      // 仅当没有id且menuData有数据时才进行路由跳转
+      if (!(route.params?.id) && menuData.length > 0 && menuData[0]?.id) {
         router.push({
           name: 'statementManageDetail',
           params: {
-            id: menuData[0]?.id || 'undefined',
+            id: menuData[0].id,
           } });
       }
     },
