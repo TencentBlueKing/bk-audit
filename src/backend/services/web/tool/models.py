@@ -70,6 +70,7 @@ class Tool(SoftDeleteModel):
     def delete_by_uid(cls, uid: str):
         Tool.objects.filter(uid=uid, is_deleted=False).delete()
         ToolTag.objects.filter(tool_uid=uid).delete()
+        ToolFavorite.objects.filter(tool_uid=uid).delete()
 
     def get_tags(self) -> QuerySet["ToolTag"]:
         """
@@ -159,3 +160,18 @@ class ToolTag(OperateRecordModel):
         verbose_name = gettext_lazy("Tool Tag")
         verbose_name_plural = verbose_name
         unique_together = [("tool_uid", "tag_id")]
+
+
+class ToolFavorite(OperateRecordModel):
+    """工具收藏
+
+    使用 tool_uid 而非 tool_id 关联工具，确保工具版本更新后收藏状态仍然正确。
+    """
+
+    tool_uid = models.CharField(gettext_lazy("工具UID"), max_length=64, db_index=True)
+    username = models.CharField(gettext_lazy("Username"), max_length=64, db_index=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("Tool Favorite")
+        verbose_name_plural = verbose_name
+        unique_together = [["tool_uid", "username"]]

@@ -40,3 +40,16 @@ MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY = {
     "use_tool_permission_tags": set(),
     "manage_tool_permission_tags": set(),
 }
+
+
+def mock_wrapper_permission_field(result_list, *args, **kwargs):
+    """
+    Mock wrapper_permission_field 函数，直接返回结果列表，
+    并为每个结果添加默认的权限字段
+    """
+    for item in result_list:
+        item["permission"] = {
+            "use_tool": True,
+            "manage_tool": True,
+        }
+    return result_list
