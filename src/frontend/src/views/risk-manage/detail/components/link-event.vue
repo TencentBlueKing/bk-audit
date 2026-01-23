@@ -113,6 +113,11 @@
                           {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
                         </bk-button>
                         <span v-else> -- </span>
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="copy-btn"
+                          type="copy"
+                          @click.stop="handleCopyValue(strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label)" />
                       </template>
                       <!-- 其他字段 -->
                       <template v-else>
@@ -135,16 +140,17 @@
                               drillMap.get(basicItem.field_name),
                               basicItem.field_name
                             )">
-                            <edit-tag
-                              v-if="basicItem.field_name === 'operator'"
-                              :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
-                              :max="99"
-                              :show-copy="false"
-                              style="display: inline-block;"
-                              @click="handleUseTool(
-                                drillMap.get(basicItem.field_name),
-                                basicItem.field_name
-                              )" />
+                            <span v-if="basicItem.field_name === 'operator'">
+                              <edit-tag
+                                :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
+                                :max="99"
+                                :show-copy="false"
+                                style="display: inline-block;"
+                                @click="handleUseTool(
+                                  drillMap.get(basicItem.field_name),
+                                  basicItem.field_name
+                                )" />
+                            </span>
                             <span v-else>
                               {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
                             </span>
@@ -189,8 +195,13 @@
                             :max="99"
                             style="display: inline-block;" />
                           <span v-else>
-                            {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                            {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) || '--' }}
                           </span>
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="copy-btn"
+                            type="copy"
+                            @click.stop="handleCopyValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)" />
                         </span>
                       </template>
                       <!-- 证据下探按钮 -->
@@ -217,6 +228,11 @@
                               {{ drillMap.get(basicItem.field_name).drill_config.length }}
                             </span>
                           </bk-button>
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="copy-btn"
+                            type="copy"
+                            @click.stop="handleCopyValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)" />
                           <template #content>
                             <div>
                               <div
@@ -289,6 +305,11 @@
                             key
                           )">
                           {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="copy-btn"
+                            type="copy"
+                            @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                         </span>
                         <template #content>
                           <div>
@@ -317,6 +338,11 @@
                         v-else
                         class="space">
                         {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="copy-btn"
+                          type="copy"
+                          @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                       </span>
                       <!-- 证据下探按钮 -->
                       <template v-if="drillMap.get(key)">
@@ -342,6 +368,11 @@
                               {{ drillMap.get(key).drill_config.length }}
                             </span>
                           </bk-button>
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="copy-btn"
+                            type="copy"
+                            @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                           <template #content>
                             <div>
                               <div
@@ -405,6 +436,11 @@
                             key
                           )">
                           {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="copy-btn"
+                            type="copy"
+                            @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                         </span>
                         <template #content>
                           <div>
@@ -433,6 +469,11 @@
                         v-else
                         class="space">
                         {{ handleShowText(displayValueDict.eventData[key]?.value) }}
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="copy-btn"
+                          type="copy"
+                          @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                       </span>
                       <!-- 证据下探按钮 -->
                       <template v-if="drillMap.get(key)">
@@ -457,6 +498,11 @@
                             ">
                               {{ drillMap.get(key).drill_config.length }}
                             </span>
+                            <audit-icon
+                              v-bk-tooltips="t('复制')"
+                              class="copy-btn"
+                              type="copy"
+                              @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                           </bk-button>
                           <template #content>
                             <div>
@@ -568,12 +614,15 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
+  import { execCopy } from '@utils/assist';
+
   import addEvent from '../add-event/index.vue';
 
   import RenderInfoItem from './render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+
 
   interface DrillItem {
     field_name: string;
@@ -793,6 +842,14 @@
     }
     // 3. 其他情况直接返回原值
     return value;
+  };
+
+  const handleCopyValue = (value: any) => {
+    const text = handleShowText(value);
+    if (text === undefined || text === null || text === '' || text === '--') {
+      return;
+    }
+    execCopy(String(text), t('复制成功'));
   };
 
   // 将各种类型转换为字符串，模拟 Vue 模板的显示效果
@@ -1237,6 +1294,12 @@
 
           .info-value {
             word-break: break-all;
+
+            &:hover {
+              .copy-btn {
+                opacity: 100%;
+              }
+            }
           }
         }
       }
@@ -1250,6 +1313,12 @@
 
           .info-value {
             word-break: break-all;
+
+            &:hover {
+              .copy-btn {
+                opacity: 100%;
+              }
+            }
           }
         }
       }
@@ -1372,6 +1441,23 @@
 
 .space {
   white-space: pre-line;
+
+  &:hover {
+    .copy-btn {
+      opacity: 100%;
+    }
+  }
+}
+
+.copy-btn {
+  margin-left: 8px;
+  color: #3a84ff;
+  cursor: pointer;
+  opacity: 0%;
+
+  &:hover {
+    opacity: 100%;
+  }
 }
 
 @keyframes spin {
