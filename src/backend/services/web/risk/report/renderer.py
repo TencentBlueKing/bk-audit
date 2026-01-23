@@ -22,12 +22,16 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Type
 
+import mistune
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from jinja2 import Environment, nodes
 from markupsafe import Markup
 
 from services.web.risk.report.providers import Provider
+
+# Markdown 解析器实例
+_markdown_parser = mistune.create_markdown()
 
 
 class ProviderNamespace:
@@ -241,10 +245,11 @@ def _build_render_context(
             field_name = full_name.split(".")[-1] if "." in full_name else full_name
             if provider_key not in namespace_providers:
                 namespace_providers[provider_key] = {}
-            # AI变量返回的内容包裹 <div class="ai-content"></div>，使用 Markup 防止转义
             ai_result = results.get(call.original_expr, "")
             if ai_result:
-                ai_result = Markup(f'<div class="ai-content">{ai_result}</div>')
+                # 使用 mistune 将 markdown 转换为 HTML
+                html_content = _markdown_parser(ai_result)
+                ai_result = Markup(html_content)
             namespace_providers[provider_key][field_name] = ai_result
 
     # 为每个命名空间创建对象（如ai）
