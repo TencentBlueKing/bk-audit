@@ -141,25 +141,24 @@
       return { html: container.innerHTML, aiAgent: [] as typeof aiAgentData.value };
     }
 
-    const aiAgents: Array<{ id: string; name: string; prompt: string }> = [];
-    targets.forEach((targetNode, index) => {
+    targets.forEach((targetNode) => {
       const prompt = targetNode.getAttribute('data-prompt') || targetNode.textContent || '';
-      const name = targetNode.getAttribute('data-name') || t('完整AI总结');
-      const id = targetNode.getAttribute('data-id') || `ai-summary-${index + 1}`;
-      const placeholder = doc.createElement('span');
-      placeholder.setAttribute('data-ai-placeholder', 'true');
-      placeholder.setAttribute('data-ai-embed', 'true');
-      placeholder.setAttribute('data-id', id);
-      placeholder.setAttribute('data-name', name);
-      placeholder.setAttribute('data-prompt', prompt);
-      placeholder.setAttribute('data-ai-index', String(index));
-      placeholder.textContent = aiBlockToken;
-      targetNode.parentNode?.replaceChild(placeholder, targetNode);
-      aiAgents.push({ id, name, prompt });
+      const fragment = doc.createDocumentFragment();
+      const lines = prompt.split(/\r?\n/);
+      lines.forEach((line) => {
+        const paragraph = doc.createElement('p');
+        if (line.trim() === '') {
+          paragraph.innerHTML = '<br>';
+        } else {
+          paragraph.textContent = line;
+        }
+        fragment.appendChild(paragraph);
+      });
+      targetNode.parentNode?.replaceChild(fragment, targetNode);
     });
     return {
       html: container.innerHTML,
-      aiAgent: aiAgents,
+      aiAgent: [] as typeof aiAgentData.value,
     };
   };
 
@@ -298,68 +297,5 @@
     background-color: #fff !important;
   }
 
-  /* AI智能体块样式 */
-  :deep(.ql-ai-agent) {
-    position: relative;
-    display: block;
-    width: 100%;
-    height: auto;
-    padding: 0;
-    margin: 0;
-    line-height: 1;
-  }
-
-  :deep(.ai-agent-block) {
-    display: flex;
-    width: 100%;
-    min-height: auto;
-    padding: 4px 12px;
-    margin: 0;
-    background: #f5f7fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    align-items: flex-start;
-  }
-
-  :deep(.ai-agent-ai) {
-    align-self: flex-start;
-    margin-top: 12px;
-  }
-
-  :deep(.ai-agent-content) {
-    display: flex;
-    padding: 10px 0;
-    margin-left: 5px;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  :deep(.ai-agent-label) {
-    font-family: MicrosoftYaHei-Bold, sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 22px;
-    letter-spacing: 0;
-    color: #313238;
-  }
-
-  :deep(.ai-agent-prompt) {
-    display: block;
-    overflow: visible;
-    font-family: MicrosoftYaHei, sans-serif;
-    font-size: 12px;
-    line-height: 20px;
-    letter-spacing: 0;
-    color: #4d4f56;
-    text-align: justify;
-    word-break: break-word;
-  }
-
-  /* 移除AI智能体块周围的默认间距 */
-  :deep(.ql-editor .ql-ai-agent) {
-    padding: 0;
-    margin: 0;
-  }
 }
 </style>
