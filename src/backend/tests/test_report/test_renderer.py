@@ -809,9 +809,9 @@ class TestAIPreviewResource(TestCase):
             self.assertIn("summary", result["ai"])
             self.assertIn("suggestion", result["ai"])
 
-            # 验证 AI 执行器被调用并返回了 mock 结果
-            self.assertEqual(result["ai"]["summary"], "这是AI生成的风险摘要内容")
-            self.assertEqual(result["ai"]["suggestion"], "这是AI生成的处理建议")
+            # 验证 AI 执行器被调用并返回了 mock 结果（内容经过 markdown 渲染）
+            self.assertIn("这是AI生成的风险摘要内容", result["ai"]["summary"])
+            self.assertIn("这是AI生成的处理建议", result["ai"]["suggestion"])
 
     def test_ai_preview_task_with_single_variable(self):
         """测试 render_ai_variable 任务执行单个 AI 变量"""
@@ -829,7 +829,8 @@ class TestAIPreviewResource(TestCase):
 
             self.assertIn("ai", result)
             self.assertIn("analysis", result["ai"])
-            self.assertEqual(result["ai"]["analysis"], "这是AI生成的风险分析")
+            # 内容经过 markdown 渲染
+            self.assertIn("这是AI生成的风险分析", result["ai"]["analysis"])
 
     def test_ai_preview_task_risk_not_found(self):
         """测试 render_ai_variable 任务风险单不存在的情况"""
@@ -1056,10 +1057,10 @@ class TestGetTaskResultResource(TestCase):
 
             result = self.resource.risk.get_task_result(task_id="test_real_task_id")
 
-            # 验证返回结果
+            # 验证返回结果（内容经过 markdown 渲染）
             self.assertEqual(result["status"], "SUCCESS")
             self.assertIn("ai", result["result"])
-            self.assertEqual(result["result"]["ai"]["summary"], "这是AI生成的风险摘要")
+            self.assertIn("这是AI生成的风险摘要", result["result"]["ai"]["summary"])
 
     def test_full_ai_preview_workflow(self):
         """测试完整的 AI 预览工作流：提交任务 -> 执行任务 -> 获取结果"""
@@ -1105,7 +1106,7 @@ class TestGetTaskResultResource(TestCase):
 
             get_result = self.resource.risk.get_task_result(task_id="workflow_task_id")
 
-            # 验证完整工作流结果
+            # 验证完整工作流结果（内容经过 markdown 渲染）
             self.assertEqual(get_result["status"], "SUCCESS")
-            self.assertEqual(get_result["result"]["ai"]["summary"], "风险摘要：检测到异常行为")
-            self.assertEqual(get_result["result"]["ai"]["suggestion"], "建议：立即进行安全审查")
+            self.assertIn("风险摘要：检测到异常行为", get_result["result"]["ai"]["summary"])
+            self.assertIn("建议：立即进行安全审查", get_result["result"]["ai"]["suggestion"])

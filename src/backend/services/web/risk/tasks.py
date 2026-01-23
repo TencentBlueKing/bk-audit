@@ -21,6 +21,7 @@ import json
 import os
 from typing import Any
 
+import mistune
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
@@ -524,6 +525,8 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
 
             try:
                 result = ai_provider.get(name=var_name)
+                if result:
+                    result = mistune.html(result)
                 ai_results[field_name] = result
             except Exception as e:
                 logger_celery.exception("[RenderAIVariable] Failed to get AI variable %s: %s", var_name, e)

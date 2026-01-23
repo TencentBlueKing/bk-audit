@@ -30,9 +30,6 @@ from markupsafe import Markup
 
 from services.web.risk.report.providers import Provider
 
-# Markdown 解析器实例
-_markdown_parser = mistune.create_markdown()
-
 
 class ProviderNamespace:
     """Provider命名空间，用于支持 provider.field 语法
@@ -245,10 +242,11 @@ def _build_render_context(
             field_name = full_name.split(".")[-1] if "." in full_name else full_name
             if provider_key not in namespace_providers:
                 namespace_providers[provider_key] = {}
+            # AI变量返回的内容：先使用 markdown 渲染，使用 Markup 防止转义
             ai_result = results.get(call.original_expr, "")
             if ai_result:
                 # 使用 mistune 将 markdown 转换为 HTML
-                html_content = _markdown_parser(ai_result)
+                html_content = mistune.html(ai_result)
                 ai_result = Markup(html_content)
             namespace_providers[provider_key][field_name] = ai_result
 
