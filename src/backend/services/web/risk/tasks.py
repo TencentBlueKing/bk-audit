@@ -79,7 +79,7 @@ cache: DefaultClient = _cache
     time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
     max_retries=settings.RENDER_MAX_RETRY,
     acks_late=True,  # 任务级别的延迟确认
-    reject_on_worker_lost=True,  # Worker 丢失时拒绝任务
+    rate_limit=settings.RENDER_TASK_RATE_LIMIT,  # 限流：防止下游服务被打爆
 )
 def render_risk_report(self, risk_id: str, task_id: str):
     """
