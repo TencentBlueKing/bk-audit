@@ -21,3 +21,5 @@ RENDER_MAX_RETRY = int(os.getenv("BKAPP_RENDER_MAX_RETRY", 3))
 RENDER_TASK_TIMEOUT = int(os.getenv("BKAPP_RENDER_TASK_TIMEOUT", 30 * 60))
 # 渲染任务延迟触发时间（秒），默认 5 分钟
 RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", 60 * 5))
+# 渲染任务限流，格式: "次数/时间单位"，如 "10/m", "100/m", "1000/h"
+RENDER_TASK_RATE_LIMIT = os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "10/m")
