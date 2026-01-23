@@ -36,7 +36,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
 
     def setUp(self):
         super().setUp()
-        # 创建策略，包含 enum_mappings 配置
+        # 创建策略，包含 enum_mappings 和 drill_config 配置
         self.strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="test_strategy_for_apigw",
@@ -50,7 +50,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
                     "is_priority": True,
                     "description": "事件唯一标识",
                     "enum_mappings": None,
-                    "drill_config": [],
+                    "drill_config": [{"tool": {"uid": "test-tool", "version": 1}, "config": [], "drill_name": "测试工具"}],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -68,7 +68,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
                         "collection_id": "user_mapping",
                         "mappings": [{"source_key": "admin", "target_value": "管理员"}],
                     },
-                    "drill_config": [],
+                    "drill_config": [{"tool": {"uid": "user-tool", "version": 1}, "config": [], "drill_name": "用户工具"}],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -111,9 +111,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
-        result = RetrieveRiskStrategyInfoAPIGW().perform_request(
-            {"risk_id": self.risk.risk_id, "prohibit_enum_mappings": False}
-        )
+        result = RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": False})
 
         self.assertIsInstance(result, dict)
         self.assertEqual(result["risk_level"], RiskLevel.HIGH.value)
@@ -125,13 +123,11 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
     @mock.patch("core.utils.tools.get_app_info")
     def test_retrieve_risk_strategy_info_apigw_with_enum_mappings(self, mock_get_app_info):
         """
-        测试 prohibit_enum_mappings=False 时返回 enum_mappings 字段
+        测试 lite_mode=False 时返回 enum_mappings 字段
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
-        result = RetrieveRiskStrategyInfoAPIGW().perform_request(
-            {"risk_id": self.risk.risk_id, "prohibit_enum_mappings": False}
-        )
+        result = RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": False})
 
         # 验证 event_data_field_configs 中包含 enum_mappings
         event_data_configs = result.get("event_data_field_configs", [])
@@ -144,15 +140,13 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         self.assertIsNotNone(operator_field["enum_mappings"])
 
     @mock.patch("core.utils.tools.get_app_info")
-    def test_retrieve_risk_strategy_info_apigw_prohibit_enum_mappings(self, mock_get_app_info):
+    def test_retrieve_risk_strategy_info_apigw_lite_mode(self, mock_get_app_info):
         """
-        测试 prohibit_enum_mappings=True 时不返回 enum_mappings 字段
+        测试 lite_mode=True 时不返回 enum_mappings 字段，且只保留有 drill_config 的字段
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
-        result = RetrieveRiskStrategyInfoAPIGW().perform_request(
-            {"risk_id": self.risk.risk_id, "prohibit_enum_mappings": True}
-        )
+        result = RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": True})
 
         # 验证所有字段配置中都不包含 enum_mappings
         for field_key in [
@@ -168,10 +162,17 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
                     f"字段 {field_config.get('field_name')} 不应包含 enum_mappings",
                 )
 
+        # 验证 lite_mode=True 时只保留有 drill_config 的字段
+        # event_data_field_configs 中只有 operator 有 drill_config，ip_address 没有
+        event_data_configs = result.get("event_data_field_configs", [])
+        field_names = [f["field_name"] for f in event_data_configs]
+        self.assertIn("operator", field_names)
+        self.assertNotIn("ip_address", field_names)
+
     @mock.patch("core.utils.tools.get_app_info")
-    def test_retrieve_risk_strategy_info_apigw_default_prohibit_enum_mappings(self, mock_get_app_info):
+    def test_retrieve_risk_strategy_info_apigw_default_lite_mode(self, mock_get_app_info):
         """
-        测试 prohibit_enum_mappings 默认值为 True，不返回 enum_mappings
+        测试 lite_mode 默认值为 True，不返回 enum_mappings
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
@@ -197,7 +198,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         """
         mock_get_app_info.return_value = {"app_code": "test_app"}
 
-        RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "prohibit_enum_mappings": False})
+        RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": False})
 
         # 验证 get_app_info 被调用
         mock_get_app_info.assert_called_once()
@@ -212,9 +213,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         from django.http import Http404
 
         with self.assertRaises(Http404):
-            RetrieveRiskStrategyInfoAPIGW().perform_request(
-                {"risk_id": "non_existent_risk_id", "prohibit_enum_mappings": False}
-            )
+            RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": "non_existent_risk_id", "lite_mode": False})
 
     @mock.patch("core.utils.tools.get_app_info")
     def test_retrieve_risk_strategy_info_apigw_strategy_not_found(self, mock_get_app_info):
@@ -235,7 +234,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
 
         try:
             result = RetrieveRiskStrategyInfoAPIGW().perform_request(
-                {"risk_id": risk_without_strategy.risk_id, "prohibit_enum_mappings": False}
+                {"risk_id": risk_without_strategy.risk_id, "lite_mode": False}
             )
 
             self.assertEqual(result, {})
@@ -268,7 +267,7 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
                         "collection_id": "basic_mapping",
                         "mappings": [],
                     },
-                    "drill_config": [],
+                    "drill_config": [{"tool": {"uid": "basic-tool", "version": 1}, "config": [], "drill_name": "基础工具"}],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -286,7 +285,7 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
                         "collection_id": "data_mapping",
                         "mappings": [],
                     },
-                    "drill_config": [],
+                    "drill_config": [{"tool": {"uid": "data-tool", "version": 1}, "config": [], "drill_name": "数据工具"}],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -304,7 +303,9 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
                         "collection_id": "evidence_mapping",
                         "mappings": [],
                     },
-                    "drill_config": [],
+                    "drill_config": [
+                        {"tool": {"uid": "evidence-tool", "version": 1}, "config": [], "drill_name": "证据工具"}
+                    ],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -322,7 +323,7 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
                         "collection_id": "meta_mapping",
                         "mappings": [],
                     },
-                    "drill_config": [],
+                    "drill_config": [{"tool": {"uid": "meta-tool", "version": 1}, "config": [], "drill_name": "元工具"}],
                     "is_show": True,
                     "duplicate_field": False,
                     "field_type": "string",
@@ -336,13 +337,13 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
 
     def test_serializer_with_enum_mappings(self):
         """
-        测试序列化器 prohibit_enum_mappings=False 时包含 enum_mappings
+        测试序列化器 lite_mode=False 时包含 enum_mappings
         """
         from services.web.risk.serializers import (
             RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
 
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=False)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, lite_mode=False)
         data = serializer.data
 
         # 验证所有字段配置都包含 enum_mappings
@@ -355,15 +356,15 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
             for field_config in data.get(field_key, []):
                 self.assertIn("enum_mappings", field_config)
 
-    def test_serializer_prohibit_enum_mappings(self):
+    def test_serializer_lite_mode(self):
         """
-        测试序列化器 prohibit_enum_mappings=True 时移除 enum_mappings
+        测试序列化器 lite_mode=True 时移除 enum_mappings
         """
         from services.web.risk.serializers import (
             RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
 
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=True)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, lite_mode=True)
         data = serializer.data
 
         # 验证所有字段配置都不包含 enum_mappings
@@ -388,7 +389,7 @@ class TestRetrieveRiskStrategyInfoAPIGWResponseSerializer(TestCase):
             RetrieveRiskStrategyInfoAPIGWResponseSerializer,
         )
 
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, prohibit_enum_mappings=True)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(self.strategy, lite_mode=True)
         data = serializer.data
 
         # 验证基本字段存在
