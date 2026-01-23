@@ -229,7 +229,7 @@
           prompt: data.prompt,
           result: '',
         }, 'api');
-        quill.insertText(blotIndex + 1, '\n', 'api');
+        // 不额外插入换行，避免智能体块后出现空白行
       }
     } else {
       let searchIndex = quill.getText().lastIndexOf(aiBlockToken);
@@ -248,7 +248,7 @@
           prompt: data.prompt,
           result: '',
         }, 'api');
-        quill.insertText(searchIndex + 1, '\n', 'api');
+        // 不额外插入换行，避免智能体块后出现空白行
         searchIndex = quill.getText().lastIndexOf(aiBlockToken, searchIndex - 1);
       }
     }
@@ -331,8 +331,7 @@
               prompt,
               result: '',
             },
-          })
-          .insert('\n');
+          });
       });
     }
     isEditorReady.value = true;
@@ -663,7 +662,7 @@
   display: flex;
   width: 100%;
   min-height: auto;
-  padding: 4px 12px;
+  padding: 2px 10px;
   margin: 0;
   background: #f5f7fa;
   border: 1px solid #e0e0e0;
@@ -673,7 +672,7 @@
 
 :deep(.ai-agent-content) {
   display: flex;
-  padding: 10px 0;
+  padding: 4px 0;
   margin-left: 35px;
   flex: 1;
   flex-direction: column;
@@ -705,7 +704,7 @@
   top: 20px;
   right: 8px;
   display: flex;
-  margin-top: 12px;
+  margin-top: 6px;
   align-self: flex-start;
   gap: 8px;
 }
