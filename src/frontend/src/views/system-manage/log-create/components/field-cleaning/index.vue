@@ -236,6 +236,7 @@
     defaultValue: [],
     manual: true,
     onSuccess(data) {
+      console.log('data', data);
       if (data.length > 0) {
         hasLogData.value = false;
         formData.data = data[0].value;
