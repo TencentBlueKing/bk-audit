@@ -28,6 +28,7 @@
       :is="renderCom"
       ref="comRef"
       :edit-data="editData"
+      :form-data="formData"
       :is-edit-data-loading="isEditDataLoading"
       :select="formData.configs.select"
       :strategy-name="formData.strategy_name"
@@ -68,6 +69,7 @@
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
+  import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
@@ -96,6 +98,8 @@
     risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'],
     processor_groups: [],
     notice_groups: []
+    report_enabled: boolean,
+    report_config: Record<string, any>,
   }
 
   const router = useRouter();
@@ -106,11 +110,13 @@
   const comMap = {
     1: Step1,
     2: Step2,
-    3: Step3,
+    3: eventReport,
+    4: Step3,
   };
   const steps = [
     { title: t('风险发现') },
     { title: t('单据展示') },
+    { title: t('事件调查报告') },
     { title: t('其他配置') },
   ];
   const currentStep = ref(1);
@@ -143,22 +149,19 @@
     risk_meta_field_config: [],
     processor_groups: [],
     notice_groups: [],
+    report_enabled: false,
+    report_config: {},
   });
 
   // 编辑状态获取数据
   const {
-    run: fetchStrategyList,
+    run: fetchStrategyInfo,
     loading: isEditDataLoading,
-  } = useRequest(StrategyManageService.fetchStrategyList, {
-    defaultValue: {
-      results: [],
-      page: 1,
-      num_pages: 1,
-      total: 1,
-    },
+  } = useRequest(StrategyManageService.fetchStrategyInfo, {
+    defaultValue: new StrategyModel(),
     onSuccess: (data) => {
-      // eslint-disable-next-line prefer-destructuring
-      editData.value = data.results[0];
+      // // eslint-disable-next-line prefer-destructuring
+      editData.value = data;
       editData.value.event_basic_field_configs = editData.value.event_basic_field_configs.map((item) => {
         if (item.drill_config && !Array.isArray(item.drill_config)) {
           // eslint-disable-next-line no-param-reassign
@@ -288,7 +291,6 @@
   // 提交
   const handleSubmit = () => {
     const params = _.cloneDeep(formData.value);
-
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
@@ -322,9 +324,7 @@
 
   onMounted(() => {
     if (isEditMode || isCloneMode) {
-      fetchStrategyList({
-        page: 1,
-        page_size: 1,
+      fetchStrategyInfo({
         strategy_id: route.params.id,
       });
     }
@@ -333,7 +333,7 @@
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 450px;
+  width: 650px;
   margin: 0 auto;
   transform: translateX(-86px);
 

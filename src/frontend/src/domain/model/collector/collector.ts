@@ -32,6 +32,7 @@ export default class Collector {
     manage_collection_v2_bk_log: boolean;
     view_collection_v2_bk_log: boolean;
   };
+  tail_log_time: string;  // 最后一条数据时间
 
   constructor(payload = {} as Collector) {
     this.bk_biz_id = payload.bk_biz_id;
@@ -48,5 +49,6 @@ export default class Collector {
     this.processing_id = payload.processing_id;
     this.system_id = payload.system_id;
     this.permission = payload.permission;
+    this.tail_log_time = payload.tail_log_time;
   }
 }
