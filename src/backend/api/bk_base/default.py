@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import traceback
 
-from bk_resource import BkApiResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
     DataflowBatchStatusListReqSerializer,
@@ -37,7 +37,7 @@ from api.bk_base.serializers import (
 from api.domains import BK_BASE_API_URL
 
 
-class BkBaseResource(BkApiResource, abc.ABC):
+class BkBaseResource(CommonBkApiResource, abc.ABC):
     base_url = BK_BASE_API_URL
     module_name = "bkbase"
     platform_authorization = True

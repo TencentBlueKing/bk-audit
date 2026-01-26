@@ -971,7 +971,7 @@ class RetrieveUserResource(Meta, CacheMixin, Resource):
         if cache_data is not None:
             return cache_data
         try:
-            data = api.user_manage.retrieve_user(validated_request_data)
+            data = api.user_manage.retrieve_user({"bk_username": validated_request_data["id"]})
         except APIRequestError:
             data = {"username": validated_request_data["id"], "display_name": gettext("未知用户")}
         self.set_cache({"username": validated_request_data["id"]}, data, RETRIEVE_USER_TIMEOUT)
