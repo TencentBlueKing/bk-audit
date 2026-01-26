@@ -46,12 +46,26 @@
           @scroll="handleScroll">
           <div class="card-list-box">
             <div
-              v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
+              v-for="(item, index) in sortedDataList"
               :key="index"
               class="card-list-item"
               @click="handleClickTool(item)"
               @mouseenter="handleMouseenter(item)"
               @mouseleave="handleMouseleave()">
+              <!-- 左上角收藏icon -->
+              <div
+                v-show="itemMouseenter === item.uid || item.favorite"
+                class="item-top-left-icon"
+                :class="{ 'with-bg': itemMouseenter === item.uid }">
+                <img
+                  v-bk-tooltips="{
+                    content: item.favorite ? t('取消收藏') : t('收藏'),
+                    placement: 'top',
+                  }"
+                  class="favorite-icon"
+                  :src="item.favorite ? pentagramFillIcon : pentagramIcon"
+                  @click.stop="handleToggleFavorite(item)">
+              </div>
               <div
                 v-show="itemMouseenter === item.uid"
                 class="item-top-right-icon">
@@ -271,7 +285,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { nextTick, ref } from 'vue';
+  import { computed, nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -280,6 +294,9 @@
   import ToolInfo from '@model/tool/tool-info';
 
   import useUrlSearch from '@hooks/use-url-search';
+
+  import pentagramIcon from '@images/pentagram.svg';
+  import pentagramFillIcon from '@images/pentagram-fill.svg';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -355,12 +372,30 @@
     appendSearchParams,
   } = useUrlSearch();
 
+  // 排序后的数据列表，收藏的排在前面
+  const sortedDataList = computed(() => {
+    const filteredList = dataList.value.filter(item => item.permission.manage_tool || item.permission.use_tool);
+    // 收藏的卡片排在前面
+    return [...filteredList].sort((a, b) => {
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return 0;
+    });
+  });
+
   // 获取所有工具
   const {
     data: allToolsData,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     manual: true,
+  });
+
+  // 收藏/取消收藏
+  const {
+    run: toggleFavorite,
+  } = useRequest(ToolManageService.toggleFavorite, {
+    defaultValue: {},
   });
 
   const openUrlTools = () => {
@@ -508,6 +543,22 @@
       isFixedDelete.value = !isFixedDelete.value;
       itemMouseenter.value = item.uid;
     }
+  };
+
+  // 收藏/取消收藏
+  const handleToggleFavorite = (item: ToolInfo) => {
+    const newFavoriteStatus = !item.favorite;
+    toggleFavorite({
+      uid: item.uid,
+      favorite: newFavoriteStatus,
+    }).then(() => {
+      // 更新本地数据
+      const targetItem = dataList.value.find(i => i.uid === item.uid);
+      if (targetItem) {
+        targetItem.favorite = newFavoriteStatus;
+      }
+      messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
+    });
   };
 
   // 策略跳转
@@ -860,6 +911,37 @@
             margin-right: 5px;
             margin-left: 5px;
             background-color: #979ba5;
+          }
+        }
+
+        .item-top-left-icon {
+          position: absolute;
+          top: 0;
+          left: 0;
+          z-index: 1;
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-start;
+          width: 40px;
+          height: 40px;
+          border-top-left-radius: 2px;
+
+          &.with-bg {
+            background: linear-gradient(135deg, #f5f7fa 50%, transparent 50%);
+          }
+
+          .favorite-icon {
+            position: relative;
+            top: 4px;
+            left: 4px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            transition: all .2s ease;
+
+            &:hover {
+              transform: scale(1.2);
+            }
           }
         }
 

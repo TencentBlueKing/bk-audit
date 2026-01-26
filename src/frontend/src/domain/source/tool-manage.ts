@@ -105,6 +105,17 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
   }
+  // 收藏/取消收藏工具
+  toggleFavorite(params: {
+    uid: string,
+    favorite: boolean,
+  }) {
+    return Request.put(`${this.path}/tool/${params.uid}/favorite/`, {
+      params: {
+        favorite: params.favorite,
+      },
+    });
+  }
   // 获取图表列表
   getChartLists() {
     return Request.get<Array<{
