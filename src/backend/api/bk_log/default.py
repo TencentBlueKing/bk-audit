@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import abc
 from binascii import Error
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from api.base import CommonBkApiResource
 from api.bk_log.constants import (
     BK_AUDIT_TAGS,
     DEFAULT_VISIBLE_CONFIG,
@@ -71,7 +71,7 @@ from apps.bk_crypto.crypto import asymmetric_cipher
 from core.utils.data import distinct
 
 
-class BKLogBaseResource(BkApiResource, abc.ABC):
+class BKLogBaseResource(CommonBkApiResource, abc.ABC):
     base_url = BK_LOG_API_URL
     module_name = "bk-log"
 

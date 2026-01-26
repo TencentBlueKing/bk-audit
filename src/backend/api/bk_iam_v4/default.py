@@ -18,14 +18,14 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import math
 
-from bk_resource import BkApiResource
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.bk_iam_v4.constants import FETCH_ALL_SYSTEMS_MAX_PAGE_SIZE
 from api.domains import BK_IAM_V4_API_URL
 
 
-class IAMV4BaseResource(BkApiResource, abc.ABC):
+class IAMV4BaseResource(CommonBkApiResource, abc.ABC):
     base_url = BK_IAM_V4_API_URL
     module_name = "bk_iam_v4"
 

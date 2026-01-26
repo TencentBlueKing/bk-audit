@@ -19,17 +19,18 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import copy
 
-from bk_resource import APIResource, BkApiResource
+from bk_resource import APIResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.bk_monitor.constants import BKMONITOR_METRIC_MAX_BATCH_SIZE
 from api.bk_monitor.serializers import ReportEventSerializer, ReportMetricSerializer
 from api.domains import BK_MONITOR_API_URL, BK_MONITOR_METRIC_PROXY_URL
 
 
-class BKMonitorBaseResource(BkApiResource, abc.ABC):
+class BKMonitorBaseResource(CommonBkApiResource, abc.ABC):
     base_url = BK_MONITOR_API_URL
     module_name = "bk-monitor"
     platform_authorization = True
