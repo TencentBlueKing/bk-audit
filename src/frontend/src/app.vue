@@ -25,6 +25,12 @@
       <template #header>
         <router-back v-if="!(route.meta?.isNoBack)" />
         <span>{{ t(pageTitle) }}</span>
+        <span
+          v-if="route.meta?.isShowTitleTip"
+          class="title-tip">
+          <span v-if="titleTip !==''"> | </span>
+          <span class="title-tip-text">{{ titleTip }}</span>
+        </span>
         <div
           id="teleport-router-link"
           style="margin-left: 14px;" />
@@ -148,6 +154,13 @@
 
   const layoutRef = ref();
   const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
+  const titleTip = computed(() => {
+    const paramTip = route.params?.routeTitleTp as string | string[] | undefined;
+    const queryTip = route.query?.routeTitleTp as string | string[] | undefined;
+    const value = Array.isArray(paramTip) ? paramTip[0] : paramTip
+      || (Array.isArray(queryTip) ? queryTip[0] : queryTip);
+    return value ? String(value) : '';
+  });
 
   const handleVersionLog = () => {
     isShowVersionLog.value = true;
@@ -248,5 +261,17 @@
     margin-right: 4px;
     font-size: 14px;
   }
+}
+
+.title-tip {
+  margin-left: 5px;
+  font-size: 14px;
+  color: #4d4f56;
+}
+
+.title-tip-text {
+  font-size: 14px;
+  line-height: 52px;
+  color: #4d4f56;
 }
 </style>

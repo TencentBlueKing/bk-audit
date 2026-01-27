@@ -24,14 +24,13 @@
     computed,
     provide,
     ref,
+    watch,
   } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
 
   import ConfigModel from '@model/root/config';
-
-  import useUrlSearch from '@hooks/use-url-search';
 
   import { changeConfirm } from '@utils/assist';
 
@@ -53,19 +52,23 @@
   };
 
   const router = useRouter();
-  const { appendSearchParams } = useUrlSearch();
   const route = useRoute();
   const defaultComponentType: StepComponentKey = 'logCreate';
-  const routeQueryType = route.query.type as StepComponentKey;
+  const getQueryComponentType = () => {
+    const routeQueryType = route.query.type as StepComponentKey;
+    return componentMap[routeQueryType] ? routeQueryType : defaultComponentType;
+  };
 
-  const currentComponentType = ref<StepComponentKey>(componentMap[routeQueryType]
-    ? routeQueryType : defaultComponentType);
+  const currentComponentType = ref<StepComponentKey>(getQueryComponentType());
 
   const renderComponent = computed(() => componentMap[currentComponentType.value]);
 
   const configData = ref(new ConfigModel());
 
   provide('configData', configData);
+  provide('setLogCreateComponentType', (type: StepComponentKey) => {
+    currentComponentType.value = type;
+  });
 
   useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
@@ -75,12 +78,24 @@
     },
   });
 
+  watch(
+    () => route.query.type,
+    () => {
+      currentComponentType.value = getQueryComponentType();
+    },
+  );
+
   const handleStepChange = (step: any, formData: Record<string, any>) => {
     const componentType = resolveNextComponent(formData);
     changeConfirm()
       .then(() => {
-        appendSearchParams({
-          type: componentType,
+        router.replace({
+          name: route.name!,
+          params: route.params,
+          query: {
+            ...route.query,
+            type: componentType,
+          },
         });
         currentComponentType.value = componentType;
       });
