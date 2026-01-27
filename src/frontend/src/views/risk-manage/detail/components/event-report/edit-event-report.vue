@@ -39,6 +39,15 @@
         </template>
       </bk-popover>
       <bk-button
+        v-else-if="!reportAutoRender"
+        class="mb16"
+        disabled
+        outline
+        theme="primary"
+        @click="handleGenerateReport">
+        {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
+      </bk-button>
+      <bk-button
         v-else
         class="mb16"
         outline
@@ -106,6 +115,7 @@
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import AIAgentBlot from './ai-model';
+  import { sanitizeEditorHtml } from './editor-utils';
   import saveReportDialog from './save-report-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
@@ -116,6 +126,7 @@
     status: string | undefined;
     reportEnabled: boolean;
     strategyId: number | string;
+    reportAutoRender: boolean;
   }
 
   const props = defineProps<Props>();
@@ -259,7 +270,8 @@
   };
 
   const applyEditorContent = (content: string) => {
-    const normalized = normalizeContentWithAiBlock(content);
+    const sanitized = sanitizeEditorHtml(content);
+    const normalized = normalizeContentWithAiBlock(sanitized);
     localeReportContent.value = normalized.html;
     aiAgentData.value = normalized.aiAgent;
     if (!isEditorReady.value) return;
@@ -537,43 +549,27 @@
   };
   const isAutoGenerate = ref(false);
   const handleSubmit = () => {
-    let subTitleText = '';
+    const manualText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
+    const autoText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+    const isAutoReport = props.status === 'auto';
+    const hasChange = isChangeVal.value;
+    const hasReget = isRegetVal.value;
+    let subTitleText = manualText;
     let isShowButton = false;
-    if (props.status === 'auto') { // 自动生成的单子
-      if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
-        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-        isAutoGenerate.value  = false;
-      }
-      if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
-        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-        isAutoGenerate.value  = false;
-      }
-      if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
-        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
-        isAutoGenerate.value  = true;
-      }
-      if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
-        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
-        isAutoGenerate.value  = true;
-      }
-    } else { // 人工编辑的单子
-      if (isChangeVal.value && isRegetVal.value) { // 有改动 且 点击了重新生成
-        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-        isAutoGenerate.value  = false;
-      }
-      if (isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
-        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-        isAutoGenerate.value  = false;
-      }
-      if (!isChangeVal.value && isRegetVal.value) { // 没有改动 且 点击了重新生成
-        subTitleText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
-        isAutoGenerate.value  = true;
-        isShowButton = true;
-      }
-      if (!isChangeVal.value && !isRegetVal.value) { // 没有改动 且 没有重新生成
-        subTitleText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-        isAutoGenerate.value  = true;
-      }
+
+    if (hasChange) {
+      subTitleText = manualText;
+      isAutoGenerate.value = false;
+    } else if (isAutoReport) {
+      subTitleText = autoText;
+      isAutoGenerate.value = true;
+    } else if (hasReget) {
+      subTitleText = autoText;
+      isAutoGenerate.value = true;
+      isShowButton = true;
+    } else {
+      subTitleText = manualText;
+      isAutoGenerate.value = true;
     }
 
     // 人工编辑后，则提示用户
