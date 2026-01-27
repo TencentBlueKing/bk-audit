@@ -280,6 +280,7 @@ class ApiAuthMethod(TextChoices):
     """
 
     BK_APP_AUTH = "bk_app_auth", gettext_lazy("蓝鲸应用认证")
+    HMAC_SIGNATURE = "hmac_signature", gettext_lazy("HMAC签名认证")
     NONE = "none", gettext_lazy("无认证")
 
 
@@ -293,6 +294,19 @@ class BkAppAuthConfig(BaseModel):
 class BkAuthItem(BaseModel):
     method: Literal[ApiAuthMethod.BK_APP_AUTH] = ApiAuthMethod.BK_APP_AUTH
     config: BkAppAuthConfig  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
+
+
+class HmacSignatureAuthConfig(BaseModel):
+    """HMAC签名认证需要的具体字段"""
+
+    secret_id: str = PydanticField(..., description="密钥ID")
+    secret_key: str = PydanticField(..., description="密钥Key")
+    app_code: str = PydanticField(default="", description="应用Code（可选，用于X-APP-CODE请求头）")
+
+
+class HmacSignatureAuthItem(BaseModel):
+    method: Literal[ApiAuthMethod.HMAC_SIGNATURE] = ApiAuthMethod.HMAC_SIGNATURE
+    config: HmacSignatureAuthConfig  # 这里的 config 强类型约束为 HmacSignatureAuthConfig
 
 
 class NoAuthItem(BaseModel):
@@ -328,7 +342,7 @@ class ApiConfig(BaseModel):
     # 这里定义 auth_config 可以是上面定义的任意一种 Item
     # discriminator="method" 告诉 Pydantic：
     # "请先看 method 字段的值，如果是 'bk_app_auth'，就用 BkAuthItem 来校验"
-    auth_config: Annotated[Union[BkAuthItem, NoAuthItem], DictField()] = PydanticField(
+    auth_config: Annotated[Union[BkAuthItem, HmacSignatureAuthItem, NoAuthItem], DictField()] = PydanticField(
         title=gettext_lazy("认证配置"), discriminator="method"
     )
     headers: List[ParamField] = PydanticField(title=gettext_lazy("请求头"))
