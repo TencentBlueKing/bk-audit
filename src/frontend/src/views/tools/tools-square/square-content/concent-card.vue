@@ -46,7 +46,7 @@
           @scroll="handleScroll">
           <div class="card-list-box">
             <div
-              v-for="(item, index) in sortedDataList"
+              v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
               :key="index"
               class="card-list-item"
               @click="handleClickTool(item)"
@@ -276,7 +276,7 @@
     :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item] = el"
+      :ref="(el: any) => dialogRefs[item] = el"
       :all-tools-data="allToolsData"
       :tags-enums="tagsEnums"
       @close="handleClose"
@@ -285,7 +285,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, nextTick, ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -308,11 +308,11 @@
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
-  interface Exposes{
+  interface Exposes {
     getToolsList: (id: string) => void;
   }
   interface Emits {
-    (e: 'change'):void;
+    (e: 'change'): void;
   }
 
   const props = defineProps<Props>();
@@ -371,17 +371,6 @@
     removeSearchParam,
     appendSearchParams,
   } = useUrlSearch();
-
-  // 排序后的数据列表，收藏的排在前面
-  const sortedDataList = computed(() => {
-    const filteredList = dataList.value.filter(item => item.permission.manage_tool || item.permission.use_tool);
-    // 收藏的卡片排在前面
-    return [...filteredList].sort((a, b) => {
-      if (a.favorite && !b.favorite) return -1;
-      if (!a.favorite && b.favorite) return 1;
-      return 0;
-    });
-  });
 
   // 获取所有工具
   const {
@@ -462,7 +451,7 @@
 
   // +n显示
   const tagContent = (tags: Array<string>) => {
-    const tagNameList = props.tagsEnums.map((i:TagItem) => {
+    const tagNameList = props.tagsEnums.map((i: TagItem) => {
       if (tags.slice(3, tags.length).includes(i.tag_id)) {
         return i.tag_name;
       }
@@ -552,12 +541,19 @@
       uid: item.uid,
       favorite: newFavoriteStatus,
     }).then(() => {
-      // 更新本地数据
-      const targetItem = dataList.value.find(i => i.uid === item.uid);
-      if (targetItem) {
-        targetItem.favorite = newFavoriteStatus;
-      }
       messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
+      // 重新获取列表数据，后端会处理排序
+      fetchToolsList({
+        page: 1,
+        page_size: currentPage.value * currentPagSize.value,
+        my_created: props.myCreated,
+        recent_used: props.recentUsed,
+        keyword: searchValue.value,
+        tags: [props.tagId],
+      }).then((data) => {
+        dataList.value = data.results;
+        total.value = data.total;
+      });
     });
   };
 
@@ -622,9 +618,9 @@
 
 
   const middleTtooltips = (text: string) => (
-    <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
-      {text}
-    </div>
+  <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
+    {text}
+  </div>
   );
 
   const itemIcon = (item: ToolInfo) => {
@@ -643,7 +639,7 @@
    * 打开工具，根据工具信息，打开工具，并传递工具信息
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
-  */
+   */
   const handleClickTool = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
