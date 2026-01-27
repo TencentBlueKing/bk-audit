@@ -185,12 +185,6 @@ class ListToolTags(ToolBase):
 
         tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
 
-        # 查询当前用户收藏的工具数量
-        favorite_tool_ids = ToolFavorite.objects.filter(username=current_user).values_list("tool_id", flat=True)
-        favorite_tool_count = (
-            Tool.all_latest_tools().filter(authed_tool_filter).filter(id__in=favorite_tool_ids).count()
-        )
-
         tag_count = [
             {
                 "tag_name": str(ToolTagsEnum.ALL_TOOLS.label),
@@ -209,11 +203,6 @@ class ListToolTags(ToolBase):
                 .filter(uid__in=recent_tool_usage_manager.get_recent_uids(current_user))
                 .filter(authed_tool_filter)
                 .count(),
-            },
-            {
-                "tag_name": str(ToolTagsEnum.FAVORITE_TOOLS.label),
-                "tag_id": ToolTagsEnum.FAVORITE_TOOLS.value,
-                "tool_count": favorite_tool_count,
             },
             {
                 "tag_name": str(NO_TAG_NAME),

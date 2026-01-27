@@ -49,7 +49,6 @@ from services.web.tool.resources import (
     GetToolDetail,
     ListTool,
     ListToolAll,
-    ListToolTags,
 )
 from tests.test_tool.constants import MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY
 
@@ -314,37 +313,6 @@ class ToolFavoriteTestCase(TestCase):
             result = GetToolDetail()({"uid": self.tool_1.uid})
 
         self.assertFalse(result["favorite"])
-
-    # ==================== 收藏标签统计测试 ====================
-
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_tags_favorite_count(self, mock_authed_tool_filter):
-        """测试标签列表中收藏工具数量统计"""
-        mock_authed_tool_filter.return_value = Q()
-
-        # 收藏 tool_1
-        ToolFavorite.objects.create(tool=self.tool_1, username=self.test_user)
-
-        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
-            result = ListToolTags()({})
-
-        # 查找收藏标签
-        favorite_tag = next((t for t in result if t["tag_id"] == ToolTagsEnum.FAVORITE_TOOLS.value), None)
-        self.assertIsNotNone(favorite_tag)
-        self.assertEqual(favorite_tag["tool_count"], 1)
-
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_tags_favorite_count_zero(self, mock_authed_tool_filter):
-        """测试标签列表中没有收藏时数量为0"""
-        mock_authed_tool_filter.return_value = Q()
-
-        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
-            result = ListToolTags()({})
-
-        # 查找收藏标签
-        favorite_tag = next((t for t in result if t["tag_id"] == ToolTagsEnum.FAVORITE_TOOLS.value), None)
-        self.assertIsNotNone(favorite_tag)
-        self.assertEqual(favorite_tag["tool_count"], 0)
 
     # ==================== 删除工具时收藏级联清理测试 ====================
 
