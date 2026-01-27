@@ -53,6 +53,7 @@
     <edit-event-report
       :key="editReportKey"
       v-model:isShowEditEventReport="isShowEditEventReport"
+      :report-auto-render="data.report_auto_render"
       :report-content="data.report?.content || ''"
       :report-enabled="data.report_enabled"
       :status="data.report?.status"
@@ -77,6 +78,7 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import AIAgentBlot from './ai-model';
   import EditEventReport from './edit-event-report.vue';
+  import { sanitizeEditorHtml } from './editor-utils';
 
   interface expose {
     showReport: () => void;
@@ -219,7 +221,8 @@
       aiAgentData.value = [];
       return;
     }
-    const normalized = normalizeContentWithAiBlock(html);
+    const sanitized = sanitizeEditorHtml(html);
+    const normalized = normalizeContentWithAiBlock(sanitized);
     content.value = normalized.html;
     aiAgentData.value = normalized.aiAgent;
     if (!isEditorReady.value) {
