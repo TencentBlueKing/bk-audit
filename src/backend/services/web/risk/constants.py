@@ -184,7 +184,7 @@ class EventMappingFields:
         is_index=True,
         is_dimension=False,
         property={
-            "remark": RAW_EVENT_ID_REMARK,
+            "remark": str(RAW_EVENT_ID_REMARK),
         },
     )
 
