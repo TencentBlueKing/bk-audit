@@ -48,6 +48,7 @@ export default {
       name: 'logCreate',
       meta: {
         title: '新建日志上报',
+        isShowTitleTip: true,
       },
     },
     {
