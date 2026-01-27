@@ -330,11 +330,14 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         method = api_config.method.lower()
         headers = {h.key: h.value for h in api_config.headers}
 
-        # 4. 应用认证
-        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config)
-        auth_handler.apply_auth(headers)
+        # 4. 应用认证（传入url和method，让IEOP认证自动解析host和path）
+        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config, url=url, method=method)
 
-        # 5. 发送请求
+        # 5. 根据认证类型处理参数
+        # IEOPAuthHandler.apply_auth 会直接修改 body 或 query_params（添加认证参数）
+        auth_handler.apply_auth(headers, body=body_params, query_params=query_params, url=url)
+
+        # 6. 发送请求
         request_kwargs = {}
         if query_params:
             request_kwargs["params"] = query_params
@@ -343,10 +346,10 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
 
         try:
             # 日志脱敏
-            safe_headers = auth_handler.mask_headers(headers)
+            safe_body = body_params
             logger.info(
                 f"[{self.__class__.__name__}] Request: {method.upper()} {url}, "
-                f"headers={safe_headers}, kwargs={request_kwargs}"
+                f"body={safe_body}, query_params={query_params}"
             )
 
             response = requests.request(
