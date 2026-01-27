@@ -264,6 +264,8 @@ class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteRes
 class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiToolExecuteResult]):
     """API 工具执行器"""
 
+    SENSITIVE_LOG_FIELDS = {"app_secret", "bk_app_secret"}
+
     @classmethod
     def _parse_config(cls, config: Any) -> TConfig:
         return ApiToolConfig.model_validate(config)
@@ -273,6 +275,23 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         仅做结构解析，不做业务渲染
         """
         return APIToolExecuteParams.model_validate(params)
+
+    @classmethod
+    def _sanitize_log_payload(cls, payload: Any) -> Any:
+        """
+        日志脱敏：对字典/列表中的敏感字段做递归脱敏
+        """
+        if isinstance(payload, dict):
+            sanitized = {}
+            for key, value in payload.items():
+                if key.lower() in cls.SENSITIVE_LOG_FIELDS:
+                    sanitized[key] = "***"
+                else:
+                    sanitized[key] = cls._sanitize_log_payload(value)
+            return sanitized
+        if isinstance(payload, list):
+            return [cls._sanitize_log_payload(item) for item in payload]
+        return payload
 
     def _render_request_params(self, params: APIToolExecuteParams) -> List["ApiRequestParam"]:
         """
@@ -330,11 +349,14 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         method = api_config.method.lower()
         headers = {h.key: h.value for h in api_config.headers}
 
-        # 4. 应用认证
-        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config)
-        auth_handler.apply_auth(headers)
+        # 4. 应用认证（传入url和method，让IEOP认证自动解析host和path）
+        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config, url=url, method=method)
 
-        # 5. 发送请求
+        # 5. 根据认证类型处理参数
+        # IEOPAuthHandler.apply_auth 会直接修改 body 或 query_params（添加认证参数）
+        auth_handler.apply_auth(headers, body=body_params, query_params=query_params, url=url)
+
+        # 6. 发送请求
         request_kwargs = {}
         if query_params:
             request_kwargs["params"] = query_params
@@ -343,10 +365,11 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
 
         try:
             # 日志脱敏
-            safe_headers = auth_handler.mask_headers(headers)
+            safe_body = self._sanitize_log_payload(body_params)
+            safe_query_params = self._sanitize_log_payload(query_params)
             logger.info(
                 f"[{self.__class__.__name__}] Request: {method.upper()} {url}, "
-                f"headers={safe_headers}, kwargs={request_kwargs}"
+                f"body={safe_body}, query_params={safe_query_params}"
             )
 
             response = requests.request(

@@ -340,7 +340,8 @@ class CollectorTest(TestCase):
             self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": True})
 
     def __create_api_push(self):
-        create_result = self.resource.databus.collector.create_api_push(**CREATE_API_PUSH_DATA)
+        with mock.patch("databus.collector.resources.create_api_push_etl.delay", mock.Mock()):
+            create_result = self.resource.databus.collector.create_api_push(**CREATE_API_PUSH_DATA)
         return create_result
 
     @mock.patch(
@@ -402,7 +403,8 @@ class CollectorTest(TestCase):
             "system_id": COLLECTOR_DATA.get("system_id"),
             "custom_collector_config_name": custom_name,
         }
-        result = self.resource.databus.collector.create_api_push(**request_data)
+        with mock.patch("databus.collector.resources.create_api_push_etl.delay", mock.Mock()):
+            result = self.resource.databus.collector.create_api_push(**request_data)
         self.assertIsNotNone(result.get("collector_config_id"))
 
         # 验证自定义名称已被保存到英文名字段
