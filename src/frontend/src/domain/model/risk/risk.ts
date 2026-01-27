@@ -84,6 +84,7 @@ export default class Event {
   tags: string[];
   risk_label: string;
   report_enabled: boolean;
+  report_auto_render: boolean;
   has_report: boolean;
   report: {
     content: string;
@@ -117,6 +118,7 @@ export default class Event {
     this.status = payload.status;
     this.event_type = payload.event_type;
     this.report_enabled = payload.report_enabled;
+    this.report_auto_render = payload.report_auto_render;
     this.has_report = payload.has_report;
     this.report = payload.report;
     this.rule_id = payload.rule_id;
