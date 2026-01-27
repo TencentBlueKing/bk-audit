@@ -125,6 +125,11 @@
       </bk-button>
       <bk-button
         class="ml8"
+        @click="handleLastStep">
+        {{ t('上一步') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -132,7 +137,7 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { computed, inject, type Ref, ref } from 'vue';
+  import { computed, inject, nextTick, onMounted, type Ref, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   // import MetaManageService from '@service/meta-manage';
   // import useRequest from '@/hooks/use-request';
@@ -157,17 +162,17 @@
   const selectSdkTypeList = ref([
     {
       label: 'PYTHON_SDK',
-      name: 'Python SDk',
+      name: 'PYTHON SDk',
       url: 'https://github.com/TencentBlueKing/bk-audit-python-sdk',
     },
     {
       label: 'JAVA_SDK',
-      name: 'Java SDk',
+      name: 'JAVA SDk',
       url: 'https://github.com/TencentBlueKing/bk-audit-java-sdk',
     },
     {
       label: 'GO_SDK',
-      name: 'Go SDk',
+      name: 'GO SDk',
       url: 'https://github.com/TencentBlueKing/bk-audit-go-sdk',
     }]);
 
@@ -205,6 +210,7 @@
   const isEditMode = route.name === 'logCollectorEdit';
 
   const configData = inject<Ref<ConfigModel>>('configData');
+  const setLogCreateComponentType = inject<(type: string) => void>('setLogCreateComponentType');
 
   if (isEditMode) {
     localFormData.value.notice.read_requirement = true;
@@ -234,6 +240,19 @@
       });
   };
 
+  const handleLastStep = () => {
+    router.push({
+      name: 'logCreate',
+      params: {
+        systemId: route.params.systemId,
+      },
+      query: {
+        type: 'logCreate',
+      },
+    });
+    setLogCreateComponentType?.('logCreate');
+  };
+
   const handleCancel = () => {
     router.push({
       name: 'systemDetail',
@@ -245,6 +264,21 @@
       },
     });
   };
+  onMounted(() => {
+    // 加入route参数
+    nextTick(() => {
+      router.replace({
+        name: route.name!,
+        params: {
+          ...route.params,
+        },
+        query: {
+          ...route.query,
+          routeTitleTp: t('SDK 接入'),
+        },
+      });
+    });
+  });
 </script>
 <style scoped lang="postcss">
 .step1-action {

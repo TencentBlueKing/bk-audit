@@ -23,118 +23,6 @@
       class="api-form"
       :model="formData"
       :rules="formRules">
-      <!-- 新建数据上报 -->
-      <div class="content-section">
-        <div class="log-create-header">
-          <div class="log-create-header-title">
-            {{ t('新建数据上报') }}
-          </div>
-          <div class="log-create-header-line" />
-          <div class="log-create-header-desc">
-            {{ t('基于权限模型或数据接入数据，可上传或数据至审计中心，以供后续分析与风险追踪；因不同方式流程有差异，请先选择上报方式') }}
-          </div>
-        </div>
-        <bk-form-item
-          :label="t('认证授权')"
-          property="enabled">
-          <div class="auth-wrapper">
-            <div class="auth-item">
-              <span class="auth-label">Token：</span>
-              <div class="auth-content">
-                <auth-button
-                  v-if="!data.enabled"
-                  action-id="edit_system"
-                  :resource="route.params.systemId"
-                  style="margin-left: 19px;"
-                  text
-                  theme="primary">
-                  {{ t('点击创建后，立即生成token') }}
-                </auth-button>
-                <template
-                  v-else>
-                  <bk-loading
-                    class="token"
-                    :loading="isGeting"
-                    style="background: none;">
-                    <template v-if="isGeting || isTokenLoading">
-                      <span
-                        class="token-text"
-                        style="color: #3a84ff;">
-                        <audit-icon
-                          class="rotate-loading"
-                          svg
-                          type="loading" />
-                        {{ t('生成中') }}
-                      </span>
-                    </template>
-                    <template v-else>
-                      <template v-if="isHide">
-                        <span
-                          v-bk-tooltips="{content: token.token, placement: 'top', extCls:'token-tooltips'}"
-                          class="token-text">{{ token.token }}</span>
-                      </template>
-                      <span v-else>
-                        <span
-                          v-for="i in 7"
-                          :key="i"
-                          class="encryption" />
-                      </span>
-                      <span
-                        class="operation-icon">
-                        <auth-component
-                          action-id="edit_system"
-                          :resource="route.params.systemId">
-                          <audit-icon
-                            :type="isHide?'view':'hide'"
-                            @click.stop="handleGetToken" />
-                        </auth-component>
-                        <auth-component
-                          action-id="edit_system"
-                          :resource="route.params.systemId">
-                          <audit-icon
-                            v-bk-tooltips="t('复制')"
-                            class="ml12"
-                            type="copy"
-                            @click.stop="handleTokenCopy" />
-                        </auth-component>
-                      </span>
-                    </template>
-                  </bk-loading>
-                </template>
-              </div>
-            </div>
-            <div class="auth-item">
-              <div
-                class="auth-label"
-                style="height: 36px;">
-                <span>EndPoint：</span>
-              </div>
-              <div
-                v-bk-tooltips="{content: data.hosts.map((item: string)=>item).join('\n'), placement: 'bottom'}"
-                class="auth-content-endpoint">
-                <template
-                  v-for="item in data.hosts.slice(0,3)"
-                  :key="item">
-                  <div
-                    class="auth-desc">
-                    {{ item }}
-                  </div>
-                </template>
-              </div>
-              <div
-                v-if="data.hosts"
-                class="point-icon">
-                <audit-icon
-                  v-bk-tooltips="t('复制')"
-                  class="ml12"
-                  type="copy"
-                  @click.stop="() => execCopy(data.hosts.map((item: string)=>item).join('\n'))" />
-              </div>
-            </div>
-          </div>
-        </bk-form-item>
-      </div>
-
       <!-- 记录上报日志 -->
       <div class="content-section">
         <div class="log-create-header">
@@ -213,7 +101,14 @@
         @click="handleCreate">
         {{ t('创建') }}
       </auth-button>
-      <bk-button class="ml8">
+      <bk-button
+        class="ml8"
+        @click="handlePrevious">
+        {{ t('上一步') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </div>
@@ -221,17 +116,13 @@
   <data-inspection v-else />
 </template>
 <script setup lang="ts">
-  import { computed, inject, type Ref, ref } from 'vue';
+  import { computed, inject, nextTick, onMounted, type Ref, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import CollectorManageService from '@service/collector-manage';
 
   import ConfigModel from '@model/root/config';
-
-  import {
-    execCopy,
-  } from '@utils/assist';
 
   import useRequest from '@/hooks/use-request';
   import dataInspection from '@/views/system-manage/log-create/components/data-inspection/index.vue';
@@ -239,12 +130,8 @@
   const { t } = useI18n();
 
   const route = useRoute();
-  const isHide = ref(false);
-  const isGeting = ref(false);
+  const router = useRouter();
   const isCreating = ref(false);
-  const hasGetToken = ref(false);
-  const isTokenLoading = ref(false);
-  const timer = ref();
   const currentStep = ref(1);
   const formRef = ref();
   const formData = ref({
@@ -269,12 +156,12 @@
   const selectSdkTypeList = ref([
     {
       label: 'PYTHON_SDK',
-      name: 'Python SDk',
+      name: 'PYTHON SDk',
       url: 'https://github.com/TencentBlueKing/bk-audit-python-sdk',
     },
     {
       label: 'JAVA_SDK',
-      name: 'Java SDk',
+      name: 'JAVA SDk',
       url: 'https://github.com/TencentBlueKing/bk-audit-java-sdk',
     },
     {
@@ -307,14 +194,6 @@
     manual: true,
   });
 
-  // 获取token
-  const {
-    run: fetchApiPush,
-    data: token,
-  }  = useRequest(CollectorManageService.fetchApiPush, {
-    defaultValue: {},
-  });
-
   // 生成token
   const {
     run: createApiPush,
@@ -330,70 +209,56 @@
     },
   });
 
-  const handleToken = () => {
-    isHide.value = true;
-    isGeting.value = true;
-    createApiPush({
-      system_id: route.params.systemId,
-    });
-    // data.value.enabled = true;
-    timer.value = setInterval(() => getToken(), 2000);
-  };
-
-  const getToken = () => {
-    fetchApiPush({
-      system_id: route.params.systemId,
-    }).finally(() => {
-      if (token.value.token) {
-        isGeting.value = false;
-        clearInterval(timer.value);
-      }
-    });
-  };
-
-  // 第一次生成token 后续无需再生成
-  const handleGetToken = () => {
-    if (!hasGetToken.value) {
-      isTokenLoading.value = true;
-      fetchApiPush({
-        system_id: route.params.systemId,
-      }).finally(() => {
-        hasGetToken.value = true;
-        isHide.value = !isHide.value;
-        isTokenLoading.value = false;
-      });
-    } else {
-      isHide.value = !isHide.value;
-    }
-  };
-
-  // 复制同理，第一次生成token后续无需再生成
-  const handleTokenCopy = () => {
-    if (!hasGetToken.value) {
-      isTokenLoading.value = true;
-      fetchApiPush({
-        system_id: route.params.systemId,
-      }).finally(() => {
-        hasGetToken.value = true;
-        isTokenLoading.value = false;
-        execCopy(token.value.token, t('复制成功'));
-      });
-    } else {
-      execCopy(token.value.token, t('复制成功'));
-    }
-  };
-
   // 手动触发 notice 表单项校验
   const handleNoticeChange = () => {
     formRef.value?.validate('notice');
   };
 
+  const handlePrevious = () => {
+    router.push({
+      name: 'logCreate',
+      params: {
+        systemId: route.params.systemId,
+      },
+      query: {
+        type: 'logCreate',
+      },
+    });
+  };
+  const handleCancel = () => {
+    router.push({
+      name: 'systemDetail',
+      params: {
+        id: route.params.systemId,
+      },
+      query: {
+        contentType: 'dataReport',
+      },
+    });
+  };
   const handleCreate = () => {
     formRef.value.validate().then(() => {
       isCreating.value = true;
-      handleToken();
+      createApiPush({
+        system_id: route.params.systemId,
+      });
     });
   };
+  onMounted(() => {
+    // 加入route参数
+    nextTick(() => {
+      router.replace({
+        name: route.name!,
+        params: {
+          ...route.params,
+        },
+        query: {
+          ...route.query,
+          routeTitleTp: t('SDK 接入'),
+        },
+      });
+    });
+  });
 </script>
 <style scoped lang="postcss">
 .log-create-api-push {
@@ -432,93 +297,6 @@
       font-size: 12px;
       color: #979ba5;
       vertical-align: middle;
-    }
-  }
-
-  .auth-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    .auth-item {
-      position: relative;
-      display: flex;
-      padding: 14px 16px;
-      align-items: center;
-      background-color: #f5f7fa;
-      border-radius: 4px;
-      gap: 10px;
-
-      .auth-label {
-        display: flex;
-        align-items: flex-start;
-        font-size: 12px;
-        color: #63656e;
-      }
-
-      .auth-content {
-        display: flex;
-        align-items: center;
-
-        .token {
-          display: flex;
-          margin-left: 19px;
-          cursor: pointer;
-
-          .token-text {
-            display: inline-block;
-            width: 251px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .encryption {
-            display: inline-block;
-            width: 5px;
-            height: 5px;
-            margin-right: 5px;
-            background-color: #63656e;
-            border-radius: 50%;
-          }
-
-          .operation-icon {
-            display: none;
-            padding: 0 12px;
-            font-size: 14px;
-            color: #979ba5;
-
-            .ml12 {
-              margin-left: 12px;
-            }
-          }
-        }
-
-        .token:hover {
-          .operation-icon {
-            display: inline-block;
-          }
-        }
-      }
-
-      .auth-content-endpoint {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-
-        .auth-desc {
-          font-size: 12px;
-          line-height: 16px;
-          color: #63656e;
-        }
-      }
-
-      .point-icon {
-        position: absolute;
-        top: 0;
-        right: 8px;
-        font-size: 14px;
-        color: #3a84ff;
-      }
     }
   }
 

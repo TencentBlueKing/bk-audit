@@ -114,7 +114,9 @@
         @click="handleNextStep">
         {{ t('下一步') }}
       </bk-button>
-      <bk-button class="ml8">
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </div>
@@ -124,7 +126,7 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import CollectorManageService from '@service/collector-manage';
 
@@ -140,6 +142,7 @@
 
   const { t } = useI18n();
   const route = useRoute();
+  const router = useRouter();
   const { feature: showBkbase } = useFeature('bkbase_data_source');
 
   const formData = ref({
@@ -231,6 +234,18 @@
 
   const handleNextStep = () => {
     emits('change', 2, formData.value);
+  };
+
+  const handleCancel = () => {
+    router.push({
+      name: 'systemDetail',
+      params: {
+        id: route.params.systemId,
+      },
+      query: {
+        contentType: 'dataReport',
+      },
+    });
   };
 </script>
 
