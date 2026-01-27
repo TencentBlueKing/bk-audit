@@ -330,8 +330,8 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         method = api_config.method.lower()
         headers = {h.key: h.value for h in api_config.headers}
 
-        # 4. 应用认证
-        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config)
+        # 4. 应用认证（传入url和method，让HMAC签名认证自动解析host和path）
+        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config, url=url, method=method)
         auth_handler.apply_auth(headers)
 
         # 5. 发送请求
