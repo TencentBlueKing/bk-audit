@@ -99,6 +99,7 @@
     processor_groups: [],
     notice_groups: []
     report_enabled: boolean,
+    report_auto_render: boolean,
     report_config: Record<string, any>,
   }
 
@@ -150,6 +151,7 @@
     processor_groups: [],
     notice_groups: [],
     report_enabled: false,
+    report_auto_render: false,
     report_config: {},
   });
 

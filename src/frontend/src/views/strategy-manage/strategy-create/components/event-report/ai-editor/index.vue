@@ -87,6 +87,7 @@
     getContentVal: () => string;
     getQuillContent: () => string;
     hasContent: () => boolean;
+    clearContent: () => void;
   }
 
   interface emits {
@@ -646,6 +647,18 @@
       initValue(data);
     },
     hasContent: () => hasContent(content.value),
+    clearContent() {
+      content.value = '';
+      aiList.value = [];
+      savedSelection.value = null;
+      if (quill) {
+        quill.setContents([{ insert: '\n' }], 'silent');
+        previousContent.value = quill.getContents();
+      } else {
+        previousContent.value = null;
+      }
+      emit('isHasContent', false);
+    },
   });
 </script>
 
