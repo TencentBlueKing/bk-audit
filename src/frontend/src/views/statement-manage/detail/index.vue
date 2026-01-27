@@ -45,6 +45,14 @@
   const {  emit } = useEventBus();
   let app: any;
 
+  // 校验id是否为有效值
+  const isValidId = (id: any): boolean => {
+    if (!id) return false;
+    if (id === 'undefined' || id === 'null') return false;
+    if (typeof id === 'string' && id.trim() === '') return false;
+    return true;
+  };
+
   const loadScript = (src: string) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = src;
@@ -64,6 +72,12 @@
   };
 
   const init = async  () => {
+    // 校验id是否有效
+    if (!isValidId(route.params.id)) {
+      console.warn('Invalid panel id:', route.params.id);
+      return;
+    }
+
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       app = await window.BkVisionSDK.init(
@@ -85,7 +99,8 @@
   };
 
   watch(() => route, () => {
-    if (route.params.id !== '' && route.name === 'statementManageDetail') {
+    // 增加更严谨的id校验
+    if (isValidId(route.params.id) && route.name === 'statementManageDetail') {
       nextTick(() => {
         if (app) {
           app.unmount();
