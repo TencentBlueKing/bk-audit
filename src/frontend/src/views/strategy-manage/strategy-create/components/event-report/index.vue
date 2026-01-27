@@ -32,13 +32,33 @@
         <bk-switcher
           v-model="isEnvent"
           class="event-switcher"
-          theme="primary" />
-        <span>
+          theme="primary"
+          @change="handleSwitcher" />
+        <div class="event-title-desc">
           <audit-icon
             class="title-fill-icon"
             type="info-fill" />
           <span class="info-fill-dec">{{ t('启用后，审计策略产生的风险工单将新增事件调查报告内容，便于非技术人员理解风险详情') }}</span>
-        </span>
+        </div>
+      </div>
+      <div class="is-auto-reports">
+        <div class="auto-reports-content">
+          <bk-checkbox
+            v-model="isAutoGetReports"
+            :disabled="!isEnvent"
+            size="small">
+            {{ t('自动生成报告') }}
+          </bk-checkbox>
+          <div class="auto-reports-desc">
+            <audit-icon
+              class="title-fill-icon"
+              type="info-fill" />
+            <span
+              class="info-fill-text"
+              style="color: #979ba5;">{{ t('勾选后，风险单产生时将自动生成事件调查报告，建议策略正式上线后再开启，避免调试阶段消耗过多 AI Token，调试期间可在风险单中手动创建报告')
+              }}</span>
+          </div>
+        </div>
       </div>
       <div class="event-editor">
         <div class="event-editor-title">
@@ -56,32 +76,36 @@
       <div
         v-if="isEnvent && riskLisks.length > 0"
         class="risks-select">
-        <bk-select
-          v-model="selectedValue"
-          class="risks-bk-select"
-          :prefix="t('审计风险工单')">
-          <bk-option
-            v-for="(item, index) in riskLisks"
-            :id="item?.risk_id"
-            :key="index"
-            :name="`${item?.title}(${item?.risk_id})`" />
-        </bk-select>
-        <bk-button
-          v-bk-tooltips="{
-            disabled: !(!hasEditorContent || selectedValue ===''),
-            content: previewTooltips,
-          }"
-          class="ml8"
-          :disabled="!hasEditorContent || selectedValue ===''"
-          outline
-          theme="primary"
-          @click="handlePreview">
-          {{ t('报告预览') }}
-        </bk-button>
-        <audit-icon
-          class="info-fill ml8"
-          type="info-fill" />
-        <span class="ml8 select-tip-text">{{ t('关联审计风险工单，用于预览报告渲染效果') }}</span>
+        <div class="risks-select-content">
+          <bk-select
+            v-model="selectedValue"
+            class="risks-bk-select"
+            :prefix="t('审计风险工单')">
+            <bk-option
+              v-for="(item, index) in riskLisks"
+              :id="item?.risk_id"
+              :key="index"
+              :name="`${item?.title}(${item?.risk_id})`" />
+          </bk-select>
+          <bk-button
+            v-bk-tooltips="{
+              disabled: !(!hasEditorContent || selectedValue === ''),
+              content: previewTooltips,
+            }"
+            class="ml8"
+            :disabled="!hasEditorContent || selectedValue === ''"
+            outline
+            theme="primary"
+            @click="handlePreview">
+            {{ t('报告预览') }}
+          </bk-button>
+          <div class="risks-select-desc">
+            <audit-icon
+              class="info-fill"
+              type="info-fill" />
+            <span class="select-tip-text">{{ t('关联审计风险工单，用于预览报告渲染效果') }}</span>
+          </div>
+        </div>
       </div>
     </div>
     <template #action>
@@ -93,7 +117,7 @@
           class="ml8"
           theme="primary"
           @click="handleNext">
-          {{ t( isEnvent ? '下一步' : '跳过') }}
+          {{ t(isEnvent ? '下一步' : '跳过') }}
         </bk-button>
         <bk-button
           class="ml8"
@@ -130,6 +154,7 @@
     notice_groups: Array<number>,
     report_enabled: boolean,
     report_config: Record<string, any>,
+    report_auto_render: boolean,
   }
 
   interface riskItem {
@@ -159,6 +184,7 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const isEnvent = ref(false);
+  const isAutoGetReports = ref(false);
   const showPreview = ref(false);
   const aiEditorRef = ref();
   const previewReportRef = ref();
@@ -178,7 +204,14 @@
       : (props.editData?.configs?.select || []);
     return data;
   });
-
+  const handleSwitcher = (value: boolean) => {
+    isEnvent.value = value;
+    console.log('handleSwitcher', value);
+    if (!value) {
+      isAutoGetReports.value = false;
+      aiEditorRef.value?.clearContent();
+    }
+  };
   // 是否显示提示
   const isShowTips = ref(false);
   // 定期检查编辑器内容变化
@@ -317,6 +350,7 @@
       notice_groups: [],
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
+      report_auto_render: isAutoGetReports.value,
     });
   };
   const handleCancel = () => {
@@ -347,7 +381,8 @@
 
   onMounted(() => {
     if (isEditMode || isCloneMode) {
-      isEnvent.value =  props.editData.report_enabled;
+      isEnvent.value = props.editData.report_enabled;
+      isAutoGetReports.value = props.editData.report_auto_render;
       const strategyId = route.params.id;
       // 默认当前时间往前6个月（6个月前到现在）
       const now = dayjs();
@@ -391,13 +426,6 @@
       color: #3a84ff;
     }
 
-    .info-fill-text {
-      margin-left: 9px;
-      font-size: 12px;
-      line-height: 20px;
-      letter-spacing: 0;
-      color: #4d4f56;
-    }
   }
 
   .event-box {
@@ -410,6 +438,7 @@
     .event-title {
       display: flex;
       height: 50px;
+      padding: 0 16px;
       font-size: 14px;
       font-weight: 700;
       line-height: 22px;
@@ -419,26 +448,46 @@
       align-items: center;
 
       .event-title-text {
-        margin-left: 16px;
+        margin-right: 13px;
       }
 
       .event-switcher {
-        margin-left: 13px;
+        margin-right: 13px;
       }
 
-      .info-fill-dec {
-        margin-left: 5px;
+      .event-title-desc {
+        display: flex;
+        align-items: center;
+        flex: 1;
+
+        .info-fill-dec {
+          margin-left: 5px;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 20px;
+          letter-spacing: 0;
+          color: #4d4f56;
+        }
+      }
+    }
+
+    .is-auto-reports {
+      padding: 20px 16px 0;
+
+      .auto-reports-content {
+        display: flex;
+        align-items: flex-start;
         font-size: 12px;
-        font-weight: 500;
         line-height: 20px;
         letter-spacing: 0;
         color: #4d4f56;
-      }
 
-      .title-fill-icon {
-        margin-left: 9px;
-        font-size: 14px;
-        color: #979ba5;
+        .auto-reports-desc {
+          display: flex;
+          align-items: center;
+          margin-left: 8px;
+          flex: 1;
+        }
       }
     }
 
@@ -458,13 +507,22 @@
     }
 
     .risks-select {
-      display: flex;
-      padding-bottom: 20px;
-      margin-left: 16px;
-      align-items: center;
+      padding: 0 16px 20px;
 
-      .risks-bk-select {
-        width: 520px;
+      .risks-select-content {
+        display: flex;
+        align-items: center;
+
+        .risks-bk-select {
+          width: 520px;
+        }
+
+        .risks-select-desc {
+          display: flex;
+          align-items: center;
+          margin-left: 8px;
+          flex: 1;
+        }
       }
     }
   }
@@ -483,5 +541,18 @@
   .action-button {
     margin-top: 20px;
   }
+}
+
+.title-fill-icon {
+  margin-left: 0;
+  font-size: 14px;
+  color: #979ba5;
+}
+
+.info-fill-text {
+  margin-left: 5px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #4d4f56;
 }
 </style>
