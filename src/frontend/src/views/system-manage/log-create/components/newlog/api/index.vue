@@ -156,17 +156,17 @@
   const selectSdkTypeList = ref([
     {
       label: 'PYTHON_SDK',
-      name: 'PYTHON SDk',
+      name: 'Python SDK',
       url: 'https://github.com/TencentBlueKing/bk-audit-python-sdk',
     },
     {
       label: 'JAVA_SDK',
-      name: 'JAVA SDk',
+      name: 'Java SDK',
       url: 'https://github.com/TencentBlueKing/bk-audit-java-sdk',
     },
     {
       label: 'GO_SDK',
-      name: 'Go SDk',
+      name: 'Go SDK',
       url: 'https://github.com/TencentBlueKing/bk-audit-go-sdk',
     },
   ]);
