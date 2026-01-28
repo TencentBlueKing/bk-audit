@@ -19,7 +19,7 @@
     class="create-strategy-page"
     :offset-target="getSmartActionOffsetTarget">
     <div
-      v-if="isShowTips"
+      v-if="isShowTips || isCreateeMode"
       class="event-tips">
       <audit-icon
         class="info-fill-icon"
@@ -64,13 +64,20 @@
         <div class="event-editor-title">
           {{ t('事件调查报告模版') }}
         </div>
-        <div class="editor-box">
+        <div
+          class="editor-box"
+          :class="{ 'editor-box-error': editorError }">
           <ai-editor
             ref="aiEditorRef"
             :disabled="!isEnvent"
             :event-info-data="eventInfoData"
             :risk-lisks="riskLisks"
             @is-has-content="handleHasContent" />
+          <div
+            v-if="editorError"
+            class="editor-error-text">
+            {{ t('请填写模板') }}
+          </div>
         </div>
       </div>
       <div
@@ -80,7 +87,10 @@
           <bk-select
             v-model="selectedValue"
             class="risks-bk-select"
-            :prefix="t('审计风险工单')">
+            filterable
+            :no-match-text="t('无匹配数据')"
+            :prefix="t('审计风险工单')"
+            :search-placeholder="t('请输入风险标题或风险ID')">
             <bk-option
               v-for="(item, index) in riskLisks"
               :id="item?.risk_id"
@@ -187,6 +197,11 @@
   const isAutoGetReports = ref(false);
   const showPreview = ref(false);
   const aiEditorRef = ref();
+  const route = useRoute();
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const isCreateeMode = route.name === 'strategyCreate';
+
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
   const selectedValue = ref('');
@@ -222,7 +237,7 @@
     contentCheckInterval = setInterval(() => {
       if (aiEditorRef.value) {
         try {
-          const content = aiEditorRef.value.getContent();
+          const content = aiEditorRef.value.getContentVal();
           editorContent.value = content || '';
         } catch {
           editorContent.value = '';
@@ -232,8 +247,12 @@
   };
   // 检查编辑器是否有内容
   const hasEditorContent = ref(false);
+  const editorError = ref(false);
   const handleHasContent = (hasContent: boolean) => {
     hasEditorContent.value = hasContent;
+    if (hasContent) {
+      editorError.value = false;
+    }
   };
 
   // 构建报告配置
@@ -333,18 +352,21 @@
     }
   });
 
-
-  const route = useRoute();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
   const handlePrevious = () => {
     emits('previousStep', 2);
   };
   const handleNext = () => {
-    reportInfo.value.enabled = isEnvent.value;
     if (isEnvent.value) {
+      if (aiEditorRef.value && !aiEditorRef.value.hasContent()) {
+        editorError.value = true;
+        return;
+      }
+      reportInfo.value.enabled = true;
       reportInfo.value.config = buildReportConfig();
+    } else {
+      reportInfo.value.enabled = false;
     }
+
     emits('nextStep', 4, {
       processor_groups: [],
       notice_groups: [],
@@ -504,6 +526,18 @@
 
     .editor-box {
       margin-top: 5px;
+    }
+
+    .editor-box-error {
+      :deep(.rich-text-editor-container) {
+        border-color: #ea3636;
+      }
+    }
+
+    .editor-error-text {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #ea3636;
     }
 
     .risks-select {

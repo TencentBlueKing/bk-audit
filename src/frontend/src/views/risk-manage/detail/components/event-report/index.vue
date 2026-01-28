@@ -53,7 +53,6 @@
     <edit-event-report
       :key="editReportKey"
       v-model:isShowEditEventReport="isShowEditEventReport"
-      :report-auto-render="data.report_auto_render"
       :report-content="data.report?.content || ''"
       :report-enabled="data.report_enabled"
       :status="data.report?.status"
