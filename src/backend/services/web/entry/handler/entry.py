@@ -117,6 +117,11 @@ class EntryHandler(object):
             },
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
+            # 给前端注入租户ID和用户管理API域名
+            "tenant_config": {
+                'BK_TENANT_ID': getattr(settings, 'BK_TENANT_ID', 'tencent'),
+                'BK_USER_WEB_APIGW_URL': getattr(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web'),
+            },
         }
         return data
 
