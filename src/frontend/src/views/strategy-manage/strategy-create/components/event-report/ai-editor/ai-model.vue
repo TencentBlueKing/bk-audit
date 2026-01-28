@@ -134,7 +134,13 @@
         <div
           v-if="isPreviewExpanded"
           class="preview-concent">
-          <bk-loading :loading="isLoading">
+          <bk-loading
+            :class="isLoading ? 'preview-loading' : ''"
+            :loading="isLoading"
+            mode="spin"
+            size="small"
+            theme="primary"
+            :title="t('正在使用AI生成报告内容')">
             <div class="preview-concent-box">
               <div v-html="getContent(concent)" />
             </div>
@@ -301,6 +307,7 @@
 
   const handlePreview = () => {
     formRef.value.validate().then(() => {
+      concent.value = '';
       isLoading.value = true;
       isPreviewExpanded.value = true;
       isShowConfirm.value = false;
@@ -554,11 +561,23 @@
 }
 
 .preview-concent {
+  position: relative;
   width: 765px;
   height: 100%;
   padding-bottom: 20px;
   margin-left: -25px;
   background-color: #fff;
+}
+
+.preview-loading {
+  position: absolute;
+  top: 30%;
+  left: 55%;
+  transform: translateX(-50%);
+
+  :deep(.bk-loading-title) {
+    margin-left: -50px !important;
+  }
 }
 
 .preview-concent-box {

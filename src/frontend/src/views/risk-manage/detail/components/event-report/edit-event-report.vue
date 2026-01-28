@@ -48,7 +48,11 @@
       </bk-button>
       <bk-loading
         class="edit-event-report-editor"
-        :loading="riskReportGenerateLoading || isPollingLoading">
+        :loading="riskReportGenerateLoading || isPollingLoading"
+        mode="spin"
+        size="small"
+        theme="primary"
+        :title="t('正在使用模版生成报告内容')">
         <quill-editor
           ref="quillEditorRef"
           v-model:content="localeReportContent"
@@ -133,6 +137,7 @@
   const isApiLoading = ref(false);
   const isRegetVal = ref(false);
   const isChangeVal = ref(false);
+  const baseReportContent = ref<string>('');
   const saveReportDialogRef = ref();
   const editorOptions = {
     theme: 'snow',
@@ -263,6 +268,8 @@
     const sanitized = sanitizeEditorHtml(content);
     const normalized = normalizeContentWithAiBlock(sanitized);
     localeReportContent.value = normalized.html;
+    baseReportContent.value = normalized.html;
+    isApiLoading.value = localeReportContent.value === baseReportContent.value;
     aiAgentData.value = normalized.aiAgent;
     if (!isEditorReady.value) return;
     nextTick(() => {
@@ -477,7 +484,7 @@
   // 停止轮询
   const stopPolling = () => {
     isPolling = false;
-    isApiLoading.value = false;
+    isApiLoading.value = localeReportContent.value === baseReportContent.value;
     isPollingLoading.value = false; // 停止轮询时取消 loading
     currentTaskId = null;
     setTimeout(() => {
@@ -536,6 +543,7 @@
     if (!isProgrammaticUpdate.value) {
       quillEditFlag.value = true;
     }
+    isApiLoading.value = localeReportContent.value === baseReportContent.value;
   };
   const isAutoGenerate = ref(false);
   const handleSubmit = () => {
@@ -630,6 +638,10 @@
 
   .edit-event-report-editor {
     background-color: #fff;
+
+    :deep(.bk-loading-title) {
+      margin-left: -50px !important;
+    }
   }
 }
 
