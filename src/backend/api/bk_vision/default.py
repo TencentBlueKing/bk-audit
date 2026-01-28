@@ -18,13 +18,13 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import BkApiResource
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.domains import BK_VISION_API_URL
 
 
-class BKVision(BkApiResource, abc.ABC):
+class BKVision(CommonBkApiResource, abc.ABC):
     module_name = "bk_vision"
     base_url = BK_VISION_API_URL
     platform_authorization = True
