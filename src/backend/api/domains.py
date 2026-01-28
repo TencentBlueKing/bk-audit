@@ -37,7 +37,11 @@ BK_LOG_API_URL = (
 BK_PAAS_API_URL = get_endpoint(settings.BK_PAAS_APIGW_NAME, stage="prod")
 
 # User Manage
-USER_MANAGE_URL = get_endpoint(settings.USERMANAGE_ESB_NAME, APIProvider.ESB)
+USER_MANAGE_URL = (
+    get_endpoint(settings.USERMANAGE_APIGW_NAME, APIProvider.APIGW)
+    if APIGW_ENABLED
+    else get_endpoint(settings.USERMANAGE_ESB_NAME, APIProvider.ESB)
+)
 
 # BkBase
 BK_BASE_API_URL = settings.BK_BASE_API_URL or get_endpoint(settings.BK_BASE_APIGW_NAME, stag="test")

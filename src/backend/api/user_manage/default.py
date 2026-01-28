@@ -20,15 +20,18 @@ import abc
 import base64
 import os
 
-from bk_resource import BkApiResource
 from bk_resource.utils.cache import CacheTypeItem
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.domains import USER_MANAGE_URL
 
+# 判断是否使用 APIGW
+APIGW_ENABLED = settings.USE_APIGW
 
-class UserManageResource(BkApiResource, abc.ABC):
+
+class UserManageResource(CommonBkApiResource, abc.ABC):
     base_url = USER_MANAGE_URL
     module_name = "user_manage"
 
@@ -36,26 +39,28 @@ class UserManageResource(BkApiResource, abc.ABC):
 class ListUsers(UserManageResource):
     name = gettext_lazy("获取用户列表")
     method = "GET"
-    action = "/list_users/"
+    action = "/users/"
 
 
 class RetrieveUser(UserManageResource):
     name = gettext_lazy("获取单个用户信息")
     method = "GET"
-    action = "/retrieve_user/"
+    action = "/users/{bk_username}/"
+    url_keys = ["bk_username"]
 
 
 class ListUserDepartments(UserManageResource):
     name = gettext_lazy("查询用户的部门信息 (v2)")
     method = "GET"
-    action = "/list_profile_departments/"
+    action = "/users/{bk_username}/departments/"
+    url_keys = ["bk_username"]
     cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60, user_related=False)
 
 
 class ListDepartments(UserManageResource):
     name = gettext_lazy("查询部门 (v2)")
     method = "GET"
-    action = "/list_departments/"
+    action = "/departments/"
     cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60, user_related=False)
     platform_authorization = True
 
@@ -63,7 +68,8 @@ class ListDepartments(UserManageResource):
 class RetrieveDepartment(UserManageResource):
     name = gettext_lazy("查询单个部门信息 (v2)")
     method = "GET"
-    action = "/retrieve_department/"
+    action = "/departments/{department_id}/"
+    url_keys = ["department_id"]
     cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
     platform_authorization = True
 

@@ -18,15 +18,15 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import BkApiResource
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.domains import APIGW_ENABLED, BK_ITSM_API_URL
 
 
-class BKITSM(BkApiResource, abc.ABC):
+class BKITSM(CommonBkApiResource, abc.ABC):
     module_name = "bk_itsm"
     base_url = BK_ITSM_API_URL
     platform_authorization = True

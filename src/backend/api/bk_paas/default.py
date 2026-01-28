@@ -21,14 +21,14 @@ import json
 from typing import Dict
 
 import requests
-from bk_resource import BkApiResource
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.domains import BK_PAAS_API_URL
 
 
-class PaaSV3BaseResource(BkApiResource, abc.ABC):
+class PaaSV3BaseResource(CommonBkApiResource, abc.ABC):
     base_url = BK_PAAS_API_URL
     bkapi_header_authorization = False
     bkapi_data_authorization = False
