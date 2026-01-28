@@ -52,6 +52,20 @@
               @click="handleClickTool(item)"
               @mouseenter="handleMouseenter(item)"
               @mouseleave="handleMouseleave()">
+              <!-- 左上角收藏icon -->
+              <div
+                v-show="itemMouseenter === item.uid || item.favorite"
+                class="item-top-left-icon"
+                :class="{ 'with-bg': itemMouseenter === item.uid }">
+                <img
+                  v-bk-tooltips="{
+                    content: item.favorite ? t('取消收藏') : t('收藏'),
+                    placement: 'top',
+                  }"
+                  class="favorite-icon"
+                  :src="item.favorite ? pentagramFillIcon : pentagramIcon"
+                  @click.stop="handleToggleFavorite(item)">
+              </div>
               <div
                 v-show="itemMouseenter === item.uid"
                 class="item-top-right-icon">
@@ -262,7 +276,7 @@
     :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item] = el"
+      :ref="(el: any) => dialogRefs[item] = el"
       :all-tools-data="allToolsData"
       :tags-enums="tagsEnums"
       @close="handleClose"
@@ -281,6 +295,9 @@
 
   import useUrlSearch from '@hooks/use-url-search';
 
+  import pentagramIcon from '@images/pentagram.svg';
+  import pentagramFillIcon from '@images/pentagram-fill.svg';
+
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
   import DialogVue from '../components/dialog.vue';
@@ -291,11 +308,11 @@
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
-  interface Exposes{
+  interface Exposes {
     getToolsList: (id: string) => void;
   }
   interface Emits {
-    (e: 'change'):void;
+    (e: 'change'): void;
   }
 
   const props = defineProps<Props>();
@@ -318,7 +335,7 @@
   }
 
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageError } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
@@ -361,6 +378,13 @@
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     manual: true,
+  });
+
+  // 收藏/取消收藏
+  const {
+    run: toggleFavorite,
+  } = useRequest(ToolManageService.toggleFavorite, {
+    defaultValue: {},
   });
 
   const openUrlTools = () => {
@@ -427,7 +451,7 @@
 
   // +n显示
   const tagContent = (tags: Array<string>) => {
-    const tagNameList = props.tagsEnums.map((i:TagItem) => {
+    const tagNameList = props.tagsEnums.map((i: TagItem) => {
       if (tags.slice(3, tags.length).includes(i.tag_id)) {
         return i.tag_name;
       }
@@ -510,6 +534,32 @@
     }
   };
 
+  // 收藏/取消收藏
+  const handleToggleFavorite = (item: ToolInfo) => {
+    const newFavoriteStatus = !item.favorite;
+    toggleFavorite({
+      uid: item.uid,
+      favorite: newFavoriteStatus,
+    }).then(() => {
+      messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
+      // 重新获取列表数据，后端会处理排序
+      fetchToolsList({
+        page: 1,
+        page_size: currentPage.value * currentPagSize.value,
+        my_created: props.myCreated,
+        recent_used: props.recentUsed,
+        keyword: searchValue.value,
+        tags: [props.tagId],
+      }).then((data) => {
+        dataList.value = data.results;
+        total.value = data.total;
+      });
+    })
+      .catch(() => {
+        messageError(t('操作失败，请重试'));
+      });
+  };
+
   // 策略跳转
   const handlesStrategiesClick = (item: ToolInfo) => {
     if (item?.strategies.length === 0) {
@@ -571,9 +621,9 @@
 
 
   const middleTtooltips = (text: string) => (
-    <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
-      {text}
-    </div>
+  <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
+    {text}
+  </div>
   );
 
   const itemIcon = (item: ToolInfo) => {
@@ -592,7 +642,7 @@
    * 打开工具，根据工具信息，打开工具，并传递工具信息
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
-  */
+   */
   const handleClickTool = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
@@ -860,6 +910,37 @@
             margin-right: 5px;
             margin-left: 5px;
             background-color: #979ba5;
+          }
+        }
+
+        .item-top-left-icon {
+          position: absolute;
+          top: 0;
+          left: 0;
+          z-index: 1;
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-start;
+          width: 40px;
+          height: 40px;
+          border-top-left-radius: 2px;
+
+          &.with-bg {
+            background: linear-gradient(135deg, #f5f7fa 50%, transparent 50%);
+          }
+
+          .favorite-icon {
+            position: relative;
+            top: 4px;
+            left: 4px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            transition: all .2s ease;
+
+            &:hover {
+              transform: scale(1.2);
+            }
           }
         }
 
