@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Any, Optional, Self, Union
 
-from pypika.functions import Cast, Count
+from pypika.functions import Cast, Count, DistinctOptionFunction
 from pypika.terms import Function, Term
 
 from core.sql.constants import FieldType
@@ -30,7 +30,7 @@ class DisCount(Count):
 
     def __init__(self, param, alias=None):
         super().__init__(param, alias=alias)
-        self.distinct()
+        self._distinct = True
 
 
 class ConcatWs(Function):
@@ -116,13 +116,23 @@ class JsonContains(Function):
         super().__init__("JSON_CONTAINS", *params, alias=alias)
 
 
-class GroupConcat(Function):
+class GroupConcat(DistinctOptionFunction):
     """
     GROUP_CONCAT 函数
     """
 
     def __init__(self, term: Term, alias: Optional[str] = None):
         super().__init__("GROUP_CONCAT", term, alias=alias)
+
+
+class DisGroupConcat(GroupConcat):
+    """
+    GROUP_CONCAT DISTINCT 函数（去重）
+    """
+
+    def __init__(self, term: Term, alias: Optional[str] = None):
+        super().__init__(term, alias=alias)
+        self._distinct = True
 
 
 class Concat(Function):

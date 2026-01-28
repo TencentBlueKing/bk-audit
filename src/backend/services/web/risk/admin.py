@@ -20,6 +20,7 @@ import datetime
 
 from django import forms
 from django.contrib import admin
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -34,6 +35,7 @@ from services.web.risk.models import (
     Risk,
     RiskEventSubscription,
     RiskExperience,
+    RiskReport,
     RiskRule,
     TicketNode,
     TicketPermission,
@@ -44,14 +46,26 @@ from services.web.risk.widgets import WhereConditionWidget
 class StrategyFilter(admin.SimpleListFilter):
     title = _("命中策略")
     parameter_name = "strategy"
+    # 缓存键和超时时间
+    CACHE_KEY = "risk_admin:strategy_filter:lookups"
+    CACHE_TIMEOUT = 300  # 5 分钟缓存
 
     def lookups(self, request, model_admin):
+        # 使用缓存避免每次加载页面都执行全表 distinct() 查询
+        cached_lookups = cache.get(self.CACHE_KEY)
+        if cached_lookups is not None:
+            return cached_lookups
+
         # 仅展示当前风险单中实际命中的策略，避免全量策略过多
         strategy_ids = list(Risk.objects.values_list("strategy_id", flat=True).distinct().order_by())
         from services.web.strategy_v2.models import Strategy
 
         strategies = Strategy.objects.filter(strategy_id__in=strategy_ids).only("strategy_id", "strategy_name")
-        return [(str(s.strategy_id), s.strategy_name or str(s.strategy_id)) for s in strategies]
+        lookups = [(str(s.strategy_id), s.strategy_name or str(s.strategy_id)) for s in strategies]
+
+        # 缓存结果
+        cache.set(self.CACHE_KEY, lookups, self.CACHE_TIMEOUT)
+        return lookups
 
     def queryset(self, request, queryset):
         value = self.value()
@@ -62,33 +76,78 @@ class StrategyFilter(admin.SimpleListFilter):
 
 @admin.register(Risk)
 class RiskAdmin(admin.ModelAdmin):
+    # 截断展示的最大长度
+    TRUNCATE_MAX_LENGTH = 100
+    # JSONField 展示的最大元素数量
+    JSON_MAX_ITEMS = 3
+
     list_display = [
         "risk_id",
-        "title",
+        "title_short",
         "strategy",
-        "event_content_short",
-        "operator",
+        "operator_short",
         "event_time",
         "status",
-        "current_operator",
-        "notice_users",
+        "current_operator_short",
+        "notice_users_short",
         "risk_label",
         "manual_synced",
+        "auto_generate_report",
     ]
     # 支持按策略名搜索
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
-    list_filter = ["status", "risk_label", "manual_synced", StrategyFilter]
-    list_per_page = 100  # 设置每页显示100条记录
+    list_filter = ["status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
+    list_per_page = 50  # 减少每页数量以提升性能
 
     def get_queryset(self, request):
-        qs = Risk.annotated_queryset().select_related("strategy")
-        return qs
+        """
+        Admin 专用的轻量级 queryset：
+        1. defer 所有不在 list_display 中直接使用的大字段
+        2. 使用 select_related 避免 N+1 查询
+        """
+        return Risk.objects.defer("event_content", "event_evidence", "event_data").select_related("strategy")
 
-    def event_content_short(self, obj: Risk):
-        return getattr(obj, "event_content_short", "")
+    def _truncate_text_field(self, value: str, max_length: int = None) -> str:
+        """截断 TextField 展示"""
+        if not value:
+            return ""
+        max_len = max_length or self.TRUNCATE_MAX_LENGTH
+        return value[:max_len] + "..." if len(value) > max_len else value
 
-    event_content_short.short_description = "Event Content Short"
+    def _truncate_json_field(self, value, max_items: int = None, max_length: int = None) -> str:
+        """截断 JSONField 展示"""
+        if not value:
+            return ""
+        max_items = max_items or self.JSON_MAX_ITEMS
+        max_len = max_length or self.TRUNCATE_MAX_LENGTH
+        if isinstance(value, list):
+            display = ", ".join(str(v) for v in value[:max_items])
+            if len(value) > max_items:
+                display += f" (+{len(value) - max_items})"
+        else:
+            display = str(value)
+        return display[:max_len] + "..." if len(display) > max_len else display
+
+    def title_short(self, obj: Risk) -> str:
+        return self._truncate_text_field(obj.title)
+
+    title_short.short_description = _("风险标题")
+
+    def operator_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.operator)
+
+    operator_short.short_description = _("责任人")
+
+    def current_operator_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.current_operator)
+
+    current_operator_short.short_description = _("当前处理人")
+
+    def notice_users_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.notice_users)
+
+    notice_users_short.short_description = _("关注人")
 
 
 @admin.register(ProcessApplication)
@@ -237,3 +296,26 @@ class RiskEventSubscriptionAdmin(admin.ModelAdmin):
             "page": 1,
             "page_size": 10,
         }
+
+
+@admin.register(RiskReport)
+class RiskReportAdmin(admin.ModelAdmin):
+    list_display = [
+        "risk",
+        "status",
+        "content_short",
+        "created_at",
+        "updated_at",
+    ]
+    search_fields = ["risk__risk_id"]
+    list_filter = ["status"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    raw_id_fields = ["risk"]
+
+    def content_short(self, obj: RiskReport):
+        """显示报告内容的前100个字符"""
+        if obj.content:
+            return obj.content[:100] + "..." if len(obj.content) > 100 else obj.content
+        return ""
+
+    content_short.short_description = _("报告内容摘要")

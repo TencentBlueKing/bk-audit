@@ -19,7 +19,9 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import os
+from typing import Any
 
+import mistune
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
@@ -52,7 +54,11 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
+from services.web.risk.handlers import (
+    BKMAlertSyncHandler,
+    EventHandler,
+    RiskReportHandler,
+)
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -61,10 +67,44 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import ManualEvent, Risk, TicketNode
+from services.web.risk.report import AIProvider
 from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
+
+
+@celery_app.task(
+    bind=True,
+    queue="risk_report",
+    time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
+    max_retries=settings.RENDER_MAX_RETRY,
+    acks_late=True,  # 任务级别的延迟确认
+    rate_limit=settings.RENDER_TASK_RATE_LIMIT,  # 限流：防止下游服务被打爆
+)
+def render_risk_report(self, risk_id: str, task_id: str):
+    """
+    渲染风险报告任务（尾部触发机制）
+
+    工作流：
+    1. 获取 Redis 锁
+    2. 执行渲染
+    3. 检查任务期间是否有新事件
+    4. 有新事件 -> 递归触发新任务
+    5. 无新事件 -> 释放锁
+    """
+    handler = RiskReportHandler(risk_id=risk_id, task_id=task_id)
+    try:
+        handler.run()
+    except Exception as exc:
+        logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
+        # 注意：handler.run() 的 finally 块已经释放了锁，这里不需要再释放
+        try:
+            # 失败重试，倒计时 10s
+            self.retry(exc=exc, countdown=10)
+        except Exception:  # NOCC:broad-except(需要处理所有异常)
+            # 达到最大重试次数 (MaxRetriesExceededError)
+            handler.handle_max_retries_exceeded(exc)
 
 
 @periodic_task(run_every=crontab(minute="*/10"), queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -87,7 +127,6 @@ def add_event(data: list):
     EventHandler().add_event(data)
 
 
-@lock(lock_name="celery:manual_add_event")
 def manual_add_event(data: list):
     """将事件写入 ManualEvent 表"""
 
@@ -186,11 +225,11 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=30,
 )
-@lock(lock_name="celery:sync_manual_event_status")
+@lock(lock_name="celery:sync_manual_event_status", timeout=30)
 def sync_manual_event_status():
     """同步已入 ES 的手工事件状态"""
 
@@ -228,11 +267,11 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=1),
+    run_every=datetime.timedelta(seconds=10),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=30,
 )
-@lock(lock_name="celery:sync_manual_risk_status")
+@lock(lock_name="celery:sync_manual_risk_status", timeout=30)
 def sync_manual_risk_status():
     """同步已入 BKBase 的手工风险状态"""
 
@@ -360,7 +399,8 @@ def process_one_risk(*, risk_id: str):
         if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
             cache.delete(key=cache_key)
             TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
-                new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
+                new_operators=TransOperator.load_security_person(),
+                description=gettext("风险自动流转失败，转为安全接口人处理"),
             )
         else:
             cache.set(
@@ -445,3 +485,58 @@ def sync_auto_result(node_id: str = None):
                 node.save(update_fields=["process_result", "status"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
+
+
+@celery_app.task(queue="risk")
+def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
+    """Celery任务：渲染 AI 变量
+
+    用于「AI 智能体预览」接口，单独预览 AI 变量的输出
+
+    Args:
+        risk_id: 风险ID
+        ai_variables: AI 变量配置列表，格式：
+            [
+                {"name": "ai.risk_summary", "prompt_template": "..."},
+                {"name": "ai.suggestion", "prompt_template": "..."}
+            ]
+
+    Returns:
+        {
+            "ai": {
+                "risk_summary": "AI 生成的风险摘要...",
+                "suggestion": "AI 生成的建议..."
+            }
+        }
+    """
+    try:
+        # 获取风险实例
+        _ = Risk.objects.get(risk_id=risk_id)
+
+        # 构建 AI Provider
+        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables)
+
+        # 执行 AI 调用，收集结果
+        ai_results = {}
+        for var_config in ai_variables:
+            var_name = var_config["name"]
+            # 提取变量名（去掉 ai. 前缀）
+            field_name = var_name.replace("ai.", "") if var_name.startswith("ai.") else var_name
+
+            try:
+                result = ai_provider.get(name=var_name)
+                if result:
+                    result = mistune.html(result)
+                ai_results[field_name] = result
+            except Exception as e:
+                logger_celery.exception("[RenderAIVariable] Failed to get AI variable %s: %s", var_name, e)
+                ai_results[field_name] = f"[Error: {e}]"
+
+        return {"ai": ai_results}
+
+    except Risk.DoesNotExist:
+        logger_celery.error("[RenderAIVariable] Risk not found: %s", risk_id)
+        raise ValueError(f"风险单不存在: {risk_id}")
+    except Exception as e:
+        logger_celery.exception("[RenderAIVariable] Failed to render AI variables: %s", e)
+        raise

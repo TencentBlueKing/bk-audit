@@ -271,6 +271,15 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    PROCESS_RISK = ActionMeta(
+        id="process_risk",
+        name=gettext("处理审计风险"),
+        name_en="Process Risk",
+        type="manage",
+        related_resource_types=[ResourceEnum.RISK],
+        related_actions=[],
+        version=1,
+    )
     LIST_RULE = ActionMeta(
         id="list_rule",
         name=gettext("规则列表访问"),
