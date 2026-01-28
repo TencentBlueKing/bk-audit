@@ -112,7 +112,9 @@
       </div>
     </template>
     <template #footer>
-      <div :class="isPreviewExpanded ? 'footer': ''">
+      <div
+        v-if="riskLisks.length !== 0"
+        :class="isPreviewExpanded ? 'footer': ''">
         <div
           class="preview"
           :class="{ 'expanded': isPreviewExpanded }"
@@ -138,6 +140,9 @@
           </bk-loading>
         </div>
       </div>
+      <div
+        v-else
+        class="footer-elese" />
     </template>
   </bk-sideslider>
 </template>
@@ -588,5 +593,13 @@
       background-color: #fff ;
     }
   }
+}
+
+.footer-elese {
+  position: absolute;
+  width: 100%;
+  height: 52px;
+  margin-left: -25px;
+  background-color: #f5f7fa;
 }
 </style>
