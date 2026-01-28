@@ -355,7 +355,6 @@
                 data={data} />
           }
           <bk-dropdown
-            trigger="click"
             style="margin-left: 8px">
             {{
               default: () => <bk-button text>
@@ -371,7 +370,7 @@
                       resource={data.strategy_id}
                       onClick={() => handleGenerateReport(data)}
                       text>
-                      {data.has_report ? t('编辑调查报告') : t('生成调查报告')}
+                      {data.has_report ? t('编辑调查报告') : t('创建调查报告')}
                     </auth-button>
                   </bk-dropdown-item>
                 </bk-dropdown-menu>

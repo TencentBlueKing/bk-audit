@@ -106,6 +106,7 @@
 
   interface Props {
     tableData?: any[];
+    eventData?: any[];
   }
 
   interface Emits {
@@ -116,6 +117,7 @@
   }
   const props = withDefaults(defineProps<Props>(), {
     tableData: () => [],
+    eventData: () => ([]),
   });
 
   const emits = defineEmits<Emits>();
@@ -133,12 +135,26 @@
 
   // 初始化表格数据
   const initTableData = () => {
-    if (props.tableData && props.tableData.length > 0) {
-      // props.tableData 就是 expected-results/index.vue 中 vuedraggable 的 expectedResultList
-      localTableData.value = props.tableData.map((item: any) => ({
-        ...item,
-        aggregate: 'latest',
-      }));
+    if (props.tableData && props.tableData.length > 0 && props.eventData && props.eventData.length > 0) {
+      const eventDataMap = new Map<string, any>();
+      props.eventData.forEach((item: any) => {
+        if (item.field_name) {
+          eventDataMap.set(item.field_name, item);
+        }
+        if (item.display_name) {
+          eventDataMap.set(item.display_name, item);
+        }
+      });
+      const allowedNameSet = new Set(props.eventData
+        .filter((item: any) => item.is_show === true)
+        .flatMap((item: any) => [item.field_name, item.display_name].filter(Boolean)));
+      localTableData.value = props.tableData
+        .filter((item: any) => allowedNameSet.has(item.display_name) || allowedNameSet.has(item.raw_name))
+        .map((item: any) => ({
+          ...item,
+          frontend_name: eventDataMap.get(item.display_name)?.display_name,
+          aggregate: 'latest',
+        }));
     } else {
       localTableData.value = [];
     }
@@ -146,14 +162,14 @@
 
   // 监听 props.tableData 变化，同步到本地数据
   // props.tableData 来自 expected-results/index.vue 的 expectedResultList (vuedraggable 的 :list)
-  watch(() => props.tableData, () => {
+  watch(() => [props.tableData, props.eventData], () => {
     initTableData();
   }, { deep: true, immediate: true });
 
   // 变量名称
   const nameTiptext = (item: any) => {
     if (item.display_name !== '') {
-      return `${item.display_name}(${item.raw_name})`;
+      return `${item.frontend_name}(${item.raw_name})`;
     }
     return item.raw_name;
   };
