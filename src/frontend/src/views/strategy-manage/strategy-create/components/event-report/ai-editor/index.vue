@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="rich-text-editor-container">
+  <div
+    class="rich-text-editor-container"
+    :class="{ 'is-fullscreen': isFullscreen }">
     <div class="editor-wrapper">
       <div
         v-if="disabled"
@@ -25,6 +27,9 @@
         v-model:content="content"
         content-type="html"
         :options="editorOptions"
+        :placeholder="placeholder"
+        @blur="handleBlur"
+        @focus="handleFocus"
         @ready="onEditorReady"
         @text-change="handleTextChange" />
     </div>
@@ -52,6 +57,8 @@
   import { useI18n } from 'vue-i18n';
 
   import aiIconUrl from '@images/ai.svg';
+  import fullScreenIconUrl from '@images/full screen.svg';
+  import unFullScreenIconUrl from '@images/un-full-screen.svg';
   import { QuillEditor } from '@vueup/vue-quill';
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -135,7 +142,8 @@
   const showInsetVarModal = ref(false);
   const insetVarRef = ref();
   const aiList = ref<info[]>([]); // AI列表
-
+  const placeholder = ref(t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成'));
+  const isFullscreen = ref(false);
   // 定义处理函数
   const insertVariable = () => {
     if (!quill) return;
@@ -167,6 +175,34 @@
     showAIModal.value = true;
   };
 
+  const setFullscreenButtonLabel = () => {
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar');
+    if (toolbar && toolbar.container) {
+      const fullscreenButton = toolbar.container.querySelector('.ql-fullscreen') as HTMLElement | null;
+      if (fullscreenButton) {
+        const icon = isFullscreen.value ? unFullScreenIconUrl : fullScreenIconUrl;
+        const title = isFullscreen.value ? t('退出全屏') : t('全屏');
+        fullscreenButton.innerHTML = `<img class="fullscreen-icon" src="${icon}" alt="${title}" />`;
+        fullscreenButton.setAttribute('title', title);
+        fullscreenButton.classList.add('custom-toolbar-icon-btn');
+      }
+    }
+  };
+
+  const toggleFullscreen = () => {
+    isFullscreen.value = !isFullscreen.value;
+    document.body.classList.toggle('ai-editor-fullscreen-open', isFullscreen.value);
+    setFullscreenButtonLabel();
+  };
+
+  const handleFullscreenKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isFullscreen.value) {
+      event.preventDefault();
+      toggleFullscreen();
+    }
+  };
+
   const onEditorReady = (quillInstance: QuillInstance) => {
     quill = quillInstance;
 
@@ -196,6 +232,8 @@
           aiAgentButton.setAttribute('title', '引用AI智能体');
           aiAgentButton.classList.add('custom-toolbar-btn');
         }
+
+        setFullscreenButtonLabel();
       }
     });
 
@@ -224,20 +262,24 @@
           [{ direction: 'rtl' }, { align: [] }],
           ['link', 'image', 'video'],
           ['clean'],
-          ['variable', 'aiagent'], // 自定义按钮
+          ['variable', 'aiagent', 'fullscreen'], // 自定义按钮
         ],
         handlers: {
           variable: insertVariable,
           aiagent: openAIAgentModal,
+          fullscreen: toggleFullscreen,
         },
       },
     },
-    placeholder: '开始输入...',
+    placeholder: placeholder.value,
   };
+  window.addEventListener('keydown', handleFullscreenKeydown);
   onBeforeUnmount(() => {
     if (quill && quill.root) {
       quill.root.removeEventListener('click', handleEditorClick);
     }
+    document.body.classList.remove('ai-editor-fullscreen-open');
+    window.removeEventListener('keydown', handleFullscreenKeydown);
   });
 
   const handleEditorClick = (e: MouseEvent) => {
@@ -431,7 +473,20 @@
     });
     return blocks;
   };
-
+  const handleFocus = () => {
+    if (!quill) return;
+    placeholder.value = '';
+    if (quill.root) {
+      quill.root.dataset.placeholder = placeholder.value;
+    }
+  };
+  const handleBlur = () => {
+    if (!quill) return;
+    placeholder.value = t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成');
+    if (quill.root) {
+      quill.root.dataset.placeholder = placeholder.value;
+    }
+  };
   // 处理文本变化事件
   const handleTextChange = () => {
     if (!quill || showDeleteDialog.value) return;
@@ -550,14 +605,15 @@
     });
   });
   // 判断编辑器是否有实际内容
-  const hasContent = (html: string): boolean => {
-    if (!html || html.trim() === '') {
+  const hasContent = (html?: string): boolean => {
+    const htmlContent = typeof html === 'string' ? html : (quill?.root?.innerHTML || '');
+    if (!htmlContent || htmlContent.trim() === '') {
       return false;
     }
 
     // 解析 HTML
     const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
+    const doc = parser.parseFromString(htmlContent, 'text/html');
     // eslint-disable-next-line prefer-destructuring
     const body = doc.body;
 
@@ -592,8 +648,8 @@
   };
 
   // 监听 content 变化
-  watch(() => content.value, (newVal) => {
-    const hasActualContent = hasContent(newVal);
+  watch(() => content.value, () => {
+    const hasActualContent = hasContent();
     emit('isHasContent', hasActualContent);
   }, {
     immediate: true,
@@ -646,7 +702,7 @@
     setQuillContent(data: string) {
       initValue(data);
     },
-    hasContent: () => hasContent(content.value),
+    hasContent: () => hasContent(),
     clearContent() {
       content.value = '';
       aiList.value = [];
@@ -670,6 +726,32 @@
   border: 1px solid #ddd;
   border-radius: 4px;
   flex-direction: column;
+}
+
+:deep(body.ai-editor-fullscreen-open) {
+  overflow: hidden;
+}
+
+.rich-text-editor-container.is-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+}
+
+.rich-text-editor-container.is-fullscreen .editor-wrapper {
+  height: calc(100vh - 2px);
+}
+
+.rich-text-editor-container.is-fullscreen :deep(.quill-editor) {
+  height: 100%;
+}
+
+.rich-text-editor-container.is-fullscreen :deep(.ql-editor) {
+  min-height: calc(100vh - 120px);
 }
 
 .editor-wrapper {
@@ -748,6 +830,7 @@
   word-break: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 :deep(.ai-agent-actions) {
@@ -823,6 +906,19 @@
   color: #3a84ff !important;
   background-color: transparent !important;
   opacity: 80%;
+}
+
+:deep(.ql-toolbar .ql-fullscreen) {
+  width: 28px !important;
+  height: 24px !important;
+  padding: 0 4px !important;
+}
+
+:deep(.ql-toolbar .ql-fullscreen .fullscreen-icon) {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
 }
 
 /* disabled 状态下自定义按钮样式 */

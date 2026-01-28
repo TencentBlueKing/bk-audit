@@ -93,7 +93,7 @@
     },
   ]);
   const handleCopy = (row: any) => {
-    execCopy(row.title, t('复制成功'));
+    execCopy(`{{ risk.${row.field} }}`, t('复制成功'));
   };
   const handleInsert = (row: any) => {
     const variableText = `{{ risk.${row.field} }}`;
