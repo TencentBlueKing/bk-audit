@@ -17,12 +17,13 @@
 <template>
   <div
     ref="rootRef"
-    class="show-tooltips-text">
+    class="show-tooltips-text"
+    :style="{ '--line-clamp': String(line) }">
     <span>
       {{ data || '--' }}
     </span>
     <div
-      :id="`${data}`"
+      ref="templateRef"
       style="display: none;max-height: 90vh;overflow: auto;">
       <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
         {{ data }}
@@ -60,17 +61,18 @@
     line: 1,  // 默认一行
   });
 
-  const rootRef = ref();
+  const rootRef = ref<HTMLElement | null>(null);
+  const templateRef = ref<HTMLElement | null>(null);
 
   let tippyIns: Instance;
 
-  watch(() => props.data, (data) => {
+  watch(() => props.data, () => {
     nextTick(() => {
       if (tippyIns) {
         tippyIns.hide();
         tippyIns.destroy();
       }
-      const template = document.getElementById(`${data}`);
+      const template = templateRef.value;
       if (handleIsShowTippy() && template && props.isShow) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
           content: template.innerHTML,
@@ -93,6 +95,9 @@
   });
   // 当文本溢出省略号则hover显示全部内容
   const handleIsShowTippy = () => {
+    if (!rootRef.value) {
+      return false;
+    }
     const { clientWidth, clientHeight } = rootRef.value;
     const { scrollWidth, scrollHeight } = rootRef.value;
     // 多行溢出判断：宽度或高度超出都显示tooltip
@@ -115,7 +120,7 @@
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: v-bind(line);
+    -webkit-line-clamp: var(--line-clamp);
   }
 
   .text-content {

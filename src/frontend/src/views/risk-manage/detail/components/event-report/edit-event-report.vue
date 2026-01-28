@@ -39,15 +39,6 @@
         </template>
       </bk-popover>
       <bk-button
-        v-else-if="!reportAutoRender"
-        class="mb16"
-        disabled
-        outline
-        theme="primary"
-        @click="handleGenerateReport">
-        {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
-      </bk-button>
-      <bk-button
         v-else
         class="mb16"
         outline
@@ -126,7 +117,6 @@
     status: string | undefined;
     reportEnabled: boolean;
     strategyId: number | string;
-    reportAutoRender: boolean;
   }
 
   const props = defineProps<Props>();
