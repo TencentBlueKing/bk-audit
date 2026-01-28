@@ -46,6 +46,7 @@
     <inset-var
       ref="insetVarRef"
       v-model:visible="showInsetVarModal"
+      :event-data="eventData"
       :event-info-data="eventInfoData"
       @confirm="handleInsetVarConfirm" />
   </div>
@@ -86,6 +87,7 @@
     disabled?: boolean;
     riskLisks: Array<riskItem>;
     eventInfoData?: any[];
+    eventData?: any[];
   }
 
   interface expose {
@@ -104,6 +106,7 @@
   const props = withDefaults(defineProps<Props>(), {
     disabled: false,
     eventInfoData: () => [],
+    eventData: () => [],
   });
   const emit = defineEmits<emits>();
   const { t } = useI18n();

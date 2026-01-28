@@ -41,6 +41,7 @@
             name="event">
             <event-info
               ref="eventInfoRef"
+              :event-data="eventData"
               :table-data="eventInfoData"
               @insert="handleInsert" />
           </bk-tab-panel>
@@ -60,6 +61,7 @@
   interface Props {
     visible: boolean;
     eventInfoData?: any[];
+    eventData?: any[];
   }
 
   interface Emits {
@@ -72,6 +74,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     eventInfoData: () => [],
+    eventData: () => [],
   });
   const emits = defineEmits<Emits>();
   const isShowRight = ref(false);

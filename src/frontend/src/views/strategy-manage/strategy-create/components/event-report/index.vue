@@ -70,6 +70,7 @@
           <ai-editor
             ref="aiEditorRef"
             :disabled="!isEnvent"
+            :event-data="eventData"
             :event-info-data="eventInfoData"
             :risk-lisks="riskLisks"
             @is-has-content="handleHasContent" />
@@ -146,7 +147,7 @@
   import dayjs from 'dayjs';
   import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
 
@@ -181,6 +182,7 @@
   interface Props {
     editData: StrategyModel;
     select?: any[]; // 从父组件传递的 formData.configs.select
+    formData?: any; // 从父组件传递的 step2 表格数据
   }
   interface Emits {
     (e: 'previousStep', step: number): void;
@@ -190,6 +192,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     select: () => [],
+    formData: () => ({}),
   });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
@@ -198,6 +201,7 @@
   const showPreview = ref(false);
   const aiEditorRef = ref();
   const route = useRoute();
+  const router = useRouter();
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
   const isCreateeMode = route.name === 'strategyCreate';
@@ -219,12 +223,20 @@
       : (props.editData?.configs?.select || []);
     return data;
   });
+  const eventData = computed(() => {
+    if (!props.formData) {
+      return [];
+    }
+    return [
+      ...(props.formData.event_basic_field_configs || []),
+      ...(props.formData.event_data_field_configs || []),
+      ...(props.formData.event_evidence_field_configs || []),
+    ];
+  });
   const handleSwitcher = (value: boolean) => {
     isEnvent.value = value;
-    console.log('handleSwitcher', value);
     if (!value) {
       isAutoGetReports.value = false;
-      aiEditorRef.value?.clearContent();
     }
   };
   // 是否显示提示
@@ -376,7 +388,9 @@
     });
   };
   const handleCancel = () => {
-    console.log('handleCancel');
+    router.push({
+      name: 'strategyList',
+    });
   };
 
   const handlePreview = () => {
@@ -518,6 +532,7 @@
 
       .event-editor-title {
         font-size: 12px;
+        font-weight: 500;
         line-height: 20px;
         letter-spacing: 0;
         color: #4d4f56;
