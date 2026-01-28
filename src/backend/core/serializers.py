@@ -126,6 +126,30 @@ class FriendlyDateTimeField(serializers.DateTimeField):
         return super().to_representation(value)
 
 
+class CommaSeparatedListField(serializers.Field):
+    """
+    列表字段，将列表转换为英文逗号分隔的字符串
+
+    Usage:
+        operator = CommaSeparatedListField(label="责任人")
+
+    示例：
+        输入: ["user1", "user2"] -> 输出: "user1,user2"
+        输入: None -> 输出: ""
+        输入: [] -> 输出: ""
+    """
+
+    def to_representation(self, value):
+        if value is None or value == []:
+            return ""
+        if isinstance(value, list):
+            return ",".join(str(item) for item in value if item)
+        return str(value) if value else ""
+
+    def to_internal_value(self, data):
+        raise NotImplementedError("CommaSeparatedListField is read-only and does not support input")
+
+
 class TimestampIntegerField(serializers.IntegerField):
     """用于将日期时间字段序列化为毫秒级整型时间戳的 IntegerField。"""
 

@@ -21,7 +21,11 @@ from typing import List
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
-from core.serializers import ChoiceDisplayField, FriendlyDateTimeField
+from core.serializers import (
+    ChoiceDisplayField,
+    CommaSeparatedListField,
+    FriendlyDateTimeField,
+)
 from services.web.risk.constants import RiskLabel, RiskStatus
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RiskLevel
@@ -61,14 +65,14 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         label=gettext_lazy("最后发现时间"),
         help_text=gettext_lazy("风险最后发现时间"),
     )
-    operator = serializers.JSONField(
+    operator = CommaSeparatedListField(
         label=gettext_lazy("责任人"),
         help_text=gettext_lazy("风险相关的责任人列表"),
     )
     risk_label = ChoiceDisplayField(
         choices=RiskLabel,
-        label=gettext_lazy("风险标签"),
-        help_text=gettext_lazy("风险标签（正常/误报）"),
+        label=gettext_lazy("风险标记"),
+        help_text=gettext_lazy("风险标记（正常/误报）"),
     )
     strategy_id = serializers.IntegerField(
         label=gettext_lazy("命中策略ID"),
@@ -80,11 +84,11 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         label=gettext_lazy("风险类型"),
         help_text=gettext_lazy("事件类型标签列表"),
     )
-    current_operator = serializers.JSONField(
+    current_operator = CommaSeparatedListField(
         label=gettext_lazy("当前处理人"),
         help_text=gettext_lazy("当前负责处理的人员"),
     )
-    notice_users = serializers.JSONField(
+    notice_users = CommaSeparatedListField(
         label=gettext_lazy("关注人"),
         help_text=gettext_lazy("关注该风险的用户列表"),
     )
@@ -140,6 +144,14 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def to_representation(self, instance):
+        """
+        重写序列化方法，统一将空值转为空字符串
+        """
+        data = super().to_representation(instance)
+        # 统一将空值转为空字符串
+        return {key: ("" if value is None else value) for key, value in data.items()}
 
     @classmethod
     def get_field_definitions(cls) -> List[dict]:

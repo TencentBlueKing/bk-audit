@@ -37,7 +37,7 @@ class ReportConfig(BaseModel):
     """
     报告配置
 
-    包含两类变量：
+    包含三类变量：
     1. 风险变量：不需要配置，直接用 risk.* 引用
     2. 事件变量：不需要单独配置，模板中直接使用 {{ count(event.event_id) }} 语法
     3. AI 变量：需要配置，由 AI 服务生成
