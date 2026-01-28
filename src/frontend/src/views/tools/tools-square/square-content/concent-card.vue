@@ -335,7 +335,7 @@
   }
 
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageError } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
@@ -554,7 +554,10 @@
         dataList.value = data.results;
         total.value = data.total;
       });
-    });
+    })
+      .catch(() => {
+        messageError(t('操作失败，请重试'));
+      });
   };
 
   // 策略跳转
