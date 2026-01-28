@@ -14,6 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
+<!-- eslint-disable vue/no-v-html -->
 <template>
   <bk-sideslider
     v-model:isShow="isShowRight"
@@ -135,7 +136,7 @@
           class="preview-concent">
           <bk-loading :loading="isLoading">
             <div class="preview-concent-box">
-              {{ concent }}
+              <div v-html="getContent(concent)" />
             </div>
           </bk-loading>
         </div>
@@ -148,6 +149,7 @@
 </template>
 
 <script setup lang="ts">
+  import DOMPurify from 'dompurify';
   import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -221,6 +223,8 @@
     prompt_template: '',
     result: '',
   });
+
+  const getContent = (content: string) => DOMPurify.sanitize(content);
   const handleClose = () => {
     isShowRight.value = false;
     if (timerId.value !== null) {
