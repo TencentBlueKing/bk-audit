@@ -177,7 +177,7 @@ BK_APIGW_NAME = os.getenv("BKAPP_BK_APIGW_NAME", "bk-audit")
 # 多租户配置
 MULTI_TENANT_ENABLED = strtobool(os.getenv("BKAPP_MULTI_TENANT_ENABLED", "False"))
 # 单租户ID
-BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID", "tencent")
+BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
 
 BK_API_URL_TMPL = os.getenv("BK_API_URL_TMPL", "")
 APIGW_DEFINITION_SETTINGS = {"BK_APIGW_NAME": BK_APIGW_NAME}
