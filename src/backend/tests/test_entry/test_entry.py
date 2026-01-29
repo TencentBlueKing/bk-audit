@@ -65,7 +65,6 @@ class EntryHandlerUserApiGwUrlTest(TestCase):
         from services.web.entry.handler.entry import EntryHandler
 
         with mock.patch.object(settings, 'BK_API_URL_TMPL', 'https://api.example.com/api/{api_name}'):
-            # 使用默认的 api_name: bk-user-web
-            with mock.patch.object(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web'):
+            with mock.patch.dict('os.environ', {'BKPAAS_ENVIRONMENT': 'prod'}):
                 url = EntryHandler.get_user_web_apigw_url()
-                self.assertEqual(url, 'https://api.example.com/api/bk-user-web/bk-user-web/prod')
+                self.assertEqual(url, 'https://api.example.com/api/bk-user-web/prod')
