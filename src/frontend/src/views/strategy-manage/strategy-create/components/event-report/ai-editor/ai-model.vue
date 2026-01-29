@@ -145,6 +145,12 @@
             size="small"
             theme="primary"
             :title="t('正在使用AI生成报告内容')">
+            <audit-icon
+              v-if="getContent(concent) !== ''"
+              v-bk-tooltips="t('复制所有')"
+              class="preview-angle-copy"
+              type="copy"
+              @click="handleCopy" />
             <div class="preview-concent-box">
               <div v-html="getContent(concent)" />
             </div>
@@ -166,6 +172,8 @@
   import RiskManageService from '@service/risk-manage';
 
   import useRequest from '@hooks/use-request';
+
+  import { execCopy } from '@utils/assist';
 
   interface riskItem {
     risk_id: string,
@@ -228,7 +236,7 @@
     prompt_template: '',
     risk_id: '',
   });
-  const namePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  const namePattern = /^[a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]*$/;
   const rules = ref({
     name: [
       {
@@ -239,7 +247,7 @@
           }
           return namePattern.test(trimmed);
         },
-        message: t('名称需以字母或下划线开头，只能包含字母、数字和下划线'),
+        message: t('名称需以字母、下划线或中文开头，只能包含字母、数字、下划线和中文'),
         trigger: 'blur',
       },
     ],
@@ -271,6 +279,19 @@
     return initialEmpty || isChangedFromInitial.value;
   });
 
+  const getCopyText = (content: string) => {
+    const normalized = String(content ?? '').replace(/\\n/g, '\n');
+    const hasHtmlTag = /<\/?[a-z][\s\S]*>/i.test(normalized);
+    if (!hasHtmlTag) {
+      return normalized;
+    }
+    const container = document.createElement('div');
+    container.innerHTML = normalized;
+    return (container.innerText || '').trim();
+  };
+  const handleCopy = () => {
+    execCopy(getCopyText(concent.value), t('复制成功'));
+  };
   const updateInitialSnapshot = () => {
     initialFormSnapshot.value = {
       name: formData.value.name.trim(),
@@ -679,6 +700,18 @@
 
   :deep(li) {
     margin-bottom: 4px;
+  }
+}
+
+.preview-angle-copy {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  font-size: 18px;
+  cursor: pointer;
+
+  &:hover {
+    color: #3a84ff;
   }
 }
 
