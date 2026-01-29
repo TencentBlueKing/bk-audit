@@ -710,19 +710,19 @@ class TestAIPreviewResource(TestCase):
         self.assertIn("ai_variables", serializer.errors)
 
     def test_ai_variable_serializer_valid(self):
-        """测试 AIVariableSerializer 验证有效数据"""
-        from services.web.risk.serializers import AIVariableSerializer
+        """测试 AIVariableConfig.drf_serializer_with_validation 验证有效数据"""
+        from services.web.risk.report_config import AIVariableConfig
 
         data = {"name": "ai.summary", "prompt_template": "请总结风险"}
-        serializer = AIVariableSerializer(data=data)
+        serializer = AIVariableConfig.drf_serializer_with_validation()(data=data)
         self.assertTrue(serializer.is_valid())
 
     def test_ai_variable_serializer_name_must_start_with_ai(self):
-        """测试 AIVariableSerializer 验证name必须以ai.开头"""
-        from services.web.risk.serializers import AIVariableSerializer
+        """测试 AIVariableConfig.drf_serializer_with_validation 验证name必须以ai.开头"""
+        from services.web.risk.report_config import AIVariableConfig
 
         data = {"name": "summary", "prompt_template": "请总结风险"}
-        serializer = AIVariableSerializer(data=data)
+        serializer = AIVariableConfig.drf_serializer_with_validation()(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("name", serializer.errors)
 
@@ -755,6 +755,8 @@ class TestAIPreviewResource(TestCase):
         """测试通过 resource 调用 AIPreview 提交异步任务"""
         from unittest.mock import MagicMock, patch
 
+        from services.web.risk.report_config import AIVariableConfig
+
         # Mock celery task 的 delay 方法
         mock_task = MagicMock()
         mock_task.id = "test_task_id_123"
@@ -777,7 +779,10 @@ class TestAIPreviewResource(TestCase):
             mock_render.delay.assert_called_once_with(
                 risk_id=self.risk.risk_id,
                 ai_variables=[
-                    {"name": "ai.summary", "prompt_template": "请总结风险"},
+                    {
+                        "name": "ai.summary",
+                        "prompt_template": f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结风险",
+                    },
                 ],
             )
 
