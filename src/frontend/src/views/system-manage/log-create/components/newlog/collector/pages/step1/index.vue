@@ -67,7 +67,7 @@
                 </bk-radio-button>
               </bk-radio-group>
               <div class="sdk-support-footer">
-                <span>{{ t('前往SDk') }}：</span>
+                <span>{{ t('前往SDK') }}：</span>
                 <a
                   :href="selectedSdkUrl"
                   target="_blank">{{ selectedSdkUrl }}</a>
@@ -241,6 +241,7 @@
   };
 
   const handleLastStep = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'logCreate',
       params: {
@@ -254,6 +255,7 @@
   };
 
   const handleCancel = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'systemDetail',
       params: {
@@ -274,7 +276,7 @@
         },
         query: {
           ...route.query,
-          routeTitleTp: t('SDK 接入'),
+          routeTitleTp: t('日志采集接入'),
         },
       });
     });
