@@ -1053,13 +1053,27 @@ class RiskExportReqSerializer(serializers.Serializer):
 class AIVariableSerializer(serializers.Serializer):
     """AI 变量配置序列化器"""
 
+    # Jinja 变量名正则: 必须以字母或下划线开头，只能包含字母、数字和下划线
+    JINJA_VAR_NAME_PATTERN = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
+
     name = serializers.CharField(label=gettext_lazy("AI变量名"), help_text=gettext_lazy("必须以 ai. 开头，如 ai.risk_summary"))
     prompt_template = serializers.CharField(label=gettext_lazy("AI提示词模板"), help_text=gettext_lazy("可以包含风险变量和事件变量"))
 
     def validate_name(self, value: str) -> str:
-        """验证 AI 变量名必须以 ai. 开头"""
+        """验证 AI 变量名必须以 ai. 开头，且符合 Jinja 变量名规范"""
+        import re
+
         if not value.startswith("ai."):
             raise serializers.ValidationError(gettext_lazy("AI变量名必须以 'ai.' 开头"))
+
+        # 提取 ai. 后面的变量名部分进行 Jinja 变量名规范验证
+        var_name = value[3:]  # 去掉 'ai.' 前缀
+        if not var_name:
+            raise serializers.ValidationError(gettext_lazy("AI变量名不能只有 'ai.' 前缀"))
+
+        if not re.match(self.JINJA_VAR_NAME_PATTERN, var_name):
+            raise serializers.ValidationError(gettext_lazy("AI变量名必须符合 Jinja 变量名规范：以字母或下划线开头，只能包含字母、数字和下划线"))
+
         return value
 
 

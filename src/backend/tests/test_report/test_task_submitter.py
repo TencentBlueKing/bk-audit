@@ -59,7 +59,7 @@ class TestSubmitRenderTask(TestCase):
 
         report_config = ReportConfig(
             template="{{ ai.summary }}",
-            ai_variables=[AIVariableConfig(name="summary", prompt_template="请总结风险")],
+            ai_variables=[AIVariableConfig(name="ai.summary", prompt_template="请总结风险")],
         )
 
         result = submit_render_task(risk=self.risk, report_config=report_config)
@@ -94,12 +94,12 @@ class TestSubmitRenderTask(TestCase):
 
         mock_task.delay.return_value = MagicMock()
 
-        # 混合：部分有前缀，部分没有
+        # 两个都有 ai. 前缀
         report_config = ReportConfig(
             template="{{ ai.summary }}{{ ai.recommendation }}",
             ai_variables=[
-                AIVariableConfig(name="summary", prompt_template="总结..."),  # 无前缀
-                AIVariableConfig(name="ai.recommendation", prompt_template="建议..."),  # 已有前缀
+                AIVariableConfig(name="ai.summary", prompt_template="总结..."),
+                AIVariableConfig(name="ai.recommendation", prompt_template="建议..."),
             ],
         )
 
@@ -127,7 +127,7 @@ class TestSubmitRenderTask(TestCase):
         report_config = ReportConfig(
             template="# 风险报告\n\n{{ risk.title }}\n\n{{ ai.summary }}",
             ai_variables=[
-                AIVariableConfig(name="summary", prompt_template="请总结该风险的要点"),
+                AIVariableConfig(name="ai.summary", prompt_template="请总结该风险的要点"),
             ],
         )
 

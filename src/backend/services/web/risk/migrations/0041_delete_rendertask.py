@@ -4,13 +4,8 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('risk', '0040_riskreport_alter_manualevent_options_and_more'),
     ]
 
-    operations = [
-        migrations.DeleteModel(
-            name='RenderTask',
-        ),
-    ]
+    operations = []

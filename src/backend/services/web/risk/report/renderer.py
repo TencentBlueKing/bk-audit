@@ -151,7 +151,7 @@ def _parse_template(template: str, providers: list[Provider] = None) -> list[Pro
         template: Jinja2模板字符串
         providers: Provider列表
 
-    Returns:s
+    Returns:
         ProviderCall列表
     """
     if providers is None:

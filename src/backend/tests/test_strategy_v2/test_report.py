@@ -35,7 +35,7 @@ class TestRetrieveStrategy(TestCase):
                 "template": "Test template {{ risk.title }}",
                 "ai_variables": [
                     {
-                        "name": "summary",
+                        "name": "ai.summary",
                         "prompt_template": "请总结风险",
                     }
                 ],
@@ -73,7 +73,7 @@ class TestPreviewRiskReportSerializer(TestCase):
                 "template": "Risk: {{ risk.title }}",
                 "ai_variables": [
                     {
-                        "name": "summary",
+                        "name": "ai.summary",
                         "prompt_template": "请总结",
                     }
                 ],
