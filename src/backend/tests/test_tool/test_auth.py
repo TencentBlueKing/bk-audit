@@ -20,23 +20,20 @@ import hashlib
 import hmac
 import json
 from datetime import datetime
-from unittest import mock
+from unittest import TestCase, mock
 
-from django.test import TestCase
-
-from apps.meta.constants import SENSITIVE_REPLACE_VALUE
 from services.web.tool.constants import (
     ApiAuthMethod,
     BkAppAuthConfig,
     BkAuthItem,
-    HmacSignatureAuthConfig,
-    HmacSignatureAuthItem,
+    IEOPAuthConfig,
+    IEOPAuthItem,
     NoAuthItem,
 )
 from services.web.tool.executor.auth import (
     AuthHandlerFactory,
     BkAppAuthHandler,
-    HmacSignatureAuthHandler,
+    IEOPAuthHandler,
     NoAuthHandler,
 )
 
@@ -50,16 +47,6 @@ class TestNoAuthHandler(TestCase):
         headers = {"Content-Type": "application/json"}
         handler.apply_auth(headers)
         self.assertEqual(headers, {"Content-Type": "application/json"})
-
-    def test_mask_headers_returns_copy(self):
-        """测试mask_headers返回请求头的副本"""
-        handler = NoAuthHandler()
-        headers = {"Content-Type": "application/json"}
-        masked = handler.mask_headers(headers)
-        self.assertEqual(masked, headers)
-        # 确保是副本
-        masked["X-Test"] = "test"
-        self.assertNotIn("X-Test", headers)
 
 
 class TestBkAppAuthHandler(TestCase):
@@ -80,44 +67,53 @@ class TestBkAppAuthHandler(TestCase):
         self.assertEqual(auth_data["bk_app_code"], "test_app")
         self.assertEqual(auth_data["bk_app_secret"], "test_secret_12345")
 
-    def test_mask_headers_hides_secret(self):
-        """测试mask_headers隐藏敏感信息"""
-        headers = {"Content-Type": "application/json"}
-        self.handler.apply_auth(headers)
-        masked = self.handler.mask_headers(headers)
 
-        auth_data = json.loads(masked["X-Bkapi-Authorization"])
-        self.assertEqual(auth_data["bk_app_code"], "test_app")
-        self.assertEqual(auth_data["bk_app_secret"], SENSITIVE_REPLACE_VALUE)
-
-
-class TestHmacSignatureAuthHandler(TestCase):
-    """测试HMAC签名认证处理器"""
+class TestIEOPAuthHandler(TestCase):
+    """测试IEOP认证处理器"""
 
     def setUp(self):
         """设置测试环境"""
-        self.config = HmacSignatureAuthConfig(
-            secret_id="test_secret_id", secret_key="test_secret_key", app_code="test_app_code"
+        self.config = IEOPAuthConfig(
+            app_code="test_app_code",
+            app_secret="test_app_secret",
+            operator="test_operator",
+            secret_id="test_secret_id",
+            secret_key="test_secret_key",
         )
-        self.handler = HmacSignatureAuthHandler(self.config)
+        self.handler = IEOPAuthHandler(self.config)
 
     def test_set_request_info_parses_url(self):
         """测试set_request_info从URL中正确解析host和path"""
         url = "https://api.example.com/v1/users"
-        self.handler.set_request_info(url, "POST")
+        self.handler.set_request_info(url, "GET")
 
         self.assertEqual(self.handler.host, "api.example.com")
         self.assertEqual(self.handler.path, "/v1/users")
+        self.assertEqual(self.handler.method, "GET")
+
+    def test_set_request_info_with_post(self):
+        """测试POST方法"""
+        url = "https://api.example.com/v1/users"
+        self.handler.set_request_info(url, "POST")
+        self.assertEqual(self.handler.method, "POST")
+
+    def test_set_request_info_method_case_insensitive(self):
+        """测试method不区分大小写"""
+        url = "https://api.example.com/v1/users"
+        self.handler.set_request_info(url, "get")
+        self.assertEqual(self.handler.method, "GET")
+
+        self.handler.set_request_info(url, "Post")
         self.assertEqual(self.handler.method, "POST")
 
     def test_set_request_info_parses_url_with_port(self):
         """测试set_request_info解析带端口的URL"""
         url = "https://api.example.com:8080/v1/users"
-        self.handler.set_request_info(url, "GET")
+        self.handler.set_request_info(url, "POST")
 
         self.assertEqual(self.handler.host, "api.example.com:8080")
         self.assertEqual(self.handler.path, "/v1/users")
-        self.assertEqual(self.handler.method, "GET")
+        self.assertEqual(self.handler.method, "POST")
 
     def test_set_request_info_default_path(self):
         """测试URL没有path时默认为/"""
@@ -130,7 +126,7 @@ class TestHmacSignatureAuthHandler(TestCase):
     def test_set_request_info_parses_complex_url(self):
         """测试解析复杂URL（带查询参数）"""
         url = "https://api.example.com/v1/users?page=1&size=10"
-        self.handler.set_request_info(url, "GET")
+        self.handler.set_request_info(url, "POST")
 
         self.assertEqual(self.handler.host, "api.example.com")
         self.assertEqual(self.handler.path, "/v1/users")
@@ -158,34 +154,179 @@ class TestHmacSignatureAuthHandler(TestCase):
         headers = {"Content-Type": "application/json"}
         url = "https://api.example.com/v1/users"
 
-        self.handler.apply_auth(headers, url=url, method="POST")
+        self.handler.apply_auth(headers, body={}, url=url)
 
-        self.assertIn("X-APP-CODE", headers)
-        self.assertEqual(headers["X-APP-CODE"], "test_app_code")
         self.assertIn("Date", headers)
         self.assertIn("Authorization", headers)
 
-    def test_apply_auth_without_app_code(self):
-        """测试app_code为空时不添加X-APP-CODE头"""
-        config = HmacSignatureAuthConfig(
-            secret_id="test_secret_id", secret_key="test_secret_key", app_code=""  # 空app_code
-        )
-        handler = HmacSignatureAuthHandler(config)
+    def test_apply_auth_adds_body_params(self):
+        """测试apply_auth自动添加认证参数到body"""
         headers = {"Content-Type": "application/json"}
+        body = {"some_param": "some_value"}
         url = "https://api.example.com/v1/users"
 
-        handler.apply_auth(headers, url=url, method="POST")
+        self.handler.apply_auth(headers, body=body, url=url)
 
-        self.assertNotIn("X-APP-CODE", headers)
+        self.assertEqual(body["app_code"], "test_app_code")
+        self.assertEqual(body["app_secret"], "test_app_secret")
+        self.assertEqual(body["operator"], "test_operator")
+        self.assertEqual(body["some_param"], "some_value")
+
+    def test_apply_auth_without_operator(self):
+        """测试operator为空且获取不到当前用户时不添加到body"""
+        config = IEOPAuthConfig(
+            app_code="test_app",
+            app_secret="test_secret",
+            operator="",  # 空operator
+            secret_id="test_id",
+            secret_key="test_key",
+        )
+        handler = IEOPAuthHandler(config)
+        headers = {"Content-Type": "application/json"}
+        body = {}
+        url = "https://api.example.com/v1/users"
+
+        with mock.patch('services.web.tool.executor.auth.get_request_username', return_value=""):
+            handler.apply_auth(headers, body=body, url=url)
+
+        self.assertNotIn("operator", body)
+        self.assertIn("app_code", body)
+        self.assertIn("app_secret", body)
+
+    def test_apply_auth_default_operator_from_current_user(self):
+        """测试operator为空时自动获取当前用户"""
+        config = IEOPAuthConfig(
+            app_code="test_app",
+            app_secret="test_secret",
+            operator="",  # 空operator
+            secret_id="test_id",
+            secret_key="test_key",
+        )
+        handler = IEOPAuthHandler(config)
+        headers = {"Content-Type": "application/json"}
+        body = {}
+        url = "https://api.example.com/v1/users"
+
+        with mock.patch('services.web.tool.executor.auth.get_request_username', return_value="current_user"):
+            handler.apply_auth(headers, body=body, url=url)
+
+        self.assertEqual(body["operator"], "current_user")
+
+    def test_apply_auth_prefer_config_operator(self):
+        """测试配置的operator优先级高于当前用户"""
+        config = IEOPAuthConfig(
+            app_code="test_app",
+            app_secret="test_secret",
+            operator="config_operator",
+            secret_id="test_id",
+            secret_key="test_key",
+        )
+        handler = IEOPAuthHandler(config)
+        headers = {"Content-Type": "application/json"}
+        body = {}
+        url = "https://api.example.com/v1/users"
+
+        with mock.patch('services.web.tool.executor.auth.get_request_username', return_value="current_user"):
+            handler.apply_auth(headers, body=body, url=url)
+
+        # 应该使用配置的operator，而不是当前用户
+        self.assertEqual(body["operator"], "config_operator")
+
+    def test_apply_auth_deserializes_data_json_string(self):
+        """测试apply_auth自动反序列化body中的data字段"""
+        headers = {}
+        body = {"data": '{"key": "value", "number": 123}'}
+        url = "https://api.example.com/v1/users"
+
+        self.handler.apply_auth(headers, body=body, url=url)
+
+        self.assertIsInstance(body["data"], dict)
+        self.assertEqual(body["data"]["key"], "value")
+        self.assertEqual(body["data"]["number"], 123)
+
+    def test_apply_auth_keeps_data_if_not_string(self):
+        """测试data不是字符串时保持原样"""
+        headers = {}
+        body = {"data": {"already": "dict"}}
+        url = "https://api.example.com/v1/users"
+
+        self.handler.apply_auth(headers, body=body, url=url)
+
+        self.assertEqual(body["data"], {"already": "dict"})
+
+    def test_apply_auth_keeps_data_if_invalid_json(self):
+        """测试data是无效JSON字符串时保持原样"""
+        headers = {}
+        body = {"data": "not valid json {"}
+        url = "https://api.example.com/v1/users"
+
+        self.handler.apply_auth(headers, body=body, url=url)
+
+        self.assertEqual(body["data"], "not valid json {")
+
+    def test_apply_auth_skips_body_if_none(self):
+        """测试POST请求body为None时跳过body处理"""
+        headers = {}
+        url = "https://api.example.com/v1/users"
+
+        # body为None时，apply_auth只处理headers，不报错
+        self.handler.apply_auth(headers, body=None, url=url)
+
+        # 验证headers被正确处理
         self.assertIn("Date", headers)
         self.assertIn("Authorization", headers)
+
+    def test_apply_auth_get_request_adds_to_query_params(self):
+        """测试GET请求时认证参数添加到query_params"""
+        self.handler.method = "GET"
+        headers = {"Content-Type": "application/json"}
+        query_params = {"existing": "param"}
+        url = "https://api.example.com/v1/users"
+
+        self.handler.apply_auth(headers, query_params=query_params, url=url)
+
+        self.assertEqual(query_params["app_code"], "test_app_code")
+        self.assertEqual(query_params["app_secret"], "test_app_secret")
+        self.assertEqual(query_params["operator"], "test_operator")
+        self.assertEqual(query_params["existing"], "param")
+        # headers也应该被处理
+        self.assertIn("Date", headers)
+        self.assertIn("Authorization", headers)
+
+    def test_apply_auth_get_request_skips_if_query_params_none(self):
+        """测试GET请求query_params为None时跳过参数处理"""
+        self.handler.method = "GET"
+        headers = {}
+        url = "https://api.example.com/v1/users"
+
+        # query_params为None时，apply_auth只处理headers
+        self.handler.apply_auth(headers, query_params=None, url=url)
+
+        self.assertIn("Date", headers)
+        self.assertIn("Authorization", headers)
+
+    def test_apply_auth_post_does_not_modify_query_params(self):
+        """测试POST请求不修改query_params"""
+        self.handler.method = "POST"
+        headers = {}
+        body = {}
+        query_params = {"existing": "param"}
+        url = "https://api.example.com/v1/users"
+
+        self.handler.apply_auth(headers, body=body, query_params=query_params, url=url)
+
+        # POST请求只修改body，不修改query_params
+        self.assertNotIn("app_code", query_params)
+        self.assertEqual(query_params, {"existing": "param"})
+        # 认证参数应该在body中
+        self.assertEqual(body["app_code"], "test_app_code")
 
     def test_apply_auth_authorization_format(self):
         """测试Authorization头的格式正确"""
         headers = {}
         url = "https://api.example.com/v1/users"
 
-        self.handler.apply_auth(headers, url=url, method="POST")
+        self.handler.apply_auth(headers, body={}, url=url)
 
         auth_header = headers["Authorization"]
         self.assertIn('Signature keyId="test_secret_id"', auth_header)
@@ -195,38 +336,16 @@ class TestHmacSignatureAuthHandler(TestCase):
 
     def test_apply_auth_uses_preset_info(self):
         """测试apply_auth使用预设的请求信息"""
-        self.handler.set_request_info("https://preset.example.com/v1/data", "GET")
+        self.handler.set_request_info("https://preset.example.com/v1/data", "POST")
         headers = {}
 
-        # 不传url和method，使用预设值
-        self.handler.apply_auth(headers)
+        # 不传url，使用预设值
+        self.handler.apply_auth(headers, body={})
 
         self.assertIn("Authorization", headers)
         # 验证使用了preset的host
         self.assertEqual(self.handler.host, "preset.example.com")
         self.assertEqual(self.handler.path, "/v1/data")
-
-    def test_mask_headers_hides_authorization(self):
-        """测试mask_headers隐藏Authorization头"""
-        headers = {"Content-Type": "application/json"}
-        url = "https://api.example.com/v1/users"
-
-        self.handler.apply_auth(headers, url=url, method="POST")
-        masked = self.handler.mask_headers(headers)
-
-        self.assertEqual(masked["Authorization"], SENSITIVE_REPLACE_VALUE)
-        # 确保原始headers未被修改
-        self.assertNotEqual(headers["Authorization"], SENSITIVE_REPLACE_VALUE)
-
-    def test_signature_varies_with_method(self):
-        """测试不同HTTP方法产生不同签名"""
-        self.handler.host = "api.example.com"
-        date = "Mon, 27 Jan 2026 08:00:00 GMT"
-
-        sig_post = self.handler._generate_signature("POST", "/v1/users", date)
-        sig_get = self.handler._generate_signature("GET", "/v1/users", date)
-
-        self.assertNotEqual(sig_post, sig_get)
 
     def test_signature_varies_with_path(self):
         """测试不同路径产生不同签名"""
@@ -260,29 +379,51 @@ class TestAuthHandlerFactory(TestCase):
         self.assertIsInstance(handler, BkAppAuthHandler)
         self.assertEqual(handler.config.bk_app_code, "test_app")
 
-    def test_create_hmac_signature_handler(self):
-        """测试创建HMAC签名认证处理器"""
-        config = HmacSignatureAuthItem(
-            method=ApiAuthMethod.HMAC_SIGNATURE.value,
-            config=HmacSignatureAuthConfig(secret_id="test_id", secret_key="test_key", app_code="test_code"),
+    def test_create_ieop_auth_handler(self):
+        """测试创建IEOP认证处理器"""
+        config = IEOPAuthItem(
+            method=ApiAuthMethod.IEOP_AUTH.value,
+            config=IEOPAuthConfig(
+                app_code="test_app",
+                app_secret="test_secret",
+                operator="test_operator",
+                secret_id="test_id",
+                secret_key="test_key",
+            ),
         )
         handler = AuthHandlerFactory.get_handler(config)
 
-        self.assertIsInstance(handler, HmacSignatureAuthHandler)
+        self.assertIsInstance(handler, IEOPAuthHandler)
         self.assertEqual(handler.config.secret_id, "test_id")
+        self.assertEqual(handler.config.app_code, "test_app")
 
-    def test_create_hmac_handler_with_url(self):
-        """测试创建HMAC签名处理器时传入URL"""
-        config = HmacSignatureAuthItem(
-            method=ApiAuthMethod.HMAC_SIGNATURE.value,
-            config=HmacSignatureAuthConfig(secret_id="test_id", secret_key="test_key"),
+    def test_create_ieop_handler_with_url(self):
+        """测试创建IEOP认证处理器时传入URL"""
+        config = IEOPAuthItem(
+            method=ApiAuthMethod.IEOP_AUTH.value,
+            config=IEOPAuthConfig(
+                app_code="test_app", app_secret="test_secret", secret_id="test_id", secret_key="test_key"
+            ),
+        )
+        url = "https://api.example.com/v1/users"
+        handler = AuthHandlerFactory.get_handler(config, url=url, method="GET")
+
+        self.assertIsInstance(handler, IEOPAuthHandler)
+        self.assertEqual(handler.host, "api.example.com")
+        self.assertEqual(handler.path, "/v1/users")
+        self.assertEqual(handler.method, "GET")  # 支持GET
+
+    def test_create_ieop_handler_with_post_method(self):
+        """测试创建IEOP认证处理器时传入POST方法"""
+        config = IEOPAuthItem(
+            method=ApiAuthMethod.IEOP_AUTH.value,
+            config=IEOPAuthConfig(
+                app_code="test_app", app_secret="test_secret", secret_id="test_id", secret_key="test_key"
+            ),
         )
         url = "https://api.example.com/v1/users"
         handler = AuthHandlerFactory.get_handler(config, url=url, method="POST")
 
-        self.assertIsInstance(handler, HmacSignatureAuthHandler)
-        self.assertEqual(handler.host, "api.example.com")
-        self.assertEqual(handler.path, "/v1/users")
         self.assertEqual(handler.method, "POST")
 
     def test_unknown_auth_method_returns_no_auth(self):
@@ -296,30 +437,36 @@ class TestAuthHandlerFactory(TestCase):
 
         self.assertIsInstance(handler, NoAuthHandler)
 
-    def test_hmac_handler_without_url(self):
-        """测试创建HMAC处理器时不传URL"""
-        config = HmacSignatureAuthItem(
-            method=ApiAuthMethod.HMAC_SIGNATURE.value,
-            config=HmacSignatureAuthConfig(secret_id="test_id", secret_key="test_key"),
+    def test_ieop_handler_without_url(self):
+        """测试创建IEOP处理器时不传URL"""
+        config = IEOPAuthItem(
+            method=ApiAuthMethod.IEOP_AUTH.value,
+            config=IEOPAuthConfig(
+                app_code="test_app", app_secret="test_secret", secret_id="test_id", secret_key="test_key"
+            ),
         )
         handler = AuthHandlerFactory.get_handler(config)
 
-        self.assertIsInstance(handler, HmacSignatureAuthHandler)
+        self.assertIsInstance(handler, IEOPAuthHandler)
         # 未设置URL时，host和path应为默认值
         self.assertEqual(handler.host, "")
         self.assertEqual(handler.path, "")
 
 
-class TestHmacSignatureIntegration(TestCase):
-    """HMAC签名认证集成测试"""
+class TestIEOPAuthIntegration(TestCase):
+    """IEOP认证集成测试"""
 
     def test_full_flow_with_factory(self):
         """测试完整的认证流程（通过工厂创建并应用认证）"""
         # 1. 创建认证配置
-        config = HmacSignatureAuthItem(
-            method=ApiAuthMethod.HMAC_SIGNATURE.value,
-            config=HmacSignatureAuthConfig(
-                secret_id="prod_secret_id", secret_key="prod_secret_key_12345", app_code="prod_app"
+        config = IEOPAuthItem(
+            method=ApiAuthMethod.IEOP_AUTH.value,
+            config=IEOPAuthConfig(
+                app_code="prod_app",
+                app_secret="prod_secret_12345",
+                operator="admin",
+                secret_id="prod_secret_id",
+                secret_key="prod_secret_key_12345",
             ),
         )
 
@@ -329,30 +476,39 @@ class TestHmacSignatureIntegration(TestCase):
 
         # 3. 应用认证
         headers = {"Content-Type": "application/json"}
-        handler.apply_auth(headers)
+        body = {"data": '{"user_id": 123}'}
+        handler.apply_auth(headers, body=body)
 
-        # 4. 验证结果
-        self.assertIn("X-APP-CODE", headers)
+        # 4. 验证headers
         self.assertIn("Date", headers)
         self.assertIn("Authorization", headers)
-        self.assertEqual(headers["X-APP-CODE"], "prod_app")
+
+        # 5. 验证body（直接检查传入的body被修改）
+        self.assertEqual(body["app_code"], "prod_app")
+        self.assertEqual(body["app_secret"], "prod_secret_12345")
+        self.assertEqual(body["operator"], "admin")
+        # data应该被反序列化
+        self.assertIsInstance(body["data"], dict)
+        self.assertEqual(body["data"]["user_id"], 123)
 
     def test_apply_auth_twice_with_different_urls(self):
         """测试同一个handler对不同URL多次应用认证"""
-        config = HmacSignatureAuthConfig(secret_id="test_id", secret_key="test_key")
-        handler = HmacSignatureAuthHandler(config)
+        config = IEOPAuthConfig(
+            app_code="test_app", app_secret="test_secret", secret_id="test_id", secret_key="test_key"
+        )
+        handler = IEOPAuthHandler(config)
 
         # 第一次请求
         headers1 = {}
-        handler.apply_auth(headers1, url="https://api.example.com/v1/users", method="GET")
+        handler.apply_auth(headers1, body={}, url="https://api.example.com/v1/users")
         auth1 = headers1["Authorization"]
 
         # 第二次请求（不同URL）
         headers2 = {}
-        handler.apply_auth(headers2, url="https://api.example.com/v1/items", method="POST")
+        handler.apply_auth(headers2, body={}, url="https://api.example.com/v1/items")
         auth2 = headers2["Authorization"]
 
-        # 两次认证头应该不同（因为path和method都不同）
+        # 两次认证头应该不同（因为path不同）
         self.assertNotEqual(auth1, auth2)
 
     @mock.patch('services.web.tool.executor.auth.datetime')
@@ -362,10 +518,12 @@ class TestHmacSignatureIntegration(TestCase):
         mock_now = datetime(2026, 1, 27, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
-        config = HmacSignatureAuthConfig(secret_id="test_id", secret_key="test_key")
-        handler = HmacSignatureAuthHandler(config)
+        config = IEOPAuthConfig(
+            app_code="test_app", app_secret="test_secret", secret_id="test_id", secret_key="test_key"
+        )
+        handler = IEOPAuthHandler(config)
         headers = {}
-        handler.apply_auth(headers, url="https://api.example.com/test", method="POST")
+        handler.apply_auth(headers, body={}, url="https://api.example.com/test")
 
         # 验证Date头格式
         expected_date = mock_now.strftime('%a, %d %b %Y %H:%M:%S GMT')

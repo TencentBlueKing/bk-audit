@@ -280,7 +280,7 @@ class ApiAuthMethod(TextChoices):
     """
 
     BK_APP_AUTH = "bk_app_auth", gettext_lazy("蓝鲸应用认证")
-    HMAC_SIGNATURE = "hmac_signature", gettext_lazy("HMAC签名认证")
+    IEOP_AUTH = "ieop_auth", gettext_lazy("IEOP认证")
     NONE = "none", gettext_lazy("无认证")
 
 
@@ -296,17 +296,19 @@ class BkAuthItem(BaseModel):
     config: BkAppAuthConfig  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
 
 
-class HmacSignatureAuthConfig(BaseModel):
-    """HMAC签名认证需要的具体字段"""
+class IEOPAuthConfig(BaseModel):
+    """IEOP认证需要的具体字段"""
 
-    secret_id: str = PydanticField(..., description="密钥ID")
-    secret_key: str = PydanticField(..., description="密钥Key")
-    app_code: str = PydanticField(default="", description="应用Code（可选，用于X-APP-CODE请求头）")
+    app_code: str = PydanticField(..., description="应用Code")
+    app_secret: str = PydanticField(..., description="应用密钥")
+    operator: str = PydanticField(default="", description="操作人（可选）")
+    secret_id: str = PydanticField(..., description="密钥ID（用于HMAC签名）")
+    secret_key: str = PydanticField(..., description="密钥Key（用于HMAC签名）")
 
 
-class HmacSignatureAuthItem(BaseModel):
-    method: Literal[ApiAuthMethod.HMAC_SIGNATURE] = ApiAuthMethod.HMAC_SIGNATURE
-    config: HmacSignatureAuthConfig  # 这里的 config 强类型约束为 HmacSignatureAuthConfig
+class IEOPAuthItem(BaseModel):
+    method: Literal[ApiAuthMethod.IEOP_AUTH] = ApiAuthMethod.IEOP_AUTH
+    config: IEOPAuthConfig  # 这里的 config 强类型约束为 IEOPAuthConfig
 
 
 class NoAuthItem(BaseModel):
@@ -342,7 +344,7 @@ class ApiConfig(BaseModel):
     # 这里定义 auth_config 可以是上面定义的任意一种 Item
     # discriminator="method" 告诉 Pydantic：
     # "请先看 method 字段的值，如果是 'bk_app_auth'，就用 BkAuthItem 来校验"
-    auth_config: Annotated[Union[BkAuthItem, HmacSignatureAuthItem, NoAuthItem], DictField()] = PydanticField(
+    auth_config: Annotated[Union[BkAuthItem, IEOPAuthItem, NoAuthItem], DictField()] = PydanticField(
         title=gettext_lazy("认证配置"), discriminator="method"
     )
     headers: List[ParamField] = PydanticField(title=gettext_lazy("请求头"))
