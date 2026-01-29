@@ -883,8 +883,28 @@
 }
 
 :deep(.ql-editor p) {
-  margin: 0;
+  margin: 0 0 12px;
   line-height: 1.5;
+}
+
+:deep(.ql-editor h1),
+:deep(.ql-editor h2),
+:deep(.ql-editor h3),
+:deep(.ql-editor h4),
+:deep(.ql-editor h5),
+:deep(.ql-editor h6),
+:deep(.ql-editor ul),
+:deep(.ql-editor ol) {
+  margin: 0 0 12px;
+}
+
+:deep(.ql-editor ul),
+:deep(.ql-editor ol) {
+  padding-left: 20px;
+}
+
+:deep(.ql-editor li) {
+  margin-bottom: 4px;
 }
 
 /* 自定义工具栏按钮样式 - 文字按钮 */

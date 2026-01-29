@@ -28,8 +28,16 @@
         outline
         theme="primary"
         @click="handleGenerateReport">
-        {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
+        {{ t('使用模版生成') }}
       </bk-button>
+      <span
+        v-if="reportEnabled"
+        class="template-generate-tip">
+        <audit-icon
+          class="info-fill-icon"
+          type="info-fill" />
+        {{ t('使用该风险对应的审计策略中配置的事件调查报告模板自动填充内容') }}
+      </span>
       <bk-loading
         class="edit-event-report-editor"
         :loading="riskReportGenerateLoading || isPollingLoading"
@@ -479,10 +487,9 @@
   };
 
   const handleGenerateReport = () => {
-    const typeText = props.reportContent ? '重新生成' : '自动生成';
-    const titleText = `确认${typeText}报告`;
-    const subTitleText =  props.reportContent ? t('系统将根据最新的审计策略配置和风险信息重新生成报告，在重新生成之前，当前报告内容将被清空，请谨慎操作')
-      : t('系统将根据最新的审计策略配置和风险信息自动生成报告，在自动生成之前，当前报告内容将被清空，请谨慎操作');
+    const typeText = '模版生成';
+    const titleText = `确认使用${typeText}报告`;
+    const subTitleText =  t('系统将根据最新的审计策略配置和风险信息自动填充内容，在生成报告之前，当前报告内容将被清空，请谨慎操作');
 
     InfoBox({
       type: 'warning',
@@ -497,7 +504,7 @@
           textAlign: 'left',
         },
       }, t(subTitleText)),
-      confirmText: t(typeText),
+      confirmText: t('生成报告'),
       cancelText: t('取消'),
       headerAlign: 'center',
       contentAlign: 'center',
@@ -598,6 +605,12 @@
   padding: 28px 40px;
   background-color: #f5f7fa;
 
+  .template-generate-tip {
+    margin-left: 8px;
+    font-size: 12px;
+    color: #979ba5;
+  }
+
   .edit-event-report-editor {
     background-color: #fff;
 
@@ -694,5 +707,30 @@
 :deep(.ql-editor .ql-ai-agent) {
   padding: 0;
   margin: 0;
+}
+
+:deep(.ql-editor p) {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+:deep(.ql-editor h1),
+:deep(.ql-editor h2),
+:deep(.ql-editor h3),
+:deep(.ql-editor h4),
+:deep(.ql-editor h5),
+:deep(.ql-editor h6),
+:deep(.ql-editor ul),
+:deep(.ql-editor ol) {
+  margin: 0 0 12px;
+}
+
+:deep(.ql-editor ul),
+:deep(.ql-editor ol) {
+  padding-left: 20px;
+}
+
+:deep(.ql-editor li) {
+  margin-bottom: 4px;
 }
 </style>

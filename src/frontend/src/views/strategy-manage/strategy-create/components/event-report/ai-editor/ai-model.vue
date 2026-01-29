@@ -88,12 +88,12 @@
             v-if="canSave"
             class="ai-agent-insert-btn mr8"
             @click="handleConfirm">
-            {{ t('保存') }}
+            {{ primaryButtonText }}
           </div>
           <div
             v-else
             class="ai-disabled-btn mr8">
-            {{ t('保存') }}
+            {{ primaryButtonText }}
           </div>
           <bk-button
             v-if="riskLisks.length > 0"
@@ -228,7 +228,22 @@
     prompt_template: '',
     risk_id: '',
   });
-  const rules = ref({});
+  const namePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  const rules = ref({
+    name: [
+      {
+        validator: (value: string) => {
+          const trimmed = (value || '').trim();
+          if (!trimmed) {
+            return true;
+          }
+          return namePattern.test(trimmed);
+        },
+        message: t('名称需以字母或下划线开头，只能包含字母、数字和下划线'),
+        trigger: 'blur',
+      },
+    ],
+  });
 
   const concent = ref('');
   const timerId = ref<number | null>(null);
@@ -241,6 +256,8 @@
   const trimmedName = computed(() => formData.value.name.trim());
   const trimmedPrompt = computed(() => formData.value.prompt_template.trim());
   const hasRequiredFields = computed(() => trimmedName.value !== '' && trimmedPrompt.value !== '');
+  const isInsertMode = computed(() => props.initialPrompt === null);
+  const primaryButtonText = computed(() => (isInsertMode.value ? t('插入') : t('保存')));
   const isChangedFromInitial = computed(() => (
     trimmedName.value !== initialFormSnapshot.value.name
     || trimmedPrompt.value !== initialFormSnapshot.value.prompt_template
@@ -261,7 +278,18 @@
     };
   };
 
-  const getContent = (content: string) => DOMPurify.sanitize(content);
+  const getContent = (content: string) => {
+    const normalized = String(content ?? '').replace(/\\n/g, '\n');
+    const hasHtmlTag = /<\/?[a-z][\s\S]*>/i.test(normalized);
+    if (!hasHtmlTag) {
+      const escaped = normalized
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return DOMPurify.sanitize(escaped.replace(/\n/g, '<br/>'));
+    }
+    return DOMPurify.sanitize(normalized);
+  };
   const handleClose = () => {
     isShowRight.value = false;
     if (timerId.value !== null) {
@@ -271,15 +299,17 @@
   };
 
   const handleConfirm = () => {
-    // 如果不是编辑模式
-    aiInfo.value = {
-      name: formData.value.name,
-      prompt_template: formData.value.prompt_template,
-      result: '',
-    };
+    formRef.value?.validate?.().then(() => {
+      // 如果不是编辑模式
+      aiInfo.value = {
+        name: formData.value.name,
+        prompt_template: formData.value.prompt_template,
+        result: '',
+      };
 
-    emit('confirm', aiInfo.value);
-    isShowRight.value = false;
+      emit('confirm', aiInfo.value);
+      isShowRight.value = false;
+    });
   };
 
   // 查询任务结果
@@ -627,6 +657,29 @@
   padding-bottom: 20px;
   margin-left: 25px;
   overflow: hidden auto;
+  word-break: break-word;
+  white-space: pre-wrap;
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(h4),
+  :deep(h5),
+  :deep(h6),
+  :deep(p),
+  :deep(ul),
+  :deep(ol) {
+    margin: 0 0 12px;
+  }
+
+  :deep(ul),
+  :deep(ol) {
+    padding-left: 20px;
+  }
+
+  :deep(li) {
+    margin-bottom: 4px;
+  }
 }
 
 .ai-agent-drawer-preview {
