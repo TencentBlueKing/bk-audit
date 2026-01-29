@@ -16,10 +16,14 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import re
 from typing import Dict, List
 
 from drf_pydantic import BaseModel
-from pydantic import Field
+from pydantic import Field, field_validator
+
+# Jinja 变量名正则: 必须以字母或下划线开头，只能包含字母、数字和下划线
+JINJA_VAR_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class AIVariableConfig(BaseModel):
@@ -31,6 +35,23 @@ class AIVariableConfig(BaseModel):
 
     name: str = Field(..., description="变量名，用于 {{ ai.xxx }} 模板引用，同时也作为前端展示名")
     prompt_template: str = Field("", description="AI 提示词模板")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """验证 AI 变量名必须以 ai. 开头，且符合 Jinja 变量名规范"""
+        if not value.startswith("ai."):
+            raise ValueError("AI变量名必须以 'ai.' 开头")
+
+        # 提取 ai. 后面的变量名部分进行 Jinja 变量名规范验证
+        var_name = value[3:]  # 去掉 'ai.' 前缀
+        if not var_name:
+            raise ValueError("AI变量名不能只有 'ai.' 前缀")
+
+        if not JINJA_VAR_NAME_PATTERN.match(var_name):
+            raise ValueError("AI变量名必须符合 Jinja 变量名规范：以字母或下划线开头，只能包含字母、数字和下划线")
+
+        return value
 
 
 class ReportConfig(BaseModel):
