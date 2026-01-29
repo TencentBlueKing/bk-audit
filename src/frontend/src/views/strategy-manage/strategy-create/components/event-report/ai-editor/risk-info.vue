@@ -16,6 +16,19 @@
 -->
 <template>
   <div class="risk-info">
+    <div class="search-input-box">
+      <bk-input
+        v-model="searchKey"
+        class="search-input"
+        clearable
+        :placeholder="t('搜索变量名称')">
+        <template #suffix>
+          <audit-icon
+            class="search-input-suffix"
+            type="search1" />
+        </template>
+      </bk-input>
+    </div>
     <tdesign-list
       ref="tableRef"
       :border="false"
@@ -23,20 +36,19 @@
       :data-source="dataSource"
       max-height="80vh"
       :need-empty-search-tip="false"
-      no-use-rresults
       :sync-pagination-to-url="false" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
 
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import { execCopy } from '@utils/assist';
+  import { encodeRegexp, execCopy } from '@utils/assist';
 
   // interface Props {
   // }
@@ -50,7 +62,43 @@
   const { t } = useI18n();
 
   const tableRef = ref();
-  const dataSource = RiskManageService.getReportRiskVar;
+  const searchKey = ref('');
+  const riskVarList = ref<any[]>([]);
+
+  const formatRiskVarList = (data: any) => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+    return [];
+  };
+  const filterRiskVarList = (list: any[]) => {
+    const keyword = searchKey.value.trim();
+    if (!keyword) {
+      return list;
+    }
+    const rule = new RegExp(encodeRegexp(keyword), 'i');
+    return list.filter(item => rule.test(String(item.name || '')));
+  };
+  const fetchRiskVarList = async () => {
+    const data = await RiskManageService.getReportRiskVar({});
+    riskVarList.value = formatRiskVarList(data);
+    return riskVarList.value;
+  };
+  const dataSource = async () => {
+    if (riskVarList.value.length === 0) {
+      await fetchRiskVarList();
+    }
+    const results = filterRiskVarList(riskVarList.value);
+    return {
+      results,
+      page: 1,
+      num_pages: 1,
+      total: results.length,
+    };
+  };
 
   // 定义列配置
   const columns = computed(() => [
@@ -100,11 +148,35 @@
     emits('insert', variableText);
   };
 
+  watch(searchKey, () => {
+    tableRef.value?.refreshList?.();
+  });
 </script>
 
 <style lang="postcss" scoped>
 .risk-info {
   padding: 20px 40px 0;
+
+  .search-input-box {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .search-input-suffix {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    bottom: 0;
+    display: flex;
+    font-size: 20px;
+    color: #979ba5;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .search-input {
+    width: 100%;
+  }
 
   :deep(.t-table) {
     .insert-link {
