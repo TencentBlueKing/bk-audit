@@ -108,7 +108,8 @@
                   :property="`pa_params.${val.key}`"
                   required
                   :rules="[
-                    { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                    { message: t('不能为空'),
+                      validator: (value: any) => handlePaValidate(value) },
                   ]"
                   style="margin-bottom: 16px;">
                   <application-parameter
@@ -347,15 +348,21 @@
     }
   };
 
-  const handlePaValidate = (value: {field: string, value: string}) => {
+  const handlePaValidate = (value: { field: string; value: string }) => {
     if (!value || typeof value !== 'object') return false;
     const { field, value: val } = value;
-    // 检查field和value是否都为空（包括undefined、null、空字符串、）
-    const isFieldEmpty = field === undefined || field === null || field === '';
-    const isValueEmpty = val === undefined || val === null || val === '' ;
-    // 只有当field和value都为空时才返回false，否则返回true
+    const isFieldEmpty = field === undefined
+      || field === null
+      || field === ''
+      || (Array.isArray(field) && field.length === 0);
+    const isValueEmpty = val === undefined
+      || val === null
+      || val === ''
+      || (Array.isArray(val) && val.length === 0);
+    // field 和 value 同时为空，才算不通过
     return !(isFieldEmpty && isValueEmpty);
   };
+
 
   //  获取风险可用字段
   const {
