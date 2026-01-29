@@ -349,16 +349,14 @@
   };
 
   const handlePaValidate = (value: { field: string; value: string }) => {
+    const isEmpty = (v: any) => v === undefined
+      || v === null
+      || v === ''
+      || (Array.isArray(v) && v.length === 0);
     if (!value || typeof value !== 'object') return false;
     const { field, value: val } = value;
-    const isFieldEmpty = field === undefined
-      || field === null
-      || field === ''
-      || (Array.isArray(field) && field.length === 0);
-    const isValueEmpty = val === undefined
-      || val === null
-      || val === ''
-      || (Array.isArray(val) && val.length === 0);
+    const isFieldEmpty = isEmpty(field);
+    const isValueEmpty = isEmpty(val);
     // field 和 value 同时为空，才算不通过
     return !(isFieldEmpty && isValueEmpty);
   };
