@@ -22,8 +22,8 @@ from typing import Dict, List
 from drf_pydantic import BaseModel
 from pydantic import Field, field_validator
 
-# Jinja 变量名正则: 必须以字母或下划线开头，只能包含字母、数字和下划线
-JINJA_VAR_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+# Jinja 变量名正则: 必须以字母、下划线或中文开头，只能包含字母、数字、下划线和中文
+JINJA_VAR_NAME_PATTERN = re.compile(r"^[a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]*$")
 
 
 class AIVariableConfig(BaseModel):
@@ -49,7 +49,7 @@ class AIVariableConfig(BaseModel):
             raise ValueError("AI变量名不能只有 'ai.' 前缀")
 
         if not JINJA_VAR_NAME_PATTERN.match(var_name):
-            raise ValueError("AI变量名必须符合 Jinja 变量名规范：以字母或下划线开头，只能包含字母、数字和下划线")
+            raise ValueError("AI变量名必须符合 Jinja 变量名规范：以字母、下划线或中文开头，只能包含字母、数字、下划线和中文")
 
         return value
 
