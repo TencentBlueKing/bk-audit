@@ -24,7 +24,13 @@
     :width="960"
     @closed="handleClose">
     <template #default>
-      <bk-loading :loading="isLoading">
+      <bk-loading
+        class="report-preview-slider-loading"
+        :loading="isLoading"
+        mode="spin"
+        size="small"
+        theme="primary"
+        :title="t('正在使用模版生成报告内容')">
         <div class="report-preview-slider-preview-content">
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div v-html="sanitizedContent" />
@@ -186,6 +192,12 @@
 </script>
 
 <style lang="postcss" scoped>
+.report-preview-slider-loading {
+  :deep(.bk-loading-title) {
+    margin-left: -50px !important;
+  }
+}
+
 .report-preview-slider-preview-content {
   width: 880px;
   height: calc(100vh - 120px);
