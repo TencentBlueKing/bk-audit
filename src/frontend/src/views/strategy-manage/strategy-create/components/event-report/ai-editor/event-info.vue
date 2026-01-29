@@ -24,6 +24,19 @@
         {{ t('一个审计风险工单可能关联多条事件,可以使用聚合函数对数据进行处理;若不使用聚合函数,系统将默认提取最后一个事件的数据') }}
       </span>
     </div>
+    <div class="search-input-box">
+      <bk-input
+        v-model="searchKey"
+        class="search-input"
+        clearable
+        :placeholder="t('搜索变量名称、变量显示名称')">
+        <template #suffix>
+          <audit-icon
+            class="search-input-suffix"
+            type="search1" />
+        </template>
+      </bk-input>
+    </div>
     <div class="event-info-table">
       <div class="table-header">
         <div class="table-cell header-cell table-cell-right-border w1">
@@ -40,7 +53,7 @@
         </div>
       </div>
       <div
-        v-for="(row, index) in localTableData"
+        v-for="(row, index) in filteredTableData"
         :key="index"
         class="table-row">
         <div class="table-cell table-cell-right-border w1">
@@ -90,14 +103,14 @@
 </template>
 
 <script setup lang="tsx">
-  import { onMounted, ref, watch } from 'vue';
+  import { computed, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
 
-  import { execCopy } from '@utils/assist';
+  import { encodeRegexp, execCopy } from '@utils/assist';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
@@ -126,6 +139,7 @@
 
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const searchKey = ref('');
 
   // localTableData 来自 expected-results/index.vue 中的 expectedResultList
   // 数据流：
@@ -136,6 +150,15 @@
   // 5. eventInfoData -> ai-editor -> inset-var -> event-info (作为 tableData prop)
   // 6. tableData -> localTableData
   const localTableData = ref<any[]>([]);
+  const filteredTableData = computed(() => {
+    const keyword = searchKey.value.trim();
+    if (!keyword) {
+      return localTableData.value;
+    }
+    const rule = new RegExp(encodeRegexp(keyword), 'i');
+    return localTableData.value.filter(item => rule.test(String(item.frontend_name || ''))
+      || rule.test(String(item.raw_name || '')));
+  });
 
   // 初始化表格数据
   const initTableData = () => {
@@ -245,6 +268,28 @@
       line-height: 20px;
       color: #4d4f56;
     }
+  }
+
+  .search-input-box {
+    position: relative;
+    width: 880px;
+    margin: 12px 0 0 40px;
+  }
+
+  .search-input-suffix {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    bottom: 0;
+    display: flex;
+    font-size: 20px;
+    color: #979ba5;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .search-input {
+    width: 100%;
   }
 
   .event-info-table {
