@@ -8,7 +8,7 @@
     "build-server": "./node_modules/.bin/esbuild ./server/index.js --bundle --minify --outfile=./server/main.js --platform=node",
     "server": "node ./server/main.js",
     "preview": "vite preview --port 4173",
-    "build-only": "NODE_OPTIONS=--max-old-space-size=4096 vite build --mode release",
+    "build-only": "NODE_OPTIONS=--max-old-space-size=8192 vite build --mode release",
     "type-check": "vue-tsc --noEmit",
     "lint-script": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
     "lint-style": "stylelint --fix ./src/**/*.{vue,css} --custom-syntax",

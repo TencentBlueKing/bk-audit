@@ -22,24 +22,8 @@
     :title="reportContent ? '编辑事件调查报告' : '创建事件调查报告'"
     :width="1100">
     <div class="edit-event-report-content">
-      <bk-popover
-        v-if="!reportEnabled"
-        placement="top"
-        theme="dark">
-        <bk-button
-          class="mb16"
-          disabled
-          outline
-          theme="primary"
-          @click="handleGenerateReport">
-          {{ reportContent ? t('重新生成报告') : t('自动生成报告') }}
-        </bk-button>
-        <template #content>
-          <component :is="reportEnabledTeps" />
-        </template>
-      </bk-popover>
       <bk-button
-        v-else
+        v-if="reportEnabled"
         class="mb16"
         outline
         theme="primary"
@@ -98,10 +82,9 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
+  import { useRoute } from 'vue-router';
 
   import RiskReportService from '@service/risk-report';
-  import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -120,7 +103,6 @@
     reportContent?: string;
     status: string | undefined;
     reportEnabled: boolean;
-    strategyId: number | string;
   }
 
   const props = defineProps<Props>();
@@ -132,7 +114,6 @@
     replaceSearchParams,
   } = useUrlSearch();
   const route = useRoute();
-  const router = useRouter();
   const { messageSuccess } = useMessage();
   const isApiLoading = ref(false);
   const isRegetVal = ref(false);
@@ -596,25 +577,6 @@
     quillEditFlag.value = false;
     // 重置url
     replaceSearchParams({
-    });
-  };
-  const reportEnabledTeps = () => <div>
-        <span>{t('该审计风险所属策略未启用事件调查报告自动生成功能，请编辑 ')}</span>
-        <span onClick={handleTostrategyId}  style="color: #4d93fa;cursor: pointer;">{`${strategyList.value.find(item => item.value === props.strategyId)?.label}(${props.strategyId})`}</span>
-        <span>{t(' 启用此功能')}</span>
-        </div>;
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
-  const handleTostrategyId = () => {
-    router.push({
-      name: 'strategyList',
-      query: {
-        strategy_id: props.strategyId,
-      },
     });
   };
   // 组件卸载时清理轮询

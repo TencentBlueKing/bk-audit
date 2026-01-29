@@ -18,7 +18,10 @@
   <div
     ref="rootRef"
     class="show-tooltips-text"
-    :style="{ '--line-clamp': String(line) }">
+    :style="{
+      '-webkit-line-clamp': line,
+      'line-clamp': line,
+    }">
     <span>
       {{ data || '--' }}
     </span>
@@ -40,6 +43,7 @@
   import {
     nextTick,
     onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -61,12 +65,13 @@
     line: 1,  // 默认一行
   });
 
-  const rootRef = ref<HTMLElement | null>(null);
+  const rootRef = ref();
   const templateRef = ref<HTMLElement | null>(null);
 
   let tippyIns: Instance;
+  let resizeObserver: ResizeObserver | null = null;
 
-  watch(() => props.data, () => {
+  const initTippy = () => {
     nextTick(() => {
       if (tippyIns) {
         tippyIns.hide();
@@ -89,15 +94,24 @@
         });
       }
     });
+  };
+
+  watch(() => props.data, () => {
+    initTippy();
   }, {
     deep: true,
     immediate: true,
   });
+  onMounted(() => {
+    if (rootRef.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        initTippy();
+      });
+      resizeObserver.observe(rootRef.value);
+    }
+  });
   // 当文本溢出省略号则hover显示全部内容
   const handleIsShowTippy = () => {
-    if (!rootRef.value) {
-      return false;
-    }
     const { clientWidth, clientHeight } = rootRef.value;
     const { scrollWidth, scrollHeight } = rootRef.value;
     // 多行溢出判断：宽度或高度超出都显示tooltip
@@ -107,6 +121,10 @@
     return false;
   };
   onBeforeUnmount(() => {
+    if (resizeObserver && rootRef.value) {
+      resizeObserver.unobserve(rootRef.value);
+      resizeObserver.disconnect();
+    }
     if (tippyIns) {
       tippyIns.hide();
       tippyIns.unmount();
@@ -120,7 +138,6 @@
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: var(--line-clamp);
   }
 
   .text-content {

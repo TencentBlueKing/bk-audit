@@ -70,7 +70,11 @@
             :label="t('关联审计风险单')">
             <bk-select
               v-model="formData.risk_id"
-              class="risks-bk-select">
+              class="risks-bk-select"
+              filterable
+              :no-match-text="t('无匹配数据')"
+              :prefix="t('审计风险工单')"
+              :search-placeholder="t('请输入风险标题或风险ID')">
               <bk-option
                 v-for="item in riskLisks"
                 :id="item.risk_id"
@@ -81,15 +85,15 @@
         </bk-form>
         <div class="ai-agent-drawer-footer">
           <div
-            v-if="isShowConfirm"
+            v-if="canSave"
             class="ai-agent-insert-btn mr8"
             @click="handleConfirm">
-            {{ t('插入') }}
+            {{ t('保存') }}
           </div>
           <div
             v-else
             class="ai-disabled-btn mr8">
-            {{ t('插入') }}
+            {{ t('保存') }}
           </div>
           <bk-button
             v-if="riskLisks.length > 0"
@@ -98,7 +102,7 @@
               content: t('请选择关联审计风险单'),
             }"
             class="mr8"
-            :disabled="formData.risk_id === ''"
+            :disabled="formData.risk_id === '' || isPreviewing"
             outline
             theme="primary"
             @click="handlePreview">
@@ -156,7 +160,7 @@
 
 <script setup lang="ts">
   import DOMPurify from 'dompurify';
-  import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
@@ -213,8 +217,12 @@
   const formRef = ref();
   const textareaRows = ref(6);
   const isPreviewExpanded = ref(false);
-  const isShowConfirm = ref(false);
+  const initialFormSnapshot = ref({
+    name: '',
+    prompt_template: '',
+  });
   const isLoading = ref(true);
+  const isPreviewing = ref(false);
   const formData = ref({
     name: '',
     prompt_template: '',
@@ -229,6 +237,29 @@
     prompt_template: '',
     result: '',
   });
+
+  const trimmedName = computed(() => formData.value.name.trim());
+  const trimmedPrompt = computed(() => formData.value.prompt_template.trim());
+  const hasRequiredFields = computed(() => trimmedName.value !== '' && trimmedPrompt.value !== '');
+  const isChangedFromInitial = computed(() => (
+    trimmedName.value !== initialFormSnapshot.value.name
+    || trimmedPrompt.value !== initialFormSnapshot.value.prompt_template
+  ));
+  const canSave = computed(() => {
+    if (!hasRequiredFields.value) {
+      return false;
+    }
+    const initialEmpty = initialFormSnapshot.value.name === ''
+      && initialFormSnapshot.value.prompt_template === '';
+    return initialEmpty || isChangedFromInitial.value;
+  });
+
+  const updateInitialSnapshot = () => {
+    initialFormSnapshot.value = {
+      name: formData.value.name.trim(),
+      prompt_template: formData.value.prompt_template.trim(),
+    };
+  };
 
   const getContent = (content: string) => DOMPurify.sanitize(content);
   const handleClose = () => {
@@ -259,7 +290,7 @@
     onSuccess(data: RiskReport) {
       if (data.status === 'PENDING' || data.status === 'RUNNING') {
         isLoading.value = true;
-        isShowConfirm.value = false;
+        isPreviewing.value = true;
         // 清除之前的定时器（如果存在）
         if (timerId.value !== null) {
           clearTimeout(timerId.value);
@@ -276,13 +307,13 @@
           timerId.value = null;
         }
         isLoading.value = false;
-        isShowConfirm.value = true;
+        isPreviewing.value = false;
         const aiResult = data.result?.ai || {};
         concent.value =   Object.values(aiResult).length === 0 ? '暂无数据' : String(Object.values(aiResult)[0]);
         // 成功
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;
-        isShowConfirm.value = true;
+        isPreviewing.value = false;
         // 失败
         concent.value = '失败';
         // 清除定时器
@@ -310,7 +341,7 @@
       concent.value = '';
       isLoading.value = true;
       isPreviewExpanded.value = true;
-      isShowConfirm.value = false;
+      isPreviewing.value = true;
       // 延迟计算 rows，让高度过渡动画先完成，使过渡更平滑
       nextTick(() => {
         setTimeout(() => {
@@ -341,22 +372,21 @@
     });
   };
 
-  // 计算 textarea 的 rows 值（基于页面高度的 50%）
+  // 计算 textarea 的 rows 值（基于页面高度的 70%）
   const calculateTextareaRows = () => {
     if (isPreviewExpanded.value) {
-      textareaRows.value = 3;
+      textareaRows.value = 4;
       return;
     }
     // 获取视口高度
-    const viewportHeight = window.innerHeight;
-    // 计算目标高度（视口高度的 50%）
-    const targetHeight = viewportHeight *  0.6;
+    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+    const targetHeight = viewportHeight * 0.7;
     // textarea 每行高度大约为 22px（包括行间距和 padding）
-    const lineHeight = 22;
+    const lineHeight =  22.5;
     // 计算行数
     const calculatedRows = Math.floor(targetHeight / lineHeight);
-    // 设置最小和最大行数限制
-    textareaRows.value = Math.max(10, Math.min(calculatedRows, 50));
+    // 设置最小行数限制，确保高度接近 70% 视口
+    textareaRows.value = Math.max(10, calculatedRows);
   };
 
   // 窗口大小变化时重新计算
@@ -388,6 +418,7 @@
     }
     // 重置预览状态
     isPreviewExpanded.value = false;
+    updateInitialSnapshot();
   };
   // 同步 visible 和 isShowRight
   watch(() => props.visible, (newVal) => {
@@ -421,10 +452,11 @@
   // 组件挂载时计算并监听窗口大小变化
   onMounted(() => {
     calculateTextareaRows();
+
     window.addEventListener('resize', handleResize);
     nextTick(() => {
       formRef.value?.clearValidate();
-      isShowConfirm.value = !(props.riskLisks.length > 0);
+      console.log('!(props.riskLisks.length > 0)', !(props.riskLisks.length > 0));
     });
   });
 
@@ -563,15 +595,22 @@
 .preview-concent {
   position: relative;
   width: 765px;
-  height: 100%;
+  height: calc(55vh - 68px);
   padding-bottom: 20px;
   margin-left: -25px;
+  overflow: hidden;
   background-color: #fff;
+
+  :deep(.bk-loading),
+  :deep(.bk-loading-wrapper) {
+    display: block;
+    height: 100%;
+  }
 }
 
 .preview-loading {
   position: absolute;
-  top: 30%;
+  top: 0%;
   left: 55%;
   transform: translateX(-50%);
 
@@ -582,10 +621,12 @@
 
 .preview-concent-box {
   width: 740px;
-  height: calc( 100% - 70px);
+  height: auto;
+  max-height: calc(55vh - 68px);
   padding: 0 40px;
+  padding-bottom: 20px;
   margin-left: 25px;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .ai-agent-drawer-preview {

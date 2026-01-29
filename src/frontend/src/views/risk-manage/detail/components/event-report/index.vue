@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="event-report">
-    <render-info-block class="flex mt16">
+    <render-info-block
+      v-if="data.permission?.edit_risk_v2"
+      class="flex mt16">
       <render-info-item label="状态">
         {{ (data.report?.status === 'auto' ? t('自动生成') : t('人工编辑') ) || '--' }}
       </render-info-item>
@@ -24,7 +26,9 @@
         {{ data.report?.updated_by || '--' }}
       </render-info-item>
     </render-info-block>
-    <render-info-block class="flex mt16">
+    <render-info-block
+      v-if="data.permission?.edit_risk_v2"
+      class="flex mt16">
       <render-info-item label="状态说明">
         {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
           t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
@@ -56,7 +60,6 @@
       :report-content="data.report?.content || ''"
       :report-enabled="data.report_enabled"
       :status="data.report?.status"
-      :strategy-id="data.strategy_id"
       @update="handleUpdate" />
   </div>
 </template>
@@ -79,6 +82,19 @@
   import EditEventReport from './edit-event-report.vue';
   import { sanitizeEditorHtml } from './editor-utils';
 
+  interface QuillInstance {
+    root: HTMLElement;
+    getIndex: (blot: any) => number | null;
+    getText: () => string;
+    deleteText: (index: number, length: number, source?: string) => void;
+    insertText: (index: number, text: string, source?: string) => void;
+    insertEmbed: (index: number, type: string, value: any, source?: string) => void;
+    setText: (text: string, source?: string) => void;
+    clipboard: {
+      addMatcher: (selector: string, matcher: (node: Node) => any) => void;
+      dangerouslyPasteHTML: (index: number, html: string) => void;
+    };
+  }
   interface expose {
     showReport: () => void;
   }
@@ -96,22 +112,9 @@
 
   const isShowEditEventReport = ref(false);
   const editorRef = ref<InstanceType<typeof QuillEditor>>();
-  interface QuillInstance {
-    root: HTMLElement;
-    getIndex: (blot: any) => number | null;
-    getText: () => string;
-    deleteText: (index: number, length: number, source?: string) => void;
-    insertText: (index: number, text: string, source?: string) => void;
-    insertEmbed: (index: number, type: string, value: any, source?: string) => void;
-    setText: (text: string, source?: string) => void;
-    clipboard: {
-      addMatcher: (selector: string, matcher: (node: Node) => any) => void;
-      dangerouslyPasteHTML: (index: number, html: string) => void;
-    };
-  }
-  const quill = ref<QuillInstance | null>(null);
-  const Delta = Quill.import('delta') as any;
 
+  const quill = ref<QuillInstance | null>(null);
+  const getQuillInstance = () => (editorRef.value as any)?.getQuill?.();
   // 事件调查报告内容
   const content = ref('');
   const rawContent = computed(() => props.data.report?.content);
@@ -123,6 +126,7 @@
 
   // 配置编辑器选项：不显示工具栏，只用于渲染
   const options = reactive({
+    theme: 'snow',
     modules: {
       toolbar: false, // 隐藏工具栏
     },
@@ -238,26 +242,31 @@
     });
   };
 
-  const handleEditorReady = (quillInstance: QuillInstance) => {
-    quill.value = quillInstance;
-    quill.value.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
-      const element = node as HTMLElement;
-      const id = element.getAttribute('data-id') || Date.now().toString();
-      const name = element.getAttribute('data-name') || t('完整AI总结');
-      const prompt = element.getAttribute('data-prompt') || '';
-      return new Delta()
-        .insert({
-          aiAgent: {
-            id,
-            name,
-            prompt,
-            result: '',
-          },
-        })
-        .insert('\n');
-    });
+  const handleEditorReady = () => {
+    const quill = getQuillInstance();
+    if (quill) {
+      const Delta = Quill.import('delta') as any;
+      quill.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
+        const element = node as HTMLElement;
+        const id = element.getAttribute('data-id') || Date.now().toString();
+        const name = element.getAttribute('data-name') || t('完整AI总结');
+        const prompt = element.getAttribute('data-prompt') || '';
+        return new Delta()
+          .insert({
+            aiAgent: {
+              id,
+              name,
+              prompt,
+              result: '',
+            },
+          });
+      });
+    }
     isEditorReady.value = true;
-    applyEditorContent(rawContent.value);
+    isEditorReady.value = true;
+    nextTick(() => {
+      applyEditorContent(rawContent.value);
+    });
   };
 
   watch(rawContent, (newContent) => {
@@ -297,6 +306,19 @@
 
   :deep(.ql-disabled) {
     background-color: #fff !important;
+  }
+
+  :deep(.ql-editor li p) {
+    display: inline !important;
+    margin: 0 !important;
+  }
+
+  :deep(.ql-editor li p + p::before) {
+    content: ' ';
+  }
+
+  :deep(.ql-editor strong) {
+    display: inline !important;
   }
 
 }
