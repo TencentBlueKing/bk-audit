@@ -4,8 +4,8 @@ import os
 from unittest import TestCase, mock
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
+from django.test import TestCase as DjangoTestCase
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -45,8 +45,7 @@ from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, T
 from services.web.vision.models import VisionPanel
 
 
-@pytest.mark.django_db
-class TestSqlDataSearchExecutor(TestCase):
+class TestSqlDataSearchExecutor(DjangoTestCase):
     def setUp(self):
         """设置SQL查询执行器的测试环境和mock对象"""
         self.analyzer_cls = SqlQueryAnalysis
@@ -417,8 +416,7 @@ class TestSqlDataSearchExecutor(TestCase):
         self.assertDictEqual(expected, result)
 
 
-@pytest.mark.django_db
-class TestBkVisionExecutor(TestCase):
+class TestBkVisionExecutor(DjangoTestCase):
     def setUp(self):
         """设置BK Vision执行器的测试环境"""
         example_var = {
@@ -487,8 +485,7 @@ class TestBkVisionExecutor(TestCase):
                 self.assertEqual(result.panel_id, "panel_123")
 
 
-@pytest.mark.django_db
-class TestToolExecutorFactory(TestCase):
+class TestToolExecutorFactory(DjangoTestCase):
     def setUp(self):
         self.analyzer_cls = SqlQueryAnalysis
 
@@ -815,8 +812,7 @@ class TestApiVariableParserPersonSelect(TestCase):
         self.assertEqual(result, "single_user")
 
 
-@pytest.mark.django_db
-class ApiToolExecutorTestCase(TestCase):
+class ApiToolExecutorTestCase(DjangoTestCase):
     def setUp(self):
         self.tool_uid = "executor_test_uid"
         self.tool_name = "Executor Test API"
@@ -1814,8 +1810,7 @@ class TestApiToolExecutor(TestCase):
         self.assertEqual(body.get("operator"), "admin")
 
 
-@pytest.mark.django_db
-class TestApiToolExecutorWithTool(TestCase):
+class TestApiToolExecutorWithTool(DjangoTestCase):
     """测试通过Tool对象创建API工具执行器"""
 
     def setUp(self):
