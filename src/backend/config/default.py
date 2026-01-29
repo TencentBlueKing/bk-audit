@@ -174,9 +174,16 @@ PLATFORM_CODE = "29"
 
 # APIGW配置
 BK_APIGW_NAME = os.getenv("BKAPP_BK_APIGW_NAME", "bk-audit")
+# 多租户配置
+MULTI_TENANT_ENABLED = strtobool(os.getenv("BKAPP_MULTI_TENANT_ENABLED", "False"))
+# 单租户ID
+BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
+
 BK_API_URL_TMPL = os.getenv("BK_API_URL_TMPL", "")
 APIGW_DEFINITION_SETTINGS = {"BK_APIGW_NAME": BK_APIGW_NAME}
 USE_APIGW = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
+USERMANAGE_APIGW_NAME = os.getenv("BKAPP_USERMANAGE_APIGW_NAME", "bk-user")
+BKUSER_WEB_APIGATEWAY_ROOT = os.getenv("BKUSER_WEB_APIGATEWAY_ROOT", "bk-user-web")
 
 # ESB配置
 BK_COMPONENT_API_URL = os.getenv("BKAPP_BK_COMPONENT_API_URL", os.getenv("BK_COMPONENT_API_URL"))

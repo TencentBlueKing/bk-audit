@@ -29,7 +29,7 @@ class RetrieveLeader(CacheResource):
     def perform_request(self, validated_request_data):
         try:
             # 获取用户信息&解析出leader信息
-            user_info = api.user_manage.retrieve_user(validated_request_data)
+            user_info = api.user_manage.retrieve_user({"bk_username": validated_request_data["id"]})
             return user_info.get("leader", [])[0].get("username", "")
         except (IndexError, APIRequestError):
             return ""
