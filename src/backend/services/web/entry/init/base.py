@@ -45,6 +45,7 @@ from services.web.databus.storage.serializers import (
 )
 from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
+    AUDIT_DOC_CONFIG_KEY,
     INIT_ASSET_FINISHED_KEY,
     INIT_DORIS_FISHED_KEY,
     INIT_ES_FISHED_KEY,
@@ -54,6 +55,7 @@ from services.web.entry.constants import (
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
 from services.web.risk.constants import (
@@ -117,6 +119,8 @@ class SystemInitHandler:
         self.create_or_update_plugin_etl()
         self.init_system()
         self.init_asset()
+        self.init_sdk_config()
+        self.init_doc_config()
         self.init_system_rule_audit()
         print("[Main] Init Finished")
 
@@ -232,6 +236,45 @@ class SystemInitHandler:
         sync_iam_systems()
         print("[InitSystem] Finished")
         self.post_init(INIT_SYSTEM_FINISHED_KEY)
+
+    def init_sdk_config(self):
+        """
+        初始化 SDK 配置
+
+        从 settings 读取各语言 SDK 的配置信息并存储到全局配置中。
+
+        配置说明:
+            - BKAPP_GO_SDK_CONFIG: Go SDK 配置信息，通常为 JSON 格式字符串，包含 SDK 文档链接、示例代码等
+            - BKAPP_JAVA_SDK_CONFIG: Java SDK 配置信息，通常为 JSON 格式字符串，包含 SDK 文档链接、示例代码等
+            - BKAPP_PYTHON_SDK_CONFIG: Python SDK 配置信息，通常为 JSON 格式字符串，包含 SDK 文档链接、示例代码等
+
+        默认值: 空字符串
+        """
+        sdk_config = {
+            "go_sdk": settings.BKAPP_GO_SDK_CONFIG,
+            "java_sdk": settings.BKAPP_JAVA_SDK_CONFIG,
+            "python_sdk": settings.BKAPP_PYTHON_SDK_CONFIG,
+        }
+        GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
+
+    def init_doc_config(self):
+        """
+        初始化文档配置
+
+        从 settings 读取审计相关文档链接配置并存储到全局配置中。
+
+        配置说明:
+            - BKAPP_AUDIT_ACCESS_GUIDE: 审计接入指南文档链接，用于指导用户如何接入审计中心
+            - BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS: 审计操作日志记录规范文档链接，
+              用于说明操作日志的记录标准和格式要求
+
+        默认值: 空字符串
+        """
+        audit_doc_config = {
+            "audit_access_guide": settings.BKAPP_AUDIT_ACCESS_GUIDE,
+            "audit_operation_log_record_standards": settings.BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS,
+        }
+        GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""
