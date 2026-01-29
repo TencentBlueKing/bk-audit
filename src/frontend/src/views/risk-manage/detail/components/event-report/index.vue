@@ -20,7 +20,7 @@
       v-if="data.permission?.edit_risk_v2"
       class="flex mt16">
       <render-info-item label="状态">
-        {{ (data.report?.status === 'auto' ? t('自动生成') : t('人工编辑') ) || '--' }}
+        {{ (data.report?.status === 'auto' ? t('模板生成') : t('人工编辑') ) || '--' }}
       </render-info-item>
       <render-info-item label="更新人">
         {{ data.report?.updated_by || '--' }}
@@ -319,6 +319,31 @@
 
   :deep(.ql-editor strong) {
     display: inline !important;
+  }
+
+  :deep(.ql-editor p) {
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+
+  :deep(.ql-editor h1),
+  :deep(.ql-editor h2),
+  :deep(.ql-editor h3),
+  :deep(.ql-editor h4),
+  :deep(.ql-editor h5),
+  :deep(.ql-editor h6),
+  :deep(.ql-editor ul),
+  :deep(.ql-editor ol) {
+    margin: 0 0 12px;
+  }
+
+  :deep(.ql-editor ul),
+  :deep(.ql-editor ol) {
+    padding-left: 20px;
+  }
+
+  :deep(.ql-editor li) {
+    margin-bottom: 4px;
   }
 
 }
