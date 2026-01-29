@@ -48,7 +48,7 @@
             v-model="isAutoGetReports"
             :disabled="!isEnvent"
             size="small">
-            {{ t('使用模版生成') }}
+            {{ t('自动生成报告') }}
           </bk-checkbox>
           <div class="auto-reports-desc">
             <audit-icon
