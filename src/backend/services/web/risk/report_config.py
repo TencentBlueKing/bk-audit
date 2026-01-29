@@ -17,10 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import re
-from typing import Dict, List
+from typing import ClassVar, Dict, List, Type
 
 from drf_pydantic import BaseModel
 from pydantic import Field, field_validator
+from rest_framework import serializers
 
 # Jinja 变量名正则: 必须以字母、下划线或中文开头，只能包含字母、数字、下划线和中文
 JINJA_VAR_NAME_PATTERN = re.compile(r"^[a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]*$")
@@ -32,6 +33,23 @@ class AIVariableConfig(BaseModel):
 
     用于配置 AI 生成的变量。
     """
+
+    PREDEFINED_PROMPT_TEMPLATE: ClassVar[
+        str
+    ] = """
+!!!请严格遵循以下规则：!!!
+1. 思考过程保持简洁。
+2. 工具调用失败最多只重试一次。
+4. 若调用下钻工具，必须先根据风险ID获取策略配置中的下钻工具配置；
+   调用 execute_drill_tool（或 MCP 中的 execute_tool 变体）时，确保 tool_variables 的 raw_name
+   与下钻配置中的 source_field 一致，且需要传的参数都传齐。
+5. 调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。
+6. 输出必须为 Markdown，内容简洁明了，不得虚构事实。
+!!!调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。!!!
+"""
+
+    # 缓存生成的 DRF 序列化器类
+    _drf_serializer_class: ClassVar[Type[serializers.Serializer]] = None
 
     name: str = Field(..., description="变量名，用于 {{ ai.xxx }} 模板引用，同时也作为前端展示名")
     prompt_template: str = Field("", description="AI 提示词模板")
@@ -52,6 +70,55 @@ class AIVariableConfig(BaseModel):
             raise ValueError("AI变量名必须符合 Jinja 变量名规范：以字母、下划线或中文开头，只能包含字母、数字、下划线和中文")
 
         return value
+
+    @field_validator("prompt_template")
+    @classmethod
+    def validate_prompt_template(cls, value: str) -> str:
+        """将预定义的 prompt 模板添加到用户传入的 prompt 前面"""
+        return cls.PREDEFINED_PROMPT_TEMPLATE + '\n' + value
+
+    @classmethod
+    def drf_serializer_with_validation(cls) -> Type[serializers.Serializer]:
+        """
+        返回带有验证方法的 DRF 序列化器类
+
+        drf_pydantic 的 drf_serializer() 只会映射字段，不会继承 pydantic 的 field_validator。
+        这个方法返回一个扩展的序列化器类，添加了 DRF 的验证方法。
+        """
+        if cls._drf_serializer_class is not None:
+            return cls._drf_serializer_class
+
+        # 获取 drf_pydantic 生成的基础序列化器类
+        base_serializer = type(cls.drf_serializer())
+
+        # 创建验证方法的闭包，引用 cls 的常量
+        predefined_template = cls.PREDEFINED_PROMPT_TEMPLATE
+        var_pattern = JINJA_VAR_NAME_PATTERN
+
+        class AIVariableConfigSerializerWithValidation(base_serializer):
+            """带有验证方法的 AIVariableConfig 序列化器"""
+
+            def validate_name(self, value: str) -> str:
+                """验证 AI 变量名必须以 ai. 开头，且符合 Jinja 变量名规范"""
+                if not value.startswith("ai."):
+                    raise serializers.ValidationError("AI变量名必须以 'ai.' 开头")
+
+                # 提取 ai. 后面的变量名部分进行 Jinja 变量名规范验证
+                var_name = value[3:]  # 去掉 'ai.' 前缀
+                if not var_name:
+                    raise serializers.ValidationError("AI变量名不能只有 'ai.' 前缀")
+
+                if not var_pattern.match(var_name):
+                    raise serializers.ValidationError("AI变量名必须符合 Jinja 变量名规范：以字母、下划线或中文开头，只能包含字母、数字、下划线和中文")
+
+                return value
+
+            def validate_prompt_template(self, value: str) -> str:
+                """将预定义的 prompt 模板添加到用户传入的 prompt 前面"""
+                return predefined_template + '\n' + value
+
+        cls._drf_serializer_class = AIVariableConfigSerializerWithValidation
+        return cls._drf_serializer_class
 
 
 class ReportConfig(BaseModel):

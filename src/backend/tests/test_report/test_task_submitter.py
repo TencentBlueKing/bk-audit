@@ -147,7 +147,12 @@ class TestSubmitRenderTask(TestCase):
         # AIProvider 内部将 list 转为 dict 格式
         self.assertEqual(
             ai_provider.ai_variables_config,
-            {"ai.summary": {"name": "ai.summary", "prompt_template": "请总结该风险的要点"}},
+            {
+                "ai.summary": {
+                    "name": "ai.summary",
+                    "prompt_template": f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结该风险的要点",
+                }
+            },
         )
 
         # 3. 验证 variables 中的 risk 数据
