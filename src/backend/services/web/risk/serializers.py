@@ -1087,6 +1087,10 @@ class AIVariableSerializer(serializers.Serializer):
 
         return value
 
+    def validate_prompt_template(self, value: str) -> str:
+        """将预定义的 prompt 模板添加到用户传入的 prompt 前面"""
+        return self.PREDEFINED_PROMPT_TEMPLATE + '\n' + value
+
 
 class AIPreviewRequestSerializer(serializers.Serializer):
     """AI 智能体预览请求序列化器"""
