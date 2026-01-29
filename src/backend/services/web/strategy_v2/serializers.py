@@ -572,12 +572,9 @@ class StrategyDetailSerializer(serializers.ModelSerializer):
 
     def get_tags(self, obj):
         """
-        从预加载的策略标签关系中获取 tag_id 列表
+        获取策略关联的 tag_id 列表
         """
-        if hasattr(obj, 'prefetched_tags'):
-            return [tag_rel.tag_id for tag_rel in obj.prefetched_tags]
-        else:
-            return list(obj.tags.values_list('tag_id', flat=True))
+        return list(obj.tags.values_list('tag_id', flat=True))
 
     class Meta:
         model = Strategy
