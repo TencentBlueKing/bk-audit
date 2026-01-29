@@ -103,10 +103,24 @@
     },
   });
   // 使用 DOMPurify 清理 HTML 内容以防止 XSS（允许插入图片）
-  const sanitizedContent = computed(() => DOMPurify.sanitize(concent.value, {
-    ADD_TAGS: ['img'],
-    ADD_ATTR: ['src', 'alt', 'width', 'height', 'title', 'style'],
-  }));
+  const sanitizedContent = computed(() => {
+    const normalized = String(concent.value ?? '').replace(/\\n/g, '\n');
+    const hasHtmlTag = /<\/?[a-z][\s\S]*>/i.test(normalized);
+    if (!hasHtmlTag) {
+      const escaped = normalized
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return DOMPurify.sanitize(escaped.replace(/\n/g, '<br/>'), {
+        ADD_TAGS: ['img'],
+        ADD_ATTR: ['src', 'alt', 'width', 'height', 'title', 'style'],
+      });
+    }
+    return DOMPurify.sanitize(normalized, {
+      ADD_TAGS: ['img'],
+      ADD_ATTR: ['src', 'alt', 'width', 'height', 'title', 'style'],
+    });
+  });
   // 查询任务结果
   const {
     run: getTaskRiskReport,
@@ -204,6 +218,8 @@
   margin-top: 20px;
   margin-left: 40px;
   overflow-y: auto;
+  word-break: break-word;
+  white-space: pre-wrap;
 
   .preview-info {
     padding: 12px;
@@ -224,6 +240,27 @@
     background: #fff;
     border: 1px solid #dcdee5;
     border-radius: 2px;
+  }
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(h4),
+  :deep(h5),
+  :deep(h6),
+  :deep(p),
+  :deep(ul),
+  :deep(ol) {
+    margin: 0 0 12px;
+  }
+
+  :deep(ul),
+  :deep(ol) {
+    padding-left: 20px;
+  }
+
+  :deep(li) {
+    margin-bottom: 4px;
   }
 }
 
