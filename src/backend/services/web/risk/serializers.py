@@ -50,6 +50,7 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
 )
+from services.web.risk.report_config import AIVariableConfig
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import (
     EventFieldSerializer,
@@ -1050,25 +1051,12 @@ class RiskExportReqSerializer(serializers.Serializer):
     )
 
 
-class AIVariableSerializer(serializers.Serializer):
-    """AI 变量配置序列化器"""
-
-    name = serializers.CharField(label=gettext_lazy("AI变量名"), help_text=gettext_lazy("必须以 ai. 开头，如 ai.risk_summary"))
-    prompt_template = serializers.CharField(label=gettext_lazy("AI提示词模板"), help_text=gettext_lazy("可以包含风险变量和事件变量"))
-
-    def validate_name(self, value: str) -> str:
-        """验证 AI 变量名必须以 ai. 开头"""
-        if not value.startswith("ai."):
-            raise serializers.ValidationError(gettext_lazy("AI变量名必须以 'ai.' 开头"))
-        return value
-
-
 class AIPreviewRequestSerializer(serializers.Serializer):
     """AI 智能体预览请求序列化器"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
     ai_variables = serializers.ListField(
-        child=AIVariableSerializer(),
+        child=AIVariableConfig.drf_serializer_with_validation()(),
         label=gettext_lazy("AI变量配置列表"),
         min_length=1,
         help_text=gettext_lazy("至少需要配置一个 AI 变量"),
