@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import json
 import os
-from unittest import mock
+from unittest import TestCase, mock
 from unittest.mock import MagicMock, patch
 
 import requests
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -45,7 +45,7 @@ from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, T
 from services.web.vision.models import VisionPanel
 
 
-class TestSqlDataSearchExecutor(TestCase):
+class TestSqlDataSearchExecutor(DjangoTestCase):
     def setUp(self):
         """设置SQL查询执行器的测试环境和mock对象"""
         self.analyzer_cls = SqlQueryAnalysis
@@ -416,7 +416,7 @@ class TestSqlDataSearchExecutor(TestCase):
         self.assertDictEqual(expected, result)
 
 
-class TestBkVisionExecutor(TestCase):
+class TestBkVisionExecutor(DjangoTestCase):
     def setUp(self):
         """设置BK Vision执行器的测试环境"""
         example_var = {
@@ -485,7 +485,7 @@ class TestBkVisionExecutor(TestCase):
                 self.assertEqual(result.panel_id, "panel_123")
 
 
-class TestToolExecutorFactory(TestCase):
+class TestToolExecutorFactory(DjangoTestCase):
     def setUp(self):
         self.analyzer_cls = SqlQueryAnalysis
 
@@ -812,7 +812,7 @@ class TestApiVariableParserPersonSelect(TestCase):
         self.assertEqual(result, "single_user")
 
 
-class ApiToolExecutorTestCase(TestCase):
+class ApiToolExecutorTestCase(DjangoTestCase):
     def setUp(self):
         self.tool_uid = "executor_test_uid"
         self.tool_name = "Executor Test API"
@@ -1254,8 +1254,8 @@ class TestApiToolExecutor(TestCase):
             ApiVariablePosition,
             BkAppAuthConfig,
             BkAuthItem,
-            HmacSignatureAuthConfig,
-            HmacSignatureAuthItem,
+            IEOPAuthConfig,
+            IEOPAuthItem,
             NoAuthItem,
             ParamField,
         )
@@ -1308,17 +1308,19 @@ class TestApiToolExecutor(TestCase):
             output_config=self.output_config,
         )
 
-        # HMAC签名认证配置
-        self.hmac_auth_config = ApiToolConfig(
+        # IEOP认证配置
+        self.ieop_auth_config = ApiToolConfig(
             api_config=ApiConfig(
                 url="https://api.example.com/v1/users",
                 method=ApiRequestMethod.POST,
-                auth_config=HmacSignatureAuthItem(
-                    method=ApiAuthMethod.HMAC_SIGNATURE,
-                    config=HmacSignatureAuthConfig(
+                auth_config=IEOPAuthItem(
+                    method=ApiAuthMethod.IEOP_AUTH,
+                    config=IEOPAuthConfig(
+                        app_code="test_app_code",
+                        app_secret="test_app_secret",
+                        operator="test_operator",
                         secret_id="test_secret_id",
                         secret_key="test_secret_key",
-                        app_code="test_app_code",
                     ),
                 ),
                 headers=[ParamField(key="Content-Type", value="application/json")],
@@ -1386,8 +1388,8 @@ class TestApiToolExecutor(TestCase):
         self.assertEqual(auth_data["bk_app_secret"], "test_secret_12345")
 
     @mock.patch('services.web.tool.executor.tool.requests.request')
-    def test_execute_with_hmac_signature_auth(self, mock_request):
-        """测试HMAC签名认证方式执行API工具"""
+    def test_execute_with_ieop_auth(self, mock_request):
+        """测试IEOP认证方式执行API工具"""
         from services.web.tool.executor.tool import ApiToolExecutor
 
         mock_response = mock.Mock()
@@ -1395,7 +1397,7 @@ class TestApiToolExecutor(TestCase):
         mock_response.json.return_value = {"code": 0, "message": "success"}
         mock_request.return_value = mock_response
 
-        executor = ApiToolExecutor(self.hmac_auth_config.model_dump())
+        executor = ApiToolExecutor(self.ieop_auth_config.model_dump())
         params = {"tool_variables": [{"raw_name": "user_id", "value": "12345"}]}
         result = executor.execute(params)
 
@@ -1406,11 +1408,9 @@ class TestApiToolExecutor(TestCase):
         call_kwargs = mock_request.call_args
         headers = call_kwargs[1]["headers"]
 
-        # 验证HMAC签名认证头
+        # 验证IEOP认证头
         self.assertIn("Authorization", headers)
         self.assertIn("Date", headers)
-        self.assertIn("X-APP-CODE", headers)
-        self.assertEqual(headers["X-APP-CODE"], "test_app_code")
 
         # 验证Authorization格式
         auth_header = headers["Authorization"]
@@ -1419,9 +1419,15 @@ class TestApiToolExecutor(TestCase):
         self.assertIn('headers="(request-target) host date"', auth_header)
         self.assertIn('signature="', auth_header)
 
+        # 验证body中包含认证参数
+        body = call_kwargs[1].get("json", {})
+        self.assertEqual(body.get("app_code"), "test_app_code")
+        self.assertEqual(body.get("app_secret"), "test_app_secret")
+        self.assertEqual(body.get("operator"), "test_operator")
+
     @mock.patch('services.web.tool.executor.tool.requests.request')
-    def test_execute_with_hmac_auth_without_app_code(self, mock_request):
-        """测试HMAC签名认证方式执行API工具（不带app_code）"""
+    def test_execute_with_ieop_auth_without_operator(self, mock_request):
+        """测试IEOP认证方式执行API工具（不带operator）"""
         from services.web.tool.constants import (
             ApiAuthMethod,
             ApiConfig,
@@ -1430,8 +1436,8 @@ class TestApiToolExecutor(TestCase):
             ApiStandardInputVariable,
             ApiToolConfig,
             ApiVariablePosition,
-            HmacSignatureAuthConfig,
-            HmacSignatureAuthItem,
+            IEOPAuthConfig,
+            IEOPAuthItem,
         )
         from services.web.tool.executor.tool import ApiToolExecutor
 
@@ -1439,12 +1445,14 @@ class TestApiToolExecutor(TestCase):
             api_config=ApiConfig(
                 url="https://api.example.com/v1/users",
                 method=ApiRequestMethod.POST,
-                auth_config=HmacSignatureAuthItem(
-                    method=ApiAuthMethod.HMAC_SIGNATURE,
-                    config=HmacSignatureAuthConfig(
+                auth_config=IEOPAuthItem(
+                    method=ApiAuthMethod.IEOP_AUTH,
+                    config=IEOPAuthConfig(
+                        app_code="test_app",
+                        app_secret="test_secret",
+                        operator="",  # 空operator
                         secret_id="test_id",
                         secret_key="test_key",
-                        app_code="",  # 空app_code
                     ),
                 ),
                 headers=[],
@@ -1471,17 +1479,22 @@ class TestApiToolExecutor(TestCase):
 
         executor = ApiToolExecutor(config.model_dump())
         params = {"tool_variables": [{"raw_name": "data", "value": "test_data"}]}
-        result = executor.execute(params)
+        with mock.patch('services.web.tool.executor.auth.get_request_username', return_value=""):
+            result = executor.execute(params)
 
         self.assertEqual(result.status_code, 200)
 
         # 验证请求调用
         call_kwargs = mock_request.call_args
         headers = call_kwargs[1]["headers"]
+        body = call_kwargs[1].get("json", {})
 
-        # 验证没有X-APP-CODE头
-        self.assertNotIn("X-APP-CODE", headers)
-        # 但应该有Authorization和Date头
+        # 验证没有operator字段（因为为空）
+        self.assertNotIn("operator", body)
+        # 但应该有app_code和app_secret
+        self.assertEqual(body.get("app_code"), "test_app")
+        self.assertEqual(body.get("app_secret"), "test_secret")
+        # 应该有Authorization和Date头
         self.assertIn("Authorization", headers)
         self.assertIn("Date", headers)
 
@@ -1723,8 +1736,8 @@ class TestApiToolExecutor(TestCase):
         self.assertIn("Connection timeout", result.message)
 
     @mock.patch('services.web.tool.executor.tool.requests.request')
-    def test_execute_hmac_auth_url_parsing(self, mock_request):
-        """测试HMAC认证自动从URL解析host和path"""
+    def test_execute_ieop_auth_url_parsing(self, mock_request):
+        """测试IEOP认证自动从URL解析host和path"""
         from services.web.tool.constants import (
             ApiAuthMethod,
             ApiConfig,
@@ -1733,8 +1746,8 @@ class TestApiToolExecutor(TestCase):
             ApiStandardInputVariable,
             ApiToolConfig,
             ApiVariablePosition,
-            HmacSignatureAuthConfig,
-            HmacSignatureAuthItem,
+            IEOPAuthConfig,
+            IEOPAuthItem,
         )
         from services.web.tool.executor.tool import ApiToolExecutor
 
@@ -1743,12 +1756,14 @@ class TestApiToolExecutor(TestCase):
             api_config=ApiConfig(
                 url="https://prod-api.example.com:8080/api/v2/blacklist/create",
                 method=ApiRequestMethod.POST,
-                auth_config=HmacSignatureAuthItem(
-                    method=ApiAuthMethod.HMAC_SIGNATURE,
-                    config=HmacSignatureAuthConfig(
+                auth_config=IEOPAuthItem(
+                    method=ApiAuthMethod.IEOP_AUTH,
+                    config=IEOPAuthConfig(
+                        app_code="prod_app",
+                        app_secret="prod_secret",
+                        operator="admin",
                         secret_id="prod_id",
                         secret_key="prod_key",
-                        app_code="prod_app",
                     ),
                 ),
                 headers=[],
@@ -1788,8 +1803,14 @@ class TestApiToolExecutor(TestCase):
         # 签名字符串格式: (request-target): post /api/v2/blacklist/create\nhost: prod-api.example.com:8080\ndate: ...
         self.assertIn('Signature keyId="prod_id"', auth_header)
 
+        # 验证body中包含认证参数
+        body = call_kwargs[1].get("json", {})
+        self.assertEqual(body.get("app_code"), "prod_app")
+        self.assertEqual(body.get("app_secret"), "prod_secret")
+        self.assertEqual(body.get("operator"), "admin")
 
-class TestApiToolExecutorWithTool(TestCase):
+
+class TestApiToolExecutorWithTool(DjangoTestCase):
     """测试通过Tool对象创建API工具执行器"""
 
     def setUp(self):
@@ -1802,8 +1823,8 @@ class TestApiToolExecutorWithTool(TestCase):
             ApiStandardInputVariable,
             ApiToolConfig,
             ApiVariablePosition,
-            HmacSignatureAuthConfig,
-            HmacSignatureAuthItem,
+            IEOPAuthConfig,
+            IEOPAuthItem,
             ParamField,
         )
 
@@ -1811,12 +1832,14 @@ class TestApiToolExecutorWithTool(TestCase):
             api_config=ApiConfig(
                 url="https://api.example.com/v1/data",
                 method=ApiRequestMethod.POST,
-                auth_config=HmacSignatureAuthItem(
-                    method=ApiAuthMethod.HMAC_SIGNATURE,
-                    config=HmacSignatureAuthConfig(
+                auth_config=IEOPAuthItem(
+                    method=ApiAuthMethod.IEOP_AUTH,
+                    config=IEOPAuthConfig(
+                        app_code="tool_app",
+                        app_secret="tool_secret",
+                        operator="tool_operator",
                         secret_id="tool_secret_id",
                         secret_key="tool_secret_key",
-                        app_code="tool_app",
                     ),
                 ),
                 headers=[ParamField(key="X-Custom-Header", value="custom_value")],
@@ -1866,13 +1889,17 @@ class TestApiToolExecutorWithTool(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.result, {"code": 0, "data": "success"})
 
-        # 验证HMAC认证头
+        # 验证IEOP认证头
         call_kwargs = mock_request.call_args
         headers = call_kwargs[1]["headers"]
         self.assertIn("Authorization", headers)
-        self.assertIn("X-APP-CODE", headers)
-        self.assertEqual(headers["X-APP-CODE"], "tool_app")
         self.assertIn("X-Custom-Header", headers)
+
+        # 验证body中包含认证参数
+        body = call_kwargs[1].get("json", {})
+        self.assertEqual(body.get("app_code"), "tool_app")
+        self.assertEqual(body.get("app_secret"), "tool_secret")
+        self.assertEqual(body.get("operator"), "tool_operator")
         self.assertEqual(headers["X-Custom-Header"], "custom_value")
 
     @mock.patch('services.web.tool.executor.tool.requests.request')
