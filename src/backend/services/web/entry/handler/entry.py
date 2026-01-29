@@ -120,9 +120,8 @@ class EntryHandler(object):
             # 给前端注入租户ID和用户管理API域名
             "tenant_config": {
                 'BK_TENANT_ID': getattr(settings, 'BK_TENANT_ID', 'tencent'),
-                'BK_USER_WEB_APIGW_URL': getattr(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web'),
+                'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
             },
-            "apiBaseUrl": cls.get_user_web_apigw_url(),
         }
         return data
 
@@ -157,12 +156,14 @@ class EntryHandler(object):
     def get_user_web_apigw_url(cls):
         """
         获取人员选择器 API 的网关地址
-        返回格式: BK_API_URL_TMPL + 网关环名+网关环境
+        返回格式: BK_API_URL_TMPL + 网关环境
         """
-        api_name = getattr(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web')
-        stage = "prod"
-        base_url = settings.BK_API_URL_TMPL.format(api_name=api_name).rstrip('/')
-        return f"{base_url}/{api_name}/{stage}"
+        stage = os.getenv('BKPAAS_ENVIRONMENT', 'prod')
+        base_url = settings.BK_API_URL_TMPL.format(api_name='bk-user-web').rstrip('/')
+        # 如果是 http 则转换为 https
+        if base_url.startswith('http://'):
+            base_url = base_url.replace('http://', 'https://', 1)
+        return f"{base_url}/{stage}"
 
 
 class WatermarkFeature:
