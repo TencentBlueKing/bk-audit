@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
 
   return {
-    logLevel: 'error',
+    // logLevel: 'error',
     base: process.env.AUDIT_VITE_BUILD_BASE_DIR || '/',
     publicDir: 'static',
     plugins: [
@@ -72,8 +72,13 @@ export default defineConfig(({ mode }) => {
     envPrefix: 'AUDIT_',
     server: {
       https: {},
-      port: 8082,
+      port: 8081,
       strictPort: true,
+      host: 'local.audit.woa.com',
+      hmr: {
+        host: 'local.audit.woa.com',
+        port: 8081,
+      },
     },
   };
 });
