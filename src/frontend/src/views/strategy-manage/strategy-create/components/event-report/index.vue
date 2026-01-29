@@ -237,6 +237,7 @@
     isEnvent.value = value;
     if (!value) {
       isAutoGetReports.value = false;
+      editorError.value = false;
     }
   };
   // 是否显示提示
@@ -377,6 +378,7 @@
       reportInfo.value.config = buildReportConfig();
     } else {
       reportInfo.value.enabled = false;
+      reportInfo.value.config = buildReportConfig();
     }
 
     emits('nextStep', 4, {
@@ -429,7 +431,7 @@
         end_time: formatDate(now.valueOf()),
       };
       fetchRisksBriefList(params);
-      if (props.editData.report_enabled && props.editData.report_config?.frontend_template) {
+      if (props.editData.report_config?.frontend_template) {
         // 使用 nextTick 确保编辑器已经准备好
         nextTick(() => {
           if (aiEditorRef.value) {

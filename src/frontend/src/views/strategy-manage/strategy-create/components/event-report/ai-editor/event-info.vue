@@ -44,10 +44,12 @@
         :key="index"
         class="table-row">
         <div class="table-cell table-cell-right-border w1">
-          <tool-tip-text
-            :data="nameTiptext(row)"
-            :line="1"
-            placement="top" />
+          <div class="table-cell-text">
+            <tool-tip-text
+              :data="`${row.frontend_name}(${row.raw_name})`"
+              :line="1"
+              placement="top" />
+          </div>
         </div>
 
         <div class="table-cell table-cell-right-border w2 pn">
@@ -63,14 +65,16 @@
           </bk-select>
         </div>
         <div class="table-cell table-cell-right-border w3">
-          <tool-tip-text
-            :data="referenceModeText(row)"
-            :line="1"
-            placement="top" />
+          <div class="table-cell-text">
+            <tool-tip-text
+              :data="referenceModeText(row)"
+              :line="1"
+              placement="top" />
+          </div>
           <audit-icon
             class="copy-icon"
             type="copy"
-            @click="handleCopy(row)" />
+            @click="handleCopy(referenceModeText(row))" />
         </div>
 
         <div class="table-cell w5">
@@ -166,13 +170,6 @@
     initTableData();
   }, { deep: true, immediate: true });
 
-  // 变量名称
-  const nameTiptext = (item: any) => {
-    if (item.display_name !== '') {
-      return `${item.frontend_name}(${item.raw_name})`;
-    }
-    return item.raw_name;
-  };
   const referenceModeText = (item: any) => {
     if (item.aggregate === 'null') {
       return `{{ event.${item.display_name} }}`;
@@ -205,7 +202,8 @@
   });
   // 复制
   const handleCopy = (item: any) => {
-    execCopy(`{{ event.${item.display_name} }}`, t('复制成功'));
+    console.log('item', item);
+    execCopy(item, t('复制成功'));
   };
   // 插入
   const handleInsert = (item: any) => {
@@ -282,6 +280,16 @@
       font-size: 12px;
       color: #4d4f56;
       align-items: center;
+
+      .table-cell-text {
+        width: 100%;
+        min-width: 0;
+        flex: 1 1 0;
+
+        :deep(.show-tooltips-text) {
+          width: 100%;
+        }
+      }
 
       &.header-cell {
         font-weight: 500;
