@@ -128,6 +128,7 @@ class EntryHandler(object):
                 'BK_TENANT_ID': getattr(settings, 'BK_TENANT_ID', 'tencent'),
                 'BK_USER_WEB_APIGW_URL': getattr(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web'),
             },
+            "apiBaseUrl": cls.get_user_web_apigw_url(),
         }
         return data
 
@@ -157,6 +158,17 @@ class EntryHandler(object):
     @classmethod
     def get_schema_help(cls):
         return GlobalMetaConfig.get(DEFAULT_SCHEMA_HELP_KEY, default=DEFAULT_SCHEMA_HELP)
+
+    @classmethod
+    def get_user_web_apigw_url(cls):
+        """
+        获取人员选择器 API 的网关地址
+        返回格式: BK_API_URL_TMPL + 网关环名+网关环境
+        """
+        api_name = getattr(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web')
+        stage = "prod"
+        base_url = settings.BK_API_URL_TMPL.format(api_name=api_name).rstrip('/')
+        return f"{base_url}/{api_name}/{stage}"
 
 
 class WatermarkFeature:
