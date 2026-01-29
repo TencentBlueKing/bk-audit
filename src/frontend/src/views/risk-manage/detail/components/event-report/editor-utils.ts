@@ -35,6 +35,31 @@ export const sanitizeEditorHtml = (content: string) => {
   const blockSelector = 'p,div,section,article,header,footer,aside,nav,h1,h2,h3,h4,h5,h6,pre,blockquote';
   const listItems = Array.from(container.querySelectorAll('li')) as HTMLElement[];
   listItems.forEach((li) => {
+    // 扁平化 li 内的嵌套列表，避免 Quill 渲染丢失
+    const nestedLists = Array.from(li.children)
+      .filter(child => child.tagName === 'UL' || child.tagName === 'OL') as HTMLElement[];
+    nestedLists.forEach((list) => {
+      const nestedItems = Array.from(list.children)
+        .filter(child => child.tagName === 'LI') as HTMLElement[];
+      if (!nestedItems.length) {
+        list.parentNode?.removeChild(list);
+        return;
+      }
+      const fragment = doc.createDocumentFragment();
+      nestedItems.forEach((item, index) => {
+        const text = (item.textContent || '').trim();
+        if (!text) return;
+        const span = doc.createElement('span');
+        span.textContent = `• ${text}`;
+        fragment.appendChild(span);
+        if (index < nestedItems.length - 1) {
+          fragment.appendChild(doc.createElement('br'));
+        }
+      });
+      li.insertBefore(fragment, list);
+      list.parentNode?.removeChild(list);
+    });
+
     const blocks = Array.from(li.querySelectorAll(blockSelector)) as HTMLElement[];
     blocks.forEach((block) => {
       while (block.firstChild) {

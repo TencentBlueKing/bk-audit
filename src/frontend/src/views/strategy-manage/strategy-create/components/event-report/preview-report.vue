@@ -32,6 +32,11 @@
         theme="primary"
         :title="t('正在使用模版生成报告内容')">
         <div class="report-preview-slider-preview-content">
+          <audit-icon
+            v-bk-tooltips="t('复制所有')"
+            class="preview-copy-icon"
+            type="copy"
+            @click="handleCopy" />
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div v-html="sanitizedContent" />
         </div>
@@ -48,6 +53,8 @@
   import RiskManageService from '@service/risk-manage';
 
   import useRequest from '@hooks/use-request';
+
+  import { execCopy } from '@utils/assist';
 
 
   interface RiskReport {
@@ -102,6 +109,19 @@
       ai_variables: [],
     },
   });
+  const getCopyText = (content: string) => {
+    const normalized = String(content ?? '').replace(/\\n/g, '\n');
+    const hasHtmlTag = /<\/?[a-z][\s\S]*>/i.test(normalized);
+    if (!hasHtmlTag) {
+      return normalized;
+    }
+    const container = document.createElement('div');
+    container.innerHTML = normalized;
+    return (container.innerText || '').trim();
+  };
+  const handleCopy = () => {
+    execCopy(getCopyText(concent.value), t('复制成功'));
+  };
   // 使用 DOMPurify 清理 HTML 内容以防止 XSS（允许插入图片）
   const sanitizedContent = computed(() => {
     const normalized = String(concent.value ?? '').replace(/\\n/g, '\n');
@@ -213,6 +233,7 @@
 }
 
 .report-preview-slider-preview-content {
+  position: relative;
   width: 880px;
   height: calc(100vh - 120px);
   margin-top: 20px;
@@ -220,6 +241,20 @@
   overflow-y: auto;
   word-break: break-word;
   white-space: pre-wrap;
+
+  .preview-copy-icon {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-size: 16px;
+    color: #63656e;
+    cursor: pointer;
+    transition: color .2s;
+
+    &:hover {
+      color: #3a84ff;
+    }
+  }
 
   .preview-info {
     padding: 12px;
