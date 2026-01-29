@@ -31,8 +31,10 @@ from services.web.databus.constants import (
 )
 from services.web.databus.models import Snapshot
 from services.web.entry.constants import (
+    AUDIT_DOC_CONFIG_KEY,
     INIT_ASSET_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
 from services.web.strategy_v2.models import Strategy
@@ -216,3 +218,55 @@ class SystemInitRuleAuditTests(TestCase):
 
         mock_create.assert_not_called()
         self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+
+
+@override_settings(BKAPP_INIT_SYSTEM="True")
+class SystemInitSdkConfigTests(TestCase):
+    """测试 init_sdk_config 方法"""
+
+    def setUp(self):
+        super().setUp()
+        self.handler = SystemInitHandler()
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @override_settings(
+        BKAPP_GO_SDK_CONFIG='{"doc": "go_sdk_doc"}',
+        BKAPP_JAVA_SDK_CONFIG='{"doc": "java_sdk_doc"}',
+        BKAPP_PYTHON_SDK_CONFIG='{"doc": "python_sdk_doc"}',
+    )
+    def test_init_sdk_config_with_env(self, mock_set):
+        """测试从 settings 读取 SDK 配置"""
+        self.handler.init_sdk_config()
+
+        mock_set.assert_called_once()
+        call_args = mock_set.call_args
+        self.assertEqual(call_args.args[0], SDK_CONFIG_KEY)
+        sdk_config = call_args.args[1]
+        self.assertEqual(sdk_config["go_sdk"], '{"doc": "go_sdk_doc"}')
+        self.assertEqual(sdk_config["java_sdk"], '{"doc": "java_sdk_doc"}')
+        self.assertEqual(sdk_config["python_sdk"], '{"doc": "python_sdk_doc"}')
+
+
+@override_settings(BKAPP_INIT_SYSTEM="True")
+class SystemInitDocConfigTests(TestCase):
+    """测试 init_doc_config 方法"""
+
+    def setUp(self):
+        super().setUp()
+        self.handler = SystemInitHandler()
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @override_settings(
+        BKAPP_AUDIT_ACCESS_GUIDE="https://example.com/guide",
+        BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS="https://example.com/standards",
+    )
+    def test_init_doc_config_with_env(self, mock_set):
+        """测试从 settings 读取文档配置"""
+        self.handler.init_doc_config()
+
+        mock_set.assert_called_once()
+        call_args = mock_set.call_args
+        self.assertEqual(call_args.args[0], AUDIT_DOC_CONFIG_KEY)
+        doc_config = call_args.args[1]
+        self.assertEqual(doc_config["audit_access_guide"], "https://example.com/guide")
+        self.assertEqual(doc_config["audit_operation_log_record_standards"], "https://example.com/standards")
