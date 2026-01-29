@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from uuid import uuid1
 
 from bkcrypto.contrib.django.ciphers import get_asymmetric_cipher
+from django.conf import settings
 
 from apps.bk_crypto.crypto import FakeAsymmetricCipher, asymmetric_cipher
 from tests.base import TestCase
@@ -52,3 +53,19 @@ class EntryTest(TestCase):
         decrypt_text: str = cipher.decrypt(encrypt_text)
         self.assertEquals(random_text, decrypt_text)
         self.assertTrue(cipher.verify(plaintext=random_text, signature=cipher.sign(random_text)))
+
+
+class EntryHandlerUserApiGwUrlTest(TestCase):
+    """测试 EntryHandler.get_user_web_apigw_url 方法"""
+
+    def test_get_user_web_apigw_url_default(self) -> None:
+        """测试默认配置下的 URL 生成"""
+        from unittest import mock
+
+        from services.web.entry.handler.entry import EntryHandler
+
+        with mock.patch.object(settings, 'BK_API_URL_TMPL', 'https://api.example.com/api/{api_name}'):
+            # 使用默认的 api_name: bk-user-web
+            with mock.patch.object(settings, 'BKUSER_WEB_APIGATEWAY_ROOT', 'bk-user-web'):
+                url = EntryHandler.get_user_web_apigw_url()
+                self.assertEqual(url, 'https://api.example.com/api/bk-user-web/bk-user-web/prod')
