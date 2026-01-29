@@ -49,7 +49,7 @@
               </bk-radio-button>
             </bk-radio-group>
             <div class="sdk-support-footer">
-              <span>{{ t('前往SDk') }}：</span>
+              <span>{{ t('前往SDK') }}：</span>
               <a
                 :href="selectedSdkUrl"
                 target="_blank">{{ selectedSdkUrl }}</a>
@@ -172,6 +172,7 @@
   ]);
 
   const configData = inject<Ref<ConfigModel>>('configData');
+  const setLogCreateComponentType = inject<(type: string) => void>('setLogCreateComponentType');
 
   // 根据选中的 SDK 类型获取对应的 URL
   const selectedSdkUrl = computed(() => {
@@ -215,6 +216,7 @@
   };
 
   const handlePrevious = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'logCreate',
       params: {
@@ -224,8 +226,10 @@
         type: 'logCreate',
       },
     });
+    setLogCreateComponentType?.('logCreate');
   };
   const handleCancel = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'systemDetail',
       params: {
@@ -254,7 +258,7 @@
         },
         query: {
           ...route.query,
-          routeTitleTp: t('SDK 接入'),
+          routeTitleTp: t('API PUSH接入'),
         },
       });
     });
