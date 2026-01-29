@@ -1,3 +1,4 @@
+<!-- eslint-disable max-len -->
   <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -47,7 +48,7 @@
             v-model="isAutoGetReports"
             :disabled="!isEnvent"
             size="small">
-            {{ t('自动生成报告') }}
+            {{ t('使用模版生成') }}
           </bk-checkbox>
           <div class="auto-reports-desc">
             <audit-icon
@@ -55,7 +56,7 @@
               type="info-fill" />
             <span
               class="info-fill-text"
-              style="color: #979ba5;">{{ t('勾选后，风险单产生时将自动生成事件调查报告，建议策略正式上线后再开启，避免调试阶段消耗过多 AI Token，调试期间可在风险单中手动创建报告')
+              style="color: #979ba5;">{{ t('开启后，策略产生风险时将自动创建调查报告，如果模版中使用了AI智能体会消耗AI额度，策略调试阶段可能会产生大量风险，建议先关闭，等稳定后再开启，关闭时可在风险单中手动使用此模板生成报告')
               }}</span>
           </div>
         </div>
@@ -321,7 +322,7 @@
     }
 
     const aiVariables = aiEditorRef.value.getAiLists().map((item: aiVariables) => ({
-      name: item.name,
+      name: `ai.${item.name}`,
       prompt_template: item.prompt_template,
     }));
     return {
