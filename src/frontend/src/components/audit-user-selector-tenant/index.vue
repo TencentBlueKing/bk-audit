@@ -24,7 +24,7 @@
     :multiple="multiple"
     :tenant-id="tenantId"
     @blur="handleBlur"
-    @change="handleChange" />
+    @update:model-value="handleValueChange" />
 </template>
 
 <script setup lang="ts">
@@ -100,9 +100,13 @@
     return MOCK_TENANT_CONFIG.BK_TENANT_ID;
   });
 
-  const handleChange = (value: Array<string> | string) => {
-    emit('update:modelValue', value);
-    emit('change', value);
+  // const handleChange = (value: Array<string> | string) => {
+  //   // emit('update:modelValue', value);
+  //   // emit('change', value);
+  // };
+  const handleValueChange = (v:string[]) => {
+    emit('update:modelValue', v);
+    emit('change', v);
   };
 
   const handleBlur = () => {
