@@ -84,6 +84,10 @@ BKVISION_WEB_URL_KEY = "bkvision_web_url"
 SDK_CONFIG_KEY = "sdk_config"
 AUDIT_DOC_CONFIG_KEY = "audit_doc_config"
 
+# AI 实践文档地址
+AI_PRACTICES_KEY = "ai_practices"
+DEFAULT_AI_PRACTICES = {"ai_summary": "http://example.com/wiki/"}
+
 
 def get_manual_event_strategy_config(rt_id):
     """
