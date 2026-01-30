@@ -49,6 +49,9 @@ export default class Config {
   help_info:{
     schema: string;
     query_string: string;
+    ai_practices: {
+      ai_summary: string;
+    };
   };
   bk_biz_id: number;
   shared_res_url: string;
@@ -108,6 +111,9 @@ export default class Config {
       return {
         schema: '',
         query_string: '',
+        ai_practices: {
+          ai_summary: '',
+        },
       };
     }
     return params;
