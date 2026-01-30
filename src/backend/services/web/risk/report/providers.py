@@ -193,9 +193,6 @@ class AIProvider(Provider):
         if self._ai_executor:
             return self._ai_executor(prompt)
 
-        # 调用ai-audit-report服务的chat_completion接口
-        from bk_resource import api
-
         try:
             result = api.bk_plugins_ai_audit_report.chat_completion(
                 user=self.context.get("user", "admin"),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
@@ -203,7 +200,7 @@ class AIProvider(Provider):
                 chat_history=[],
                 execute_kwargs={"stream": False},
             )
-            return result.get("content", "")
+            return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
         except Exception as e:
             return f"[AI生成失败: {e}]"
 

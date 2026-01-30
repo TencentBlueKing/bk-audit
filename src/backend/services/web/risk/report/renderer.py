@@ -246,7 +246,7 @@ def _build_render_context(
             ai_result = results.get(call.original_expr, "")
             if ai_result:
                 html_content = render_ai_markdown(ai_result)
-                ai_result = Markup(f'<div class="ai-content">{html_content}</div>')
+                ai_result = Markup(html_content)
             namespace_providers[provider_key][field_name] = ai_result
 
     # 为每个命名空间创建对象（如ai）
