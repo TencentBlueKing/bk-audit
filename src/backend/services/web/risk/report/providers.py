@@ -25,6 +25,7 @@ from typing import Any, Callable, Dict, Optional, Type
 from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.utils import timezone
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
@@ -316,7 +317,9 @@ class EventProvider(Provider):
         field_type = self._get_field_type(field_name, aggregate)
 
         # end_time 向上取整到秒，避免因微秒精度导致的边界丢失
-        end_time = ceil_to_second(self.risk.event_end_time)
+        # 当 event_end_time 为空时，使用当前时间作为 fallback
+
+        end_time = ceil_to_second(self.risk.event_end_time) if self.risk.event_end_time else timezone.now()
 
         builder = EventProviderSqlBuilder(
             table_name=self._get_rt_id(),
