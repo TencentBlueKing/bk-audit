@@ -197,6 +197,24 @@ class TestReportConfigValidation(TestCase):
         serializer = CreateStrategyRequestSerializer(data=payload)
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_create_strategy_report_invalid_ai_variable_name(self):
+        """测试创建策略：report_config AI 变量名不符合规范 -> 失败"""
+        payload = self._build_base_payload()
+        payload["report_enabled"] = True
+        payload["report_config"] = {
+            "template": "Test template {{ risk.title }}",
+            "ai_variables": [
+                {
+                    "name": "ai.1summary",
+                    "prompt_template": "请总结风险",
+                }
+            ],
+        }
+
+        serializer = CreateStrategyRequestSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("report_config", str(serializer.errors).lower())
+
     def test_create_strategy_report_enabled_without_config(self):
         """测试创建策略：report_enabled=True 但 report_config 为空 -> 失败"""
         payload = self._build_base_payload()
