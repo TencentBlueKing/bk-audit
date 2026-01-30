@@ -81,7 +81,7 @@ class DeptConvertor(Converter):
 
         # 获取部门信息
         try:
-            departments_data = api.user_manage.retrieve_department(id=dept_id)
+            departments_data = api.user_manage.retrieve_department(department_id=dept_id)
         except APIRequestError:
             departments_data = {}
 

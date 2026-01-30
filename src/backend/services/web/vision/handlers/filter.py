@@ -93,7 +93,7 @@ class DeptFilter(DataFilter):
 
         # 获取用户组织架构
         with ignored(APIRequestError):
-            departments = api.user_manage.list_user_departments(id=username)
+            departments = api.user_manage.list_user_departments(bk_username=username)
             if departments:
                 authed_dept.add(departments[0]["full_name"])
 
