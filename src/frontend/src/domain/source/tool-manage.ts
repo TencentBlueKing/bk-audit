@@ -111,7 +111,7 @@ class ToolManage extends ModuleBase {
     favorite: boolean,
   }) {
     return Request.put(`${this.path}/tool/${params.uid}/favorite/`, {
-      data: {
+      params: {
         favorite: params.favorite,
       },
     });
