@@ -536,7 +536,7 @@
   const isAutoGenerate = ref(false);
   const handleSubmit = () => {
     const manualText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
-    const autoText = '保存后，报告将被标记为「自动生成」状态，后续有新事件触发，系统将自动更新该报表内容';
+    const autoText = '保存后，报告将被标记为「模板生成」状态，后续有新事件触发，系统将自动更新该报表内容';
     const isAutoReport = props.status === 'auto';
     const hasChange = isChangeVal.value;
     const hasReget = isRegetVal.value;
