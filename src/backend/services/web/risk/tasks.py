@@ -26,6 +26,7 @@ from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
+from celery.exceptions import MaxRetriesExceededError
 from celery.schedules import crontab
 from django.conf import settings
 from django.core.cache import cache as _cache
@@ -102,8 +103,8 @@ def render_risk_report(self, risk_id: str, task_id: str):
         try:
             # 失败重试
             self.retry(exc=exc, countdown=settings.RENDER_RETRY_DELAY)
-        except Exception:  # NOCC:broad-except(需要处理所有异常)
-            # 达到最大重试次数 (MaxRetriesExceededError)
+        except MaxRetriesExceededError:
+            # 达到最大重试次数
             handler.handle_max_retries_exceeded(exc)
 
 
