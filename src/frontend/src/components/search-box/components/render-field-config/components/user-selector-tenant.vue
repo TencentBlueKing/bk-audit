@@ -48,7 +48,8 @@
   const { t } = useI18n();
   const multiple = true;
 
-  const handleChange = (value: Props['defaultValue']) => {
+
+  const handleChange = (value:string[]) => {
     emits('change', props.name, value);
   };
 
