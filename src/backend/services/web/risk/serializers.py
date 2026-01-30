@@ -1056,7 +1056,7 @@ class AIPreviewRequestSerializer(serializers.Serializer):
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
     ai_variables = serializers.ListField(
-        child=AIVariableConfig.drf_serializer_with_validation()(),
+        child=AIVariableConfig.drf_serializer(),
         label=gettext_lazy("AI变量配置列表"),
         min_length=1,
         help_text=gettext_lazy("至少需要配置一个 AI 变量"),

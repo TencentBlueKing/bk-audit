@@ -710,21 +710,31 @@ class TestAIPreviewResource(TestCase):
         self.assertIn("ai_variables", serializer.errors)
 
     def test_ai_variable_serializer_valid(self):
-        """测试 AIVariableConfig.drf_serializer_with_validation 验证有效数据"""
+        """测试 AIVariableConfig.drf_serializer 验证有效数据"""
         from services.web.risk.report_config import AIVariableConfig
 
         data = {"name": "ai.summary", "prompt_template": "请总结风险"}
-        serializer = AIVariableConfig.drf_serializer_with_validation()(data=data)
+        serializer = AIVariableConfig.drf_serializer(data=data)
         self.assertTrue(serializer.is_valid())
 
     def test_ai_variable_serializer_name_must_start_with_ai(self):
-        """测试 AIVariableConfig.drf_serializer_with_validation 验证name必须以ai.开头"""
+        """测试 AIVariableConfig.drf_serializer 验证name必须以ai.开头"""
         from services.web.risk.report_config import AIVariableConfig
 
         data = {"name": "summary", "prompt_template": "请总结风险"}
-        serializer = AIVariableConfig.drf_serializer_with_validation()(data=data)
+        serializer = AIVariableConfig.drf_serializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("name", serializer.errors)
+
+    def test_ai_variable_serializer_prompt_template_idempotent(self):
+        """测试 AIVariableConfig.drf_serializer 已前缀 prompt_template 不重复追加"""
+        from services.web.risk.report_config import AIVariableConfig
+
+        prefixed_prompt = f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结风险"
+        data = {"name": "ai.summary", "prompt_template": prefixed_prompt}
+        serializer = AIVariableConfig.drf_serializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["prompt_template"], prefixed_prompt)
 
     @classmethod
     def setUpTestData(cls):
@@ -817,6 +827,24 @@ class TestAIPreviewResource(TestCase):
             # 验证 AI 执行器被调用并返回了 mock 结果（内容经过 markdown 渲染）
             self.assertIn("这是AI生成的风险摘要内容", result["ai"]["summary"])
             self.assertIn("这是AI生成的处理建议", result["ai"]["suggestion"])
+
+    def test_ai_preview_task_escapes_html(self):
+        """测试 render_ai_variable 任务对原始HTML进行转义"""
+        from unittest.mock import patch
+
+        from services.web.risk.tasks import render_ai_variable
+
+        ai_variables = [
+            {"name": "ai.summary", "prompt_template": "请总结风险"},
+        ]
+
+        raw_html = "<script>alert(1)</script>"
+        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value=raw_html):
+            result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
+
+            summary_html = result["ai"]["summary"]
+            self.assertNotIn(raw_html, summary_html)
+            self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", summary_html)
 
     def test_ai_preview_task_with_single_variable(self):
         """测试 render_ai_variable 任务执行单个 AI 变量"""
