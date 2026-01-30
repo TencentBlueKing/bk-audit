@@ -38,7 +38,7 @@ BK_PAAS_API_URL = get_endpoint(settings.BK_PAAS_APIGW_NAME, stage="prod")
 
 # User Manage
 USER_MANAGE_URL = (
-    get_endpoint(settings.USERMANAGE_APIGW_NAME, APIProvider.APIGW)
+    get_endpoint(settings.USERMANAGE_APIGW_NAME, APIProvider.APIGW, stag="prod")
     if APIGW_ENABLED
     else get_endpoint(settings.USERMANAGE_ESB_NAME, APIProvider.ESB)
 )
