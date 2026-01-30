@@ -58,12 +58,12 @@ export default {
   },
   operator: {
     label: '责任人',
-    type: 'user-selector',
+    type: 'user-selector-tenant', // 多租户人员选择器
     required: false,
   },
   current_operator: {
     label: '当前处理人',
-    type: 'user-selector',
+    type: 'user-selector-tenant', // 多租户人员选择器
     required: false,
   },
   status: {
@@ -108,7 +108,7 @@ export default {
   },
   notice_users: {
     label: '关注人',
-    type: 'user-selector',
+    type: 'user-selector-tenant', // 多租户人员选择器
     required: false,
   },
 } as Record<string, IFieldConfig>;

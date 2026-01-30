@@ -71,7 +71,7 @@ export default {
   },
   username: {
     label: '操作人',
-    type: 'user-selector',
+    type: 'user-selector-tenant', // 多租户人员选择器
     required: false,
     operator: 'include',
   },

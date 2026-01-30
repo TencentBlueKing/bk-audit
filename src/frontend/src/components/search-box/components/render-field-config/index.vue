@@ -55,6 +55,7 @@
   import RenderInput from './components/input.vue';
   import RenderSelect from './components/select.vue';
   import RenderUserSelector from './components/user-selector.vue';
+  import RenderUserSelectorTenant from './components/user-selector-tenant.vue';
 
   interface Props {
     name: string,
@@ -79,6 +80,7 @@
     string: RenderInput,
     select: RenderSelect,
     'user-selector': RenderUserSelector,
+    'user-selector-tenant': RenderUserSelectorTenant,
   };
 
   const renderCom = computed(() => comMap[config.type as keyof typeof comMap]);

@@ -19,15 +19,15 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 import requests
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.logger import logger
 from django.utils.translation import gettext_lazy
 
+from api.base import CommonBkApiResource
 from api.domains import BK_CMSI_API_URL
 
 
-class CMSIResource(BkApiResource, abc.ABC):
+class CMSIResource(CommonBkApiResource, abc.ABC):
     base_url = BK_CMSI_API_URL
     module_name = "bk_cmsi"
     IS_STANDARD_FORMAT = False
