@@ -20,6 +20,6 @@ class ToolAdmin(admin.ModelAdmin):
 
 @admin.register(ToolFavorite)
 class ToolFavoriteAdmin(admin.ModelAdmin):
-    list_display = ["tool", "username", "created_at"]
+    list_display = ["tool_uid", "username", "created_at"]
     list_filter = ["username"]
-    search_fields = ["tool__uid", "tool__name", "username"]
+    search_fields = ["tool_uid", "username"]

@@ -283,8 +283,8 @@ class ListTool(ToolBase):
         permission = ToolPermission(username=current_user)
         authed_tool_filter = permission.authed_tool_filter
 
-        # 构建收藏状态子查询
-        favorite_subquery = ToolFavorite.objects.filter(tool_id=OuterRef("id"), username=current_user)
+        # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
+        favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         queryset = Tool.all_latest_tools().filter(authed_tool_filter).annotate(favorite=Exists(favorite_subquery))
 
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
@@ -911,8 +911,8 @@ class ListToolAll(ToolBase):
     def perform_request(self, validated_request_data):
         current_user = get_request_username()
 
-        # 构建收藏状态子查询
-        favorite_subquery = ToolFavorite.objects.filter(tool_id=OuterRef("id"), username=current_user)
+        # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
+        favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery)).order_by("name")
 
         tool_uids = [tool.uid for tool in tool_qs]
@@ -965,8 +965,8 @@ class GetToolDetail(ToolBase):
         setattr(tool, "tags", [str(tid) for tid in tag_ids])
         setattr(tool, "strategies", [str(sid) for sid in strategies_ids])
 
-        # 查询当前用户对该工具的收藏状态
-        favorite = ToolFavorite.objects.filter(tool=tool, username=current_user).exists()
+        # 查询当前用户对该工具的收藏状态（使用 tool_uid 关联）
+        favorite = ToolFavorite.objects.filter(tool_uid=tool.uid, username=current_user).exists()
         setattr(tool, "favorite", favorite)
 
         # 如果是SQL工具且有引用表，检查表权限
@@ -1129,8 +1129,8 @@ class FavoriteTool(ToolBase):
             raise ToolDoesNotExist()
 
         if favorite:
-            ToolFavorite.objects.get_or_create(tool=tool, username=username)
+            ToolFavorite.objects.get_or_create(tool_uid=tool.uid, username=username)
         else:
-            ToolFavorite.objects.filter(tool=tool, username=username).delete()
+            ToolFavorite.objects.filter(tool_uid=tool.uid, username=username).delete()
 
         return {"favorite": favorite}
