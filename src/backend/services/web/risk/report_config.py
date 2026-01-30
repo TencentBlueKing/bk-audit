@@ -44,6 +44,7 @@ class AIVariableConfig(BaseModel):
    与下钻配置中的 source_field 一致，且需要传的参数都传齐。
 5. 调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。
 6. 输出必须为 Markdown，内容简洁明了，不得虚构事实。
+7. 若用户没有声明获取几条事件数据，默认只获取最新1条事件数据。
 !!!调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。!!!
 """
 
