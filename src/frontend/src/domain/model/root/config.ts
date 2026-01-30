@@ -39,14 +39,14 @@ export default class Config {
     domain: string;
     name: string;
     available: Array<{
-      id: string,
-      name: string
-    }>
+      id: string;
+      name: string;
+    }>;
   };
   copyright: string;
   version: string;
   site_title: string;
-  help_info:{
+  help_info: {
     schema: string;
     query_string: string;
     ai_practices: {
@@ -71,6 +71,10 @@ export default class Config {
   };
   tool: {
     vision_share_permission_url: string;
+  };
+  tenant_config: {
+     BK_TENANT_ID: string;
+     BK_USER_WEB_APIGW_URL: string;
   };
 
   constructor(payload = {} as Config) {
@@ -100,6 +104,7 @@ export default class Config {
     this.metric = payload.metric;
     this.help_info = this.initHelpInfo(payload.help_info);
     this.tool = payload.tool;
+    this.tenant_config = payload.tenant_config;
   }
 
   initHelpInfo(params: Config['help_info']) {
