@@ -55,9 +55,17 @@
             :label="t('AI 提示词')"
             property="prompt_template"
             required>
+            <div
+              class="prompt_template-link"
+              @click="handleJumpLink">
+              <span>{{ t('提示词最佳实践') }} </span>
+              <audit-icon
+                class="preview-angle-jump-link"
+                type="jump-link" />
+            </div>
             <bk-input
               v-model="formData.prompt_template"
-              class="ai-prompt-textarea"
+              :class="isPreviewExpanded ? '' : 'ai-prompt-textarea'"
               :placeholder="t('请输入 AI 提示词，指导 AI 如何生成这部分内容')"
               :resize="false"
               :rows="textareaRows"
@@ -129,7 +137,8 @@
             :class="{ 'rotated': isPreviewExpanded }"
             type="angle-line-up" />
           <div class="preview-title">
-            <span>{{ t('AI 生成内容预览') }}</span>
+            <span>{{ t('AI 生成内容预览') }}
+            </span>
           </div>
         </div>
         <div
@@ -170,6 +179,9 @@
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
 
@@ -223,7 +235,7 @@
   // const isEditMode = route.name === 'strategyEdit';
   const isShowRight = ref(false);
   const formRef = ref();
-  const textareaRows = ref(6);
+  const textareaRows = ref(3);
   const isPreviewExpanded = ref(false);
   const initialFormSnapshot = ref({
     name: '',
@@ -292,6 +304,21 @@
   const handleCopy = () => {
     execCopy(getCopyText(concent.value), t('复制成功'));
   };
+
+  // 全局数据
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+  // 跳转链接新窗口
+  const handleJumpLink = () => {
+    if (configData.value) {
+      window.open(configData.value.help_info.ai_practices.ai_summary, '_blank');
+    }
+  };
+
   const updateInitialSnapshot = () => {
     initialFormSnapshot.value = {
       name: formData.value.name.trim(),
@@ -429,15 +456,6 @@
       textareaRows.value = 4;
       return;
     }
-    // 获取视口高度
-    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-    const targetHeight = viewportHeight * 0.7;
-    // textarea 每行高度大约为 22px（包括行间距和 padding）
-    const lineHeight =  22.5;
-    // 计算行数
-    const calculatedRows = Math.floor(targetHeight / lineHeight);
-    // 设置最小行数限制，确保高度接近 70% 视口
-    textareaRows.value = Math.max(10, calculatedRows);
   };
 
   // 窗口大小变化时重新计算
@@ -733,6 +751,7 @@
     background-color: #f5f7fa;
   }
 
+
   :deep(.bk-modal-footer) {
     height: 52px;
     margin-top: -5px;
@@ -751,5 +770,25 @@
   height: 52px;
   margin-left: -25px;
   background-color: #f5f7fa;
+}
+
+:deep(.ai-prompt-textarea.bk-textarea > textarea) {
+  height: calc(100vh - 400px) !important;
+}
+
+.prompt_template-link {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  font-size: 12px;
+  color: #3a84ff;
+  cursor: pointer;
+
+  .preview-angle-jump-link {
+    margin-left: 5px;
+    font-size: 14px;
+    color: #3a84ff;
+    cursor: pointer;
+  }
 }
 </style>
