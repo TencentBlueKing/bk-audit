@@ -488,7 +488,7 @@ def sync_auto_result(node_id: str = None):
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
 
-@celery_app.task(queue="risk")
+@celery_app.task(queue="risk_render")
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
 
