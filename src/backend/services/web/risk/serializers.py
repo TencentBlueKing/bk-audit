@@ -936,6 +936,8 @@ class RetrieveRiskStrategyInfoAPIGWRequestSerializer(serializers.Serializer):
 
 
 class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
+    strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"))
+    strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"))
     event_basic_field_configs = serializers.ListField(
         label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
     )
@@ -958,6 +960,8 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Strategy
         fields = [
+            "strategy_name",
+            "strategy_type",
             "risk_level",
             "risk_hazard",
             "risk_guidance",

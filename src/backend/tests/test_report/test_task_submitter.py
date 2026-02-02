@@ -145,12 +145,15 @@ class TestSubmitRenderTask(TestCase):
         self.assertIsInstance(ai_provider, AIProvider)
         self.assertEqual(ai_provider.context, {"risk_id": self.risk.risk_id})
         # AIProvider 内部将 list 转为 dict 格式
+        # 根据 PREDEFINED_PROMPT_TEMPLATE 是否为空来动态计算期望的 prompt_template
+        prefix = AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE
+        expected_prompt = f"{prefix}\n请总结该风险的要点" if prefix else "请总结该风险的要点"
         self.assertEqual(
             ai_provider.ai_variables_config,
             {
                 "ai.summary": {
                     "name": "ai.summary",
-                    "prompt_template": f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结该风险的要点",
+                    "prompt_template": expected_prompt,
                 }
             },
         )
