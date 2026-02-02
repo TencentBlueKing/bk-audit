@@ -33,20 +33,7 @@ class AIVariableConfig(BaseModel):
     用于配置 AI 生成的变量。
     """
 
-    PREDEFINED_PROMPT_TEMPLATE: ClassVar[
-        str
-    ] = """
-!!!请严格遵循以下规则：!!!
-1. 思考过程保持简洁。
-2. 工具调用失败最多只重试一次。
-4. 若调用下钻工具，必须先根据风险ID获取策略配置中的下钻工具配置；
-   调用 execute_drill_tool（或 MCP 中的 execute_tool 变体）时，确保 tool_variables 的 raw_name
-   与下钻配置中的 source_field 一致，且需要传的参数都传齐。
-5. 调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。
-6. 输出必须为 Markdown，内容简洁明了，不得虚构事实。
-7. 若用户没有声明获取几条事件数据，默认只获取最新1条事件数据。
-!!!调用 MCP 工具时务必附带 path_param 或 query_param，且参数准确。!!!
-"""
+    PREDEFINED_PROMPT_TEMPLATE: ClassVar[str] = """"""
 
     drf_config: ClassVar[dict] = {
         "validate_pydantic": True,
@@ -79,6 +66,8 @@ class AIVariableConfig(BaseModel):
     def validate_prompt_template(cls, value: str) -> str:
         """将预定义的 prompt 模板添加到用户传入的 prompt 前面"""
         prefix = cls.PREDEFINED_PROMPT_TEMPLATE
+        if not prefix:
+            return value
         if value.startswith(prefix):
             return value
 

@@ -727,14 +727,21 @@ class TestAIPreviewResource(TestCase):
         self.assertIn("name", serializer.errors)
 
     def test_ai_variable_serializer_prompt_template_idempotent(self):
-        """测试 AIVariableConfig.drf_serializer 已前缀 prompt_template 不重复追加"""
+        """测试 AIVariableConfig.drf_serializer prompt_template 不重复追加前缀"""
         from services.web.risk.report_config import AIVariableConfig
 
-        prefixed_prompt = f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结风险"
-        data = {"name": "ai.summary", "prompt_template": prefixed_prompt}
+        # 当 PREDEFINED_PROMPT_TEMPLATE 为空时，prompt_template 应保持原样
+        prompt = "请总结风险"
+        data = {"name": "ai.summary", "prompt_template": prompt}
         serializer = AIVariableConfig.drf_serializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["prompt_template"], prefixed_prompt)
+        # 无前缀时，prompt 应保持原样
+        if not AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE:
+            self.assertEqual(serializer.validated_data["prompt_template"], prompt)
+        else:
+            # 有前缀时，prompt 应被添加前缀
+            expected = f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n{prompt}"
+            self.assertEqual(serializer.validated_data["prompt_template"], expected)
 
     @classmethod
     def setUpTestData(cls):
@@ -785,13 +792,15 @@ class TestAIPreviewResource(TestCase):
             self.assertEqual(result["task_id"], "test_task_id_123")
             self.assertEqual(result["status"], "PENDING")
 
-            # 验证 celery task 被调用
+            # 验证 celery task 被调用，根据 PREDEFINED_PROMPT_TEMPLATE 是否为空确定期望的 prompt_template
+            prefix = AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE
+            expected_prompt = f"{prefix}\n请总结风险" if prefix else "请总结风险"
             mock_render.delay.assert_called_once_with(
                 risk_id=self.risk.risk_id,
                 ai_variables=[
                     {
                         "name": "ai.summary",
-                        "prompt_template": f"{AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE}\n请总结风险",
+                        "prompt_template": expected_prompt,
                     },
                 ],
             )
