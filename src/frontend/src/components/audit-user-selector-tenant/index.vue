@@ -22,6 +22,7 @@
     :api-base-url="apiBaseUrl"
     :disabled="disabled"
     :multiple="multiple"
+    :render-tag="renderTag"
     :tenant-id="tenantId"
     @blur="handleBlur"
     @update:model-value="handleValueChange" />
@@ -60,12 +61,11 @@
   const userSelectorRef = ref();
   const localValue = ref<Props['modelValue']>([]);
 
-  // Mock 数据配置 - 当后端接口未返回 tenant_config 时使用
-  // TODO: 后端接口就绪后，移除 mock 数据
-  const MOCK_TENANT_CONFIG = {
-    BK_TENANT_ID: '',
-    BK_USER_WEB_APIGW_URL: '',
-  };
+  // 自定义标签渲染
+  const renderTag = (createElement:any, userInfo:any) => createElement('span', { class: 'custom-tag' }, [
+    createElement('img', { src: userInfo.logo, class: 'avatar' }),
+    userInfo.display_name,
+  ]);
 
   // 从sessionStorage中获取配置
   const getConfig = () => {
@@ -96,14 +96,9 @@
     if (config?.tenant_config?.BK_TENANT_ID) {
       return config.tenant_config.BK_TENANT_ID;
     }
-    // 使用 mock 数据
-    return MOCK_TENANT_CONFIG.BK_TENANT_ID;
+    return '';
   });
 
-  // const handleChange = (value: Array<string> | string) => {
-  //   // emit('update:modelValue', value);
-  //   // emit('change', value);
-  // };
   const handleValueChange = (v:string[]) => {
     emit('update:modelValue', v);
     emit('change', v);
