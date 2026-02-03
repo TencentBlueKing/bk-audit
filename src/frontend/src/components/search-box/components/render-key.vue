@@ -116,6 +116,7 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const allText = t('全部');
   // const isExportLoading = ref(false);
   const {
     replaceSearchParams,
@@ -160,16 +161,53 @@
     localSearchModel.value[fieldName] = value;
     const replaceUrl = getSearchParams();
     if (Array.isArray(value)) {
-      replaceUrl[fieldName] = value.join(',');
+      const normalized = value
+        .map(item => (item == null ? '' : item.toString()))
+        .filter(item => item !== '' && item !== allText);
+      if (normalized.length === 0) {
+        delete replaceUrl[fieldName];
+      } else {
+        replaceUrl[fieldName] = normalized.join(',');
+      }
+    } else if (value === '' || value === null || value === undefined) {
+      delete replaceUrl[fieldName];
     } else {
       replaceUrl[fieldName] = value;
     }
     replaceSearchParams(replaceUrl);
   };
   // 提交搜索
+  const updateSearchParams = () => {
+    const replaceUrl = getSearchParams();
+    const fieldNames = new Set(Object.keys(props.fieldConfig));
+    if (Object.prototype.hasOwnProperty.call(localSearchModel.value, 'datetime_origin')) {
+      fieldNames.add('datetime_origin');
+    }
+    fieldNames.forEach((fieldName) => {
+      const value = localSearchModel.value[fieldName];
+      if (Array.isArray(value)) {
+        const normalized = value
+          .map(item => (item == null ? '' : item.toString()))
+          .filter(item => item !== '' && item !== allText);
+        if (normalized.length === 0) {
+          delete replaceUrl[fieldName];
+        } else {
+          replaceUrl[fieldName] = normalized.join(',');
+        }
+        return;
+      }
+      if (value === '' || value === null || value === undefined || value === allText) {
+        delete replaceUrl[fieldName];
+        return;
+      }
+      replaceUrl[fieldName] = value;
+    });
+    replaceSearchParams(replaceUrl);
+  };
   const handleSubmit = () => {
     const getValues = fieldConfigRef.value.map((item: any) => item.getValue());
     Promise.all(getValues).then(() => {
+      updateSearchParams();
       emits('update:modelValue', localSearchModel.value);
       emits('submit');
     });
