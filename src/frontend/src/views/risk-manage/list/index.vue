@@ -302,6 +302,14 @@
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
     {
+      label: () => t('事件调查报告'),
+      field: () => 'has_report',
+      sort: 'custom',
+      width: 160,
+      render: ({ data }: { data: RiskManageModel }) => <bk-tag
+        >{ data.has_report ? t('已生成') : t('未生成') }</bk-tag>,
+    },
+    {
       label: () => t('风险标记'),
       field: () => 'risk_label',
       width: 110,
@@ -431,7 +439,7 @@
       }, [] as Array<{
         label: string, field: string, disabled: boolean,
       }>) || [],
-      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'].concat(fieldNames),
       showLineHeight: false,
       trigger: 'manual' as const,  // 添加 as const 类型断言
     };
