@@ -95,16 +95,31 @@
 
     return timeStr.replace(/\s(\d{2}:\d{2})$/, '+$1');
   };
+  const normalizeParamArray = (value: unknown) => {
+    if (_.isArray(value)) {
+      return value.map(item => (item == null ? '' : item.toString())).filter(item => item !== '');
+    }
+    if (value == null || value === '') {
+      return [];
+    }
+    return value.toString().split(',');
+  };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
     const config = FieldConfig[searchFieldName as keyof typeof FieldConfig];
     if (!config) {
       return;
     }
+    if (urlSearchParams[searchFieldName] === undefined
+      || urlSearchParams[searchFieldName] === null
+      || urlSearchParams[searchFieldName] === '') {
+      return;
+    }
     if (config.type !== 'string') {
-      searchModel.value[searchFieldName] = urlSearchParams[searchFieldName].split(',');
+      searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
     } else {
-      searchModel.value[searchFieldName] = urlSearchParams[searchFieldName];
+      const value = urlSearchParams[searchFieldName];
+      searchModel.value[searchFieldName] = value == null ? '' : value.toString();
     }
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
@@ -115,7 +130,7 @@
     ];
   }
   if (urlSearchParams.datetime_origin) {
-    searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
+    searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
   }
 
   const handleRenderTypeChange = () => {

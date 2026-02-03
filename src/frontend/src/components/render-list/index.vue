@@ -386,11 +386,22 @@
         order_field: orderField,
         order_type: orderType,
       } = getSearchParams();
+      const normalizedParams = Object.keys(params).reduce((result, key) => {
+        const value = params[key];
+        if (value === undefined || value === null || value === '') {
+          return result;
+        }
+        if (Array.isArray(value) && value.length === 0) {
+          return result;
+        }
+        return {
+          ...result,
+          [key]: value,
+        };
+      }, {} as Record<string, any>);
       paramsMemo = {
-        ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
-        ...params,
+        ...(orderField && orderType ? { order_field: orderField, order_type: orderType } : {}),
+        ...normalizedParams,
       };
       if (isReady) {
         pagination.current = 1;
