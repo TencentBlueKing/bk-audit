@@ -340,28 +340,36 @@
     ],
   });
 
+  const normalizeParamArray = (value: unknown) => {
+    if (_.isArray(value)) {
+      return value.map(item => (item == null ? '' : item.toString())).filter(item => item !== '');
+    }
+    if (value == null || value === '') {
+      return [];
+    }
+    return value.toString().split(',');
+  };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
     const config = props.fieldConfig[searchFieldName];
     if (!config) {
       return;
     }
-    if (!urlSearchParams[searchFieldName]) return;
+    if (urlSearchParams[searchFieldName] === undefined
+      || urlSearchParams[searchFieldName] === null
+      || urlSearchParams[searchFieldName] === '') return;
     if (config.type !== 'string') {
-      // 如果urlSearchParams[searchFieldName]是数字则转换成字符串
-      if (_.isNumber(urlSearchParams[searchFieldName])) {
-        urlSearchParams[searchFieldName] = urlSearchParams[searchFieldName].toString();
-      }
-      searchModel.value[searchFieldName] = urlSearchParams[searchFieldName].split(',');
+      searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
     } else {
-      searchModel.value[searchFieldName] = urlSearchParams[searchFieldName];
+      const value = urlSearchParams[searchFieldName];
+      searchModel.value[searchFieldName] = value == null ? '' : value.toString();
     }
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
   }
   if (urlSearchParams.datetime_origin) {
-    searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
+    searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
   }
 
   const handleRenderTypeChange = () => {
@@ -370,6 +378,12 @@
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
   };
+  const allText = t('全部');
+  const normalizeSearchArray = (value: Array<string | number>) => (
+    value
+      .map(item => (item == null ? '' : item.toString()))
+      .filter(item => item !== '' && item !== allText)
+  );
   const getSearchParams = () => {
     const result = Object.keys(searchModel.value).reduce((result, key) => {
       const value = searchModel.value[key];
@@ -380,10 +394,23 @@
           end_time: value[1],
         };
       }
+      if (value === allText) {
+        return result;
+      }
       if (!_.isEmpty(value)) {
+        if (_.isArray(value)) {
+          const normalized = normalizeSearchArray(value);
+          if (normalized.length === 0) {
+            return result;
+          }
+          return {
+            ...result,
+            [key]: normalized.join(','),
+          };
+        }
         return {
           ...result,
-          [key]: _.isArray(value) ? value.join(',') : value,
+          [key]: value,
         };
       }
       return result;
