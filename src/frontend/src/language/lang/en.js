@@ -600,6 +600,7 @@ export default {
   批量编辑依赖资源: 'Edit dependent assets in bulk',
   接入新系统: 'New',
   工具: 'Tool square',
+  工具广场: 'Tool square',
   编辑器中的图片预览: 'Image preview in editor',
   处理说明中图片预览: 'Image preview in processing instructions',
 };

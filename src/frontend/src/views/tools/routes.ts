@@ -23,7 +23,7 @@ export default {
     name: 'toolsSquare',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'toolsSquare',
   },
   children: [
     {

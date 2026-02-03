@@ -55,6 +55,14 @@
         <router-link
           class="main-navigation-nav "
           :class="{
+            active: curNavName === 'toolsSquare'
+          }"
+          :to="{ name:'toolsSquare', query: {} }">
+          {{ t('工具广场') }}
+        </router-link>
+        <router-link
+          class="main-navigation-nav "
+          :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
           :to="{ name:'analysisManage', query: {} }">
@@ -152,20 +160,6 @@
           </audit-menu-item-group>
           <audit-menu-item-group>
             <template #title>
-              <div>{{ t('工具') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('工具') }}</div>
-            </template>
-            <audit-menu-item index="tools">
-              <audit-icon
-                class="menu-item-icon"
-                type="gongju" />
-              {{ t('工具') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
               <div>{{ t('接入') }}</div>
             </template>
             <template #flod-title>
@@ -190,6 +184,22 @@
                 class="menu-item-icon"
                 type="data-storage" />
               {{ t('数据存储') }}
+            </audit-menu-item>
+          </audit-menu-item-group>
+        </template>
+        <template v-else-if="curNavName === 'toolsSquare'">
+          <audit-menu-item-group>
+            <template #title>
+              <div>{{ t('工具广场') }}</div>
+            </template>
+            <template #flod-title>
+              <div>{{ t('工具广场') }}</div>
+            </template>
+            <audit-menu-item index="toolsSquare">
+              <audit-icon
+                class="menu-item-icon"
+                type="gongju" />
+              {{ t('工具广场') }}
             </audit-menu-item>
           </audit-menu-item-group>
         </template>
