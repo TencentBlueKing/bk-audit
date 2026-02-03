@@ -24,11 +24,10 @@
         v-model="localEventItem.display_name"
         required
         theme="background" />
-      <span
+      <tooltips
         v-else
-        class="ml8">
-        {{ localEventItem.display_name }}
-      </span>
+        :data="localEventItem.display_name"
+        :line="1" />
     </template>
 
     <!-- 是否展示 -->
@@ -200,11 +199,10 @@
       :show-word-limit="false" />
 
     <!-- 仅查看 -->
-    <span
+    <tooltips
       v-else
-      class="ml8">
-      {{ localEventItem[fieldKey] }}
-    </span>
+      :data="localEventItem[fieldKey]"
+      :line="1" />
   </div>
 </template>
 
@@ -216,6 +214,8 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import ToolDetailModel from '@model/tool/tool-detail';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import FieldDict from './field-dict.vue';
   import FieldInput from './field-input.vue';
