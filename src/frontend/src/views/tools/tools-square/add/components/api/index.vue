@@ -83,6 +83,42 @@
               type="password" />
           </bk-form-item>
         </div>
+        <div
+          v-if="formData.api_config.auth_config.method === 'ieop_auth'"
+          class="auth-box">
+          <bk-form-item
+            :label="t('应用Code(app_code)')"
+            label-width="160"
+            property="api_config.auth_config.config.app_code"
+            required>
+            <bk-input v-model="formData.api_config.auth_config.config.app_code" />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('应用密钥(app_secret)')"
+            label-width="160"
+            property="api_config.auth_config.config.app_secret"
+            required>
+            <bk-input
+              v-model="formData.api_config.auth_config.config.app_secret"
+              type="password" />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('密钥ID(secret_id)')"
+            label-width="160"
+            property="api_config.auth_config.config.secret_id"
+            required>
+            <bk-input v-model="formData.api_config.auth_config.config.secret_id" />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('密钥Key(secret_key)')"
+            label-width="160"
+            property="api_config.auth_config.config.secret_key"
+            required>
+            <bk-input
+              v-model="formData.api_config.auth_config.config.secret_key"
+              type="password" />
+          </bk-form-item>
+        </div>
         <div class="item-headers">
           <span>Headers</span>
           <div
@@ -225,6 +261,10 @@
         config: {
           bk_app_code: '',
           bk_app_secret: '',
+          app_code: '',
+          app_secret: '',
+          secret_id: '',
+          secret_key: '',
         },
         method: 'bk_app_auth',
       },
@@ -277,6 +317,7 @@
       enable_grouping: true,
     },
   });
+
   const rules = ref({});
   const authList = ref<Array<{
     id: string,
@@ -484,8 +525,19 @@
           formData.value.api_config.auth_config.config = {
             bk_app_code: '',
             bk_app_secret: '',
+            app_code: '',
+            app_secret: '',
+            secret_id: '',
+            secret_key: '',
           };
         }
+        // 确保所有认证字段存在
+        const allAuthFields = ['bk_app_code', 'bk_app_secret', 'app_code', 'app_secret', 'secret_id', 'secret_key'];
+        allAuthFields.forEach((field) => {
+          if (!formData.value.api_config.auth_config.config[field]) {
+            formData.value.api_config.auth_config.config[field] = '';
+          }
+        });
         setTimeout(() => {
           emits('getIsDoneDeBug', false, false, true,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
           initformData.value = JSON.parse(JSON.stringify(formData.value));
