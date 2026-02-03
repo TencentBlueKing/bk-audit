@@ -67,6 +67,8 @@ from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
+    GetToolDetailByNameAPIGWRequestSerializer,
+    GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
     ListToolTagsResponseSerializer,
     SqlAnalyseRequestSerializer,
@@ -584,10 +586,11 @@ class UpdateTool(ToolBase):
         """
 
         new_config = validated_request_data["config"]
+        new_name = validated_request_data.get("name", old_tool.name)
         new_tool_data = {
             "uid": old_tool.uid,
             "tool_type": old_tool.tool_type,
-            "name": validated_request_data.get("name", old_tool.name),
+            "name": new_name,
             "description": validated_request_data.get("description", old_tool.description),
             "namespace": validated_request_data.get("namespace", old_tool.namespace),
             "version": old_tool.version + 1,
@@ -1134,3 +1137,61 @@ class FavoriteTool(ToolBase):
             ToolFavorite.objects.filter(tool_uid=tool.uid, username=username).delete()
 
         return {"favorite": favorite}
+
+
+class GetToolDetailByNameAPIGW(ToolBase):
+    """
+    通过工具名称获取工具详情(APIGW)
+
+    仅做应用权限校验，不校验用户权限。
+    支持 lite_mode 模式，默认只返回 input_variable 定义。
+
+    请求参数：
+    ```json
+    {
+        "name": "工具名称",
+        "lite_mode": true  // 可选，默认 true，只返回 input_variable
+    }
+    ```
+
+    响应结构（lite_mode=true）：
+    ```json
+    {
+        "uid": "xxx",
+        "name": "xxx",
+        "tool_type": "data_search",
+        "version": 1,
+        "description": "xxx",
+        "namespace": "xxx",
+        "config": {
+            "input_variable": [...]
+        }
+    }
+    ```
+
+    响应结构（lite_mode=false）：返回完整的工具配置
+    """
+
+    name = gettext_lazy("通过名称获取工具详情(APIGW)")
+    RequestSerializer = GetToolDetailByNameAPIGWRequestSerializer
+    ResponseSerializer = GetToolDetailByNameAPIGWResponseSerializer
+
+    def validate_response_data(self, response_data):
+        return response_data
+
+    def perform_request(self, validated_request_data):
+        from core.utils.tools import get_app_info
+
+        # 仅做应用权限校验
+        get_app_info()
+
+        tool_name = validated_request_data["name"]
+        lite_mode = validated_request_data.get("lite_mode", True)
+
+        # 通过名称查找最新版本的工具
+        tool = Tool.all_latest_tools().filter(name=tool_name).first()
+        if not tool:
+            raise ToolDoesNotExist()
+
+        serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
+        return serializer.data
