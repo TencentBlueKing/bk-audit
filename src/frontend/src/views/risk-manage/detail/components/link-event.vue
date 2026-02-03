@@ -109,7 +109,7 @@
                         text
                         theme="primary"
                         @click="handlerStrategy()">
-                        {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
+                        {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }} ({{ eventItem.strategy_id }})
                       </bk-button>
                       <span v-else> -- </span>
                     </template>
