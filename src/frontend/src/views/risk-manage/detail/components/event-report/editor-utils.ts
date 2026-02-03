@@ -20,16 +20,74 @@ export const sanitizeEditorHtml = (content: string) => {
   const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) {
-    return content.replace(/\r?\n/g, '');
+    return content
+      .replace(/\\n/g, '</p><p>')
+      .replace(/\r?\n/g, '</p><p>');
   }
+
+  const tables = Array.from(container.querySelectorAll('table')) as HTMLTableElement[];
+  tables.forEach((table) => {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const fragment = doc.createDocumentFragment();
+    rows.forEach((row) => {
+      const cells = Array.from(row.querySelectorAll('th,td')) as HTMLElement[];
+      if (!cells.length) return;
+      const line = cells
+        .map(cell => (cell.textContent || '').trim())
+        .filter(Boolean)
+        .join(' | ');
+      if (!line) return;
+      const paragraph = doc.createElement('p');
+      paragraph.textContent = line;
+      fragment.appendChild(paragraph);
+    });
+    table.parentNode?.insertBefore(fragment, table);
+    table.parentNode?.removeChild(table);
+  });
 
   const walker = doc.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
   while (node) {
-    if (node.nodeValue) {
-      node.nodeValue = node.nodeValue.replace(/\r?\n/g, '');
+    const nextNode = walker.nextNode();
+    const textValue = node.nodeValue || '';
+    if (textValue && (/[\r\n]/.test(textValue) || textValue.includes('\\n'))) {
+      const parentElement = node.parentNode as HTMLElement | null;
+      const inParagraph = parentElement?.closest('p');
+      if (inParagraph) {
+        const normalizedText = textValue.replace(/\\n/g, '\n');
+        if (normalizedText.trim() === '') {
+          node.nodeValue = normalizedText.replace(/\r?\n/g, '');
+        } else {
+          const parts = normalizedText.split(/\r?\n+/);
+          if (parts.length <= 1) {
+            node.nodeValue = normalizedText;
+          } else {
+            const parent = inParagraph.parentNode;
+            if (!parent) {
+              node.nodeValue = normalizedText.replace(/\r?\n/g, '');
+            } else {
+              const fragment = doc.createDocumentFragment();
+              parts.forEach((part, index) => {
+                const targetParagraph = index === 0
+                  ? inParagraph
+                  : doc.createElement('p');
+                if (index > 0) {
+                  fragment.appendChild(targetParagraph);
+                }
+                if (part) {
+                  targetParagraph.appendChild(doc.createTextNode(part));
+                }
+              });
+              node.nodeValue = '';
+              parent.insertBefore(fragment, inParagraph.nextSibling);
+            }
+          }
+        }
+      } else {
+        node.nodeValue = textValue.replace(/\\n/g, '').replace(/\r?\n/g, '');
+      }
     }
-    node = walker.nextNode();
+    node = nextNode;
   }
 
   const blockSelector = 'p,div,section,article,header,footer,aside,nav,h1,h2,h3,h4,h5,h6,pre,blockquote';
