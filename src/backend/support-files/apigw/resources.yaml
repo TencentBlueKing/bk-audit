@@ -907,6 +907,83 @@ paths:
         disabledStages: [ ]
         descriptionEn:
 
+  /tools/detail_by_name/:
+    get:
+      operationId: get_tool_detail_by_name
+      description: 根据工具名称获取工具详情
+      tags: [ ]
+      parameters:
+        - in: query
+          name: name
+          type: string
+          required: true
+          description: 工具名称
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              uid:
+                type: string
+                description: 工具唯一标识
+              name:
+                type: string
+                description: 工具名称
+              tool_type:
+                type: string
+                description: 工具类型
+                enum:
+                  - data_search
+                  - api
+                  - bk_vision
+              version:
+                type: integer
+                description: 工具版本
+              description:
+                type: string
+                description: 工具描述
+              namespace:
+                type: string
+                description: 命名空间
+              config:
+                type: object
+                description: 工具配置
+                properties:
+                  input_variable:
+                    type: array
+                    description: 输入变量定义
+                    items:
+                      type: object
+                      properties:
+                        raw_name:
+                          type: string
+                          description: 变量原始名称
+                        display_name:
+                          type: string
+                          description: 变量显示名称
+                        required:
+                          type: boolean
+                          description: 是否必填
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/tool_apigw/detail_by_name/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
+
   /{namespace}/strategies/all/:
     get:
       operationId: get_all_strategy

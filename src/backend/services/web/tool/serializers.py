@@ -375,3 +375,40 @@ class ToolFavoriteRespSerializer(serializers.Serializer):
     """工具收藏响应序列化器"""
 
     favorite = serializers.BooleanField(label=gettext_lazy("是否收藏"))
+
+
+class GetToolDetailByNameAPIGWRequestSerializer(serializers.Serializer):
+    """通过名称获取工具详情请求序列化器(APIGW)"""
+
+    name = serializers.CharField(label=gettext_lazy("工具名称"))
+    lite_mode = serializers.BooleanField(required=False, default=True, label=gettext_lazy("精简模式"))
+
+
+class GetToolDetailByNameAPIGWResponseSerializer(serializers.ModelSerializer):
+    """通过名称获取工具详情响应序列化器(APIGW)"""
+
+    config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
+
+    class Meta:
+        model = Tool
+        fields = [
+            "uid",
+            "name",
+            "tool_type",
+            "version",
+            "description",
+            "namespace",
+            "config",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        self.lite_mode = kwargs.pop("lite_mode", True)
+        super().__init__(*args, **kwargs)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self.lite_mode:
+            # lite_mode 模式下，config 只保留 input_variable 定义
+            config = data.get("config", {})
+            data["config"] = {"input_variable": config.get("input_variable", [])}
+        return data
