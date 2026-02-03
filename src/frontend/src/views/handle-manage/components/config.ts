@@ -91,4 +91,19 @@ export default {
     type: 'user-selector',
     required: false,
   },
+  has_report: {
+    label: '事件调查报告',
+    type: 'select',
+    required: false,
+    service: () => Promise.resolve([
+      {
+        id: 'true',
+        name: '已生成',
+      },
+      {
+        id: 'false',
+        name: '未生成',
+      },
+    ]),
+  },
 } as Record<string, IFieldConfig>;
