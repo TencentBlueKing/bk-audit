@@ -25,15 +25,9 @@ from rest_framework.fields import empty
 from rest_framework.validators import UniqueTogetherValidator
 
 from apps.meta.constants import (
-    ALLOWED_LIST_USER_FIELDS,
     DEFAULT_DURATION_TIME,
     DEFAULT_ES_SOURCE_TYPE,
     GLOBAL_CONFIG_LEVEL_INSTANCE,
-    LIST_USER_FIELDS,
-    LIST_USER_PAGE,
-    LIST_USER_PAGE_SIZE,
-    LIST_USERS_LOOKUP_FIELD,
-    RETRIEVE_USER_FIELDS,
     TAG_NAME_REGEXP,
     ConfigLevelChoices,
     LogReportStatus,
@@ -620,50 +614,6 @@ class GetSpacesMineResponseSerializer(serializers.Serializer):
         if data.get("permission"):
             data["permission"] = format_resource_permission(data["permission"])
         return super().to_internal_value(data)
-
-
-class ListUsersRequestSerializer(serializers.Serializer):
-    page = serializers.IntegerField(label=gettext_lazy("页码"), default=LIST_USER_PAGE)
-    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"), default=LIST_USER_PAGE_SIZE)
-    fields = serializers.CharField(label=gettext_lazy("返回字段"), default=LIST_USER_FIELDS)
-    lookup_field = serializers.CharField(label=gettext_lazy("查找字段"), required=False)
-    fuzzy_lookups = serializers.CharField(label=gettext_lazy("模糊查找关键字"), required=False)
-    exact_lookups = serializers.CharField(label=gettext_lazy("精准查找关键字"), required=False)
-
-    def validate_fields(self, value: str):
-        _fields = value.split(",")
-        not_allowed_fields = {field for field in _fields if field and field not in ALLOWED_LIST_USER_FIELDS}
-        if not not_allowed_fields:
-            return value
-        message = gettext("字段不在允许查询的字段列表中 => %(fields)s") % {"fields": ",".join(not_allowed_fields)}
-        raise serializers.ValidationError(message)
-
-
-class ListUsersResponseSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    name = serializers.CharField()
-    display_name = serializers.CharField()
-
-
-class RetrieveUserRequestSerializer(serializers.Serializer):
-    id = serializers.CharField(label=gettext_lazy("用户名"))
-    lookup_field = serializers.CharField(label=gettext_lazy("查找字段"), default=LIST_USERS_LOOKUP_FIELD)
-    fields = serializers.CharField(label=gettext_lazy("返回字段"), default=RETRIEVE_USER_FIELDS)
-
-
-class RetrieveUserResponseSerializer(serializers.Serializer):
-    id = serializers.IntegerField(label=gettext_lazy("ID"), default=0, allow_null=True)
-    username = serializers.CharField(label=gettext_lazy("用户名"), allow_blank=True)
-    status = serializers.CharField(label=gettext_lazy("状态"), default="", allow_blank=True)
-    display_name = serializers.CharField(label=gettext_lazy("显示名称"), default="", allow_blank=True)
-    staff_status = serializers.CharField(label=gettext_lazy("雇员状态"), default="", allow_blank=True)
-    departments = serializers.ListField(
-        label=gettext_lazy("部门"), child=serializers.JSONField(), default=list, allow_null=True
-    )
-    leader = serializers.ListField(
-        label=gettext_lazy("上级"), child=serializers.JSONField(), default=list, allow_null=True
-    )
-    extras = serializers.JSONField(label=gettext_lazy("拓展信息"), default=dict, allow_null=True)
 
 
 class UploadDataMapFileRequestSerializer(serializers.Serializer):

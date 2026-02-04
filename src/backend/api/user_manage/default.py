@@ -36,19 +36,6 @@ class UserManageResource(CommonBkApiResource, abc.ABC):
     module_name = "user_manage"
 
 
-class ListUsers(UserManageResource):
-    name = gettext_lazy("获取用户列表")
-    method = "GET"
-    action = "/api/v3/open/tenant/users/"
-
-
-class RetrieveUser(UserManageResource):
-    name = gettext_lazy("获取单个用户信息")
-    method = "GET"
-    action = "/api/v3/open/tenant/users/{bk_username}/"
-    url_keys = ["bk_username"]
-
-
 class ListUserDepartments(UserManageResource):
     name = gettext_lazy("查询用户的部门信息 (v2)")
     method = "GET"
@@ -65,12 +52,12 @@ class ListDepartments(UserManageResource):
     platform_authorization = True
 
 
-class RetrieveDepartment(UserManageResource):
-    name = gettext_lazy("查询单个部门信息 (v2)")
+class ListUserLeader(UserManageResource):
+    name = gettext_lazy("查询用户的上级")
     method = "GET"
-    action = "/api/v3/open/tenant/departments/{department_id}/"
-    url_keys = ["department_id"]
-    cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
+    action = "/api/v3/open/tenant/users/{bk_username}/leaders/"
+    url_keys = ["bk_username"]
+    cache_type = CacheTypeItem(key="list_profile_leaders", timeout=60 * 60, user_related=False)
     platform_authorization = True
 
 

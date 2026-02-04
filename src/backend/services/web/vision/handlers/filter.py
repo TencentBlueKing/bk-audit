@@ -142,14 +142,10 @@ class DeptFilter(DataFilter):
             return input_data[0] if is_single else input_data
 
         # 无权限申请
-        apply_data, apply_url = Permission().get_apply_data(
-            [ActionEnum.VIEW_PANEL],
-            [ResourceEnum.DEPT_BK_USERMGR.create_instance(instance_id=item) for item in no_permission_dept],
-        )
+
         raise PermissionException(
             action_name=str(ActionEnum.VIEW_PANEL.name),
-            apply_url=apply_url,
-            permission=apply_data,
+            permission={},  # 传空字典
         )
 
 

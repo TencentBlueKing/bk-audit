@@ -28,7 +28,6 @@ import openpyxl
 import requests
 from bk_resource import CacheResource, Resource, api, resource
 from bk_resource.contrib.model import ModelResource
-from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache as default_cache
@@ -49,7 +48,6 @@ from apps.meta.constants import (
     FETCH_INSTANCE_SCHEMA_METHOD,
     GET_APP_INFO_CACHE_TIMEOUT,
     IAM_MANAGER_ROLE,
-    RETRIEVE_USER_TIMEOUT,
     SpaceType,
     SystemAuditStatusEnum,
 )
@@ -115,15 +113,11 @@ from apps.meta.serializers import (
     ListAllTagsRespSerializer,
     ListGeneralConfigReqSerializer,
     ListResourceTypeSerializer,
-    ListUsersRequestSerializer,
-    ListUsersResponseSerializer,
     NamespaceSerializer,
     ResourceTypeListSerializer,
     ResourceTypeSerializer,
     ResourceTypeTreeReqSerializer,
     ResourceTypeTreeSerializer,
-    RetrieveUserRequestSerializer,
-    RetrieveUserResponseSerializer,
     SaveTagResponseSerializer,
     SaveTagsRequestSerializer,
     SystemFavoriteReqSerializer,
@@ -945,36 +939,6 @@ class GetSpacesMineResource(Resource):
         data = api.bk_log.bizs_list()
         for biz in data:
             biz.update({"space_type_id": SpaceType.BIZ.value, "space_type_name": str(SpaceType.BIZ.label)})
-        return data
-
-
-class ListUsersResource(Meta, Resource):
-    name = gettext_lazy("获取用户列表")
-    RequestSerializer = ListUsersRequestSerializer
-    serializer_class = ListUsersResponseSerializer
-
-    def perform_request(self, validated_request_data):
-        return api.user_manage.list_users(validated_request_data)
-
-
-class RetrieveUserResource(Meta, CacheMixin, Resource):
-    name = gettext_lazy("获取用户详情")
-    RequestSerializer = RetrieveUserRequestSerializer
-    ResponseSerializer = RetrieveUserResponseSerializer
-    cache = default_cache
-
-    def generate_cache_key(self, username) -> str:
-        return f"api:{self.__class__.__name__}:{username}"
-
-    def perform_request(self, validated_request_data):
-        cache_data = self.get_cache({"username": validated_request_data["id"]})
-        if cache_data is not None:
-            return cache_data
-        try:
-            data = api.user_manage.retrieve_user({"bk_username": validated_request_data["id"]})
-        except APIRequestError:
-            data = {"username": validated_request_data["id"], "display_name": gettext("未知用户")}
-        self.set_cache({"username": validated_request_data["id"]}, data, RETRIEVE_USER_TIMEOUT)
         return data
 
 

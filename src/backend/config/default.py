@@ -175,7 +175,7 @@ PLATFORM_CODE = "29"
 # APIGW配置
 BK_APIGW_NAME = os.getenv("BKAPP_BK_APIGW_NAME", "bk-audit")
 # 多租户配置
-MULTI_TENANT_ENABLED = strtobool(os.getenv("BKAPP_MULTI_TENANT_ENABLED", "False"))
+ENABLE_MULTI_TENANT_MODE = strtobool(os.getenv("BKAPP_MULTI_TENANT_ENABLED_MODE", "True"))
 # 单租户ID
 BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
 

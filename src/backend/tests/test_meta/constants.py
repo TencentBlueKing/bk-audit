@@ -29,11 +29,6 @@ from apps.meta.constants import DEFAULT_ES_SOURCE_TYPE as _DEFAULT_ES_SOURCE_TYP
 from apps.meta.constants import (
     GLOBAL_CONFIG_LEVEL_INSTANCE,
     IAM_MANAGER_ROLE,
-    LIST_USER_FIELDS,
-    LIST_USER_PAGE,
-    LIST_USER_PAGE_SIZE,
-    LIST_USERS_LOOKUP_FIELD,
-    RETRIEVE_USER_FIELDS,
     CollectorParamConditionMatchType,
     CollectorParamConditionTypeEnum,
     ConfigLevelChoices,
@@ -591,40 +586,6 @@ GET_SPACES_MINE_OF_V2_DATA = [
         "permission": {"view_business_v2_bk_log" + "_" + IAMSystems.BK_LOG.value: True},
     }
 ]
-
-# List Users
-LIST_USERS_API_RESP = {
-    "id": 1,
-    "name": USERNAME,
-    "display_name": "管理员",
-}
-LIST_USERS_PARAMS = {
-    "page": LIST_USER_PAGE,
-    "page_size": LIST_USER_PAGE_SIZE,
-    "fields": LIST_USER_FIELDS,
-    "lookup_field": "display_name",
-    "fuzzy_lookups": "name",
-    "exact_lookups": "display_name",
-}
-LIST_USERS_DATA = LIST_USERS_API_RESP
-
-# Retrieve User
-RETRIEVE_USER_API_RESP = {
-    "username": USERNAME,
-    "status": "NORMAL",
-    "display_name": "管理员",
-    "staff_status": "IN",
-    "departments": [{"order": 2, "id": 2872, "full_name": "虚拟账号", "name": "虚拟账号"}],
-    "leader": [],
-    "extras": {"virtualapi": 1, "postname": None},
-    "id": 1,
-}
-RETRIEVE_USER_PARAMS = {
-    "id": USERNAME,
-    "lookup_field": LIST_USERS_LOOKUP_FIELD,
-    "fields": RETRIEVE_USER_FIELDS,
-}
-RETRIEVE_USER_DATA = RETRIEVE_USER_API_RESP
 
 GLOBAL_CHOICES = {
     'BKVisionFieldCategory': [

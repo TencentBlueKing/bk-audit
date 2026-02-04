@@ -54,9 +54,6 @@ from tests.test_meta.constants import (
     GET_STANDARD_FIELDS_DATA,
     GET_STANDARD_FIELDS_PARAMS,
     GLOBAL_CHOICES,
-    LIST_USERS_API_RESP,
-    LIST_USERS_DATA,
-    LIST_USERS_PARAMS,
     RESOURCE_TYPE_DATA,
     RESOURCE_TYPE_LIST_DATA,
     RESOURCE_TYPE_LIST_DATA2,
@@ -66,9 +63,6 @@ from tests.test_meta.constants import (
     RESOURCE_TYPE_SON_SON2_DATA,
     RESOURCE_TYPE_SON_SON_DATA,
     RESOURCE_TYPE_TREE_DATA,
-    RETRIEVE_USER_API_RESP,
-    RETRIEVE_USER_DATA,
-    RETRIEVE_USER_PARAMS,
     SET_GLOBAL_META_CONFIG_DATA,
     SET_GLOBAL_META_CONFIG_PARAMS,
     SNAPSHOT_DATA,
@@ -314,19 +308,6 @@ class MetaTest(TestCase):
         result = self.resource.meta.get_spaces_mine()
         result = ordered_dict_to_json(result)
         self.assertEqual(result, GET_SPACES_MINE_OF_V2_DATA)
-
-    @mock.patch("meta.resources.api.user_manage.list_users", mock.Mock(return_value=LIST_USERS_API_RESP))
-    def test_list_users(self):
-        """ListUsersResource"""
-        result = self.resource.meta.list_users(**LIST_USERS_PARAMS)
-        self.assertEqual(result, LIST_USERS_DATA)
-
-    @mock.patch("meta.resources.api.user_manage.retrieve_user", mock.Mock(return_value=RETRIEVE_USER_API_RESP))
-    def test_retrieve_user(self):
-        """RetrieveUserResource"""
-        self.resource.meta.retrieve_user(**RETRIEVE_USER_PARAMS)
-        result = self.resource.meta.retrieve_user(**RETRIEVE_USER_PARAMS)
-        self.assertEqual(result, RETRIEVE_USER_DATA)
 
     def test_get_global_choices(self):
         """GetGlobalChoicesResource"""

@@ -57,7 +57,7 @@ class MemberVariableParser(MemberVariableParserBase):
             case MemberVariable.OPERATOR:
                 return self.operators
             case MemberVariable.OPERATOR_LEADER:
-                return [resource.user_manage.retrieve_leader(id=operator) for operator in self.operators]
+                return [resource.user_manage.retrieve_leader(bk_username=operator) for operator in self.operators]
         return [member]
 
 
