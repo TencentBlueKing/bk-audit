@@ -99,7 +99,7 @@
     return '';
   });
 
-  const handleValueChange = (v:string[]) => {
+  const handleValueChange = (v: string | string[]) => {
     emit('update:modelValue', v);
     emit('change', v);
   };

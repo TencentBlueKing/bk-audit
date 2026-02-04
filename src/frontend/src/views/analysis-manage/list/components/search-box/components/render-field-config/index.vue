@@ -123,7 +123,7 @@
     select: RenderSelect,
     sensitive: RenderSensitive,
     'system-id': RenderSystemId,
-    'user-selector': RenderUserSelector,
+    'user-selector-tenant': RenderUserSelector,
     cascader: RenderCascader,
   };
 
