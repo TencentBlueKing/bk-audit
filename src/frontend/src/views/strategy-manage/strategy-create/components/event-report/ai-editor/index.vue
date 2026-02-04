@@ -962,4 +962,10 @@
 }
 
 
+/* 去掉全局编辑器样式里对 .ql-fullscreen 的伪元素图标，避免重复 */
+:deep(.ql-toolbar .ql-fullscreen::before) {
+  background: none !important;
+  content: none !important;
+}
+
 </style>
