@@ -297,6 +297,25 @@
   :deep(li) {
     margin-bottom: 4px;
   }
+
+  :deep(table) {
+    width: 100%;
+    margin: 8px 0 12px;
+    border-collapse: collapse;
+  }
+
+  :deep(th),
+  :deep(td) {
+    padding: 8px 12px;
+    word-break: break-word;
+    vertical-align: top;
+    border: 1px solid #dcdee5;
+  }
+
+  :deep(thead th) {
+    font-weight: 600;
+    background: #f5f7fa;
+  }
 }
 
 </style>
