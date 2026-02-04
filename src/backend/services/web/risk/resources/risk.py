@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from bk_resource import CacheResource, api, resource
+from bk_resource.base import Empty
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
@@ -117,6 +118,8 @@ from services.web.risk.serializers import (
     GetRiskFieldsByStrategyResponseSerializer,
     ListEventFieldsByStrategyRequestSerializer,
     ListEventFieldsByStrategyResponseSerializer,
+    ListRiskBriefRequestSerializer,
+    ListRiskBriefResponseSerializer,
     ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
@@ -132,6 +135,7 @@ from services.web.risk.serializers import (
     RiskInfoSerializer,
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
+    UpdateRiskRequestSerializer,
 )
 from services.web.risk.tasks import (
     _build_manual_event_time_range,
@@ -158,7 +162,10 @@ class RetrieveRisk(RiskMeta):
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk_obj))
         data = RiskInfoSerializer(risk_obj).data
         data = wrapper_permission_field(
-            data, actions=[ActionEnum.EDIT_RISK], id_field=lambda risk: risk["risk_id"], many=False
+            data,
+            actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
+            id_field=lambda risk: risk["risk_id"],
+            many=False,
         )
         risk = data[0]
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
@@ -256,10 +263,8 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
         if not strategy:
             return {}
 
-        prohibit_enum_mappings = validated_request_data.get("prohibit_enum_mappings", True)
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
-            strategy, prohibit_enum_mappings=prohibit_enum_mappings
-        )
+        lite_mode = validated_request_data.get("lite_mode", True)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(strategy, lite_mode=lite_mode)
         return serializer.data
 
 
@@ -654,7 +659,7 @@ class UpdateRiskLabel(RiskMeta):
     name = gettext_lazy("更新风险标记")
     RequestSerializer = UpdateRiskLabelReqSerializer
     ResponseSerializer = RiskInfoSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -768,7 +773,7 @@ class ListRiskStrategy(ListRiskBase):
 class CustomCloseRisk(RiskMeta):
     name = gettext_lazy("人工关单")
     RequestSerializer = CustomCloseRiskRequestSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -786,7 +791,7 @@ class CustomCloseRisk(RiskMeta):
 class CustomTransRisk(RiskMeta):
     name = gettext_lazy("人工转单")
     RequestSerializer = CustomTransRiskReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -822,7 +827,7 @@ class BulkCustomTransRisk(RiskMeta):
 class CustomAutoProcess(RiskMeta):
     name = gettext_lazy("人工执行处理套餐")
     RequestSerializer = CustomAutoProcessReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -857,7 +862,7 @@ class CustomAutoProcess(RiskMeta):
 class ForceRevokeApproveTicket(RiskMeta):
     name = gettext_lazy("强制撤销审批单据")
     RequestSerializer = ForceRevokeApproveTicketReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -886,7 +891,7 @@ class ForceRevokeApproveTicket(RiskMeta):
 class ForceRevokeAutoProcess(RiskMeta):
     name = gettext_lazy("强制终止处理套餐")
     RequestSerializer = ForceRevokeAutoProcessReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -947,7 +952,7 @@ class RetryAutoProcess(RiskMeta):
 class ReopenRisk(RiskMeta):
     name = gettext_lazy("重开单据")
     RequestSerializer = ReopenRiskReqSerializer
-    audit_action = ActionEnum.EDIT_RISK
+    audit_action = ActionEnum.PROCESS_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -1147,3 +1152,76 @@ class ListEventFieldsByStrategy(RiskMeta):
             {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
             for field_name, display_name in results
         ]
+
+
+# ============== 风险报告相关接口 ==============
+
+
+class ListRiskBrief(RiskMeta):
+    """
+    获取风险简要列表
+
+    用于策略配置时选择风险单进行预览。
+    无权限控制，返回精简数据。
+    """
+
+    name = gettext_lazy("获取风险简要列表")
+    RequestSerializer = ListRiskBriefRequestSerializer
+    ResponseSerializer = ListRiskBriefResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        queryset = Risk.objects.all()
+
+        # 策略过滤
+        strategy_id = validated_request_data.get("strategy_id")
+        if strategy_id:
+            queryset = queryset.filter(strategy_id=strategy_id)
+
+        # 时间范围过滤（必填）
+        start_time = validated_request_data["start_time"]
+        end_time = validated_request_data["end_time"]
+        queryset = queryset.filter(created_at__gte=start_time, created_at__lte=end_time)
+
+        # 只返回精简字段，不限制数量
+        # 优化：使用 values 减少数据传输量
+        return queryset.values("risk_id", "title", "strategy_id", "created_at").order_by("-created_at")
+
+
+class UpdateRisk(RiskMeta):
+    """
+    编辑风险
+
+    目前支持编辑风险单标题。
+    """
+
+    name = gettext_lazy("编辑风险")
+    audit_action = ActionEnum.EDIT_RISK
+    RequestSerializer = UpdateRiskRequestSerializer
+
+    # 允许更新的字段
+    UPDATABLE_FIELDS = ["title"]
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data.pop("risk_id")
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+        origin_data = RiskInfoSerializer(risk).data
+
+        # 动态更新字段
+        update_fields = []
+        for key in self.UPDATABLE_FIELDS:
+            if key not in validated_request_data:
+                continue
+            new_val = validated_request_data[key]
+            old_val = getattr(risk, key, Empty())
+            if isinstance(old_val, Empty) or old_val == new_val:
+                continue
+            setattr(risk, key, new_val)
+            update_fields.append(key)
+
+        if update_fields:
+            risk.save(update_fields=update_fields)
+
+        setattr(risk, "instance_origin_data", origin_data)
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+        return RiskInfoSerializer(risk).data

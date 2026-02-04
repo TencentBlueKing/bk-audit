@@ -40,9 +40,10 @@ class TestProcessRiskIsFormalFilter(TestCase):
         )
 
         # Ensure synchronous processing path and intercept process_one_risk
-        with mock.patch("services.web.risk.tasks.settings.ENABLE_MULTI_PROCESS_RISK", False), mock.patch(
-            "services.web.risk.tasks.process_one_risk"
-        ) as mocked_process:
+        with (
+            mock.patch("services.web.risk.tasks.settings.ENABLE_MULTI_PROCESS_RISK", False),
+            mock.patch("services.web.risk.tasks.process_one_risk") as mocked_process,
+        ):
             process_risk_ticket()
 
             # Only the formal strategy risk should be processed

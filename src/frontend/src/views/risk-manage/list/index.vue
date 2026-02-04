@@ -314,49 +314,74 @@
       width: 148,
       fixed: 'right',
       render: ({ data }: { data: RiskManageModel }) => (
-        data.status === 'stand_by' ? <div>
-        <bk-button text  class='mr16'>{t('--')}</bk-button></div>
-        :     (<p>
-        {
-          ['for_approve', 'auto_process'].includes(data.status)
-            ? (
-              <bk-button
-                v-bk-tooltips={t('当前状态不支持人工处理')}
-                text
-                theme='primary'
-                class='mr16 is-disabled'>
-                {t('处理')}
-              </bk-button>
+        data.status === 'stand_by'
+          ? <div>
+            <bk-button text  class='mr16'>{t('--')}</bk-button>
+          </div>
+          : (<p>
+          {
+            ['for_approve', 'auto_process'].includes(data.status)
+              ? (
+                <bk-button
+                  v-bk-tooltips={t('当前状态不支持人工处理')}
+                  text
+                  theme='primary'
+                  class='mr16 is-disabled'>
+                  {t('处理')}
+                </bk-button>
+              )
+              : (
+                <auth-button
+                  text
+                  theme='primary'
+                  class='mr16'
+                  permission={data.permission.process_risk || data.current_operator.includes(userInfo.value.username)}
+                  action-id='process_risk'
+                  resource={data.risk_id}
+                  onClick={() => handleToDetail(data)}>
+                  {t('处理')}
+                </auth-button>
             )
-            : (
-              <auth-button
-                text
-                theme='primary'
-                class='mr16'
-                permission={data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.value.username)}
-                action-id='edit_risk_v2'
-                resource={data.risk_id}
-                onClick={() => handleToDetail(data)}>
-                {t('处理')}
-              </auth-button>
-           )
-        }
-        {
-          data.status === 'auto_process'
-            ? <bk-button text theme='primary'
-              class="is-disabled"
-              v-bk-tooltips={{
-                content: data.risk_label === 'normal'
-                  ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                  : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-              }}>
-                {data.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-              </bk-button>
-            : <MarkRiskLabel
-                onUpdate={() => fetchList()}
-                userInfo={userInfo.value}
-                data={data} />
           }
+          {
+            data.status === 'auto_process'
+              ? <bk-button text theme='primary'
+                class="is-disabled"
+                v-bk-tooltips={{
+                  content: data.risk_label === 'normal'
+                    ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                    : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+                }}>
+                  {data.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
+                </bk-button>
+              : <MarkRiskLabel
+                  onUpdate={() => fetchList()}
+                  userInfo={userInfo.value}
+                  data={data} />
+          }
+          <bk-dropdown
+            style="margin-left: 8px">
+            {{
+              default: () => <bk-button text>
+                <audit-icon type="more" />
+              </bk-button>,
+              content: () => (
+                <bk-dropdown-menu>
+                  <bk-dropdown-item>
+                    <auth-button
+                      style="width: 100%;"
+                      actionId="edit_risk_v2"
+                      permission={data.permission.edit_risk_v2}
+                      resource={data.strategy_id}
+                      onClick={() => handleGenerateReport(data)}
+                      text>
+                      {data.has_report ? t('编辑调查报告') : t('创建调查报告')}
+                    </auth-button>
+                  </bk-dropdown-item>
+                </bk-dropdown-menu>
+              ),
+            }}
+          </bk-dropdown>
           </p>)
       ),
     },
@@ -633,6 +658,18 @@
       ...searchModel.value,
     };
     listRef.value.fetchData(dataParams);
+  };
+
+  const handleGenerateReport = (data: RiskManageModel) => {
+    router.push({
+      name: 'riskManageDetail',
+      params: {
+        riskId: data.risk_id,
+      },
+      query: {
+        openEditReport: data.has_report ? 'true' : 'false',
+      },
+    });
   };
 
   // 新增风险

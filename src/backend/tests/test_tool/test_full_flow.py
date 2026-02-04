@@ -58,10 +58,13 @@ class TestToolFullFlow(TestCase):
         uid = resp["uid"]
         self.assertTrue(Tool.objects.filter(uid=uid).exists())
 
-        with mock.patch.object(QuerySyncResource, 'bulk_request', return_value=MOCK_API_RESPONSE), mock.patch.object(
-            UserAuthBatchCheck,
-            'perform_request',
-            return_value=[{"result": True, "user_id": "tester", "object_id": "users"}],
+        with (
+            mock.patch.object(QuerySyncResource, 'bulk_request', return_value=MOCK_API_RESPONSE),
+            mock.patch.object(
+                UserAuthBatchCheck,
+                'perform_request',
+                return_value=[{"result": True, "user_id": "tester", "object_id": "users"}],
+            ),
         ):
             result = self.resource.tool.execute_tool(
                 {

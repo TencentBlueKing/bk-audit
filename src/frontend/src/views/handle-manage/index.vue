@@ -332,8 +332,8 @@
           text
           theme='primary'
           class='mr16'
-          permission={data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.value.username)}
-          action-id='edit_risk_v2'
+          permission={data.permission.process_risk || data.current_operator.includes(userInfo.value.username)}
+          action-id=' process_risk'
           resource={data.risk_id}
           onClick={() => handleToDetail(data)}>
           {t('处理')}
@@ -354,7 +354,29 @@
                 userInfo={userInfo.value}
                 data={data} />
           }
-
+          <bk-dropdown
+            style="margin-left: 8px">
+            {{
+              default: () => <bk-button text>
+                <audit-icon type="more" />
+              </bk-button>,
+              content: () => (
+                <bk-dropdown-menu>
+                  <bk-dropdown-item>
+                    <auth-button
+                      style="width: 100%;"
+                      actionId="edit_risk_v2"
+                      permission={data.permission.edit_risk_v2}
+                      resource={data.strategy_id}
+                      onClick={() => handleGenerateReport(data)}
+                      text>
+                      {data.has_report ? t('编辑调查报告') : t('创建调查报告')}
+                    </auth-button>
+                  </bk-dropdown-item>
+                </bk-dropdown-menu>
+              ),
+            }}
+          </bk-dropdown>
           </p>,
     },
   ] as Column[];
@@ -417,7 +439,17 @@
     new_operators: [],
     description: '',
   });
-
+  const handleGenerateReport = (data: RiskManageModel) => {
+    router.push({
+      name: 'riskManageDetail',
+      params: {
+        riskId: data.risk_id,
+      },
+      query: {
+        openEditReport: data.has_report ? 'true' : 'false',
+      },
+    });
+  };
   const formRef = ref();
   const rules = ref<Record<string, any>>({});
   const handleConfirm = () => {

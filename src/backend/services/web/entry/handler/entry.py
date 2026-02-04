@@ -28,8 +28,10 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
+    AI_PRACTICES_KEY,
     BKBASE_WEB_URL_KEY,
     BKVISION_WEB_URL_KEY,
+    DEFAULT_AI_PRACTICES,
     DEFAULT_QUERY_STRING_HELP_ENV_KEY,
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
@@ -82,7 +84,11 @@ class EntryHandler(object):
             # TAM
             "aegis_id": settings.AEGIS_ID,
             # 页面信息
-            "help_info": {"query_string": cls.get_query_help(), "schema": cls.get_schema_help()},
+            "help_info": {
+                "query_string": cls.get_query_help(),
+                "schema": cls.get_schema_help(),
+                "ai_practices": GlobalMetaConfig.get(AI_PRACTICES_KEY, default=DEFAULT_AI_PRACTICES),
+            },
             # 语言
             "language": {
                 "available": [{"id": lang_code, "name": desc} for lang_code, desc in settings.LANGUAGES],

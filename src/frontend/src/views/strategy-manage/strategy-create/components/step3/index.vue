@@ -263,7 +263,7 @@
   });
 
   const handlePrevious = () => {
-    emits('previousStep', 2);
+    emits('previousStep', 3);
   };
 
   const handleCancel = () => {
@@ -275,7 +275,7 @@
   const submit = () => {
     formRef.value.validate().then(() => {
       // 先更新formData, 最后一步step不变
-      emits('nextStep', 3, formData.value);
+      emits('nextStep', 4, formData.value);
       emits('submitData');
     });
   };

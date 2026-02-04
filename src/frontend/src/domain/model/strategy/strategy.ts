@@ -102,6 +102,9 @@ export default class Strategy {
   processor_groups: Array<number>;
   link_table_uid: string;
   link_table_version: number;
+  report_enabled: boolean;
+  report_config: any;
+  report_auto_render: boolean;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -133,6 +136,9 @@ export default class Strategy {
     this.processor_groups = payload.processor_groups;
     this.link_table_uid = payload.link_table_uid;
     this.link_table_version = payload.link_table_version;
+    this.report_enabled = payload.report_enabled;
+    this.report_config = payload.report_config;
+    this.report_auto_render = payload.report_auto_render;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

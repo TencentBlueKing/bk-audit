@@ -81,6 +81,10 @@ PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
 # bkvision WEB 访问地址
 BKVISION_WEB_URL_KEY = "bkvision_web_url"
 
+# AI 实践文档地址
+AI_PRACTICES_KEY = "ai_practices"
+DEFAULT_AI_PRACTICES = {"ai_summary": "http://example.com/wiki/"}
+
 
 def get_manual_event_strategy_config(rt_id):
     """

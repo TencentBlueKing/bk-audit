@@ -32,6 +32,8 @@ export default class Event {
   rule_version: number;
   origin_operator: string[];
   current_operator: string[];
+  updated_at: string;
+  updated_by: string;
   unsynced_events?: Array<Record<string, any>>;
   event_end_time: string;
   ticket_history: Array<{
@@ -81,6 +83,18 @@ export default class Event {
   notice_users: string[];
   tags: string[];
   risk_label: string;
+  report_enabled: boolean;
+  report_auto_render: boolean;
+  has_report: boolean;
+  report: {
+    content: string;
+    status: string;
+    auto_generate: boolean;
+    create_at: string;
+    update_at: string;
+    updated_by: string;
+    updated_at: string;
+  } | null;
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
   title: string;
@@ -90,6 +104,8 @@ export default class Event {
 
   constructor(payload = {} as Event) {
     this.risk_id = payload.risk_id;
+    this.updated_at = payload.updated_at;
+    this.updated_by = payload.updated_by;
     this.event_content = payload.event_content;
     this.raw_event_id = payload.raw_event_id;
     this.strategy_id = payload.strategy_id;
@@ -101,7 +117,10 @@ export default class Event {
     this.operator = payload.operator;
     this.status = payload.status;
     this.event_type = payload.event_type;
-
+    this.report_enabled = payload.report_enabled;
+    this.report_auto_render = payload.report_auto_render;
+    this.has_report = payload.has_report;
+    this.report = payload.report;
     this.rule_id = payload.rule_id;
     this.rule_version = payload.rule_version;
     this.origin_operator = payload.origin_operator;
