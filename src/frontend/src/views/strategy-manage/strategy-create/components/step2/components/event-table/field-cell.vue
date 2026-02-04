@@ -201,7 +201,7 @@
     <!-- 仅查看 -->
     <tooltips
       v-else
-      :data="localEventItem[fieldKey]"
+      :data="getTooltipData(localEventItem[fieldKey])"
       :line="1" />
   </div>
 </template>
@@ -389,6 +389,16 @@
       name: '',
       type: '',
     };
+  };
+
+  const getTooltipData = (value: any): string | number => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return value;
+    }
+    return JSON.stringify(value);
   };
 
   watch(() => props.eventItem, (value) => {
