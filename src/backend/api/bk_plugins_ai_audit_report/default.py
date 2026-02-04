@@ -22,6 +22,7 @@ import json
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import is_backend
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.handlers.wsgi import WSGIRequest
 from django.utils.translation import gettext_lazy
@@ -146,7 +147,7 @@ class ChatCompletion(AIAuditReport):
             return False
 
     def _parse_stream_response(self, response) -> str:
-        done_cover_content = None
+        done_content = None
         text_content = ""
         for line in response.iter_lines(decode_unicode=True):
             if not line or not line.startswith("data:"):
@@ -162,14 +163,12 @@ class ChatCompletion(AIAuditReport):
             content = event.get("content", "")
             cover = event.get("cover", False)
             if event_type == "done":
-                if cover:
-                    done_cover_content = content
-                else:
-                    text_content += content
+                done_content = content
             elif event_type == "text":
                 text_content = content if cover else text_content + content
-        if done_cover_content is not None:
-            return done_cover_content
+        if done_content is not None:
+            logger.info("AI stream done content: %s", done_content)
+        logger.info("AI stream text content: %s", text_content)
         return text_content
 
     def parse_response(self, response):

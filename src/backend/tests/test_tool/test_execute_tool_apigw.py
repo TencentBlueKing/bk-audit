@@ -83,8 +83,8 @@ class TestToolNameNotUnique(TestCase):
             config={"uid": "vision_uid_3"},
         )
 
-    def test_tool_uid_version_unique(self):
-        """相同 uid+version 仍应保持唯一"""
+    def test_tool_uid_version_name_unique(self):
+        """相同 uid+version+name 仍应保持唯一"""
         from django.db import IntegrityError
 
         from services.web.tool.constants import ToolTypeEnum
@@ -102,7 +102,7 @@ class TestToolNameNotUnique(TestCase):
         with self.assertRaises(IntegrityError):
             Tool.objects.create(
                 namespace="ns",
-                name="tool_v1_dup",
+                name="tool_v1",
                 uid="tool_uid_unique",
                 version=1,
                 tool_type=ToolTypeEnum.BK_VISION.value,
