@@ -238,8 +238,9 @@
   height: calc(100vh - 120px);
   margin-top: 20px;
   margin-left: 40px;
-  overflow-y: auto;
+  overflow: hidden auto;
   word-break: break-word;
+  word-wrap: break-word;
   white-space: pre-wrap;
 
   .preview-copy-icon {
@@ -287,6 +288,24 @@
   :deep(ul),
   :deep(ol) {
     margin: 0 0 12px;
+    word-break: break-word;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  :deep(img) {
+    height: auto;
+    max-width: 100%;
+  }
+
+  :deep(pre),
+  :deep(code) {
+    max-width: 100%;
+    overflow-x: auto;
+    word-break: break-word;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
   }
 
   :deep(ul),
@@ -300,14 +319,18 @@
 
   :deep(table) {
     width: 100%;
+    max-width: 100%;
     margin: 8px 0 12px;
     border-collapse: collapse;
+    table-layout: fixed;
   }
 
   :deep(th),
   :deep(td) {
     padding: 8px 12px;
     word-break: break-word;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     vertical-align: top;
     border: 1px solid #dcdee5;
   }
