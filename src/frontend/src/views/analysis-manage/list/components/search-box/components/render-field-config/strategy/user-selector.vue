@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <audit-user-selector
+  <audit-user-selector-tenant
     allow-create
     :model-value="defaultValue"
     :multiple="multiple"
@@ -30,6 +30,8 @@
 </script>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
+
+  import AuditUserSelectorTenant from '@components/audit-user-selector-tenant/index.vue';
 
   import type { IFieldConfig } from '../config';
 
