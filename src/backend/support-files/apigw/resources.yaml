@@ -974,7 +974,7 @@ paths:
         backend:
           type: HTTP
           method: get
-          path: /api/v1/tool_apigw/detail_by_name/
+          path: /api/v1/namespaces/{namespace}/tool_apigw/detail_by_name/
           matchSubpath: false
           timeout: 0
           upstreams: { }

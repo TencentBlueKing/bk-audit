@@ -65,4 +65,5 @@ class ToolAPIGWViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
+        ResourceRoute("GET", resource.tool.get_tool_detail_by_name_apigw, endpoint="detail_by_name"),
     ]
