@@ -198,9 +198,11 @@ class AIProvider(Provider):
                 user=self.context.get("user", "admin"),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
                 input=f'当前分析的Risk ID是{self.context["risk_id"]}。若后续无其他要求，返回标准的Markdown格式。\n' + prompt,
                 chat_history=[],
-                execute_kwargs={"stream": False},
+                execute_kwargs={"stream": True},
             )
-            return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            if isinstance(result, dict):
+                return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            return result or ""
         except Exception as e:
             return f"[AI生成失败: {e}]"
 
