@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import json
 from unittest import mock
 
 from bk_resource import api
@@ -33,13 +34,13 @@ class TestAIAuditReport(TestCase):
 
     @mock.patch(
         "api.bk_plugins_ai_audit_report.default.ChatCompletion.perform_request",
-        mock.Mock(return_value=CHAT_COMPLETION_RESPONSE["data"]),
+        mock.Mock(return_value=CHAT_COMPLETION_RESPONSE["data"]["content"]),
     )
     def test_chat_completion(self):
         """测试智能体对话接口"""
         result = api.bk_plugins_ai_audit_report.chat_completion(**CHAT_COMPLETION_PARAMS)
-        self.assertIn("content", result)
-        self.assertIsInstance(result["content"], str)
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, CHAT_COMPLETION_RESPONSE["data"]["content"])
 
 
 class TestAIAuditReportAuth(TestCase):
@@ -158,3 +159,117 @@ class TestAIAuditReportAuth(TestCase):
 
         # 验证用户信息已添加
         self.assertEqual(result.get("bk_username"), "test_bk_user")
+
+
+class TestAIAuditReportStream(TestCase):
+    """测试AI审计报告智能体流式返回"""
+
+    def setUp(self):
+        self.resource = ChatCompletion()
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_returns_done_content(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': 'hello ', 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': 'final', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "hello final")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_fallbacks_to_text_when_done_missing(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': 'part1', 'cover': False})}",
+            f"data: {json.dumps({'event': 'text', 'content': 'part2', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "part1part2")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_done_cover_overrides_text(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': 'prefix ', 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': 'override', 'cover': True})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "override")
+
+    def test_before_request_sets_stream_flag(self):
+        kwargs = {"json": {"execute_kwargs": {"stream": True}}}
+
+        result = self.resource.before_request(kwargs)
+
+        self.assertTrue(result.get("stream"))
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_non_stream_parses_content(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {"result": True, "data": {"content": "plain"}, "code": 0}
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": False},
+            }
+        )
+
+        self.assertEqual(result, "plain")

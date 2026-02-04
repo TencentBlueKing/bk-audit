@@ -17,12 +17,15 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
 
 from bk_resource import BkApiResource
+from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import is_backend
 from django.conf import settings
 from django.core.handlers.wsgi import WSGIRequest
 from django.utils.translation import gettext_lazy
+from requests.exceptions import HTTPError
 
 from api.domains import AI_AUDIT_REPORT_API_URL
 
@@ -114,3 +117,85 @@ class ChatCompletion(AIAuditReport):
         if user:
             headers["X-BKAIDEV-USER"] = user
         return headers
+
+    def before_request(self, kwargs):
+        request_data = kwargs.get("json") or kwargs.get("data") or {}
+        if isinstance(request_data, dict):
+            execute_kwargs = request_data.get("execute_kwargs") or {}
+            if execute_kwargs.get("stream"):
+                kwargs["stream"] = True
+        return kwargs
+
+    def _is_stream_response(self, response) -> bool:
+        content_type = (response.headers.get("Content-Type") or response.headers.get("content-type") or "").lower()
+        if "text/event-stream" in content_type:
+            return True
+        try:
+            body = getattr(response.request, "body", None)
+            if not body:
+                return False
+            if isinstance(body, (bytes, bytearray)):
+                body = body.decode("utf-8")
+            if isinstance(body, str):
+                body = json.loads(body)
+            if not isinstance(body, dict):
+                return False
+            execute_kwargs = body.get("execute_kwargs") or {}
+            return bool(execute_kwargs.get("stream"))
+        except Exception:
+            return False
+
+    def _parse_stream_response(self, response) -> str:
+        done_cover_content = None
+        text_content = ""
+        for line in response.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data = line[len("data:") :].strip()
+            if data == "[DONE]":
+                break
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            event_type = event.get("event")
+            content = event.get("content", "")
+            cover = event.get("cover", False)
+            if event_type == "done":
+                if cover:
+                    done_cover_content = content
+                else:
+                    text_content += content
+            elif event_type == "text":
+                text_content = content if cover else text_content + content
+        if done_cover_content is not None:
+            return done_cover_content
+        return text_content
+
+    def parse_response(self, response):
+        if self._is_stream_response(response):
+            try:
+                response.raise_for_status()
+            except HTTPError as err:
+                try:
+                    result_json = response.json()
+                except Exception:
+                    result_json = {}
+                content = str(err.response.content)
+                if isinstance(result_json, dict):
+                    content = "[{code}] {message}".format(
+                        code=result_json.get("code"),
+                        message=result_json.get("message"),
+                    )
+                raise APIRequestError(
+                    module_name=self.module_name,
+                    url=self.action,
+                    status_code=response.status_code,
+                    result=content,
+                )
+            return self._parse_stream_response(response)
+
+        data = super().parse_response(response)
+        if isinstance(data, dict) and "content" in data:
+            return data.get("content")
+        return data
