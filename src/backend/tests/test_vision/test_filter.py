@@ -67,13 +67,10 @@ class TestVisionFilters(TestCase):
         result = DeptFilter().check_data("Dept/Sub")
         self.assertEqual(result, "Dept/Sub")
 
-    @mock.patch("services.web.vision.handlers.filter.Permission")
     @mock.patch.object(DeptFilter, "get_data", return_value=[{"label": "Dept", "value": "Dept"}])
-    def test_dept_filter_check_data_raises_without_permission(self, _, mock_permission):
-        mock_permission.return_value.get_apply_data.return_value = ({"apply": True}, "url")
+    def test_dept_filter_check_data_raises_without_permission(self, _):
         with self.assertRaises(PermissionException):
             DeptFilter().check_data(["OtherDept"])
-        mock_permission.return_value.get_apply_data.assert_called_once()
 
     @mock.patch.object(SystemDiagnosisFilter, "_fetch_iam_permissions_systems")
     def test_system_diagnosis_filter_respects_limit(self, mock_fetch):

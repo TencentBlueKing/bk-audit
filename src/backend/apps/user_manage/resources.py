@@ -20,16 +20,21 @@ from bk_resource import CacheResource, api
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
 from django.utils.translation import gettext_lazy
+from rest_framework import serializers
 
 
 class RetrieveLeader(CacheResource):
     name = gettext_lazy("获取单个用户的leader信息")
     cache_type = CacheTypeItem(key="retrieve_leader", timeout=60 * 60, user_related=False)
+    serializer_class = serializers.CharField
+
+    class RequestSerializer(serializers.Serializer):
+        bk_username = serializers.CharField(label="蓝鲸用户唯一标识")
 
     def perform_request(self, validated_request_data):
         try:
-            # 获取用户信息&解析出leader信息
-            user_info = api.user_manage.retrieve_user({"bk_username": validated_request_data["id"]})
-            return user_info.get("leader", [])[0].get("username", "")
+            # 获取用户的上级信息
+            leaders = api.user_manage.list_user_leader({"bk_username": validated_request_data["bk_username"]})
+            return leaders[0].get("display_name", "") if leaders else ""
         except (IndexError, APIRequestError):
             return ""

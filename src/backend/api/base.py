@@ -6,6 +6,6 @@ class CommonBkApiResource(BkApiResource):
     def build_header(self, validated_request_data):
         headers = super().build_header(validated_request_data)
         # 多租户头
-        if getattr(settings, "MULTI_TENANT_ENABLED", False):
+        if getattr(settings, "ENABLE_MULTI_TENANT_MODE", False):
             headers["X-Bk-Tenant-Id"] = settings.BK_TENANT_ID
         return headers

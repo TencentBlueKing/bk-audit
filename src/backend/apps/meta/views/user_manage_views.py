@@ -15,13 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from bk_resource import resource
-from bk_resource.viewsets import ResourceRoute, ResourceViewSet
-
-
-class UserManageViewSet(ResourceViewSet):
-    resource_routes = [
-        ResourceRoute("GET", resource.meta.list_users, endpoint="list_users"),
-        ResourceRoute("GET", resource.meta.retrieve_user, endpoint="retrieve_user"),
-    ]
