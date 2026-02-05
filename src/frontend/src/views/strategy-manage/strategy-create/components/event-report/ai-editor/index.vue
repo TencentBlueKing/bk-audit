@@ -223,16 +223,16 @@
         // 设置"引用变量"按钮
         const variableButton = toolbar.container.querySelector('.ql-variable');
         if (variableButton) {
-          variableButton.innerHTML = '引用变量';
-          variableButton.setAttribute('title', '引用变量');
+          variableButton.innerHTML = t('引用变量');
+          variableButton.setAttribute('title', t('引用变量'));
           variableButton.classList.add('custom-toolbar-btn');
         }
 
         // 设置"引用AI智能体"按钮
         const aiAgentButton = toolbar.container.querySelector('.ql-aiagent');
         if (aiAgentButton) {
-          aiAgentButton.innerHTML = `<img src="${aiIconUrl}" style="width: 20px; height: 15px; margin-right: 4px; vertical-align: middle; margin-top: -2px;" />引用AI智能体`;
-          aiAgentButton.setAttribute('title', '引用AI智能体');
+          aiAgentButton.innerHTML = `<img src="${aiIconUrl}" style="width: 20px; height: 15px; margin-right: 4px; vertical-align: middle; margin-top: -2px;" />${t('引用AI智能体')}`;
+          aiAgentButton.setAttribute('title', t('引用AI智能体'));
           aiAgentButton.classList.add('custom-toolbar-btn');
         }
 
