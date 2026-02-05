@@ -100,6 +100,7 @@
           </div>
           <div
             v-else
+            v-bk-tooltips="{ content: t('内容无变化') }"
             class="ai-disabled-btn mr8">
             {{ primaryButtonText }}
           </div>
