@@ -172,6 +172,7 @@
   ]);
 
   const configData = inject<Ref<ConfigModel>>('configData');
+  const setLogCreateComponentType = inject<(type: string) => void>('setLogCreateComponentType');
 
   // 根据选中的 SDK 类型获取对应的 URL
   const selectedSdkUrl = computed(() => {
@@ -215,6 +216,7 @@
   };
 
   const handlePrevious = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'logCreate',
       params: {
@@ -223,7 +225,15 @@
       query: {
         type: 'logCreate',
       },
-    });
+    })
+      .then(() => {
+        // 手动触发组件类型切换，确保页面正确跳转
+        setLogCreateComponentType?.('logCreate');
+      })
+      .catch(() => {
+        // 路由跳转失败时恢复 changeConfirm 状态
+        window.changeConfirm = true;
+      });
   };
   const handleCancel = () => {
     router.push({
@@ -254,7 +264,7 @@
         },
         query: {
           ...route.query,
-          routeTitleTp: t('SDK 接入'),
+          routeTitleTp: t('API PUSH 接入'),
         },
       });
     });
