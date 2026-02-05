@@ -170,7 +170,7 @@
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;
         // 失败
-        concent.value = '失败';
+        concent.value = t('失败');
         // 清除定时器
         if (timerId.value !== null) {
           clearTimeout(timerId.value);

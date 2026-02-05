@@ -49,7 +49,7 @@
             <bk-input
               v-model="formData.name"
               clearable
-              placeholder="请输入" />
+              :placeholder="t('请输入')" />
           </bk-form-item>
           <bk-form-item
             :label="t('AI 提示词')"
@@ -388,13 +388,13 @@
         isLoading.value = false;
         isPreviewing.value = false;
         const aiResult = data.result?.ai || {};
-        concent.value =   Object.values(aiResult).length === 0 ? '暂无数据' : String(Object.values(aiResult)[0]);
+        concent.value =   Object.values(aiResult).length === 0 ? t('暂无数据') : String(Object.values(aiResult)[0]);
         // 成功
       } else if (data.status === 'FAILURE') {
         isLoading.value = false;
         isPreviewing.value = false;
         // 失败
-        concent.value = '失败';
+        concent.value = t('失败');
         // 清除定时器
         if (timerId.value !== null) {
           clearTimeout(timerId.value);
