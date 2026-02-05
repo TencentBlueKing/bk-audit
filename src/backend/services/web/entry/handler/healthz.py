@@ -150,8 +150,6 @@ class HealthzHandler(object):
             self._check_api(
                 api.bk_paas.uni_apps_query, id=settings.APP_CODE, include_deploy_info=True, include_market_info="true"
             ),
-            # 检查user_manage
-            self._check_api(api.user_manage.list_users),
         ]
         # 等待任务结束
         loop.run_until_complete(asyncio.wait(tasks))
