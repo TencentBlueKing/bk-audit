@@ -76,6 +76,11 @@ export default class Config {
     audit_access_guide: string;
     audit_operation_log_record_standards: string;
   };
+  tenant_config: {
+    BK_TENANT_ID: string;
+    BK_USER_WEB_APIGW_URL: string;
+ };
+
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
     this.app_code = payload.app_code;
@@ -104,6 +109,7 @@ export default class Config {
     this.help_info = this.initHelpInfo(payload.help_info);
     this.tool = payload.tool;
     this.audit_doc_config = payload.audit_doc_config;
+    this.tenant_config = payload.tenant_config;
   }
 
   initHelpInfo(params: Config['help_info']) {
