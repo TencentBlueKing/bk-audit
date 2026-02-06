@@ -102,14 +102,14 @@
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
 
       <!-- 日志表特有，人员选择器 -->
-      <audit-user-selector
+      <audit-user-selector-tenant
         v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
         :popover-options="{ placement: 'top-start' }"
-        @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
+        @change="(value: Array<string> | string) => handleFilter(Array.isArray(value) ? value : [value], index)" />
 
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
