@@ -213,7 +213,7 @@
 
   const calcTableHeight = _.throttle(() => {
     const windowInnerHeight = window.innerHeight;
-    tableMaxHeight.value = windowInnerHeight - 250;
+    tableMaxHeight.value = windowInnerHeight - 500;
   }, 100);
 
   onMounted(() => {
