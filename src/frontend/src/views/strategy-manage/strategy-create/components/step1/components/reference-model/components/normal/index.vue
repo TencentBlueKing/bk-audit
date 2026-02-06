@@ -124,7 +124,7 @@
                 trigger="hover"
                 @blur="isValueFocus[index]=false"
                 @focus="isValueFocus[index]=true" />
-              <audit-user-selector
+              <audit-user-selector-tenant
                 v-else-if="item.key.includes('username')"
                 v-model="item.value"
                 allow-create

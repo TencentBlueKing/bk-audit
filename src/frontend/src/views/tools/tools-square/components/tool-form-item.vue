@@ -43,7 +43,7 @@
       type="number"
       @update:model-value="handleNumberInputDataChange" />
 
-    <audit-user-selector
+    <audit-user-selector-tenant
       v-else-if="dataConfig.field_category === 'person_select'"
       v-model="user"
       v-bk-tooltips="{

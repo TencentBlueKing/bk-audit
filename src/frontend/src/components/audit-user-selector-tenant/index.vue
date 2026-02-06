@@ -19,8 +19,10 @@
     v-bind="$attrs"
     ref="userSelectorRef"
     v-model="localValue"
+    :allow-create="allowCreate"
     :api-base-url="apiBaseUrl"
-    :disabled="disabled"
+    :auto-focus="autoFocus"
+    :disabled="isDisabled"
     :multiple="multiple"
     :render-tag="renderTag"
     :tenant-id="tenantId"
@@ -41,8 +43,12 @@
 
   interface Props {
     modelValue: Array<string> | string;
+    allowCreate?: boolean;
     multiple?: boolean;
-    disabled?: boolean;
+    // collapseTags?: boolean;  //bk-select 属性 bk-user-select 不支持
+    // needRecord?: boolean;
+    isDisabled?: boolean;
+    autoFocus?: boolean;
   }
 
   interface Emits {
@@ -53,8 +59,12 @@
 
   const props = withDefaults(defineProps<Props>(), {
     modelValue: () => [],
+    allowCreate: false,
     multiple: true,
-    disabled: false,
+    // collapseTags: true,
+    // needRecord: false,
+    isDisabled: false,
+    autoFocus: true,
   });
 
   const emit = defineEmits<Emits>();

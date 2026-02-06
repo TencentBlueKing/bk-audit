@@ -273,7 +273,7 @@
                     v-model="item.default_value"
                     clearable
                     type="number" />
-                  <audit-user-selector
+                  <audit-user-selector-tenant
                     v-else-if="item.field_category === 'person_select'"
                     v-model="item.default_value" />
                   <div

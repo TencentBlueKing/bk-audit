@@ -116,7 +116,7 @@
                 v-model="formModel[item.raw_name]"
                 clearable
                 type="number" />
-              <audit-user-selector
+              <audit-user-selector-tenant
                 v-else-if="item.field_category === 'person_select'"
                 v-model="formModel[item.raw_name]" />
               <div

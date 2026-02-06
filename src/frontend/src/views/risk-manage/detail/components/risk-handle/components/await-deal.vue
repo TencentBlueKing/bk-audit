@@ -55,7 +55,7 @@
           :label="t('转单人员')"
           property="new_operators"
           required>
-          <audit-user-selector
+          <audit-user-selector-tenant
             v-model="formData.new_operators"
             :placeholder="t('请输入人员')" />
         </bk-form-item>
