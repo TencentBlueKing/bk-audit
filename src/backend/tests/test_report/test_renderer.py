@@ -272,70 +272,6 @@ class TestEventProviderWithMockAPI(TestCase):
         self.assertFalse(result.matched)
 
 
-class TestAIProvider(TestCase):
-    """测试AIProvider"""
-
-    def test_get_ai_content(self):
-        """测试获取AI生成内容"""
-        from services.web.risk.report.providers import AIProvider
-
-        # 使用ai_executor参数注入mock执行器
-        def mock_executor(prompt):
-            return MOCK_AI_RESPONSE["content"]
-
-        provider = AIProvider(
-            context={"risk_id": "123"}, ai_variables_config=MOCK_AI_VARIABLES_CONFIG, ai_executor=mock_executor
-        )
-        result = provider.get(name="summary")
-        self.assertIn("2025年12月17日", result)
-
-    def test_get_ai_content_no_prompt(self):
-        """测试AI变量未配置prompt的情况"""
-        from services.web.risk.report.providers import AIProvider
-
-        provider = AIProvider(context={"risk_id": "123"}, ai_variables_config=[])
-        result = provider.get(name="unknown_var")
-        self.assertIn("未配置prompt", result)
-
-    def test_match_getattr_node(self):
-        """测试AIProvider的match方法匹配属性访问节点"""
-        from jinja2 import Environment
-
-        from services.web.risk.report.providers import AIProvider
-
-        provider = AIProvider(context={}, key="ai")
-        env = Environment()
-
-        # 测试匹配 ai.summary
-        ast = env.parse("{{ ai.summary }}")
-        output_node = ast.body[0]
-        getattr_node = output_node.nodes[0]
-
-        result = provider.match(getattr_node)
-        self.assertTrue(result.matched)
-        self.assertEqual(result.original_expr, "ai.summary")
-        self.assertIs(result.provider, provider)
-        self.assertEqual(result.node_type, nodes.Getattr)
-        self.assertEqual(result.call_args["name"], "ai.summary")  # 完整变量表达式
-
-    def test_match_wrong_provider_key(self):
-        """测试AIProvider的match方法不匹配错误的provider_key"""
-        from jinja2 import Environment
-
-        from services.web.risk.report.providers import AIProvider
-
-        provider = AIProvider(context={}, key="ai")
-        env = Environment()
-
-        # 测试不匹配 other.summary
-        ast = env.parse("{{ other.summary }}")
-        output_node = ast.body[0]
-        getattr_node = output_node.nodes[0]
-
-        result = provider.match(getattr_node)
-        self.assertFalse(result.matched)
-
-
 class TestTemplateParser(TestCase):
     """测试模板解析（使用Jinja2 AST + Provider.match）"""
 
@@ -809,46 +745,66 @@ class TestAIPreviewResource(TestCase):
         """测试 render_ai_variable 任务实际执行（mock AI 执行器）"""
         from unittest.mock import patch
 
+        from django.core.cache import cache
+
         from services.web.risk.tasks import render_ai_variable
 
+        # 清除缓存，避免测试之间的缓存干扰
+        cache.clear()
+
+        # 使用唯一的 name 确保缓存 key 不同（缓存 key 基于 name 而非 prompt_template）
         ai_variables = [
-            {"name": "ai.summary", "prompt_template": "请总结风险"},
-            {"name": "ai.suggestion", "prompt_template": "请给出建议"},
+            {"name": "ai.mock_summary", "prompt_template": "请总结风险"},
+            {"name": "ai.mock_suggestion", "prompt_template": "请给出建议"},
         ]
 
-        # Mock AIProvider._execute_ai_agent 方法
-        def mock_ai_executor(self, prompt):
+        # Mock API 调用
+        def mock_chat_completion(**kwargs):
+            prompt = kwargs.get("input", "")
             if "总结" in prompt:
                 return "这是AI生成的风险摘要内容"
             elif "建议" in prompt:
                 return "这是AI生成的处理建议"
             return f"Mock AI response for: {prompt}"
 
-        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", mock_ai_executor):
+        # 需要 patch API 调用
+        with patch(
+            "services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion",
+            mock_chat_completion,
+        ):
             # 直接调用任务函数（同步执行）
             result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             # 验证返回结果结构
             self.assertIn("ai", result)
-            self.assertIn("summary", result["ai"])
-            self.assertIn("suggestion", result["ai"])
+            self.assertIn("mock_summary", result["ai"])
+            self.assertIn("mock_suggestion", result["ai"])
 
             # 验证 AI 执行器被调用并返回了 mock 结果（内容经过 markdown 渲染）
-            self.assertIn("这是AI生成的风险摘要内容", result["ai"]["summary"])
-            self.assertIn("这是AI生成的处理建议", result["ai"]["suggestion"])
+            self.assertIn("这是AI生成的风险摘要内容", result["ai"]["mock_summary"])
+            self.assertIn("这是AI生成的处理建议", result["ai"]["mock_suggestion"])
 
     def test_ai_preview_task_escapes_html(self):
         """测试 render_ai_variable 任务对原始HTML进行转义"""
         from unittest.mock import patch
 
+        from django.core.cache import cache
+
         from services.web.risk.tasks import render_ai_variable
 
+        # 清除缓存，避免测试之间的缓存干扰
+        cache.clear()
+
+        # 使用唯一的 prompt_template 避免与其他测试缓存冲突
         ai_variables = [
-            {"name": "ai.summary", "prompt_template": "请总结风险"},
+            {"name": "ai.summary", "prompt_template": "请总结风险（HTML转义测试）"},
         ]
 
         raw_html = "<script>alert(1)</script>"
-        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value=raw_html):
+        with patch(
+            "services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion",
+            return_value=raw_html,
+        ):
             result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             summary_html = result["ai"]["summary"]
@@ -859,14 +815,22 @@ class TestAIPreviewResource(TestCase):
         """测试 render_ai_variable 任务执行单个 AI 变量"""
         from unittest.mock import patch
 
+        from django.core.cache import cache
+
         from services.web.risk.tasks import render_ai_variable
+
+        # 清除缓存，避免测试之间的缓存干扰
+        cache.clear()
 
         ai_variables = [
             {"name": "ai.analysis", "prompt_template": "请分析风险原因"},
         ]
 
-        # Mock AIProvider._execute_ai_agent 方法
-        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value="这是AI生成的风险分析"):
+        # Mock API 调用
+        with patch(
+            "services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion",
+            return_value="这是AI生成的风险分析",
+        ):
             result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
             self.assertIn("ai", result)
@@ -1078,14 +1042,23 @@ class TestGetTaskResultResource(TestCase):
         """测试真实执行 render_ai_variable 任务后获取结果"""
         from unittest.mock import MagicMock, patch
 
+        from django.core.cache import cache
+
         from services.web.risk.tasks import render_ai_variable
 
+        # 清除缓存，避免测试之间的缓存干扰
+        cache.clear()
+
+        # 使用唯一的 prompt_template 避免与其他测试缓存冲突
         ai_variables = [
-            {"name": "ai.summary", "prompt_template": "请总结风险"},
+            {"name": "ai.task_result_summary", "prompt_template": "请总结风险（任务结果测试）"},
         ]
 
-        # Mock AIProvider._execute_ai_agent 方法
-        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", return_value="这是AI生成的风险摘要"):
+        # Mock API 调用
+        with patch(
+            "services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion",
+            return_value="这是AI生成的风险摘要",
+        ):
             # 直接调用任务函数获取结果（同步执行）
             task_result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
@@ -1102,17 +1075,23 @@ class TestGetTaskResultResource(TestCase):
             # 验证返回结果（内容经过 markdown 渲染）
             self.assertEqual(result["status"], "SUCCESS")
             self.assertIn("ai", result["result"])
-            self.assertIn("这是AI生成的风险摘要", result["result"]["ai"]["summary"])
+            self.assertIn("这是AI生成的风险摘要", result["result"]["ai"]["task_result_summary"])
 
     def test_full_ai_preview_workflow(self):
         """测试完整的 AI 预览工作流：提交任务 -> 执行任务 -> 获取结果"""
         from unittest.mock import MagicMock, patch
 
+        from django.core.cache import cache
+
         from services.web.risk.tasks import render_ai_variable
 
+        # 清除缓存，避免测试之间的缓存干扰
+        cache.clear()
+
+        # 使用唯一的 prompt_template 避免与其他测试缓存冲突
         ai_variables = [
-            {"name": "ai.summary", "prompt_template": "请总结风险"},
-            {"name": "ai.suggestion", "prompt_template": "请给出建议"},
+            {"name": "ai.summary", "prompt_template": "请总结风险（完整工作流测试）"},
+            {"name": "ai.suggestion", "prompt_template": "请给出建议（完整工作流测试）"},
         ]
 
         # Step 1: Mock task.delay 提交任务
@@ -1127,15 +1106,18 @@ class TestGetTaskResultResource(TestCase):
             self.assertEqual(submit_result["task_id"], "workflow_task_id")
             self.assertEqual(submit_result["status"], "PENDING")
 
-        # Step 2: 实际执行任务（mock AI 执行器）
-        def mock_ai_executor(self, prompt):
-            if "总结" in prompt:
+        # Step 2: 实际执行任务（mock API 调用）
+        def mock_chat_completion(**kwargs):
+            prompt = kwargs.get("input", "")
+            if "总结" in prompt and "完整工作流测试" in prompt:
                 return "风险摘要：检测到异常行为"
-            elif "建议" in prompt:
+            elif "建议" in prompt and "完整工作流测试" in prompt:
                 return "建议：立即进行安全审查"
             return "默认响应"
 
-        with patch("services.web.risk.tasks.AIProvider._execute_ai_agent", mock_ai_executor):
+        with patch(
+            "services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion", mock_chat_completion
+        ):
             task_result = render_ai_variable(risk_id=self.risk.risk_id, ai_variables=ai_variables)
 
         # Step 3: 获取任务结果

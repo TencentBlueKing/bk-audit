@@ -784,6 +784,10 @@ class AggregationFunction(TextChoices):
 # 查询失败占位符
 EVENT_QUERY_FAILED = gettext_lazy("查询失败")
 
+# AI 生成失败消息格式
+AI_ERROR_PREFIX = "[AI生成失败: "
+AI_ERROR_SUFFIX = "]"
+
 # AggregationFunction → AggregateType 映射
 # first/latest 不走聚合 SQL，不在此映射
 AGGREGATION_FUNCTION_TO_SQL_TYPE = {

@@ -21,15 +21,15 @@ from functools import reduce
 from typing import Dict, Optional, Type, Union
 
 from pypika import Table
-from pypika.functions import Count
+from pypika.functions import Cast, Count
 from pypika.queries import QueryBuilder
 from pypika.terms import BasicCriterion, EmptyCriterion, Function
 
 from core.sql.builder.builder import BkBaseTable
 from core.sql.builder.functions import GetJsonObject
-from core.sql.builder.terms import PypikaField
+from core.sql.builder.terms import DorisJsonTypeExtractFunction, PypikaField
 from core.sql.builder.utils import get_function, operate
-from core.sql.constants import FilterConnector
+from core.sql.constants import AggregateType, FieldType, FilterConnector
 from core.sql.exceptions import (
     FilterValueError,
     InvalidAggregateTypeError,
@@ -299,3 +299,29 @@ class BkBaseComputeSqlGenerator(SQLGenerator):
     """BK-BASE 计算模块的 SQL 生成器"""
 
     table_cls = BkBaseTable
+
+
+class BkbaseDorisSqlGenerator(BkBaseComputeSqlGenerator):
+    """
+    Bkbase Doris SQL 生成器；支持 Doris JSON 字段下钻。
+    """
+
+    # GROUP_CONCAT 要求参数是 STRING 类型，这些聚合类型不做 CAST
+    _STRING_ONLY_AGGREGATES = {AggregateType.LIST.value, AggregateType.LIST_DISTINCT.value}
+
+    def _get_pypika_field(self, field: Field):
+        if not field.keys:
+            return super()._get_pypika_field(field)
+
+        table = self._get_table(field.table)
+        base_field = self.field_type_cls.get_field(table, field)
+        json_value = DorisJsonTypeExtractFunction(base_field, field.keys, FieldType.STRING)
+
+        # GROUP_CONCAT (LIST/LIST_DISTINCT) 要求参数是 STRING，跳过 CAST
+        if field.aggregate in self._STRING_ONLY_AGGREGATES:
+            return json_value
+
+        target_type = field.field_type or FieldType.STRING
+        if target_type in (FieldType.STRING, FieldType.TEXT):
+            return json_value
+        return Cast(json_value, target_type.query_data_type)
