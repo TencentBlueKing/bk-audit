@@ -20,33 +20,33 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Callable, Dict, Optional, Type
 
 from bk_resource import api
+from bk_resource.utils.cache import CacheTypeItem, UsingCache
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.utils import timezone
+from django.db.models import Max
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
-from api.bk_base.constants import StorageType
-from apps.meta.constants import ConfigLevelChoices
-from apps.meta.models import GlobalMetaConfig
-from core.sql.constants import FieldType
-from core.utils.time import ceil_to_second
-from services.web.databus.constants import DORIS_EVENT_BKBASE_RT_ID_KEY
+from core.sql.constants import AggregateType, FieldType
 from services.web.risk.constants import (
     AGGREGATION_FUNCTION_TO_SQL_TYPE,
+    AI_ERROR_PREFIX,
+    AI_ERROR_SUFFIX,
     DEFAULT_FIELD_TYPE_BY_AGGREGATE,
     EVENT_QUERY_FAILED,
     AggregationFunction,
 )
 from services.web.risk.handlers.event_provider_sql import (
     EventFieldConfig,
-    EventProviderSqlBuilder,
+    RiskEventAggregateSqlBuilder,
 )
 from services.web.risk.models import Risk
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import Strategy, StrategyTool
+from services.web.tool.models import Tool
 
 
 @dataclass
@@ -97,8 +97,11 @@ class AIProvider(Provider):
     """AI变量Provider
 
     用于处理AI变量，如 ai.summary, ai.suggestion 等
-    调用AI Agent生成内容
+    调用AI Agent生成内容，支持缓存
     """
+
+    # 缓存配置
+    _cache_type = CacheTypeItem(key="ai_provider", timeout=settings.AI_PROVIDER_CACHE_TIMEOUT, user_related=False)
 
     def __init__(
         self,
@@ -106,6 +109,7 @@ class AIProvider(Provider):
         ai_variables_config: list[dict] = None,
         ai_executor: Callable = None,
         key: str = "ai",
+        enable_cache: bool = False,
     ):
         """初始化AI Provider
 
@@ -114,11 +118,26 @@ class AIProvider(Provider):
             ai_variables_config: AI变量配置列表，包含 name 和 prompt_template
             ai_executor: 自定义的AI执行器，用于测试时注入mock
             key: Provider的key，默认为 ai
+            enable_cache: 是否启用缓存，默认关闭
         """
         self.context = context
         self.ai_variables_config = {var["name"]: var for var in (ai_variables_config or [])}
         self._ai_executor = ai_executor
         self.key = key
+        self.enable_cache = enable_cache
+
+        # 根据 enable_cache 动态包装 _execute_ai_agent
+        if enable_cache:
+            self._wrap_execute_ai_agent()
+
+    def _wrap_execute_ai_agent(self):
+        """将 _execute_ai_agent 方法包装为支持缓存的版本"""
+        self._execute_ai_agent = UsingCache(
+            cache_type=self._cache_type,
+            compress=True,
+            is_cache_func=self._cache_write_trigger,
+            func_key_generator=lambda _: self._generate_cache_key(),
+        )(self._execute_ai_agent)
 
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是AI变量访问
@@ -204,7 +223,97 @@ class AIProvider(Provider):
                 return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
             return result or ""
         except Exception as e:
-            return f"[AI生成失败: {e}]"
+            return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"
+
+    def _generate_cache_key(self) -> str:
+        """生成缓存 key 的业务部分
+
+        完整缓存 key 由 UsingCache 自动组装，格式为：
+            {key_prefix}:{cache_type.key}:{func_key}:{args_md5}
+        其中：
+            - func_key: 本方法返回的业务 key（risk_id:策略时间:工具时间:事件数）
+            - args_md5: UsingCache 自动计算的 prompt 参数 MD5
+
+        因此，完整缓存 key 包含以下失效因子：
+            1. risk_id - 风险唯一标识
+            2. strategy_updated_at - 策略更新时间（策略配置变更时失效）
+            3. tools_max_updated_at - 工具最新更新时间（AI 工具变更时失效）
+            4. event_count - 事件数量（新增事件时失效）
+            5. prompt - 提示词内容（prompt 变化时失效，由 UsingCache 自动处理）
+        """
+        risk = self._risk
+        if not risk:
+            logger.warning("[AIProvider] Cache key=unknown; risk not found")
+            return "unknown"
+
+        cache_key = (
+            f"{risk.risk_id}:"
+            f"{self._get_strategy_updated_at(risk)}:"
+            f"{self._get_tools_max_updated_at(risk.strategy_id)}:"
+            f"{self._get_event_count(risk)}"
+        )
+        logger.info("[AIProvider] Cache key=%s", cache_key)
+        return cache_key
+
+    def _cache_write_trigger(self, result: Any) -> bool:
+        """仅成功结果写入缓存"""
+        risk_id = self.context["risk_id"]
+        if not result:
+            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=empty_result", risk_id)
+            return False
+        if isinstance(result, str) and result.startswith(AI_ERROR_PREFIX):
+            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=error_result", risk_id)
+            return False
+        logger.info("[AIProvider] Cache write; risk_id=%s, result_len=%d", risk_id, len(result) if result else 0)
+        return True
+
+    @cached_property
+    def _risk(self) -> Optional[Risk]:
+        """获取 Risk 对象（实例级别缓存，避免重复查询）"""
+        risk_id = self.context["risk_id"]
+        if not risk_id:
+            return None
+        return Risk.objects.select_related("strategy").filter(risk_id=risk_id).first()
+
+    def _get_strategy_updated_at(self, risk: Risk) -> str:
+        """获取策略更新时间"""
+        if risk.strategy and risk.strategy.updated_at:
+            return risk.strategy.updated_at.strftime("%Y%m%d%H%M%S")
+        return ""
+
+    def _get_tools_max_updated_at(self, strategy_id: int) -> str:
+        """获取策略关联工具的最新更新时间（仅查询最新版本的工具）"""
+        tool_uids = list(
+            StrategyTool.objects.filter(strategy_id=strategy_id).values_list("tool_uid", flat=True).distinct()
+        )
+        if not tool_uids:
+            return ""
+        # 使用 all_latest_tools 确保只查询每个工具的最新版本
+        max_updated = (
+            Tool.all_latest_tools().filter(uid__in=tool_uids).aggregate(max_updated=Max("updated_at"))["max_updated"]
+        )
+        return max_updated.strftime("%Y%m%d%H%M%S") if max_updated else ""
+
+    def _get_event_count(self, risk: Risk) -> int:
+        """使用 RiskEventAggregateSqlBuilder 查询事件数量"""
+        try:
+            builder = RiskEventAggregateSqlBuilder(risk)
+            count_field = EventFieldConfig(
+                raw_name="*",
+                display_name="cnt",
+                field_type=FieldType.LONG,
+                aggregate=AggregateType.COUNT,
+            )
+            sql = builder.build_aggregate_sql([count_field])
+            logger.info("[AIProvider] Event count SQL: %s", sql)
+            if not sql:
+                return 0
+
+            result = api.bk_base.query_sync(sql=sql)
+            return result.get("list", [{}])[0].get("cnt", 0)
+        except Exception as e:
+            logger.warning("[AIProvider] Failed to get event count: %s", e)
+            return 0
 
 
 class EventProvider(Provider):
@@ -221,8 +330,6 @@ class EventProvider(Provider):
 
     # Provider的唯一标识key
     key: str = "event"
-    # Doris 存储后缀
-    STORAGE_SUFFIX: str = StorageType.DORIS.value
 
     def __init__(self, risk_id: str, **kwargs):
         """初始化事件Provider
@@ -245,16 +352,6 @@ class EventProvider(Provider):
         if self._risk is None and self._risk_id:
             self._risk = Risk.objects.select_related("strategy").filter(risk_id=self._risk_id).first()
         return self._risk
-
-    @classmethod
-    def _apply_storage_suffix(cls, table_name: str) -> str:
-        """给 BKBase 表追加 Doris 后缀"""
-        cleaned = (table_name or "").strip()
-        if not cleaned:
-            return cleaned
-        if cleaned.endswith(f".{cls.STORAGE_SUFFIX}"):
-            return cleaned
-        return f"{cleaned}.{cls.STORAGE_SUFFIX}"
 
     def _get_field_type_from_strategy(self, field_name: str) -> Optional[str]:
         """从策略 configs.select 获取字段的真实类型
@@ -286,16 +383,6 @@ class EventProvider(Provider):
 
         return field_type_map.get(field_name)
 
-    def _get_rt_id(self) -> str:
-        """获取事件结果表 ID（带 doris 后缀）"""
-        rt_id = GlobalMetaConfig.get(
-            config_key=DORIS_EVENT_BKBASE_RT_ID_KEY,
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=settings.DEFAULT_NAMESPACE,
-            default="",
-        )
-        return self._apply_storage_suffix(rt_id)
-
     def _get_field_type(self, field_name: str, aggregate: str) -> FieldType:
         """获取字段类型：优先从策略获取，fallback 根据聚合类型"""
         field_type_str = self._get_field_type_from_strategy(field_name)
@@ -315,18 +402,7 @@ class EventProvider(Provider):
         field_name = spec.get("field", key)
         field_type = self._get_field_type(field_name, aggregate)
 
-        # end_time 向上取整到秒，避免因微秒精度导致的边界丢失
-        # 当 event_end_time 为空时，使用当前时间作为 fallback
-
-        end_time = ceil_to_second(self.risk.event_end_time) if self.risk.event_end_time else timezone.now()
-
-        builder = EventProviderSqlBuilder(
-            table_name=self._get_rt_id(),
-            strategy_id=self.risk.strategy_id,
-            raw_event_id=self.risk.raw_event_id,
-            start_time=int(self.risk.event_time.timestamp() * 1000),
-            end_time=int(end_time.timestamp() * 1000),
-        )
+        builder = RiskEventAggregateSqlBuilder(self.risk)
 
         field_config = EventFieldConfig(
             raw_name=field_name,

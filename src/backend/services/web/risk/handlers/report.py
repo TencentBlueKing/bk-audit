@@ -182,8 +182,8 @@ class RiskReportHandler:
         # 解析报告配置
         report_config = ReportConfig.model_validate(risk.strategy.report_config)
 
-        # 提交渲染任务并同步等待结果（简化调用）
-        async_result = submit_render_task(risk=risk, report_config=report_config)
+        # 提交渲染任务并同步等待结果（后台事件触发，不使用缓存）
+        async_result = submit_render_task(risk=risk, report_config=report_config, enable_cache=False)
 
         # 同步等待渲染结果（阻塞直到完成）
         try:
