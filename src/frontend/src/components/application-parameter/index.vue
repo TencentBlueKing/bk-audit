@@ -126,12 +126,11 @@
         </bk-option-group>
       </bk-select>
       <div v-else>
-        <audit-user-selector
+        <audit-user-selector-tenant
           v-if="config.custom_type === 'bk_user_selector'"
           v-model="userSelectorValue"
           allow-create
-          class="consition-value"
-          @change="handlerUserChange" />
+          class="consition-value" />
 
         <bk-input
           v-else
@@ -196,11 +195,23 @@
     return undefined;
   });
 
-  const userSelectorValue = computed<string | string[] | undefined | number>(() => {
-    if (props.config.custom_type === 'bk_user_selector') {
-      return modelValue.value.value || [];
-    }
-    return undefined;
+  const userSelectorValue = computed<string | string[]>({
+    get() {
+      if (props.config.custom_type === 'bk_user_selector') {
+        const val = modelValue.value.value;
+        if (Array.isArray(val)) {
+          return val as string[];
+        }
+        if (typeof val === 'string') {
+          return val;
+        }
+        return [];
+      }
+      return [];
+    },
+    set(val: string | string[]) {
+      handlerUserChange(val);
+    },
   });
 
   const generalValue = computed<string>(() => {

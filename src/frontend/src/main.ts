@@ -31,6 +31,7 @@ import AuditPopconfirm from '@components/audit-popconfirm/index.vue';
 import AuditRouterView from '@components/audit-router-view/index.vue';
 import AuditSideslider from '@components/audit-sideslider/index.vue';
 import AuditUserSelector from '@components/audit-user-selector/index.vue';
+import AuditUserSelectorTenant from '@components/audit-user-selector-tenant/index.vue';
 import AuthButton from '@components/auth/button.vue';
 import AuthComponent from '@components/auth/component';
 import AuthOption from '@components/auth/option.vue';
@@ -89,6 +90,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('AuditRouterView', AuditRouterView);
     BKApp.component('AuditSideslider', AuditSideslider);
     BKApp.component('AuditUserSelector', AuditUserSelector);
+    BKApp.component('AuditUserSelectorTenant', AuditUserSelectorTenant);
     BKApp.component('AuthButton', AuthButton);
     BKApp.component('AuthComponent', AuthComponent);
     BKApp.component('AuthOption', AuthOption);

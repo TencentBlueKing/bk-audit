@@ -129,7 +129,7 @@
                       :value="sItem.value" />
                   </bk-select>
                   <!-- operator特殊处理 -->
-                  <audit-user-selector
+                  <audit-user-selector-tenant
                     v-else-if="item.field?.includes('operator')"
                     v-model="item.value"
                     allow-create

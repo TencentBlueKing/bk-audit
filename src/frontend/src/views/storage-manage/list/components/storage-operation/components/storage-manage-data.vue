@@ -153,7 +153,7 @@
         :label="t('集群负责人')"
         property="admin"
         required>
-        <audit-user-selector v-model="formData.admin" />
+        <audit-user-selector-tenant v-model="formData.admin" />
       </bk-form-item>
       <bk-form-item
         :label="t('集群说明')"
