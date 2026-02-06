@@ -265,7 +265,7 @@
             <bk-popover
               ref="requiredListRef"
               allow-html
-              content="#hidden_pop_content_add"
+              :content="`#${popoverContentId}`"
               ext-cls="field-required-pop"
               placement="top"
               theme="light"
@@ -278,7 +278,9 @@
               </span>
             </bk-popover>
             <div style="display: none">
-              <div id="hidden_pop_content_add">
+              <div
+                :id="popoverContentId"
+                class="field-required-pop-hideen">
                 <div
                   v-for="(item, index) in addList"
                   :key="index"
@@ -386,6 +388,13 @@
   const fieldDictId = ref('');
 
   const newToolDataName = inject<ComputedRef<string>>('newToolDataName', computed(() => ''));
+
+  // 为每个表格实例生成唯一的 popover content ID
+  const popoverContentId = computed(() => {
+    // 使用 json_path 生成唯一 ID，替换特殊字符
+    const uniqueId = props.data?.json_path?.replace(/[^a-zA-Z0-9]/g, '_') || `popover_${Date.now()}`;
+    return `hidden_pop_content_add_${uniqueId}`;
+  });
 
   // 转换树形数据
   const transformTreeData = (nodes: any[]): FieldItem[] => {
@@ -925,5 +934,10 @@
   margin-left: 5px;
   color: #63656e;
   cursor: pointer;
+}
+
+.field-required-pop-hideen {
+  max-height: 300px;
+  overflow-y: auto;
 }
 </style>
