@@ -1771,7 +1771,7 @@ class PreviewRiskReport(StrategyV2Base):
         # 解析报告配置（预览使用前端传入的配置）
         report_config = ReportConfig.model_validate(report_config_data)
 
-        # 提交渲染任务（简化调用）
-        async_result = submit_render_task(risk=risk, report_config=report_config)
+        # 提交渲染任务（预览报告，启用缓存）
+        async_result = submit_render_task(risk=risk, report_config=report_config, enable_cache=True)
 
         return {"task_id": async_result.id, "status": "PENDING"}

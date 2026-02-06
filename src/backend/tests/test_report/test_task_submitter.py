@@ -179,8 +179,8 @@ class TestSubmitRenderTask(TestCase):
         self.assertEqual(risk_data["strategy_id"], self.strategy.strategy_id)
 
     @patch("services.web.risk.report.task_submitter.render_template")
-    def test_submit_render_task_enable_cache_default_true(self, mock_task):
-        """测试 enable_cache 默认为 True（用户手动生成/预览报告场景）"""
+    def test_submit_render_task_enable_cache_default_false(self, mock_task):
+        """测试 enable_cache 默认为 False（后台事件触发场景）"""
         from services.web.risk.report.task_submitter import submit_render_task
 
         mock_task.delay.return_value = MagicMock()
@@ -194,11 +194,11 @@ class TestSubmitRenderTask(TestCase):
 
         call_kwargs = mock_task.delay.call_args[1]
         ai_provider = next(p for p in call_kwargs["providers"] if isinstance(p, AIProvider))
-        self.assertTrue(ai_provider.enable_cache)
+        self.assertFalse(ai_provider.enable_cache)
 
     @patch("services.web.risk.report.task_submitter.render_template")
-    def test_submit_render_task_enable_cache_false(self, mock_task):
-        """测试 enable_cache=False（后台事件触发场景）"""
+    def test_submit_render_task_enable_cache_true(self, mock_task):
+        """测试 enable_cache=True（用户手动生成/预览报告场景）"""
         from services.web.risk.report.task_submitter import submit_render_task
 
         mock_task.delay.return_value = MagicMock()
@@ -208,8 +208,8 @@ class TestSubmitRenderTask(TestCase):
             ai_variables=[AIVariableConfig(name="ai.summary", prompt_template="请总结风险")],
         )
 
-        submit_render_task(risk=self.risk, report_config=report_config, enable_cache=False)
+        submit_render_task(risk=self.risk, report_config=report_config, enable_cache=True)
 
         call_kwargs = mock_task.delay.call_args[1]
         ai_provider = next(p for p in call_kwargs["providers"] if isinstance(p, AIProvider))
-        self.assertFalse(ai_provider.enable_cache)
+        self.assertTrue(ai_provider.enable_cache)
