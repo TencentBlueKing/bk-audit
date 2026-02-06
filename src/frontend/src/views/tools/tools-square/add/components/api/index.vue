@@ -55,7 +55,8 @@
           <bk-select
             v-model="formData.api_config.auth_config.method"
             auto-focus
-            class="bk-select">
+            class="bk-select"
+            @change="handleAuthMethodChange">
             <bk-option
               v-for="(item, index) in authList"
               :id="item.id"
@@ -382,6 +383,17 @@
   // 方法改变默认值
   const handleMethodChange = (value: string) => {
     paramsConfigRef.value?.changeMethod(value);
+  };
+  // 认证方式变更处理
+  const handleAuthMethodChange = () => {
+    formData.value.api_config.auth_config.config = {
+      bk_app_code: '',
+      bk_app_secret: '',
+      app_code: '',
+      app_secret: '',
+      secret_id: '',
+      secret_key: '',
+    };
   };
   // 添加 headers
   const handleAddHeaders = () => {
