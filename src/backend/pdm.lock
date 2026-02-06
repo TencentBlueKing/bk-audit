@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:3a59375ba8d063995513bb52c420bbe32e86aa05246d836163444197f40ca38e"
+content_hash = "sha256:fe15ed4778dcbe41be5c7aa63d39333f9a00aa9a6271b23b859980350c4ac321"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -221,14 +221,14 @@ files = [
 
 [[package]]
 name = "bk-notice-sdk"
-version = "1.3.2"
+version = "1.4.2"
 summary = "A project for fetching and displaying announcement notifications."
 groups = ["default"]
 dependencies = [
     "bkapi-client-core<2.0.0,>=1.0.2",
 ]
 files = [
-    {file = "bk-notice-sdk-1.3.2.tar.gz", hash = "sha256:286d873bf8e652e3b750b442b81a9e42f7dda82b52fb334a321c677e6b95272d"},
+    {file = "bk-notice-sdk-1.4.2.tar.gz", hash = "sha256:13c0aa65aa495f8237722587f65235a4c4d2c7915460b556e4902613b22023b4"},
 ]
 
 [[package]]
