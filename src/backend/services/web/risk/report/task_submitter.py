@@ -30,7 +30,7 @@ from services.web.risk.report_config import ReportConfig
 def submit_render_task(
     risk: Risk,
     report_config: ReportConfig,
-    enable_cache: bool = True,
+    enable_cache: bool = False,
 ) -> AsyncResult:
     """
     提交渲染任务（简化版）
@@ -40,7 +40,7 @@ def submit_render_task(
     Args:
         risk: 风险对象
         report_config: 报告配置（包含 template 和 ai_variables）
-        enable_cache: 是否启用 AI 缓存，默认开启。用户手动生成/预览报告时开启，后台事件触发时关闭
+        enable_cache: 是否启用 AI 缓存，默认关闭。用户手动生成/预览报告时显式开启
 
     Returns:
         Celery AsyncResult 对象

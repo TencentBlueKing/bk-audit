@@ -173,7 +173,7 @@ class RetrieveRisk(RiskMeta):
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
-        risk["is_generating"] = self._is_report_generating(risk_obj.risk_id)
+        risk["report_generating"] = self._is_report_generating(risk_obj.risk_id)
         return risk
 
     def _is_report_generating(self, risk_id: str) -> bool:

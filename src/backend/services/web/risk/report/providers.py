@@ -24,7 +24,7 @@ from functools import cached_property
 from typing import Any, Callable, Dict, Optional, Type
 
 from bk_resource import api
-from bk_resource.utils.cache import CacheTypeItem, UsingCache
+from bk_resource.utils.cache import CacheTypeItem, using_cache
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db.models import Max
@@ -126,19 +126,6 @@ class AIProvider(Provider):
         self.key = key
         self.enable_cache = enable_cache
 
-        # 根据 enable_cache 动态包装 _execute_ai_agent
-        if enable_cache:
-            self._wrap_execute_ai_agent()
-
-    def _wrap_execute_ai_agent(self):
-        """将 _execute_ai_agent 方法包装为支持缓存的版本"""
-        self._execute_ai_agent = UsingCache(
-            cache_type=self._cache_type,
-            compress=True,
-            is_cache_func=self._cache_write_trigger,
-            func_key_generator=lambda _: self._generate_cache_key(),
-        )(self._execute_ai_agent)
-
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是AI变量访问
 
@@ -195,6 +182,15 @@ class AIProvider(Provider):
 
         if not prompt:
             return f"[AI变量 {name} 未配置prompt]"
+
+        # 根据 enable_cache 动态包装 _execute_ai_agent
+        if self.enable_cache:
+            return using_cache(
+                cache_type=self._cache_type,
+                compress=True,
+                is_cache_func=self._cache_write_trigger,
+                func_key_generator=lambda _: self._generate_cache_key(),
+            )(self._execute_ai_agent)(prompt)
 
         # 调用AI Agent生成内容
         return self._execute_ai_agent(prompt)
