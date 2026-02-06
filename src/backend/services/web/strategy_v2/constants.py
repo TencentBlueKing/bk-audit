@@ -326,3 +326,14 @@ class StrategyFieldSourceEnum(TextChoices):
     DATA = "data", gettext_lazy("数据字段")
     EVIDENCE = "evidence", gettext_lazy("证据字段")
     RISK_META = "risk_meta", gettext_lazy("风险元字段")
+
+
+@register_choices("strategy_report_status")
+class StrategyReportStatus(TextChoices):
+    """
+    策略事件调查报告状态
+    """
+
+    AUTO = "auto", gettext_lazy("自动生成")
+    MANUAL = "manual", gettext_lazy("手动生成")
+    DISABLED = "disabled", gettext_lazy("未开启")

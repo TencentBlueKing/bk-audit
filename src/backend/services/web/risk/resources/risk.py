@@ -29,6 +29,7 @@ from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
@@ -62,6 +63,7 @@ from services.web.risk.constants import (
     EVENT_EXPORT_FIELD_PREFIX,
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
+    RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
     RiskExportField,
     RiskFields,
@@ -171,7 +173,13 @@ class RetrieveRisk(RiskMeta):
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
+        risk["is_generating"] = self._is_report_generating(risk_obj.risk_id)
         return risk
+
+    def _is_report_generating(self, risk_id: str) -> bool:
+        """检查报告是否正在生成（通过 Redis 锁判断）"""
+        lock_key = RISK_RENDER_LOCK_KEY.format(risk_id=risk_id)
+        return cache.get(lock_key) is not None
 
     def _load_unsynced_manual_events(self, risk_obj: Risk) -> List[dict]:
         start = risk_obj.event_time

@@ -29,6 +29,7 @@ from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
     AI_PRACTICES_KEY,
+    AUDIT_DOC_CONFIG_KEY,
     BKBASE_WEB_URL_KEY,
     BKVISION_WEB_URL_KEY,
     DEFAULT_AI_PRACTICES,
@@ -39,6 +40,7 @@ from services.web.entry.constants import (
     IAM_WEB_URL_KEY,
     IEG_STD_OP_DOC_URL_KEY,
     PERMISSION_MODEL_IWIKI_URL_KEY,
+    SDK_CONFIG_KEY,
     SEARCH_RULE_IWIKI_URL_KEY,
     V3_SYSTEM_CREATE_URL_KEY,
     VISION_SHARE_PERMISSION_URL_KEY,
@@ -123,6 +125,8 @@ class EntryHandler(object):
             },
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
+            "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
+            "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
         }
         return data
 

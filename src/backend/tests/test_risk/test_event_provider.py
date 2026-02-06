@@ -15,8 +15,8 @@ from jinja2 import Environment, nodes
 from core.sql.constants import AggregateType, FieldType
 from services.web.risk.constants import EVENT_QUERY_FAILED, AggregationFunction
 from services.web.risk.handlers.event_provider_sql import (
+    EventAggregateSqlBuilder,
     EventFieldConfig,
-    EventProviderSqlBuilder,
 )
 from services.web.risk.report.providers import EventProvider
 from tests.base import TestCase
@@ -39,7 +39,7 @@ class TestEventProviderSqlBuilder(TestCase):
     )
 
     def setUp(self):
-        self.builder = EventProviderSqlBuilder(
+        self.builder = EventAggregateSqlBuilder(
             table_name=self.TABLE_NAME,
             strategy_id=self.STRATEGY_ID,
             raw_event_id=self.RAW_EVENT_ID,
@@ -372,7 +372,7 @@ class TestEventProviderMatch(TestCase):
         self.assertFalse(self.provider.match(node).matched)
 
 
-@mock.patch("services.web.risk.report.providers.GlobalMetaConfig.get")
+@mock.patch("apps.meta.models.GlobalMetaConfig.get")
 @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
 class TestEventProviderGet(TestCase):
     """EventProvider.get() 集成测试
@@ -513,22 +513,44 @@ class TestEventProviderFieldType(TestCase):
         self.assertEqual(self.provider._get_field_type("unknown", "count"), FieldType.STRING)
 
 
-class TestEventProviderStorageSuffix(TestCase):
-    """EventProvider._apply_storage_suffix() 测试"""
+class TestRiskEventAggregateSqlBuilderStorageSuffix(TestCase):
+    """RiskEventAggregateSqlBuilder.get_rt_id() 存储后缀测试
 
-    def test_apply_suffix(self):
-        """测试追加 doris 后缀"""
-        self.assertEqual(EventProvider._apply_storage_suffix("591_test"), "591_test.doris")
+    注：_apply_storage_suffix 逻辑已移至 RiskEventAggregateSqlBuilder.get_rt_id()
+    """
 
-    def test_not_duplicate_suffix(self):
-        """测试不重复追加后缀"""
-        self.assertEqual(EventProvider._apply_storage_suffix("591_test.doris"), "591_test.doris")
+    @mock.patch("apps.meta.models.GlobalMetaConfig.get")
+    def test_get_rt_id_applies_suffix(self, mock_global_config):
+        """测试 get_rt_id 追加 doris 后缀"""
+        from services.web.risk.handlers.event_provider_sql import (
+            RiskEventAggregateSqlBuilder,
+        )
 
-    def test_empty_table_name(self):
-        """测试空表名"""
-        self.assertEqual(EventProvider._apply_storage_suffix(""), "")
-        self.assertEqual(EventProvider._apply_storage_suffix(None), "")
-        self.assertEqual(EventProvider._apply_storage_suffix("  "), "")
+        mock_global_config.return_value = "591_test_table"
+        result = RiskEventAggregateSqlBuilder.get_rt_id()
+        self.assertEqual(result, "591_test_table.doris")
+
+    @mock.patch("apps.meta.models.GlobalMetaConfig.get")
+    def test_get_rt_id_not_duplicate_suffix(self, mock_global_config):
+        """测试 get_rt_id 不重复追加后缀"""
+        from services.web.risk.handlers.event_provider_sql import (
+            RiskEventAggregateSqlBuilder,
+        )
+
+        mock_global_config.return_value = "591_test_table.doris"
+        result = RiskEventAggregateSqlBuilder.get_rt_id()
+        self.assertEqual(result, "591_test_table.doris")
+
+    @mock.patch("apps.meta.models.GlobalMetaConfig.get")
+    def test_get_rt_id_empty_returns_empty(self, mock_global_config):
+        """测试空配置返回空字符串"""
+        from services.web.risk.handlers.event_provider_sql import (
+            RiskEventAggregateSqlBuilder,
+        )
+
+        mock_global_config.return_value = ""
+        result = RiskEventAggregateSqlBuilder.get_rt_id()
+        self.assertEqual(result, "")
 
 
 class TestEventProviderLazyLoad(TestCase):
@@ -571,3 +593,89 @@ class TestCeilToSecond(TestCase):
         from core.utils.time import ceil_to_second
 
         self.assertIsNone(ceil_to_second(None))
+
+
+class TestRiskEventAggregateSqlBuilder(TestCase):
+    """测试 RiskEventAggregateSqlBuilder（从 Risk 对象初始化）"""
+
+    def setUp(self):
+        from datetime import timedelta
+        from unittest import mock
+
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+        from services.web.strategy_v2.models import Strategy
+
+        self.Risk = Risk
+        self.Strategy = Strategy
+
+        self.mock_config = mock.patch(
+            "apps.meta.models.GlobalMetaConfig.get",
+            return_value="591_test_event_table",
+        )
+        self.mock_config.start()
+
+        self.strategy = Strategy.objects.create(
+            strategy_id=9999,
+            strategy_name="Test Strategy",
+            namespace="default",
+        )
+
+        now = timezone.now()
+        self.risk = Risk.objects.create(
+            risk_id="test_risk_001",
+            strategy_id=self.strategy.strategy_id,
+            raw_event_id="raw_event_001",
+            event_time=now - timedelta(hours=1),
+            event_end_time=now,
+        )
+
+    def tearDown(self):
+        self.mock_config.stop()
+        self.Risk.objects.filter(risk_id="test_risk_001").delete()
+        self.Strategy.objects.filter(strategy_id=9999).delete()
+
+    def test_init_from_risk(self):
+        """测试从 Risk 对象初始化"""
+        from services.web.risk.handlers.event_provider_sql import (
+            RiskEventAggregateSqlBuilder,
+        )
+
+        builder = RiskEventAggregateSqlBuilder(self.risk)
+
+        self.assertEqual(builder.strategy_id, self.risk.strategy_id)
+        self.assertEqual(builder.raw_event_id, self.risk.raw_event_id)
+        self.assertIsNotNone(builder.start_time)
+        self.assertIsNotNone(builder.end_time)
+
+    def test_get_rt_id(self):
+        """测试获取结果表 ID"""
+        from services.web.risk.handlers.event_provider_sql import (
+            RiskEventAggregateSqlBuilder,
+        )
+
+        rt_id = RiskEventAggregateSqlBuilder.get_rt_id()
+
+        self.assertIn("591_test_event_table", rt_id)
+        self.assertTrue(rt_id.endswith(".doris"))
+
+    def test_build_count_sql(self):
+        """测试构建 COUNT SQL"""
+        from services.web.risk.handlers.event_provider_sql import (
+            EventFieldConfig,
+            RiskEventAggregateSqlBuilder,
+        )
+
+        builder = RiskEventAggregateSqlBuilder(self.risk)
+        count_field = EventFieldConfig(
+            raw_name="*",
+            display_name="cnt",
+            field_type=FieldType.LONG,
+            aggregate=AggregateType.COUNT,
+        )
+        sql = builder.build_aggregate_sql([count_field])
+
+        self.assertIsNotNone(sql)
+        self.assertIn("COUNT", sql)
+        self.assertIn("cnt", sql)

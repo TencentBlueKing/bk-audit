@@ -33,6 +33,7 @@ from services.web.strategy_v2.constants import (
     RuleAuditConfigType,
     RuleAuditFieldType,
     RuleAuditSourceType,
+    StrategyReportStatus,
     StrategySource,
     StrategyStatusChoices,
 )
@@ -288,6 +289,102 @@ class StrategyTest(TestCase):
                 # 我们在创建时放了 risk_title 一项
                 self.assertGreaterEqual(len(strategy_data["risk_meta_field_config"]), 1)
                 self.assertEqual(strategy_data["risk_meta_field_config"][0]["field_name"], "risk_title")
+
+    def test_list_strategy_report_status(self):
+        """测试策略列表返回 report_status 字段"""
+        # 创建三种不同报告状态的策略
+        auto_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="auto_report_strategy",
+            configs={},
+            report_enabled=True,
+            report_auto_render=True,
+        )
+        manual_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="manual_report_strategy",
+            configs={},
+            report_enabled=True,
+            report_auto_render=False,
+        )
+        disabled_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="disabled_report_strategy",
+            configs={},
+            report_enabled=False,
+            report_auto_render=True,  # 即使 auto_render=True，但 enabled=False 仍为未开启
+        )
+
+        result = resource.strategy_v2.list_strategy(namespace=self.namespace)
+        result_map = {s["strategy_id"]: s for s in result}
+
+        # 验证 report_status 字段返回正确
+        self.assertEqual(result_map[auto_strategy.strategy_id]["report_status"], StrategyReportStatus.AUTO.value)
+        self.assertEqual(result_map[manual_strategy.strategy_id]["report_status"], StrategyReportStatus.MANUAL.value)
+        self.assertEqual(
+            result_map[disabled_strategy.strategy_id]["report_status"], StrategyReportStatus.DISABLED.value
+        )
+
+    def test_list_strategy_filter_by_report_status(self):
+        """测试策略列表按 report_status 筛选"""
+        # 创建三种不同报告状态的策略
+        auto_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="filter_auto_strategy",
+            configs={},
+            report_enabled=True,
+            report_auto_render=True,
+        )
+        manual_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="filter_manual_strategy",
+            configs={},
+            report_enabled=True,
+            report_auto_render=False,
+        )
+        disabled_strategy = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="filter_disabled_strategy",
+            configs={},
+            report_enabled=False,
+        )
+
+        # 测试筛选自动生成
+        result = resource.strategy_v2.list_strategy(
+            namespace=self.namespace, report_status=StrategyReportStatus.AUTO.value
+        )
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertIn(auto_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(manual_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
+
+        # 测试筛选手动生成
+        result = resource.strategy_v2.list_strategy(
+            namespace=self.namespace, report_status=StrategyReportStatus.MANUAL.value
+        )
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertNotIn(auto_strategy.strategy_id, strategy_ids)
+        self.assertIn(manual_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
+
+        # 测试筛选未开启
+        result = resource.strategy_v2.list_strategy(
+            namespace=self.namespace, report_status=StrategyReportStatus.DISABLED.value
+        )
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertNotIn(auto_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(manual_strategy.strategy_id, strategy_ids)
+        self.assertIn(disabled_strategy.strategy_id, strategy_ids)
+
+        # 测试多选筛选（自动生成 + 手动生成）
+        result = resource.strategy_v2.list_strategy(
+            namespace=self.namespace,
+            report_status=f"{StrategyReportStatus.AUTO.value},{StrategyReportStatus.MANUAL.value}",
+        )
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertIn(auto_strategy.strategy_id, strategy_ids)
+        self.assertIn(manual_strategy.strategy_id, strategy_ids)
+        self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
 
     def test_create_rule_strategy(self) -> None:
         """Create Rule Strategy with risk_field_config"""
