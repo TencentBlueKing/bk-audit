@@ -219,8 +219,8 @@ class GenerateRiskReport(RiskReportMeta):
         # 解析报告配置
         report_config = ReportConfig.model_validate(strategy.report_config)
 
-        # 提交渲染任务（简化调用）
-        async_result = submit_render_task(risk=risk, report_config=report_config)
+        # 提交渲染任务（用户手动生成报告，启用缓存）
+        async_result = submit_render_task(risk=risk, report_config=report_config, enable_cache=True)
 
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
         return {"task_id": async_result.id, "status": "PENDING"}
