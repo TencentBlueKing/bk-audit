@@ -545,7 +545,7 @@
   };
 
   const handlerManagersChange = (val: string[] | string) => {
-    formData.value.managers = val;
+    formData.value.managers = val as string[];
   };
 
   const handlerRouteChange = (type: string) => {
