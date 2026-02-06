@@ -1258,19 +1258,7 @@
         "name_en": "View Audit Report by Department",
         "type": "view",
         "version": 1,
-        "related_resource_types": [
-          {
-            "system_id": "bk_usermgr",
-            "id": "department",
-            "selection_mode": "instance",
-            "related_instance_selections": [
-              {
-                "system_id": "bk_usermgr",
-                "id": "department"
-              }
-            ]
-          }
-        ],
+        "related_resource_types": [],
         "related_actions": [
           "list_base_panel",
           "view_base_panel_v2"
