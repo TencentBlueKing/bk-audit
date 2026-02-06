@@ -526,7 +526,6 @@
     window.addEventListener('resize', handleResize);
     nextTick(() => {
       formRef.value?.clearValidate();
-      console.log('!(props.riskLisks.length > 0)', !(props.riskLisks.length > 0));
     });
   });
 
