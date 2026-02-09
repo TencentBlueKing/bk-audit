@@ -140,7 +140,7 @@
               :border="['row','outer','col']"
               :columns="tableField.columns"
               :data="tableField.tableData"
-              header-align="center"
+              header-align="left"
               :max-height="maxHeight"
               :pagination="tableField.pagination"
               show-overflow-tooltip
