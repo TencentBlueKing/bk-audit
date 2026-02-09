@@ -535,30 +535,55 @@
   };
   const isAutoGenerate = ref(false);
   const handleSubmit = () => {
+    // 新创建报告时，直接保存，不提示
+    if (!props.reportContent) {
+      const restoredContent = restoreAiContentBlocks(localeReportContent.value);
+      saveOrUpdateRiskReport({
+        risk_id: route.params.riskId,
+        content: restoredContent,
+        auto_generate: false,
+      });
+      return;
+    }
+
     const manualText = '保存后，报告将被标记为「人工编辑」状态，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告';
     const autoText = '保存后，报告将被标记为「模板生成」状态，后续有新事件触发，系统将自动更新该报表内容';
     const isAutoReport = props.status === 'auto';
     const hasChange = isChangeVal.value;
     const hasReget = isRegetVal.value;
+
+    // 判断状态是否发生变化
+    // 从模板生成变为人工编辑：isAutoReport && hasChange
+    // 从人工编辑变为模板生成：!isAutoReport && hasReget
+    const statusChanged = (isAutoReport && hasChange) || (!isAutoReport && hasReget);
+
+    // 如果状态没有变化，直接保存，不提示
+    if (!statusChanged) {
+      const restoredContent = restoreAiContentBlocks(localeReportContent.value);
+      // 根据当前状态决定 auto_generate 的值
+      const autoGenerate = isAutoReport && !hasChange;
+      saveOrUpdateRiskReport({
+        risk_id: route.params.riskId,
+        content: restoredContent,
+        auto_generate: autoGenerate,
+      });
+      return;
+    }
+
+    // 状态发生变化，需要提示用户
     let subTitleText = manualText;
     let isShowButton = false;
 
     if (hasChange) {
+      // 从模板生成变为人工编辑
       subTitleText = manualText;
       isAutoGenerate.value = false;
-    } else if (isAutoReport) {
-      subTitleText = autoText;
-      isAutoGenerate.value = true;
     } else if (hasReget) {
+      // 从人工编辑变为模板生成
       subTitleText = autoText;
       isAutoGenerate.value = true;
       isShowButton = true;
-    } else {
-      subTitleText = manualText;
-      isAutoGenerate.value = true;
     }
-
-    // 人工编辑后，则提示用户
 
     nextTick(() => {
       saveReportDialogRef.value?.show(subTitleText, isShowButton);
