@@ -45,12 +45,14 @@
             :label="t('通知对象')"
             label-width="135"
             property="group_member">
-            <user-variable-select-tenant
+            <audit-user-selector-tenant
               class="form-item-common"
               :collapse-tags="collapseTags"
               :model-value="formData.group_member"
               :multiple="multiple"
               :placeholder="t('请输入用户名，或通过输入$使用变量')"
+              :user-group="variableList"
+              :user-group-name="t('可使用变量')"
               @change="handleNoticeReceiver" />
             <bk-alert
               class="form-item-common mt8"
@@ -132,6 +134,7 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
   import NoticeManageService from '@service/notice-group';
 
   import NoticeGroupsModel from '@model/notice/notice-group';
@@ -139,10 +142,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  // import UserVariableSelect from './user-variable-select.vue';
-  import userVariableSelectTenant from './user-variable-select-tenant.vue';
-
   import getAssetsFile from '@/utils/getAssetsFile';
+
 
   interface NoticeWay{
     [key: string|number]: boolean
@@ -246,6 +247,20 @@
       formData.value.description = data.description;
     },
   });
+
+  // 可使用变量
+  const variableList = ref<{id:string, name:string}[]>([]);
+  useRequest(MetaManageService.fetchVariableList, {
+    manual: true,
+    defaultValue: [],
+    onSuccess: (data) => {
+      variableList.value = data.map(item => ({
+        id: item.value,
+        name: `${item.value}(${item.label})`,
+      }));
+    },
+  });
+
 
   // 校验通知方式
   const checkNoticeWay = (value: NoticeWay) => {
