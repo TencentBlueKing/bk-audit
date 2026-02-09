@@ -26,6 +26,8 @@
     :multiple="multiple"
     :render-tag="renderTag"
     :tenant-id="tenantId"
+    :user-group="userGroup"
+    :user-group-name="userGroupName"
     @blur="handleBlur"
     @update:model-value="handleValueChange" />
 </template>
@@ -49,6 +51,8 @@
     // needRecord?: boolean;
     isDisabled?: boolean;
     autoFocus?: boolean;
+    userGroup?: Array<{ id: string; name: string; }>;
+    userGroupName?: string;
   }
 
   interface Emits {
@@ -65,6 +69,8 @@
     // needRecord: false,
     isDisabled: false,
     autoFocus: true,
+    userGroup: () => [],
+    userGroupName: '用户组',
   });
 
   const emit = defineEmits<Emits>();
