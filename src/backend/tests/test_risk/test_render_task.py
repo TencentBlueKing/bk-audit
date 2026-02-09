@@ -163,6 +163,23 @@ class TestRiskRenderTask(TestCase):
         # 验证锁释放
         assert cache.get(self.lock_key) is None
 
+    @mock.patch("services.web.risk.handlers.report.submit_render_task")
+    def test_render_task_disable_cache_for_auto_trigger(self, mock_submit):
+        """测试：后台事件触发时 enable_cache=False"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.get.return_value = "Auto generated report"
+        mock_submit.return_value = mock_async_result
+
+        task_id = "test-task-uuid"
+        cache.set(self.lock_key, task_id)
+
+        render_risk_report(risk_id=self.risk.risk_id, task_id=task_id)
+
+        # 验证 submit_render_task 被调用时 enable_cache=False
+        mock_submit.assert_called_once()
+        call_kwargs = mock_submit.call_args[1]
+        self.assertFalse(call_kwargs["enable_cache"])
+
     def test_lock_ownership_fail(self):
         """测试：锁被抢占/过期，任务自动退出"""
         task_id = "my-task-uuid"

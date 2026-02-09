@@ -515,7 +515,7 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
         _ = Risk.objects.get(risk_id=risk_id)
 
         # 构建 AI Provider
-        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables)
+        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables, enable_cache=True)
 
         # 执行 AI 调用，收集结果
         ai_results = {}

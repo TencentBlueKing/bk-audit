@@ -955,6 +955,32 @@ class TestRetrieveRiskDetail(TestCase):
         data = self.resource.risk.retrieve_risk({"risk_id": unsynced_risk.risk_id})
         self.assertEqual(data["status"], "stand_by")
 
+    def test_retrieve_risk_report_generating_when_lock_exists(self):
+        """测试报告生成中时 report_generating 返回 True"""
+        from django.core.cache import cache
+
+        from services.web.risk.constants import RISK_RENDER_LOCK_KEY
+
+        lock_key = RISK_RENDER_LOCK_KEY.format(risk_id=self.risk.risk_id)
+        cache.set(lock_key, "task-uuid", timeout=60)
+        try:
+            data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
+            self.assertTrue(data["report_generating"])
+        finally:
+            cache.delete(lock_key)
+
+    def test_retrieve_risk_report_generating_when_no_lock(self):
+        """测试无锁时 report_generating 返回 False"""
+        from django.core.cache import cache
+
+        from services.web.risk.constants import RISK_RENDER_LOCK_KEY
+
+        lock_key = RISK_RENDER_LOCK_KEY.format(risk_id=self.risk.risk_id)
+        cache.delete(lock_key)
+
+        data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
+        self.assertFalse(data["report_generating"])
+
 
 class TestSyncManualRiskStatus(TestCase):
     def setUp(self):
