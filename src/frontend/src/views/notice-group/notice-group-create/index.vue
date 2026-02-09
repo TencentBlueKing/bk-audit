@@ -45,7 +45,7 @@
             :label="t('通知对象')"
             label-width="135"
             property="group_member">
-            <user-variable-select
+            <user-variable-select-tenant
               class="form-item-common"
               :collapse-tags="collapseTags"
               :model-value="formData.group_member"
@@ -139,7 +139,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import UserVariableSelect from './user-variable-select.vue';
+  // import UserVariableSelect from './user-variable-select.vue';
+  import userVariableSelectTenant from './user-variable-select-tenant.vue';
 
   import getAssetsFile from '@/utils/getAssetsFile';
 
@@ -286,8 +287,8 @@
   };
 
   // 接收通知对象
-  const handleNoticeReceiver = (value: Array<string>) => {
-    formData.value.group_member = value;
+  const handleNoticeReceiver = (value: Array<string> | string) => {
+    formData.value.group_member = value as string[];
   };
   const closeDialog = () => {
     showCreate.value = false;
