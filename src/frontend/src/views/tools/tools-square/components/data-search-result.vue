@@ -19,7 +19,7 @@
     :border="['row','outer','col']"
     :columns="columns"
     :data="tableData"
-    header-align="center"
+    header-align="left"
     :max-height="maxHeight"
     :pagination="pagination"
     :remote-pagination="remotePagination"
