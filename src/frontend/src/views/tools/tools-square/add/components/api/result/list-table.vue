@@ -880,6 +880,11 @@
   color: #63656e;
   border-right: 1px solid #dcdee5;
   border-bottom: 1px solid #dcdee5;
+  transition: background-color .2s;
+
+  &:hover {
+    background: #f5f7fa;
+  }
 }
 
 .field-icon {
