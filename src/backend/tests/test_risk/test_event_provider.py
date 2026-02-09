@@ -56,8 +56,8 @@ class TestEventProviderSqlBuilder(TestCase):
         也应跳过 CAST，直接使用 JSON_EXTRACT_STRING 输出。
         """
         fields = [
-            EventFieldConfig(
-                raw_name="gse索引",
+            EventFieldConfig.event_data(
+                field_name="gse索引",
                 display_name="gse索引",
                 field_type=FieldType.LONG,  # 字段类型是 LONG
                 aggregate=AggregateType.LIST_DISTINCT,  # 但聚合是 LIST_DISTINCT
@@ -65,18 +65,17 @@ class TestEventProviderSqlBuilder(TestCase):
         ]
         sql = self.builder.build_aggregate_sql(fields)
 
-        # 验证：不应出现 CAST ... AS BIGINT，应保持 STRING
-        self.assertNotIn("CAST", sql)
-        self.assertNotIn("BIGINT", sql)
-        # 应使用 GROUP_CONCAT(DISTINCT ...)
-        self.assertIn("GROUP_CONCAT(DISTINCT", sql)
-        self.assertIn("JSON_EXTRACT_STRING", sql)
+        expected = (
+            "SELECT GROUP_CONCAT(DISTINCT JSON_EXTRACT_STRING(`t`.`event_data`,'$.gse索引')) `gse索引` "
+            f"FROM {self.TABLE_NAME} `t` {self.BASE_WHERE}"
+        )
+        self.assertEqual(sql, expected)
 
     def test_aggregate_sql_list_long_field_no_cast(self):
         """测试 LIST 聚合对 LONG 类型字段不做 CAST"""
         fields = [
-            EventFieldConfig(
-                raw_name="event_count",
+            EventFieldConfig.event_data(
+                field_name="event_count",
                 display_name="event_count",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.LIST,
@@ -84,19 +83,19 @@ class TestEventProviderSqlBuilder(TestCase):
         ]
         sql = self.builder.build_aggregate_sql(fields)
 
-        # 验证：不应出现 CAST
-        self.assertNotIn("CAST", sql)
-        # 应使用 GROUP_CONCAT(...)（无 DISTINCT）
-        self.assertIn("GROUP_CONCAT(JSON_EXTRACT_STRING", sql)
-        self.assertNotIn("DISTINCT", sql)
+        expected = (
+            "SELECT GROUP_CONCAT(JSON_EXTRACT_STRING(`t`.`event_data`,'$.event_count')) `event_count` "
+            f"FROM {self.TABLE_NAME} `t` {self.BASE_WHERE}"
+        )
+        self.assertEqual(sql, expected)
 
     # --- 聚合查询 SQL 完整验证 ---
 
     def test_aggregate_sql_count(self):
         """测试 COUNT 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="event_id",
+            EventFieldConfig.event_data(
+                field_name="event_id",
                 display_name="event_id",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.COUNT,
@@ -113,8 +112,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_count_distinct(self):
         """测试 COUNT_DISTINCT 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="user_id",
+            EventFieldConfig.event_data(
+                field_name="user_id",
                 display_name="user_id",
                 field_type=FieldType.STRING,
                 aggregate=AggregateType.DISCOUNT,
@@ -132,8 +131,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_sum(self):
         """测试 SUM 聚合 SQL（LONG 类型 CAST 到 BIGINT）"""
         fields = [
-            EventFieldConfig(
-                raw_name="amount",
+            EventFieldConfig.event_data(
+                field_name="amount",
                 display_name="amount",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.SUM,
@@ -150,8 +149,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_avg(self):
         """测试 AVG 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="score",
+            EventFieldConfig.event_data(
+                field_name="score",
                 display_name="score",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.AVG,
@@ -168,8 +167,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_max(self):
         """测试 MAX 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="price",
+            EventFieldConfig.event_data(
+                field_name="price",
                 display_name="price",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.MAX,
@@ -186,8 +185,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_min(self):
         """测试 MIN 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="latency",
+            EventFieldConfig.event_data(
+                field_name="latency",
                 display_name="latency",
                 field_type=FieldType.LONG,
                 aggregate=AggregateType.MIN,
@@ -204,8 +203,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_list(self):
         """测试 LIST 聚合 SQL（GROUP_CONCAT）"""
         fields = [
-            EventFieldConfig(
-                raw_name="action",
+            EventFieldConfig.event_data(
+                field_name="action",
                 display_name="action",
                 field_type=FieldType.STRING,
                 aggregate=AggregateType.LIST,
@@ -222,8 +221,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_aggregate_sql_list_distinct(self):
         """测试 LIST_DISTINCT 聚合 SQL"""
         fields = [
-            EventFieldConfig(
-                raw_name="category",
+            EventFieldConfig.event_data(
+                field_name="category",
                 display_name="category",
                 field_type=FieldType.STRING,
                 aggregate=AggregateType.LIST_DISTINCT,
@@ -242,8 +241,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_first_sql(self):
         """测试 FIRST SQL（ORDER BY ASC LIMIT 1）"""
         fields = [
-            EventFieldConfig(
-                raw_name="username",
+            EventFieldConfig.event_data(
+                field_name="username",
                 display_name="username",
                 field_type=FieldType.STRING,
             )
@@ -260,8 +259,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_latest_sql(self):
         """测试 LATEST SQL（ORDER BY DESC LIMIT 1）"""
         fields = [
-            EventFieldConfig(
-                raw_name="ip",
+            EventFieldConfig.event_data(
+                field_name="ip",
                 display_name="ip",
                 field_type=FieldType.STRING,
             )
@@ -280,8 +279,8 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_field_type_cast_double(self):
         """测试 DOUBLE 类型的 CAST"""
         fields = [
-            EventFieldConfig(
-                raw_name="rate",
+            EventFieldConfig.event_data(
+                field_name="rate",
                 display_name="rate",
                 field_type=FieldType.DOUBLE,
                 aggregate=AggregateType.SUM,
@@ -298,17 +297,44 @@ class TestEventProviderSqlBuilder(TestCase):
     def test_field_type_string_no_cast(self):
         """测试 STRING 类型无需 CAST（first/latest 场景）"""
         fields = [
-            EventFieldConfig(
-                raw_name="name",
+            EventFieldConfig.event_data(
+                field_name="name",
                 display_name="name",
                 field_type=FieldType.STRING,
             )
         ]
         sql = self.builder.build_first_sql(fields)
 
-        # STRING 类型不 CAST，直接 JSON_EXTRACT_STRING
-        self.assertIn("JSON_EXTRACT_STRING(`t`.`event_data`,'$.name') `name`", sql)
-        self.assertNotIn("CAST", sql)
+        expected = (
+            "SELECT JSON_EXTRACT_STRING(`t`.`event_data`,'$.name') `name` "
+            f"FROM {self.TABLE_NAME} `t` {self.BASE_WHERE} "
+            "ORDER BY `t`.`dtEventTimeStamp` ASC LIMIT 1"
+        )
+        self.assertEqual(sql, expected)
+
+    # --- 普通表字段（非 JSON 下钻）---
+
+    def test_aggregate_sql_table_column(self):
+        """测试普通表字段聚合（非 JSON 下钻）"""
+        fields = [
+            EventFieldConfig(
+                raw_name="dtEventTimeStamp",
+                display_name="min_time",
+                field_type=FieldType.LONG,
+                aggregate=AggregateType.MIN,
+            )
+        ]
+        sql = self.builder.build_aggregate_sql(fields)
+
+        expected = "SELECT MIN(`t`.`dtEventTimeStamp`) `min_time` " f"FROM {self.TABLE_NAME} `t` {self.BASE_WHERE}"
+        self.assertEqual(sql, expected)
+
+    def test_count_star(self):
+        """测试 build_count_sql 生成正确的 COUNT(*) SQL"""
+        sql = self.builder.build_count_sql()
+
+        expected = f"SELECT COUNT(*) `count` FROM {self.TABLE_NAME} `t` {self.BASE_WHERE} LIMIT 1"
+        self.assertEqual(sql, expected)
 
     # --- 边界情况 ---
 
@@ -661,21 +687,19 @@ class TestRiskEventAggregateSqlBuilder(TestCase):
         self.assertTrue(rt_id.endswith(".doris"))
 
     def test_build_count_sql(self):
-        """测试构建 COUNT SQL"""
+        """测试构建 COUNT(*) SQL — 使用 build_count_sql"""
         from services.web.risk.handlers.event_provider_sql import (
-            EventFieldConfig,
             RiskEventAggregateSqlBuilder,
         )
 
         builder = RiskEventAggregateSqlBuilder(self.risk)
-        count_field = EventFieldConfig(
-            raw_name="*",
-            display_name="cnt",
-            field_type=FieldType.LONG,
-            aggregate=AggregateType.COUNT,
-        )
-        sql = builder.build_aggregate_sql([count_field])
+        sql = builder.build_count_sql()
 
-        self.assertIsNotNone(sql)
-        self.assertIn("COUNT", sql)
-        self.assertIn("cnt", sql)
+        expected = (
+            f"SELECT COUNT(*) `count` FROM {builder.table_name} `t` "
+            f"WHERE `t`.`strategy_id`={builder.strategy_id} "
+            f"AND `t`.`raw_event_id`='{builder.raw_event_id}' "
+            f"AND `t`.`dtEventTimeStamp` BETWEEN {builder.start_time} AND {builder.end_time} "
+            f"LIMIT 1"
+        )
+        self.assertEqual(sql, expected)

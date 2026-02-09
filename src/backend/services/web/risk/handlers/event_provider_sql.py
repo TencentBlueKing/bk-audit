@@ -22,7 +22,6 @@ EventProvider SQL 生成器
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Optional
 
 from django.conf import settings
@@ -48,14 +47,40 @@ from services.web.databus.constants import DORIS_EVENT_BKBASE_RT_ID_KEY
 from services.web.risk.models import Risk
 
 
-@dataclass
-class EventFieldConfig:
-    """事件字段配置"""
+class EventFieldConfig(Field):
+    """
+    风险事件字段配置
 
-    raw_name: str  # JSON key 名称（中文字段名）
-    display_name: str  # SQL 别名
-    field_type: FieldType = FieldType.STRING
-    aggregate: Optional[AggregateType] = None
+    继承 core.sql.model.Field，预填 table 别名。
+    对于 event_data JSON 下钻字段，使用 event_data() 工厂方法。
+    """
+
+    table: str = "t"
+
+    @classmethod
+    def event_data(
+        cls,
+        field_name: str,
+        display_name: str,
+        field_type: FieldType = FieldType.STRING,
+        aggregate: Optional[AggregateType] = None,
+    ) -> "EventFieldConfig":
+        """
+        构造 event_data JSON 下钻字段
+
+        Args:
+            field_name: event_data 中的 JSON key 名称
+            display_name: SQL 别名
+            field_type: 字段类型
+            aggregate: 聚合函数
+        """
+        return cls(
+            raw_name="event_data",
+            display_name=display_name,
+            field_type=field_type,
+            keys=[field_name],
+            aggregate=aggregate,
+        )
 
 
 class EventAggregateSqlBuilder:
@@ -64,7 +89,6 @@ class EventAggregateSqlBuilder:
     """
 
     TABLE_ALIAS: str = "t"
-    JSON_COLUMN: str = "event_data"
 
     def __init__(
         self,
@@ -136,23 +160,6 @@ class EventAggregateSqlBuilder:
         ]
         return WhereCondition(conditions=conditions)
 
-    def _build_json_field(self, config: EventFieldConfig) -> Field:
-        """
-        构建 JSON 下钻字段
-
-        keys 参数触发 BkbaseDorisSqlGenerator._get_pypika_field 的逻辑：
-        - JSON_EXTRACT_STRING(event_data, '$.字段名')
-        - 非 STRING 类型会 CAST 到目标类型
-        """
-        return Field(
-            table=self.TABLE_ALIAS,
-            raw_name=self.JSON_COLUMN,
-            display_name=config.display_name,
-            field_type=config.field_type,
-            keys=[config.raw_name],
-            aggregate=config.aggregate,
-        )
-
     def _build_order_field(self) -> Field:
         """构建排序字段（dtEventTimeStamp）"""
         return Field(
@@ -162,12 +169,26 @@ class EventAggregateSqlBuilder:
             field_type=FieldType.LONG,
         )
 
-    def build_aggregate_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_count_sql(self) -> str:
+        """
+        构建 COUNT(*) SQL
+
+        COUNT(*) 不能通过普通字段机制生成（PyPika 会将 * 转义为 `t`.`*`），
+        使用 generator.generate_count 专用方法。
+        """
+        config = SqlConfig(
+            select_fields=[],
+            from_table=self._table,
+            where=self._base_where,
+        )
+        return str(self._generator.generate_count(config))
+
+    def build_aggregate_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建聚合查询 SQL
 
         Args:
-            fields: 聚合字段配置列表（必须有 aggregate 属性）
+            fields: 字段列表（Field 或其子类，如 EventFieldConfig）
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -175,10 +196,8 @@ class EventAggregateSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
-
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             group_by=[],
@@ -186,12 +205,12 @@ class EventAggregateSqlBuilder:
 
         return str(self._generator.generate(config))
 
-    def build_first_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_first_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建 first 查询 SQL（ORDER BY ASC LIMIT 1）
 
         Args:
-            fields: 字段配置列表
+            fields: 字段列表
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -199,11 +218,10 @@ class EventAggregateSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
         order_by = [Order(field=self._build_order_field(), order=PypikaOrder.asc)]
 
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             order_by=order_by,
@@ -212,12 +230,12 @@ class EventAggregateSqlBuilder:
 
         return str(self._generator.generate(config))
 
-    def build_latest_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_latest_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建 latest 查询 SQL（ORDER BY DESC LIMIT 1）
 
         Args:
-            fields: 字段配置列表
+            fields: 字段列表
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -225,11 +243,10 @@ class EventAggregateSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
         order_by = [Order(field=self._build_order_field(), order=PypikaOrder.desc)]
 
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             order_by=order_by,

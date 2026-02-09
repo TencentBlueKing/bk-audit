@@ -192,7 +192,7 @@ class TestAIProviderCache(TestCase):
     @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
     def test_get_event_count(self, mock_query):
         """测试获取事件数量"""
-        mock_query.return_value = {"list": [{"cnt": 100}]}
+        mock_query.return_value = {"list": [{"count": 100}]}
 
         provider = AIProvider(
             context={"risk_id": self.risk.risk_id},
@@ -309,7 +309,7 @@ class TestAIProviderCache(TestCase):
         cache.clear()
 
         # Mock 返回值
-        mock_bkbase_query.return_value = {"list": [{"cnt": 10}]}
+        mock_bkbase_query.return_value = {"list": [{"count": 10}]}
         mock_chat_completion.return_value = "这是 AI 生成的内容"
 
         ai_variables = [{"name": "ai.test_cache", "prompt_template": "测试缓存"}]
@@ -353,7 +353,7 @@ class TestAIProviderCache(TestCase):
         ai_variables = [{"name": "ai.test_invalidation", "prompt_template": "测试失效"}]
 
         # 第一次调用，事件数为 10
-        mock_bkbase_query.return_value = {"list": [{"cnt": 10}]}
+        mock_bkbase_query.return_value = {"list": [{"count": 10}]}
         mock_chat_completion.return_value = "第一次生成"
 
         provider1 = AIProvider(
@@ -365,7 +365,7 @@ class TestAIProviderCache(TestCase):
         self.assertEqual(mock_chat_completion.call_count, 1)
 
         # 第二次调用，事件数变为 20（缓存应失效）
-        mock_bkbase_query.return_value = {"list": [{"cnt": 20}]}
+        mock_bkbase_query.return_value = {"list": [{"count": 20}]}
         mock_chat_completion.return_value = "第二次生成"
 
         provider2 = AIProvider(
