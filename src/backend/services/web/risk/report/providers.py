@@ -31,7 +31,7 @@ from django.db.models import Max
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
-from core.sql.constants import AggregateType, FieldType
+from core.sql.constants import FieldType
 from services.web.risk.constants import (
     AGGREGATION_FUNCTION_TO_SQL_TYPE,
     AI_ERROR_PREFIX,
@@ -294,19 +294,10 @@ class AIProvider(Provider):
         """使用 RiskEventAggregateSqlBuilder 查询事件数量"""
         try:
             builder = RiskEventAggregateSqlBuilder(risk)
-            count_field = EventFieldConfig(
-                raw_name="*",
-                display_name="cnt",
-                field_type=FieldType.LONG,
-                aggregate=AggregateType.COUNT,
-            )
-            sql = builder.build_aggregate_sql([count_field])
+            sql = builder.build_count_sql()
             logger.info("[AIProvider] Event count SQL: %s", sql)
-            if not sql:
-                return 0
-
             result = api.bk_base.query_sync(sql=sql)
-            return result.get("list", [{}])[0].get("cnt", 0)
+            return result.get("list", [{}])[0].get("count", 0)
         except Exception as e:
             logger.warning("[AIProvider] Failed to get event count: %s", e)
             return 0
@@ -400,22 +391,19 @@ class EventProvider(Provider):
 
         builder = RiskEventAggregateSqlBuilder(self.risk)
 
-        field_config = EventFieldConfig(
-            raw_name=field_name,
+        sql_aggregate = AGGREGATION_FUNCTION_TO_SQL_TYPE.get(aggregate) if aggregate else None
+        field_config = EventFieldConfig.event_data(
+            field_name=field_name,
             display_name=key,
             field_type=field_type,
+            aggregate=sql_aggregate,
         )
 
-        sql: Optional[str] = None
         if aggregate == AggregationFunction.FIRST:
             sql = builder.build_first_sql([field_config])
         elif aggregate == AggregationFunction.LATEST:
             sql = builder.build_latest_sql([field_config])
         else:
-            # 聚合查询
-            sql_aggregate = AGGREGATION_FUNCTION_TO_SQL_TYPE.get(aggregate)
-            if sql_aggregate:
-                field_config.aggregate = sql_aggregate
             sql = builder.build_aggregate_sql([field_config])
 
         return sql
