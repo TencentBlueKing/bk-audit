@@ -18,6 +18,7 @@
 <template>
   <bk-sideslider
     v-model:isShow="isShowRight"
+    :before-close="handleBeforeClose"
     :class="isPreviewExpanded ? 'ai-agent-drawer ai-agent-drawer-preview' : 'ai-agent-drawer'"
     quick-close
     :title="t('引用 AI 智能体')"
@@ -175,6 +176,7 @@
 </template>
 
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import DOMPurify from 'dompurify';
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -339,6 +341,36 @@
     }
     return DOMPurify.sanitize(normalized);
   };
+  // 关闭前的确认函数
+  const handleBeforeClose = (): Promise<boolean> => {
+    // 检查内容是否有变化
+    if (isChangedFromInitial.value) {
+      // 有变化，显示确认对话框
+      return new Promise((resolve) => {
+        InfoBox({
+          type: 'warning',
+          title: t('确认离开？'),
+          subTitle: t('当前有未保存的更改，离开将会导致未保存信息丢失'),
+          confirmText: t('确定'),
+          cancelText: t('取消'),
+          headerAlign: 'center',
+          contentAlign: 'center',
+          footerAlign: 'center',
+          onConfirm() {
+            // 用户确认，允许关闭
+            resolve(true);
+          },
+          onClose() {
+            // 用户取消，阻止关闭
+            resolve(false);
+          },
+        });
+      });
+    }
+    // 没有变化，直接允许关闭
+    return Promise.resolve(true);
+  };
+
   const handleClose = () => {
     isShowRight.value = false;
     if (timerId.value !== null) {

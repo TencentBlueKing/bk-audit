@@ -18,6 +18,7 @@
   <audit-sideslider
     ref="sidesliderRef"
     v-model:isShow="isShowEditEventReport"
+    :before-close="handleBeforeClose"
     show-footer-slot
     :title="reportContent ? '编辑事件调查报告' : '创建事件调查报告'"
     :width="1100">
@@ -354,15 +355,49 @@
     required: true,
   });
   watch(isShowEditEventReport, (show) => {
-    if (!show) return;
-    nextTick(() => {
-      if (props.reportContent !== undefined) {
-        applyEditorContent(props.reportContent);
-      } else {
-        applyEditorContent('');
-      }
-    });
+    // 打开时，初始化内容
+    if (show) {
+      nextTick(() => {
+        if (props.reportContent !== undefined) {
+          applyEditorContent(props.reportContent);
+        } else {
+          applyEditorContent('');
+        }
+      });
+    }
   });
+
+  // 关闭前的确认函数
+  const handleBeforeClose = (): Promise<boolean> => {
+    // 检查内容是否有变化
+    if (isChangeVal.value || isRegetVal.value) {
+      // 有变化，显示确认对话框
+      return new Promise((resolve) => {
+        InfoBox({
+          type: 'warning',
+          title: t('确认离开？'),
+          subTitle: t('当前有未保存的更改，离开将会导致未保存信息丢失'),
+          confirmText: t('确定'),
+          cancelText: t('取消'),
+          headerAlign: 'center',
+          contentAlign: 'center',
+          footerAlign: 'center',
+          onConfirm() {
+            // 用户确认，允许关闭
+            isChangeVal.value = false;
+            isRegetVal.value = false;
+            resolve(true);
+          },
+          onClose() {
+            // 用户取消，阻止关闭
+            resolve(false);
+          },
+        });
+      });
+    }
+    // 没有变化，直接允许关闭
+    return Promise.resolve(true);
+  };
 
   const {
     run: saveOrUpdateRiskReport,
