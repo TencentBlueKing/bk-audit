@@ -451,12 +451,19 @@
     });
   };
 
-  // 计算 textarea 的 rows 值（基于页面高度的 70%）
+  // 计算 textarea 的 rows 值
   const calculateTextareaRows = () => {
-    if (isPreviewExpanded.value) {
-      textareaRows.value = 4;
-      return;
+    const windowHeight = window.innerHeight;
+    const textareaHeight = windowHeight * 0.1;
+
+    let rows = 3;
+    if (textareaHeight < 100) {
+      rows = Math.round(textareaHeight / 30) <= 2 ? 2 : Math.round(textareaHeight / 30);
     }
+    if (textareaHeight > 100) {
+      rows = Math.round(textareaHeight / 15);
+    }
+    textareaRows.value = rows;
   };
 
   // 窗口大小变化时重新计算
