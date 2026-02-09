@@ -39,19 +39,20 @@
     watch,
   } from 'vue';
 
-  import useRequest from '@hooks/use-request';
-
   import BkUserSelector from '@blueking/bk-user-selector';
 
   import '@blueking/bk-user-selector/vue3/vue3.css';
-  import MetaManageService from '@/domain/service/meta-manage';
 
   interface Props {
     modelValue: Array<string> | string;
     allowCreate?: boolean;
     multiple?: boolean;
+    // collapseTags?: boolean;  //bk-select 属性 bk-user-select 不支持
+    // needRecord?: boolean;
     isDisabled?: boolean;
     autoFocus?: boolean;
+    userGroup?: Array<{ id: string; name: string; }>;
+    userGroupName?: string;
   }
 
   interface Emits {
@@ -64,34 +65,22 @@
     modelValue: () => [],
     allowCreate: false,
     multiple: true,
+    // collapseTags: true,
+    // needRecord: false,
     isDisabled: false,
     autoFocus: true,
+    userGroup: () => [],
+    userGroupName: '用户组',
   });
 
   const emit = defineEmits<Emits>();
   const userSelectorRef = ref();
   const localValue = ref<Props['modelValue']>([]);
-  // 用户组数据，从接口获取变量列表
-  const userGroup = ref<{ id: string; name: string; }[]>([]);
-  useRequest(MetaManageService.fetchVariableList, {
-    manual: true,
-    defaultValue: [],
-    onSuccess: (value) => {
-      userGroup.value = value.map(item => ({
-        id: item.value,
-        name: `${item.value}(${item.label})`,
-      }));
-    },
-  });
-
-
-  const userGroupName = ref('可使用变量');
-
 
   // 自定义标签渲染
   const renderTag = (createElement:any, userInfo:any) => createElement('span', { class: 'custom-tag' }, [
     createElement('img', { src: userInfo.logo, class: 'avatar' }),
-    userInfo.display_name || userInfo.name,
+    userInfo.display_name,
   ]);
 
   // 从sessionStorage中获取配置
@@ -108,6 +97,7 @@
   };
 
   // 计算apiBaseUrl
+  // apiBaseUrl 由后端配置中的 BK_API_URL_TMPL 与 BK_USER_WEB_APIGW_URL 以及网关环境拼接而成
   const apiBaseUrl = computed(() => {
     const config = getConfig();
     if (config?.tenant_config?.BK_USER_WEB_APIGW_URL) {
@@ -137,7 +127,6 @@
   watch(
     () => props.modelValue,
     (modelValue: Props['modelValue']) => {
-      console.log(modelValue, 'model');
       localValue.value = modelValue;
     },
     {
@@ -149,12 +138,6 @@
 
 <style lang="postcss">
   .bk-user-selector {
-    position: relative;
-    z-index: 1;
     width: 100%;
-
-    .angle-up {
-      display: none !important;
-    }
   }
 </style>
