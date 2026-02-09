@@ -594,8 +594,7 @@
 .headers-config {
   display: flex;
   width: 100%;
-  padding-bottom: 10px;
-  margin-top: 10px;
+  margin-top: 8px;
   align-items: center;
 
   .config-input {
