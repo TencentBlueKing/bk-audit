@@ -159,6 +159,18 @@ class RisksViewSet(ResourceViewSet):
                 )
             ],
         ),
+        ResourceRoute(
+            "POST",
+            resource.risk.list_processed_risk,
+            endpoint="processed",
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
+                    data_field=lambda data: data["results"],
+                    id_field=lambda risk: risk["risk_id"],
+                )
+            ],
+        ),
         ResourceRoute("GET", resource.risk.list_risk_fields, endpoint="fields"),
         ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
         ResourceRoute("PUT", resource.risk.update_risk_label, pk_field="risk_id", endpoint="risk_label"),
