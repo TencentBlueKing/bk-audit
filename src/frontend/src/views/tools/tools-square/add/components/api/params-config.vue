@@ -890,7 +890,8 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 }
 
 .field-icon {
-  margin-left: 20px;
+  margin-left: 16px;
+  font-size: 14px;
   color: #c4c6cc;
 }
 
@@ -953,7 +954,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
 /* 时间范围选择器tag样式 */
 .var-split span {
-  margin-top: 2px;
+  margin-top: 4px;
   margin-right: 10px;
 }
 
