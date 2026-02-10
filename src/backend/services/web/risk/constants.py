@@ -468,6 +468,7 @@ class RiskViewType(TextChoices):
     ALL = "all", gettext_lazy("全部风险")
     TODO = "todo", gettext_lazy("待我处理")
     WATCH = "watch", gettext_lazy("我的关注")
+    PROCESSED = "processed", gettext_lazy("处理历史")
 
 
 class RiskEventSubscriptionFieldCategory(TextChoices):
