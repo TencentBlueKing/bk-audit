@@ -177,6 +177,8 @@
 
   let isReady = false;
   const isLoading = ref(false);
+  // 新增：用户是否手动选择了分页大小的标志
+  const isUserSelectedPageSize = ref(false);
   const {
     getSearchParams,
     replaceSearchParams,
@@ -247,6 +249,8 @@
         order_type: orderType,
       };
     }
+    // 从URL参数初始化时重置用户选择标志
+    isUserSelectedPageSize.value = false;
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
@@ -278,6 +282,8 @@
   };
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
+    // 用户手动选择分页大小，设置标志
+    isUserSelectedPageSize.value = true;
     pagination.limit = pageLimit;
     isUnload.value = false;
     isLoading.value = true;
@@ -292,6 +298,8 @@
   };
   // 情况搜索条件
   const handleClearSearch  = () => {
+    // 清空搜索条件时重置用户选择标志
+    isUserSelectedPageSize.value = false;
     emits('clearSearch');
   };
   onMounted(() => {
@@ -359,6 +367,20 @@
         ...pagination.limitList,
         nextLimit,
       ]);
+
+      // 如果用户已经手动选择了分页大小，则不再自动调整分页大小
+      if (isUserSelectedPageSize.value) {
+        // 只更新表格高度，不修改分页大小
+        const nextHeight = dimensions.tableHeaderHeight
+          + dimensions.rowNum * dimensions.tableRowHeight
+          + dimensions.paginationHeight
+          + 8;
+        // eslint-disable-next-line max-len
+        tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+        tableHeight.value = tableMaxHeight.value;
+        return;
+      }
+
       pagination.limit = nextLimit;
       if (pagination.limit > 10) {
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
@@ -404,6 +426,8 @@
         pagination.current = Number(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       }
+      // 重置用户选择标志，允许重新计算分页大小
+      isUserSelectedPageSize.value = false;
       isLoading.value = true;
       fetchListData();
     },
@@ -438,6 +462,8 @@
     },
     initData() {
       isLoading.value = false;
+      // 初始化数据时重置用户选择标志
+      isUserSelectedPageSize.value = false;
       fetchListData();
     },
   });
