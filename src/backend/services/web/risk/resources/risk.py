@@ -106,6 +106,7 @@ from services.web.risk.models import (
     RiskExperience,
     TicketNode,
     TicketPermission,
+    UserType,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -534,8 +535,8 @@ class ListRisk(RiskMeta):
             )
         return queryset.order_by(order_field)
 
-    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
-        # 构造表达式
+    def _build_filter_query(self, validated_request_data: dict) -> Q:
+        """通用筛选条件构造：从请求参数中提取风险等级、标签等筛选条件并构造 Q 表达式，供所有 ListRisk 子类共享。"""
         q = Q()
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
@@ -554,8 +555,11 @@ class ListRisk(RiskMeta):
             for i in val:
                 _q |= Q(**{key: i})
             q &= _q
-        # 获取有权限且符合表达式的
-        return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
+        return q
+
+    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+        q = self._build_filter_query(validated_request_data)
+        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
 
     def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
         if not risk_ids:
@@ -626,18 +630,35 @@ class ListMineRisk(ListRisk):
     name = gettext_lazy("获取待我处理的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        queryset = queryset.filter(Q(current_operator__contains=get_request_username()))
-        return queryset
+        q = self._build_filter_query(validated_request_data)
+        return Risk.annotated_queryset().filter(q, current_operator__contains=get_request_username()).distinct()
 
 
 class ListNoticingRisk(ListRisk):
     name = gettext_lazy("获取我关注的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        queryset = queryset.filter(Q(notice_users__contains=get_request_username()))
-        return queryset
+        q = self._build_filter_query(validated_request_data)
+        return Risk.annotated_queryset().filter(q, notice_users__contains=get_request_username()).distinct()
+
+
+class ListProcessedRisk(ListRisk):
+    name = gettext_lazy("获取处理历史风险列表")
+
+    def load_risks(self, validated_request_data):
+        q = self._build_filter_query(validated_request_data)
+        username = get_request_username()
+        processed_risk_ids = TicketPermission.objects.filter(
+            user=username,
+            user_type=UserType.OPERATOR,
+            action=ActionEnum.LIST_RISK.id,
+        ).values("risk_id")
+        return (
+            Risk.annotated_queryset()
+            .filter(q, risk_id__in=processed_risk_ids)
+            .exclude(current_operator__contains=username)
+            .distinct()
+        )
 
 
 class ListRiskFields(RiskMeta):
@@ -700,6 +721,7 @@ class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
         RiskViewType.ALL.value: ListRisk,
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
+        RiskViewType.PROCESSED.value: ListProcessedRisk,
     }
 
     @classmethod

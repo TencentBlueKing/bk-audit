@@ -194,13 +194,28 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ["risk_id", "last_operate_time"],
         ]
 
+    # ──── 单一权限 ────
+
     @classmethod
-    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
+    def iam_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
-        获取有权限处理的风险筛选条件
+        IAM 策略权限：仅返回用户在权限中心申请过的风险
         """
 
-        q = Q(
+        permission = Permission(get_request_username())
+        request = permission.make_request(action=get_action_by_id(action), resources=[])
+        policies = permission.iam_client._do_policy_query(request)
+        if policies:
+            return RiskPathEqDjangoQuerySetConverter().convert(policies)
+        return Q(pk__in=[])
+
+    @classmethod
+    def local_risk_filter(cls) -> Q:
+        """
+        本地权限：通过 TicketPermission 授权的风险（处理人/关注人）
+        """
+
+        return Q(
             risk_id__in=TicketPermission.objects.filter(
                 user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
                 user=get_request_username(),
@@ -208,12 +223,18 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ).values("risk_id")
         )
 
-        permission = Permission(get_request_username())
-        request = permission.make_request(action=get_action_by_id(action), resources=[])
-        policies = permission.iam_client._do_policy_query(request)
-        if policies:
-            q |= RiskPathEqDjangoQuerySetConverter().convert(policies)
-        return q
+    # ──── 组合权限 ────
+
+    @classmethod
+    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
+        """
+        组合权限：IAM 策略 + 本地 TicketPermission
+        用于 ListRiskByPA / RiskExport / ListRiskByRule 等需要完整权限校验的场景
+        """
+
+        return cls.local_risk_filter() | cls.iam_risk_filter(action)
+
+    # ──── QuerySet 快捷方法 ────
 
     @classmethod
     def annotated_queryset(cls) -> QuerySet["Risk"]:
@@ -228,9 +249,17 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         ).defer("event_content")
 
     @classmethod
+    def load_iam_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+        """
+        获取仅通过 IAM 权限过滤的风险集
+        """
+
+        return cls.annotated_queryset().filter(cls.iam_risk_filter(action))
+
+    @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
         """
-        获取有权限处理的风险
+        获取通过组合权限（IAM + 本地）过滤的风险集
         """
 
         return cls.annotated_queryset().filter(cls.authed_risk_filter(action))
