@@ -457,7 +457,7 @@
 <style lang="postcss" scoped>
 .object-table {
   position: relative;
-  margin-top: 6px;
+  margin-top: 12px;
   border: 1px solid #dcdee5;
   border-radius: 2px;
 
@@ -495,7 +495,7 @@
   display: flex;
   min-width: 640px;
   overflow: hidden;
-  border: 1px solid #dcdee5;
+  border-top: 1px solid #dcdee5;
   border-radius: 2px;
   user-select: none;
   flex-direction: column;
@@ -525,6 +525,10 @@
   overflow: hidden;
   border-left: 1px solid #dcdee5;
   align-items: center;
+
+  &:first-child {
+    border-left: none;
+  }
 
   .field-value-div {
     display: flex;
@@ -638,7 +642,6 @@
   line-height: 42px;
   color: #63656e;
   border-right: 1px solid #dcdee5;
-  border-bottom: 1px solid #dcdee5;
 }
 
 .field-icon {
