@@ -276,7 +276,7 @@
 .draggable-box {
   .draggable-element {
     position: relative;
-    padding-top: 10px;
+    padding-top: 16px;
     cursor: pointer;
 
     .draggable-heard {

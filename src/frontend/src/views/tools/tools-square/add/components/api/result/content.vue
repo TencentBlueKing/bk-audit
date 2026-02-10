@@ -423,7 +423,7 @@
 <style lang="postcss" scoped>
 
 .content-item {
-  margin-top: 24px;
+  margin-top: 16px;
 
   .content-lable {
     font-size: 12px;
