@@ -156,7 +156,9 @@
                       </bk-tag>
                     </span>
                   </div>
-                  <div style="display: flex;">
+                  <div
+                    class="var-split"
+                    style="display: flex;">
                     <bk-input
                       v-model="item.split_config.end_field"
                       @change="() => handelVarItem(item)" />
@@ -741,7 +743,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   min-width: 640px;
   overflow: hidden;
   border: 1px solid #dcdee5;
-  border-radius: 2px;
+  border-radius: 2px 2px 0 0;
   user-select: none;
   flex-direction: column;
   flex: 1;
@@ -883,12 +885,13 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   font-size: 12px;
   line-height: 42px;
   color: #63656e;
-  border-right: 1px solid #dcdee5;
-  border-bottom: 1px solid #dcdee5;
+  border: 1px solid #dcdee5;
+  border-top: none;
 }
 
 .field-icon {
-  margin-left: 20px;
+  margin-left: 16px;
+  font-size: 14px;
   color: #c4c6cc;
 }
 
@@ -906,7 +909,11 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
 .var-split {
   display: flex;
-  border-bottom: 1px solid  #dcdee5;
+
+  &:first-child {
+    border-bottom: 1px solid  #dcdee5;
+  }
+
 }
 
 .params-box {
@@ -944,4 +951,21 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   text-underline-offset: 5px;
   cursor: pointer;
 }
+
+/* 时间范围选择器tag样式 */
+.var-split span {
+  margin-top: 4px;
+  margin-right: 10px;
+}
+
+.var-split .bk-tag.bk-tag-info,
+.var-split .bk-tag.bk-tag-warning {
+  width: 50px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+
 </style>
