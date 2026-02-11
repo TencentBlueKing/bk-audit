@@ -23,7 +23,11 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
-from services.web.risk.constants import EventFilterOperator, RiskStatus
+from services.web.risk.constants import (
+    EventFilterOperator,
+    RiskDisplayStatus,
+    RiskStatus,
+)
 from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
 from services.web.risk.resources.risk import ListMineRisk
 from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
@@ -648,6 +652,109 @@ class TestListRiskResource(TestCase):
         event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
         self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_bkbase_with_display_status_filter(self):
+        """传入具体 status 值时，BkBase SQL 中应包含 display_status 筛选条件"""
+        # 创建一条 display_status=CLOSED 的风险
+        closed_risk = Risk.objects.create(
+            risk_id="risk-closed-display",
+            raw_event_id="raw-closed",
+            strategy=self.strategy,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            title=self.bkbase_title,
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=closed_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": closed_risk.risk_id, "strategy_id": closed_risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "status": RiskDisplayStatus.CLOSED,
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], closed_risk.risk_id)
+        # 验证 BkBase SQL 中包含 display_status 筛选条件
+        self.assertEqual(len(sql_log), 2)
+        combined_sql = " ".join(sql_log).replace("`", "")
+        self.assertIn("display_status", combined_sql)
+        self.assertIn(RiskDisplayStatus.CLOSED, combined_sql)
+        self.assertEqual(data["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_db_with_display_status_filter(self):
+        """DB 路径下传入 status 时，应通过 display_status 字段筛选"""
+        # setUp 中的 risk 默认 display_status=NEW
+        closed_risk = Risk.objects.create(
+            risk_id="risk-closed-db",
+            raw_event_id="raw-closed-db",
+            strategy=self.strategy,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            title="closed-risk",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=closed_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        # 传入 status=closed，应只返回 display_status=closed 的风险
+        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.CLOSED})
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], closed_risk.risk_id)
+
+        # 传入 status=new，应只返回 display_status=new 的风险（setUp 中的 risk）
+        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.NEW})
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+
+    def test_list_risk_via_bkbase_with_multiple_display_status(self):
+        """传入多个 status 值时，BkBase SQL 中应包含多个 display_status 筛选条件"""
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        # 逗号分隔传入多个 status
+        payload = {
+            "use_bkbase": True,
+            "status": f"{RiskDisplayStatus.NEW},{RiskDisplayStatus.CLOSED}",
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        combined_sql = " ".join(sql_log).replace("`", "")
+        # 验证 SQL 中包含 display_status 筛选
+        self.assertIn("display_status", combined_sql)
+        self.assertIn(RiskDisplayStatus.NEW, combined_sql)
+        self.assertIn(RiskDisplayStatus.CLOSED, combined_sql)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_via_bkbase_prioritizes_manual_unsynced(self):

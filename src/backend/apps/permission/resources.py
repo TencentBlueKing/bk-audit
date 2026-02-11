@@ -28,6 +28,7 @@ from apps.permission.handlers.auth import AuthHandler
 from apps.permission.handlers.permission import Permission
 from apps.permission.serializers import (
     BatchIsAllowRequestSerializer,
+    CheckAnyPermissionRequestSerializer,
     CheckPermissionRequestSerializer,
     GetApplyDataRequestSerializer,
 )
@@ -69,6 +70,18 @@ class CheckPermissionResource(IAM):
 
         # 日志平台
         return api.bk_log.check_allowed(action_ids=action_ids, resources=instances)
+
+
+class CheckAnyPermissionResource(IAM):
+    """检查当前用户对某动作是否有任意权限（不关心具体资源实例）"""
+
+    name = gettext_lazy("检查当前用户对某动作是否有任意权限")
+    RequestSerializer = CheckAnyPermissionRequestSerializer
+
+    def perform_request(self, validated_request_data: dict) -> dict:
+        action_ids = validated_request_data["action_ids"]
+        client = Permission()
+        return {action_id: client.has_action_any_permission(action_id) for action_id in action_ids}
 
 
 class GetApplyDataResource(IAM):
