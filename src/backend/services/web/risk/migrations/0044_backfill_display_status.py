@@ -1,73 +1,70 @@
-from django.db import migrations, transaction
-
-# 分批大小，避免单次 update 影响行过多导致锁表
-BATCH_SIZE = 2000
-
-
-def _batch_update(model, queryset, **update_kwargs):
-    """分批更新，每次处理 BATCH_SIZE 条记录"""
-    while True:
-        batch_pks = list(queryset.values_list("pk", flat=True)[:BATCH_SIZE])
-        if not batch_pks:
-            break
-        model.objects.filter(pk__in=batch_pks).update(**update_kwargs)
+from django.db import migrations
 
 
 def forwards(apps, schema_editor):
-    """根据现有 status 回填 display_status"""
+    """
+    根据现有 status 回填 display_status。
+    """
     Risk = apps.get_model("risk", "Risk")
     TicketNode = apps.get_model("risk", "TicketNode")
 
-    with transaction.atomic():
-        # 1. 批量默认映射：status → display_status
-        status_to_display = {
-            "new": "new",
-            "for_approve": "for_approve",
-            "auto_process": "auto_process",
-            "closed": "closed",
-            "await_deal": "processing",  # 默认映射为"处理中"
-        }
-        for status_val, display_val in status_to_display.items():
-            _batch_update(
-                Risk,
-                Risk.objects.filter(status=status_val).exclude(display_status=display_val),
-                display_status=display_val,
-            )
+    print("[forwards] 开始回填 display_status", flush=True)
 
-        # 2. 特殊处理：仅有 NewRisk 操作历史的 await_deal → "待处理"
-        #    使用子查询替代 Python set 操作，避免大数据量下的内存和 SQL IN 问题
-        await_risks = Risk.objects.filter(status="await_deal")
-        has_other_actions = (
-            TicketNode.objects.filter(risk_id__in=await_risks.values("risk_id"))
-            .exclude(action="NewRisk")
-            .values("risk_id")
+    # -------- 第一步：全量直接映射 status → display_status --------
+    # 包含 await_deal → await_deal，先把所有记录都设为默认映射值
+    full_mapping = {
+        "new": "new",
+        "for_approve": "for_approve",
+        "auto_process": "auto_process",
+        "closed": "closed",
+        "await_deal": "await_deal",
+    }
+    for status_val, display_val in full_mapping.items():
+        updated = (
+            Risk.objects.filter(status=status_val)
+            .exclude(display_status=display_val)
+            .update(display_status=display_val)
         )
-        pure_new_risks = await_risks.exclude(risk_id__in=has_other_actions)
-        _batch_update(Risk, pure_new_risks, display_status="await_deal")
+        print(f"[forwards] 映射 status={status_val} → display_status={display_val}, 更新 {updated} 条", flush=True)
+
+    # -------- 第二步：修正少量 await_deal 中有操作历史的 → processing --------
+    # 从 TicketNode 取出所有有非 NewRisk 操作的 risk_id（通常很少），直接作为子查询更新
+    processing_risk_ids = TicketNode.objects.exclude(action="NewRisk").values_list("risk_id", flat=True).distinct()
+    updated = (
+        Risk.objects.filter(status="await_deal", risk_id__in=processing_risk_ids)
+        .exclude(display_status="processing")
+        .update(display_status="processing")
+    )
+    print(f"[forwards] await_deal + 有操作历史 → processing, 共更新 {updated} 条", flush=True)
+
+    print("[forwards] 回填 display_status 完成", flush=True)
 
 
 def backwards(apps, schema_editor):
     """回滚：将 display_status 全部重置为与 status 的默认映射"""
     Risk = apps.get_model("risk", "Risk")
 
-    with transaction.atomic():
-        status_to_display = {
-            "new": "new",
-            "for_approve": "for_approve",
-            "auto_process": "auto_process",
-            "closed": "closed",
-            "await_deal": "processing",
-        }
-        for status_val, display_val in status_to_display.items():
-            _batch_update(
-                Risk,
-                Risk.objects.filter(status=status_val).exclude(display_status=display_val),
-                display_status=display_val,
-            )
+    print("[backwards] 开始回滚 display_status", flush=True)
+
+    status_to_display = {
+        "new": "new",
+        "for_approve": "for_approve",
+        "auto_process": "auto_process",
+        "closed": "closed",
+        "await_deal": "new",
+    }
+    for status_val, display_val in status_to_display.items():
+        updated = (
+            Risk.objects.filter(status=status_val)
+            .exclude(display_status=display_val)
+            .update(display_status=display_val)
+        )
+        print(f"[backwards] 映射 status={status_val} → display_status={display_val}, 更新 {updated} 条", flush=True)
+
+    print("[backwards] 回滚 display_status 完成", flush=True)
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("risk", "0043_add_risk_display_status"),
     ]
