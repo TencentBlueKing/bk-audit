@@ -23,7 +23,11 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
-from services.web.risk.constants import EventFilterOperator, RiskStatus
+from services.web.risk.constants import (
+    EventFilterOperator,
+    RiskDisplayStatus,
+    RiskStatus,
+)
 from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
 from services.web.risk.resources.risk import ListMineRisk
 from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
@@ -54,6 +58,12 @@ class TestListRiskResource(TestCase):
         )
         self.authed_filter_patcher.start()
         self.addCleanup(self.authed_filter_patcher.stop)
+
+        self.iam_filter_patcher = mock.patch(
+            "services.web.risk.models.Risk.iam_risk_filter", return_value=Q(), autospec=True
+        )
+        self.iam_filter_patcher.start()
+        self.addCleanup(self.iam_filter_patcher.stop)
 
         self.bkbase_table_config = {
             ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
@@ -174,14 +184,16 @@ class TestListRiskResource(TestCase):
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
-        permission_q = Q(risk_id__in=TicketPermission.objects.filter(user=self.username).values("risk_id"))
-        original_return = Risk.authed_risk_filter.return_value
-        Risk.authed_risk_filter.return_value = permission_q
-        try:
-            with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-                data = self._call_resource({"use_bkbase": True, "title": "bkbase-title"})
-        finally:
-            Risk.authed_risk_filter.return_value = original_return
+        # ListRisk（所有风险）仅用 IAM 权限，需 mock iam_risk_filter 以限定结果集
+        iam_q = Q(risk_id=self.risk.risk_id)
+        with (
+            mock.patch(
+                "services.web.risk.models.Risk.iam_risk_filter",
+                return_value=iam_q,
+            ),
+            mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync),
+        ):
+            data = self._call_resource({"use_bkbase": True, "title": "bkbase-title"})
 
         results = data["results"]
         self.assertEqual(len(results), 1)
@@ -191,8 +203,9 @@ class TestListRiskResource(TestCase):
         risk_table = f"{self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
         self.assertIn(risk_table, sql_log[0])
         self.assertIn(risk_table, sql_log[1])
+        # 所有风险为 IAM 仅用，不 join ticket_permission 表
         ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
-        self.assertTrue(any(ticket_table in sql for sql in sql_log))
+        self.assertFalse(any(ticket_table in sql for sql in sql_log))
         event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
         self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
@@ -650,6 +663,109 @@ class TestListRiskResource(TestCase):
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
+    def test_list_risk_via_bkbase_with_display_status_filter(self):
+        """传入具体 status 值时，BkBase SQL 中应包含 display_status 筛选条件"""
+        # 创建一条 display_status=CLOSED 的风险
+        closed_risk = Risk.objects.create(
+            risk_id="risk-closed-display",
+            raw_event_id="raw-closed",
+            strategy=self.strategy,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            title=self.bkbase_title,
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=closed_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": closed_risk.risk_id, "strategy_id": closed_risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "status": RiskDisplayStatus.CLOSED,
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], closed_risk.risk_id)
+        # 验证 BkBase SQL 中包含 display_status 筛选条件
+        self.assertEqual(len(sql_log), 2)
+        combined_sql = " ".join(sql_log).replace("`", "")
+        self.assertIn("display_status", combined_sql)
+        self.assertIn(RiskDisplayStatus.CLOSED, combined_sql)
+        self.assertEqual(data["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_db_with_display_status_filter(self):
+        """DB 路径下传入 status 时，应通过 display_status 字段筛选"""
+        # setUp 中的 risk 默认 display_status=NEW
+        closed_risk = Risk.objects.create(
+            risk_id="risk-closed-db",
+            raw_event_id="raw-closed-db",
+            strategy=self.strategy,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            title="closed-risk",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=closed_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        # 传入 status=closed，应只返回 display_status=closed 的风险
+        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.CLOSED})
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], closed_risk.risk_id)
+
+        # 传入 status=new，应只返回 display_status=new 的风险（setUp 中的 risk）
+        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.NEW})
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+
+    def test_list_risk_via_bkbase_with_multiple_display_status(self):
+        """传入多个 status 值时，BkBase SQL 中应包含多个 display_status 筛选条件"""
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        # 逗号分隔传入多个 status
+        payload = {
+            "use_bkbase": True,
+            "status": f"{RiskDisplayStatus.NEW},{RiskDisplayStatus.CLOSED}",
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        combined_sql = " ".join(sql_log).replace("`", "")
+        # 验证 SQL 中包含 display_status 筛选
+        self.assertIn("display_status", combined_sql)
+        self.assertIn(RiskDisplayStatus.NEW, combined_sql)
+        self.assertIn(RiskDisplayStatus.CLOSED, combined_sql)
+        assert_hive_sql(self, sql_log)
+
     def test_list_risk_via_bkbase_prioritizes_manual_unsynced(self):
         manual_risk = Risk.objects.create(
             risk_id="risk-manual-unsynced",
@@ -813,11 +929,7 @@ class TestListMineAndNoticingRisk(TestCase):
 
     def test_list_mine_risk(self):
         request = self._make_request()
-        with mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked:
-            mocked.return_value = Risk.annotated_queryset().filter(
-                risk_id__in=[self.risk_owned.risk_id, self.risk_noticed.risk_id]
-            )
-            response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
+        response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
 
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
@@ -836,11 +948,7 @@ class TestListMineAndNoticingRisk(TestCase):
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk_owned.risk_id, "strategy_id": self.strategy.strategy_id}]}
 
-        with (
-            mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked,
-            mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync),
-        ):
-            mocked.return_value = Risk.annotated_queryset().filter(risk_id=self.risk_owned.risk_id)
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             response = ListMineRisk().request(
                 {
                     "page": 1,
@@ -858,6 +966,26 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertEqual(len(sql_log), 2)
         self.assertEqual(response["sql"], sql_log)
         assert_hive_sql(self, sql_log)
+
+    def test_list_mine_risk_no_perm_check(self):
+        """ListMineRisk 不依赖 load_authed_risks，直接按 current_operator 查询"""
+        request = self._make_request()
+        response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
+        results = response["results"]
+        risk_ids = {item["risk_id"] for item in results}
+        self.assertIn(self.risk_owned.risk_id, risk_ids)
+        self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
+
+    def test_list_noticing_risk_no_perm_check(self):
+        """ListNoticingRisk 不依赖 load_authed_risks，直接按 notice_users 查询"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        request = self._make_request()
+        response = ListNoticingRisk().request({"page": 1, "page_size": 10}, _request=request)
+        results = response["results"]
+        risk_ids = {item["risk_id"] for item in results}
+        self.assertIn(self.risk_noticed.risk_id, risk_ids)
+        self.assertNotIn(self.risk_owned.risk_id, risk_ids)
 
 
 class TestRetrieveRiskDetail(TestCase):
@@ -1126,3 +1254,262 @@ class TestSyncManualEventStatus(TestCase):
         self.assertEqual(called_kwargs["value"]["manual_event_id"], expected_ids)
         self.assertEqual(called_kwargs["value"]["start_time"], expected_start)
         self.assertEqual(called_kwargs["value"]["end_time"], expected_end)
+
+
+class TestRiskPermissionFilters(TestCase):
+    """测试 Risk 模型的三层权限过滤方法"""
+
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            strategy_id=301,
+            strategy_name="perm-test-strategy",
+            risk_level=RiskLevel.HIGH.value,
+        )
+        # 风险1：用户通过 TicketPermission 有权限（本地权限）
+        self.risk_local = Risk.objects.create(
+            risk_id="R-LOCAL",
+            title="local-perm-risk",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=self.risk_local.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user="admin",
+            user_type=UserType.OPERATOR,
+        )
+        # 风险2：用户通过 IAM 有权限（无 TicketPermission）
+        self.risk_iam = Risk.objects.create(
+            risk_id="R-IAM",
+            title="iam-perm-risk",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+        # 风险3：用户无任何权限
+        self.risk_none = Risk.objects.create(
+            risk_id="R-NONE",
+            title="no-perm-risk",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+
+    def _mock_iam_policies(self):
+        """mock IAM 返回仅包含 R-IAM 的策略"""
+        return Q(risk_id="R-IAM")
+
+    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
+    @mock.patch("services.web.risk.models.Permission")
+    def test_iam_risk_filter_only_returns_iam_risks(self, mock_perm_cls, mock_converter_cls):
+        """iam_risk_filter 应仅返回 IAM 策略匹配的风险"""
+        mock_perm = mock_perm_cls.return_value
+        mock_perm.make_request.return_value = mock.MagicMock()
+        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
+        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+
+        q = Risk.iam_risk_filter(ActionEnum.LIST_RISK)
+        risk_ids = set(Risk.objects.filter(q).values_list("risk_id", flat=True))
+
+        self.assertIn("R-IAM", risk_ids)
+        self.assertNotIn("R-LOCAL", risk_ids)
+        self.assertNotIn("R-NONE", risk_ids)
+
+    def test_local_risk_filter_only_returns_ticket_permission_risks(self):
+        """local_risk_filter 应仅返回 TicketPermission 中有记录的风险"""
+        q = Risk.local_risk_filter()
+        risk_ids = set(Risk.objects.filter(q).values_list("risk_id", flat=True))
+
+        self.assertIn("R-LOCAL", risk_ids)
+        self.assertNotIn("R-IAM", risk_ids)
+        self.assertNotIn("R-NONE", risk_ids)
+
+    @mock.patch("services.web.risk.models.Permission")
+    def test_iam_risk_filter_no_policies_returns_empty(self, mock_perm_cls):
+        """IAM 无策略时应返回空集"""
+        mock_perm = mock_perm_cls.return_value
+        mock_perm.make_request.return_value = mock.MagicMock()
+        mock_perm.iam_client._do_policy_query.return_value = None
+
+        q = Risk.iam_risk_filter(ActionEnum.LIST_RISK)
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [])
+
+    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
+    @mock.patch("services.web.risk.models.Permission")
+    def test_load_iam_authed_risks_has_annotations(self, mock_perm_cls, mock_converter_cls):
+        """load_iam_authed_risks 返回的 QuerySet 应保留 annotated_queryset 的注解字段"""
+        mock_perm = mock_perm_cls.return_value
+        mock_perm.make_request.return_value = mock.MagicMock()
+        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
+        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+
+        qs = Risk.load_iam_authed_risks(ActionEnum.LIST_RISK)
+        risk = qs.first()
+        self.assertTrue(hasattr(risk, "event_content_short"))
+        self.assertTrue(hasattr(risk, "_has_report"))
+
+    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
+    @mock.patch("services.web.risk.models.Permission")
+    def test_load_authed_risks_backward_compatible(self, mock_perm_cls, mock_converter_cls):
+        """load_authed_risks 应保持向后兼容，返回 IAM + TicketPermission 的并集"""
+        mock_perm = mock_perm_cls.return_value
+        mock_perm.make_request.return_value = mock.MagicMock()
+        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
+        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+
+        qs = Risk.load_authed_risks(ActionEnum.LIST_RISK)
+        risk_ids = set(qs.values_list("risk_id", flat=True))
+
+        self.assertIn("R-LOCAL", risk_ids)
+        self.assertIn("R-IAM", risk_ids)
+        self.assertNotIn("R-NONE", risk_ids)
+
+
+class TestListProcessedRisk(TestCase):
+    """处理历史接口：返回我曾作为处理人的风险，排除当前处理人包含我的"""
+
+    def setUp(self):
+        super().setUp()
+        self.factory = APIRequestFactory()
+        self.username = "admin"
+        self.strategy = Strategy.objects.create(
+            strategy_id=404,
+            strategy_name="processed-strategy",
+            risk_level=RiskLevel.HIGH.value,
+        )
+        self.risk_past = Risk.objects.create(
+            risk_id="R-PAST",
+            title="past-processed",
+            strategy=self.strategy,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            current_operator=[],
+        )
+        TicketPermission.objects.create(
+            risk_id="R-PAST",
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        self.risk_current = Risk.objects.create(
+            risk_id="R-CURRENT",
+            title="current-processing",
+            strategy=self.strategy,
+            status=RiskStatus.AWAIT_PROCESS,
+            display_status=RiskDisplayStatus.AWAIT_PROCESS,
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            current_operator=[self.username],
+        )
+        TicketPermission.objects.create(
+            risk_id="R-CURRENT",
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        self.risk_noticed = Risk.objects.create(
+            risk_id="R-NOTICED",
+            title="noticed-only",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            display_status=RiskDisplayStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            notice_users=[self.username],
+        )
+        TicketPermission.objects.create(
+            risk_id="R-NOTICED",
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.NOTICE_USER,
+        )
+        self.risk_open = Risk.objects.create(
+            risk_id="R-OPEN",
+            title="open-past",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            display_status=RiskDisplayStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
+            current_operator=["someone_else"],
+        )
+        TicketPermission.objects.create(
+            risk_id="R-OPEN",
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        # 低风险等级策略 + 风险，用于筛选测试
+        self.strategy_low = Strategy.objects.create(
+            strategy_id=405,
+            strategy_name="processed-strategy-low",
+            risk_level=RiskLevel.LOW.value,
+        )
+        self.risk_past_low = Risk.objects.create(
+            risk_id="R-PAST-LOW",
+            title="past-processed-low",
+            strategy=self.strategy_low,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
+            current_operator=[],
+        )
+        TicketPermission.objects.create(
+            risk_id="R-PAST-LOW",
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+    def _make_request(self):
+        django_request = self.factory.get("/risks/processed/", data={"page": 1, "page_size": 10})
+        django_request.user = SimpleNamespace(username=self.username, is_authenticated=True)
+        request = Request(django_request)
+        request.user = django_request.user
+        return request
+
+    def test_list_processed_risk_returns_past_risks(self):
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        request = self._make_request()
+        resp = ListProcessedRisk().request({"page": 1, "page_size": 10}, _request=request)
+        risk_ids = {item["risk_id"] for item in resp["results"]}
+        self.assertIn("R-PAST", risk_ids)
+        self.assertIn("R-OPEN", risk_ids)
+        self.assertNotIn("R-CURRENT", risk_ids)
+        self.assertNotIn("R-NOTICED", risk_ids)
+
+    def test_list_processed_risk_includes_closed(self):
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        request = self._make_request()
+        resp = ListProcessedRisk().request({"page": 1, "page_size": 10}, _request=request)
+        statuses = {item["risk_id"]: item["status"] for item in resp["results"]}
+        self.assertIn("R-PAST", statuses)
+        self.assertEqual(statuses["R-PAST"], RiskDisplayStatus.CLOSED)
+
+    def test_list_processed_risk_with_risk_level_filter(self):
+        """筛选参数与 TicketPermission 子查询 + exclude 组合正确工作"""
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        request = self._make_request()
+        # 只筛选高风险：应返回 R-PAST 和 R-OPEN（高风险），不含 R-PAST-LOW（低风险）
+        # 接口要求 risk_level 为字符串，serializer 会按逗号拆成列表
+        resp = ListProcessedRisk().request(
+            {"page": 1, "page_size": 10, "risk_level": RiskLevel.HIGH.value},
+            _request=request,
+        )
+        risk_ids = {item["risk_id"] for item in resp["results"]}
+        self.assertIn("R-PAST", risk_ids)
+        self.assertIn("R-OPEN", risk_ids)
+        self.assertNotIn("R-PAST-LOW", risk_ids)
+        self.assertNotIn("R-CURRENT", risk_ids)
+
+        # 只筛选低风险：应只返回 R-PAST-LOW
+        resp = ListProcessedRisk().request(
+            {"page": 1, "page_size": 10, "risk_level": RiskLevel.LOW.value},
+            _request=request,
+        )
+        risk_ids = {item["risk_id"] for item in resp["results"]}
+        self.assertEqual(risk_ids, {"R-PAST-LOW"})

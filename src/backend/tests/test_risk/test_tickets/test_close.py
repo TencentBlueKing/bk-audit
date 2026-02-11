@@ -20,7 +20,7 @@ import uuid
 
 from django.utils.translation import gettext
 
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import CloseRisk
 from tests.test_risk.test_tickets.base import RiskContext, TicketTest
 
@@ -40,5 +40,7 @@ class CloseTest(TicketTest):
             risk.refresh_from_db()
             # 风险状态
             self.assertEquals(risk.status, RiskStatus.CLOSED)
+            # display_status 同步为 CLOSED
+            self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
             # 节点操作人
             self.assertEquals(risk.last_history.operator, operator)

@@ -41,7 +41,7 @@ from services.web.databus.constants import (
 from services.web.databus.exceptions import SchemaEmptyError
 from services.web.databus.models import Snapshot
 from services.web.databus.storage.handler.redis import RedisHandler
-from services.web.databus.utils import start_bkbase_clean
+from services.web.databus.utils import restart_bkbase_clean, start_bkbase_clean
 
 
 class JoinDataEtlStorageHandler:
@@ -61,8 +61,16 @@ class JoinDataEtlStorageHandler:
         self.storage_type = storage_type
         self.snapshot = snapshot
 
-    def create_clean(self):
-        """创建清洗"""
+    def create_clean(self, update=False):
+        """创建/更新清洗"""
+        if update:
+            # 更新清洗
+            config = self.clean_config.copy()
+            config["processing_id"] = self.snapshot.bkbase_processing_id
+            api.bk_base.databus_cleans_put(config)
+            restart_bkbase_clean(self.snapshot.bkbase_table_id, self.snapshot.bkbase_processing_id)
+            return self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id
+        # 创建清洗
         result = api.bk_base.databus_cleans_post(self.clean_config)
         start_bkbase_clean(result["result_table_id"], result["processing_id"], get_request_username())
         processing_id = result["processing_id"]

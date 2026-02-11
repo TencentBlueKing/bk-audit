@@ -88,6 +88,7 @@ class RiskAdmin(admin.ModelAdmin):
         "operator_short",
         "event_time",
         "status",
+        "display_status",
         "current_operator_short",
         "notice_users_short",
         "risk_label",
@@ -97,7 +98,7 @@ class RiskAdmin(admin.ModelAdmin):
     # 支持按策略名搜索
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
-    list_filter = ["status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
+    list_filter = ["status", "display_status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
     list_per_page = 50  # 减少每页数量以提升性能
 
     def get_queryset(self, request):
