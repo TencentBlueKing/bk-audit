@@ -24,5 +24,6 @@ class PermissionViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.permission.system, endpoint="systems"),
         ResourceRoute("GET", resource.permission.check_permission, endpoint="check"),
+        ResourceRoute("GET", resource.permission.check_any_permission, endpoint="check_any"),
         ResourceRoute("GET", resource.permission.get_apply_data, endpoint="apply_data"),
     ]

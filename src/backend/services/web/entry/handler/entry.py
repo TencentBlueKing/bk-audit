@@ -28,8 +28,8 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
-    AUDIT_DOC_CONFIG_KEY,
     AI_PRACTICES_KEY,
+    AUDIT_DOC_CONFIG_KEY,
     BKBASE_WEB_URL_KEY,
     BKVISION_WEB_URL_KEY,
     DEFAULT_AI_PRACTICES,

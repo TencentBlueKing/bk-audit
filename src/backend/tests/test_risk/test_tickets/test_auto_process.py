@@ -24,7 +24,7 @@ from bk_resource.settings import bk_resource_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import AutoProcess, ForApprove
 from services.web.risk.models import Risk
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
@@ -75,6 +75,8 @@ class AutoProcessTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AUTO_PROCESS)
+                # display_status 同步为 AUTO_PROCESS
+                self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
                 # 检测单据是否符合预期
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
 
@@ -111,6 +113,8 @@ class AutoProcessTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AUTO_PROCESS)
+                # display_status 同步为 AUTO_PROCESS
+                self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
                 # 再次执行
                 with mock.patch(
                     "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
@@ -120,6 +124,8 @@ class AutoProcessTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+                # 套餐完成且不自动关单，使用默认映射：AWAIT_PROCESS → PROCESSING
+                self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
                 self.assertEquals(risk.current_operator, AutoProcess.load_security_person())
 
     @mock.patch(
@@ -155,6 +161,8 @@ class AutoProcessTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+                # 套餐执行失败，使用默认映射：AWAIT_PROCESS → PROCESSING
+                self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
                 self.assertEquals(risk.current_operator, AutoProcess.load_security_person())
 
     @mock.patch(

@@ -23,7 +23,7 @@ from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 
 from apps.itsm.constants import TicketStatus
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import ForApprove, NewRisk
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
@@ -69,6 +69,8 @@ class ForApproveTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.FOR_APPROVE)
+                # display_status 同步为 FOR_APPROVE
+                self.assertEquals(risk.display_status, RiskDisplayStatus.FOR_APPROVE)
                 # 检测单据是否符合预期
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
 
@@ -102,6 +104,8 @@ class ForApproveTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.FOR_APPROVE)
+                # display_status 同步为 FOR_APPROVE
+                self.assertEquals(risk.display_status, RiskDisplayStatus.FOR_APPROVE)
                 # 执行审批节点
                 ForApprove(risk_id=risk.risk_id, operator=operator).run()
                 risk.refresh_from_db()
@@ -116,6 +120,8 @@ class ForApproveTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AUTO_PROCESS)
+                # 审批通过后 display_status 同步为 AUTO_PROCESS
+                self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
 
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
@@ -147,10 +153,14 @@ class ForApproveTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.FOR_APPROVE.value)
+                # display_status 同步为 FOR_APPROVE
+                self.assertEquals(risk.display_status, RiskDisplayStatus.FOR_APPROVE)
                 # 执行审批节点
                 ForApprove(risk_id=risk.risk_id, operator=operator).run()
                 risk.refresh_from_db()
                 # 检测风险状态
                 self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+                # 审批失败后 display_status 使用默认映射：AWAIT_PROCESS → PROCESSING
+                self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
                 # 检测处理人
                 self.assertEquals(risk.current_operator, ForApprove.load_security_person())
