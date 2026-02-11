@@ -63,6 +63,7 @@ from services.web.risk.constants import (
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_SHOW_FIELDS,
+    RiskDisplayStatus,
     RiskExportField,
     RiskFields,
     RiskLabel,
@@ -692,6 +693,15 @@ class RiskStatusCommon(RiskMeta):
         return choices_to_dict(RiskStatus)
 
 
+class RiskDisplayStatusCommon(RiskMeta):
+    """获取风险展示状态类型（供前端下拉框筛选使用）"""
+
+    name = gettext_lazy("获取风险展示状态类型")
+
+    def perform_request(self, validated_request_data):
+        return choices_to_dict(RiskDisplayStatus)
+
+
 class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
     RequestSerializer = ListRiskMetaRequestSerializer
     many_response_data = True
@@ -1086,7 +1096,7 @@ class RiskExport(RiskMeta):
                 RiskExportField.EVENT_TIME: risk.event_time.strftime(api_settings.DATETIME_FORMAT),
                 RiskExportField.RISK_HAZARD: risk.strategy.risk_hazard,
                 RiskExportField.RISK_GUIDANCE: risk.strategy.risk_guidance,
-                RiskExportField.STATUS: str(RiskStatus.get_label(risk.status)),
+                RiskExportField.STATUS: str(RiskDisplayStatus.get_label(risk.display_status)),
                 RiskExportField.RULE_ID: risk.rule_id,
                 RiskExportField.OPERATOR: data2string(risk.operator),
                 RiskExportField.CURRENT_OPERATOR: data2string(risk.current_operator),

@@ -23,7 +23,7 @@ from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import RiskLabel, RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
     APPROVE_SERVICE_INFO,
@@ -62,12 +62,16 @@ class RiskLabelTest(TicketTest):
             # 检测关单
             self.assertEquals(risk.status, RiskStatus.CLOSED.value)
             self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
+            # MisReport→CloseRisk: display_status 同步为 CLOSED
+            self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
             # 解除误报
             operator = uuid.uuid1().hex
             resource.risk.update_risk_label(risk_id=risk.risk_id, risk_label=RiskLabel.NORMAL, new_operators=[operator])
             risk.refresh_from_db()
             # 检测状态
             self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS.value)
+            # ReOpenMisReport→ReOpen: 使用默认映射 AWAIT_PROCESS → PROCESSING
+            self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
             self.assertEquals(risk.current_operator, [operator])
 
     @mock.patch(
@@ -122,6 +126,8 @@ class RiskLabelTest(TicketTest):
                 # 检测关单
                 self.assertEquals(risk.status, RiskStatus.CLOSED.value)
                 self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
+                # MisReport（审批中）→CloseRisk: display_status 同步为 CLOSED
+                self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
 
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
@@ -176,15 +182,19 @@ class RiskLabelTest(TicketTest):
                     revoke_process=False,
                 )
                 risk.refresh_from_db()
-                # 检测状态
+                # 检测状态 —— MisReport 不关单（套餐继续执行），display_status 保持不变
                 self.assertEquals(risk.status, RiskStatus.AUTO_PROCESS)
                 self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
+                # MisReport.update_status 为 pass，不改变 status，display_status 保持 AUTO_PROCESS
+                self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
                 # 解除误报
                 resource.risk.update_risk_label(risk_id=risk.risk_id, risk_label=RiskLabel.NORMAL)
                 risk.refresh_from_db()
-                # 检测状态
+                # 检测状态 —— ReOpenMisReport 不改变 status（仍为 AUTO_PROCESS）
                 self.assertEquals(risk.status, RiskStatus.AUTO_PROCESS)
                 self.assertEquals(risk.risk_label, RiskLabel.NORMAL)
+                # display_status 保持 AUTO_PROCESS
+                self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
                 # 处理误报
                 resource.risk.update_risk_label(
                     risk_id=risk.risk_id,
@@ -196,3 +206,5 @@ class RiskLabelTest(TicketTest):
                 # 检测关单
                 self.assertEquals(risk.status, RiskStatus.CLOSED.value)
                 self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
+                # MisReport（强制终止套餐）→CloseRisk: display_status 同步为 CLOSED
+                self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)

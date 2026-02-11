@@ -269,32 +269,33 @@ class EventMappingFields:
 
 class RiskStatus(TextChoices):
     """
-    所有风险状态
+    后端流转状态（驱动状态机，稳定少变）
+
+    注意：STAND_BY（录入中）已移至 RiskDisplayStatus，不参与后端流转。
+    手工录入的风险以 NEW 状态入库，前端通过 display_status 展示为"录入中"。
 
     ```mermaid
-    graph TB
-    A(风险单产生 NEW)
-    B(自动处理审批中 FOR_APPROVE)
-    C(套餐处理中(自动) AUTO_PROCESS)
-    D(已关单 CLOSED)
-    E(待处理 AWAIT_PROCESS)
-    F(套餐处理中(人工发起) AUTO_PROCESS)
-    A --配置了处理规则--> B
-    A --未配置处理规则--> E
-    B --审批通过--> C
-    B --审批不通过--> E
-    C --成功--> D
-    C --失败-->E
-    E --手动关单--> D
-    E --转单--> E
-    E --处理套餐--> F
-    F --配置了成功就关闭单据--> D
-    F --配置了成功也需要人工处理--> E
+    flowchart TB
+        A("风险单产生 NEW")
+        A -- "NewRisk: 配置了处理规则且需要审批" --> B("自动处理审批中 FOR_APPROVE")
+        A -- "NewRisk: 配置了处理规则且无需审批" --> C("套餐处理中 AUTO_PROCESS")
+        A -- "NewRisk: 未配置处理规则" --> E("人工处理 AWAIT_PROCESS")
+        B -- "ForApprove: 审批通过" --> C
+        B -- "ForApprove: 审批不通过" --> E
+        B -- "OperateFailed: 单据异常" --> E
+        C -- "AutoProcess→CloseRisk: 成功且auto_close=True" --> D("已关单 CLOSED")
+        C -- "AutoProcess: 成功且auto_close=False" --> E
+        C -- "AutoProcess: 执行失败" --> E
+        C -- "AutoProcess→CloseRisk: 误报标记+套餐结束" --> D
+        E -- "CloseRisk: 手动关单" --> D
+        E -- "MisReport→CloseRisk: 标记误报" --> D
+        E -- "TransOperator: 转单" --> E
+        E -- "CustomProcess→ForApprove: 人工发起处理套餐(需审批)" --> B
+        E -- "CustomProcess→AutoProcess: 人工发起处理套餐(无需审批)" --> C
+        D -- "ReOpen: 重开单据" --> E
+        D -- "ReOpenMisReport→ReOpen: 解除误报" --> E
     ```
     """
-
-    # 录入中, 手工录入风险才存在这个状态，同步到BKBase后自动切换为NEW
-    STAND_BY = "stand_by", gettext_lazy("录入中")
 
     # 新
     NEW = "new", gettext_lazy("新")
@@ -307,6 +308,73 @@ class RiskStatus(TextChoices):
     AUTO_PROCESS = "auto_process", gettext_lazy("套餐处理中")
 
     # 关闭
+    CLOSED = "closed", gettext_lazy("已关单")
+
+
+class RiskDisplayStatus(TextChoices):
+    """
+    前端展示状态（随产品需求灵活调整）
+
+    与 RiskStatus 的关系：
+    - RiskStatus 驱动后端状态机流转，稳定少变
+    - RiskDisplayStatus 用于前端展示和筛选，由 handler 基类自动从 RiskStatus 映射
+    - 映射逻辑见 RiskFlowBaseHandler.DISPLAY_STATUS_MAP
+
+    ```mermaid
+    flowchart TB
+        S("录入中 STAND_BY") -. "manual_synced=True" .-> A
+        A("新 NEW")
+        A -- "NewRisk: 未配置处理规则" --> B("待处理 AWAIT_PROCESS")
+        A -- "NewRisk: 配置了处理规则且需要审批" --> D("自动处理审批中 FOR_APPROVE")
+        A -- "NewRisk: 配置了处理规则且无需审批" --> E("套餐处理中 AUTO_PROCESS")
+        B -- "CloseRisk: 手动关单" --> F("已关单 CLOSED")
+        B -- "MisReport→CloseRisk: 标记误报" --> F
+        B -- "TransOperator: 转单" --> C("处理中 PROCESSING")
+        B -- "CustomProcess→ForApprove: 人工发起处理套餐(需审批)" --> D
+        B -- "CustomProcess→AutoProcess: 人工发起处理套餐(无需审批)" --> E
+        C -- "CloseRisk: 手动关单" --> F
+        C -- "MisReport→CloseRisk: 标记误报" --> F
+        C -- "TransOperator: 转单" --> C
+        C -- "CustomProcess→ForApprove: 人工发起处理套餐(需审批)" --> D
+        C -- "CustomProcess→AutoProcess: 人工发起处理套餐(无需审批)" --> E
+        D -- "ForApprove: 审批通过" --> E
+        D -- "ForApprove: 审批不通过" --> C
+        D -- "OperateFailed: 单据异常" --> C
+        E -- "AutoProcess→CloseRisk: 成功且auto_close=True" --> F
+        E -- "AutoProcess→CloseRisk: 误报标记+套餐结束" --> F
+        E -- "AutoProcess: 成功且auto_close=False" --> C
+        E -- "AutoProcess: 执行失败" --> C
+        F -- "ReOpen: 重开单据" --> C
+        F -- "ReOpenMisReport→ReOpen: 解除误报" --> C
+    ```
+
+    注意：
+    - STAND_BY 不参与后端流转，由 serializer 根据 manual_synced 标记展示
+    - AWAIT_PROCESS 与 PROCESSING 均对应 RiskStatus.AWAIT_PROCESS，
+      区别在于 NewRisk handler 映射为"待处理"（DISPLAY_STATUS_MAP 覆盖），
+      其他 handler（默认映射）映射为"处理中"
+    - MisReport 不关单的场景（套餐继续执行）：display_status 保持不变，符合预期
+    """
+
+    # 录入中
+    STAND_BY = "stand_by", gettext_lazy("录入中")
+
+    # 新
+    NEW = "new", gettext_lazy("新")
+
+    # 待处理（仅 NEW → 未配置处理规则 时）
+    AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
+
+    # 处理中（其他所有进入 AWAIT_PROCESS 的路径）
+    PROCESSING = "processing", gettext_lazy("处理中")
+
+    # 自动处理审批中
+    FOR_APPROVE = "for_approve", gettext_lazy("自动处理审批中")
+
+    # 套餐处理中
+    AUTO_PROCESS = "auto_process", gettext_lazy("套餐处理中")
+
+    # 已关单
     CLOSED = "closed", gettext_lazy("已关单")
 
 
