@@ -20,7 +20,7 @@ import uuid
 from unittest import mock
 
 from core.exceptions import RiskStatusInvalid
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import ReOpen
 from tests.test_risk.test_tickets.base import RiskContext, TicketTest
 
@@ -49,4 +49,6 @@ class ReOpenTest(TicketTest):
             risk.refresh_from_db()
             # 验证状态
             self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+            # ReOpen 使用默认映射：AWAIT_PROCESS → PROCESSING（处理中）
+            self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
             self.assertEquals(risk.current_operator, ReOpen.load_security_person())

@@ -40,6 +40,7 @@ from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
+    RiskDisplayStatus,
     RiskLabel,
     RiskReportStatus,
     RiskStatus,
@@ -146,6 +147,13 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     operator = models.JSONField(EventMappingFields.OPERATOR.description, null=True, blank=True)
     status = models.CharField(
         gettext_lazy("Risk Status"), choices=RiskStatus.choices, default=RiskStatus.NEW, max_length=32, db_index=True
+    )
+    display_status = models.CharField(
+        gettext_lazy("Display Status"),
+        choices=RiskDisplayStatus.choices,
+        default=RiskDisplayStatus.NEW,
+        max_length=32,
+        db_index=True,
     )
     rule_id = models.BigIntegerField(gettext_lazy("Risk Rule ID"), null=True, blank=True)
     rule_version = models.IntegerField(gettext_lazy("Risk Rule Version"), null=True, blank=True)
