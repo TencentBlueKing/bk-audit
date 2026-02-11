@@ -1,7 +1,8 @@
 from django.db import migrations
+from django.db.models import Exists, OuterRef
 
 # 分批大小，避免单次 update 影响行过多导致锁表
-BATCH_SIZE = 2000
+BATCH_SIZE = 5000
 
 
 def _batch_update(model, queryset, **update_kwargs):
@@ -14,7 +15,10 @@ def _batch_update(model, queryset, **update_kwargs):
         count = len(batch_pks)
         model.objects.filter(pk__in=batch_pks).update(**update_kwargs)
         total_updated += count
-        print(f"[_batch_update] 本批更新 {count} 条, 累计更新 {total_updated} 条, update_kwargs={update_kwargs}", flush=True)
+        print(
+            f"[_batch_update] 本批更新 {count} 条, 累计更新 {total_updated} 条, update_kwargs={update_kwargs}",
+            flush=True,
+        )
     print(f"[_batch_update] 完成, 共更新 {total_updated} 条, update_kwargs={update_kwargs}", flush=True)
     return total_updated
 
@@ -26,32 +30,38 @@ def forwards(apps, schema_editor):
 
     print("[forwards] 开始回填 display_status", flush=True)
 
-    # 1. 批量默认映射：status → display_status
-    status_to_display = {
+    # 1. 非 await_deal 状态：直接映射（数据量少，直接更新）
+    simple_mapping = {
         "new": "new",
         "for_approve": "for_approve",
         "auto_process": "auto_process",
         "closed": "closed",
-        "await_deal": "processing",  # 默认映射为"处理中"
     }
-    for status_val, display_val in status_to_display.items():
-        print(f"[forwards] 映射 status={status_val} → display_status={display_val}", flush=True)
-        _batch_update(
-            Risk,
-            Risk.objects.filter(status=status_val).exclude(display_status=display_val),
-            display_status=display_val,
+    for status_val, display_val in simple_mapping.items():
+        updated = (
+            Risk.objects.filter(status=status_val)
+            .exclude(display_status=display_val)
+            .update(display_status=display_val)
         )
+        print(f"[forwards] 映射 status={status_val} → display_status={display_val}, 更新 {updated} 条", flush=True)
 
-    # 2. 特殊处理：仅有 NewRisk 操作历史的 await_deal → "待处理"
-    #    使用子查询替代 Python set 操作，避免大数据量下的内存和 SQL IN 问题
-    print("[forwards] 开始特殊处理: 仅有 NewRisk 操作历史的 await_deal → await_deal(待处理)", flush=True)
-    await_risks = Risk.objects.filter(status="await_deal")
-    has_other_actions = (
-        TicketNode.objects.filter(risk_id__in=await_risks.values("risk_id")).exclude(action="NewRisk").values("risk_id")
+    # 2. await_deal 状态：使用 Exists 判断是否有非 NewRisk 的操作历史，一步到位
+    #    EXISTS 子查询在 MySQL 中会使用 semi-join 优化，远优于 NOT IN (subquery)
+    has_non_new_risk_action = Exists(TicketNode.objects.filter(risk_id=OuterRef("risk_id")).exclude(action="NewRisk"))
+
+    # 2a. 有非 NewRisk 操作历史 → processing（处理中）
+    qs_processing = (
+        Risk.objects.filter(status="await_deal").exclude(display_status="processing").filter(has_non_new_risk_action)
     )
-    pure_new_risks = await_risks.exclude(risk_id__in=has_other_actions)
-    updated = _batch_update(Risk, pure_new_risks, display_status="await_deal")
-    print(f"[forwards] 特殊处理完成, 共 {updated} 条 await_deal 风险回退为待处理", flush=True)
+    updated = _batch_update(Risk, qs_processing, display_status="processing")
+    print(f"[forwards] await_deal + 有操作历史 → processing, 更新 {updated} 条", flush=True)
+
+    # 2b. 仅有 NewRisk（或无操作历史） → await_deal（待处理）
+    qs_await = (
+        Risk.objects.filter(status="await_deal").exclude(display_status="await_deal").exclude(has_non_new_risk_action)
+    )
+    updated = _batch_update(Risk, qs_await, display_status="await_deal")
+    print(f"[forwards] await_deal + 仅有 NewRisk → await_deal(待处理), 更新 {updated} 条", flush=True)
 
     print("[forwards] 回填 display_status 完成", flush=True)
 
@@ -70,12 +80,12 @@ def backwards(apps, schema_editor):
         "await_deal": "processing",
     }
     for status_val, display_val in status_to_display.items():
-        print(f"[backwards] 映射 status={status_val} → display_status={display_val}", flush=True)
-        _batch_update(
-            Risk,
-            Risk.objects.filter(status=status_val).exclude(display_status=display_val),
-            display_status=display_val,
+        updated = (
+            Risk.objects.filter(status=status_val)
+            .exclude(display_status=display_val)
+            .update(display_status=display_val)
         )
+        print(f"[backwards] 映射 status={status_val} → display_status={display_val}, 更新 {updated} 条", flush=True)
 
     print("[backwards] 回滚 display_status 完成", flush=True)
 
