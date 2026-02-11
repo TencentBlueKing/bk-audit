@@ -82,7 +82,7 @@ class JoinDataEtlStorageHandler:
         if update:
             # 更新入库
             storage_config = self.storage_config.copy()
-            storage_config["result_table_id"] = self.storage_result_table_id
+            storage_config["result_table_id"] = self.snapshot.bkbase_table_id
             api.bk_base.databus_storages_put(storage_config)
         else:
             api.bk_base.databus_storages_post(self.storage_config)
