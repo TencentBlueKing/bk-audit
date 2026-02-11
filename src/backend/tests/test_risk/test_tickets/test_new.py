@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from unittest import mock
 
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import NewRisk
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 
@@ -44,13 +44,15 @@ class NewTest(TicketTest):
             risk.refresh_from_db()
             # 风险状态
             self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+            # NewRisk 覆盖映射：AWAIT_PROCESS → AWAIT_PROCESS（待处理）
+            self.assertEquals(risk.display_status, RiskDisplayStatus.AWAIT_PROCESS)
             # 有当前处理人且为安全责任人
             self.assertEquals(risk.current_operator, NewRisk.load_security_person())
 
-    def _test_rule(self, risk_status: str, pa_info: dict = None):
+    def _test_rule(self, risk_status: str, expected_display_status: str = None, pa_info: dict = None):
         """
         测试规则
-        关键验证：有规则，状态
+        关键验证：有规则，状态，display_status
         """
 
         with RuleContext(pa_info=pa_info) as (_, rule):
@@ -63,13 +65,20 @@ class NewTest(TicketTest):
                 self.assertEquals(risk.rule_id, rule.rule_id)
                 # 风险状态
                 self.assertEquals(risk.status, risk_status)
+                # display_status 同步验证
+                if expected_display_status:
+                    self.assertEquals(risk.display_status, expected_display_status)
 
     def test_rule_for_approve(self):
         """测试审批"""
 
-        self._test_rule(RiskStatus.FOR_APPROVE)
+        self._test_rule(RiskStatus.FOR_APPROVE, expected_display_status=RiskDisplayStatus.FOR_APPROVE)
 
     def test_rule_auto_process(self):
         """测试自动处理"""
 
-        self._test_rule(RiskStatus.AUTO_PROCESS, pa_info={"need_approve": False})
+        self._test_rule(
+            RiskStatus.AUTO_PROCESS,
+            expected_display_status=RiskDisplayStatus.AUTO_PROCESS,
+            pa_info={"need_approve": False},
+        )
