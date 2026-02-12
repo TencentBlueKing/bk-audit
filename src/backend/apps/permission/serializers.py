@@ -34,6 +34,15 @@ class CheckPermissionRequestSerializer(serializers.Serializer):
         return [resource for resource in value.split(",") if resource]
 
 
+class CheckAnyPermissionRequestSerializer(serializers.Serializer):
+    """检查当前用户对某动作是否有任意权限（不关心具体资源实例）"""
+
+    action_ids = serializers.CharField(label=gettext_lazy("操作ID"), help_text=ActionEnum.choices())
+
+    def validate_action_ids(self, value: str):
+        return [action_id for action_id in value.split(",") if action_id]
+
+
 class GetApplyDataRequestSerializer(CheckPermissionRequestSerializer):
     ...
 

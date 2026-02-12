@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from unittest import mock
 
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import NewRisk, TransOperator
 from tests.test_risk.test_tickets.base import RiskContext, TicketTest
 
@@ -46,4 +46,6 @@ class TransOperatorTest(TicketTest):
             risk.refresh_from_db()
             # 风险状态
             self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+            # TransOperator 使用默认映射：AWAIT_PROCESS → PROCESSING（处理中）
+            self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
             self.assertEquals(risk.current_operator, new_operators)

@@ -65,18 +65,18 @@ class TestListRiskOrderByStrategyLevel(TestCase):
             notice_users=["admin"],
         )
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
-    def test_list_risk_sort_by_strategy_level_desc(self, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_list_risk_sort_by_strategy_level_desc(self, mock_load_iam_authed_risks):
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
 
         resp = call_resource_with_request(ListRisk().request, {"order_field": "risk_level", "order_type": "desc"})
         # Desc custom order: HIGH > MIDDLE > LOW
         ids = [i["risk_id"] for i in resp["results"]]
         self.assertEqual(ids, ["RH-2", "RM-2", "RL-2"])
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
-    def test_list_risk_sort_by_strategy_level_asc(self, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_list_risk_sort_by_strategy_level_asc(self, mock_load_iam_authed_risks):
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
 
         resp = call_resource_with_request(
             ListRisk().request, {"order_field": "risk_level", "order_type": OrderTypeChoices.ASC}
@@ -85,19 +85,20 @@ class TestListRiskOrderByStrategyLevel(TestCase):
         ids = [i["risk_id"] for i in resp["results"]]
         self.assertEqual(ids, ["RL-2", "RM-2", "RH-2"])
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
-    def test_list_mine_risk_sort_by_strategy_level_desc(self, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_list_risk_uses_iam_only(self, mock_load_iam_authed_risks):
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
 
+        call_resource_with_request(ListRisk().request, {"order_field": "-event_time"})
+        mock_load_iam_authed_risks.assert_called_once()
+
+    def test_list_mine_risk_sort_by_strategy_level_desc(self):
         resp = call_resource_with_request(ListMineRisk().request, {"order_field": "risk_level", "order_type": "desc"})
         # mine has RH-2 and RL-2 -> order: RH-2 then RL-2 (HIGH > LOW in desc custom)
         ids = [i["risk_id"] for i in resp["results"]]
         self.assertEqual(ids, ["RH-2", "RL-2"])
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
-    def test_list_noticing_risk_sort_by_strategy_level_desc(self, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.all()
-
+    def test_list_noticing_risk_sort_by_strategy_level_desc(self):
         resp = call_resource_with_request(
             ListNoticingRisk().request, {"order_field": "risk_level", "order_type": "desc"}
         )
