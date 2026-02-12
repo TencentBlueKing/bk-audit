@@ -125,7 +125,15 @@ class RiskResourceProvider(IAMResourceProvider):
         # 注意：filter.start_time/end_time 为毫秒时间戳，这里保持毫秒精度，避免边界被截断
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        base_qs = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+
+        # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
+        pk_list = list(
+            base_qs.order_by("updated_at").values_list("risk_id", flat=True)[page.slice_from : page.slice_to]
+        )
+        # 用主键精确回表，只回表 page_size 条记录
+        queryset = Risk.objects.filter(risk_id__in=pk_list).order_by("updated_at")
+
         results = [
             {
                 "id": item.risk_id,
@@ -136,9 +144,9 @@ class RiskResourceProvider(IAMResourceProvider):
                 "updated_at": None,
                 "data": self.resource_provider_serializer(instance=item).data,
             }
-            for item in queryset[page.slice_from : page.slice_to]
+            for item in queryset
         ]
-        return ListResult(results=results, count=queryset.count())
+        return ListResult(results=results, count=base_qs.count())
 
 
 class ManualEventResourceProvider(IAMResourceProvider):
@@ -204,8 +212,15 @@ class ManualEventResourceProvider(IAMResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = ManualEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
-        page_qs = queryset[page.slice_from : page.slice_to]
+        base_qs = ManualEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+
+        # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
+        pk_list = list(
+            base_qs.order_by("updated_at").values_list("manual_event_id", flat=True)[page.slice_from : page.slice_to]
+        )
+        # 用主键精确回表，只回表 page_size 条记录
+        queryset = ManualEvent.objects.filter(manual_event_id__in=pk_list).order_by("updated_at")
+
         results = [
             {
                 "id": str(item.manual_event_id),
@@ -216,9 +231,9 @@ class ManualEventResourceProvider(IAMResourceProvider):
                 "updated_at": None,
                 "data": self.resource_provider_serializer(instance=item).data,
             }
-            for item in page_qs
+            for item in queryset
         ]
-        return ListResult(results=results, count=queryset.count())
+        return ListResult(results=results, count=base_qs.count())
 
 
 class TicketPermissionResourceProvider(IAMResourceProvider):
