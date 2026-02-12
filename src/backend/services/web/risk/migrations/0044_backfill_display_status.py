@@ -1,67 +1,84 @@
 from django.db import migrations
-from django.db.models import Exists, OuterRef
 
 # 分批大小，避免单次 update 影响行过多导致锁表
 BATCH_SIZE = 5000
 
 
-def _batch_update(model, queryset, **update_kwargs):
-    """分批更新，每次处理 BATCH_SIZE 条记录"""
+def _batch_update_by_status(model, status_val, display_val):
+    """
+    分批更新：按 status 筛选并设置 display_status。
+    利用 status 上的索引直接定位，每批用 pk 范围游标推进，避免重复全表扫描。
+    """
     total_updated = 0
+    last_pk = ""
     while True:
-        batch_pks = list(queryset.values_list("pk", flat=True)[:BATCH_SIZE])
+        batch_pks = list(
+            model.objects.filter(status=status_val, pk__gt=last_pk)
+            .exclude(display_status=display_val)
+            .order_by("pk")
+            .values_list("pk", flat=True)[:BATCH_SIZE]
+        )
         if not batch_pks:
             break
-        count = len(batch_pks)
-        model.objects.filter(pk__in=batch_pks).update(**update_kwargs)
+        count = model.objects.filter(pk__in=batch_pks).update(display_status=display_val)
         total_updated += count
+        last_pk = batch_pks[-1]
         print(
-            f"[_batch_update] 本批更新 {count} 条, 累计更新 {total_updated} 条, update_kwargs={update_kwargs}",
+            f"[_batch_update_by_status] 本批更新 {count} 条, 累计 {total_updated} 条, "
+            f"status={status_val} → display_status={display_val}",
             flush=True,
         )
-    print(f"[_batch_update] 完成, 共更新 {total_updated} 条, update_kwargs={update_kwargs}", flush=True)
+    print(
+        f"[_batch_update_by_status] 完成, 共更新 {total_updated} 条, " f"status={status_val} → display_status={display_val}",
+        flush=True,
+    )
     return total_updated
 
 
 def forwards(apps, schema_editor):
-    """根据现有 status 回填 display_status"""
+    """
+    根据现有 status 回填 display_status。
+    """
     Risk = apps.get_model("risk", "Risk")
     TicketNode = apps.get_model("risk", "TicketNode")
 
     print("[forwards] 开始回填 display_status", flush=True)
 
-    # 1. 非 await_deal 状态：直接映射（数据量少，直接更新）
-    simple_mapping = {
+    # -------- 第一步：全量直接映射 status → display_status --------
+    # 包含 await_deal → await_deal，先把所有记录都设为默认映射值
+    full_mapping = {
         "new": "new",
         "for_approve": "for_approve",
         "auto_process": "auto_process",
         "closed": "closed",
+        "await_deal": "await_deal",
     }
-    for status_val, display_val in simple_mapping.items():
-        updated = (
-            Risk.objects.filter(status=status_val)
-            .exclude(display_status=display_val)
-            .update(display_status=display_val)
-        )
+    for status_val, display_val in full_mapping.items():
+        updated = _batch_update_by_status(Risk, status_val, display_val)
         print(f"[forwards] 映射 status={status_val} → display_status={display_val}, 更新 {updated} 条", flush=True)
 
-    # 2. await_deal 状态：使用 Exists 判断是否有非 NewRisk 的操作历史，一步到位
-    #    EXISTS 子查询在 MySQL 中会使用 semi-join 优化，远优于 NOT IN (subquery)
-    has_non_new_risk_action = Exists(TicketNode.objects.filter(risk_id=OuterRef("risk_id")).exclude(action="NewRisk"))
-
-    # 2a. 有非 NewRisk 操作历史 → processing（处理中）
-    qs_processing = (
-        Risk.objects.filter(status="await_deal").exclude(display_status="processing").filter(has_non_new_risk_action)
+    # -------- 第二步：修正少量 await_deal 中有操作历史的 → processing --------
+    # 先从 TicketNode 取出所有有非 NewRisk 操作的 risk_id（通常很少）
+    processing_risk_ids = list(
+        TicketNode.objects.exclude(action="NewRisk").values_list("risk_id", flat=True).distinct()
     )
-    updated = _batch_update(Risk, qs_processing, display_status="processing")
-    print(f"[forwards] await_deal + 有操作历史 → processing, 更新 {updated} 条", flush=True)
+    print(f"[forwards] 有非 NewRisk 操作历史的 risk_id 数量: {len(processing_risk_ids)}", flush=True)
 
-    # 2b. 仅有 NewRisk（或无操作历史） → await_deal（待处理）
-    qs_await = (
-        Risk.objects.filter(status="await_deal").exclude(display_status="await_deal").exclude(has_non_new_risk_action)
-    )
-    updated = _batch_update(Risk, qs_await, display_status="await_deal")
-    print(f"[forwards] await_deal + 仅有 NewRisk → await_deal(待处理), 更新 {updated} 条", flush=True)
+    if processing_risk_ids:
+        # 分批更新这些 risk_id 对应的 await_deal 记录为 processing
+        total_updated = 0
+        for i in range(0, len(processing_risk_ids), BATCH_SIZE):
+            batch_ids = processing_risk_ids[i : i + BATCH_SIZE]
+            count = (
+                Risk.objects.filter(status="await_deal", risk_id__in=batch_ids)
+                .exclude(display_status="processing")
+                .update(display_status="processing")
+            )
+            total_updated += count
+            print(f"[forwards] 修正 processing 本批 {count} 条, 累计 {total_updated} 条", flush=True)
+        print(f"[forwards] await_deal + 有操作历史 → processing, 共更新 {total_updated} 条", flush=True)
+    else:
+        print("[forwards] 无需修正 processing（没有非 NewRisk 操作历史）", flush=True)
 
     print("[forwards] 回填 display_status 完成", flush=True)
 
