@@ -26,7 +26,7 @@
     "@vueup/vue-quill": "1.2.0",
     "aegis-web-sdk": "1.38.3",
     "art-template": "4.13.2",
-    "axios": "1.12.2",
+    "axios": "^1.13.5",
     "bkui-vue": "2.0.2-beta.12",
     "connect-history-api-fallback": "2.0.0",
     "cookie-parser": "1.4.6",
