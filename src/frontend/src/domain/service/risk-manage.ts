@@ -83,6 +83,21 @@ export default {
       }));
   },
   /**
+   * @desc 获取处理历史风险列表
+   */
+  fetchProcessedRiskList(params: {
+    page: number,
+    page_size: number
+  }) {
+    return RiskManageSource.getProcessedRiskList(params, {
+      permission: 'page',
+    })
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
    * @desc 获取风险可用字段
    */
   fetchFields() {

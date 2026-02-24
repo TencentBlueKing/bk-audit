@@ -77,6 +77,16 @@ class RiskManage extends ModuleBase {
       payload,
     });
   }
+  // 获取处理历史风险列表
+  getProcessedRiskList(params: {
+    page: number,
+    page_size: number
+  }, payload = {} as IRequestPayload) {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/processed/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+      payload,
+    });
+  }
   // 获取风险可用字段
   getFields() {
     return Request.get<Array<{
