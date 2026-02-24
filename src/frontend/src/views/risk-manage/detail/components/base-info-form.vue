@@ -268,6 +268,11 @@
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },
+    processing: {
+      theme: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
+    },
   };
   // 判断值是否为数组（包括字符串形式的数组）
   const handleShowText = (value: any) => {

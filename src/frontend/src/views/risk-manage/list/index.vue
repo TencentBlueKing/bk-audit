@@ -139,6 +139,11 @@
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },
+    processing: {
+      tag: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
+    },
   };
 
   interface FieldItem {
@@ -340,7 +345,7 @@
       render: ({ data }: { data: RiskManageModel }) => (
         data.status === 'stand_by'
           ? <div>
-            <bk-button text  class='mr16'>{t('--')}</bk-button>
+            <bk-button text  class='mr16'>--</bk-button>
           </div>
           : (<p>
           {
@@ -556,7 +561,7 @@
     });
     if (results.some(item => item.status === 'stand_by')) {
       // 执行定时器
-      timeout = setTimeout(() => {
+      safeSetTimeout(() => {
         const addEventRiskIds = JSON.parse(sessionStorage.getItem('addEventRiskIds') || '[]');
         if (addEventRiskIds.length === 0) {
           listRef.value?.initData();
@@ -566,7 +571,9 @@
           page: 1,
           page_size: 20,
         }).then((data) => {
-          listRef.value?.initListData(data.results, 'risk_id');
+          if (isComponentMounted.value) {
+            listRef.value?.initListData(data.results, 'risk_id');
+          }
         });
       }, 5000);
     } else {
@@ -730,12 +737,24 @@
       sessionStorage.removeItem('addEventRiskIds');
     });
   });
+  const isComponentMounted = ref(true);
+
   onUnmounted(() => {
+    isComponentMounted.value = false;
     if (timeout) {
       clearTimeout(timeout);
       timeout = undefined;
     }
   });
+
+  // 添加定时器执行前的组件状态检查
+  const safeSetTimeout = (callback: () => void, delay: number) => {
+    timeout = setTimeout(() => {
+      if (isComponentMounted.value) {
+        callback();
+      }
+    }, delay);
+  };
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {

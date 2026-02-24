@@ -315,10 +315,10 @@
           }
         }
       });
-      // await_deal的情况多渲染一个表单
-      if (data.status === 'await_deal') {
+      // await_deal和processing的情况多渲染一个表单
+      if (data.status === 'await_deal' || data.status === 'processing') {
         const item = Object.assign({}, data.ticket_history[data.ticket_history.length - 1]);
-        item.action = 'await_deal';
+        item.action = 'await_deal'; // 使用await_deal组件来处理两种状态
         list.value.push({
           tag: `<p style='font-size: 12px;' class='${item.action}-${data.ticket_history.length}'>
                 <span style='color: #313238;margin-left: 4px;'>${historyActionMap[item.action].name || item.action}</span>

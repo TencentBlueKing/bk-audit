@@ -122,6 +122,11 @@
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },
+    processing: {
+      tag: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
+    },
   };
   const selectedItemList = ref<FieldItem[]>([]);
 

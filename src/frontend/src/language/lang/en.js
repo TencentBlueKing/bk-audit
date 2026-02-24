@@ -126,6 +126,7 @@ export default {
   '操作 ID': 'Action ID',
   操作事件名称: 'Action name',
   风险等级: 'Risk level',
+  风险创建中: 'Risk Creating',
   操作事件类型: 'Action type',
   日志拉取: 'log pull',
   新建采集: 'New',
@@ -603,4 +604,5 @@ export default {
   工具广场: 'Tool square',
   编辑器中的图片预览: 'Image preview in editor',
   处理说明中图片预览: 'Image preview in processing instructions',
+  处理历史: 'Processed History',
 };
