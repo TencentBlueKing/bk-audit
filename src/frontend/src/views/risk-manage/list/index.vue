@@ -230,9 +230,9 @@
             ? (
               <div style='display: flex;align-items: center;height: 100%;'>
                 <bk-tag
-                  theme={statusToMap[data.status].tag}>
+                  theme={statusToMap[data.status]?.tag}>
                   <p style='display: flex;align-items: center;'>
-                    <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                    <audit-icon type={statusToMap[data.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`} />
                     <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
                   </p>
                 </bk-tag>
@@ -243,9 +243,9 @@
             )
             : (
               <bk-tag
-                theme={statusToMap[data.status].tag}>
+                theme={statusToMap[data.status]?.tag}>
                 <p style='display: flex;align-items: center;'>
-                  <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                  <audit-icon type={statusToMap[data.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`} />
                   <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
                 </p>
               </bk-tag>))
