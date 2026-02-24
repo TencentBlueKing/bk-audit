@@ -31,6 +31,7 @@ export default {
       meta: {
         title: '所有风险',
         skeleton: 'noticeGroupList',
+        permission: 'list_risk_v2',
       },
     },
     {

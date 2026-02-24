@@ -32,6 +32,12 @@ class Iam extends ModuleBase {
       params,
     });
   }
+  // 检查当前用户是否拥有任意权限策略
+  checkAny(params: { action_ids: string }) {
+    return Request.get<Record<string, boolean>>(`${this.path}/permission/check_any/`, {
+      params,
+    });
+  }
   // 获取权限申请数据
   getApplyData(params: { action_ids: string, resources?: string}) {
     return Request.get<ApplyDataModel>(`${this.path}/permission/apply_data/`, {
