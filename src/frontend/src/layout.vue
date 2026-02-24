@@ -210,13 +210,21 @@
               type="daiwochuli" />
             {{ t('待我处理') }}
           </audit-menu-item>
+          <audit-menu-item index="processedManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="yunxingjilu" />
+            {{ t('处理历史') }}
+          </audit-menu-item>
           <audit-menu-item index="attentionManage">
             <audit-icon
               class="menu-item-icon"
               type="wodeguanzhu" />
             {{ t('我的关注') }}
           </audit-menu-item>
-          <audit-menu-item index="riskManage">
+          <audit-menu-item
+            v-if="hasAllRiskPermission"
+            index="riskManage">
             <audit-icon
               class="menu-item-icon"
               type="gaojingshijian" />
@@ -481,6 +489,19 @@
     manual: true,
     onSuccess: (data) => {
       permissionCreateSystem.value = data.create_system;
+    },
+  });
+
+  // 检查所有风险权限
+  const hasAllRiskPermission = ref(false);
+  useRequest(IamManageService.checkAny, {
+    defaultParams: {
+      action_ids: 'list_risk_v2',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      hasAllRiskPermission.value = data.list_risk_v2 || false;
     },
   });
 
