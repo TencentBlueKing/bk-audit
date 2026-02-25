@@ -97,12 +97,12 @@
   };
   const normalizeParamArray = (value: unknown) => {
     if (_.isArray(value)) {
-      return value.map(item => (item == null ? '' : item.toString())).filter(item => item !== '');
+      return value.map(item => (item === null ? '' : item.toString())).filter(item => item !== '');
     }
-    if (value == null || value === '') {
+    if (value === null || value === '') {
       return [];
     }
-    return value.toString().split(',');
+    return value?.toString().split(',');
   };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
@@ -119,7 +119,7 @@
       searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
     } else {
       const value = urlSearchParams[searchFieldName];
-      searchModel.value[searchFieldName] = value == null ? '' : value.toString();
+      searchModel.value[searchFieldName] = value === null ? '' : value.toString();
     }
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
