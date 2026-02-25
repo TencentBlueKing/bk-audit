@@ -31,6 +31,7 @@
         :min-height="300"
         :pagination="pagination"
         remote-pagination
+        :scrollbar="false"
         :settings="settings"
         @column-sort="handleColumnSortChange"
         @page-limit-change="handlePageLimitChange"
