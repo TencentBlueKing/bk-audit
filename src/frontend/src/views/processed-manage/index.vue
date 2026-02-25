@@ -118,7 +118,7 @@
     },
     processing: {
       tag: 'info',
-      icon: 'chulizhong',
+      icon: 'loading',
       color: '#3A84FF',
     },
   };
