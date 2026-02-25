@@ -101,7 +101,7 @@ export default {
     '为一个统计周期,': 'generate risk ticket i',
     秒: 'Second',
     统计周期最小为5分钟: 'The minimum statistical period is 5 minutes',
-    '策略ID、策略名称、配置方式、标签、状态': 'Strategy ID、Name、Type、Tag、Status',
+    '策略ID、策略名称、配置方式、标签、状态、事件调查报告': 'Strategy ID、Name、Type、Tag、Status、Event Investigation Report',
     请选择状态: 'Please choose status',
     操作日志: 'Event log',
     状态: 'Status',

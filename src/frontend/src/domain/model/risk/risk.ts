@@ -85,6 +85,7 @@ export default class Event {
   risk_label: string;
   report_enabled: boolean;
   report_auto_render: boolean;
+  report_generating: boolean;
   has_report: boolean;
   report: {
     content: string;
@@ -137,5 +138,6 @@ export default class Event {
     this.notice_groups = payload.notice_groups;
     this.processor_groups = payload.processor_groups;
     this.event_basic_field_configs = payload.event_basic_field_configs;
+    this.report_generating = payload.report_generating;
   }
 }
