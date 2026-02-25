@@ -32,6 +32,7 @@
         :data-source="dataSource"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
     </div>
@@ -319,7 +320,22 @@
     {
       label: () => t('事件调查报告'),
       field: () => 'has_report',
-      sort: 'custom',
+      filter: {
+        list: [
+          {
+            text: t('已生成'),
+            value: true,
+          },
+          {
+            text: t('未生成'),
+            value: false,
+          },
+        ],
+        filterScope: 'all',
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => <bk-tag
         >{ data.has_report ? t('已生成') : t('未生成') }</bk-tag>,
@@ -668,6 +684,24 @@
   };
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
+  };
+  // 列筛选处理（跨页过滤）
+  const handleColumnFilter = (checkedObj: Record<string, any>) => {
+    const checkField = checkedObj.column.field();
+    // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
+    const value = checkedObj.checked.map((item: any) => {
+      if (typeof item === 'boolean') {
+        return item ? 'true' : 'false';
+      }
+      return String(item);
+    }).join(',');
+    // 更新搜索模型，将筛选条件添加到搜索参数中
+    searchModel.value = {
+      ...searchModel.value,
+      [checkField]: value || '',
+    };
+    // 重新获取数据，实现跨页过滤
+    fetchList();
   };
   const fetchList = () => {
     if (!listRef.value) return;
