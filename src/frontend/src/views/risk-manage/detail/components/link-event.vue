@@ -754,6 +754,11 @@
 
   // 预处理所有展示值
   const displayValueDict = computed<DisplayValueDict>(() => {
+    if (!eventItem.value) {
+      return {
+        eventData: {},
+      };
+    }
     const baseKeys = Object.keys(eventItem.value).filter(key => key !== 'event_data');
     const baseResult = baseKeys.reduce((acc, key) => {
       acc[key as keyof typeof acc] = getDisplayValue(key, eventItem.value[key as keyof typeof eventItem.value]);

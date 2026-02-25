@@ -15,53 +15,60 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="event-report">
-    <render-info-block
-      v-if="data.permission?.edit_risk_v2"
-      class="flex mt16">
-      <render-info-item label="状态">
-        {{ (data.report?.status === 'auto' ? t('模板生成') : t('人工编辑') ) || '--' }}
-      </render-info-item>
-      <render-info-item label="更新人">
-        {{ data.report?.updated_by || '--' }}
-      </render-info-item>
-    </render-info-block>
-    <render-info-block
-      v-if="data.permission?.edit_risk_v2"
-      class="flex mt16">
-      <render-info-item label="状态说明">
-        {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
-          t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
-      </render-info-item>
-      <render-info-item label="更新时间">
-        {{ data.report?.updated_at || '--' }}
-      </render-info-item>
-    </render-info-block>
-    <quill-editor
-      :key="reportRenderKey"
-      ref="editorRef"
-      v-model:content="content"
-      content-type="html"
-      disabled
-      :options="options"
-      theme="snow"
-      @ready="handleEditorReady" />
-    <bk-button
-      v-if="data.permission?.edit_risk_v2"
-      class="event-report-edit-button"
-      outline
-      theme="primary"
-      @click="handleEditReport">
-      {{ t('编辑') }}
-    </bk-button>
-    <edit-event-report
-      :key="editReportKey"
-      v-model:isShowEditEventReport="isShowEditEventReport"
-      :report-content="data.report?.content || ''"
-      :report-enabled="data.report_enabled"
-      :status="data.report?.status"
-      @update="handleUpdate" />
-  </div>
+  <bk-loading
+    class="event-report-loading"
+    :loading="loading"
+    mode="spin"
+    theme="primary"
+    :title="t('正在生成报告')">
+    <div class="event-report">
+      <render-info-block
+        v-if="data.permission?.edit_risk_v2"
+        class="flex mt16">
+        <render-info-item label="状态">
+          {{ (data.report?.status === 'auto' ? t('模板生成') : t('人工编辑') ) || '--' }}
+        </render-info-item>
+        <render-info-item label="更新人">
+          {{ data.report?.updated_by || '--' }}
+        </render-info-item>
+      </render-info-block>
+      <render-info-block
+        v-if="data.permission?.edit_risk_v2"
+        class="flex mt16">
+        <render-info-item label="状态说明">
+          {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
+            t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
+        </render-info-item>
+        <render-info-item label="更新时间">
+          {{ data.report?.updated_at || '--' }}
+        </render-info-item>
+      </render-info-block>
+      <quill-editor
+        :key="reportRenderKey"
+        ref="editorRef"
+        v-model:content="content"
+        content-type="html"
+        disabled
+        :options="options"
+        theme="snow"
+        @ready="handleEditorReady" />
+      <bk-button
+        v-if="data.permission?.edit_risk_v2"
+        class="event-report-edit-button"
+        outline
+        theme="primary"
+        @click="handleEditReport">
+        {{ t('编辑') }}
+      </bk-button>
+      <edit-event-report
+        :key="editReportKey"
+        v-model:isShowEditEventReport="isShowEditEventReport"
+        :report-content="data.report?.content || ''"
+        :report-enabled="data.report_enabled"
+        :status="data.report?.status"
+        @update="handleUpdate" />
+    </div>
+  </bk-loading>
 </template>
 <script setup lang="ts">
   import Quill from 'quill';
@@ -110,6 +117,7 @@
   }>();
   const { t } = useI18n();
 
+  const loading =  computed(() => props.data.report_generating);
   const isShowEditEventReport = ref(false);
   const editorRef = ref<InstanceType<typeof QuillEditor>>();
 
@@ -346,5 +354,12 @@
     margin-bottom: 4px;
   }
 
+}
+
+.event-report-loading {
+  :deep(.bk-loading-title) {
+    margin-left: -15px;
+    color: #3a84ff;
+  }
 }
 </style>
