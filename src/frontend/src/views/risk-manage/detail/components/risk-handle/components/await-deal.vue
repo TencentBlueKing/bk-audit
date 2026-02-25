@@ -500,6 +500,16 @@
     });
   };
 
+  // 当处理说明为空时，取消离开页面不需要弹确认弹窗
+  watch(
+    () => formData.value.description,
+    (description) => {
+      if (!description) {
+        window.changeConfirm = false;
+      }
+    },
+  );
+
   watch(
     () => formData.value, (val) => {
       Object.keys(paramsDetailData.value).forEach((obj) => {
