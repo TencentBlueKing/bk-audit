@@ -574,6 +574,7 @@
     getEventFields();
   });
 
+
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'processedManageDetail') {
       const params = getSearchParamsPost('event_filters');
@@ -582,16 +583,14 @@
         ...params,
         event_filters: paramsEventFilters,
       };
-      next({
-        ...to,
-        query: {
-          ...to.query,
-          ...EventFiltersParams,
-        },
-      });
-    } else {
-      next();
+      // 保存当前查询参数到目标路由的 query 中
+      // eslint-disable-next-line no-param-reassign
+      to.query = {
+        ...to.query,
+        ...EventFiltersParams,
+      };
     }
+    next();
   });
 </script>
 <style lang='postcss'>
