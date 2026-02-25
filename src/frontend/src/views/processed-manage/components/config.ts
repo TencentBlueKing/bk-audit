@@ -68,6 +68,11 @@ export default {
     service: RiskManageService.fetchRiskStatusCommon,
     filterList: ['new'],
   },
+  current_operator: {
+    label: '当前处理人',
+    type: 'user-selector',
+    required: false,
+  },
   event_content: {
     label: '风险描述',
     type: 'string',
