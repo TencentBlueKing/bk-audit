@@ -162,7 +162,7 @@
     const replaceUrl = getSearchParams();
     if (Array.isArray(value)) {
       const normalized = value
-        .map(item => (item == null ? '' : item.toString()))
+        .map(item => (item === null ? '' : item.toString()))
         .filter(item => item !== '' && item !== allText);
       if (normalized.length === 0) {
         delete replaceUrl[fieldName];
@@ -187,7 +187,7 @@
       const value = localSearchModel.value[fieldName];
       if (Array.isArray(value)) {
         const normalized = value
-          .map(item => (item == null ? '' : item.toString()))
+          .map(item => (item === null ? '' : item.toString()))
           .filter(item => item !== '' && item !== allText);
         if (normalized.length === 0) {
           delete replaceUrl[fieldName];

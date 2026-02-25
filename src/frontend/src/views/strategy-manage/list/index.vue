@@ -49,7 +49,7 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('策略ID、策略名称、配置方式、标签、状态')"
+            :placeholder="t('策略ID、策略名称、配置方式、标签、状态、事件调查报告')"
             unique-select
             :validate-values="validateValues"
             value-split-code=","
@@ -450,7 +450,25 @@
       placeholder: t('请选择标签'),
       onlyRecommendChildren: true,
     },
-
+    {
+      name: t('事件调查报告'),
+      id: 'report_status',
+      placeholder: t('请选择事件调查报告'),
+      children: [{
+        name: t('手动生成'),
+        id: 'manual',
+        placeholder: t('请选择事件调查报告'),
+      }, {
+        name: t('自动生成'),
+        id: 'auto',
+        placeholder: t('请选择事件调查报告'),
+      }, {
+        name: t('未开启'),
+        id: 'disabled',
+        placeholder: t('请选择事件调查报告'),
+      }],
+      onlyRecommendChildren: true,
+    },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
   const dataSource = StrategyManageService.fetchStrategyList;
@@ -518,6 +536,20 @@
     {
       text: t('引入模型审计'),
       value: 'model',
+    },
+  ];
+  const initReportStatusFilterList = [
+    {
+      text: t('手动生成'),
+      value: 'manual',
+    },
+    {
+      text: t('自动生成'),
+      value: 'auto',
+    },
+    {
+      text: t('未开启'),
+      value: 'disabled',
     },
   ];
   const tableColumn = ref([
@@ -710,6 +742,20 @@
       },
     },
     {
+      label: () => t('事件调查报告'),
+      field: () => 'report_status',
+      filter: {
+        list: initReportStatusFilterList,
+        filterScope: SortScope.CURRENT,
+        // match: FullEnum.FUZZY,
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
+      render: ({ data }: { data: StrategyModel }) => <bk-tag
+        >{reportStatusText(data.report_status) }</bk-tag>,
+    },
+    {
       label: () => t('启停'),
       field: () => 'status',
       width: 110,
@@ -882,6 +928,15 @@
     },
   ] as any[]);
 
+  const reportStatusText = (data: string) => {
+    if (data === 'manual') {
+      return t('手动生成');
+    }
+    if (data === 'auto') {
+      return t('自动生成');
+    }
+    return t('未开启');
+  };
   const handleDelete = (data: StrategyModel) => {
     isShowDeleteDialog.value = true;
     deleteName.value = data.strategy_name;
@@ -922,7 +977,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at'],
+    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -1092,6 +1147,7 @@
       strategy_type: '',
       tag: '',
       status: '',
+      report_status: '',
     } as Record<string, any>;
 
     keyword.forEach((item: SearchKey, index) => {
@@ -1237,6 +1293,24 @@
           }],
         });
       }
+    } else if (value && checkField === 'report_status') {
+      if (findObj) {
+        findObj.values = [{
+          id: value,
+          name:
+            nameList.map(nameItem => initReportStatusFilterList?.find(cItem => cItem.value === nameItem)?.text || nameItem).join(','),
+        }];
+      } else {
+        searchKey.value.push({
+          id: 'report_status',
+          name: t('事件调查报告'),
+          values: [{
+            id: value,
+            name:
+              nameList.map(nameItem => initReportStatusFilterList?.find(cItem => cItem.value === nameItem)?.text || nameItem).join(','),
+          }],
+        });
+      }
     } else {
       searchKey.value = [];
     }
@@ -1249,6 +1323,7 @@
       strategy_type: '',
       tag: '',
       status: '',
+      report_status: '',
     } as Record<string, any>;
     searchKey.value = [];
     renderLabelRef.value.resetAllLabel();
@@ -1331,6 +1406,25 @@
               id: item.tag_id,
               placeholder: t('请选择标签'),
             })),
+            onlyRecommendChildren: true,
+          },
+          {
+            name: t('事件调查报告'),
+            id: 'report_status',
+            placeholder: t('请选择事件调查报告'),
+            children: [{
+              name: t('手动生成'),
+              id: 'manual',
+              placeholder: t('请选择事件调查报告'),
+            }, {
+              name: t('自动生成'),
+              id: 'auto',
+              placeholder: t('请选择事件调查报告'),
+            }, {
+              name: t('未开启'),
+              id: 'disabled',
+              placeholder: t('请选择事件调查报告'),
+            }],
             onlyRecommendChildren: true,
           },
         ];
