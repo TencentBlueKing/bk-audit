@@ -191,6 +191,7 @@
 </template>
 
 <script setup lang='ts'>
+  import DOMPurify from 'dompurify';
   import {
     computed,
     ref,
@@ -497,9 +498,8 @@
   // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
   const isRichTextNotEmpty = (html: string) => {
     if (!html) return false;
-    // 去除所有HTML标签后，检查是否有实际文本内容
-    const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '')
-      .trim();
+    // 使用 DOMPurify 安全地去除所有HTML标签，只保留纯文本内容
+    const text = DOMPurify.sanitize(html, { ALLOWED_TAGS: [] }).trim();
     return text.length > 0;
   };
 
