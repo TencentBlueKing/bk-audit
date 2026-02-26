@@ -28,7 +28,13 @@ from services.web.risk.constants import (
     RiskDisplayStatus,
     RiskStatus,
 )
-from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
+from services.web.risk.models import (
+    ManualEvent,
+    Risk,
+    TicketNode,
+    TicketPermission,
+    UserType,
+)
 from services.web.risk.resources.risk import ListMineRisk
 from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
 from services.web.strategy_v2.constants import RiskLevel
@@ -1372,7 +1378,7 @@ class TestRiskPermissionFilters(TestCase):
 
 
 class TestListProcessedRisk(TestCase):
-    """处理历史接口：返回我曾作为处理人的风险，排除当前处理人包含我的"""
+    """处理历史接口：返回我曾操作过的风险，排除当前处理人包含我的"""
 
     def setUp(self):
         super().setUp()
@@ -1392,11 +1398,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             current_operator=[],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-PAST",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="CloseRisk",
+            timestamp=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-01 00:00:00",
         )
         self.risk_current = Risk.objects.create(
             risk_id="R-CURRENT",
@@ -1407,11 +1414,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             current_operator=[self.username],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-CURRENT",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="TransOperator",
+            timestamp=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-02 00:00:00",
         )
         self.risk_noticed = Risk.objects.create(
             risk_id="R-NOTICED",
@@ -1422,12 +1430,6 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             notice_users=[self.username],
         )
-        TicketPermission.objects.create(
-            risk_id="R-NOTICED",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.NOTICE_USER,
-        )
         self.risk_open = Risk.objects.create(
             risk_id="R-OPEN",
             title="open-past",
@@ -1437,13 +1439,13 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
             current_operator=["someone_else"],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-OPEN",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="TransOperator",
+            timestamp=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-04 00:00:00",
         )
-        # 低风险等级策略 + 风险，用于筛选测试
         self.strategy_low = Strategy.objects.create(
             strategy_id=405,
             strategy_name="processed-strategy-low",
@@ -1458,11 +1460,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
             current_operator=[],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-PAST-LOW",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="CloseRisk",
+            timestamp=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-05 00:00:00",
         )
 
     def _make_request(self):
@@ -1493,7 +1496,7 @@ class TestListProcessedRisk(TestCase):
         self.assertEqual(statuses["R-PAST"], RiskDisplayStatus.CLOSED)
 
     def test_list_processed_risk_with_risk_level_filter(self):
-        """筛选参数与 TicketPermission 子查询 + exclude 组合正确工作"""
+        """筛选参数与 TicketNode 子查询 + exclude 组合正确工作"""
         from services.web.risk.resources.risk import ListProcessedRisk
 
         request = self._make_request()

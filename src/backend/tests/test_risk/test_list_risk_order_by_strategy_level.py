@@ -102,7 +102,9 @@ class TestListRiskOrderByStrategyLevel(TestCase):
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    def test_list_mine_risk_load_risks_returns_plain_queryset(self):
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_list_mine_risk_load_risks_returns_plain_queryset(self, mock_load_iam_authed_risks):
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
         """ListMineRisk.load_risks 应返回不带注解的纯净 QuerySet"""
         qs = ListMineRisk().load_risks({})
         risk = qs.first()
@@ -110,8 +112,10 @@ class TestListRiskOrderByStrategyLevel(TestCase):
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    def test_list_noticing_risk_load_risks_returns_plain_queryset(self):
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_list_noticing_risk_load_risks_returns_plain_queryset(self, mock_load_iam_authed_risks):
         """ListNoticingRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
         qs = ListNoticingRisk().load_risks({})
         risk = qs.first()
         self.assertIsNotNone(risk, "setUp 数据应包含 notice_users=['admin'] 的风险")
