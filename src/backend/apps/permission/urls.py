@@ -48,11 +48,13 @@ try:
     from services.web.risk.provider import (
         ManualEventResourceProvider,
         RiskResourceProvider,
+        TicketNodeResourceProvider,
         TicketPermissionResourceProvider,
     )
 except (RuntimeError, ImportError):
     RiskResourceProvider = None
     TicketPermissionResourceProvider = None
+    TicketNodeResourceProvider = None
     ManualEventResourceProvider = None
 
 try:
@@ -86,6 +88,8 @@ if ManualEventResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.MANUAL_EVENT.id, ManualEventResourceProvider())
 if TicketPermissionResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.TICKET_PERMISSION.id, TicketPermissionResourceProvider())
+if TicketNodeResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.TICKET_NODE.id, TicketNodeResourceProvider())
 
 if PanelResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.PANEL.id, PanelResourceProvider())

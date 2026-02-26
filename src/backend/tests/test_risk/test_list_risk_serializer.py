@@ -17,11 +17,9 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
-from unittest import mock
 
 from django.test import SimpleTestCase
 from django.utils import timezone
-from rest_framework import serializers
 from sqlglot import exp
 
 from services.web.risk.constants import (
@@ -151,12 +149,12 @@ class TestListRiskResponseSerializer(SimpleTestCase):
         self.assertNotIn("display_status", serialized)
 
     def test_status_field_shows_stand_by_when_manual_unsynced(self):
-        """manual_synced=False 优先级：即使 display_status 有值，status 也应为 stand_by"""
+        """manual_synced=False 时 display_status 已持久化为 STAND_BY，直接映射"""
         risk = self.create_risk(
             risk_id="risk_ds_standby",
             event_end_time=None,
-            display_status=RiskDisplayStatus.AWAIT_PROCESS,
-            status=RiskStatus.AWAIT_PROCESS,
+            display_status=RiskDisplayStatus.STAND_BY,
+            status=RiskStatus.NEW,
             manual_synced=False,
         )
 
@@ -166,10 +164,8 @@ class TestListRiskResponseSerializer(SimpleTestCase):
         self.assertNotIn("display_status", serialized)
 
     def test_status_field_maps_all_display_status_values(self):
-        """验证所有 RiskDisplayStatus 枚举值都能正确映射（STAND_BY 除外，它由 manual_synced 控制）"""
+        """验证所有 RiskDisplayStatus 枚举值都能正确映射"""
         for ds in RiskDisplayStatus:
-            if ds == RiskDisplayStatus.STAND_BY:
-                continue
             risk = self.create_risk(
                 risk_id=f"risk_ds_{ds.value}",
                 event_end_time=None,
@@ -184,41 +180,12 @@ class TestListRiskResponseSerializer(SimpleTestCase):
             self.assertNotIn("display_status", serialized)
 
     def test_risk_info_serializer_status_uses_display_status(self):
-        """RiskInfoSerializer 与 ListRiskResponseSerializer 使用相同的 to_representation 映射逻辑"""
-        risk = self.create_risk(
-            risk_id="risk_info_ds",
-            event_end_time=None,
-            display_status=RiskDisplayStatus.FOR_APPROVE,
-            status=RiskStatus.FOR_APPROVE,
-        )
+        """RiskInfoSerializer.status 字段 source 指向 display_status"""
+        self.assertEqual(RiskInfoSerializer().fields["status"].source, "display_status")
 
-        # RiskInfoSerializer 包含多个会触发 DB 查询的字段（tags, report 等）
-        # 我们只需测试 to_representation 中 display_status 的映射逻辑
-        base_data = {"status": RiskStatus.FOR_APPROVE, "display_status": RiskDisplayStatus.FOR_APPROVE}
-        with mock.patch.object(serializers.ModelSerializer, "to_representation", return_value=dict(base_data)):
-            serializer = RiskInfoSerializer(instance=risk)
-            serialized = serializer.to_representation(risk)
-
-        self.assertEqual(serialized["status"], RiskDisplayStatus.FOR_APPROVE.value)
-        self.assertNotIn("display_status", serialized)
-
-    def test_risk_info_serializer_stand_by_when_manual_unsynced(self):
-        """RiskInfoSerializer: manual_synced=False 时 status 为 stand_by"""
-        risk = self.create_risk(
-            risk_id="risk_info_standby",
-            event_end_time=None,
-            display_status=RiskDisplayStatus.NEW,
-            status=RiskStatus.NEW,
-            manual_synced=False,
-        )
-
-        base_data = {"status": RiskStatus.NEW, "display_status": RiskDisplayStatus.NEW}
-        with mock.patch.object(serializers.ModelSerializer, "to_representation", return_value=dict(base_data)):
-            serializer = RiskInfoSerializer(instance=risk)
-            serialized = serializer.to_representation(risk)
-
-        self.assertEqual(serialized["status"], RiskDisplayStatus.STAND_BY.value)
-        self.assertNotIn("display_status", serialized)
+    def test_risk_info_serializer_excludes_display_status(self):
+        """RiskInfoSerializer 不暴露 display_status 字段"""
+        self.assertNotIn("display_status", RiskInfoSerializer().fields)
 
 
 class TestListRiskRequestSerializer(SimpleTestCase):

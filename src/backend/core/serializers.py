@@ -187,7 +187,15 @@ class FieldType(object):
 
 def get_serializer_fields(serializer_class):
     """
-    遍历serializer所有field，生成关于该serializer的schema列表
+    遍历serializer所有field，生成关于该serializer的schema列表。
+
+    注意：read_only 字段会被跳过。此函数同时被 IAM 权限属性和资产快照 Doris 建表使用，
+    如果 ModelSerializer 中某个字段因 auto_now / AutoField 等原因被 Django 标记为
+    editable=False（DRF 映射为 read_only），则该字段不会出现在 schema 中，
+    进而导致 BKBase Doris 表缺少对应列。
+
+    解决方法：在 ProviderSerializer 中显式声明该字段为普通字段（覆盖 read_only），
+    参见 RiskProviderSerializer.last_operate_time / StrategyProviderSerializer.strategy_id。
     """
 
     if not serializer_class:
