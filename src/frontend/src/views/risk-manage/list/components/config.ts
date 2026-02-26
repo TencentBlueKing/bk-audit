@@ -56,6 +56,11 @@ export default {
     type: 'datetimerange',
     required: false,
   },
+  last_operate_time: {
+    label: '最后一次处理时间',
+    type: 'datetimerange',
+    required: false,
+  },
   operator: {
     label: '责任人',
     type: 'user-selector',
