@@ -434,6 +434,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
     )
     title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
     event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
+    has_report = serializers.BooleanField(label=gettext_lazy("是否已生成报告"), required=False, allow_null=True)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -488,7 +489,15 @@ class ListRiskRequestSerializer(serializers.Serializer):
         data["use_bkbase"] = bool(data.get("use_bkbase", False))
         # 格式转换
         for key, val in attrs.items():
-            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
+            if key in [
+                "event_time__gte",
+                "event_time__lt",
+                "order_type",
+                "order_field",
+                "use_bkbase",
+                "event_filters",
+                "has_report",
+            ]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
