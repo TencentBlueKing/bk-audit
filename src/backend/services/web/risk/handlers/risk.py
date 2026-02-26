@@ -45,6 +45,7 @@ from services.web.risk.constants import (
     RISK_RENDER_LOCK_KEY,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
+    RiskDisplayStatus,
     RiskStatus,
 )
 from services.web.risk.handlers import EventHandler
@@ -255,6 +256,7 @@ class RiskHandler:
         create_params = self.gen_risk_create_params(event)
         if manual:
             create_params["manual_synced"] = False
+            create_params["display_status"] = RiskDisplayStatus.STAND_BY
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
         return True, risk

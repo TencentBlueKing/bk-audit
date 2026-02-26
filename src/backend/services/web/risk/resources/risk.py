@@ -56,6 +56,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
@@ -99,6 +100,7 @@ from services.web.risk.handlers.ticket import (
     MisReport,
     ReOpen,
     ReOpenMisReport,
+    RiskExperienceRecord,
     TransOperator,
 )
 from services.web.risk.models import (
@@ -109,7 +111,6 @@ from services.web.risk.models import (
     RiskExperience,
     TicketNode,
     TicketPermission,
-    UserType,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -172,7 +173,11 @@ class RetrieveRisk(RiskMeta):
             many=False,
         )
         risk = data[0]
-        nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
+        nodes = (
+            TicketNode.objects.filter(risk_id=risk["risk_id"])
+            .exclude(action=RiskExperienceRecord.__name__)
+            .order_by("timestamp")
+        )
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
         risk["report_generating"] = self._is_report_generating(risk_obj.risk_id)
@@ -597,6 +602,9 @@ class ListRisk(RiskMeta):
                 TicketPermission._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY, fallback=TicketPermission._meta.db_table
                 ),
+                TicketNode._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_TICKET_NODE_BKBASE_RT_ID_KEY, fallback=TicketNode._meta.db_table
+                ),
                 "risk_event": self._get_configured_table_name(
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
                 ),
@@ -644,7 +652,11 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return Risk.objects.filter(q, current_operator__contains=get_request_username()).distinct()
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, current_operator__contains=get_request_username())
+            .distinct()
+        )
 
 
 class ListNoticingRisk(ListRisk):
@@ -652,25 +664,28 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return Risk.objects.filter(q, notice_users__contains=get_request_username()).distinct()
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, notice_users__contains=get_request_username())
+            .distinct()
+        )
 
 
 class ListProcessedRisk(ListRisk):
+    """
+    处理历史：曾作为处理人但当前不是处理人的风险。
+    """
+
     name = gettext_lazy("获取处理历史风险列表")
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
         username = get_request_username()
-        processed_risk_ids = TicketPermission.objects.filter(
-            user=username,
-            user_type=UserType.OPERATOR,
-            action=ActionEnum.LIST_RISK.id,
+        # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
+        processed_risk_ids = TicketNode.objects.filter(
+            operator=username,
         ).values("risk_id")
-        return (
-            Risk.objects.filter(q, risk_id__in=processed_risk_ids)
-            .exclude(current_operator__contains=username)
-            .distinct()
-        )
+        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
 
 
 class ListRiskFields(RiskMeta):
@@ -734,7 +749,7 @@ class RiskDisplayStatusCommon(RiskMeta):
         return choices_to_dict(RiskDisplayStatus)
 
 
-class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
+class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     RequestSerializer = ListRiskMetaRequestSerializer
     many_response_data = True
     # 风险视图类型与风险类的映射
@@ -757,7 +772,7 @@ class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
         return risk_cls().load_risks(filter_dict)
 
 
-class ListRiskTags(ListRiskBase):
+class ListRiskTags(ListRiskMetaBase):
     """
     获取用户的风险标签列表，支持用户在不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
@@ -779,7 +794,7 @@ class ListRiskTags(ListRiskBase):
         return tags.filter(tag_id__in=tag_id_qs)
 
 
-class ListRiskStrategy(ListRiskBase):
+class ListRiskStrategy(ListRiskMetaBase):
     """
     获取风险的策略，支持不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询

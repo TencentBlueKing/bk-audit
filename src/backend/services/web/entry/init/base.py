@@ -294,6 +294,7 @@ class SystemInitHandler:
             ResourceEnum.STRATEGY: {},
             ResourceEnum.STRATEGY_TAG: {},
             ResourceEnum.TICKET_PERMISSION: {},
+            ResourceEnum.TICKET_NODE: {},
             ResourceEnum.MANUAL_EVENT: {
                 CLEAN_CONFIG_JSON_CONF_KEY: {
                     "time_format": "Unix Time Stamp(milliseconds)",

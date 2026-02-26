@@ -20,6 +20,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
@@ -28,7 +29,13 @@ from services.web.risk.constants import (
     RiskDisplayStatus,
     RiskStatus,
 )
-from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
+from services.web.risk.models import (
+    ManualEvent,
+    Risk,
+    TicketNode,
+    TicketPermission,
+    UserType,
+)
 from services.web.risk.resources.risk import ListMineRisk
 from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
 from services.web.strategy_v2.constants import RiskLevel
@@ -783,6 +790,7 @@ class TestListRiskResource(TestCase):
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         sql_log: List[str] = []
 
@@ -832,6 +840,7 @@ class TestListRiskResource(TestCase):
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         sql_log: List[str] = []
 
@@ -882,6 +891,12 @@ class TestListMineAndNoticingRisk(TestCase):
         self.factory = APIRequestFactory()
         self.username = "admin"
         self.bkbase_title = "bkbase-title"
+
+        self.iam_filter_patcher = mock.patch(
+            "services.web.risk.models.Risk.iam_risk_filter", return_value=Q(), autospec=True
+        )
+        self.iam_filter_patcher.start()
+        self.addCleanup(self.iam_filter_patcher.stop)
 
         self.strategy = Strategy.objects.create(
             namespace="default",
@@ -1089,6 +1104,7 @@ class TestRetrieveRiskDetail(TestCase):
             title="manual-unsynced-status",
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
 
         data = self.resource.risk.retrieve_risk({"risk_id": unsynced_risk.risk_id})
@@ -1146,6 +1162,7 @@ class TestSyncManualRiskStatus(TestCase):
             title="manual-unsynced",
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         untouched = Risk.objects.create(
             risk_id="risk-still-unsynced",
@@ -1155,6 +1172,7 @@ class TestSyncManualRiskStatus(TestCase):
             title="manual-unsynced-2",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         called_sql = {}
 
@@ -1165,8 +1183,12 @@ class TestSyncManualRiskStatus(TestCase):
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             _sync_manual_risk_status(batch_size=10)
 
-        self.assertTrue(Risk.objects.get(pk=target.pk).manual_synced)
-        self.assertFalse(Risk.objects.get(pk=untouched.pk).manual_synced)
+        synced_target = Risk.objects.get(pk=target.pk)
+        self.assertTrue(synced_target.manual_synced)
+        self.assertEqual(synced_target.display_status, RiskDisplayStatus.STAND_BY)
+        still_unsynced = Risk.objects.get(pk=untouched.pk)
+        self.assertFalse(still_unsynced.manual_synced)
+        self.assertEqual(still_unsynced.display_status, RiskDisplayStatus.STAND_BY)
         self.assertIn(target.risk_id, called_sql.get("value", ""))
 
 
@@ -1398,7 +1420,7 @@ class TestRiskPermissionFilters(TestCase):
 
 
 class TestListProcessedRisk(TestCase):
-    """处理历史接口：返回我曾作为处理人的风险，排除当前处理人包含我的"""
+    """处理历史接口：返回我曾操作过的风险，排除当前处理人包含我的"""
 
     def setUp(self):
         super().setUp()
@@ -1408,6 +1430,7 @@ class TestListProcessedRisk(TestCase):
             strategy_id=404,
             strategy_name="processed-strategy",
             risk_level=RiskLevel.HIGH.value,
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
         self.risk_past = Risk.objects.create(
             risk_id="R-PAST",
@@ -1418,11 +1441,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             current_operator=[],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-PAST",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="CloseRisk",
+            timestamp=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-01 00:00:00",
         )
         self.risk_current = Risk.objects.create(
             risk_id="R-CURRENT",
@@ -1433,11 +1457,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             current_operator=[self.username],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-CURRENT",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="TransOperator",
+            timestamp=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-02 00:00:00",
         )
         self.risk_noticed = Risk.objects.create(
             risk_id="R-NOTICED",
@@ -1448,12 +1473,6 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             notice_users=[self.username],
         )
-        TicketPermission.objects.create(
-            risk_id="R-NOTICED",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.NOTICE_USER,
-        )
         self.risk_open = Risk.objects.create(
             risk_id="R-OPEN",
             title="open-past",
@@ -1463,13 +1482,13 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
             current_operator=["someone_else"],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-OPEN",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="TransOperator",
+            timestamp=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-04 00:00:00",
         )
-        # 低风险等级策略 + 风险，用于筛选测试
         self.strategy_low = Strategy.objects.create(
             strategy_id=405,
             strategy_name="processed-strategy-low",
@@ -1484,11 +1503,12 @@ class TestListProcessedRisk(TestCase):
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
             current_operator=[],
         )
-        TicketPermission.objects.create(
+        TicketNode.objects.create(
             risk_id="R-PAST-LOW",
-            action=ActionEnum.LIST_RISK.id,
-            user=self.username,
-            user_type=UserType.OPERATOR,
+            operator=self.username,
+            action="CloseRisk",
+            timestamp=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).timestamp(),
+            time="2024-01-05 00:00:00",
         )
 
     def _make_request(self):
@@ -1519,7 +1539,7 @@ class TestListProcessedRisk(TestCase):
         self.assertEqual(statuses["R-PAST"], RiskDisplayStatus.CLOSED)
 
     def test_list_processed_risk_with_risk_level_filter(self):
-        """筛选参数与 TicketPermission 子查询 + exclude 组合正确工作"""
+        """筛选参数与 TicketNode 子查询 + exclude 组合正确工作"""
         from services.web.risk.resources.risk import ListProcessedRisk
 
         request = self._make_request()
@@ -1552,3 +1572,56 @@ class TestListProcessedRisk(TestCase):
         self.assertIsNotNone(risk, "setUp 数据应包含已处理的风险")
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
+
+    def test_list_processed_risk_via_bkbase(self):
+        """ListProcessedRisk 走 BkBase 路径时，SQL 应正确映射 risk_ticketnode 表"""
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        bkbase_table_config = {
+            ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
+            ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
+            ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
+            ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY: "bkdata.ticket_permission_rt",
+            ASSET_TICKET_NODE_BKBASE_RT_ID_KEY: "bkdata.ticket_node_rt",
+            DORIS_EVENT_BKBASE_RT_ID_KEY: "bkdata.event_rt",
+        }
+        for config_key, table_id in bkbase_table_config.items():
+            GlobalMetaConfig.set(
+                config_key=config_key,
+                config_value=table_id,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            )
+        self.addCleanup(lambda: GlobalMetaConfig.objects.filter(config_key__in=bkbase_table_config.keys()).delete())
+
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": "R-PAST", "strategy_id": self.strategy.strategy_id}]}
+
+        request = self._make_request()
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            resp = ListProcessedRisk().request(
+                {
+                    "page": 1,
+                    "page_size": 10,
+                    "event_filters": [
+                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
+                    ],
+                },
+                _request=request,
+            )
+
+        self.assertEqual(len(sql_log), 2)
+        ticket_node_table = f"{bkbase_table_config[ASSET_TICKET_NODE_BKBASE_RT_ID_KEY]}.doris"
+        self.assertTrue(
+            any(ticket_node_table in sql for sql in sql_log),
+            f"BkBase SQL 应包含 ticket_node 映射表 {ticket_node_table}，实际 SQL: {sql_log}",
+        )
+        risk_table = f"{bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
+        self.assertTrue(any(risk_table in sql for sql in sql_log))
+        self.assertEqual(resp["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
