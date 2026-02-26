@@ -479,6 +479,15 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
 
+    def validate_report_status(self, value: str) -> str:
+        if not value:
+            return value
+        valid_values = {choice[0] for choice in StrategyReportStatus.choices}
+        invalid_values = [v for v in value.split(",") if v and v not in valid_values]
+        if invalid_values:
+            raise serializers.ValidationError(gettext_lazy("无效的报告状态值: %s") % ", ".join(invalid_values))
+        return value
+
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
         # split into array

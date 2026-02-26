@@ -276,6 +276,8 @@ class RiskEventAggregateSqlBuilder(EventAggregateSqlBuilder):
             instance_key=settings.DEFAULT_NAMESPACE,
             default="",
         )
+        if rt_id:
+            rt_id = rt_id.strip()
         if rt_id and not rt_id.endswith(f".{cls.STORAGE_SUFFIX}"):
             rt_id = f"{rt_id}.{cls.STORAGE_SUFFIX}"
         return rt_id
