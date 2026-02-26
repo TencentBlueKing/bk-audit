@@ -144,7 +144,8 @@ class ListRiskByRule(RiskRuleMeta):
         q = RiskRuleOperator.build_query_filter(rule.scope) & Q(
             Q(event_time__gte=rule.created_at) | Q(status=RiskStatus.NEW)
         )
-        risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK).exclude(status=RiskStatus.CLOSED).filter(q)
+        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+        risks = Risk.annotated_queryset(qs).exclude(status=RiskStatus.CLOSED).filter(q)
         return risks
 
 

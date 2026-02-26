@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 from functools import cached_property
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -245,13 +245,15 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     # ──── QuerySet 快捷方法 ────
 
     @classmethod
-    def annotated_queryset(cls) -> QuerySet["Risk"]:
+    def annotated_queryset(cls, queryset: Optional[QuerySet["Risk"]] = None) -> QuerySet["Risk"]:
         """
-        返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
-        以及 _has_report 标记（用于避免 N+1 查询）
-        """
+        返回带展示注解的 Risk 查询集。
 
-        return cls.objects.annotate(
+        可接受外部 QuerySet 并在其上添加注解；无参调用时从 cls.objects 开始。
+        """
+        if queryset is None:
+            queryset = cls.objects.all()
+        return queryset.annotate(
             event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
             _has_report=Exists(RiskReport.objects.filter(risk_id=OuterRef("risk_id"))),
         ).defer("event_content")
@@ -259,18 +261,16 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     @classmethod
     def load_iam_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
         """
-        获取仅通过 IAM 权限过滤的风险集
+        获取仅通过 IAM 权限过滤的风险集（不带展示注解）。
         """
-
-        return cls.annotated_queryset().filter(cls.iam_risk_filter(action))
+        return cls.objects.filter(cls.iam_risk_filter(action))
 
     @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
         """
-        获取通过组合权限（IAM + 本地）过滤的风险集
+        获取通过组合权限（IAM + 本地）过滤的风险集（不带展示注解）。
         """
-
-        return cls.annotated_queryset().filter(cls.authed_risk_filter(action))
+        return cls.objects.filter(cls.authed_risk_filter(action))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
