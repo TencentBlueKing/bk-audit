@@ -107,7 +107,6 @@ from services.web.risk.models import (
     RiskExperience,
     TicketNode,
     TicketPermission,
-    UserType,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -635,16 +634,16 @@ class ListMineRisk(ListRisk):
     name = gettext_lazy("获取待我处理的风险列表")
 
     def load_risks(self, validated_request_data):
-        q = self._build_filter_query(validated_request_data)
-        return Risk.objects.filter(q, current_operator__contains=get_request_username()).distinct()
+        queryset = super().load_risks(validated_request_data)
+        return queryset.filter(Q(current_operator__contains=get_request_username()))
 
 
 class ListNoticingRisk(ListRisk):
     name = gettext_lazy("获取我关注的风险列表")
 
     def load_risks(self, validated_request_data):
-        q = self._build_filter_query(validated_request_data)
-        return Risk.objects.filter(q, notice_users__contains=get_request_username()).distinct()
+        queryset = super().load_risks(validated_request_data)
+        return queryset.filter(Q(notice_users__contains=get_request_username()))
 
 
 class ListProcessedRisk(ListRisk):
@@ -653,16 +652,10 @@ class ListProcessedRisk(ListRisk):
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
         username = get_request_username()
-        processed_risk_ids = TicketPermission.objects.filter(
-            user=username,
-            user_type=UserType.OPERATOR,
-            action=ActionEnum.LIST_RISK.id,
+        processed_risk_ids = TicketNode.objects.filter(
+            operator=username,
         ).values("risk_id")
-        return (
-            Risk.objects.filter(q, risk_id__in=processed_risk_ids)
-            .exclude(current_operator__contains=username)
-            .distinct()
-        )
+        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
 
 
 class ListRiskFields(RiskMeta):
