@@ -524,6 +524,8 @@
         prompt_template: '',
         result: '',
       };
+      // 新建模式：重置预览内容
+      concent.value = '';
     }
     // 重置预览状态
     isPreviewExpanded.value = false;
