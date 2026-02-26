@@ -28,7 +28,6 @@ from django.conf import settings
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
-from core.models import get_request_username
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     CLEAN_CONFIG_JSON_CONF_KEY,
@@ -61,21 +60,23 @@ class JoinDataEtlStorageHandler:
         self.storage_type = storage_type
         self.snapshot = snapshot
 
-    def create_clean(self, update=False):
-        """创建/更新清洗"""
+    def create_clean(self, update: bool = False):
+        """创建或更新清洗"""
         if update:
-            # 更新清洗
-            config = self.clean_config.copy()
-            config["processing_id"] = self.snapshot.bkbase_processing_id
-            api.bk_base.databus_cleans_put(config)
+            # 更新清洗链路
+            clean_config = self.clean_config.copy()
+            clean_config["processing_id"] = self.snapshot.bkbase_processing_id
+            api.bk_base.databus_cleans_put(
+                clean_config,
+            )
             restart_bkbase_clean(self.snapshot.bkbase_table_id, self.snapshot.bkbase_processing_id)
             return self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id
-        # 创建清洗
-        result = api.bk_base.databus_cleans_post(self.clean_config)
-        start_bkbase_clean(result["result_table_id"], result["processing_id"], get_request_username())
-        processing_id = result["processing_id"]
-        bkbase_table_id = result["result_table_id"]
-        return processing_id, bkbase_table_id
+        else:
+            result = api.bk_base.databus_cleans_post(self.clean_config)
+            start_bkbase_clean(result["result_table_id"], result["processing_id"])
+            processing_id = result["processing_id"]
+            bkbase_table_id = result["result_table_id"]
+            return processing_id, bkbase_table_id
 
     def create_storage(self, update=False):
         """创建入库"""

@@ -87,6 +87,7 @@ class CollectorTest(TestCase):
     """
 
     def setUp(self) -> None:
+        super().setUp()
         self.collector = CollectorConfig.objects.create(**COLLECTOR_DATA)
         CollectorPlugin.objects.create(**PLUGIN_DATA)
         System.objects.create(
@@ -124,6 +125,16 @@ class CollectorTest(TestCase):
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
+        # 避免测试触发 Celery broker（Redis）连接
+        self._create_api_push_etl_delay_patch = mock.patch(
+            "databus.collector.resources.create_api_push_etl.delay",
+            mock.Mock(),
+        )
+        self._create_api_push_etl_delay_patch.start()
+
+    def tearDown(self) -> None:
+        self._create_api_push_etl_delay_patch.stop()
+        super().tearDown()
 
     def test_get_collectors(self):
         """GetCollectorsResource"""

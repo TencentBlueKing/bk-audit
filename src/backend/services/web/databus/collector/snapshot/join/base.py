@@ -200,13 +200,15 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
             self.storage_type,
             snapshot=self.snapshot,
         )
-        # 已有清洗链路不做调整
+        # 已有清洗链路则更新
         if self._get_table_id():
-            logger.info(f"{self.__class__.__name__} Skip Etl; SnapshotID => {self.snapshot.id}")
+            logger.info(f"{self.__class__.__name__} Update Etl; SnapshotID => {self.snapshot.id}")
+            self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create_clean(
+                update=True
+            )
         else:
             # 没有清洗链路则创建
             logger.info(f"{self.__class__.__name__} Create Etl; SnapshotID => {self.snapshot.id}")
-
             self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create_clean()
         self.snapshot.save()
 
@@ -222,9 +224,9 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
         storage = self.snapshot.storages.filter(storage_type=self.storage_type).first()
         try:
             if storage.status == SnapshotRunningStatus.RUNNING:
-                logger.info(f"{self.__class__.__name__} Skip Storage; SnapshotID => {self.snapshot.id}")
-                return
-            if storage.status == SnapshotRunningStatus.FAILED:
+                logger.info(f"{self.__class__.__name__} update Storage; SnapshotID => {self.snapshot.id}")
+                etl_storage_handler.create_storage(update=True)
+            elif storage.status == SnapshotRunningStatus.FAILED:
                 etl_storage_handler.create_storage(update=True)
             else:
                 etl_storage_handler.create_storage()
