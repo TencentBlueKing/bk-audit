@@ -98,6 +98,7 @@ from services.web.risk.handlers.ticket import (
     MisReport,
     ReOpen,
     ReOpenMisReport,
+    RiskExperienceRecord,
     TransOperator,
 )
 from services.web.risk.models import (
@@ -170,7 +171,11 @@ class RetrieveRisk(RiskMeta):
             many=False,
         )
         risk = data[0]
-        nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
+        nodes = (
+            TicketNode.objects.filter(risk_id=risk["risk_id"])
+            .exclude(action=RiskExperienceRecord.__name__)
+            .order_by("timestamp")
+        )
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
         return risk
