@@ -137,7 +137,8 @@
             </div>
             <bk-table
               :key="key"
-              :border="['row','outer','col']"
+              :border="['row','col']"
+              class="api-search-result-table"
               :columns="tableField.columns"
               :data="tableField.tableData"
               header-align="left"
@@ -711,6 +712,9 @@
 :deep(.card-content) {
   padding: 16px;
   background-color: #fafbfd;
+  border: .5px solid #dcdee5;
+  border-bottom-right-radius: 2px;
+  border-bottom-left-radius: 2px;
 
   .top-search-table-title {
     margin: 10px 0;
@@ -728,5 +732,21 @@
 .single-content {
   padding: 0;
   background-color: #fff;
+}
+
+</style>
+<style  lang="postcss">
+.api-search-result-table {
+  .bk-table-head table thead th,
+  .bk-table-body table thead th,
+  table thead th,
+  .bk-table .bk-table-head table thead th,
+  .bk-table .bk-table-body table thead th {
+    background-color: #f0f1f5 !important;
+  }
+
+  .bk-table-footer {
+    background-color: #fff;
+  }
 }
 </style>
