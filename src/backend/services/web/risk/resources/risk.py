@@ -338,9 +338,13 @@ class ListRisk(RiskMeta):
         return start_date, end_date
 
     def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
+        # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
         risks = self._apply_ordering(base_queryset, order_field).only("pk")
         paged_queryset, page = paginate_queryset(
-            queryset=risks, request=request, base_queryset=Risk.annotated_queryset()
+            queryset=risks,
+            request=request,
+            # 数据加载阶段套上展示注解（event_content_short / _has_report）
+            base_queryset=Risk.annotated_queryset(),
         )
         paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
         paged_risks = list(paged_queryset)
@@ -632,7 +636,7 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return Risk.annotated_queryset().filter(q, current_operator__contains=get_request_username()).distinct()
+        return Risk.objects.filter(q, current_operator__contains=get_request_username()).distinct()
 
 
 class ListNoticingRisk(ListRisk):
@@ -640,7 +644,7 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return Risk.annotated_queryset().filter(q, notice_users__contains=get_request_username()).distinct()
+        return Risk.objects.filter(q, notice_users__contains=get_request_username()).distinct()
 
 
 class ListProcessedRisk(ListRisk):
@@ -655,8 +659,7 @@ class ListProcessedRisk(ListRisk):
             action=ActionEnum.LIST_RISK.id,
         ).values("risk_id")
         return (
-            Risk.annotated_queryset()
-            .filter(q, risk_id__in=processed_risk_ids)
+            Risk.objects.filter(q, risk_id__in=processed_risk_ids)
             .exclude(current_operator__contains=username)
             .distinct()
         )
@@ -761,20 +764,11 @@ class ListRiskTags(ListRiskBase):
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
         if not risk_view_type:
             return tags
-        risk_ids = set(
-            self.load_risk_view_type_risks(risk_view_type, validated_request_data).values_list("risk_id", flat=True)
-        )
-        if not risk_ids:
-            return []
 
-        # 1. 获取这些风险对应的策略ID
-        strategy_ids = set(Risk.objects.filter(risk_id__in=risk_ids).values_list("strategy_id", flat=True))
-
-        # 2. 查询这些策略关联的标签ID
-        tag_ids = set(StrategyTag.objects.filter(strategy_id__in=strategy_ids).values_list("tag_id", flat=True))
-
-        # 3. 返回对应的标签
-        return tags.filter(tag_id__in=tag_ids)
+        risk_qs = self.load_risk_view_type_risks(risk_view_type, validated_request_data)
+        strategy_id_qs = risk_qs.order_by().values("strategy_id").distinct()
+        tag_id_qs = StrategyTag.objects.filter(strategy_id__in=strategy_id_qs).values("tag_id")
+        return tags.filter(tag_id__in=tag_id_qs)
 
 
 class ListRiskStrategy(ListRiskBase):
@@ -792,14 +786,13 @@ class ListRiskStrategy(ListRiskBase):
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
         if not risk_view_type:
             return strategies
-        strategy_ids = set(
+        strategy_id_qs = (
             self.load_risk_view_type_risks(risk_view_type, validated_request_data)
-            .values_list("strategy_id", flat=True)
+            .order_by()
+            .values("strategy_id")
             .distinct()
         )
-        if not strategy_ids:
-            return []
-        return strategies.filter(strategy_id__in=strategy_ids)
+        return strategies.filter(strategy_id__in=strategy_id_qs)
 
 
 class CustomCloseRisk(RiskMeta):
@@ -1058,9 +1051,8 @@ class RiskExport(RiskMeta):
         risk_ids: List[str] = validated_request_data["risk_ids"]
 
         # 1. 获取有权限的风险列表
-        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.load_authed_risks(action=ActionEnum.LIST_RISK)).filter(
-            risk_id__in=risk_ids
-        )
+        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.annotated_queryset(qs)).filter(risk_id__in=risk_ids)
 
         authed_risk_ids = list(risks.values_list("risk_id", flat=True))
         no_authed_risk_ids = set(risk_ids) - set(authed_risk_ids)

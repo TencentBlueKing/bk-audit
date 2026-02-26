@@ -127,7 +127,7 @@ class TestListRiskResource(TestCase):
         return data
 
     def test_list_risk_via_db(self):
-        data = self._call_resource({"use_bkbase": False})
+        data = self._call_resource({})
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
@@ -137,7 +137,7 @@ class TestListRiskResource(TestCase):
         target_end_time = self.risk.event_time + datetime.timedelta(seconds=59, microseconds=1)
         Risk.objects.filter(pk=self.risk.pk).update(event_end_time=target_end_time)
 
-        data = self._call_resource({"use_bkbase": False})
+        data = self._call_resource({})
         results = data["results"]
 
         self.assertEqual(len(results), 1)
@@ -154,9 +154,17 @@ class TestListRiskResource(TestCase):
         self.assertEqual(result["event_end_time"], expected_formatted)
         self.assertNotEqual(result["event_end_time"], original_formatted)
 
-    def test_list_risk_via_db_with_event_filters(self):
+    def test_list_risk_with_event_filters_uses_bkbase(self):
+        """有 event_filters 时自动走 BKBase 路径"""
+        sql_log = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
         payload = {
-            "use_bkbase": False,
             "event_filters": [
                 {
                     "field": "ip",
@@ -167,12 +175,13 @@ class TestListRiskResource(TestCase):
             ],
         }
 
-        data = self._call_resource(payload)
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
 
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
-        self.assertEqual(data["sql"], [])
+        self.assertTrue(len(sql_log) == 2, "应走 BKBase 路径产生 SQL")
 
     def test_list_risk_via_bkbase(self):
         sql_log = []
@@ -193,7 +202,14 @@ class TestListRiskResource(TestCase):
             ),
             mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync),
         ):
-            data = self._call_resource({"use_bkbase": True, "title": "bkbase-title"})
+            data = self._call_resource(
+                {
+                    "title": "bkbase-title",
+                    "event_filters": [
+                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
+                    ],
+                }
+            )
 
         results = data["results"]
         self.assertEqual(len(results), 1)
@@ -207,7 +223,7 @@ class TestListRiskResource(TestCase):
         ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
         self.assertFalse(any(ticket_table in sql for sql in sql_log))
         event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
-        self.assertFalse(any(event_table in sql for sql in sql_log))
+        self.assertTrue(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -222,7 +238,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -278,7 +293,6 @@ class TestListRiskResource(TestCase):
             }
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "event_filters": [
                 {
@@ -323,7 +337,6 @@ class TestListRiskResource(TestCase):
             }
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "order_field": "event_data.ip",
             "order_type": "desc",
@@ -365,7 +378,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "event_filters": [
                 {
@@ -407,7 +419,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
@@ -469,7 +480,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
@@ -518,7 +528,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             # 无去重：thedate 应在 risk_event_0 基础子查询处
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
@@ -560,11 +569,11 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "risk_level": RiskLevel.HIGH.value,
             "order_field": "risk_level",
             "order_type": "desc",
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
@@ -592,7 +601,6 @@ class TestListRiskResource(TestCase):
             event_data_field_configs=[{"field_name": "address", "display_name": "Address"}],
         )
         payload = {
-            "use_bkbase": False,
             "event_filters": [
                 {
                     "field": "unknown",
@@ -645,7 +653,7 @@ class TestListRiskResource(TestCase):
             "risk_level": "",
             "title": "bkbase-full-title",
             "notice_users": "",
-            "use_bkbase": True,
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
@@ -659,7 +667,7 @@ class TestListRiskResource(TestCase):
         self.assertIn("2025-04-20", combined_sql)
         self.assertIn("2025-10-20", combined_sql)
         event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
-        self.assertFalse(any(event_table in sql for sql in sql_log))
+        self.assertTrue(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -690,8 +698,8 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": closed_risk.risk_id, "strategy_id": closed_risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "status": RiskDisplayStatus.CLOSED,
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
@@ -728,13 +736,13 @@ class TestListRiskResource(TestCase):
         )
 
         # 传入 status=closed，应只返回 display_status=closed 的风险
-        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.CLOSED})
+        data = self._call_resource({"status": RiskDisplayStatus.CLOSED})
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], closed_risk.risk_id)
 
         # 传入 status=new，应只返回 display_status=new 的风险（setUp 中的 risk）
-        data = self._call_resource({"use_bkbase": False, "status": RiskDisplayStatus.NEW})
+        data = self._call_resource({"status": RiskDisplayStatus.NEW})
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
@@ -751,8 +759,8 @@ class TestListRiskResource(TestCase):
 
         # 逗号分隔传入多个 status
         payload = {
-            "use_bkbase": True,
             "status": f"{RiskDisplayStatus.NEW},{RiskDisplayStatus.CLOSED}",
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
@@ -785,8 +793,12 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         request_first = self._make_request({"page": 1, "page_size": 1})
+        bkbase_payload = {
+            "title": "bkbase-title",
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
+        }
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-            data = self.resource.risk.list_risk({"use_bkbase": True, "title": "bkbase-title"}, _request=request_first)
+            data = self.resource.risk.list_risk(bkbase_payload, _request=request_first)
 
         self.assertEqual(data["total"], 2)
         self.assertEqual(data["num_pages"], 2)
@@ -804,9 +816,7 @@ class TestListRiskResource(TestCase):
 
         request_second = self._make_request({"page": 2, "page_size": 1})
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync_second):
-            data_second = self.resource.risk.list_risk(
-                {"use_bkbase": True, "title": "bkbase-title"}, _request=request_second
-            )
+            data_second = self.resource.risk.list_risk(bkbase_payload, _request=request_second)
 
         self.assertEqual([item["risk_id"] for item in data_second["results"]], [self.risk.risk_id])
         self.assertEqual(data_second["total"], 2)
@@ -832,7 +842,6 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "use_bkbase": True,
             "title": "bkbase-title",
             "event_filters": [
                 {
@@ -953,10 +962,12 @@ class TestListMineAndNoticingRisk(TestCase):
                 {
                     "page": 1,
                     "page_size": 10,
-                    "use_bkbase": True,
                     "title": "bkbase-title",
                     "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
                     "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
+                    "event_filters": [
+                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
+                    ],
                 },
                 _request=request,
             )
@@ -1311,10 +1322,28 @@ class TestRiskPermissionFilters(TestCase):
         risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
         self.assertEqual(risk_ids, [])
 
+    def test_annotated_queryset_accepts_external_queryset(self):
+        """annotated_queryset 应支持接受外部 QuerySet 并在其上添加注解"""
+        base_qs = Risk.objects.filter(risk_id="R-LOCAL")
+        annotated_qs = Risk.annotated_queryset(queryset=base_qs)
+        risk = annotated_qs.first()
+        self.assertIsNotNone(risk)
+        self.assertTrue(hasattr(risk, "event_content_short"))
+        self.assertTrue(hasattr(risk, "_has_report"))
+        self.assertEqual(risk.risk_id, "R-LOCAL")
+
+    def test_annotated_queryset_without_args_unchanged(self):
+        """无参调用 annotated_queryset 行为不变"""
+        qs = Risk.annotated_queryset()
+        risk = qs.first()
+        self.assertIsNotNone(risk)
+        self.assertTrue(hasattr(risk, "event_content_short"))
+        self.assertTrue(hasattr(risk, "_has_report"))
+
     @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
     @mock.patch("services.web.risk.models.Permission")
-    def test_load_iam_authed_risks_has_annotations(self, mock_perm_cls, mock_converter_cls):
-        """load_iam_authed_risks 返回的 QuerySet 应保留 annotated_queryset 的注解字段"""
+    def test_load_iam_authed_risks_returns_plain_queryset(self, mock_perm_cls, mock_converter_cls):
+        """load_iam_authed_risks 返回不带注解的纯净 QuerySet"""
         mock_perm = mock_perm_cls.return_value
         mock_perm.make_request.return_value = mock.MagicMock()
         mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
@@ -1322,8 +1351,8 @@ class TestRiskPermissionFilters(TestCase):
 
         qs = Risk.load_iam_authed_risks(ActionEnum.LIST_RISK)
         risk = qs.first()
-        self.assertTrue(hasattr(risk, "event_content_short"))
-        self.assertTrue(hasattr(risk, "_has_report"))
+        self.assertFalse(hasattr(risk, "event_content_short"))
+        self.assertFalse(hasattr(risk, "_has_report"))
 
     @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
     @mock.patch("services.web.risk.models.Permission")
@@ -1487,3 +1516,13 @@ class TestListProcessedRisk(TestCase):
         )
         risk_ids = {item["risk_id"] for item in resp["results"]}
         self.assertEqual(risk_ids, {"R-PAST-LOW"})
+
+    def test_list_processed_risk_load_risks_returns_plain_queryset(self):
+        """ListProcessedRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        qs = ListProcessedRisk().load_risks({})
+        risk = qs.first()
+        self.assertIsNotNone(risk, "setUp 数据应包含已处理的风险")
+        self.assertFalse(hasattr(risk, "event_content_short"))
+        self.assertFalse(hasattr(risk, "_has_report"))

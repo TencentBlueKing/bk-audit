@@ -421,7 +421,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
     tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
-    use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
+    use_bkbase = serializers.BooleanField(
+        label=gettext_lazy("是否通过BKBase查询"),
+        required=False,
+        default=False,
+        help_text=gettext_lazy("已废弃：由 event_filters 自动决定，传入无效"),
+    )
     order_field = serializers.CharField(
         label=gettext_lazy("排序字段"),
         required=False,
@@ -492,7 +497,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["title__contains"] = data.pop("title")
         event_filters = event_filters or []
         data["event_filters"] = event_filters
-        data["use_bkbase"] = bool(data.get("use_bkbase", False))
+        data["use_bkbase"] = bool(event_filters)
         # 将前端传入的 status 映射到 display_status 进行筛选
         if data.get("status"):
             data["display_status"] = data.pop("status")
