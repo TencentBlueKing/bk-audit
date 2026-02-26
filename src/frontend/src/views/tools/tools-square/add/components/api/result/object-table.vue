@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="object-table">
-    <div class="object-table-head">
+    <div
+      class="object-table-head"
+      style="background-color: #f5f7fa">
       <audit-icon
         class="move"
         type="move" />
@@ -35,21 +37,22 @@
       <div class="field-header-row">
         <div
           class="field-value"
-          style="flex: 0 0 200px;">
+          style="flex: 0 0 200px;background-color: #f0f1f5">
           {{ t('显示名') }}
         </div>
         <div
           class="field-value"
-          style="flex: 0 0 250px;">
+          style="flex: 0 0 250px;background-color: #f0f1f5">
           {{ t('字段值映射') }}
         </div>
         <div
           class="field-value"
-          style="flex: 0 0 300px;">
+          style="flex: 0 0 300px;background-color: #f0f1f5">
           {{ t('字段值下钻') }}
         </div>
         <div
-          class="field-value">
+          class="field-value"
+          style="background-color: #f0f1f5">
           {{ t('字段说明') }}
         </div>
       </div>
@@ -184,7 +187,8 @@
               </bk-form-item>
             </div>
             <div
-              class="field-value">
+              class="field-value"
+              style="border-right: 0;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -523,7 +527,7 @@
 
   /* width: 180px; */
   overflow: hidden;
-  border-left: 1px solid #dcdee5;
+  border-right: 1px solid #dcdee5;
   align-items: center;
 
   &:first-child {
