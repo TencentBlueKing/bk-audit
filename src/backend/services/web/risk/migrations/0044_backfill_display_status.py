@@ -66,7 +66,7 @@ def backwards(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("risk", "0043_add_risk_display_status"),
+        ("risk", "0043_risk_has_report"),
     ]
 
     operations = [
