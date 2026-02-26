@@ -32,6 +32,7 @@ export default {
       name: 'toolsSquare',
       meta: {
         title: '工具广场',
+        nodeSideContent: true,
       },
     },
     {

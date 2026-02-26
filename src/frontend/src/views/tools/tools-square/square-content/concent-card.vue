@@ -363,7 +363,7 @@
   const scrollStyle = {
     width: '98%',
     'margin-top': '10px',
-    height: 'calc(100vh - 200px)',
+    height: 'calc(100vh - 150px)',
   };
 
   const urlToolsIds = ref<Set<string>>(new Set());
