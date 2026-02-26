@@ -20,9 +20,10 @@ import abc
 
 from blueapps.utils.request_provider import get_request_username
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from services.web.risk.handlers.ticket import RiskExperienceRecord
 from services.web.risk.models import Risk, RiskExperience
 from services.web.risk.serializers import (
     ListRiskExperienceReqSerializer,
@@ -42,13 +43,20 @@ class SaveRiskExperience(RiskExperienceMeta):
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        username = get_request_username()
         risk_experience: RiskExperience = RiskExperience.objects.filter(
-            risk_id=risk.risk_id, created_by=get_request_username()
+            risk_id=risk.risk_id, created_by=username
         ).first()
-        if not risk_experience:
-            return RiskExperience.objects.create(risk_id=risk.risk_id, content=validated_request_data["content"])
-        risk_experience.content = validated_request_data["content"]
-        risk_experience.save(update_fields=["content"])
+        if risk_experience is None:
+            risk_experience = RiskExperience.objects.create(
+                risk_id=risk.risk_id, content=validated_request_data["content"]
+            )
+            description = gettext("%s 添加风险总结") % username
+        else:
+            risk_experience.content = validated_request_data["content"]
+            risk_experience.save(update_fields=["content"])
+            description = gettext("%s 修改风险总结") % username
+        RiskExperienceRecord(risk_id=risk.risk_id, operator=username).run(description=description)
         return risk_experience
 
 

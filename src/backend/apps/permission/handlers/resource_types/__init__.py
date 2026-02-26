@@ -29,6 +29,7 @@ from apps.permission.handlers.resource_types.panel import Panel
 from apps.permission.handlers.resource_types.risk import (
     ManualEvent,
     Risk,
+    TicketNode,
     TicketPermission,
 )
 from apps.permission.handlers.resource_types.sensitive_object import (
@@ -62,6 +63,7 @@ class ResourceEnum:
     RISK = Risk
     MANUAL_EVENT = ManualEvent
     TICKET_PERMISSION = TicketPermission
+    TICKET_NODE = TicketNode
     PANEL = Panel
     TAG = Tag
     TOOL = Tool
