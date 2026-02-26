@@ -560,6 +560,11 @@ class ListRisk(RiskMeta):
         if tag_filter := validated_request_data.pop("tag_objs__in", None):
             q &= Q(strategy__tags__tag_id__in=tag_filter)
 
+        # 是否已生成报告
+        has_report = validated_request_data.pop("has_report", None)
+        if has_report is not None:
+            q &= Q(has_report=has_report)
+
         for key, val in validated_request_data.items():
             if not val:
                 continue
