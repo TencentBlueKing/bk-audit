@@ -110,6 +110,12 @@
     });
   };
   const handleCancel = () => new Promise<boolean>((resolve) => {
+    if (!window.changeConfirm) {
+      isEdit.value = true;
+      isShow.value = false;
+      resolve(true);
+      return;
+    }
     InfoBox({
       title: t('确认取消当前操作?'),
       content: t('已填写的内容将会丢失，请谨慎操作！'),
@@ -139,6 +145,7 @@
         sessionStorage.setItem('addEventRiskIds', JSON.stringify(data?.risk_ids));
       }
       messageSuccess(t('添加成功'));
+      window.changeConfirm = false;
       isShow.value = false;
       isEdit.value = true;
       editData.value = null;
