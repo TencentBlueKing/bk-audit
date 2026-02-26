@@ -198,6 +198,7 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
+    onBeforeRouteLeave,
     useRoute,
     useRouter,
   } from 'vue-router';
@@ -492,23 +493,40 @@
       }
     });
   };
+
+  // 判断当前表单是否有实质性用户输入
+  const hasSubstantialInput = () => {
+    const { method, description, new_operators: newOperators, pa_id: paId } = formData.value;
+    switch (method) {
+    case 'closeOrder':
+      return !!description;
+    case 'transfer':
+      return !!description || (newOperators && newOperators.length > 0);
+    case 'ProcessPackage':
+      return !!paId;
+    default:
+      return false;
+    }
+  };
+
+  // 路由离开前判断：如果没有实质性输入，则不弹确认弹窗
+  onBeforeRouteLeave(() => {
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
+  });
+
   const handleCancel = () => {
+    // 取消按钮点击时，先判断是否有实质性输入，没有则重置 changeConfirm
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
     router.push({
       name: route.name === 'riskManageDetail'
         ? 'riskManageList'
         : 'handleManageList',
     });
   };
-
-  // 当处理说明为空时，取消离开页面不需要弹确认弹窗
-  watch(
-    () => formData.value.description,
-    (description) => {
-      if (!description) {
-        window.changeConfirm = false;
-      }
-    },
-  );
 
   watch(
     () => formData.value, (val) => {
