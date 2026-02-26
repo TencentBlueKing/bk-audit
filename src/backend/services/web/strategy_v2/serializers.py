@@ -59,6 +59,7 @@ from services.web.strategy_v2.constants import (
     RuleAuditWhereConnector,
     StrategyAlgorithmOperator,
     StrategyOperator,
+    StrategyReportStatus,
     StrategySource,
     StrategyType,
     TableType,
@@ -462,6 +463,11 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"), required=False)
     tag = serializers.CharField(label=gettext_lazy("Tag"), required=False)
     status = serializers.CharField(label=gettext_lazy("Status"), required=False)
+    report_status = serializers.CharField(
+        label=gettext_lazy("事件调查报告状态"),
+        required=False,
+        help_text="可选值: %s，多个用逗号分隔" % ", ".join(f"{value}({label})" for value, label in StrategyReportStatus.choices),
+    )
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
@@ -472,6 +478,15 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     )
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
+
+    def validate_report_status(self, value: str) -> str:
+        if not value:
+            return value
+        valid_values = {choice[0] for choice in StrategyReportStatus.choices}
+        invalid_values = [v for v in value.split(",") if v and v not in valid_values]
+        if invalid_values:
+            raise serializers.ValidationError(gettext_lazy("无效的报告状态值: %s") % ", ".join(invalid_values))
+        return value
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
@@ -510,6 +525,11 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
     tools = StrategyToolSerializer(many=True, read_only=True)
+    report_status = serializers.ChoiceField(
+        label=gettext_lazy("事件调查报告状态"),
+        choices=StrategyReportStatus.choices,
+        read_only=True,
+    )
 
     def get_tags(self, obj):
         """
@@ -529,6 +549,13 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
+        # 根据 report_enabled 和 report_auto_render 计算事件调查报告状态
+        if not instance.report_enabled:
+            data["report_status"] = StrategyReportStatus.DISABLED.value
+        elif instance.report_auto_render:
+            data["report_status"] = StrategyReportStatus.AUTO.value
+        else:
+            data["report_status"] = StrategyReportStatus.MANUAL.value
         return data
 
 

@@ -110,6 +110,7 @@ from services.web.strategy_v2.constants import (
     StrategyAlgorithmOperator,
     StrategyFieldSourceEnum,
     StrategyOperator,
+    StrategyReportStatus,
     StrategySource,
     StrategyStatusChoices,
     StrategyType,
@@ -624,6 +625,20 @@ class ListStrategy(StrategyV2Base):
                 for item in validated_request_data[key]:
                     q |= Q(**{f"{key}__icontains": item})
                 queryset = queryset.filter(q)
+        # report_status filter
+        if validated_request_data.get("report_status"):
+            report_status_q = Q()
+            for status in validated_request_data["report_status"]:
+                if status == StrategyReportStatus.AUTO.value:
+                    # 自动生成: report_enabled=True 且 report_auto_render=True
+                    report_status_q |= Q(report_enabled=True, report_auto_render=True)
+                elif status == StrategyReportStatus.MANUAL.value:
+                    # 手动生成: report_enabled=True 且 report_auto_render=False
+                    report_status_q |= Q(report_enabled=True, report_auto_render=False)
+                elif status == StrategyReportStatus.DISABLED.value:
+                    # 未开启: report_enabled=False
+                    report_status_q |= Q(report_enabled=False)
+            queryset = queryset.filter(report_status_q)
 
         # 预加载策略标签，避免N+1查询
         queryset = queryset.prefetch_related(
@@ -1756,7 +1771,7 @@ class PreviewRiskReport(StrategyV2Base):
         # 解析报告配置（预览使用前端传入的配置）
         report_config = ReportConfig.model_validate(report_config_data)
 
-        # 提交渲染任务（简化调用）
-        async_result = submit_render_task(risk=risk, report_config=report_config)
+        # 提交渲染任务（预览报告，启用缓存）
+        async_result = submit_render_task(risk=risk, report_config=report_config, enable_cache=True)
 
         return {"task_id": async_result.id, "status": "PENDING"}

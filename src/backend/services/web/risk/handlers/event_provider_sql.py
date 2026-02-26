@@ -18,16 +18,20 @@ to the current version of the project delivered to anyone in the future.
 EventProvider SQL 生成器
 
 纯 SQL 生成，不负责执行查询。
-复用 RiskEventSubscriptionSqlGenerator 生成聚合、Latest、First 三种 SQL。
+使用 BkbaseDorisSqlGenerator 生成聚合、Latest、First 三种 SQL。
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Optional
 
+from django.conf import settings
+from django.utils import timezone
 from pypika import Order as PypikaOrder
 
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig
 from core.sql.builder.builder import BKBaseQueryBuilder
+from core.sql.builder.generator import BkbaseDorisSqlGenerator
 from core.sql.constants import AggregateType, FieldType, Operator
 from core.sql.model import (
     Condition,
@@ -38,31 +42,53 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from services.web.risk.handlers.subscription_sql import (
-    RiskEventSubscriptionSqlGenerator,
-)
+from core.utils.time import ceil_to_second
+from services.web.databus.constants import DORIS_EVENT_BKBASE_RT_ID_KEY
+from services.web.risk.models import Risk
 
 
-@dataclass
-class EventFieldConfig:
-    """事件字段配置"""
-
-    raw_name: str  # JSON key 名称（中文字段名）
-    display_name: str  # SQL 别名
-    field_type: FieldType = FieldType.STRING
-    aggregate: Optional[AggregateType] = None
-
-
-class EventProviderSqlBuilder:
+class EventFieldConfig(Field):
     """
-    EventProvider SQL 构建器（纯 SQL 生成）
+    风险事件字段配置
 
-    复用 RiskEventSubscriptionSqlGenerator 生成 SQL，不执行查询。
-    由调用方（EventProvider）收集 SQL 后并发执行。
+    继承 core.sql.model.Field，预填 table 别名。
+    对于 event_data JSON 下钻字段，使用 event_data() 工厂方法。
+    """
+
+    table: str = "t"
+
+    @classmethod
+    def event_data(
+        cls,
+        field_name: str,
+        display_name: str,
+        field_type: FieldType = FieldType.STRING,
+        aggregate: Optional[AggregateType] = None,
+    ) -> "EventFieldConfig":
+        """
+        构造 event_data JSON 下钻字段
+
+        Args:
+            field_name: event_data 中的 JSON key 名称
+            display_name: SQL 别名
+            field_type: 字段类型
+            aggregate: 聚合函数
+        """
+        return cls(
+            raw_name="event_data",
+            display_name=display_name,
+            field_type=field_type,
+            keys=[field_name],
+            aggregate=aggregate,
+        )
+
+
+class EventAggregateSqlBuilder:
+    """
+    EventAggregateSqlBuilder 用于生成事件聚合查询 SQL
     """
 
     TABLE_ALIAS: str = "t"
-    JSON_COLUMN: str = "event_data"
 
     def __init__(
         self,
@@ -88,7 +114,7 @@ class EventProviderSqlBuilder:
         self.start_time = start_time
         self.end_time = end_time
 
-        self._generator = RiskEventSubscriptionSqlGenerator(BKBaseQueryBuilder())
+        self._generator = BkbaseDorisSqlGenerator(BKBaseQueryBuilder())
         self._table = Table(table_name=table_name, alias=self.TABLE_ALIAS)
         self._base_where = self._build_base_where()
 
@@ -134,23 +160,6 @@ class EventProviderSqlBuilder:
         ]
         return WhereCondition(conditions=conditions)
 
-    def _build_json_field(self, config: EventFieldConfig) -> Field:
-        """
-        构建 JSON 下钻字段
-
-        keys 参数触发 RiskEventSubscriptionSqlGenerator._get_pypika_field 的逻辑：
-        - JSON_EXTRACT_STRING(event_data, '$.字段名')
-        - 非 STRING 类型会 CAST 到目标类型
-        """
-        return Field(
-            table=self.TABLE_ALIAS,
-            raw_name=self.JSON_COLUMN,
-            display_name=config.display_name,
-            field_type=config.field_type,
-            keys=[config.raw_name],
-            aggregate=config.aggregate,
-        )
-
     def _build_order_field(self) -> Field:
         """构建排序字段（dtEventTimeStamp）"""
         return Field(
@@ -160,12 +169,26 @@ class EventProviderSqlBuilder:
             field_type=FieldType.LONG,
         )
 
-    def build_aggregate_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_count_sql(self) -> str:
+        """
+        构建 COUNT(*) SQL
+
+        COUNT(*) 不能通过普通字段机制生成（PyPika 会将 * 转义为 `t`.`*`），
+        使用 generator.generate_count 专用方法。
+        """
+        config = SqlConfig(
+            select_fields=[],
+            from_table=self._table,
+            where=self._base_where,
+        )
+        return str(self._generator.generate_count(config))
+
+    def build_aggregate_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建聚合查询 SQL
 
         Args:
-            fields: 聚合字段配置列表（必须有 aggregate 属性）
+            fields: 字段列表（Field 或其子类，如 EventFieldConfig）
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -173,10 +196,8 @@ class EventProviderSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
-
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             group_by=[],
@@ -184,12 +205,12 @@ class EventProviderSqlBuilder:
 
         return str(self._generator.generate(config))
 
-    def build_first_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_first_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建 first 查询 SQL（ORDER BY ASC LIMIT 1）
 
         Args:
-            fields: 字段配置列表
+            fields: 字段列表
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -197,11 +218,10 @@ class EventProviderSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
         order_by = [Order(field=self._build_order_field(), order=PypikaOrder.asc)]
 
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             order_by=order_by,
@@ -210,12 +230,12 @@ class EventProviderSqlBuilder:
 
         return str(self._generator.generate(config))
 
-    def build_latest_sql(self, fields: List[EventFieldConfig]) -> Optional[str]:
+    def build_latest_sql(self, fields: List[Field]) -> Optional[str]:
         """
         构建 latest 查询 SQL（ORDER BY DESC LIMIT 1）
 
         Args:
-            fields: 字段配置列表
+            fields: 字段列表
 
         Returns:
             SQL 字符串，或 None（字段为空时）
@@ -223,11 +243,10 @@ class EventProviderSqlBuilder:
         if not fields:
             return None
 
-        select_fields = [self._build_json_field(f) for f in fields]
         order_by = [Order(field=self._build_order_field(), order=PypikaOrder.desc)]
 
         config = SqlConfig(
-            select_fields=select_fields,
+            select_fields=list(fields),
             from_table=self._table,
             where=self._base_where,
             order_by=order_by,
@@ -235,3 +254,48 @@ class EventProviderSqlBuilder:
         )
 
         return str(self._generator.generate(config))
+
+
+class RiskEventAggregateSqlBuilder(EventAggregateSqlBuilder):
+    """
+    基于 Risk 对象的事件聚合 SQL Builder
+
+    自动从 Risk 对象提取 strategy_id、raw_event_id、起止时间等参数，
+    简化调用方代码。
+    """
+
+    STORAGE_SUFFIX: str = "doris"
+
+    @classmethod
+    def get_rt_id(cls) -> str:
+        """获取事件结果表 ID（带 doris 后缀）"""
+
+        rt_id = GlobalMetaConfig.get(
+            config_key=DORIS_EVENT_BKBASE_RT_ID_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+            default="",
+        )
+        if rt_id:
+            rt_id = rt_id.strip()
+        if rt_id and not rt_id.endswith(f".{cls.STORAGE_SUFFIX}"):
+            rt_id = f"{rt_id}.{cls.STORAGE_SUFFIX}"
+        return rt_id
+
+    def __init__(self, risk: "Risk"):
+        """
+        初始化
+
+        Args:
+            risk: Risk 对象
+        """
+        self.risk = risk
+        end_time = ceil_to_second(risk.event_end_time) if risk.event_end_time else timezone.now()
+
+        super().__init__(
+            table_name=self.get_rt_id(),
+            strategy_id=risk.strategy_id,
+            raw_event_id=risk.raw_event_id,
+            start_time=int(risk.event_time.timestamp() * 1000),
+            end_time=int(end_time.timestamp() * 1000),
+        )
