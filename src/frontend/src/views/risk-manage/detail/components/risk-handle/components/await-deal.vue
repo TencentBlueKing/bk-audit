@@ -494,14 +494,23 @@
     });
   };
 
+  // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
+  const isRichTextNotEmpty = (html: string) => {
+    if (!html) return false;
+    // 去除所有HTML标签后，检查是否有实际文本内容
+    const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '')
+      .trim();
+    return text.length > 0;
+  };
+
   // 判断当前表单是否有实质性用户输入
   const hasSubstantialInput = () => {
     const { method, description, new_operators: newOperators, pa_id: paId } = formData.value;
     switch (method) {
     case 'closeOrder':
-      return !!description;
+      return isRichTextNotEmpty(description);
     case 'transfer':
-      return !!description || (newOperators && newOperators.length > 0);
+      return isRichTextNotEmpty(description) || (newOperators && newOperators.length > 0);
     case 'ProcessPackage':
       return !!paId;
     default:
@@ -509,15 +518,8 @@
     }
   };
 
-  // 路由离开前判断：如果没有实质性输入，则不弹确认弹窗
-  onBeforeRouteLeave(() => {
-    if (!hasSubstantialInput()) {
-      window.changeConfirm = false;
-    }
-  });
-
   const handleCancel = () => {
-    // 取消按钮点击时，先判断是否有实质性输入，没有则重置 changeConfirm
+    // 取消按钮点击时，如果没有实质性输入则重置 changeConfirm
     if (!hasSubstantialInput()) {
       window.changeConfirm = false;
     }
@@ -527,6 +529,13 @@
         : 'handleManageList',
     });
   };
+
+  // 路由离开前判断：如果没有实质性输入，则不弹确认弹窗
+  onBeforeRouteLeave(() => {
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
+  });
 
   watch(
     () => formData.value, (val) => {
