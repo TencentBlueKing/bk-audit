@@ -51,7 +51,7 @@ def backwards(apps, schema_editor):
         "for_approve": "for_approve",
         "auto_process": "auto_process",
         "closed": "closed",
-        "await_deal": "new",
+        "await_deal": "await_deal",
     }
     for status_val, display_val in status_to_display.items():
         updated = (

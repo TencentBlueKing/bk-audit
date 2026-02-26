@@ -20,6 +20,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
@@ -889,6 +890,12 @@ class TestListMineAndNoticingRisk(TestCase):
         self.username = "admin"
         self.bkbase_title = "bkbase-title"
 
+        self.iam_filter_patcher = mock.patch(
+            "services.web.risk.models.Risk.iam_risk_filter", return_value=Q(), autospec=True
+        )
+        self.iam_filter_patcher.start()
+        self.addCleanup(self.iam_filter_patcher.stop)
+
         self.strategy = Strategy.objects.create(
             namespace="default",
             strategy_name="single-strategy",
@@ -1388,6 +1395,7 @@ class TestListProcessedRisk(TestCase):
             strategy_id=404,
             strategy_name="processed-strategy",
             risk_level=RiskLevel.HIGH.value,
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
         self.risk_past = Risk.objects.create(
             risk_id="R-PAST",
@@ -1529,3 +1537,56 @@ class TestListProcessedRisk(TestCase):
         self.assertIsNotNone(risk, "setUp 数据应包含已处理的风险")
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
+
+    def test_list_processed_risk_via_bkbase(self):
+        """ListProcessedRisk 走 BkBase 路径时，SQL 应正确映射 risk_ticketnode 表"""
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        bkbase_table_config = {
+            ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
+            ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
+            ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
+            ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY: "bkdata.ticket_permission_rt",
+            ASSET_TICKET_NODE_BKBASE_RT_ID_KEY: "bkdata.ticket_node_rt",
+            DORIS_EVENT_BKBASE_RT_ID_KEY: "bkdata.event_rt",
+        }
+        for config_key, table_id in bkbase_table_config.items():
+            GlobalMetaConfig.set(
+                config_key=config_key,
+                config_value=table_id,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            )
+        self.addCleanup(lambda: GlobalMetaConfig.objects.filter(config_key__in=bkbase_table_config.keys()).delete())
+
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": "R-PAST", "strategy_id": self.strategy.strategy_id}]}
+
+        request = self._make_request()
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            resp = ListProcessedRisk().request(
+                {
+                    "page": 1,
+                    "page_size": 10,
+                    "event_filters": [
+                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
+                    ],
+                },
+                _request=request,
+            )
+
+        self.assertEqual(len(sql_log), 2)
+        ticket_node_table = f"{bkbase_table_config[ASSET_TICKET_NODE_BKBASE_RT_ID_KEY]}.doris"
+        self.assertTrue(
+            any(ticket_node_table in sql for sql in sql_log),
+            f"BkBase SQL 应包含 ticket_node 映射表 {ticket_node_table}，实际 SQL: {sql_log}",
+        )
+        risk_table = f"{bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
+        self.assertTrue(any(risk_table in sql for sql in sql_log))
+        self.assertEqual(resp["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
