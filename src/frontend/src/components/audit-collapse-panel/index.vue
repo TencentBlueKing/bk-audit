@@ -55,6 +55,10 @@
 </script>
 <style scoped lang="postcss">
   .collapse-panel {
+    border: .5px solid #dcdee5;
+    border-top-right-radius: 2px;
+    border-top-left-radius: 2px;
+
     .collapse-panel-title {
       height: 40px;
       padding: 0 12px;
