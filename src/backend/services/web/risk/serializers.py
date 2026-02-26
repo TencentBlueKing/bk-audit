@@ -404,6 +404,12 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TicketNodeProviderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketNode
+        fields = "__all__"
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk

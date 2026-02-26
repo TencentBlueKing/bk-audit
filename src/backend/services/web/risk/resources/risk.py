@@ -55,6 +55,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
@@ -587,6 +588,9 @@ class ListRisk(RiskMeta):
                 ),
                 TicketPermission._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY, fallback=TicketPermission._meta.db_table
+                ),
+                TicketNode._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_TICKET_NODE_BKBASE_RT_ID_KEY, fallback=TicketNode._meta.db_table
                 ),
                 "risk_event": self._get_configured_table_name(
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
