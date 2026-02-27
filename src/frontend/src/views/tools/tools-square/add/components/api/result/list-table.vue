@@ -788,10 +788,6 @@
       color: #c4c6cc;
       transition: all .15s;
 
-      &:hover {
-        color: #979ba5;
-      }
-
       &.is-popconfirm-visible {
         display: block;
       }
@@ -882,14 +878,56 @@
   transition: background-color .2s;
 
   &:hover {
-    background: #f5f7fa;
+    color: #313238;
+    background: #eff5ff;
   }
+}
+
+/* 行 hover 时，整行所有单元格一起高亮 */
+:deep(.field-row:hover .field-value) {
+  background: #eff5ff !important;
+}
+
+/* 行 hover 时，输入类组件也跟随高亮 */
+:deep(.field-row:hover .bk-form-item .bk-input),
+:deep(.field-row:hover .bk-form-item .bk-date-picker-editor),
+:deep(.field-row:hover .bk-form-item .bk-select-trigger),
+:deep(.field-row:hover .bk-form-item .bk-select-tag),
+:deep(.field-row:hover .bk-form-item .date-picker) {
+  color: #313238 !important;
+  background: #eff5ff !important;
+  border-color: transparent !important;
+  transition: none !important;
+}
+
+/* bk-input 内部真正的 input 也一起变色 */
+:deep(.field-row:hover .bk-form-item .bk-input .bk-input--text),
+:deep(.field-row:hover .bk-form-item .bk-input input),
+:deep(.field-row:hover .bk-form-item .bk-input .bk-input--text input),
+:deep(.field-row:hover .bk-form-item .bk-input-wrapper),
+:deep(.field-row:hover .bk-form-item .bk-input-wrapper .bk-input--text) {
+  color: #313238 !important;
+  background: #eff5ff !important;
+  border-color: transparent !important;
+  transition: none !important;
+}
+
+/* placeholder 颜色稍微变浅一点 */
+:deep(.field-row:hover .bk-form-item .bk-input .bk-input--text::placeholder),
+:deep(.field-row:hover .bk-form-item .bk-input input::placeholder) {
+  /* 使用略深的灰色，让“请输入”在浅蓝背景上仍然可见 */
+  color: #c4c6cc !important;
 }
 
 .field-icon {
   margin-left: 20px;
   color: #c4c6cc;
   cursor: pointer;
+
+  &:hover {
+    /* 删除 icon hover 变红色 */
+    color: #ea3636;
+  }
 }
 
 .add-field {
