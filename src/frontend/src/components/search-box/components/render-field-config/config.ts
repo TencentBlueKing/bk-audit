@@ -25,4 +25,6 @@ export interface IFieldConfig {
   valName?: string,
   filterList?: string[]// 要过滤的数据列表
   defaultParams?: Record<string, any>,
+  // 是否多选 默认true
+  multiple?: boolean
 }
