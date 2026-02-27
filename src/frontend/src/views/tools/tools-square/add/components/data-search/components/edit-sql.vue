@@ -93,6 +93,7 @@
   import * as monaco from 'monaco-editor';
   import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -124,6 +125,7 @@
     () => rootRef.value,
   );
   const sqlTipRef = ref();
+  const route = useRoute();
   const isEditMode = ref(false);
   const filename = ref('');
   const uid = ref('');
@@ -170,13 +172,13 @@
   // 保存并解析
   const handleConfirm = () => {
     nextTick(() => {
-      if (isEditMode.value) {
+      if (route.name === 'toolsAdd' || !isEditMode.value) {
+        parseSql(formData.value);
+      } else {
         editModelParseSql({
           ...formData.value,
           uid: uid.value,
         });
-      } else {
-        parseSql(formData.value);
       }
     });
   };
