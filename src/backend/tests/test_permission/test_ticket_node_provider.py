@@ -70,9 +70,10 @@ class TestTicketNodeResourceProvider:
     def test_fetch_instance_list_and_schema(self):
         now = time.time()
         past = now - 600
-        a = self._mk_tn("R1", "alice", "CloseRisk", ts=now)
+        ts = int(now)
+        a = self._mk_tn("R1", "alice", "CloseRisk", ts=ts)
 
-        filter_fd = FancyDict(start_time=int(past * 1000), end_time=int(now * 1000))
+        filter_fd = FancyDict(start_time=int(past * 1000), end_time=(ts + 1) * 1000)
         page = Page(50, 0)
         lr = self.provider.fetch_instance_list(filter_fd, page)
         assert lr.count == 1
