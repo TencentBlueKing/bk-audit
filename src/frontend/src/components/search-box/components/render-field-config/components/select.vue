@@ -23,8 +23,8 @@
       collapse-tags
       filterable
       :input-search="false"
-      :model-value="modelValue"
-      multiple
+      :model-value="displayModelValue"
+      :multiple="isMultiple"
       multiple-mode="tag"
       :placeholder="`请选择${config.label}`"
       :remote-method="handleSearch"
@@ -102,6 +102,9 @@
 
   let originList = [] as Array<Record<string, string>>;
 
+  // multiple 默认为 true
+  const isMultiple = computed(() => props.config.multiple ?? true);
+
   const filterList = computed(() => {
     if (props.config.filterList) {
       return list.value.filter((item) => {
@@ -119,8 +122,29 @@
   const {
     modelValue,
     selectedAll,
-    handleChange,
+    handleChange: handleMultiChange,
   } = useMultiCommon(props, t('全部'));
+
+  // 处理单选和多选的变化
+  const handleChange = (value: Array<string | number> | string | number) => {
+    if (isMultiple.value) {
+      // 多选模式：直接使用数组
+      handleMultiChange(value as Array<string | number>);
+      return;
+    }
+    // 单选模式：将单个值转换为数组
+    const singleValue = value === undefined || value === '' ? [] : [value as string | number];
+    handleMultiChange(singleValue);
+  };
+
+  // 根据单选/多选模式调整 modelValue
+  const displayModelValue = computed(() => {
+    if (isMultiple.value) {
+      return modelValue.value;
+    }
+    // 单选模式：返回数组的第一个值，如果没有则返回空字符串
+    return modelValue.value.length > 0 ? modelValue.value[0] : '';
+  });
 
   // eslint-disable-next-line max-len
   const fetchListRef = ref<(params: Record<string, any>) => Promise<Array<Record<string, string>>>>(() => Promise.resolve([]));
