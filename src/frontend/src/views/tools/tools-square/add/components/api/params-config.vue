@@ -528,27 +528,44 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     haveSameName.value = false;
     isVarNameNOPass.value = false;
   };
-  // 前端类型改变
+  // 前端类型改变时，重置默认值
   const handleFrontendTypeChange = (item: Record<string, any>) => {
-    // 如果为人员选择,则默认值为数组
     if (item.field_category === 'person_select') {
       paramList.value = paramList.value.map((listItem: any) => {
         if (listItem.raw_name === item.raw_name) {
           return {
             ...listItem,
-            default_value: item.default_value === '' ? [] : item.default_value.split(','),
+            default_value: [],
           };
         }
         return listItem;
       });
-    }
-    // 如果为输入框,则默认值为字符串
-    if (item.field_category === 'input') {
+    } else if (item.field_category === 'input') {
       paramList.value = paramList.value.map((listItem: any) => {
         if (listItem.raw_name === item.raw_name) {
           return {
             ...listItem,
-            default_value: Array.isArray(item.default_value) ? item.default_value.join(',') : item.default_value,
+            default_value: '',
+          };
+        }
+        return listItem;
+      });
+    } else if (item.field_category === 'time_range_select') {
+      paramList.value = paramList.value.map((listItem: any) => {
+        if (listItem.raw_name === item.raw_name) {
+          return {
+            ...listItem,
+            default_value: [],
+          };
+        }
+        return listItem;
+      });
+    } else {
+      paramList.value = paramList.value.map((listItem: any) => {
+        if (listItem.raw_name === item.raw_name) {
+          return {
+            ...listItem,
+            default_value: '',
           };
         }
         return listItem;
@@ -745,7 +762,9 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   display: flex;
   min-width: 640px;
   overflow: hidden;
-  border: 1px solid #dcdee5;
+  border-top: 1px solid #dcdee5;
+  border-right: 1px solid #dcdee5;
+  border-bottom: 1px solid #dcdee5;
   border-radius: 2px 2px 0 0;
   user-select: none;
   flex-direction: column;
