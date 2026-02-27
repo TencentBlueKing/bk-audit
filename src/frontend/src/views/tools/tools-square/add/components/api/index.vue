@@ -121,7 +121,7 @@
           </bk-form-item>
         </div>
         <div class="item-headers">
-          <span>Headers</span>
+          <span>Header</span>
           <div
             v-for="(headersItem, index) in formData.api_config.headers"
             :key="index"
@@ -160,7 +160,7 @@
             <audit-icon
               class="headers-plus-circle"
               type="plus-circle" />
-            <span class="plus-circle-text">{{ t('添加 Headers') }}</span>
+            <span class="plus-circle-text">{{ t('添加 Header') }}</span>
           </div>
         </div>
         <div class="item-params">

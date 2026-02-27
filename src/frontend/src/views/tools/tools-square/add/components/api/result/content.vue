@@ -192,17 +192,20 @@
 
     treeData.value = searchTree(JSON.parse(JSON.stringify(initTreeDatas.value)));
   };
-  const handelTagRemove = (val: any) => {
-    if (val) {
-      // selectedItems中找出name与val相同的节点
-      const node = selectedItems.value.find(item => item.name === val);
-      if (node) {
-        const index = selectedId.value.indexOf(node.json_path);
-        if (index > -1) {
-          selectedId.value.splice(index, 1);
-          selectedItems.value.splice(index, 1);
-        }
-      }
+  // 删除已选 tag 时，同步更新选中数组，触发 watch 反向更新树勾选状态
+  const handelTagRemove = (val: string) => {
+    if (!val) return;
+
+    // tag 文本格式为 `${name}(${json_path})`，从中解析出 json_path
+    const match = val.match(/\((.*)\)$/);
+    const jsonPath = match?.[1];
+    if (!jsonPath) return;
+
+    const index = selectedId.value.indexOf(jsonPath);
+    if (index > -1) {
+      selectedId.value.splice(index, 1);
+      selectValue.value.splice(index, 1);
+      selectedItems.value.splice(index, 1);
     }
   };
 
