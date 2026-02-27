@@ -115,6 +115,7 @@ export default {
     label: '事件调查报告',
     type: 'select',
     required: false,
+    multiple: false,
     service: () => Promise.resolve([
       {
         id: 'true',
