@@ -102,37 +102,37 @@ class TestListRiskOrderByStrategyLevel(TestCase):
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_list_mine_risk_load_risks_returns_plain_queryset(self, mock_load_iam_authed_risks):
-        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_list_mine_risk_load_risks_returns_plain_queryset(self, mock_load_authed_risks):
         """ListMineRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        mock_load_authed_risks.return_value = Risk.objects.all()
         qs = ListMineRisk().load_risks({})
         risk = qs.first()
         self.assertIsNotNone(risk, "setUp 数据应包含 current_operator=['admin'] 的风险")
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_list_noticing_risk_load_risks_returns_plain_queryset(self, mock_load_iam_authed_risks):
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_list_noticing_risk_load_risks_returns_plain_queryset(self, mock_load_authed_risks):
         """ListNoticingRisk.load_risks 应返回不带注解的纯净 QuerySet"""
-        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+        mock_load_authed_risks.return_value = Risk.objects.all()
         qs = ListNoticingRisk().load_risks({})
         risk = qs.first()
         self.assertIsNotNone(risk, "setUp 数据应包含 notice_users=['admin'] 的风险")
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_list_mine_risk_sort_by_strategy_level_desc(self, mock_load_iam_authed_risks):
-        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_list_mine_risk_sort_by_strategy_level_desc(self, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.all()
         resp = call_resource_with_request(ListMineRisk().request, {"order_field": "risk_level", "order_type": "desc"})
         # mine has RH-2 and RL-2 -> order: RH-2 then RL-2 (HIGH > LOW in desc custom)
         ids = [i["risk_id"] for i in resp["results"]]
         self.assertEqual(ids, ["RH-2", "RL-2"])
 
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_list_noticing_risk_sort_by_strategy_level_desc(self, mock_load_iam_authed_risks):
-        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_list_noticing_risk_sort_by_strategy_level_desc(self, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.all()
         resp = call_resource_with_request(
             ListNoticingRisk().request, {"order_field": "risk_level", "order_type": "desc"}
         )

@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import uuid
 
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import RiskExperienceRecord
 from services.web.risk.models import TicketNode
 from tests.test_risk.test_tickets.base import RiskContext, TicketTest
@@ -56,6 +56,19 @@ class RiskExperienceRecordTest(TicketTest):
             RiskExperienceRecord(risk_id=risk.risk_id, operator=uuid.uuid1().hex).run()
             risk.refresh_from_db()
             self.assertEqual(risk.status, original_status)
+
+    def test_does_not_change_display_status(self):
+        """保存经验不应变更展示状态（尤其是"待处理"不应被改为"处理中"）"""
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.AWAIT_PROCESS,
+                "display_status": RiskDisplayStatus.AWAIT_PROCESS,
+            }
+        ) as risk:
+            RiskExperienceRecord(risk_id=risk.risk_id, operator=uuid.uuid1().hex).run()
+            risk.refresh_from_db()
+            self.assertEqual(risk.display_status, RiskDisplayStatus.AWAIT_PROCESS)
 
     def test_does_not_change_operator(self):
         """保存经验不应变更当前处理人"""

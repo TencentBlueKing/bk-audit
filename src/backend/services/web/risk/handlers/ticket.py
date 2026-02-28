@@ -752,13 +752,16 @@ class CustomProcess(RiskFlowBaseHandler):
 
 class RiskExperienceRecord(CustomProcess):
     """
-    保存风险处理经验（纯留痕，不变更状态/处理人）
+    保存风险处理经验（纯留痕，不变更状态/处理人/展示状态）
     """
 
     name = gettext_lazy("风险处理经验")
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
+        pass
+
+    def sync_display_status(self):
         pass
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:

@@ -407,7 +407,7 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
 class TicketNodeProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketNode
-        fields = "__all__"
+        fields = ["id", "risk_id", "operator"]
 
 
 class ListRiskRequestSerializer(serializers.Serializer):
