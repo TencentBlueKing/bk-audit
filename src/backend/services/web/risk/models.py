@@ -172,6 +172,12 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         default=True,
         help_text=gettext_lazy("开启后风险产生新事件时会自动生成报告"),
     )
+    has_report = models.BooleanField(
+        gettext_lazy("是否已生成报告"),
+        default=False,
+        db_index=True,
+        help_text=gettext_lazy("任何流程为该风险生成报告后置为 True"),
+    )
 
     def can_auto_generate_report(self) -> bool:
         """
@@ -667,3 +673,16 @@ class RiskReport(OperateRecordModel):
 
     def __str__(self):
         return f"RiskReport({self.risk_id})"
+
+
+from django.db.models.signals import post_save  # noqa: E402
+from django.dispatch import receiver  # noqa: E402
+
+
+@receiver(post_save, sender=RiskReport)
+def sync_risk_has_report(sender, instance: RiskReport, created: bool, **kwargs):
+    """
+    当 RiskReport 被创建或保存时，将对应 Risk.has_report 置为 True。
+    无论通过哪个入口（手动创建/编辑、Celery 自动生成）生成报告，均会触发。
+    """
+    Risk.objects.filter(risk_id=instance.risk_id).update(has_report=True)

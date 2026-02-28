@@ -293,3 +293,38 @@ class TestBkBaseEventOrdering(SimpleTestCase):
         )
         components = components_builder.build(base_expression)
         self.assertIsNone(components.matched_event)
+
+
+class TestListRiskRequestSerializerHasReport(SimpleTestCase):
+    """ListRiskRequestSerializer has_report 字段验证"""
+
+    def test_has_report_true_is_valid(self):
+        """传入 has_report=True 时序列化器合法"""
+        serializer = ListRiskRequestSerializer(data={"has_report": True})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIs(serializer.validated_data["has_report"], True)
+
+    def test_has_report_false_is_valid(self):
+        """传入 has_report=False 时序列化器合法，且值保留为 False"""
+        serializer = ListRiskRequestSerializer(data={"has_report": False})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIs(serializer.validated_data["has_report"], False)
+
+    def test_has_report_null_is_valid(self):
+        """传入 has_report=null 时序列化器合法（allow_null=True）"""
+        serializer = ListRiskRequestSerializer(data={"has_report": None})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsNone(serializer.validated_data["has_report"])
+
+    def test_has_report_not_provided_is_valid(self):
+        """不传 has_report 时序列化器合法，validated_data 中不含该键"""
+        serializer = ListRiskRequestSerializer(data={})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("has_report", serializer.validated_data)
+
+    def test_has_report_not_split_by_comma_logic(self):
+        """has_report 不被通用逗号分割逻辑处理，布尔值保持原样"""
+        serializer = ListRiskRequestSerializer(data={"has_report": True})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        # 确认 validated_data 中 has_report 是布尔值，而非列表
+        self.assertIsInstance(serializer.validated_data["has_report"], bool)
