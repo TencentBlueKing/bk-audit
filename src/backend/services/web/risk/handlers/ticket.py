@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import datetime
 import json
-from typing import List
+from typing import List, Optional
 
 from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
@@ -42,6 +42,7 @@ from services.web.risk.constants import (
     RISK_OPERATE_NOTICE_CONFIG_KEY,
     SECURITY_PERSON_KEY,
     ApproveTicketFields,
+    RiskDisplayStatus,
     RiskLabel,
     RiskStatus,
 )
@@ -66,6 +67,16 @@ class RiskFlowBaseHandler:
     name = gettext_lazy("默认流转")
     allowed_status = []
     enable_notice = True
+
+    # 默认映射：status → display_status
+    # 子类可覆盖以实现特殊映射（如 NewRisk 将 AWAIT_PROCESS 映射为"待处理"）
+    DISPLAY_STATUS_MAP = {
+        RiskStatus.NEW: RiskDisplayStatus.NEW,
+        RiskStatus.FOR_APPROVE: RiskDisplayStatus.FOR_APPROVE,
+        RiskStatus.AUTO_PROCESS: RiskDisplayStatus.AUTO_PROCESS,
+        RiskStatus.CLOSED: RiskDisplayStatus.CLOSED,
+        RiskStatus.AWAIT_PROCESS: RiskDisplayStatus.PROCESSING,  # 默认"处理中"
+    }
 
     def __init__(self, risk_id: str, operator: str):
         self.risk: Risk = Risk.objects.get(risk_id=risk_id)
@@ -144,11 +155,25 @@ class RiskFlowBaseHandler:
         process_result = self.process(*args, **kwargs)
         self.update_operator(process_result=process_result, *args, **kwargs)
         self.update_status(process_result=process_result, *args, **kwargs)
+        self.sync_display_status()
         self.record_history(process_result=process_result, *args, **kwargs)
         self.auth_current_operator()
         self.notice_current_operator()
         self.auth_notice_user()
         self.post_process(process_result=process_result, *args, **kwargs)
+
+    def resolve_display_status(self) -> Optional[str]:
+        """
+        解析展示状态。
+        """
+        return self.DISPLAY_STATUS_MAP.get(self.risk.status)
+
+    def sync_display_status(self):
+        """根据当前 status 自动同步 display_status"""
+        display_status = self.resolve_display_status()
+        if display_status and self.risk.display_status != display_status:
+            self.risk.display_status = display_status
+            self.risk.save(update_fields=["display_status"])
 
     def pre_check(self, *args, **kwargs) -> None:
         """
@@ -266,6 +291,10 @@ class NewRisk(RiskFlowBaseHandler):
 
     name = gettext_lazy("流转新风险")
     allowed_status = [RiskStatus.NEW, RiskStatus.CLOSED]
+    DISPLAY_STATUS_MAP = {
+        **RiskFlowBaseHandler.DISPLAY_STATUS_MAP,
+        RiskStatus.AWAIT_PROCESS: RiskDisplayStatus.AWAIT_PROCESS,  # 覆盖为"待处理"
+    }
 
     def pre_check(self, *args, **kwargs) -> None:
         if (
@@ -719,6 +748,24 @@ class CustomProcess(RiskFlowBaseHandler):
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return {"action": "CustomProcess", **kwargs}
+
+
+class RiskExperienceRecord(CustomProcess):
+    """
+    保存风险处理经验（纯留痕，不变更状态/处理人/展示状态）
+    """
+
+    name = gettext_lazy("风险处理经验")
+    enable_notice = False
+
+    def pre_check(self, *args, **kwargs) -> None:
+        pass
+
+    def sync_display_status(self):
+        pass
+
+    def build_history(self, process_result: dict, *args, **kwargs) -> dict:
+        return {"description": kwargs.get("description", "")}
 
 
 class TransOperator(CustomProcess):

@@ -57,3 +57,4 @@ bkcodeai.json
 *.specify
 AGENTS.md
 .claude
+*debug*

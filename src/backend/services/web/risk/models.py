@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 from functools import cached_property
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -40,6 +40,7 @@ from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
+    RiskDisplayStatus,
     RiskLabel,
     RiskReportStatus,
     RiskStatus,
@@ -147,6 +148,13 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     status = models.CharField(
         gettext_lazy("Risk Status"), choices=RiskStatus.choices, default=RiskStatus.NEW, max_length=32, db_index=True
     )
+    display_status = models.CharField(
+        gettext_lazy("Display Status"),
+        choices=RiskDisplayStatus.choices,
+        default=RiskDisplayStatus.NEW,
+        max_length=32,
+        db_index=True,
+    )
     rule_id = models.BigIntegerField(gettext_lazy("Risk Rule ID"), null=True, blank=True)
     rule_version = models.IntegerField(gettext_lazy("Risk Rule Version"), null=True, blank=True)
     origin_operator = models.JSONField(
@@ -194,13 +202,28 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ["risk_id", "last_operate_time"],
         ]
 
+    # ──── 单一权限 ────
+
     @classmethod
-    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
+    def iam_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
-        获取有权限处理的风险筛选条件
+        IAM 策略权限：仅返回用户在权限中心申请过的风险
         """
 
-        q = Q(
+        permission = Permission(get_request_username())
+        request = permission.make_request(action=get_action_by_id(action), resources=[])
+        policies = permission.iam_client._do_policy_query(request)
+        if policies:
+            return RiskPathEqDjangoQuerySetConverter().convert(policies)
+        return Q(pk__in=[])
+
+    @classmethod
+    def local_risk_filter(cls) -> Q:
+        """
+        本地权限：通过 TicketPermission 授权的风险（处理人/关注人）
+        """
+
+        return Q(
             risk_id__in=TicketPermission.objects.filter(
                 user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
                 user=get_request_username(),
@@ -208,32 +231,46 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ).values("risk_id")
         )
 
-        permission = Permission(get_request_username())
-        request = permission.make_request(action=get_action_by_id(action), resources=[])
-        policies = permission.iam_client._do_policy_query(request)
-        if policies:
-            q |= RiskPathEqDjangoQuerySetConverter().convert(policies)
-        return q
+    # ──── 组合权限 ────
 
     @classmethod
-    def annotated_queryset(cls) -> QuerySet["Risk"]:
+    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
-        返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
-        以及 _has_report 标记（用于避免 N+1 查询）
+        组合权限：IAM 策略 + 本地 TicketPermission
+        用于 ListRiskByPA / RiskExport / ListRiskByRule 等需要完整权限校验的场景
         """
 
-        return cls.objects.annotate(
+        return cls.local_risk_filter() | cls.iam_risk_filter(action)
+
+    # ──── QuerySet 快捷方法 ────
+
+    @classmethod
+    def annotated_queryset(cls, queryset: Optional[QuerySet["Risk"]] = None) -> QuerySet["Risk"]:
+        """
+        返回带展示注解的 Risk 查询集。
+
+        可接受外部 QuerySet 并在其上添加注解；无参调用时从 cls.objects 开始。
+        """
+        if queryset is None:
+            queryset = cls.objects.all()
+        return queryset.annotate(
             event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
             _has_report=Exists(RiskReport.objects.filter(risk_id=OuterRef("risk_id"))),
         ).defer("event_content")
 
     @classmethod
+    def load_iam_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+        """
+        获取仅通过 IAM 权限过滤的风险集（不带展示注解）。
+        """
+        return cls.objects.filter(cls.iam_risk_filter(action))
+
+    @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
         """
-        获取有权限处理的风险
+        获取通过组合权限（IAM + 本地）过滤的风险集（不带展示注解）。
         """
-
-        return cls.annotated_queryset().filter(cls.authed_risk_filter(action))
+        return cls.objects.filter(cls.authed_risk_filter(action))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:

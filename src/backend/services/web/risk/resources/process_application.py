@@ -149,7 +149,8 @@ class ListRiskByPA(ProcessApplicationMeta):
         q = Q()
         for rule in rules:
             q |= Q(rule_id=rule.rule_id, rule_version=rule.version)
-        risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK).exclude(status=RiskStatus.CLOSED).filter(q)
+        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+        risks = Risk.annotated_queryset(qs).exclude(status=RiskStatus.CLOSED).filter(q)
         return risks
 
 

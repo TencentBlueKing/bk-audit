@@ -70,6 +70,14 @@ class TicketPermission(ResourceTypeMeta):
     related_instance_selections = [{"system_id": system_id, "id": id}]
 
 
+class TicketNode(ResourceTypeMeta):
+    system_id = settings.BK_IAM_SYSTEM_ID
+    id = "ticket_node"
+    name = gettext("风险处理记录")
+    selection_mode = "instance"
+    related_instance_selections = [{"system_id": system_id, "id": id}]
+
+
 class ManualEvent(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
     id = "manual_event"

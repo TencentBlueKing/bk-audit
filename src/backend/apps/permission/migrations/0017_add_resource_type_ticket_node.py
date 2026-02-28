@@ -16,14 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import resource
-from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+import os
+
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
+
+from core.utils.distutils import strtobool
 
 
-class PermissionViewSet(ResourceViewSet):
-    resource_routes = [
-        ResourceRoute("GET", resource.permission.system, endpoint="systems"),
-        ResourceRoute("GET", resource.permission.check_permission, endpoint="check"),
-        ResourceRoute("GET", resource.permission.check_any_permission, endpoint="check_any"),
-        ResourceRoute("GET", resource.permission.get_apply_data, endpoint="apply_data"),
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0016_add_process_risk_action"),
     ]
+
+    operations = [migrations.RunPython(forward_func)]

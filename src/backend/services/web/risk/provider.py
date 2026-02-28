@@ -29,10 +29,11 @@ from iam.resource.utils import Page
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import IAMResourceProvider
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
-from services.web.risk.models import ManualEvent, Risk, TicketPermission
+from services.web.risk.models import ManualEvent, Risk, TicketNode, TicketPermission
 from services.web.risk.serializers import (
     ManualEventProviderSerializer,
     RiskProviderSerializer,
+    TicketNodeProviderSerializer,
     TicketPermissionProviderSerializer,
 )
 
@@ -125,7 +126,15 @@ class RiskResourceProvider(IAMResourceProvider):
         # 注意：filter.start_time/end_time 为毫秒时间戳，这里保持毫秒精度，避免边界被截断
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        base_qs = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+
+        # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
+        pk_list = list(
+            base_qs.order_by("updated_at").values_list("risk_id", flat=True)[page.slice_from : page.slice_to]
+        )
+        # 用主键精确回表，只回表 page_size 条记录
+        queryset = Risk.objects.filter(risk_id__in=pk_list).order_by("updated_at")
+
         results = [
             {
                 "id": item.risk_id,
@@ -136,9 +145,9 @@ class RiskResourceProvider(IAMResourceProvider):
                 "updated_at": None,
                 "data": self.resource_provider_serializer(instance=item).data,
             }
-            for item in queryset[page.slice_from : page.slice_to]
+            for item in queryset
         ]
-        return ListResult(results=results, count=queryset.count())
+        return ListResult(results=results, count=base_qs.count())
 
 
 class ManualEventResourceProvider(IAMResourceProvider):
@@ -204,8 +213,15 @@ class ManualEventResourceProvider(IAMResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = ManualEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
-        page_qs = queryset[page.slice_from : page.slice_to]
+        base_qs = ManualEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+
+        # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
+        pk_list = list(
+            base_qs.order_by("updated_at").values_list("manual_event_id", flat=True)[page.slice_from : page.slice_to]
+        )
+        # 用主键精确回表，只回表 page_size 条记录
+        queryset = ManualEvent.objects.filter(manual_event_id__in=pk_list).order_by("updated_at")
+
         results = [
             {
                 "id": str(item.manual_event_id),
@@ -216,9 +232,9 @@ class ManualEventResourceProvider(IAMResourceProvider):
                 "updated_at": None,
                 "data": self.resource_provider_serializer(instance=item).data,
             }
-            for item in page_qs
+            for item in queryset
         ]
-        return ListResult(results=results, count=queryset.count())
+        return ListResult(results=results, count=base_qs.count())
 
 
 class TicketPermissionResourceProvider(IAMResourceProvider):
@@ -303,3 +319,73 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
             for item in page_queryset
         ]
         return ListResult(results=results, count=queryset.count())
+
+
+class TicketNodeResourceProvider(IAMResourceProvider):
+    resource_type = ResourceEnum.TICKET_NODE.id
+    resource_provider_serializer = TicketNodeProviderSerializer
+    resource_type_index_fields = ["risk_id", "operator"]
+
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
+
+    def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
+        queryset = TicketNode.objects.all()
+        if parent_id and resource_type == ResourceEnum.RISK.id:
+            queryset = queryset.filter(risk_id=str(parent_id))
+        page_qs = queryset[page.slice_from : page.slice_to]
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in page_qs]
+        return results, queryset.count()
+
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
+        queryset = TicketNode.objects.filter(pk__in=ids)
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in queryset]
+        return results, queryset.count()
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple[List[dict], int]:
+        queryset = TicketNode.objects.all()
+        if parent_id and resource_type == ResourceEnum.RISK.id:
+            queryset = queryset.filter(risk_id=str(parent_id))
+        if keyword:
+            queryset = queryset.filter(models.Q(risk_id__icontains=keyword) | models.Q(operator__icontains=keyword))
+        page_qs = queryset[page.slice_from : page.slice_to]
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in page_qs]
+        return results, queryset.count()
+
+    def list_instance_by_policy(self, filters, page, **options):
+        expression = filters.expression
+        if not expression:
+            return ListResult(results=[], count=0)
+
+        key_mapping = {f"{self.resource_type}.id": "id"}
+        converter = PathEqDjangoQuerySetConverter(key_mapping)
+        django_filters = converter.convert(expression)
+        queryset = TicketNode.objects.filter(django_filters)
+        results = [
+            {"id": str(item.pk), "display_name": str(item.pk)} for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_instance_list(self, filter, page, **options):
+        start_ts = float(filter.start_time) / 1000.0
+        end_ts = float(filter.end_time) / 1000.0
+        base_qs = TicketNode.objects.filter(timestamp__gt=start_ts, timestamp__lte=end_ts)
+
+        pk_list = list(base_qs.order_by("timestamp").values_list("id", flat=True)[page.slice_from : page.slice_to])
+        queryset = TicketNode.objects.filter(pk__in=pk_list).order_by("timestamp")
+
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": str(item.pk),
+                "creator": None,
+                "created_at": int(item.timestamp * 1000),
+                "updater": None,
+                "updated_at": int(item.timestamp * 1000),
+                "data": self.resource_provider_serializer(item).data,
+            }
+            for item in queryset
+        ]
+        return ListResult(results=results, count=base_qs.count())

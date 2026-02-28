@@ -35,9 +35,9 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     EventFilterOperator,
     EventMappingFields,
+    RiskDisplayStatus,
     RiskLabel,
     RiskRuleOperator,
-    RiskStatus,
     RiskViewType,
 )
 from services.web.risk.models import (
@@ -238,7 +238,20 @@ class RiskReportSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class RiskInfoSerializer(serializers.ModelSerializer):
+class RiskDisplayStatusMixin:
+    """将 display_status 以 status 字段名暴露给前端，屏蔽内部字段改动"""
+
+    def to_representation(self, instance: Risk):
+        data = super().to_representation(instance)
+        display_status = data.pop("display_status", None)
+        if getattr(instance, "manual_synced", True) is False:
+            data["status"] = RiskDisplayStatus.STAND_BY.value
+        elif display_status is not None:
+            data["status"] = display_status
+        return data
+
+
+class RiskInfoSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
@@ -250,12 +263,6 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     def get_has_report(self, obj: Risk) -> bool:
         """检查风险是否有报告"""
         return hasattr(obj, "report")
-
-    def to_representation(self, instance: Risk):
-        data = super().to_representation(instance)
-        if getattr(instance, "manual_synced", True) is False:
-            data["status"] = RiskStatus.STAND_BY.value
-        return data
 
     def get_event_end_time(self, obj: Risk) -> str | None:
         """
@@ -270,7 +277,7 @@ class RiskInfoSerializer(serializers.ModelSerializer):
         # 核心逻辑：检查是否存在微秒
         if dt.microsecond > 0:
             # 1. 先去掉微秒 (归零)
-            # 2. 再加上1秒，实现“向上取整”
+            # 2. 再加上1秒，实现"向上取整"
             dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
 
         if timezone.is_naive(dt):
@@ -397,6 +404,12 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TicketNodeProviderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TicketNode
+        fields = ["id", "risk_id", "operator"]
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
@@ -414,7 +427,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
     tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
-    use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
+    use_bkbase = serializers.BooleanField(
+        label=gettext_lazy("是否通过BKBase查询"),
+        required=False,
+        default=False,
+        help_text=gettext_lazy("已废弃：由 event_filters 自动决定，传入无效"),
+    )
     order_field = serializers.CharField(
         label=gettext_lazy("排序字段"),
         required=False,
@@ -485,7 +503,10 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["title__contains"] = data.pop("title")
         event_filters = event_filters or []
         data["event_filters"] = event_filters
-        data["use_bkbase"] = bool(data.get("use_bkbase", False))
+        data["use_bkbase"] = bool(event_filters)
+        # 将前端传入的 status 映射到 display_status 进行筛选
+        if data.get("status"):
+            data["display_status"] = data.pop("status")
         # 格式转换
         for key, val in attrs.items():
             if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
@@ -533,7 +554,7 @@ class ListRiskStrategyRespSerializer(serializers.ModelSerializer):
         fields = ["label", "value"]
 
 
-class ListRiskResponseSerializer(serializers.ModelSerializer):
+class ListRiskResponseSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
     """
     List Risk
     """
@@ -610,6 +631,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "event_end_time",
             "operator",
             "status",
+            "display_status",  # 通过 to_representation 映射为 status 暴露给前端
             "current_operator",
             "notice_users",
             "event_data",
@@ -622,12 +644,6 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "report_enabled",
             "report_auto_render",
         ]
-
-    def to_representation(self, instance: Risk):
-        data = super().to_representation(instance)
-        if getattr(instance, "manual_synced", True) is False:
-            data["status"] = RiskStatus.STAND_BY.value
-        return data
 
 
 class ProcessApplicationsInfoSerializer(serializers.ModelSerializer):

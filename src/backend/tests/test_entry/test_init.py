@@ -56,7 +56,12 @@ class SystemInitAssetTests(TestCase):
         self.handler.init_asset()
 
         expected_calls = []
-        for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
+        for resource_cls in [
+            ResourceEnum.RISK,
+            ResourceEnum.STRATEGY,
+            ResourceEnum.STRATEGY_TAG,
+            ResourceEnum.TICKET_NODE,
+        ]:
             expected_calls.append(
                 mock.call(
                     {
@@ -76,7 +81,12 @@ class SystemInitAssetTests(TestCase):
 
         saved_status: Dict[str, bool] = mock_set.call_args.args[1]
         self.assertEqual(mock_set.call_args.args[0], INIT_ASSET_FINISHED_KEY)
-        for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
+        for resource_cls in [
+            ResourceEnum.RISK,
+            ResourceEnum.STRATEGY,
+            ResourceEnum.STRATEGY_TAG,
+            ResourceEnum.TICKET_NODE,
+        ]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
             self.assertTrue(saved_status.get(key))
 
@@ -169,7 +179,12 @@ class SystemInitAssetTests(TestCase):
         self.handler.init_asset()
 
         saved_status = mock_set.call_args.args[1]
-        for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
+        for resource_cls in [
+            ResourceEnum.RISK,
+            ResourceEnum.STRATEGY,
+            ResourceEnum.STRATEGY_TAG,
+            ResourceEnum.TICKET_NODE,
+        ]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
             self.assertFalse(saved_status.get(key))
 

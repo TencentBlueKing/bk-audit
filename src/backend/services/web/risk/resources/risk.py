@@ -55,6 +55,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
@@ -63,6 +64,7 @@ from services.web.risk.constants import (
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_SHOW_FIELDS,
+    RiskDisplayStatus,
     RiskExportField,
     RiskFields,
     RiskLabel,
@@ -96,6 +98,7 @@ from services.web.risk.handlers.ticket import (
     MisReport,
     ReOpen,
     ReOpenMisReport,
+    RiskExperienceRecord,
     TransOperator,
 )
 from services.web.risk.models import (
@@ -168,7 +171,11 @@ class RetrieveRisk(RiskMeta):
             many=False,
         )
         risk = data[0]
-        nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
+        nodes = (
+            TicketNode.objects.filter(risk_id=risk["risk_id"])
+            .exclude(action=RiskExperienceRecord.__name__)
+            .order_by("timestamp")
+        )
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
         return risk
@@ -336,9 +343,13 @@ class ListRisk(RiskMeta):
         return start_date, end_date
 
     def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
+        # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
         risks = self._apply_ordering(base_queryset, order_field).only("pk")
         paged_queryset, page = paginate_queryset(
-            queryset=risks, request=request, base_queryset=Risk.annotated_queryset()
+            queryset=risks,
+            request=request,
+            # 数据加载阶段套上展示注解（event_content_short / _has_report）
+            base_queryset=Risk.annotated_queryset(),
         )
         paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
         paged_risks = list(paged_queryset)
@@ -534,8 +545,8 @@ class ListRisk(RiskMeta):
             )
         return queryset.order_by(order_field)
 
-    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
-        # 构造表达式
+    def _build_filter_query(self, validated_request_data: dict) -> Q:
+        """通用筛选条件构造：从请求参数中提取风险等级、标签等筛选条件并构造 Q 表达式，供所有 ListRisk 子类共享。"""
         q = Q()
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
@@ -554,8 +565,11 @@ class ListRisk(RiskMeta):
             for i in val:
                 _q |= Q(**{key: i})
             q &= _q
-        # 获取有权限且符合表达式的
-        return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
+        return q
+
+    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+        q = self._build_filter_query(validated_request_data)
+        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
 
     def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
         if not risk_ids:
@@ -579,6 +593,9 @@ class ListRisk(RiskMeta):
                 ),
                 TicketPermission._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY, fallback=TicketPermission._meta.db_table
+                ),
+                TicketNode._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_TICKET_NODE_BKBASE_RT_ID_KEY, fallback=TicketNode._meta.db_table
                 ),
                 "risk_event": self._get_configured_table_name(
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
@@ -626,18 +643,40 @@ class ListMineRisk(ListRisk):
     name = gettext_lazy("获取待我处理的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        queryset = queryset.filter(Q(current_operator__contains=get_request_username()))
-        return queryset
+        q = self._build_filter_query(validated_request_data)
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, current_operator__contains=get_request_username())
+            .distinct()
+        )
 
 
 class ListNoticingRisk(ListRisk):
     name = gettext_lazy("获取我关注的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        queryset = queryset.filter(Q(notice_users__contains=get_request_username()))
-        return queryset
+        q = self._build_filter_query(validated_request_data)
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, notice_users__contains=get_request_username())
+            .distinct()
+        )
+
+
+class ListProcessedRisk(ListRisk):
+    """
+    处理历史：曾作为处理人但当前不是处理人的风险。
+    """
+
+    name = gettext_lazy("获取处理历史风险列表")
+
+    def load_risks(self, validated_request_data):
+        q = self._build_filter_query(validated_request_data)
+        username = get_request_username()
+        processed_risk_ids = TicketNode.objects.filter(
+            operator=username,
+        ).values("risk_id")
+        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
 
 
 class ListRiskFields(RiskMeta):
@@ -692,7 +731,16 @@ class RiskStatusCommon(RiskMeta):
         return choices_to_dict(RiskStatus)
 
 
-class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
+class RiskDisplayStatusCommon(RiskMeta):
+    """获取风险展示状态类型（供前端下拉框筛选使用）"""
+
+    name = gettext_lazy("获取风险展示状态类型")
+
+    def perform_request(self, validated_request_data):
+        return choices_to_dict(RiskDisplayStatus)
+
+
+class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     RequestSerializer = ListRiskMetaRequestSerializer
     many_response_data = True
     # 风险视图类型与风险类的映射
@@ -700,6 +748,7 @@ class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
         RiskViewType.ALL.value: ListRisk,
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
+        RiskViewType.PROCESSED.value: ListProcessedRisk,
     }
 
     @classmethod
@@ -714,7 +763,7 @@ class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
         return risk_cls().load_risks(filter_dict)
 
 
-class ListRiskTags(ListRiskBase):
+class ListRiskTags(ListRiskMetaBase):
     """
     获取用户的风险标签列表，支持用户在不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
@@ -729,23 +778,14 @@ class ListRiskTags(ListRiskBase):
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
         if not risk_view_type:
             return tags
-        risk_ids = set(
-            self.load_risk_view_type_risks(risk_view_type, validated_request_data).values_list("risk_id", flat=True)
-        )
-        if not risk_ids:
-            return []
 
-        # 1. 获取这些风险对应的策略ID
-        strategy_ids = set(Risk.objects.filter(risk_id__in=risk_ids).values_list("strategy_id", flat=True))
-
-        # 2. 查询这些策略关联的标签ID
-        tag_ids = set(StrategyTag.objects.filter(strategy_id__in=strategy_ids).values_list("tag_id", flat=True))
-
-        # 3. 返回对应的标签
-        return tags.filter(tag_id__in=tag_ids)
+        risk_qs = self.load_risk_view_type_risks(risk_view_type, validated_request_data)
+        strategy_id_qs = risk_qs.order_by().values("strategy_id").distinct()
+        tag_id_qs = StrategyTag.objects.filter(strategy_id__in=strategy_id_qs).values("tag_id")
+        return tags.filter(tag_id__in=tag_id_qs)
 
 
-class ListRiskStrategy(ListRiskBase):
+class ListRiskStrategy(ListRiskMetaBase):
     """
     获取风险的策略，支持不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
@@ -760,14 +800,13 @@ class ListRiskStrategy(ListRiskBase):
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
         if not risk_view_type:
             return strategies
-        strategy_ids = set(
+        strategy_id_qs = (
             self.load_risk_view_type_risks(risk_view_type, validated_request_data)
-            .values_list("strategy_id", flat=True)
+            .order_by()
+            .values("strategy_id")
             .distinct()
         )
-        if not strategy_ids:
-            return []
-        return strategies.filter(strategy_id__in=strategy_ids)
+        return strategies.filter(strategy_id__in=strategy_id_qs)
 
 
 class CustomCloseRisk(RiskMeta):
@@ -1026,9 +1065,8 @@ class RiskExport(RiskMeta):
         risk_ids: List[str] = validated_request_data["risk_ids"]
 
         # 1. 获取有权限的风险列表
-        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.load_authed_risks(action=ActionEnum.LIST_RISK)).filter(
-            risk_id__in=risk_ids
-        )
+        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.annotated_queryset(qs)).filter(risk_id__in=risk_ids)
 
         authed_risk_ids = list(risks.values_list("risk_id", flat=True))
         no_authed_risk_ids = set(risk_ids) - set(authed_risk_ids)
@@ -1086,7 +1124,7 @@ class RiskExport(RiskMeta):
                 RiskExportField.EVENT_TIME: risk.event_time.strftime(api_settings.DATETIME_FORMAT),
                 RiskExportField.RISK_HAZARD: risk.strategy.risk_hazard,
                 RiskExportField.RISK_GUIDANCE: risk.strategy.risk_guidance,
-                RiskExportField.STATUS: str(RiskStatus.get_label(risk.status)),
+                RiskExportField.STATUS: str(RiskDisplayStatus.get_label(risk.display_status)),
                 RiskExportField.RULE_ID: risk.rule_id,
                 RiskExportField.OPERATOR: data2string(risk.operator),
                 RiskExportField.CURRENT_OPERATOR: data2string(risk.current_operator),
