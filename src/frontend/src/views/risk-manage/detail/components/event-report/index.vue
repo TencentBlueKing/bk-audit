@@ -19,9 +19,16 @@
     class="event-report-loading"
     :loading="loading"
     mode="spin"
+    size="small"
     theme="primary"
-    :title="t('正在生成报告')">
-    <div class="event-report">
+    :title="t('正在生成事件调查报告')">
+    <div
+      v-if="loading"
+      class="event-report-loading-box" />
+
+    <div
+      v-else
+      class="event-report">
       <render-info-block
         v-if="data.permission?.edit_risk_v2"
         class="flex mt16">
@@ -296,6 +303,11 @@
   });
 </script>
 <style lang="postcss" scoped>
+.event-report-loading-box {
+  position: relative;
+  height: 300px;
+}
+
 .event-report {
   position: relative;
   padding: 10px;
@@ -358,8 +370,8 @@
 
 .event-report-loading {
   :deep(.bk-loading-title) {
-    margin-left: -15px;
-    color: #3a84ff;
+    padding-top: 10px;
+    margin-left: -40px;
   }
 }
 </style>
