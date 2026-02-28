@@ -324,7 +324,7 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
 class TicketNodeResourceProvider(IAMResourceProvider):
     resource_type = ResourceEnum.TICKET_NODE.id
     resource_provider_serializer = TicketNodeProviderSerializer
-    resource_type_index_fields = ["risk_id", "operator", "action", "timestamp"]
+    resource_type_index_fields = ["risk_id", "operator"]
 
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []

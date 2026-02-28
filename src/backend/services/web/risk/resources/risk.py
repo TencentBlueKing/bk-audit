@@ -656,19 +656,31 @@ class ListMineRisk(ListRisk):
     name = gettext_lazy("获取待我处理的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        return queryset.filter(Q(current_operator__contains=get_request_username()))
+        q = self._build_filter_query(validated_request_data)
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, current_operator__contains=get_request_username())
+            .distinct()
+        )
 
 
 class ListNoticingRisk(ListRisk):
     name = gettext_lazy("获取我关注的风险列表")
 
     def load_risks(self, validated_request_data):
-        queryset = super().load_risks(validated_request_data)
-        return queryset.filter(Q(notice_users__contains=get_request_username()))
+        q = self._build_filter_query(validated_request_data)
+        return (
+            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
+            .filter(q, notice_users__contains=get_request_username())
+            .distinct()
+        )
 
 
 class ListProcessedRisk(ListRisk):
+    """
+    处理历史：曾作为处理人但当前不是处理人的风险。
+    """
+
     name = gettext_lazy("获取处理历史风险列表")
 
     def load_risks(self, validated_request_data):
@@ -741,7 +753,7 @@ class RiskDisplayStatusCommon(RiskMeta):
         return choices_to_dict(RiskDisplayStatus)
 
 
-class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
+class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     RequestSerializer = ListRiskMetaRequestSerializer
     many_response_data = True
     # 风险视图类型与风险类的映射
@@ -764,7 +776,7 @@ class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
         return risk_cls().load_risks(filter_dict)
 
 
-class ListRiskTags(ListRiskBase):
+class ListRiskTags(ListRiskMetaBase):
     """
     获取用户的风险标签列表，支持用户在不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
@@ -786,7 +798,7 @@ class ListRiskTags(ListRiskBase):
         return tags.filter(tag_id__in=tag_id_qs)
 
 
-class ListRiskStrategy(ListRiskBase):
+class ListRiskStrategy(ListRiskMetaBase):
     """
     获取风险的策略，支持不同风险视图下的数据展示
     注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
