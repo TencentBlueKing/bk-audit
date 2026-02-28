@@ -335,6 +335,7 @@
         checked: [],
         btnSave: t('确定'),
         btnReset: t('重置'),
+        multiple: false, // 单选模式
       },
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => <bk-tag
@@ -688,13 +689,30 @@
   // 列筛选处理（跨页过滤）
   const handleColumnFilter = (checkedObj: Record<string, any>) => {
     const checkField = checkedObj.column.field();
-    // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
-    const value = checkedObj.checked.map((item: any) => {
-      if (typeof item === 'boolean') {
-        return item ? 'true' : 'false';
+    // 事件调查报告字段只支持单选，多选时传空值
+    let value = '';
+    if (checkField === 'has_report') {
+      const checkedValues = checkedObj.checked;
+      // 多选时（数组长度 > 1）传空值
+      if (Array.isArray(checkedValues) && checkedValues.length > 1) {
+        value = '';
+      } else if (Array.isArray(checkedValues) && checkedValues.length === 1) {
+        // 单选时正常处理
+        const item = checkedValues[0];
+        // eslint-disable-next-line no-nested-ternary
+        value = typeof item === 'boolean' ? (item ? 'true' : 'false') : String(item);
       }
-      return String(item);
-    }).join(',');
+    } else {
+      // 其他字段正常处理多选
+      const checkedValues = checkedObj.checked;
+      // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
+      value = checkedValues.map((item: any) => {
+        if (typeof item === 'boolean') {
+          return item ? 'true' : 'false';
+        }
+        return String(item);
+      }).join(',');
+    }
     // 更新搜索模型，将筛选条件添加到搜索参数中
     searchModel.value = {
       ...searchModel.value,
