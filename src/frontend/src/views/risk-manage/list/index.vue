@@ -38,6 +38,7 @@
       </div>
       <render-list
         ref="listRef"
+        :border="isTableEmpty ? [] : ['outer']"
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
@@ -853,6 +854,10 @@
     &.is-table-empty {
       .bk-table-fixed {
         visibility: hidden;
+      }
+
+      .bk-exception {
+        border-bottom: none;
       }
     }
   }
