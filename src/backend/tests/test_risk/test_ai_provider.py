@@ -149,7 +149,7 @@ class TestAIProviderCache(TestCase):
             enable_cache=True,
         )
 
-        cache_key = provider._generate_cache_key()
+        cache_key = provider._cache_key_prefix
 
         # _generate_cache_key 只返回业务相关的 key 部分
         # UsingCache 会自动拼接 key_prefix 和 cache_type.key（ai_provider）
@@ -167,7 +167,7 @@ class TestAIProviderCache(TestCase):
             enable_cache=True,
         )
 
-        cache_key = provider._generate_cache_key()
+        cache_key = provider._cache_key_prefix
 
         # 验证包含时间戳格式
         self.assertRegex(cache_key, r"\d{14}")
@@ -184,7 +184,7 @@ class TestAIProviderCache(TestCase):
             enable_cache=True,
         )
 
-        cache_key = provider._generate_cache_key()
+        cache_key = provider._cache_key_prefix
 
         # 验证 key 不为空
         self.assertTrue(len(cache_key) > 20)
@@ -249,7 +249,7 @@ class TestAIProviderCache(TestCase):
             enable_cache=True,
         )
 
-        cache_key = provider._generate_cache_key()
+        cache_key = provider._cache_key_prefix
         self.assertEqual(cache_key, "unknown")
 
     def test_get_tools_max_updated_at_empty_when_no_tools(self):

@@ -189,7 +189,7 @@ class AIProvider(Provider):
                 cache_type=self._cache_type,
                 compress=True,
                 is_cache_func=self._cache_write_trigger,
-                func_key_generator=lambda _: self._generate_cache_key(),
+                func_key_generator=lambda _: self._cache_key_prefix,
             )(self._execute_ai_agent)(prompt)
 
         # 调用AI Agent生成内容
@@ -221,8 +221,9 @@ class AIProvider(Provider):
         except Exception as e:
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"
 
-    def _generate_cache_key(self) -> str:
-        """生成缓存 key 的业务部分
+    @cached_property
+    def _cache_key_prefix(self) -> str:
+        """缓存 key 的业务部分
 
         完整缓存 key 由 UsingCache 自动组装，格式为：
             {key_prefix}:{cache_type.key}:{func_key}:{args_md5}
@@ -403,8 +404,11 @@ class EventProvider(Provider):
             sql = builder.build_first_sql([field_config])
         elif aggregate == AggregationFunction.LATEST:
             sql = builder.build_latest_sql([field_config])
-        else:
+        elif sql_aggregate:
             sql = builder.build_aggregate_sql([field_config])
+        else:
+            logger.warning("[EventProvider] Unknown aggregate: %s", aggregate)
+            return None
 
         return sql
 

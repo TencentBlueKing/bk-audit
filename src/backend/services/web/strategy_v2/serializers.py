@@ -525,10 +525,8 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
     tools = StrategyToolSerializer(many=True, read_only=True)
-    report_status = serializers.ChoiceField(
+    report_status = serializers.SerializerMethodField(
         label=gettext_lazy("事件调查报告状态"),
-        choices=StrategyReportStatus.choices,
-        read_only=True,
     )
 
     def get_tags(self, obj):
@@ -542,6 +540,13 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
             # 回退方案：直接使用关系查询
             return list(obj.tags.values_list('tag_id', flat=True))
 
+    def get_report_status(self, instance):
+        if not instance.report_enabled:
+            return StrategyReportStatus.DISABLED.value
+        elif instance.report_auto_render:
+            return StrategyReportStatus.AUTO.value
+        return StrategyReportStatus.MANUAL.value
+
     class Meta:
         model = Strategy
         exclude = ["backend_data", "report_config"]
@@ -549,13 +554,6 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
-        # 根据 report_enabled 和 report_auto_render 计算事件调查报告状态
-        if not instance.report_enabled:
-            data["report_status"] = StrategyReportStatus.DISABLED.value
-        elif instance.report_auto_render:
-            data["report_status"] = StrategyReportStatus.AUTO.value
-        else:
-            data["report_status"] = StrategyReportStatus.MANUAL.value
         return data
 
 
