@@ -18,7 +18,7 @@
   <div class="config">
     <card-part-vue :title="t('基础配置')">
       <template #content>
-        <div class="flex-center">
+        <div>
           <audit-form
             ref="formRef"
             class="example"
