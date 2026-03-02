@@ -74,14 +74,6 @@ export function useToolDialog() {
   };
 
   /**
-   * 关闭工具
-   * @param toolUid 工具UID
-   */
-  const handleCloseTool = (toolUid: string) => {
-    allOpenToolsData.value = allOpenToolsData.value.filter(item => item !== toolUid);
-  };
-
-  /**
    * 设置对话框引用
    * @param uids 工具UID
    * @param ref 对话框引用
@@ -95,7 +87,6 @@ export function useToolDialog() {
     dialogRefs,
     openFieldDown,
     handleOpenTool,
-    handleCloseTool,
     setDialogRef,
   };
 }

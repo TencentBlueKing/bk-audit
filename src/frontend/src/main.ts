@@ -20,7 +20,7 @@ import { createApp } from 'vue';
 import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
-
+import JsonViewer from 'vue-json-viewer';
 import RootManageService from '@service/root-manage';
 import EntryManageService from '@service/entry-manage';
 
@@ -40,6 +40,7 @@ import AuthCollapsePanel from '@components/audit-collapse-panel/index.vue';
 import DatePicker from '@blueking/date-picker';
 import RelationShip from '@components/relation-ship/index.vue';
 import RenderList from '@components/render-list/index.vue';
+import TdesignList from '@components/tdesign-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
@@ -78,6 +79,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
+    BKApp.use(JsonViewer);
     BKApp.use(createRouter(config));
 
     BKApp.component('ApplyPermissionCatch', ApplyPermissionCatch);
@@ -95,6 +97,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('AuthCollapsePanel', AuthCollapsePanel);
     BKApp.component('RelationShip', RelationShip);
     BKApp.component('RenderList', RenderList);
+    BKApp.component('TdesignList', TdesignList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);
     BKApp.component('SkeletonLoading', SkeletonLoading);

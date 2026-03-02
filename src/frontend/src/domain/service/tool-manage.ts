@@ -102,6 +102,19 @@ export default  {
     }));
   },
   /**
+     * @desc 工具调试
+     * @param { Object } params
+     */
+  fetchToolsDebug(params: {
+      tool_type: string,
+      config: Record<string, any>,
+      params: Record<string, any>,
+    }) {
+    return ToolManageSources.getToolsDebug(params).then(({ data }) =>  ({
+      ...data,
+    }));
+  },
+  /**
      * @desc 工具删除
      * @param { Object } params
      */
@@ -111,6 +124,16 @@ export default  {
     return ToolManageSources.deleteTool(params).then(({ data }) =>  ({
       ...data,
     }));
+  },
+  /**
+     * @desc 收藏/取消收藏工具
+     * @param { Object } params
+     */
+  toggleFavorite(params: {
+      uid: string,
+      favorite: boolean,
+    }) {
+    return ToolManageSources.toggleFavorite(params).then(({ data }) =>  data);
   },
   /**
      * @desc 获取图表列表

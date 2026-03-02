@@ -1,0 +1,538 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+        &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+        &rsaquo; <a href="{% url 'admin:log_subscription_logsubscription_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+        {% if original %}
+            &rsaquo; <a href="{% url 'admin:log_subscription_logsubscription_change' original.pk %}">{{ original }}</a>
+            &rsaquo; {% trans "调试订阅" %}
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'risk/css/where_condition_widget.css' %}">
+    <style>
+        .log-subscription-preview {
+            padding: 20px;
+        }
+        .log-subscription-preview h1 {
+            margin-bottom: 20px;
+        }
+        .log-subscription-preview .module {
+            margin-bottom: 20px;
+        }
+        .log-subscription-preview .form-row {
+            margin-bottom: 15px;
+        }
+        .log-subscription-preview .form-row label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        .log-subscription-preview .form-row input,
+        .log-subscription-preview .form-row select {
+            width: 300px;
+            padding: 5px;
+        }
+        .log-subscription-preview .submit-row {
+            margin-top: 20px;
+            padding: 10px 0;
+        }
+        .log-subscription-preview .submit-row button,
+        .log-subscription-preview .submit-row a {
+            margin-right: 10px;
+        }
+        .log-subscription-preview .hidden {
+            display: none;
+        }
+        .log-subscription-preview pre {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .log-subscription-preview .message {
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .log-subscription-preview .message.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .log-subscription-preview .message.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .log-subscription-preview .message.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .log-subscription-preview .results-table-wrapper {
+            overflow-x: auto;
+        }
+        .log-subscription-preview .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .log-subscription-preview .results-table th,
+        .log-subscription-preview .results-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .log-subscription-preview .results-table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        .log-subscription-preview .results-summary {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="log-subscription-preview">
+    <h1>{{ title }}</h1>
+
+    <form id="log-subscription-preview-form"
+          class="aligned"
+          data-api-url="{{ api_url }}"
+          data-subscription-token="{{ original.token|default_if_none:'' }}">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <h2>{% trans "查询参数" %}</h2>
+            
+            <div class="form-row">
+                <label for="id_source_id">{% trans "数据源" %}*</label>
+                <select id="id_source_id" name="source_id" required>
+                    <option value="">{% trans "请选择数据源" %}</option>
+                    {% for source in data_sources %}
+                        <option value="{{ source.id }}">{{ source.name }} ({{ source.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_start_time">{% trans "开始时间" %}*</label>
+                <input type="datetime-local" id="id_start_time" name="start_time"
+                       value="{{ initial.start_time|date:'Y-m-d\\TH:i' }}" required>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_end_time">{% trans "结束时间" %}*</label>
+                <input type="datetime-local" id="id_end_time" name="end_time"
+                       value="{{ initial.end_time|date:'Y-m-d\\TH:i' }}" required>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_page">{% trans "页码" %}</label>
+                <input type="number" id="id_page" name="page" value="{{ initial.page }}" min="1">
+            </div>
+            
+            <div class="form-row">
+                <label for="id_page_size">{% trans "每页数量" %}</label>
+                <input type="number" id="id_page_size" name="page_size" value="{{ initial.page_size }}" min="1" max="1000">
+            </div>
+            
+            <div class="form-row">
+                <label for="id_fields">{% trans "返回字段" %}</label>
+                <input type="text" id="id_fields" name="fields" placeholder="{% trans '留空返回全部字段，多个字段用逗号分隔' %}">
+                <p class="help">{% trans "示例: field1,field2,field3" %}</p>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_filters">{% trans "自定义筛选条件" %}</label>
+                <div class="risk-where-condition-widget" 
+                     id="log-subscription-filters-widget"
+                     data-field-options-target="log-subscription-field-options"
+                     data-operator-options-target="log-subscription-operator-options"
+                     data-field-type-options-target="log-subscription-field-type-options">
+                    <div class="risk-where-condition-toolbar">
+                        <button type="button" class="button risk-where-mode-btn active" data-mode="builder">{% trans "结构化模式" %}</button>
+                        <button type="button" class="button risk-where-mode-btn" data-mode="json">{% trans "JSON 模式" %}</button>
+                        <span class="help">{% trans "复杂嵌套条件可切换到 JSON 编辑" %}</span>
+                    </div>
+                    <div class="risk-where-condition-builder" data-field-name="filters">
+                        <div class="risk-where-condition-groups"></div>
+                    </div>
+                    <textarea id="id_filters" name="filters" class="risk-where-condition-json vLargeTextField" rows="10" cols="80"></textarea>
+                </div>
+                <!-- 隐藏的配置数据 -->
+                <script type="application/json" id="log-subscription-field-options">[]</script>
+                <script type="application/json" id="log-subscription-operator-options">[["eq","="],["neq","!="],["gt",">"],["gte",">="],["lt","<"],["lte","<="],["include","in"],["exclude","not in"],["between","between"],["like","like"],["not_like","not like"],["isnull","is null"],["notnull","is not null"]]</script>
+                <script type="application/json" id="log-subscription-field-type-options">[["string","字符串"],["int","整数"],["long","长整数"],["float","浮点数"],["double","双精度"],["boolean","布尔值"],["date","日期"],["datetime","日期时间"]]</script>
+                <p class="help">{% trans "留空则不添加额外筛选条件" %}</p>
+            </div>
+        </fieldset>
+        
+        <div class="submit-row">
+            <button type="submit" class="button default" data-mode="sql">{% trans "仅生成 SQL" %}</button>
+            <button type="button" class="button" id="log-subscription-preview-execute" data-mode="execute">
+                {% trans "生成并执行查询" %}
+            </button>
+            <a class="button" href="{{ back_url }}">{% trans "返回订阅详情" %}</a>
+        </div>
+    </form>
+
+    <div id="log-subscription-preview-messages"></div>
+
+    <section id="log-subscription-preview-sql" class="module hidden">
+        <h2>Query SQL</h2>
+        <pre class="query-sql"></pre>
+        <h2>Count SQL</h2>
+        <pre class="count-sql"></pre>
+    </section>
+
+    <section id="log-subscription-preview-results" class="module hidden">
+        <h2>{% trans "查询结果" %}</h2>
+        <div class="results-summary"></div>
+        <div class="results-table-wrapper"></div>
+    </section>
+
+    <script src="{% static 'risk/js/where_condition_widget.js' %}"></script>
+    <script>
+        (function() {
+            const form = document.getElementById('log-subscription-preview-form');
+            const executeBtn = document.getElementById('log-subscription-preview-execute');
+            const messagesDiv = document.getElementById('log-subscription-preview-messages');
+            const sqlSection = document.getElementById('log-subscription-preview-sql');
+            const resultsSection = document.getElementById('log-subscription-preview-results');
+            
+            // 隐藏 keys 字段（暂不支持）
+            const style = document.createElement('style');
+            style.textContent = `
+                #log-subscription-filters-widget .condition-drill-panel {
+                    display: none !important;
+                }
+            `;
+            document.head.appendChild(style);
+            
+            const filtersWidget = document.getElementById('log-subscription-filters-widget');
+            
+            function showMessage(message, type) {
+                messagesDiv.innerHTML = `<div class="message ${type}">${message}</div>`;
+            }
+            
+            function hideMessage() {
+                messagesDiv.innerHTML = '';
+            }
+            
+            function getFormData(mode) {
+                const formData = new FormData(form);
+                
+                // 将 datetime-local 转换为毫秒时间戳
+                const startTimeStr = formData.get('start_time');
+                const endTimeStr = formData.get('end_time');
+                const startTime = startTimeStr ? new Date(startTimeStr).getTime() : null;
+                const endTime = endTimeStr ? new Date(endTimeStr).getTime() : null;
+                
+                const data = {
+                    token: form.dataset.subscriptionToken,
+                    source_id: formData.get('source_id'),
+                    start_time: startTime,
+                    end_time: endTime,
+                    page: parseInt(formData.get('page')) || 1,
+                    page_size: parseInt(formData.get('page_size')) || 10,
+                    raw: mode === 'sql'
+                };
+                
+                const fields = formData.get('fields');
+                if (fields && fields.trim()) {
+                    data.fields = fields.split(',').map(f => f.trim()).filter(f => f);
+                }
+                
+                // 从 WhereConditionWidget 获取筛选条件
+                const filtersTextarea = document.getElementById('id_filters');
+                if (!filtersTextarea) {
+                    // 如果没有 textarea，跳过筛选条件处理
+                } else if (filtersWidget) {
+                    try {
+                        const currentMode = filtersWidget.dataset.mode || 'builder';
+                        if (currentMode === 'builder') {
+                            // 如果处于 builder 模式，直接序列化到 textarea（不切换模式）
+                            const groupsContainer = filtersWidget.querySelector('.risk-where-condition-groups');
+                            const rootGroup = groupsContainer ? groupsContainer.querySelector('.risk-where-group.root') : null;
+                            if (rootGroup) {
+                                // 复制 widget 的序列化逻辑
+                                function serializeGroup(groupElement) {
+                                    if (!groupElement) {
+                                        return { connector: 'and', conditions: [] };
+                                    }
+                                    
+                                    const connectorSelect = groupElement.querySelector('.group-connector');
+                                    const connector = connectorSelect && connectorSelect.value ? connectorSelect.value : 'and';
+                                    const node = {
+                                        connector,
+                                        conditions: [],
+                                    };
+                                    
+                                    const groupBody = groupElement.querySelector('.group-body');
+                                    if (!groupBody) {
+                                        return node;
+                                    }
+                                    
+                                    const itemsContainer = groupBody.querySelector('.condition-items');
+                                    if (!itemsContainer) {
+                                        return node;
+                                    }
+                                    
+                                    const items = itemsContainer.children;
+                                    for (let i = 0; i < items.length; i++) {
+                                        const child = items[i];
+                                        if (!child) continue;
+                                        
+                                        if (child.classList.contains('condition-row')) {
+                                            try {
+                                                const fieldElement = child.querySelector('.condition-field');
+                                                const fieldTypeSelect = child.querySelector('.condition-field-type');
+                                                const field = fieldElement ? (fieldElement.value || '') : '';
+                                                const operatorSelect = child.querySelector('.condition-operator');
+                                                const operator = operatorSelect ? (operatorSelect.value || '') : '';
+                                                const valueInput = child.querySelector('.condition-value');
+                                                const value = valueInput ? (valueInput.value || '').trim() : '';
+                                                
+                                                if (!field || !operator) {
+                                                    continue;
+                                                }
+                                                
+                                                const isMultiValue = ['include', 'exclude', 'between'].includes(operator);
+                                                
+                                                // 根据元素类型获取 field_type
+                                                let fieldType = 'string';
+                                                if (fieldElement && fieldElement.tagName === 'SELECT') {
+                                                    const selectedOption = fieldElement.selectedOptions[0];
+                                                    fieldType = selectedOption?.dataset?.fieldType || 'string';
+                                                } else if (fieldTypeSelect && fieldTypeSelect.value) {
+                                                    fieldType = fieldTypeSelect.value;
+                                                }
+                                                
+                                                const condition = {
+                                                    field: {
+                                                        table: 't',
+                                                        raw_name: field,
+                                                        display_name: field,
+                                                        field_type: fieldType,
+                                                    },
+                                                    operator,
+                                                };
+                                                
+                                                if (['isnull', 'notnull', 'is_null', 'is_not_null'].includes(operator)) {
+                                                    // no value needed
+                                                } else if (isMultiValue) {
+                                                    condition.filters = value ? value.split(',').map((item) => item.trim()).filter(Boolean) : [];
+                                                } else {
+                                                    condition.filter = value;
+                                                }
+                                                
+                                                node.conditions.push({condition: condition});
+                                            } catch (err) {
+                                                console.warn('序列化条件行失败:', err);
+                                                continue;
+                                            }
+                                        } else if (child.classList.contains('risk-where-group')) {
+                                            try {
+                                                const subGroup = serializeGroup(child);
+                                                if (subGroup && subGroup.conditions && subGroup.conditions.length > 0) {
+                                                    node.conditions.push(subGroup);
+                                                }
+                                            } catch (err) {
+                                                console.warn('序列化子组失败:', err);
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                    return node;
+                                }
+                                
+                                const payload = serializeGroup(rootGroup);
+                                // 如果没有任何条件，返回空字符串
+                                if (!payload || !payload.conditions || payload.conditions.length === 0) {
+                                    filtersTextarea.value = '';
+                                } else {
+                                    filtersTextarea.value = JSON.stringify(payload, null, 2);
+                                }
+                            } else {
+                                // 如果没有 rootGroup，清空 textarea
+                                filtersTextarea.value = '';
+                            }
+                        }
+                        // 如果已经是 JSON 模式，直接使用 textarea 的值
+                    } catch (error) {
+                        console.error('序列化筛选条件失败:', error);
+                        // 如果序列化失败，清空 textarea，但不阻止提交
+                        if (filtersTextarea) {
+                            filtersTextarea.value = '';
+                        }
+                    }
+                }
+                
+                const filters = filtersTextarea ? filtersTextarea.value.trim() : '';
+                if (filters) {
+                    try {
+                        const parsed = JSON.parse(filters);
+                        // 检查 field 对象是否有 keys 字段（暂不支持）
+                        function hasFieldKeys(obj, depth = 0) {
+                            // 限制递归深度，避免性能问题
+                            if (depth > 10) return false;
+                            if (typeof obj !== 'object' || obj === null) return false;
+                            
+                            // 只检查 field 对象是否有 keys 属性
+                            if (obj.field && typeof obj.field === 'object' && 'keys' in obj.field) {
+                                return true;
+                            }
+                            
+                            // 递归检查嵌套结构
+                            if (Array.isArray(obj)) {
+                                return obj.some(item => hasFieldKeys(item, depth + 1));
+                            }
+                            
+                            // 检查对象的所有值
+                            for (const key in obj) {
+                                if (obj.hasOwnProperty(key)) {
+                                    if (hasFieldKeys(obj[key], depth + 1)) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            
+                            return false;
+                        }
+                        if (hasFieldKeys(parsed)) {
+                            throw new Error('{% trans "自定义筛选条件不支持 keys 字段" %}');
+                        }
+                        data.filters = parsed;
+                    } catch (e) {
+                        // 如果解析失败，抛出错误让用户知道
+                        throw new Error('{% trans "自定义筛选条件格式错误" %}: ' + (e.message || String(e)));
+                    }
+                }
+                
+                return data;
+            }
+            
+            function displaySQL(data) {
+                sqlSection.classList.remove('hidden');
+                sqlSection.querySelector('.query-sql').textContent = data.query_sql || '{% trans "无查询 SQL" %}';
+                sqlSection.querySelector('.count-sql').textContent = data.count_sql || '{% trans "无统计 SQL" %}';
+            }
+            
+            function displayResults(data) {
+                resultsSection.classList.remove('hidden');
+                
+                const summary = resultsSection.querySelector('.results-summary');
+                summary.textContent = `{% trans "共" %} ${data.total || 0} {% trans "条记录，当前第" %} ${data.page || 1} {% trans "页，每页" %} ${data.page_size || 10} {% trans "条" %}`;
+                
+                const tableWrapper = resultsSection.querySelector('.results-table-wrapper');
+                
+                if (!data.results || data.results.length === 0) {
+                    tableWrapper.innerHTML = '<p>{% trans "无数据" %}</p>';
+                    return;
+                }
+                
+                const results = data.results;
+                const keys = Object.keys(results[0]);
+                
+                let tableHtml = '<table class="results-table"><thead><tr>';
+                keys.forEach(key => {
+                    tableHtml += `<th>${key}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+                
+                results.forEach(row => {
+                    tableHtml += '<tr>';
+                    keys.forEach(key => {
+                        const value = row[key];
+                        const displayValue = value === null ? '<em>null</em>' : String(value);
+                        tableHtml += `<td>${displayValue}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                });
+                
+                tableHtml += '</tbody></table>';
+                tableWrapper.innerHTML = tableHtml;
+            }
+            
+            async function submitForm(mode) {
+                hideMessage();
+                sqlSection.classList.add('hidden');
+                resultsSection.classList.add('hidden');
+                
+                let data;
+                try {
+                    data = getFormData(mode);
+                } catch (error) {
+                    console.error('获取表单数据失败:', error);
+                    showMessage(`{% trans "错误" %}: ${error.message || '{% trans "获取表单数据失败" %}'}`, 'error');
+                    return;
+                }
+                
+                if (!data.source_id) {
+                    showMessage('{% trans "请选择数据源" %}', 'error');
+                    return;
+                }
+                
+                if (!data.start_time || !data.end_time) {
+                    showMessage('{% trans "请选择时间范围" %}', 'error');
+                    return;
+                }
+                
+                showMessage('{% trans "正在查询..." %}', 'info');
+                
+                try {
+                    const response = await fetch(form.dataset.apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(result.message || result.error || '{% trans "请求失败" %}');
+                    }
+                    
+                    hideMessage();
+                    
+                    if (mode === 'sql') {
+                        displaySQL(result.data || result);
+                        showMessage('{% trans "SQL 生成成功" %}', 'success');
+                    } else {
+                        displaySQL(result.data || result);
+                        displayResults(result.data || result);
+                        showMessage('{% trans "查询成功" %}', 'success');
+                    }
+                } catch (error) {
+                    showMessage(`{% trans "错误" %}: ${error.message}`, 'error');
+                }
+            }
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const mode = e.submitter.dataset.mode || 'sql';
+                submitForm(mode);
+            });
+            
+            executeBtn.addEventListener('click', function() {
+                submitForm('execute');
+            });
+        })();
+    </script>
+</div>
+{% endblock %}

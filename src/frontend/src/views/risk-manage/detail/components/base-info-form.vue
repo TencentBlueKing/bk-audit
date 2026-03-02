@@ -45,7 +45,16 @@
             <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'event_type'">
-            {{ handleShowText(data.event_type) || '--' }}
+            <span v-if="isAddRisk">
+              <edit-tag
+                v-if="eventTypeComfig[0]?.typeValue === 'user-selector'"
+                :data="eventTypeComfig[0].value || ''"
+                style="display: inline-block;" />
+              <span v-else> {{ eventTypeComfig[0]?.value === '' ? '--' : eventTypeComfig[0]?.value }} </span>
+            </span>
+            <span v-else>
+              {{ handleShowText(data.event_type) || '--' }}
+            </span>
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_tags'">
             <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
@@ -65,7 +74,17 @@
             <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'event_content'">
-            {{ data.event_content === '' ? '--' : data.event_content }}
+            <span v-if="isAddRisk">
+              <edit-tag
+                v-if="eventContentComfig[0]?.typeValue === 'user-selector'"
+                :data="eventContentComfig[0].value || ''"
+                style="display: inline-block;" />
+              <span v-else> {{ eventContentComfig[0]?.value === '' ? '--' : eventContentComfig[0]?.value }} </span>
+            </span>
+            <span v-else>
+              {{ handleShowText(data.event_content) || '--' }}
+
+            </span>
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_hazard'">
             {{ data.risk_hazard === '' ? '--' : data.risk_hazard }}
@@ -78,7 +97,7 @@
               <bk-tag :theme="statusToMap[data.status].theme">
                 <p style="display: flex;align-items: center;">
                   <audit-icon
-                    :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
+                    :style="`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`"
                     :type="statusToMap[data.status].icon" />
                   {{ riskStatusCommon.find(item=>item.id===data.status)?.name === '' ? '--' :
                     riskStatusCommon.find(item=>item.id===data.status)?.name }}
@@ -182,6 +201,8 @@
     noticeGroups?: string[] // 关注人
     processorGroups?: string[] // 处理人
     operatorsComfig?: Array<Record<string, any>> // 责任人
+    eventContentComfig?: Array<Record<string, any>> // 事件描述
+    eventTypeComfig?: Array<Record<string, any>> // 事件类型
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -190,6 +211,8 @@
     noticeGroups: () => [],
     processorGroups: () => [],
     operatorsComfig: () => [],
+    eventContentComfig: () => [],
+    eventTypeComfig: () => [],
   });
   const { t, locale } = useI18n();
 

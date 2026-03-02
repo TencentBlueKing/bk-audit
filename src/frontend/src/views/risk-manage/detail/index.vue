@@ -28,15 +28,39 @@
         <base-info
           :data="detailData"
           :risk-status-common="riskStatusCommon"
-          :strategy-list="strategyList" />
+          :strategy-list="strategyList"
+          @updated-data="handleUpdatedData" />
         <!-- 关联事件 -->
-        <div class="link-event-wrap">
+        <div
+          v-if="!detailData.has_report"
+          class="link-event-wrap">
           <link-event
             :data="detailData"
             :strategy-list="strategyList"
             @get-event-data="handleGetEventData"
             @updated-data="handleUpdatedData" />
         </div>
+        <bk-tab
+          v-else
+          v-model:active="active"
+          style="margin-top: 16px;"
+          type="card-grid">
+          <bk-tab-panel
+            v-for="item in panels"
+            :key="item.name"
+            :label="item.label"
+            :name="item.name">
+            <scroll-faker>
+              <component
+                :is="comMap[item.name]"
+                ref="renderComRef"
+                :data="detailData"
+                :strategy-list="strategyList"
+                @get-event-data="handleGetEventData"
+                @updated-data="handleUpdatedData" />
+            </scroll-faker>
+          </bk-tab-panel>
+        </bk-tab>
       </div>
       <!-- 事件处理 -->
       <scroll-faker
@@ -72,15 +96,37 @@
           type="link" />
       </bk-button>
     </teleport>
+    <teleport
+      v-if="detailData.permission?.edit_risk_v2 && !detailData.has_report"
+      to="#teleport-generate-report">
+      <bk-button
+        v-bk-tooltips="t('生成调查报告')"
+        theme="primary"
+        @click="handleGenerateReport">
+        <audit-icon
+          style="margin-right: 8px;font-size: 14px;"
+          type="add" />
+        {{ t('创建调查报告') }}
+      </bk-button>
+    </teleport>
   </bk-loading>
+  <edit-event-report
+    v-model:isShowEditEventReport="isShowEditEventReport"
+    :report-auto-render="detailData.report_auto_render"
+    :report-enabled="detailData.report_enabled"
+    :status="detailData.report?.status"
+    :strategy-id="detailData.strategy_id"
+    @update="handleUpdate" />
 </template>
 
 <script setup lang='ts'>
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -102,6 +148,8 @@
   } from '@utils/assist';
 
   import BaseInfo from './components/base-info.vue';
+  import EditEventReport from './components/event-report/edit-event-report.vue';
+  import EventReport from './components/event-report/index.vue';
   import LinkEvent from './components/link-event.vue';
   import RiskHandle from './components/risk-handle/index.vue';
 
@@ -110,11 +158,27 @@
   const { t } = useI18n();
   const eventDataList = ref();
   const isShowSide = ref(true);
+  const isShowEditEventReport = ref(false);
+  const renderComRef = ref();
+  const hasAutoOpenedReport = ref(false);
 
   let timeout: undefined | number = undefined;
   const handleOpenRight = () => {
     isShowSide.value = !isShowSide.value;
   };
+
+  const comMap: Record<string, any> = {
+    eventReport: EventReport,
+    linkEvent: LinkEvent,
+  };
+
+  const panels = [
+    { name: 'eventReport', label: t('事件调查报告') },
+    { name: 'linkEvent', label: t('关联事件列表') },
+  ];
+
+  const active = ref<keyof typeof comMap>('eventReport');
+
   const {
     loading: strategyLoading,
     data: strategyList,
@@ -179,6 +243,10 @@
     execCopy(route, t('复制成功'));
   };
 
+  const handleGenerateReport = () => {
+    isShowEditEventReport.value = true;
+  };
+
   // 合并数据（包含事件信息配置）
   const detailData = computed(() => ({
     ...riskData.value,
@@ -205,7 +273,36 @@
       query: rest,
     });
   });
+  const tryOpenEditReport = () => {
+    if (hasAutoOpenedReport.value) {
+      return;
+    }
+    if (route.query.openEditReport !== 'true' || active.value !== 'eventReport') {
+      return;
+    }
+    nextTick(() => {
+      const refs = renderComRef.value;
+      const reportRef = Array.isArray(refs)
+        ? refs.find((item: any) => typeof item?.showReport === 'function')
+        : refs;
+      if (reportRef?.showReport) {
+        reportRef.showReport();
+        hasAutoOpenedReport.value = true;
+      }
+    });
+  };
 
+  watch(
+    () => [detailData.value, active.value, route.query.openEditReport],
+    (val) => {
+      if (val[0]) {
+        tryOpenEditReport();
+      }
+    },
+    {
+      immediate: true,
+    },
+  );
   onMounted(() => {
     const observer = new MutationObserver(() => {
       const left = document.querySelector('.left');
@@ -220,7 +317,11 @@
       characterData: true,
       attributes: true,
     });
-
+    nextTick(() => {
+      if (route.query.openEditReport === 'false') {
+        handleGenerateReport();
+      }
+    });
     onBeforeUnmount(() => {
       observer.takeRecords();
       observer.disconnect();

@@ -16,17 +16,29 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Annotated, Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
-from pydantic import validator
-from rest_framework.fields import CharField, JSONField
+from pydantic import field_validator
+from rest_framework.fields import CharField, DictField, JSONField, ListField
 from typing_extensions import TypedDict
 
 from apps.meta.models import EnumMappingRelatedType
 from core.choices import TextChoices, register_choices
+from core.utils.data import validate_unique_keys
+
+
+@register_choices("api_tool_error_type")
+class ApiToolErrorType(TextChoices):
+    """
+    API工具执行错误类型
+    """
+
+    NONE = "none", gettext_lazy("无异常")
+    NON_JSON_RESPONSE = "non_json_response", gettext_lazy("响应非 JSON")
+    REQUEST_ERROR = "request_error", gettext_lazy("请求异常")
 
 
 @register_choices("ToolType")
@@ -38,6 +50,11 @@ class ToolTypeEnum(TextChoices):
     DATA_SEARCH = "data_search", gettext_lazy("数据查询")
     API = "api", gettext_lazy("API")
     BK_VISION = "bk_vision", gettext_lazy("BK Vision")
+
+
+# ==========================================
+# SQL 工具配置
+# ==========================================
 
 
 @register_choices("DataSearchConfigType")
@@ -79,9 +96,9 @@ class DataSearchBaseField(BaseModel, abc.ABC):
     数据查询基本字段
     """
 
-    raw_name: str  # 字段名
-    display_name: str  # 展示名
-    description: str = PydanticField(default_factory=str)  # 字段描述
+    raw_name: str = PydanticField(title=gettext_lazy("字段名"))
+    display_name: str = PydanticField(title=gettext_lazy("显示名"))
+    description: str = PydanticField(default_factory=str, title=gettext_lazy("字段描述"))
 
 
 class ChoiceItem(TypedDict):
@@ -93,7 +110,10 @@ class EnumMappingConfig(BaseModel):
     """工具枚举映射配置"""
 
     collection_id: Optional[str] = PydanticField(
-        default="auto-generate", description="枚举集合ID（自动生成，无需手动指定）", max_length=255, allow_mutation=False
+        default="auto-generate",
+        description="枚举集合ID（自动生成，无需手动指定）",
+        max_length=255,
+        allow_mutation=False,
     )
     mappings: List[Dict[str, str]] = PydanticField(
         default_factory=list, description="枚举键值对列表，格式：[{'key': '1', 'name': 'Active'}]"
@@ -118,17 +138,83 @@ class SQLDataSearchInputVariable(DataSearchBaseField):
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
     ] = PydanticField(None, description="字段默认值")
 
-    @validator('choices')
-    def validate_choices_keys(cls, v):
-        """确保每个choice中的key值唯一"""
-        seen_keys = set()
+    @field_validator('choices')
+    @classmethod
+    def validate_choices(cls, v):
+        return validate_unique_keys(v, key_field='key', error_msg=lambda val: f"选项值 '{val}' 已存在")
 
-        for item in v:
-            key = item['key']
-            if key in seen_keys:
-                raise ValueError(f"发现重复的key: {key}")
-            seen_keys.add(key)
-        return v
+
+class Tool(BaseModel):
+    """
+    工具
+    """
+
+    uid: str  # 工具UID
+    version: int  # 工具版本
+
+
+class ToolDrillConfig(BaseModel):
+    """
+    工具下钻配置
+    """
+
+    target_value_type: TargetValueTypeEnum
+    target_field_type: Annotated[
+        Optional[str], CharField(allow_blank=True, allow_null=True, default=None)
+    ] = PydanticField("", description="引用字段类型用于前端区分字段")
+    target_value: Annotated[Union[str, int, float, bool, dict, list], JSONField(allow_null=True)] = PydanticField(
+        None, description="固定值/引用字段"
+    )
+    source_field: str  # 工具变量
+
+
+class DrillConfig(BaseModel):
+    """
+    数据查询下钻配置
+    """
+
+    tool: Tool
+    config: List[ToolDrillConfig] = PydanticField(default_factory=list)
+    drill_name: Annotated[Optional[str], CharField(allow_blank=True, allow_null=True, default=None)] = PydanticField(
+        None, description="下钻工具名称"
+    )
+
+
+class TableOutputField(DataSearchBaseField):
+    """
+    数据查询表格输出字段
+    """
+
+    drill_config: Optional[List[DrillConfig]] = None  # 下钻配置
+    enum_mappings: Optional[EnumMappingConfig] = None
+
+
+class SQLDataSearchOutputField(TableOutputField):
+    """
+    SQL数据查询输出字段
+    """
+
+    pass
+
+
+class Table(BaseModel):
+    table_name: str  # 表名
+
+
+class SQLDataSearchConfig(BaseModel):
+    """
+    SQL模式数据查询配置 -- 当工具为数据检索且配置类型为 SQL 类型时使用
+    """
+
+    sql: str = PydanticField(title="SQL语句")
+    referenced_tables: List[Table]  # RT表
+    input_variable: List[SQLDataSearchInputVariable]  # 输入变量
+    output_fields: List[SQLDataSearchOutputField]  # 输出字段
+
+
+# ==========================================
+# Bkvision 工具配置
+# ==========================================
 
 
 @register_choices("BKVisionFieldCategory")
@@ -163,66 +249,6 @@ class BKVisionInputVariable(DataSearchBaseField):
     is_default_value: bool = PydanticField(True, description="是否默认值")
 
 
-class Tool(BaseModel):
-    """
-    工具
-    """
-
-    uid: str  # 工具UID
-    version: int  # 工具版本
-
-
-class ToolDrillConfig(BaseModel):
-    """
-    工具下钻配置
-    """
-
-    target_value_type: TargetValueTypeEnum
-    target_field_type: Annotated[
-        Optional[str], CharField(allow_blank=True, allow_null=True, default=None)
-    ] = PydanticField("", description="引用字段类型用于前端区分字段")
-    target_value: Annotated[Union[str, int, float, bool, dict, list], JSONField(allow_null=True)] = PydanticField(
-        None, description="变量的详细描述"
-    )
-    source_field: str  # 工具变量
-
-
-class DrillConfig(BaseModel):
-    """
-    数据查询下钻配置
-    """
-
-    tool: Tool
-    config: List[ToolDrillConfig] = PydanticField(default_factory=list)
-    drill_name: Annotated[Optional[str], CharField(allow_blank=True, allow_null=True, default=None)] = PydanticField(
-        None, description="下钻工具名称"
-    )
-
-
-class SQLDataSearchOutputField(DataSearchBaseField):
-    """
-    SQL数据查询输出字段
-    """
-
-    drill_config: Optional[List[DrillConfig]] = None  # 下钻配置
-    enum_mappings: Optional[EnumMappingConfig] = None
-
-
-class Table(BaseModel):
-    table_name: str  # 表名
-
-
-class SQLDataSearchConfig(BaseModel):
-    """
-    SQL模式数据查询配置 -- 当工具为数据检索且配置类型为 SQL 类型时使用
-    """
-
-    sql: str = PydanticField(title="SQL语句")
-    referenced_tables: List[Table]  # RT表
-    input_variable: List[SQLDataSearchInputVariable]  # 输入变量
-    output_fields: List[SQLDataSearchOutputField]  # 输出字段
-
-
 class BkVisionConfig(BaseModel):
     """
     BK Vision配置 -- 当工具为 BK Vision时使用
@@ -240,3 +266,308 @@ class ToolTagsEnum(TextChoices):
     ALL_TOOLS = "-3", gettext_lazy("全部工具")
     MY_CREATED_TOOLS = "-4", gettext_lazy("我创建的")
     RECENTLY_USED_TOOLS = "-5", gettext_lazy("最近使用")
+    FAVORITE_TOOLS = "-6", gettext_lazy("我的收藏")
+
+
+# ==========================================
+# Api 工具配置
+# ==========================================
+
+
+@register_choices("api_auth_method")
+class ApiAuthMethod(TextChoices):
+    """
+    API认证方法
+    """
+
+    BK_APP_AUTH = "bk_app_auth", gettext_lazy("蓝鲸应用认证")
+    NONE = "none", gettext_lazy("无认证")
+
+
+class BkAppAuthConfig(BaseModel):
+    """蓝鲸认证需要的具体字段"""
+
+    bk_app_code: str = PydanticField(..., description="应用ID")
+    bk_app_secret: str = PydanticField(..., description="应用密钥")
+
+
+class BkAuthItem(BaseModel):
+    method: Literal[ApiAuthMethod.BK_APP_AUTH] = ApiAuthMethod.BK_APP_AUTH
+    config: BkAppAuthConfig  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
+
+
+class NoAuthItem(BaseModel):
+    method: Literal[ApiAuthMethod.NONE] = ApiAuthMethod.NONE
+
+
+class ParamField(BaseModel):
+    """
+    参数字段
+    """
+
+    key: str = PydanticField(title=gettext_lazy("参数字段"))
+    value: str = PydanticField(title=gettext_lazy("参数值"))
+    description: str = PydanticField(title=gettext_lazy("参数描述"), default_factory=str)
+
+
+class ApiRequestMethod(TextChoices):
+    """
+    API请求方法
+    """
+
+    GET = "GET", gettext_lazy("GET")
+    POST = "POST", gettext_lazy("POST")
+
+
+class ApiConfig(BaseModel):
+    """
+    API配置 -- 当工具为 API 时使用
+    """
+
+    url: str = PydanticField(title=gettext_lazy("请求地址"))
+    method: ApiRequestMethod = PydanticField(title=gettext_lazy("请求方法"))
+    # 这里定义 auth_config 可以是上面定义的任意一种 Item
+    # discriminator="method" 告诉 Pydantic：
+    # "请先看 method 字段的值，如果是 'bk_app_auth'，就用 BkAuthItem 来校验"
+    auth_config: Annotated[Union[BkAuthItem, NoAuthItem], DictField()] = PydanticField(
+        title=gettext_lazy("认证配置"), discriminator="method"
+    )
+    headers: List[ParamField] = PydanticField(title=gettext_lazy("请求头"))
+
+    @field_validator('headers')
+    @classmethod
+    def validate_unique_headers(cls, v):
+        return validate_unique_keys(v, key_field='key', error_msg=lambda key: gettext("请求头%s重复") % key)
+
+
+@register_choices("api_variable_position")
+class ApiVariablePosition(TextChoices):
+    """
+    API变量位置
+    """
+
+    QUERY = "query", gettext_lazy("查询参数")
+    PATH = "path", gettext_lazy("路径参数")
+    BODY = "body", gettext_lazy("请求体")
+
+
+class ApiInputVariableBase(DataSearchBaseField):
+    """
+    输入变量
+    """
+
+    required: bool = PydanticField(title=gettext_lazy("是否必填"))
+    var_name: str = PydanticField(min_length=1, title=gettext_lazy("请求参数名"))
+    field_category: FieldCategory = PydanticField(title=gettext_lazy("前端类型"))
+    default_value: Annotated[
+        Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
+    ] = PydanticField(None, title=gettext_lazy("字段默认值"))
+    is_show: bool = PydanticField(title=gettext_lazy("用户是否可见"))
+    position: ApiVariablePosition = PydanticField(title=gettext_lazy("变量位置"))
+
+    def to_request_params(self, parsed_value: Any):
+        """
+        将解析后的值转换为请求参数列表
+
+        :param parsed_value: 经过 ApiVariableParser 解析后的值
+        :return: 请求参数条目列表
+        """
+        from services.web.tool.executor.model import ApiRequestParam
+
+        return [
+            ApiRequestParam(
+                name=self.var_name,
+                value=parsed_value,
+                position=self.position,
+            )
+        ]
+
+
+class ApiStandardInputVariable(ApiInputVariableBase):
+    """
+    标准输入变量
+    """
+
+    field_category: Literal[
+        FieldCategory.INPUT,
+        FieldCategory.NUMBER_INPUT,
+        FieldCategory.TIME_SELECT,
+        FieldCategory.PERSON_SELECT,
+    ] = PydanticField(title=gettext_lazy("前端类型"))
+
+
+class ApiSelectInputVariable(ApiInputVariableBase):
+    """
+    选择输入变量
+    """
+
+    field_category: Literal[FieldCategory.MULTISELECT] = FieldCategory.MULTISELECT
+    choices: List[ChoiceItem] = PydanticField(
+        default_factory=list,
+        title=gettext_lazy("字段选项"),
+        description=gettext_lazy("用于不同字段类别下前端展示配置"),
+    )
+
+    @field_validator('choices')
+    @classmethod
+    def validate_choices(cls, v):
+        return validate_unique_keys(v, key_field='key', error_msg=lambda key: gettext("选项值 %s 重复") % key)
+
+
+class TimeRangeSplitConfig(BaseModel):
+    """
+    时间范围分割配置
+    """
+
+    start_field: str = PydanticField(min_length=1, title=gettext_lazy("开始时间参数名"))
+    end_field: str = PydanticField(min_length=1, title=gettext_lazy("结束时间参数名"))
+
+
+class TimeRangeInputVariable(ApiInputVariableBase):
+    """
+    时间范围变量 (特有逻辑)
+    """
+
+    field_category: Literal[FieldCategory.TIME_RANGE_SELECT] = FieldCategory.TIME_RANGE_SELECT
+    var_name: Optional[str] = None
+    # 时间范围分割配置
+    split_config: TimeRangeSplitConfig = PydanticField(title=gettext_lazy("时间范围分割配置"))
+
+    def to_request_params(self, parsed_value: Any):
+        """
+        时间范围变量会拆分为开始时间和结束时间两个参数
+
+        :param parsed_value: 包含 start 和 end 属性的时间范围值
+        :return: 包含开始时间和结束时间的请求参数列表
+        """
+
+        from services.web.tool.executor.model import ApiRequestParam
+
+        return [
+            ApiRequestParam(
+                name=self.split_config.start_field,
+                value=parsed_value.start,
+                position=self.position,
+            ),
+            ApiRequestParam(
+                name=self.split_config.end_field,
+                value=parsed_value.end,
+                position=self.position,
+            ),
+        ]
+
+
+class ApiOutputFieldType(TextChoices):
+    """
+    API输出字段类型
+    """
+
+    KV = "kv", gettext_lazy("键值对")
+    TABLE = "table", gettext_lazy("表格")
+
+
+class KvOutputField(BaseModel):
+    """
+    KV 类型：没有额外的配置
+    """
+
+    field_type: Literal[ApiOutputFieldType.KV] = ApiOutputFieldType.KV
+
+
+class ApiJsonField(TableOutputField):
+    """
+    API JSON 字段
+    """
+
+    json_path: str = PydanticField(
+        title=gettext_lazy("字段路径"),
+        description=gettext_lazy("完整的 JSON 路径，例如：'data.items.status'，用于唯一标识字段位置"),
+    )
+
+
+class ApiTableOutputField(ApiJsonField):
+    """API 表格内部列定义"""
+
+    pass
+
+
+class TableFieldTypeConfig(BaseModel):
+    """
+    表格字段类型配置
+    """
+
+    field_type: Literal[ApiOutputFieldType.TABLE] = ApiOutputFieldType.TABLE
+    output_fields: List[ApiTableOutputField] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
+
+
+class ApiOutputField(ApiJsonField):
+    """
+    API输出字段
+    """
+
+    field_config: Annotated[Union[TableFieldTypeConfig, KvOutputField], DictField()] = PydanticField(
+        title=gettext_lazy("字段配置"), discriminator="field_type"
+    )
+    drill_config: Optional[List[DrillConfig]] = PydanticField(None, title=gettext_lazy("下钻配置"))
+    enum_mappings: Optional[EnumMappingConfig] = PydanticField(None, title=gettext_lazy("字段值映射配置"))
+
+
+class ApiOutputGroup(BaseModel):
+    """
+    API输出分组
+    """
+
+    name: str = PydanticField(title=gettext_lazy("分组名"))
+    output_fields: List[ApiOutputField] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
+
+
+class ApiOutputConfiguration(BaseModel):
+    """
+    API 输出整体配置
+    """
+
+    # 1. 分组开关
+    enable_grouping: bool = PydanticField(
+        title=gettext_lazy("开启输出分组"), description=gettext_lazy("关闭时前端将忽略分组名，直接展示所有字段")
+    )
+
+    # 2. 统一的数据结构
+    groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
+    result_schema: Annotated[Dict[str, Any], JSONField(allow_null=True),] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("调试输出Schema"),
+        description=gettext_lazy("前端调试解析出的响应结构，后端不做处理"),
+    )
+
+    @field_validator('groups')
+    @classmethod
+    def validate_unique_groups(cls, v):
+        return validate_unique_keys(v, key_field='name', error_msg=lambda key: gettext("分组名 %s 重复") % key)
+
+
+# API 输入变量
+ApiInputVariableUnion = Annotated[
+    Union[TimeRangeInputVariable, ApiStandardInputVariable, ApiSelectInputVariable],
+    PydanticField(discriminator="field_category"),
+]
+
+
+class ApiToolConfig(BaseModel):
+    """
+    API工具配置
+    """
+
+    api_config: ApiConfig
+    input_variable: Annotated[List[ApiInputVariableUnion], ListField(child=DictField())] = PydanticField(
+        default_factory=list, title=gettext_lazy("输入变量")
+    )
+    output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
+
+    @field_validator("input_variable")
+    @classmethod
+    def validate_unique_raw_names(cls, variables):
+        return validate_unique_keys(
+            variables,
+            key_field="raw_name",
+            error_msg=lambda key: gettext("输入变量 raw_name %s 重复") % key,
+        )

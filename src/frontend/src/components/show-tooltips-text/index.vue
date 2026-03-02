@@ -17,12 +17,16 @@
 <template>
   <div
     ref="rootRef"
-    class="show-tooltips-text">
+    class="show-tooltips-text"
+    :style="{
+      '-webkit-line-clamp': line,
+      'line-clamp': line,
+    }">
     <span>
       {{ data || '--' }}
     </span>
     <div
-      :id="`${data}`"
+      ref="templateRef"
       style="display: none;max-height: 90vh;overflow: auto;">
       <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
         {{ data }}
@@ -39,6 +43,7 @@
   import {
     nextTick,
     onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -61,16 +66,18 @@
   });
 
   const rootRef = ref();
+  const templateRef = ref<HTMLElement | null>(null);
 
   let tippyIns: Instance;
+  let resizeObserver: ResizeObserver | null = null;
 
-  watch(() => props.data, (data) => {
+  const initTippy = () => {
     nextTick(() => {
       if (tippyIns) {
         tippyIns.hide();
         tippyIns.destroy();
       }
-      const template = document.getElementById(`${data}`);
+      const template = templateRef.value;
       if (handleIsShowTippy() && template && props.isShow) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
           content: template.innerHTML,
@@ -87,9 +94,21 @@
         });
       }
     });
+  };
+
+  watch(() => props.data, () => {
+    initTippy();
   }, {
     deep: true,
     immediate: true,
+  });
+  onMounted(() => {
+    if (rootRef.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        initTippy();
+      });
+      resizeObserver.observe(rootRef.value);
+    }
   });
   // 当文本溢出省略号则hover显示全部内容
   const handleIsShowTippy = () => {
@@ -102,6 +121,10 @@
     return false;
   };
   onBeforeUnmount(() => {
+    if (resizeObserver && rootRef.value) {
+      resizeObserver.unobserve(rootRef.value);
+      resizeObserver.disconnect();
+    }
     if (tippyIns) {
       tippyIns.hide();
       tippyIns.unmount();
@@ -115,7 +138,6 @@
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: v-bind(line);
   }
 
   .text-content {

@@ -18,16 +18,17 @@ from services.web.tool.exceptions import (
     InvalidVariableFormatError,
     InvalidVariableStructureError,
     ParseVariableError,
+    ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import (
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
 )
+from services.web.tool.executor.parser import ApiVariableParser, SqlVariableParser
 from services.web.tool.executor.tool import (
     BkVisionExecutor,
     SqlDataSearchExecutor,
     ToolExecutorFactory,
-    VariableValueParser,
 )
 from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, Tool
 from services.web.vision.models import VisionPanel
@@ -218,7 +219,7 @@ class TestSqlDataSearchExecutor(TestCase):
             executor.execute(params)
         self.assertIn("结构无效", str(cm.exception))
 
-    @mock.patch.object(VariableValueParser, "_format_input", side_effect=RuntimeError("mock error"))
+    @mock.patch.object(SqlVariableParser, "_format_input", side_effect=RuntimeError("mock error"))
     def test_variable_parse_fallback_error(self, _):
         """测试变量解析兜底异常 ParseVariableError"""
         config = SQLDataSearchConfig(
@@ -480,7 +481,7 @@ class TestToolExecutorFactory(TestCase):
         # SQL 工具（去掉 *）
         self.sql_tool = Tool.objects.create(
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
-            name="vision_tool",
+            name="sql_tool",
             version=1,
             config=SQLDataSearchConfig(
                 sql="SELECT a FROM table",
@@ -524,5 +525,277 @@ class TestToolExecutorFactory(TestCase):
         invalid_tool = Tool.objects.create(tool_type="invalid_type", name="invalid_tool", version=1, namespace="test")
 
         factory = ToolExecutorFactory(self.analyzer_cls)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ToolTypeNotSupport):
             factory.create_from_tool(invalid_tool)
+
+
+class TestVariableParserPersonSelect(TestCase):
+    """测试 person_select 类型变量的解析"""
+
+    def setUp(self):
+        """设置测试环境和mock对象"""
+        self.analyzer_cls = SqlQueryAnalysis
+
+        # Mock BKBase 查询接口
+        self.mock_bkbase_api = mock.patch.object(
+            QuerySyncResource,
+            "bulk_request",
+            return_value=[{"list": [{"field1": "value1"}, {"field2": "value2"}]}, {"list": [{"count": 2}]}],
+        )
+        self.mock_bkbase_api = self.mock_bkbase_api.start()
+
+        # Mock 权限校验
+        self.patcher_auth = mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
+        )
+        self.mock_auth_api = self.patcher_auth.start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+
+    def test_sql_parser_person_select_with_list(self):
+        """测试 SQL 解析器 person_select 类型变量输入为列表"""
+        config = SQLDataSearchConfig(
+            sql="SELECT a FROM table WHERE a IN :a",
+            referenced_tables=[{"table_name": "table"}],
+            input_variable=[
+                SQLDataSearchInputVariable(
+                    raw_name="a",
+                    display_name="变量A",
+                    required=True,
+                    field_category=FieldCategory.PERSON_SELECT,
+                    choices=[],
+                )
+            ],
+            output_fields=[],
+        )
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
+        params = DataSearchToolExecuteParams(
+            tool_variables=[{"raw_name": "a", "value": ["user1", "user2"]}],
+            page=1,
+            page_size=10,
+        )
+        result = executor.execute(params).model_dump()
+        in_str = "('user1', 'user2')"
+        expected = {
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a IN {in_str}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a IN {in_str} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
+        }
+        self.assertDictEqual(expected, result)
+
+    def test_sql_parser_person_select_with_string(self):
+        """测试 SQL 解析器 person_select 类型变量输入为字符串（逗号分隔）"""
+        config = SQLDataSearchConfig(
+            sql="SELECT a FROM table WHERE a IN :a",
+            referenced_tables=[{"table_name": "table"}],
+            input_variable=[
+                SQLDataSearchInputVariable(
+                    raw_name="a",
+                    display_name="变量A",
+                    required=True,
+                    field_category=FieldCategory.PERSON_SELECT,
+                    choices=[],
+                )
+            ],
+            output_fields=[],
+        )
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
+        params = DataSearchToolExecuteParams(
+            tool_variables=[{"raw_name": "a", "value": "user1,user2,user3"}],
+            page=1,
+            page_size=10,
+        )
+        result = executor.execute(params).model_dump()
+        in_str = "('user1', 'user2', 'user3')"
+        expected = {
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a IN {in_str}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a IN {in_str} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
+        }
+        self.assertDictEqual(expected, result)
+
+    def test_sql_parser_person_select_with_string_spaces(self):
+        """测试 SQL 解析器 person_select 类型变量输入为字符串（带空格的逗号分隔）"""
+        config = SQLDataSearchConfig(
+            sql="SELECT a FROM table WHERE a IN :a",
+            referenced_tables=[{"table_name": "table"}],
+            input_variable=[
+                SQLDataSearchInputVariable(
+                    raw_name="a",
+                    display_name="变量A",
+                    required=True,
+                    field_category=FieldCategory.PERSON_SELECT,
+                    choices=[],
+                )
+            ],
+            output_fields=[],
+        )
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
+        params = DataSearchToolExecuteParams(
+            tool_variables=[{"raw_name": "a", "value": "user1 , user2 , user3"}],
+            page=1,
+            page_size=10,
+        )
+        result = executor.execute(params).model_dump()
+        in_str = "('user1', 'user2', 'user3')"
+        expected = {
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a IN {in_str}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a IN {in_str} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
+        }
+        self.assertDictEqual(expected, result)
+
+    def test_sql_parser_person_select_single_value(self):
+        """测试 SQL 解析器 person_select 类型变量输入为单个非列表值"""
+        config = SQLDataSearchConfig(
+            sql="SELECT a FROM table WHERE a IN :a",
+            referenced_tables=[{"table_name": "table"}],
+            input_variable=[
+                SQLDataSearchInputVariable(
+                    raw_name="a",
+                    display_name="变量A",
+                    required=True,
+                    field_category=FieldCategory.PERSON_SELECT,
+                    choices=[],
+                )
+            ],
+            output_fields=[],
+        )
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
+        params = DataSearchToolExecuteParams(
+            tool_variables=[{"raw_name": "a", "value": "single_user"}],
+            page=1,
+            page_size=10,
+        )
+        result = executor.execute(params).model_dump()
+        in_str = "('single_user')"
+        expected = {
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a IN {in_str}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a IN {in_str} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
+        }
+        self.assertDictEqual(expected, result)
+
+
+class TestApiVariableParserPersonSelect(TestCase):
+    """测试 API 工具 person_select 类型变量的解析"""
+
+    def test_api_parser_person_select_with_list(self):
+        """测试 API 解析器 person_select 类型变量输入为列表时返回逗号分隔字符串"""
+        from services.web.tool.constants import (
+            ApiStandardInputVariable,
+            ApiVariablePosition,
+        )
+
+        variable = ApiStandardInputVariable(
+            raw_name="users",
+            display_name="用户",
+            description="选择用户",
+            var_name="users",
+            required=True,
+            field_category=FieldCategory.PERSON_SELECT,
+            is_show=True,
+            position=ApiVariablePosition.QUERY,
+        )
+        parser = ApiVariableParser(variable)
+        result = parser.parse(["user1", "user2", "user3"])
+        self.assertEqual(result, "user1,user2,user3")
+
+    def test_api_parser_person_select_with_string(self):
+        """测试 API 解析器 person_select 类型变量输入为字符串（逗号分隔）"""
+        from services.web.tool.constants import (
+            ApiStandardInputVariable,
+            ApiVariablePosition,
+        )
+
+        variable = ApiStandardInputVariable(
+            raw_name="users",
+            display_name="用户",
+            description="选择用户",
+            var_name="users",
+            required=True,
+            field_category=FieldCategory.PERSON_SELECT,
+            is_show=True,
+            position=ApiVariablePosition.QUERY,
+        )
+        parser = ApiVariableParser(variable)
+        result = parser.parse("user1,user2,user3")
+        self.assertEqual(result, "user1,user2,user3")
+
+    def test_api_parser_person_select_with_string_spaces(self):
+        """测试 API 解析器 person_select 类型变量输入为字符串（带空格的逗号分隔）"""
+        from services.web.tool.constants import (
+            ApiStandardInputVariable,
+            ApiVariablePosition,
+        )
+
+        variable = ApiStandardInputVariable(
+            raw_name="users",
+            display_name="用户",
+            description="选择用户",
+            var_name="users",
+            required=True,
+            field_category=FieldCategory.PERSON_SELECT,
+            is_show=True,
+            position=ApiVariablePosition.QUERY,
+        )
+        parser = ApiVariableParser(variable)
+        result = parser.parse("user1 , user2 , user3")
+        self.assertEqual(result, "user1,user2,user3")
+
+    def test_api_parser_person_select_single_value(self):
+        """测试 API 解析器 person_select 类型变量输入为单个非列表/非字符串值"""
+        from services.web.tool.constants import (
+            ApiStandardInputVariable,
+            ApiVariablePosition,
+        )
+
+        variable = ApiStandardInputVariable(
+            raw_name="users",
+            display_name="用户",
+            description="选择用户",
+            var_name="users",
+            required=True,
+            field_category=FieldCategory.PERSON_SELECT,
+            is_show=True,
+            position=ApiVariablePosition.QUERY,
+        )
+        parser = ApiVariableParser(variable)
+        result = parser.parse(12345)
+        self.assertEqual(result, "12345")
+
+    def test_api_parser_person_select_single_string_no_comma(self):
+        """测试 API 解析器 person_select 类型变量输入为单个用户字符串（无逗号）"""
+        from services.web.tool.constants import (
+            ApiStandardInputVariable,
+            ApiVariablePosition,
+        )
+
+        variable = ApiStandardInputVariable(
+            raw_name="users",
+            display_name="用户",
+            description="选择用户",
+            var_name="users",
+            required=True,
+            field_category=FieldCategory.PERSON_SELECT,
+            is_show=True,
+            position=ApiVariablePosition.QUERY,
+        )
+        parser = ApiVariableParser(variable)
+        result = parser.parse("single_user")
+        self.assertEqual(result, "single_user")

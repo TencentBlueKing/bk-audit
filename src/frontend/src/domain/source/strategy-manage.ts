@@ -50,6 +50,14 @@ class Strategy extends ModuleBase {
       payload,
     });
   }
+  // 获取策略详情
+  getStrategyInfo(params: {
+    strategy_id : number
+  }) {
+    return Request.get(`${this.path}/strategy/${params.strategy_id}/`, {
+      params,
+    });
+  }
   // 新建策略
   saveStrategy(params: Record<string, any>) {
     return Request.post(`${this.path}/strategy/`, {
@@ -319,6 +327,23 @@ class Strategy extends ModuleBase {
       params,
     });
   }
-}
 
+  // 获取风险简要列表
+  getRisksBrief(params: {
+    page: number,
+    page_size: number,
+    strategy_id: string
+    end_time: string,
+    start_time: string,
+  }) {
+    return Request.get(`${this.module}risks/brief/`, {
+      params,
+    });
+  }
+
+  // 获取聚合函数列表
+  getAggregationFunctions() {
+    return Request.get(`${this.path}/report/aggregation_functions/`);
+  }
+}
 export default new Strategy();

@@ -47,6 +47,8 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.sql_analyse, endpoint="sql_analyse"),
         ResourceRoute("POST", resource.tool.sql_analyse_with_tool, endpoint="sql_analyse_with_tool", pk_field="uid"),
         ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
+        ResourceRoute("POST", resource.tool.tool_execute_debug, endpoint="tool_execute_debug"),
+        ResourceRoute("PUT", resource.tool.favorite_tool, pk_field="uid", endpoint="favorite"),
     ]
 
 
@@ -63,4 +65,5 @@ class ToolAPIGWViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
+        ResourceRoute("GET", resource.tool.get_tool_detail_by_name_apigw, endpoint="detail_by_name"),
     ]

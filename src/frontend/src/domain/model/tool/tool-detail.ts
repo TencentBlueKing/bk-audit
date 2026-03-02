@@ -14,6 +14,31 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+
+export interface OutputFields {
+  raw_name: string;
+  display_name: string;
+  description: string;
+  drill_config: Array<{
+    tool: {
+      uid: string;
+      version: number;
+    };
+    drill_name: string;
+    config: Array<{
+      source_field: string;
+      target_value_type: string;
+      target_value: string;
+    }>
+  }>;
+  enum_mappings: {
+    collection_id: string;
+    mappings: Array<{
+      key: string;
+      name: string;
+    }>;
+  };
+}
 export default class ToolDetail {
   uid: string;
   name: string;
@@ -59,31 +84,26 @@ export default class ToolDetail {
         key: string,
         name: string
       }>
-    }>
-    output_fields: Array<{
-      raw_name: string;
-      display_name: string;
-      description: string;
-      drill_config: Array<{
-        tool: {
-          uid: string;
-          version: number;
+    }>;
+    // SQL 类工具
+    output_fields?: Array<OutputFields>;
+    // API 类工具
+    output_config?: {
+      enable_grouping: boolean;
+      groups: Array<{
+        name: string;
+        output_fields: {
+          raw_name: string;
+          display_name: string;
+          description: string;
+          json_path: string;
+          field_config: Array<{
+            field_type: string;
+            output_fields ?: Array<OutputFields>; // 表格类型才有
+          }>;
         };
-        drill_name: string;
-        config: Array<{
-          source_field: string;
-          target_value_type: string;
-          target_value: string;
-        }>
       }>;
-      enum_mappings: {
-        collection_id: string;
-        mappings: Array<{
-          key: string;
-          name: string;
-        }>;
-      };
-    }>
+    };
     sql: string;
     uid: string;
     updated_at: string;

@@ -56,3 +56,4 @@ bkcodeai.json
 *.cursor
 *.specify
 AGENTS.md
+.claude

@@ -43,25 +43,26 @@ export default {
       },
     },
     {
-      path: 'collector-create/:systemId',
-      component: () => import('@views/system-manage/collector-create/index.vue'),
-      name: 'collectorCreate',
+      path: 'log-create/:systemId',
+      component: () => import('@/views/system-manage/log-create/index.vue'),
+      name: 'logCreate',
       meta: {
-        title: '新建采集',
+        title: '新建日志上报',
+        isShowTitleTip: true,
       },
     },
     {
-      path: 'collector-edit/:systemId/:collectorConfigId',
-      component: () => import('@views/system-manage/collector-create/index.vue'),
-      name: 'collectorEdit',
+      path: 'log-edit/dataid/:systemId/:bkDataId',
+      component: () => import('@views/system-manage/log-create/index.vue'),
+      name: 'logDataIdEdit',
       meta: {
         title: '编辑采集',
       },
     },
     {
-      path: 'dataid-edit/:systemId/:bkDataId',
-      component: () => import('@views/system-manage/collector-create/index.vue'),
-      name: 'dataIdEdit',
+      path: 'log-edit/collector/:systemId/:collectorConfigId',
+      component: () => import('@views/system-manage/log-create/index.vue'),
+      name: 'logCollectorEdit',
       meta: {
         title: '编辑采集',
       },

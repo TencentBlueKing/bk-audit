@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from pymysql.converters import escape_string
+from unittest.mock import patch
+
+from django.test import SimpleTestCase
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -23,7 +25,9 @@ from pypika.terms import ValueWrapper
 
 from core.sql.builder.functions import Concat, GroupConcat, JsonContains
 from core.sql.builder.generator import SQLGenerator
+from core.sql.builder.terms import DorisVariantField
 from core.sql.constants import (
+    DORIS_FIELD_KEY_QUOTE,
     AggregateType,
     FieldType,
     FilterConnector,
@@ -43,16 +47,11 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from tests.base import TestCase
-
-from core.sql.builder.terms import DorisVariantField
-from core.sql.constants import DORIS_FIELD_KEY_QUOTE
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
-from unittest.mock import patch
 
 
-class TestSQLGenerator(TestCase):
+class TestSQLGenerator(SimpleTestCase):
     def setUp(self):
         self.query_builder = QueryBuilder()
 
@@ -203,6 +202,77 @@ class TestSQLGenerator(TestCase):
             'AND CAST(GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\') AS STRING)=\'Dublin\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+    def test_where_with_empty_conditions(self):
+        """测试包含空条件的 WHERE 子句处理"""
+        # 1. 正常条件
+        valid_condition_1 = WhereCondition(
+            condition=Condition(
+                field=Field(table="users", raw_name="age", display_name="user_age", field_type=FieldType.INT),
+                operator=Operator.EQ,
+                filter=18,
+            )
+        )
+
+        # 2. 空条件 (没有 condition 也没有 conditions)
+        empty_condition = WhereCondition(conditions=[], condition=None)
+
+        # 3. 组合: valid AND empty -> 应该只剩下 valid
+        config = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    valid_condition_1,
+                    empty_condition,
+                ],
+            ),
+        )
+
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_query = 'SELECT "users"."id" "user_id" FROM "users" "users" WHERE "users"."age"=18'
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+        # 4. 组合: valid OR empty -> 应该只剩下 valid
+        config_or = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.OR,
+                conditions=[
+                    valid_condition_1,
+                    empty_condition,
+                ],
+            ),
+        )
+        query_or = generator.generate(config_or)
+        self.assertEqual(str(query_or), expected_query, f"Expected: {expected_query}, but got: {query_or}")
+
+        # 5. 全是空条件 -> 不应该有 WHERE 子句
+        config_empty = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    empty_condition,
+                    empty_condition,
+                ],
+            ),
+        )
+        query_empty = generator.generate(config_empty)
+        expected_query_no_where = 'SELECT "users"."id" "user_id" FROM "users" "users"'
+        self.assertEqual(
+            str(query_empty), expected_query_no_where, f"Expected: {expected_query_no_where}, but got: {query_empty}"
+        )
 
     def test_invalid_field_source(self):
         """测试无效字段来源的捕获"""
@@ -1059,7 +1129,7 @@ class TestSQLGenerator(TestCase):
         self.assertEqual(str(query), expected_sql, msg=f"\nExpected:\n{expected_sql}\nGot:\n{str(query)}")
 
 
-class TestSQLFunctions(TestCase):
+class TestSQLFunctions(SimpleTestCase):
     """核心函数输出验证"""
 
     def test_json_contains_function(self):
@@ -1077,9 +1147,9 @@ class TestSQLFunctions(TestCase):
         self.assertEqual(str(expr), "CONCAT('a','b')")
 
 
-class TestDorisVariantFieldSanitize(TestCase):
+class TestDorisVariantFieldSanitize(SimpleTestCase):
     def test_sanitize_variant_key_type_and_empty(self):
-        """ _sanitize_variant_key 对类型和空字符串做校验 """
+        """_sanitize_variant_key 对类型和空字符串做校验"""
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
         # 非字符串 -> TypeError
         with self.assertRaises(TypeError):
@@ -1089,7 +1159,7 @@ class TestDorisVariantFieldSanitize(TestCase):
             field._sanitize_variant_key("")
 
     def test_sanitize_variant_key_escape_injection_payload(self):
-        """ 恶意 payload 作为 Variant keys 参与 Doris 查询条件时，会被 escape_string 转义，避免拼出可执行 SQL 片段"""
+        """恶意 payload 作为 Variant keys 参与 Doris 查询条件时，会被 escape_string 转义，避免拼出可执行 SQL 片段"""
         payload = "foo'\''] !=0 or 1=1; --"
         builder = DorisQuerySQLBuilder(
             table="test_table",
@@ -1120,9 +1190,7 @@ class TestDorisVariantFieldSanitize(TestCase):
                 name="snapshot_resource_type_info",
             )
             expected_bytes = field_bytes._sanitize_variant_key(payload)
-            expected_fragment_bytes = (
-                f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
-            )
+            expected_fragment_bytes = f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
             builder_bytes = DorisQuerySQLBuilder(
                 table="test_table",
                 conditions=[
@@ -1147,7 +1215,7 @@ class TestDorisVariantFieldSanitize(TestCase):
             )
 
     def test_format_keys_quote_normal_keys(self):
-        """ 正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE） """
+        """正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE）"""
         field = DorisVariantField(
             keys=["k1", "k2"],
             name="snapshot_resource_type_info",
@@ -1163,7 +1231,7 @@ class TestDorisVariantFieldSanitize(TestCase):
 
     @patch("core.sql.builder.terms.escape_string")
     def test_sanitize_variant_key_escape_return_bytes(self, mock_escape_string):
-        """ 当 escape_string 返回 bytes 时，_sanitize_variant_key 能正确 decode 成 str """
+        """当 escape_string 返回 bytes 时，_sanitize_variant_key 能正确 decode 成 str"""
         mock_escape_string.return_value = b"escaped_payload"
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
         result = field._sanitize_variant_key("foo")
@@ -1172,12 +1240,13 @@ class TestDorisVariantFieldSanitize(TestCase):
         # 确认最终返回的是 str，而不是 bytes
         self.assertIsInstance(result, str)
         self.assertEqual(result, "escaped_payload")
+
     def test_variant_like_with_injection_payload(self):
         """
         恶意 payload 作为 LIKE 条件参与 Variant 查询时：
         - 字段访问仍然是 snapshot_resource_type_info['id'] 这种受控形式
         """
-        payload =r"foo'\''] !=0 or 1=1; --"
+        payload = r"foo'\''] !=0 or 1=1; --"
 
         builder = DorisQuerySQLBuilder(
             table="test_table",
@@ -1207,7 +1276,5 @@ class TestDorisVariantFieldSanitize(TestCase):
         self.assertIn(
             expected_sub,
             sql,
-            msg=f"\n原始 payload:\n{payload}\n"
-                f"期望转义后片段:\n{expected_sub}\n"
-                f"实际 SQL:\n{sql}",
+            msg=f"\n原始 payload:\n{payload}\n" f"期望转义后片段:\n{expected_sub}\n" f"实际 SQL:\n{sql}",
         )

@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
@@ -57,10 +58,13 @@ class TestToolFullFlow(TestCase):
         uid = resp["uid"]
         self.assertTrue(Tool.objects.filter(uid=uid).exists())
 
-        with mock.patch.object(QuerySyncResource, 'bulk_request', return_value=MOCK_API_RESPONSE), mock.patch.object(
-            UserAuthBatchCheck,
-            'perform_request',
-            return_value=[{"result": True, "user_id": "tester", "object_id": "users"}],
+        with (
+            mock.patch.object(QuerySyncResource, 'bulk_request', return_value=MOCK_API_RESPONSE),
+            mock.patch.object(
+                UserAuthBatchCheck,
+                'perform_request',
+                return_value=[{"result": True, "user_id": "tester", "object_id": "users"}],
+            ),
         ):
             result = self.resource.tool.execute_tool(
                 {
@@ -124,6 +128,116 @@ class TestToolFullFlow(TestCase):
         self.assertTrue(VisionPanel.objects.filter(vision_id=vision_uid, id=panel_id).exists())
         self.assertTrue(BkVisionToolConfig.objects.filter(tool__uid=uid, panel_id=panel_id).exists())
         self.assertEqual(result["tool_type"], ToolTypeEnum.BK_VISION.value)
+
+        # 删除工具
+        self.resource.tool.delete_tool({"uid": uid})
+        self.assertFalse(Tool.objects.filter(uid=uid, is_deleted=False).exists())
+
+    def test_api_tool_full_flow(self):
+        """测试 API 工具的全流程（创建、执行、删除）"""
+        # 创建工具，使用丰富的 input_variable 示例
+        self.api_config_data = {
+            "api_config": {
+                "url": "https://example.com/api/test",
+                "method": "GET",
+                "auth_config": {
+                    "method": "bk_app_auth",
+                    "config": {
+                        "bk_app_code": os.getenv("BKPAAS_APP_ID"),
+                        "bk_app_secret": os.getenv("BKPAAS_APP_SECRET"),
+                    },
+                },
+                "headers": [{"key": "Content-Type", "value": "application/json"}],
+            },
+            "input_variable": [
+                {
+                    "raw_name": "pageIndex",
+                    "var_name": "pageIndex",
+                    "display_name": "页码",
+                    "description": "页码",
+                    "field_category": "input",
+                    "required": True,
+                    "default_value": "",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "pageSize",
+                    "var_name": "pageSize",
+                    "display_name": "条目数",
+                    "description": "条目数",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "_appid",
+                    "var_name": "_appid",
+                    "display_name": "文章类别",
+                    "description": "登录名",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "koubei",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "date",
+                    "var_name": "date",
+                    "display_name": "文档时间",
+                    "description": "文档时间",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "20180129",
+                    "is_show": True,
+                    "position": "query",
+                },
+            ],
+            "output_config": {"enable_grouping": False, "groups": []},
+        }
+        api_tool_uid = "api_tool_full_123"
+        resp = self.resource.tool.create_tool(
+            {
+                "uid": api_tool_uid,
+                "version": 1,
+                "name": "api_tool_full",
+                "namespace": "default",
+                "tool_type": ToolTypeEnum.API.value,
+                "config": self.api_config_data,
+                "description": "api tool full description",
+            }
+        )
+        uid = resp["uid"]
+        self.assertTrue(Tool.objects.filter(uid=uid).exists())
+
+        # 执行工具 (mock HTTP 请求，避免真实网络调用)
+        mock_response = mock.MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": True, "data": {"pageIndex": 2, "pageSize": 30}}
+
+        with mock.patch("requests.request", return_value=mock_response):
+            result = self.resource.tool.execute_tool(
+                {
+                    "uid": uid,
+                    "params": {
+                        "tool_variables": [
+                            {
+                                "raw_name": "pageIndex",
+                                "value": "2",
+                                "position": "query",
+                            },
+                            {
+                                "raw_name": "pageSize",
+                                "value": "30",
+                                "position": "query",
+                            },
+                        ]
+                    },
+                }
+            )
+        self.assertEqual(result["tool_type"], ToolTypeEnum.API.value)
 
         # 删除工具
         self.resource.tool.delete_tool({"uid": uid})

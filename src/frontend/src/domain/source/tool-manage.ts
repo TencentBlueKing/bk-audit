@@ -91,11 +91,30 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
   }
+  // 工具调试
+  getToolsDebug(params: {
+    tool_type: string,
+    config: Record<string, any>,
+    params: Record<string, any>,
+  }) {
+    return Request.post(`${this.path}/tool/tool_execute_debug/`, { params });
+  }
   // 工具删除
   deleteTool(params: {
     uid: string,
   }) {
     return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
+  }
+  // 收藏/取消收藏工具
+  toggleFavorite(params: {
+    uid: string,
+    favorite: boolean,
+  }) {
+    return Request.put(`${this.path}/tool/${params.uid}/favorite/`, {
+      params: {
+        favorite: params.favorite,
+      },
+    });
   }
   // 获取图表列表
   getChartLists() {

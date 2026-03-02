@@ -100,6 +100,7 @@ USER_INFO_DATA_CONFIG_KEY = "bkaudit_user_info_config_data"
 USER_INFO_DATA_NAME_FORMAT = "bkaudit_user_info_data_{}"
 
 API_PUSH_COLLECTOR_NAME_FORMAT = "{system_id}_{id}_{date}"
+API_PUSH_COLLECTOR_NAME_CH = "API Push任务"
 API_PUSH_ETL_RETRY_TIMES = 3
 API_PUSH_ETL_RETRY_WAIT_TIME = 3
 
@@ -167,6 +168,17 @@ class TargetNodeTypeChoices(TextChoices):
     SET_TEMPLATE = "SET_TEMPLATE", gettext_lazy("集群模版")
     TOPO = "TOPO", gettext_lazy("动态拓扑")
     INSTANCE = "INSTANCE", gettext_lazy("静态拓扑")
+
+
+class RecordLogTypeChoices(TextChoices):
+    SDK = "SDK", gettext_lazy("SDK接入")
+    LOG = "LOG", gettext_lazy("LOG接入")
+
+
+class SelectSdkTypeChoices(TextChoices):
+    PYTHON_SDK = "PYTHON_SDK", gettext_lazy("Python SDK")
+    JAVA_SDK = "JAVA_SDK", gettext_lazy("Java SDK")
+    GO_SDK = "GO_SDK", gettext_lazy("Go SDK")
 
 
 LogReportStatus = _LogReportStatus

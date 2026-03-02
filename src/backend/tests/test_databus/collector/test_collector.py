@@ -41,6 +41,8 @@ from tests.test_databus.collector.constants import (
     COLLECTOR_STATUS_RESULT,
     COLLECTOR_STATUS_RESULT_NODATA,
     COLLECTOR_STATUS_RESULT_NORMAL,
+    CREATE_API_PUSH_DATA,
+    CREATE_API_PUSH_RESP,
     CREATE_BCS_COLLECTOR_API_RESP,
     CREATE_BCS_COLLECTOR_DATA,
     CREATE_BCS_COLLECTOR_RESULT,
@@ -53,6 +55,8 @@ from tests.test_databus.collector.constants import (
     ETL_FIELD_HISTORY_RESULT,
     ETL_PREVIEW_DATA,
     ETL_PREVIEW_RESULT,
+    GET_API_PUSH_DATA,
+    GET_API_PUSH_RESP,
     GET_BCS_YAML_TEMPLATE_RESULT,
     GET_COLLECTOR_INFO_DATA,
     GET_COLLECTOR_RESULT_DATA,
@@ -91,6 +95,8 @@ class CollectorTest(TestCase):
             provider_config={"host": SYSTEM_HOST, "token": SYSTEM_TOKEN},
             callback_url=SYSTEM_HOST,
             auth_token=SYSTEM_TOKEN,
+            created_by="admin",
+            updated_by="admin",
         )
         ResourceType.objects.create(
             system_id=self.system_id,
@@ -332,3 +338,73 @@ class CollectorTest(TestCase):
         s.save()
         with self.assertRaises(SecurityForbiddenError):
             self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": True})
+
+    def __create_api_push(self):
+        create_result = self.resource.databus.collector.create_api_push(**CREATE_API_PUSH_DATA)
+        return create_result
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value=CREATE_API_PUSH_RESP),
+    )
+    def test_create_api_push(self):
+        """CreateAPIPushResource"""
+        result = self.__create_api_push()
+        self.assertIsNotNone(result.get("collector_config_id"))
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.get_report_token",
+        mock.Mock(return_value=GET_API_PUSH_RESP),
+    )
+    def test_get_api_push(self):
+        """GetAPIPushResource"""
+        self.test_create_api_push()
+
+        search_result = self.resource.databus.collector.get_api_push(**GET_API_PUSH_DATA)
+        self.assertEqual(search_result.get("token"), GET_API_PUSH_RESP.get("bk_data_token"))
+        self.assertEqual(
+            list(search_result.keys()),
+            ['token', 'collector_config_id', 'bk_data_id', 'collector_config_name', 'collector_config_name_en'],
+        )
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value=CREATE_API_PUSH_RESP),
+    )
+    def test_create_api_push_idempotent(self):
+        """
+        CreateAPIPushResource 幂等性测试
+        测试重复创建API Push时的行为，应该返回已存在的配置而不是创建新的
+        """
+        # 第一次创建
+        result1 = self.__create_api_push()
+        collector_config_id = result1.get("collector_config_id")
+        self.assertIsNotNone(collector_config_id)
+
+        # 第二次创建（相同参数），应该返回已存在的配置
+        result2 = self.__create_api_push()
+        self.assertEqual(result2.get("collector_config_id"), collector_config_id)
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value={"bk_data_id": None, "collector_config_id": COLLECTOR_ID + 2}),
+    )
+    def test_create_api_push_with_custom_name(self):
+        """
+        CreateAPIPushResource 自定义名称测试
+        测试使用 custom_collector_config_name 参数创建API Push
+        """
+        from django.conf import settings
+
+        custom_name = "自定义采集器名称"
+        request_data = {
+            "namespace": settings.DEFAULT_NAMESPACE,
+            "system_id": COLLECTOR_DATA.get("system_id"),
+            "custom_collector_config_name": custom_name,
+        }
+        result = self.resource.databus.collector.create_api_push(**request_data)
+        self.assertIsNotNone(result.get("collector_config_id"))
+
+        # 验证自定义名称已被保存到英文名字段
+        collector = CollectorConfig.objects.get(collector_config_id=result.get("collector_config_id"))
+        self.assertEqual(collector.collector_config_name_en, custom_name)

@@ -26,9 +26,10 @@
         v-bind="$attrs"
         :columns="columns"
         :data="listData.results"
+        :height="tableHeight"
         :max-height="tableMaxHeight"
+        :min-height="300"
         :pagination="pagination"
-        :pagination-heihgt="60"
         remote-pagination
         :settings="settings"
         @column-sort="handleColumnSortChange"
@@ -170,7 +171,7 @@
     layout: ['total', 'limit', 'list'],
   });
   const tableMaxHeight = ref(0);
-
+  const tableHeight = ref<string | number>('auto');
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
 
@@ -218,7 +219,9 @@
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
-          run(params);
+          run(params).finally(() => {
+            isLoading.value = false;
+          });
           replaceSearchParams(params);
         }
       });
@@ -296,14 +299,21 @@
     calcTableHeight();
   });
 
+  const handleResize = _.debounce(() => {
+    calcTableHeight();
+  }, 120);
+
   // 监听通知中心状态，重新计算表格高度
   on('show-notice', () => {
     calcTableHeight();
   });
 
+  window.addEventListener('resize', handleResize);
+
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
     off('show-notice');
+    window.removeEventListener('resize', handleResize);
   });
 
   // 计算表格尺寸信息
@@ -330,24 +340,43 @@
   const initTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
+      const nextHeight = dimensions.tableHeaderHeight
+        + dimensions.rowNum * dimensions.tableRowHeight
+        + dimensions.paginationHeight
+        + 8;
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+      tableHeight.value = tableMaxHeight.value;
     });
   };
 
   const calcTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
+      const nextLimit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+      const isLimitChanged = nextLimit !== pagination.limit;
       const pageLimit = new Set([
         ...pagination.limitList,
-        dimensions.rowNum,
+        nextLimit,
       ]);
-      pagination.limit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+      pagination.limit = nextLimit;
       if (pagination.limit > 10) {
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
       }
+      const nextHeight = dimensions.tableHeaderHeight
+        + dimensions.rowNum * dimensions.tableRowHeight
+        + dimensions.paginationHeight
+        + 8;
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+      tableHeight.value = tableMaxHeight.value;
+
+      if (isLimitChanged && isReady) {
+        pagination.current = 1;
+        isUnload.value = false;
+        isLoading.value = true;
+        fetchListData();
+      }
     });
   };
 

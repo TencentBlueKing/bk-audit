@@ -81,15 +81,16 @@
                 required>
                 <bk-input
                   v-model.trim="formData.description"
-                  autosize
                   :maxlength="100"
                   :placeholder="t('请输入说明')"
+                  :resize="false"
                   show-word-limit
                   style="width: 50%;"
                   type="textarea" />
               </bk-form-item>
             </template>
           </card-part-vue>
+
           <!-- 工具类型 -->
           <card-part-vue :title="t('工具类型')">
             <template #content>
@@ -103,7 +104,7 @@
                     v-for="(item, index) in toolTypeList"
                     :key="index">
                     <bk-radio
-                      :disabled="item.id === 'api' || route.name === 'toolsEdit'"
+                      :disabled="route.name === 'toolsEdit'"
                       :label="item.id">
                       <div style="display: flex; align-items: center; line-height: 16px;">
                         <audit-icon
@@ -121,6 +122,7 @@
                   </template>
                 </bk-radio-group>
               </bk-form-item>
+
               <!-- 数据查询 -->
               <template v-if="formData.tool_type === 'data_search'">
                 <bk-form-item
@@ -158,6 +160,7 @@
                     :placeholder="t('请输入数据源名称、表名、ID 等，或可直接按分类筛选')" />
                 </bk-form-item>
               </template>
+
               <!-- BKVision 图表 -->
               <div v-else-if="formData.tool_type === 'bk_vision'">
                 <bk-form-item
@@ -212,6 +215,7 @@
             v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
+            :form-data-config="formData"
             :is-edit-mode="isEditMode"
             :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
@@ -219,12 +223,18 @@
             :report-lists-panels="reportListsPanels"
             :uid="formData.uid"
             @change-is-update-submit="changeIsUpdateSubmit"
-            @change-submit="changeSubmit" />
+            @change-submit="changeSubmit"
+            @get-is-done-de-bug="getIsDoneDeBug" />
         </audit-form>
       </div>
       <template #action>
         <bk-button
+          v-bk-tooltips="{
+            disabled: !isApiDoneDeBug,
+            content: t('请完成接口成功调试后再试')
+          }"
           class="w88"
+          :disabled="isApiDoneDeBug"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('提交') : t('创建') }}
@@ -260,7 +270,7 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -273,6 +283,7 @@
 
   import useRouterBack from '@hooks/use-router-back';
 
+  import Api from './components/api/index.vue';
   import BkVision from './components/bkvision/index.vue';
   import CardPartVue from './components/card-part.vue';
   import DataSearch from './components/data-search/index.vue';
@@ -344,6 +355,13 @@
       }>
       sql: string;
       uid: string;
+      output_config: {
+        enable_grouping: boolean;
+        groups: Array<{
+          name: string;
+          output_fields: any[];
+        }>;
+      };
     };
   }
 
@@ -359,6 +377,7 @@
   const ToolTypeComMap: Record<string, any> = {
     data_search: DataSearch,
     bk_vision: BkVision,
+    api: Api,
   };
 
   const route = useRoute();
@@ -382,7 +401,7 @@
   const formRef = ref();
   const comRef = ref();
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageWarn } = useMessage();
   const loading = ref(false);
   const isCreating = ref(false);
   const isFailed = ref(false);
@@ -428,6 +447,10 @@
           mappings: [],
         },
       }],
+      output_config: {
+        enable_grouping: false,
+        groups: [],
+      },
       sql: '',
       uid: '',  // BKVision图表uid
     },
@@ -449,7 +472,7 @@
   }, {
     id: 'api',
     name: t('API接口'),
-    tips: t('暂未开放，敬请期待'),
+    tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
   }, {
     id: 'bk_vision',
     name: t('BKVision图表'),
@@ -461,6 +484,8 @@
     bk_vision: 'bkvisonxiao',
   };
 
+  // 提供响应式的工具名称给子组件
+  provide('newToolDataName', toRef(() => formData.value.name));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
@@ -746,8 +771,10 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      formData.value = data;
-      comRef.value.setConfigs(formData.value.config);
+      formData.value = data as any;
+      nextTick(() => {
+        comRef.value.setConfigs(formData.value.config);
+      });
     },
   });
 
@@ -773,13 +800,22 @@
   // 提交
   const handleSubmit = () => {
     const tastQueue = [formRef.value.validate()];
-    if (comRef.value) {
+    if (comRef.value && formData.value.tool_type !== 'api') {
       tastQueue.push(comRef.value.getValue());
+    }
+    // 创建时 api 判断是否调试成功
+    if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
+      const debugResult = comRef.value.getDebugResult();
+      if (!debugResult.isDoneDeBug) {
+        messageWarn(t('请先进行接口调试'));
+        return;
+      } if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+        messageWarn(t('接口调试失败'));
+        return;
+      }
     }
 
     Promise.all(tastQueue).then(() => {
-      isCreating.value = true;
-
       // 获取组件配置
       if (comRef.value?.getFields) {
         if (formData.value.tool_type === 'bk_vision') {
@@ -792,6 +828,27 @@
         }
       }
       const data = _.cloneDeep(formData.value);
+      const groups = data.config.output_config?.groups || [];
+      const enableGrouping = data.config.output_config?.enable_grouping || false;
+      // 判断 groups 数组中的output_fields数组是否有空的output_fields
+      let hasEmptyOutputFields = false;
+      if (groups.length > 0) {
+        groups.forEach((item: any) => {
+          if (item.output_fields.length === 0) {
+            hasEmptyOutputFields = true;
+            if (enableGrouping) {
+              messageWarn(item.name + t(' 查询结果设置未设置'));
+            } else {
+              messageWarn(t('查询结果设置未设置'));
+            }
+          }
+        });
+
+        if (hasEmptyOutputFields) {
+          return;
+        }
+      }
+      isCreating.value = true;
 
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
@@ -812,12 +869,48 @@
         });
     });
   };
-
+  const isApiDoneDeBug = ref(false);
+  // api工具获取是否调试成功
+  const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean, isSame: boolean) => {
+    // 创建时 api 判断是否调试成功
+    if (!isEditMode) {
+      if (!val) {
+        isApiDoneDeBug.value = true;
+      } else {
+        isApiDoneDeBug.value = !isSuccess;
+      }
+    } else {
+      // isSame 为 true 时，表示参数配置没有改变，不需要重新调试
+      if (isSame) {
+        isApiDoneDeBug.value = false;
+      } else { // 修改了参数
+        // 编辑时 api 判断是否调试成功
+        if (!isEditInfo && !isSuccess && !isSame) {
+          isApiDoneDeBug.value = true;
+        } else {
+          if (!isEditInfo) { // 没有修改参数
+            isApiDoneDeBug.value = false;
+          } else { // 修改了参数
+            if (!val) {
+              isApiDoneDeBug.value = true;
+            } else {
+              isApiDoneDeBug.value = !isSuccess;
+            }
+          }
+        }
+      }
+    }
+  };
   watch(() => formData.value.tool_type, (val) => {
     if (val === 'bk_vision') {
       fetchChartLists();
+      isApiDoneDeBug.value = false;
     }
     if (val === 'data_search') {
+      isShowComponent.value = true;
+      isApiDoneDeBug.value = false;
+    }
+    if (val === 'api') {
       isShowComponent.value = true;
     }
   }, {

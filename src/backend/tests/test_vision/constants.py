@@ -381,3 +381,20 @@ META_QUERY_RESPONSE = {
 }
 GET_DATA = [{'name': 'a', 'value': 'A'}]
 CHECK_DATA = 'a'
+
+# 测试变量数据
+TEST_VARIABLE_PARAMS = {
+    "share_uid": "just_test",
+    "variable_uid": "test_variable_uid",
+}
+
+TEST_VARIABLE_RESPONSE = {
+    "result": True,
+    "code": 200,
+    "data": {
+        "values": [
+            {"label": "test_label_1", "value": "test_value_1"},
+            {"label": "test_label_2", "value": "test_value_2"},
+        ]
+    },
+}

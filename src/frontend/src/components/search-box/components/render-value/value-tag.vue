@@ -22,7 +22,7 @@
       ref="rootRef"
       class="tag-pop-ref">
       <div class="mr8">
-        {{ t(config.label) }}:
+        {{ t(safeConfig.label) }}:
       </div>
       <div class="value-text">
         <template v-if="isFieldMapLoading || isRemoteOriginLoading">
@@ -34,7 +34,7 @@
       </div>
     </div>
     <audit-icon
-      v-if="!config.required"
+      v-if="!safeConfig.required"
       class="remove-btn"
       type="close"
       @click="handleRemove" />
@@ -83,9 +83,9 @@
   import {
     computed,
     onBeforeUnmount,
-    onMounted,
     ref,
     shallowRef,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -120,7 +120,12 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const config = props.fieldConfig[props.name];
+  const config = computed(() => props.fieldConfig[props.name]);
+  const safeConfig = computed(() => config.value || {
+    label: props.name,
+    type: 'string',
+    required: false,
+  });
 
   const rootRef = ref();
   const popRef = ref();
@@ -148,9 +153,9 @@
     manual: allSelectTypeKeyList.includes(props.name),
   });
 
-  if (config.service) {
+  if (config.value?.service) {
     isRemoteOriginLoading.value = true;
-    config.service()
+    config.value.service()
       .then((data) => {
         remoteOriginalList.value = data;
       })
@@ -159,16 +164,16 @@
       });
   }
 
-  const isRender = computed(() => !_.isEmpty(props.value));
+  const isRender = computed(() => !_.isEmpty(props.value) && !!config.value);
 
   const renderValueText = computed(() => {
     if (_.isEmpty(props.value)) {
       return '--';
     }
-    if (config.type === 'datetimerange') {
+    if (safeConfig.value.type === 'datetimerange') {
       return `${props.value[0]} ${t('至')} ${props.value[1]}`;
     }
-    if (config.type === 'select') {
+    if (safeConfig.value.type === 'select') {
       const valueMap = (props.value as Array<string>).reduce((result, item: string) => ({
         ...result,
         [item]: true,
@@ -181,7 +186,7 @@
         return result;
       }, [] as Array<string>).join(' | ');
     }
-    if (config.service && remoteOriginalList.value.length > 0) {
+    if (config.value?.service && remoteOriginalList.value.length > 0) {
       const valueList = Array.isArray(props.value) ? props.value : [props.value];
       const valueMap = makeMap(valueList);
       const valueKeyList = remoteOriginalList.value.reduce((result, item) => {
@@ -197,7 +202,7 @@
 
   let valueMemo: any;
 
-  let tippyIns: Instance;
+  let tippyIns: Instance | null = null;
 
   // 删除
   const handleRemove = () => {
@@ -212,15 +217,18 @@
     if (valueMemo !== undefined) {
       emits('change', props.name, valueMemo);
     } else {
-      tippyIns.hide();
+      tippyIns?.hide();
     }
   };
   // 取消
   const handleCancel = () => {
-    tippyIns.hide();
+    tippyIns?.hide();
   };
 
-  onMounted(() => {
+  const initTippy = () => {
+    if (tippyIns || !rootRef.value || !popRef.value) {
+      return;
+    }
     tippyIns = tippy(rootRef.value as SingleTarget, {
       content: popRef.value,
       placement: 'bottom-start',
@@ -237,15 +245,22 @@
         if (singleIns) {
           singleIns.hide();
         }
-        singleIns = tippyIns;
+        singleIns = tippyIns as Instance;
       },
     });
-  });
+  };
+
+  watch([rootRef, popRef, isRender], () => {
+    if (isRender.value) {
+      initTippy();
+    }
+  }, { immediate: true });
 
   onBeforeUnmount(() => {
-    tippyIns.hide();
-    tippyIns.unmount();
-    tippyIns.destroy();
+    tippyIns?.hide();
+    tippyIns?.unmount();
+    tippyIns?.destroy();
+    tippyIns = null;
   });
 
   defineExpose<Exposes>({
@@ -255,7 +270,7 @@
       }
     },
     handleCancel() {
-      tippyIns.hide();
+      tippyIns?.hide();
     },
   });
 </script>

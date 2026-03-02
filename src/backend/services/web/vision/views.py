@@ -142,7 +142,11 @@ class PanelsViewSet(BKVisionViewSet):
 
 class BKVisionInstanceViewSet(BKVisionViewSet):
     def get_permissions(self):
-        instance_id = self.get_instance_id()
+        try:
+            instance_id = self.get_instance_id()
+        except ValidationError:
+            return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
+
         panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
         # 部分场景无需鉴权
         if panel.scenario in self.escape_scenario:
@@ -171,7 +175,11 @@ class MetaViewSet(API200ViewSet, BKVisionInstanceViewSet):
     ]
 
     def get_permissions(self):
-        instance_id = self.get_instance_id()
+        try:
+            instance_id = self.get_instance_id()
+        except ValidationError:
+            return [ToolVisionPermission(try_skip_permission=True)]
+
         panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
         if panel.scenario == Scenario.TOOL.value:
             return [ToolVisionPermission(try_skip_permission=True)]
@@ -193,6 +201,7 @@ class FieldViewSet(API200ViewSet, BKVisionInstanceViewSet):
 class VariableViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_variable_data, endpoint="query"),
+        ResourceRoute("POST", resource.vision.query_test_variable, endpoint="test"),
     ]
 
 

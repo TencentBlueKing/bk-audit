@@ -16,21 +16,22 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-import numbers
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
-from arrow import ParserError
+import requests
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
+from django.conf import settings
+from django.utils.translation import gettext
 from pydantic import BaseModel
 
 from api.bk_base.constants import UserAuthActionEnum
 from core.models import get_request_username
-from core.sql.parser.model import RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
-from core.utils.time import parse_datetime
 from services.web.tool.constants import (
+    ApiToolConfig,
+    ApiVariablePosition,
     BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
@@ -38,20 +39,23 @@ from services.web.tool.constants import (
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import (
+    ApiToolExecuteError,
     BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
-    InputVariableValueError,
-    InvalidVariableFormatError,
-    InvalidVariableStructureError,
-    ParseVariableError,
-    VariableHasNoParseFunction,
+    ToolTypeNotSupport,
 )
+from services.web.tool.executor.auth import AuthHandlerFactory
 from services.web.tool.executor.model import (
+    ApiRequestParam,
+    ApiToolErrorType,
+    APIToolExecuteParams,
+    ApiToolExecuteResult,
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
     DataSearchToolExecuteResult,
 )
+from services.web.tool.executor.parser import ApiVariableParser, SqlVariableParser
 from services.web.tool.models import Tool
 from services.web.tool.permissions import check_bkvision_share_permission
 from services.web.vision.handlers.query import VisionHandler
@@ -67,7 +71,7 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
     tool: Optional[Tool]
     config: TConfig
 
-    def __init__(self, source: Union[Tool, BaseModel]):
+    def __init__(self, source: Union[Tool, Any]):
         """
         初始化执行器
         :param source: 可以是Tool对象或直接配置对象
@@ -75,14 +79,14 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
 
         if isinstance(source, Tool):
             self.tool = source
-            self.config = self._parse_config(source)
+            self.config = self._parse_config(source.config)
         else:
             self.tool = None
-            self.config = source
+            self.config = self._parse_config(source)
 
     @classmethod
     @abc.abstractmethod
-    def _parse_config(cls, tool: Tool) -> TConfig:
+    def _parse_config(cls, config: Any) -> TConfig:
         """
         从Tool对象解析配置
         """
@@ -112,99 +116,10 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
 
         raise NotImplementedError()
 
-    def execute(self, params: dict, skip_permission: bool = False):
+    def execute(self, params: dict):
         params = self._parse_params(params)
         self.validate_permission(params)
         return self._execute(params)
-
-
-class VariableValueParser:
-    """
-    变量值解析器
-    """
-
-    def __init__(self, variable: SQLDataSearchInputVariable):
-        self.variable = variable
-
-    def _format_time_range_select(self, value: Any) -> RangeVariableData:
-        """
-        格式化时间范围选择器
-        """
-
-        if not isinstance(value, list) or len(value) != 2:
-            raise InvalidVariableStructureError(
-                var_type=self.variable.field_category, expected_structure="一个包含2个元素的列表", value=value
-            )
-        # 来自 _format_time_select 的更具体的 InvalidVariableFormatError 将会被传递上来
-        start_time = self._format_time_select(value[0])
-        end_time = self._format_time_select(value[1])
-        return RangeVariableData(
-            start=start_time,
-            end=end_time,
-        )
-
-    def _format_time_select(self, value: Any) -> int:
-        """
-        格式化时间选择器
-        """
-        if isinstance(value, numbers.Number):
-            return int(value)
-        try:
-            return int(parse_datetime(value).timestamp()) * 1000
-        except (ParserError, TypeError, ValueError):
-            raise InvalidVariableFormatError(var_type=self.variable.field_category, value=value)
-
-    def _format_input(self, value: Any) -> str:
-        """
-        格式化输入
-        """
-
-        return str(value)
-
-    def _format_number_input(self, value: Any) -> int:
-        """
-        格式化数字输入
-        """
-
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            raise InvalidVariableFormatError(var_type=self.variable.field_category, value=value)
-
-    def _format_person_select(self, value: Any) -> list | str:
-        """
-        格式化人员选择器为 sql 中的 in
-        """
-
-        if not isinstance(value, list):
-            return str(value)
-        return [str(v) for v in value]
-
-    def _format_multiselect(self, value: Any) -> list:
-        """
-        格式化多选下拉框
-        """
-        if isinstance(value, list):
-            return value
-        return [value]
-
-    def parse(self, value: Any) -> Any:
-        """
-        解析变量值
-        """
-
-        func: Callable[[Any], Any] = getattr(self, f"_format_{self.variable.field_category.value}", None)
-        if not func:
-            raise VariableHasNoParseFunction(var_type=self.variable.field_category)
-        try:
-            return func(value)
-        # 捕获任何用户输入错误 (结构、格式等) 并重新抛出它。这允许具体的异常冒泡到上层。
-        except InputVariableValueError:
-            raise
-        # 捕获任何其他意外错误并将其包装为通用的内部错误。
-        except Exception as e:
-            logger.error(f"VariableValueParser 解析错误: {e}", exc_info=True)
-            raise ParseVariableError(var_type=self.variable.field_category, value=value)
 
 
 class SqlDataSearchExecutor(
@@ -212,13 +127,13 @@ class SqlDataSearchExecutor(
 ):
     """SQL数据查询执行器"""
 
-    def __init__(self, source: Union[Tool, SQLDataSearchConfig], analyzer_cls: Type[SqlQueryAnalysis]):
+    def __init__(self, source: Union[Tool, Any], analyzer_cls: Type[SqlQueryAnalysis]):
         super().__init__(source)
         self.analyzer = analyzer_cls(sql=self.config.sql)
 
     @classmethod
-    def _parse_config(cls, tool: Tool) -> TConfig:
-        return SQLDataSearchConfig.model_validate(tool.config)
+    def _parse_config(cls, config: dict) -> TConfig:
+        return SQLDataSearchConfig.model_validate(config)
 
     def _parse_params(self, params):
         return DataSearchToolExecuteParams.model_validate(params)
@@ -248,7 +163,7 @@ class SqlDataSearchExecutor(
         渲染变量值
         """
 
-        return VariableValueParser(var).parse(value)
+        return SqlVariableParser(var).parse(value)
 
     def render_variables(self, params: DataSearchToolExecuteParams) -> Dict[str, Any]:
         """
@@ -317,8 +232,8 @@ class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteRes
     """BK Vision执行器"""
 
     @classmethod
-    def _parse_config(cls, tool: Tool) -> TConfig:
-        return BkVisionConfig.model_validate(tool.config)
+    def _parse_config(cls, config: Any) -> TConfig:
+        return BkVisionConfig.model_validate(config)
 
     def _parse_params(self, params: dict) -> TParams:
         pass
@@ -346,6 +261,130 @@ class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteRes
         return BkVisionExecuteResult(panel_id=panel.id)
 
 
+class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiToolExecuteResult]):
+    """API 工具执行器"""
+
+    @classmethod
+    def _parse_config(cls, config: Any) -> TConfig:
+        return ApiToolConfig.model_validate(config)
+
+    def _parse_params(self, params: dict) -> APIToolExecuteParams:
+        """
+        仅做结构解析，不做业务渲染
+        """
+        return APIToolExecuteParams.model_validate(params)
+
+    def _render_request_params(self, params: APIToolExecuteParams) -> List["ApiRequestParam"]:
+        """
+        渲染请求参数：校验、格式化、转换为请求参数
+
+        各变量类型通过多态方法 to_request_params 自行处理转换逻辑
+        """
+
+        tool_vars_map = {var.raw_name: var.value for var in params.tool_variables}
+        final_params: List[ApiRequestParam] = []
+
+        for var_config in self.config.input_variable:
+            # 1. 获取值
+            value = tool_vars_map.get(var_config.raw_name)
+
+            # 2. 校验
+            if var_config.required and value is None:
+                raise InputVariableMissingError(var_config.display_name)
+            elif value is None:
+                # 非必填且无值，不传
+                continue
+
+            # 3. 格式化值
+            parsed_value = ApiVariableParser(var_config).parse(value)
+
+            # 4. 通过多态方法转换为请求参数
+            final_params.extend(var_config.to_request_params(parsed_value))
+
+        return final_params
+
+    def _execute(self, params: APIToolExecuteParams) -> ApiToolExecuteResult:
+        # 1. 渲染参数
+        request_params = self._render_request_params(params)
+
+        # 2. 分类参数
+        path_params = {}
+        query_params = {}
+        body_params = {}
+
+        for param in request_params:
+            if param.position == ApiVariablePosition.PATH:
+                path_params[param.name] = param.value
+            elif param.position == ApiVariablePosition.QUERY:
+                query_params[param.name] = param.value
+            elif param.position == ApiVariablePosition.BODY:
+                body_params[param.name] = param.value
+
+        # 3. 准备 URL 和 Headers
+        api_config = self.config.api_config
+        try:
+            url = api_config.url.format(**path_params)
+        except KeyError as e:
+            raise ApiToolExecuteError(status_code=400, detail=gettext("URL 路径参数缺失: %s") % e)
+
+        method = api_config.method.lower()
+        headers = {h.key: h.value for h in api_config.headers}
+
+        # 4. 应用认证
+        auth_handler = AuthHandlerFactory.get_handler(api_config.auth_config)
+        auth_handler.apply_auth(headers)
+
+        # 5. 发送请求
+        request_kwargs = {}
+        if query_params:
+            request_kwargs["params"] = query_params
+        if body_params:
+            request_kwargs["json"] = body_params
+
+        try:
+            # 日志脱敏
+            safe_headers = auth_handler.mask_headers(headers)
+            logger.info(
+                f"[{self.__class__.__name__}] Request: {method.upper()} {url}, "
+                f"headers={safe_headers}, kwargs={request_kwargs}"
+            )
+
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                timeout=settings.API_TOOL_EXECUTE_DEFAULT_TIMEOUT,
+                **request_kwargs,
+            )
+            try:
+                parsed_result = response.json()
+                return ApiToolExecuteResult(
+                    status_code=response.status_code,
+                    result=parsed_result,
+                    err_type=ApiToolErrorType.NONE,
+                    message="",
+                )
+            except ValueError:
+                return ApiToolExecuteResult(
+                    status_code=response.status_code,
+                    result=None,
+                    err_type=ApiToolErrorType.NON_JSON_RESPONSE,
+                    message=(
+                        response.text[: settings.API_TOOL_EXECUTE_DEFAULT_MAX_RETURN_CHAR] if response.text else ""
+                    ),
+                )
+        except requests.RequestException as e:
+            return ApiToolExecuteResult(
+                status_code=500,
+                result=None,
+                err_type=ApiToolErrorType.REQUEST_ERROR,
+                message=str(e),
+            )
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(f"[{self.__class__.__name__}] Request Failed: {e}", exc_info=True)
+            raise ApiToolExecuteError(status_code=500, detail=gettext("请求异常，请联系系统管理员"))
+
+
 class ToolExecutorFactory:
     """工具执行器工厂"""
 
@@ -359,5 +398,26 @@ class ToolExecutorFactory:
                 return SqlDataSearchExecutor(tool, analyzer_cls=self.sql_analyzer_cls)
         elif tool.tool_type == ToolTypeEnum.BK_VISION.value:
             return BkVisionExecutor(tool)
+        elif tool.tool_type == ToolTypeEnum.API.value:
+            return ApiToolExecutor(tool)
         # 其他数据查询类型...
-        raise ValueError(f"Unsupported tool type: {tool.tool_type}")
+        raise ToolTypeNotSupport()
+
+    def create_from_config(
+        self,
+        tool_type: str,
+        config: dict,
+        data_search_config_type: DataSearchConfigTypeEnum = DataSearchConfigTypeEnum.SQL.value,
+    ) -> BaseToolExecutor:
+        """
+        从配置创建执行器 (用于调试)
+        """
+        if (
+            tool_type == ToolTypeEnum.DATA_SEARCH.value
+            and data_search_config_type == DataSearchConfigTypeEnum.SQL.value
+        ):
+            return SqlDataSearchExecutor(config, analyzer_cls=self.sql_analyzer_cls)
+        elif tool_type == ToolTypeEnum.API.value:
+            return ApiToolExecutor(config)
+        # BkVision 不支持调试执行
+        raise ToolTypeNotSupport()

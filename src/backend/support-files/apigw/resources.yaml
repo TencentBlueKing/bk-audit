@@ -60,7 +60,180 @@ paths:
       operationId: retrieve_risk
       description: 获取风险详情
       tags: [ ]
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: 风险ID
       responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险ID
+              event_content:
+                type: string
+                description: 风险描述
+              raw_event_id:
+                type: string
+                description: 原始事件ID
+              strategy_id:
+                type: integer
+                description: 策略ID
+              event_evidence:
+                type: string
+                description: 风险证据
+              event_type:
+                type: array
+                items:
+                  type: string
+                description: 风险类型
+              event_data:
+                type: object
+                description: 事件数据
+              event_time:
+                type: string
+                format: date-time
+                description: 首次发现时间
+              event_end_time:
+                type: string
+                format: date-time
+                description: 最后发现时间
+              event_source:
+                type: string
+                description: 事件来源
+              operator:
+                type: array
+                items:
+                  type: string
+                description: 责任人
+              status:
+                type: string
+                description: 风险状态
+                enum:
+                  - stand_by
+                  - new
+                  - await_deal
+                  - for_approve
+                  - auto_process
+                  - closed
+              rule_id:
+                type: integer
+                description: 处理规则ID
+              rule_version:
+                type: integer
+                description: 处理规则版本
+              origin_operator:
+                type: array
+                items:
+                  type: string
+                description: 初始处理人
+              current_operator:
+                type: array
+                items:
+                  type: string
+                description: 当前处理人
+              notice_users:
+                type: array
+                items:
+                  type: string
+                description: 关注人
+              risk_label:
+                type: string
+                description: 风险标记
+                enum:
+                  - normal
+                  - misreport
+              last_operate_time:
+                type: string
+                format: date-time
+                description: 最后操作时间
+              title:
+                type: string
+                description: 风险标题
+              tags:
+                type: array
+                items:
+                  type: integer
+                description: 标签ID列表
+              ticket_history:
+                type: array
+                description: 单据流转历史
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 节点ID（UUID）
+                    risk_id:
+                      type: string
+                      description: 风险ID
+                    action:
+                      type: string
+                      description: 操作类型
+                    operator:
+                      type: string
+                      description: 操作人
+                    current_operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 当前处理人
+                    timestamp:
+                      type: number
+                      format: float
+                      description: 操作时间戳
+                    time:
+                      type: string
+                      description: 操作时间（格式化字符串）
+                    process_result:
+                      type: object
+                      description: 处理结果
+                    status:
+                      type: string
+                      description: 节点状态
+                      enum:
+                        - running
+                        - success
+                        - failed
+              unsynced_events:
+                type: array
+                description: 未同步的手动事件
+                items:
+                  type: object
+                  properties:
+                    manual_event_id:
+                      type: integer
+                      description: 手动事件ID
+                    event_time:
+                      type: string
+                      format: date-time
+                      description: 事件时间
+                    event_data:
+                      type: object
+                      description: 事件数据
+              created_at:
+                type: string
+                format: date-time
+                description: 创建时间
+              created_by:
+                type: string
+                description: 创建人
+              updated_at:
+                type: string
+                format: date-time
+                description: 更新时间
+              updated_by:
+                type: string
+                description: 更新人
+              manual_synced:
+                type: boolean
+                description: 手动建的单是否已同步
+                default: true
         default:
           description: ''
       x-bk-apigateway-resource:
@@ -76,15 +249,370 @@ paths:
           upstreams: { }
           transformHeaders: { }
         authConfig:
-          userVerifiedRequired: true
+          userVerifiedRequired: false
         disabledStages: [ ]
         descriptionEn:
   /risks/{id}/strategy_info/:
     get:
       operationId: retrieve_risk_strategy_info
-      description: 获取风险策略信息
+      description: 获取风险关联策略的配置信息
       tags: [ ]
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: 风险ID
       responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              risk_level:
+                type: string
+                description: 风险等级
+                enum:
+                  - LOW
+                  - MIDDLE
+                  - HIGH
+              risk_hazard:
+                type: string
+                description: 风险危害
+              risk_guidance:
+                type: string
+                description: 处理指引
+              event_basic_field_configs:
+                type: array
+                description: 事件基础字段配置
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    drill_config:
+                      type: array
+                      description: 下钻配置
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具UID
+                              version:
+                                type: integer
+                                description: 工具版本
+                          config:
+                            type: array
+                            description: 下钻变量映射
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: 工具变量名
+                                target_value_type:
+                                  type: string
+                                  description: 值类型（fixed_value/field）
+                                target_field_type:
+                                  type: string
+                                  description: 目标字段类型
+                                target_value:
+                                  type: string
+                                  description: 目标值
+                          drill_name:
+                            type: string
+                            description: 下钻工具名称
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              event_data_field_configs:
+                type: array
+                description: 事件数据字段配置
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: 下钻配置
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具UID
+                              version:
+                                type: integer
+                                description: 工具版本
+                          config:
+                            type: array
+                            description: 下钻变量映射
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: 工具变量名
+                                target_value_type:
+                                  type: string
+                                  description: 值类型（fixed_value/field）
+                                target_field_type:
+                                  type: string
+                                  description: 目标字段类型
+                                target_value:
+                                  type: string
+                                  description: 目标值
+                          drill_name:
+                            type: string
+                            description: 下钻工具名称
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              event_evidence_field_configs:
+                type: array
+                description: 事件证据字段配置
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: 下钻配置
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具UID
+                              version:
+                                type: integer
+                                description: 工具版本
+                          config:
+                            type: array
+                            description: 下钻变量映射
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: 工具变量名
+                                target_value_type:
+                                  type: string
+                                  description: 值类型（fixed_value/field）
+                                target_field_type:
+                                  type: string
+                                  description: 目标字段类型
+                                target_value:
+                                  type: string
+                                  description: 目标值
+                          drill_name:
+                            type: string
+                            description: 下钻工具名称
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              risk_meta_field_config:
+                type: array
+                description: 风险元字段配置
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: 下钻配置
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具UID
+                              version:
+                                type: integer
+                                description: 工具版本
+                          config:
+                            type: array
+                            description: 下钻变量映射
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: 工具变量名
+                                target_value_type:
+                                  type: string
+                                  description: 值类型（fixed_value/field）
+                                target_field_type:
+                                  type: string
+                                  description: 目标字段类型
+                                target_value:
+                                  type: string
+                                  description: 目标值
+                          drill_name:
+                            type: string
+                            description: 下钻工具名称
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
         default:
           description: ''
       x-bk-apigateway-resource:
@@ -95,6 +623,90 @@ paths:
           type: HTTP
           method: get
           path: /api/v1/risks_apigw/{id}/strategy_info/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
+  /risks/events/:
+    get:
+      operationId: list_risk_event_apigw
+      description: 获取风险关联的事件列表
+      tags: [ ]
+      parameters:
+        - in: query
+          name: risk_id
+          type: string
+          required: true
+          description: 风险ID
+        - in: query
+          name: namespace
+          type: string
+          required: false
+          description: 命名空间
+          default: default
+        - in: query
+          name: start_time
+          type: string
+          required: true
+          description: 开始时间（格式：YYYY-MM-DD HH:MM:SS）
+        - in: query
+          name: end_time
+          type: string
+          required: true
+          description: 结束时间（格式：YYYY-MM-DD HH:MM:SS）
+        - in: query
+          name: page
+          type: integer
+          required: true
+          description: 页码
+          minimum: 1
+          default: 1
+        - in: query
+          name: page_size
+          type: integer
+          required: true
+          description: 每页数量
+          minimum: 1
+          default: 10
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: 当前页码
+              num_pages:
+                type: integer
+                description: 总页数
+              total:
+                type: integer
+                description: 总记录数
+              results:
+                type: array
+                description: 事件列表
+                items:
+                  type: object
+                  description: 事件数据（字段结构由策略配置决定）
+              event_end_time:
+                type: string
+                format: date-time
+                description: 事件结束时间
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/event_apigw/
           matchSubpath: false
           timeout: 0
           upstreams: { }
@@ -175,11 +787,10 @@ paths:
           userVerifiedRequired: false
         disabledStages: [ ]
         descriptionEn:
-
-  /{namespace}/tools/{uid}/execute/:
+  /log_subscription/query/:
     post:
-      operationId: execute_tool
-      description: 执行工具
+      operationId: log_subscription_query
+      description: 查询日志订阅数据
       tags: [ ]
       responses:
         default:
@@ -191,7 +802,179 @@ paths:
         backend:
           type: HTTP
           method: post
+          path: /api/v1/log_subscription/log_subscription_apigw/query/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
+
+  /{namespace}/tools/{uid}/execute/:
+    post:
+      operationId: execute_tool
+      description: 执行工具
+      tags: [ ]
+      parameters:
+        - in: path
+          name: namespace
+          type: string
+          required: true
+          description: 命名空间
+        - in: path
+          name: uid
+          type: string
+          required: true
+          description: 工具唯一标识
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - params
+            properties:
+              params:
+                type: object
+                description: 工具执行参数
+                properties:
+                  tool_variables:
+                    type: array
+                    description: 工具变量列表
+                    items:
+                      type: object
+                      properties:
+                        raw_name:
+                          type: string
+                          description: 变量原始名称
+                        value:
+                          type: string
+                          description: 变量值，类型根据变量类型决定（string/number/array）
+                  page:
+                    type: integer
+                    description: 页码（仅 data_search 类型）
+                    default: 1
+                  page_size:
+                    type: integer
+                    description: 每页数量（仅 data_search 类型）
+                    default: 100
+              drill_field:
+                type: string
+                description: 指定使用哪个字段的 drill_config 进行变量值校验
+              event_start_time:
+                type: string
+                description: 事件开始时间（用于 list_event 获取事件数据）
+              event_end_time:
+                type: string
+                description: 事件结束时间（用于 list_event 获取事件数据）
+      responses:
+        '200':
+          description: 执行成功
+          schema:
+            type: object
+            required:
+              - data
+              - tool_type
+            properties:
+              data:
+                type: object
+                description: 执行结果数据，结构根据 tool_type 不同而不同
+              tool_type:
+                type: string
+                description: 工具类型
+                enum:
+                  - data_search
+                  - api
+                  - bk_vision
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
           path: /api/v1/namespaces/{namespace}/tool_apigw/{uid}/execute/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
+
+  /tools/detail_by_name/:
+    get:
+      operationId: get_tool_detail_by_name
+      description: 根据工具名称获取工具详情
+      tags: [ ]
+      parameters:
+        - in: query
+          name: name
+          type: string
+          required: true
+          description: 工具名称
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              uid:
+                type: string
+                description: 工具唯一标识
+              name:
+                type: string
+                description: 工具名称
+              tool_type:
+                type: string
+                description: 工具类型
+                enum:
+                  - data_search
+                  - api
+                  - bk_vision
+              version:
+                type: integer
+                description: 工具版本
+              description:
+                type: string
+                description: 工具描述
+              namespace:
+                type: string
+                description: 命名空间
+              config:
+                type: object
+                description: 工具配置
+                properties:
+                  input_variable:
+                    type: array
+                    description: 输入变量定义
+                    items:
+                      type: object
+                      properties:
+                        raw_name:
+                          type: string
+                          description: 变量原始名称
+                        display_name:
+                          type: string
+                          description: 变量显示名称
+                        required:
+                          type: boolean
+                          description: 是否必填
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/namespaces/{namespace}/tool_apigw/detail_by_name/
           matchSubpath: false
           timeout: 0
           upstreams: { }

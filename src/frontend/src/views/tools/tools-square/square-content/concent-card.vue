@@ -49,9 +49,23 @@
               v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
               :key="index"
               class="card-list-item"
-              @click="handleClick(item)"
+              @click="handleClickTool(item)"
               @mouseenter="handleMouseenter(item)"
               @mouseleave="handleMouseleave()">
+              <!-- 左上角收藏icon -->
+              <div
+                v-show="itemMouseenter === item.uid || item.favorite"
+                class="item-top-left-icon"
+                :class="{ 'with-bg': itemMouseenter === item.uid }">
+                <img
+                  v-bk-tooltips="{
+                    content: item.favorite ? t('取消收藏') : t('收藏'),
+                    placement: 'top',
+                  }"
+                  class="favorite-icon"
+                  :src="item.favorite ? pentagramFillIcon : pentagramIcon"
+                  @click.stop="handleToggleFavorite(item)">
+              </div>
               <div
                 v-show="itemMouseenter === item.uid"
                 class="item-top-right-icon">
@@ -139,7 +153,7 @@
                     <span
                       v-bk-tooltips="{
                         disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                        content: t(item.name),
+                        content: item.name,
                         placement: 'top',
                         delay: [300, 0],
                         extCls: 'name-tooltip'
@@ -262,7 +276,7 @@
     :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item] = el"
+      :ref="(el: any) => dialogRefs[item] = el"
       :all-tools-data="allToolsData"
       :tags-enums="tagsEnums"
       @close="handleClose"
@@ -281,6 +295,9 @@
 
   import useUrlSearch from '@hooks/use-url-search';
 
+  import pentagramIcon from '@images/pentagram.svg';
+  import pentagramFillIcon from '@images/pentagram-fill.svg';
+
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
   import DialogVue from '../components/dialog.vue';
@@ -291,11 +308,11 @@
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
-  interface Exposes{
+  interface Exposes {
     getToolsList: (id: string) => void;
   }
   interface Emits {
-    (e: 'change'):void;
+    (e: 'change'): void;
   }
 
   const props = defineProps<Props>();
@@ -318,7 +335,7 @@
   }
 
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageError } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
@@ -329,7 +346,6 @@
     dialogRefs,
     openFieldDown,
     handleOpenTool,
-    handleCloseTool,
   } = useToolDialog();
 
   const searchValue = ref<string>('');
@@ -349,8 +365,10 @@
     'margin-top': '10px',
     height: 'calc(100vh - 200px)',
   };
-  const urlToolsIds = ref<string[]>([]);
+
+  const urlToolsIds = ref<Set<string>>(new Set());
   const {
+    removeSearchParam,
     appendSearchParams,
   } = useUrlSearch();
 
@@ -362,34 +380,48 @@
     manual: true,
   });
 
+  // 收藏/取消收藏
+  const {
+    run: toggleFavorite,
+  } = useRequest(ToolManageService.toggleFavorite, {
+    defaultValue: {},
+  });
+
+  const openUrlTools = () => {
+    const toolIds = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+    urlToolsIds.value = new Set(toolIds);
+    allOpenToolsData.value = toolIds;
+    if (urlToolsIds.value.size > 0) {
+      urlToolsIds.value.forEach((item: string) => {
+        // 使用hooks中的handleOpenTool
+        handleOpenTool(item);
+        setTimeout(() => {
+          const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
+          Array.from(modals).reverse()
+            .forEach((modal, index) => {
+              const htmlModal = modal as HTMLElement;
+              if (index > 0 && !htmlModal.style.transform) {
+                htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+              }
+            });
+        }, 0);
+      });
+    }
+  };
+
   // 工具列表
   const {
     run: fetchToolsList,
   } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
-    onSuccess: (data) => {
-      dataList.value = data.results;
-      total.value = data.total;
+    onSuccess: () => {
+      // 触底拼接数据
+      // dataList.value = [...dataList.value, ...data.results];
+      // total.value = data.total;
+
       // 自动打开弹窗
       if (route.query.tool_id) {
-        urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
-        allOpenToolsData.value = urlToolsIds.value;
-        if (urlToolsIds.value.length > 0) {
-          urlToolsIds.value.forEach((item: string) => {
-            // 使用hooks中的handleOpenTool
-            handleOpenTool(item);
-            setTimeout(() => {
-              const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
-              Array.from(modals).reverse()
-                .forEach((modal, index) => {
-                  const htmlModal = modal as HTMLElement;
-                  if (index > 0 && !htmlModal.style.transform) {
-                    htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-                  }
-                });
-            }, 0);
-          });
-        }
+        openUrlTools();
       }
     },
   });
@@ -419,7 +451,7 @@
 
   // +n显示
   const tagContent = (tags: Array<string>) => {
-    const tagNameList = props.tagsEnums.map((i:TagItem) => {
+    const tagNameList = props.tagsEnums.map((i: TagItem) => {
       if (tags.slice(3, tags.length).includes(i.tag_id)) {
         return i.tag_name;
       }
@@ -434,6 +466,7 @@
     }).then(() => {
       handleCancel(item.uid);
       loading.value = true;
+      currentPage.value = 1;
       fetchToolsList({
         page: currentPage.value,
         page_size: currentPagSize.value,
@@ -441,9 +474,14 @@
         recent_used: props.recentUsed,
         keyword: searchValue.value,
         tags: [props.tagId],
-      }).finally(() => {
-        loading.value = false;
-      });
+      }).then((data) => {
+        // 非拼接模式，重新赋值
+        dataList.value = data.results;
+        total.value = data.total;
+      })
+        .finally(() => {
+          loading.value = false;
+        });
     });
   };
 
@@ -494,6 +532,32 @@
       isFixedDelete.value = !isFixedDelete.value;
       itemMouseenter.value = item.uid;
     }
+  };
+
+  // 收藏/取消收藏
+  const handleToggleFavorite = (item: ToolInfo) => {
+    const newFavoriteStatus = !item.favorite;
+    toggleFavorite({
+      uid: item.uid,
+      favorite: newFavoriteStatus,
+    }).then(() => {
+      messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
+      // 重新获取列表数据，后端会处理排序
+      fetchToolsList({
+        page: 1,
+        page_size: currentPage.value * currentPagSize.value,
+        my_created: props.myCreated,
+        recent_used: props.recentUsed,
+        keyword: searchValue.value,
+        tags: [props.tagId],
+      }).then((data) => {
+        dataList.value = data.results;
+        total.value = data.total;
+      });
+    })
+      .catch(() => {
+        messageError(t('操作失败，请重试'));
+      });
   };
 
   // 策略跳转
@@ -557,9 +621,9 @@
 
 
   const middleTtooltips = (text: string) => (
-    <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
-      {text}
-    </div>
+  <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
+    {text}
+  </div>
   );
 
   const itemIcon = (item: ToolInfo) => {
@@ -578,12 +642,12 @@
    * 打开工具，根据工具信息，打开工具，并传递工具信息
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
-  */
-  const handleClick = async (toolInfo: ToolInfo) => {
-    urlToolsIds.value.push(toolInfo.uid);
+   */
+  const handleClickTool = async (toolInfo: ToolInfo) => {
+    urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
     appendSearchParams({
-      tool_id: urlToolsIds.value.join(','),
+      tool_id: Array.from(urlToolsIds.value).join(','),
     });
 
     handleCancel(toolInfo.uid);
@@ -595,18 +659,20 @@
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      // 使用hooks中的handleCloseTool
-      handleCloseTool(ToolUid);
-
-      urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
-      appendSearchParams({
-        tool_id: urlToolsIds.value.join(','),
-      });
+      urlToolsIds.value.delete(ToolUid);
+      if (urlToolsIds.value.size <= 0) {
+        removeSearchParam('tool_id');
+      } else {
+        appendSearchParams({
+          tool_id: Array.from(urlToolsIds.value).join(','),
+        });
+      }
     }
   };
 
   const handleSearch = () => {
     loading.value = true;
+    currentPage.value = 1;
     fetchToolsList({
       page: currentPage.value,
       page_size: currentPagSize.value,
@@ -614,9 +680,14 @@
       my_created: props.myCreated,
       recent_used: props.recentUsed,
       tags: [props.tagId],
-    }).finally(() => {
-      loading.value = false;
-    });
+    }).then((data) => {
+      // 非拼接模式，重新赋值
+      dataList.value = data.results;
+      total.value = data.total;
+    })
+      .finally(() => {
+        loading.value = false;
+      });
     emits('change');
   };
 
@@ -633,20 +704,21 @@
       loading.value = false;
       isMoreLoading.value = true;
       hasMore.value = true;
+      currentPage.value += 1;
 
       fetchToolsList({
-        page: currentPage.value === 1 ? 2 : currentPage.value,
-        page_size: currentPagSize.value === 50 ? 100 : currentPagSize.value,
+        page: currentPage.value,
+        page_size: 50,
         keyword: searchValue.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
         tags: [props.tagId],
-      }).then((res) => {
-        if (res) {
-          currentPage.value += 1;
-          currentPagSize.value += 50;
-        }
       })
+        .then((data) => {
+          // 拼接模式，追加数据
+          dataList.value = [...dataList.value, ...data.results];
+          total.value = data.total;
+        })
         .finally(() => {
           hasMore.value = false;
           isMoreLoading.value = false;
@@ -657,16 +729,22 @@
   defineExpose<Exposes>({
     getToolsList(id: string) {
       nextTick(() => {
+        currentPage.value = 1;
         fetchToolsList({
           page: currentPage.value,
-          page_size: currentPagSize.value,
+          page_size: 50,
           keyword: searchValue.value,
           my_created: props.myCreated,
           recent_used: props.recentUsed,
           tags: [id],
-        }).finally(() => {
-          loading.value = false;
-        });
+        }).then((data) => {
+          // 非拼接模式，重新赋值
+          dataList.value = data.results;
+          total.value = data.total;
+        })
+          .finally(() => {
+            loading.value = false;
+          });
       });
     },
   });
@@ -832,6 +910,37 @@
             margin-right: 5px;
             margin-left: 5px;
             background-color: #979ba5;
+          }
+        }
+
+        .item-top-left-icon {
+          position: absolute;
+          top: 0;
+          left: 0;
+          z-index: 1;
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-start;
+          width: 40px;
+          height: 40px;
+          border-top-left-radius: 2px;
+
+          &.with-bg {
+            background: linear-gradient(135deg, #f5f7fa 50%, transparent 50%);
+          }
+
+          .favorite-icon {
+            position: relative;
+            top: 4px;
+            left: 4px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            transition: all .2s ease;
+
+            &:hover {
+              transform: scale(1.2);
+            }
           }
         }
 

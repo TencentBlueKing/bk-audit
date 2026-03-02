@@ -13,8 +13,10 @@ from rest_framework.test import APIRequestFactory
 
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
+from core.sql.parser.praser import SqlQueryAnalysis
 from core.testing import assert_list_contains
 from services.web.tool.constants import (
+    ApiVariablePosition,
     DataSearchConfigTypeEnum,
     FieldCategory,
     SQLDataSearchConfig,
@@ -23,6 +25,7 @@ from services.web.tool.constants import (
     Table,
     ToolTypeEnum,
 )
+from services.web.tool.exceptions import ToolTypeNotSupport
 from services.web.tool.models import (
     BkVisionToolConfig,
     DataSearchToolConfig,
@@ -37,6 +40,7 @@ from services.web.tool.resources import (
     GetToolEnumMappingByCollection,
     GetToolEnumMappingByCollectionKeys,
     ListTool,
+    ToolExecuteDebug,
     UpdateTool,
     UserQueryTableAuthCheck,
 )
@@ -87,6 +91,26 @@ class ToolResourceTestCase(TestCase):
         self.tag2 = Tag.objects.create(tag_name="tag2")
         ToolTag.objects.create(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id)
         ToolTag.objects.create(tool_uid=self.bk_tool.uid, tag_id=self.tag2.tag_id)
+        self.api_debug_config = {
+            "api_config": {
+                "url": "http://example.com/{path_id}",
+                "method": "GET",
+                "auth_config": {"method": "none"},
+                "headers": [],
+            },
+            "input_variable": [
+                {
+                    "raw_name": "path_id",
+                    "display_name": "Path ID",
+                    "required": True,
+                    "var_name": "path_id",
+                    "field_category": FieldCategory.INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.PATH.value,
+                }
+            ],
+            "output_config": {"enable_grouping": False, "groups": []},
+        }
         # Mock 权限校验
         self.patcher_auth = mock.patch.object(
             UserAuthBatchCheck,
@@ -345,10 +369,13 @@ class ToolResourceTestCase(TestCase):
         mock_authed_tool_filter.return_value = Q()
         recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
 
-        with patch(
-            "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
-            return_value=recent_uids,
-        ), patch("services.web.tool.resources.get_request_username", return_value=self.uid):
+        with (
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                return_value=recent_uids,
+            ),
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+        ):
             data = {
                 "keyword": "",
                 "tags": [],
@@ -377,6 +404,54 @@ class ToolResourceTestCase(TestCase):
         if result["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
             for table in result["config"]["referenced_tables"]:
                 self.assertIn("permission", table)
+
+    @patch("services.web.tool.resources.ToolExecutorFactory")
+    def test_tool_execute_debug_api(self, mock_factory):
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {
+            "status_code": 200,
+            "result": {"message": "ok"},
+            "err_type": "none",
+            "message": "",
+        }
+        mock_executor.execute.return_value = mock_result
+        mock_factory.return_value.create_from_config.return_value = mock_executor
+
+        request_data = {
+            "tool_type": ToolTypeEnum.API.value,
+            "config": self.api_debug_config,
+            "params": {
+                "tool_variables": [{"raw_name": "path_id", "value": "123", "position": ApiVariablePosition.PATH.value}]
+            },
+        }
+
+        resource = ToolExecuteDebug()
+        response = resource(request_data)
+
+        self.assertEqual(response["tool_type"], ToolTypeEnum.API.value)
+        self.assertEqual(
+            response["data"],
+            {"status_code": 200, "result": {"message": "ok"}, "err_type": "none", "message": ""},
+        )
+        mock_factory.assert_called_once_with(sql_analyzer_cls=SqlQueryAnalysis)
+        mock_factory.return_value.create_from_config.assert_called_once_with(
+            tool_type=ToolTypeEnum.API.value,
+            config=self.api_debug_config,
+        )
+        mock_executor.execute.assert_called_once_with(request_data["params"])
+
+    @patch("services.web.tool.resources.ToolExecutorFactory")
+    def test_tool_execute_debug_not_support(self, mock_factory):
+        mock_factory.return_value.create_from_config.side_effect = ToolTypeNotSupport()
+        request_data = {
+            "tool_type": ToolTypeEnum.BK_VISION.value,
+            "config": {"uid": "vision_demo"},
+            "params": {},
+        }
+        resource = ToolExecuteDebug()
+        with self.assertRaises(ToolTypeNotSupport):
+            resource(request_data)
 
 
 class UserQueryTableAuthCheckTestCase(TestCase):
@@ -421,7 +496,14 @@ class ToolEnumMappingTests(TestCase):
             config={
                 "sql": "SELECT 1",
                 "referenced_tables": [{"table_name": "test"}],
-                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "input_variable": [
+                    {
+                        "raw_name": "param",
+                        "display_name": "Parameter",
+                        "required": False,
+                        "field_category": FieldCategory.INPUT.value,
+                    }
+                ],
                 "output_fields": [
                     {
                         "raw_name": self.field_name,
@@ -473,7 +555,14 @@ class ToolEnumMappingTests(TestCase):
             "config": {
                 "sql": "SELECT * FROM test",
                 "referenced_tables": [{"table_name": "test_table"}],
-                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "input_variable": [
+                    {
+                        "raw_name": "param",
+                        "display_name": "Parameter",
+                        "required": False,
+                        "field_category": FieldCategory.INPUT.value,
+                    }
+                ],
                 "output_fields": [
                     {
                         "raw_name": "status",

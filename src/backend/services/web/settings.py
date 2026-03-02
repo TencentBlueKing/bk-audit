@@ -1,8 +1,11 @@
+import os
+
 INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
     "services.web.entry",
     "services.web.query",
+    "services.web.log_subscription",
     "services.web.strategy_v2",
     "services.web.risk",
     "services.web.version",
@@ -10,3 +13,15 @@ INSTALLED_APPS = (
     "services.web.tool",
     "services.web.blob_storage",
 )
+
+# ============== 渲染任务相关配置 ==============
+# 渲染任务最大重试次数
+RENDER_MAX_RETRY = int(os.getenv("BKAPP_RENDER_MAX_RETRY", 3))
+# 渲染任务超时时间（秒），默认 30 分钟
+RENDER_TASK_TIMEOUT = int(os.getenv("BKAPP_RENDER_TASK_TIMEOUT", 30 * 60))
+# 渲染任务延迟触发时间（秒），默认 5 分钟
+RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", 60 * 5))
+# 渲染任务限流，格式: "次数/时间单位"，如 "10/m", "100/m", "1000/h"
+RENDER_TASK_RATE_LIMIT = os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "5/m")
+# 渲染任务重试延迟时间（秒），默认 10 秒
+RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
