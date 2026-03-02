@@ -30,6 +30,7 @@
       :class="{ 'is-table-empty': isTableEmpty }">
       <render-list
         ref="listRef"
+        :border="isTableEmpty ? [] : ['outer']"
         :columns="tableColumn"
         :data-source="dataSource"
         :settings="settings"
@@ -762,6 +763,10 @@
     &.is-table-empty {
       .bk-table-fixed {
         visibility: hidden;
+      }
+
+      .bk-exception {
+        border-bottom: none;
       }
     }
   }
