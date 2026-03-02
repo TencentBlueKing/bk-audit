@@ -1493,7 +1493,7 @@
     .event-create-loading-box {
       position: relative;
       width: 100%;
-      min-height: 250px;
+      height: 50vh;
     }
 
     :deep(.bk-loading-indicator) {
@@ -1501,8 +1501,7 @@
     }
 
     :deep(.bk-loading-title) {
-      padding-top: 10px !important;
-      margin-left: -10px !important;
+      margin-left: -15px !important;
     }
   }
 }
