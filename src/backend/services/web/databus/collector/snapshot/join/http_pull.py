@@ -169,7 +169,7 @@ class HttpPullHandler:
                 "sensitivity": self.pull_sensitivity,
                 "data_encoding": "UTF-8",
                 "raw_data_alias": self.config_name,
-                "data_region": "inland",
+                "data_region": settings.BKBASE_DATA_REGION,
             },
             "access_conf_info": {
                 "collection_model": {

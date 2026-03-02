@@ -258,6 +258,10 @@ REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 
+DEFAULT_REDIS_TAGS = [
+    tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",") if tag
+]
+
 CACHES["db"] = {
     "BACKEND": "django.core.cache.backends.db.DatabaseCache",
     "LOCATION": "django_cache",
@@ -540,6 +544,8 @@ CORS_EXPOSE_HEADERS = ['Content-Disposition']
 # Doris 事件表入库配置
 EVENT_DORIS_EXPIRES = os.getenv("BKAPP_EVENT_DORIS_EXPIRES", "1080d")
 
+BKBASE_GEOG_AREA_CODE = os.getenv("BKAPP_BKBASE_GEOG_AREA_CODE", "inland")
+BKBASE_DATA_REGION = os.getenv("BKAPP_BKBASE_DATA_REGION", "inland")
 # 日志订阅查询最大时间范围（毫秒），默认 30 天
 LOG_SUBSCRIPTION_MAX_TIME_RANGE = int(os.getenv("BKAPP_LOG_SUBSCRIPTION_MAX_TIME_RANGE", 30 * 24 * 60 * 60 * 1000))
 
