@@ -25,7 +25,9 @@
       @change="handleSearchChange"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
-    <div class="risk-manage-list">
+    <div
+      class="risk-manage-list"
+      :class="{ 'is-table-empty': isTableEmpty }">
       <render-list
         ref="listRef"
         :columns="tableColumn"
@@ -79,6 +81,7 @@
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -387,6 +390,20 @@
   ] as Column[];
   const tableColumn = ref(initTableColumns);
 
+  const isTableEmpty = ref(false);
+  // 空数据时重置滚动条位置
+  watch(isTableEmpty, (isEmpty) => {
+    if (isEmpty) {
+      nextTick(() => {
+        const tableBody = listRef.value?.$el?.querySelector('.bk-table-body');
+        if (tableBody) {
+          tableBody.scrollLeft = 0;
+          tableBody.scrollTop = 0;
+        }
+      });
+    }
+  });
+
   // let timeout: number| undefined = undefined;
 
   const listRef = ref();
@@ -573,6 +590,10 @@
       tableColumn.value =  initColumns();
     }
     settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
+
+    // 控制表格空数据时的样式状态
+    isTableEmpty.value = !results.length;
+
     // startPolling(results);
     if (!results.length) return;
     // 获取对应风险等级
@@ -737,11 +758,12 @@
     margin-top: 16px;
     background-color: white;
 
-    /* 解决表格悬浮超出 */
-
-    /* .bk-table .bk-table-fixed .column_fixed {
-      bottom: 2px !important;
-    } */
+    /* 数据为空时隐藏右侧固定列 */
+    &.is-table-empty {
+      .bk-table-fixed {
+        visibility: hidden;
+      }
+    }
   }
 
 }
