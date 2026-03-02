@@ -378,8 +378,7 @@
 
 .event-report-loading {
   :deep(.bk-loading-title) {
-    padding-top: 10px;
-    margin-left: -40px;
+    margin-left: -45px;
   }
 }
 </style>
