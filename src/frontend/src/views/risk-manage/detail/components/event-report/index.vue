@@ -288,6 +288,14 @@
     applyEditorContent(newContent);
   }, { immediate: true });
 
+  // 监听 report_generating 状态变化，当从 true 变为 false 时通知父组件刷新
+  watch(() => props.data.report_generating, (isGenerating, prevGenerating) => {
+    // 当 report_generating 从 true 变为 false 时，通知父组件刷新
+    if (prevGenerating && !isGenerating) {
+      emits('updated-data');
+    }
+  });
+
   const  handleEditReport = () => {
     isShowEditEventReport.value = true;
   };
