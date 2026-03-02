@@ -18,12 +18,14 @@
 <template>
   <div class="risk-manage-detail-linkevent-part">
     <div
-      v-if="linkEventList.length"
+      v-if="hasLoadedData"
       class="show-side-condition-btn"
-      :style="{ left: isShowSide ? '-16px' : '164px' }">
+      :class="{ collapsed: isShowSide }"
+      :style="{ left: isShowSide ? '0px' : '164px' }">
       <bk-button
         class="show-more-btn"
         text
+        :title="isShowSide ? t('展开列表') : t('收起列表')"
         @click="() => isShowSide = !isShowSide">
         <audit-icon
           :style="{ transform: isShowSide ? 'rotateZ(90deg)' : 'rotateZ(-90deg)' }"
@@ -45,7 +47,7 @@
       <div
         :key="detailRenderKey"
         class="body">
-        <template v-if="linkEventList.length">
+        <template v-if="hasLoadedData">
           <div
             class="list"
             :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
@@ -54,7 +56,7 @@
                 <div>
                   <div
                     v-for="(item, index) in linkEventList"
-                    v-show="!isShowSide"
+                    v-show="!isShowSide && linkEventList.length > 0"
                     :key="index"
                     class="list-item"
                     :class="[
@@ -63,19 +65,30 @@
                     @click="handlerSelect(item, index)">
                     {{ item?.event_time }}
                   </div>
+                  <div
+                    v-if="!isShowSide && linkEventList.length === 0"
+                    class="list-item"
+                    style=" color: #979ba5;text-align: center;">
+                    {{ t('暂无数据') }}
+                  </div>
                 </div>
               </transition>
             </scroll-faker>
           </div>
 
           <!-- detail -->
-          <div v-if="activeStatus === 'new' && newIndex.includes(active)">
-            <div class="frontend-create">
-              <audit-icon
-                class="create-icon"
-                type="loading" />
-              {{ t('事件创建中') }}
-            </div>
+          <div
+            v-if="activeStatus === 'new' && newIndex.includes(active)"
+            class="list-item-detail event-create-detail-loading">
+            <bk-loading
+              class="event-create-loading"
+              loading
+              mode="spin"
+              size="small"
+              theme="primary"
+              :title="t('事件创建中')">
+              <div class="event-create-loading-box" />
+            </bk-loading>
           </div>
           <div
             v-else
@@ -696,6 +709,7 @@
   const router = useRouter();
   const { t, locale } = useI18n();
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
+  const hasLoadedData = ref(false); // 标记是否曾经加载过数据
   const currentPage = ref(1); // 当前页数
   const active = ref<number>(0);
   const eventItem = ref(new EventModel()); // 当前选中事件
@@ -1014,6 +1028,8 @@
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
         isShowSide.value = !(linkEventList.value.length > 1);
+        // 标记已加载过数据，防止收起时列表消失
+        hasLoadedData.value = true;
       });
     },
   });
@@ -1132,7 +1148,34 @@
   const handleAddSuccess = () => {
     active.value = 0;
     linkEventList.value = [];
-    nextTick(() => {
+    // 立即触发父组件刷新数据，更新 report_generating 状态
+    emits('updatedData');
+    // 先立即获取未同步的事件，让新添加的事件立即显示
+    getAddEventList({
+      id: props.data.risk_id,
+    }).then(() => {
+      // 如果有未同步的事件，立即显示在列表中
+      if (addEventData.value.unsynced_events.length > 0) {
+        linkEventList.value = addEventData.value.unsynced_events;
+        activeStatus.value = linkEventList.value[0]?.status || '';
+        [eventItem.value] = linkEventList.value;
+        hasLoadedData.value = true;
+        // 标记新添加的事件索引
+        newIndex.value = linkEventList.value.map((item, index) => {
+          if (item.status === 'new') {
+            return index;
+          }
+          return -1;
+        }).filter(item => item !== -1);
+        // 如果有新事件，启动定时器刷新
+        if (linkEventList.value.some(item => item.status === 'new')) {
+          activeStatus.value = 'new';
+          timeout = setTimeout(() => {
+            timeoutRefresh();
+          }, 5000);
+        }
+      }
+      // 然后刷新完整的事件列表
       fetchLinkEvent({
         start_time: props.data.event_time,
         end_time: props.data.event_end_time,
@@ -1200,22 +1243,33 @@
     });
   });
 </script>
-<style lang="postcss">
+<style lang="postcss" scoped>
 .risk-manage-detail-linkevent-part {
   position: relative;
 
   .show-side-condition-btn {
     position: absolute;
     top: 50%;
+    z-index: 10;
     overflow: hidden;
     border-radius: 0 5px 5px 0;
+    transform: translateY(-50%);
     box-shadow: 0 2px 4px 0 #1919290d;
 
+    &.collapsed {
+      left: 0 !important;
+      border-radius: 0 5px 5px 0;
+    }
+
     .show-more-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 14px;
       height: 65px;
+      padding: 0;
       line-height: 5px;
-      color: #fff;
+      color: #63656e;
       background: #eaecef;
 
       &:hover {
@@ -1432,15 +1486,24 @@
   max-width: 80%
 }
 
-.frontend-create {
-  position: absolute;
-  top: 50px;
-  left: 50%;
-  color: #3a84ff;
-  transform: translateX(-50%);
+.event-create-detail-loading {
+  width: 100%;
 
-  .create-icon {
-    animation: spin 1s linear infinite
+  .event-create-loading {
+    .event-create-loading-box {
+      position: relative;
+      width: 100%;
+      min-height: 250px;
+    }
+
+    :deep(.bk-loading-indicator) {
+      margin-left: -80px !important;
+    }
+
+    :deep(.bk-loading-title) {
+      padding-top: 10px !important;
+      margin-left: -10px !important;
+    }
   }
 }
 
@@ -1475,3 +1538,4 @@
   }
 }
 </style>
+

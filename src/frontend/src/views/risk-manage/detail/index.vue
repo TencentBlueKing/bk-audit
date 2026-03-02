@@ -163,6 +163,7 @@
   const hasAutoOpenedReport = ref(false);
 
   let timeout: undefined | number = undefined;
+  let reportGeneratingTimer: undefined | number = undefined;
   const handleOpenRight = () => {
     isShowSide.value = !isShowSide.value;
   };
@@ -206,10 +207,17 @@
     },
     manual: true,
     onSuccess(data) {
-      if (['for_approve', 'auto_process'].includes(data.status)) {
-        startPolling();
+      // 如果正在生成报告，启动快速轮询（每3秒）
+      if (data.report_generating) {
+        startReportGeneratingPolling();
       } else {
-        clearTimeout(timeout);
+        stopReportGeneratingPolling();
+        // 原有的状态轮询逻辑
+        if (['for_approve', 'auto_process'].includes(data.status)) {
+          startPolling();
+        } else {
+          clearTimeout(timeout);
+        }
       }
     },
   });
@@ -230,12 +238,32 @@
       id: route.params.riskId,
     });
   };
-  // 轮训查询详情
+  // 轮训查询详情（原有逻辑，60秒一次）
   const startPolling = () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       handleUpdate();
     }, 60 * 1000);
+  };
+  // 报告生成时的轮询（10秒一次）
+  const startReportGeneratingPolling = () => {
+    stopReportGeneratingPolling();
+    const poll = () => {
+      fetchRiskList({
+        id: route.params.riskId,
+      });
+    };
+    // 立即执行一次
+    poll();
+    // 每5秒轮询一次
+    reportGeneratingTimer = window.setInterval(poll, 5000);
+  };
+  // 停止报告生成轮询
+  const stopReportGeneratingPolling = () => {
+    if (reportGeneratingTimer !== undefined) {
+      clearInterval(reportGeneratingTimer);
+      reportGeneratingTimer = undefined;
+    }
   };
 
   const handleCopyLink = () => {
@@ -324,9 +352,13 @@
       }
     });
     onBeforeUnmount(() => {
+      // 清理所有定时器
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      stopReportGeneratingPolling();
       observer.takeRecords();
       observer.disconnect();
-      clearTimeout(timeout);
     });
   });
 </script>
