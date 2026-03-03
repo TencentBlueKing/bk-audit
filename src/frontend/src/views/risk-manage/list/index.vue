@@ -302,7 +302,7 @@
     {
       label: () => t('最后一次处理时间'),
       field: () => 'last_operate_time',
-      // sort: 'custom',
+      sort: 'custom',
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
@@ -742,7 +742,6 @@
       risk_label: '',
       event_content: '',
       risk_level: '',
-      use_bkbase: true,
       title: '',
       notice_users: '',
     };
@@ -750,6 +749,10 @@
       ...params,
       ...searchModel.value,
     };
+    // 默认排序：按首次发现时间倒序，其次按风险ID倒序
+    if (!dataParams.sort) {
+      dataParams.sort = ['-event_time', '-risk_id'];
+    }
     listRef.value.fetchData(dataParams);
   };
 
