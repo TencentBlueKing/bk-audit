@@ -135,11 +135,17 @@
                   isHeadersNoPassIndex.includes(index) )? 'rules-header-key' : '' "
                 :placeholder="t('请输入 Key')"
                 @change="handleHeadersKeyChange" />
-              <span
+              <bk-popover
                 v-if="handleRulesHeadersKey(headersItem.key)
                   && !isHeadersPass &&
                   isHeadersNoPassIndex.includes(index)"
-                class="rules-header-key-text">{{ t('请输入 Key') }}</span>
+                :content="t('请输入 Key')"
+                placement="top"
+                theme="light">
+                <audit-icon
+                  class="rules-header-key-icon"
+                  type="info-fill" />
+              </bk-popover>
             </span>
             <bk-input
               v-model="headersItem.value"
@@ -673,6 +679,7 @@
 }
 
 .rules-header-key-span {
+  position: relative;
   display: inline-block;
   width: 20%;
   vertical-align: top;
@@ -682,9 +689,13 @@
   border: 1px solid red;
 }
 
-.rules-header-key-text {
-  /* vertical-align: bottom; */
+.rules-header-key-icon {
   position: absolute;
-  color: red;
+  top: 50%;
+  right: 16px;
+  font-size: 16px;
+  color: #ea3636;
+  cursor: pointer;
+  transform: translateY(-50%);
 }
 </style>
