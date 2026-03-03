@@ -69,7 +69,9 @@ class Permission(object):
 
     @classmethod
     def get_iam_client(cls):
-        return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL)
+        return IAM(
+            settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL, bk_tenant_id=settings.BK_TENANT_ID
+        )
 
     def make_request(self, action: Union[ActionMeta, str], resources: List[Resource] = None) -> Request:
         """
