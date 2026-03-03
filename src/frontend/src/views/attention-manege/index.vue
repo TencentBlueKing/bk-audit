@@ -175,6 +175,7 @@
     {
       label: () => t('风险等级'),
       field: () => 'risk_id',
+      sort: 'custom',
       width: 90,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
@@ -226,12 +227,6 @@
       ),
     },
     {
-      label: () => t('当前处理人'),
-      field: () => 'current_operator',
-      width: 200,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
-    },
-    {
       label: () => t('首次发现时间'),
       field: () => 'event_time',
       sort: 'custom',
@@ -268,9 +263,15 @@
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
+      label: () => t('当前处理人'),
+      field: () => 'current_operator',
+      width: 200,
+      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
+    },
+    {
       label: () => t('最后一次处理时间'),
       field: () => 'last_operate_time',
-      // sort: 'custom',
+      sort: 'custom',
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
@@ -588,13 +589,16 @@
       event_content: '',
       risk_level: '',
       title: '',
-      use_bkbase: true,
       notice_users: '',
     };
     const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
     };
+    // 默认排序：按首次发现时间倒序，其次按风险ID倒序
+    if (!dataParams.sort) {
+      dataParams.sort = ['-event_time', '-risk_id'];
+    }
     listRef.value.fetchData(dataParams);
   };
 

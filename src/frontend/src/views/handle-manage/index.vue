@@ -317,7 +317,7 @@
     {
       label: () => t('最后一次处理时间'),
       field: () => 'last_operate_time',
-      // sort: 'custom',
+      sort: 'custom',
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
@@ -632,15 +632,43 @@
       return [...initTableColumns];
     }
     const params = getSearchParamsPost('event_filters');
+    const urlParams = getSearchParamsPost('');
     const columns = [...initTableColumns]; // 创建副本避免修改原始数组
     // 选中的列
     let selectedColumns: Column[] = [];
     const noValue = selectedItemList.value.filter(item => item.value !== '');
+
+    // 解析新的 sort 数组格式
+    const sortMap: Record<string, string> = {};
+    if (urlParams?.sort) {
+      try {
+        const sortArray = Array.isArray(urlParams.sort) ? urlParams.sort : JSON.parse(urlParams.sort);
+        if (Array.isArray(sortArray)) {
+          sortArray.forEach((sortField: string) => {
+            if (sortField.startsWith('-')) {
+              // 倒序：字段名前缀 - 表示倒序
+              sortMap[sortField.substring(1)] = 'desc';
+            } else {
+              // 正序：无前缀为正序
+              sortMap[sortField] = 'asc';
+            }
+          });
+        }
+      } catch {
+        // 如果解析失败，忽略
+      }
+    }
+    // 向后兼容：支持旧的 order_field + order_type 格式
+    if (!Object.keys(sortMap).length && params?.order_field && params?.order_type) {
+      sortMap[params.order_field] = params.order_type;
+    }
+
     selectedColumns = noValue.map((item) => {
-      const sortVal = params?.order_field === `event_data.${item.field_name}` ? params?.order_type :  '';
+      const fieldName = `event_data.${item.field_name}`;
+      const sortVal = sortMap[fieldName] || '';
       return {
         label: item.display_name,
-        field: `event_data.${item.field_name}`,
+        field: fieldName,
         width: 120,
         showOverflowTooltip: true,
         sort: {
@@ -755,7 +783,6 @@
       status: '',
       event_content: '',
       risk_level: '',
-      use_bkbase: true,
       title: '',
       notice_users: '',
     };
@@ -763,6 +790,11 @@
       ...params,
       ...searchModel.value,
     };
+    // 如果没有 sort 参数，设置默认排序
+    if (!dataParams.sort) {
+      dataParams.sort = ['-risk_level', '-event_time', '-risk_id'];
+    }
+    // use_bkbase 参数已移除，由 event_filters 自动决定
     listRef.value.fetchData(dataParams);
   };
 
