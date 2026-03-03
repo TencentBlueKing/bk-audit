@@ -41,7 +41,8 @@
             </span>
           </div>
           <div
-            class="field-value">
+            class="field-value"
+            style="flex: 0 1 930px; min-width: 200px;">
             {{ t('参数说明') }}
           </div>
           <div
@@ -206,7 +207,8 @@
             </div>
             <!-- 参数说明 -->
             <div
-              class="field-value">
+              class="field-value"
+              style="flex: 0 1 930px; min-width: 200px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
