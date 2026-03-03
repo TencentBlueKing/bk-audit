@@ -433,54 +433,57 @@ class ListRiskRequestSerializer(serializers.Serializer):
         default=False,
         help_text=gettext_lazy("已废弃：由 event_filters 自动决定，传入无效"),
     )
-    order_field = serializers.CharField(
-        label=gettext_lazy("排序字段"),
-        required=False,
-        allow_null=True,
-        allow_blank=True,
-        help_text="risk_level:根据风险等级排序",
-    )
-    order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"),
-        required=False,
-        allow_null=True,
-        allow_blank=True,
-        choices=OrderTypeChoices.choices,
-    )
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
     title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
     event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
+    sort = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        default=list,
+        help_text=gettext_lazy(
+            '多字段排序，如 ["-risk_level", "-event_time", "-risk_id"]。'
+            "每个元素为字段名，前缀 - 表示倒序。"
+            "替代已废弃的 order_field + order_type 参数。"
+        ),
+    )
 
-    def validate(self, attrs: dict) -> dict:
-        # 校验
-        data = super().validate(attrs)
-        event_filters = data.get("event_filters") or []
-        raw_order_field = data.get("order_field") or attrs.get("order_field")
-        normalized_order_field = (raw_order_field or "").lstrip("-")
-        if normalized_order_field.startswith("event_data."):
+    @staticmethod
+    def _normalize_sort_to_order_fields(sort_list: list) -> list:
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        order_fields = []
+        for item in sort_list:
+            bare = item.lstrip("-")
+            if not bare:
+                continue
+            prefix = "-" if item.startswith("-") else ""
+            if bare == Strategy.risk_level.field.name:
+                bare = RISK_LEVEL_ORDER_FIELD
+            order_fields.append(f"{prefix}{bare}")
+        return order_fields
+
+    @staticmethod
+    def _validate_event_data_order_fields(order_fields: list, event_filters: list) -> None:
+        """校验 event_data.xxx 排序字段必须在 event_filters 中存在对应筛选条件。"""
+        filter_fields = {(item.get("field") or "").strip() for item in event_filters if isinstance(item, dict)}
+        for field in order_fields:
+            normalized = field.lstrip("-")
+            if not normalized.startswith("event_data."):
+                continue
             if not event_filters:
                 raise serializers.ValidationError(gettext("关联事件字段排序需同时指定事件筛选条件"))
-            event_field_name = normalized_order_field[len("event_data.") :].strip()
-            filter_fields = {(item.get("field") or "").strip() for item in event_filters if isinstance(item, dict)}
-            filter_fields_with_prefix = {f"event_data.{field}" for field in filter_fields if field}
-            if (
-                event_field_name
-                and event_field_name not in filter_fields
-                and normalized_order_field not in filter_fields_with_prefix
-            ):
+            event_field_name = normalized[len("event_data.") :].strip()
+            if event_field_name and event_field_name not in filter_fields:
                 raise serializers.ValidationError(gettext("关联事件字段排序需在筛选条件中包含字段：%s") % event_field_name)
-        # 排序
-        # 兼容：前端传入 risk_level 作为排序字段时，转换为 strategy__risk_level
-        if data.get("order_field") == Strategy.risk_level.field.name:
-            data["order_field"] = RISK_LEVEL_ORDER_FIELD
-        if data.get("order_field") and data.get("order_type"):
-            data["order_field"] = (
-                f"-{data['order_field']}"
-                if data.pop("order_type") == OrderTypeChoices.DESC
-                else data.pop("order_field")
-            )
+
+    def validate(self, attrs: dict) -> dict:
+        data = super().validate(attrs)
+        event_filters = data.get("event_filters") or []
+        order_fields = self._normalize_sort_to_order_fields(data.pop("sort", []))
+        data["order_fields"] = order_fields
+        self._validate_event_data_order_fields(order_fields, event_filters)
         # 时间转换
         if data.get("start_time"):
             data["event_time__gte"] = [data.pop("start_time")]
@@ -507,9 +510,15 @@ class ListRiskRequestSerializer(serializers.Serializer):
         # 将前端传入的 status 映射到 display_status 进行筛选
         if data.get("status"):
             data["display_status"] = data.pop("status")
-        # 格式转换
+        # 将逗号分隔的字符串参数拆分为列表
         for key, val in attrs.items():
-            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
+            if key in [
+                "event_time__gte",
+                "event_time__lt",
+                "use_bkbase",
+                "event_filters",
+                "order_fields",
+            ]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
