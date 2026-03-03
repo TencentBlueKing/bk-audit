@@ -43,7 +43,11 @@
           <div
             class="field-value"
             style="flex: 0 1 930px; min-width: 200px;">
-            {{ t('参数说明') }}
+            <span
+              v-bk-tooltips="{ content: t('在接口调试页，鼠标移入label，即可显示参数说明') }"
+              class="underline-dashed">
+              {{ t('参数说明') }}
+            </span>
           </div>
           <div
             class="field-value"
