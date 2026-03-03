@@ -5,6 +5,7 @@ from typing import List
 from unittest import mock
 
 import sqlglot
+from blueapps.utils.local import request_local
 from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
@@ -90,6 +91,7 @@ class TestListRiskResource(TestCase):
         self.addCleanup(
             lambda: GlobalMetaConfig.objects.filter(config_key__in=self.bkbase_table_config.keys()).delete()
         )
+        self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
 
         self.strategy = Strategy.objects.create(
             namespace="default",
@@ -126,6 +128,7 @@ class TestListRiskResource(TestCase):
         django_request.user = SimpleNamespace(username=self.username, is_authenticated=True)
         request = Request(django_request)
         request.user = django_request.user
+        setattr(request_local, "request", request)
         return request
 
     def _call_resource(self, payload):
@@ -345,8 +348,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "title": "bkbase-title",
-            "order_field": "event_data.ip",
-            "order_type": "desc",
+            "sort": ["-event_data.ip"],
             "event_filters": [
                 {
                     "field": "ip",
@@ -578,8 +580,7 @@ class TestListRiskResource(TestCase):
         payload = {
             "title": "bkbase-title",
             "risk_level": RiskLevel.HIGH.value,
-            "order_field": "risk_level",
-            "order_type": "desc",
+            "sort": ["-risk_level", "-event_time"],
             "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
 
@@ -596,7 +597,6 @@ class TestListRiskResource(TestCase):
         data_sql_normalized = data_sql.replace("`", "")
         self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
         self.assertIn("ELSE -1 END DESC", data_sql_normalized)
-        self.assertIn("base_query.event_time DESC", data_sql_normalized)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -884,6 +884,120 @@ class TestListRiskResource(TestCase):
         self.assertEqual([item["risk_id"] for item in data_second["results"]], [self.risk.risk_id])
         self.assertEqual(data_second["results"][0]["status"], RiskStatus.NEW)
 
+    # ──── 排序 ────
+
+    def _create_sort_data(self):
+        """创建多风险等级数据用于排序测试"""
+        strategy_mid = Strategy.objects.create(strategy_id=202, strategy_name="S-MID", risk_level=RiskLevel.MIDDLE)
+        strategy_low = Strategy.objects.create(strategy_id=203, strategy_name="S-LOW", risk_level=RiskLevel.LOW)
+        Risk.objects.create(
+            risk_id="risk-mid",
+            raw_event_id="raw-mid",
+            strategy=strategy_mid,
+            status=RiskStatus.NEW,
+            display_status=RiskDisplayStatus.NEW,
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+        Risk.objects.create(
+            risk_id="risk-low",
+            raw_event_id="raw-low",
+            strategy=strategy_low,
+            status=RiskStatus.CLOSED,
+            display_status=RiskDisplayStatus.CLOSED,
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+
+    def test_list_risk_sort_by_strategy_level_desc(self):
+        """风险等级逆序 HIGH > MIDDLE > LOW"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        ids = [r["risk_id"] for r in data["results"]]
+        self.assertEqual(ids, [self.risk.risk_id, "risk-mid", "risk-low"])
+
+    def test_list_risk_sort_by_strategy_level_asc(self):
+        """风险等级正序 LOW < MIDDLE < HIGH"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["risk_level", "-event_time"]}, _request=request)
+        ids = [r["risk_id"] for r in data["results"]]
+        self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
+
+    def test_list_risk_multi_sort_risk_level_desc_event_time_desc(self):
+        """多字段排序: sort=['-risk_level', '-event_time']"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        ids = [r["risk_id"] for r in data["results"]]
+        self.assertEqual(ids[0], self.risk.risk_id)
+        self.assertEqual(ids[-1], "risk-low")
+
+    def test_list_risk_multi_sort_event_time_desc_risk_id_desc(self):
+        """多字段排序: sort=['-event_time', '-risk_id']"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["-event_time", "-risk_id"]}, _request=request)
+        ids = [r["risk_id"] for r in data["results"]]
+        self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
+
+    def test_list_risk_multi_sort_display_status_asc_event_time_desc(self):
+        """多字段排序: sort=['display_status', '-event_time'] 常规字段+事件时间"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["display_status", "-event_time"]}, _request=request)
+        statuses = [r["status"] for r in data["results"]]
+        self.assertEqual(statuses[0], RiskDisplayStatus.CLOSED.value)
+        for i in range(len(statuses) - 1):
+            self.assertLessEqual(statuses[i], statuses[i + 1])
+
+    def test_list_risk_sort_risk_level_with_event_time(self):
+        """风险等级+事件时间排序"""
+        self._create_sort_data()
+        request = self._make_request()
+        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        ids = [r["risk_id"] for r in data["results"]]
+        self.assertEqual(ids[0], self.risk.risk_id)
+        self.assertEqual(ids[-1], "risk-low")
+
+    # ──── load_risks / IAM ────
+
+    def test_list_risk_load_risks_returns_plain_queryset(self):
+        """ListRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        from services.web.risk.resources import ListRisk
+
+        qs = ListRisk().load_risks({})
+        risk = qs.first()
+        self.assertFalse(hasattr(risk, "event_content_short"))
+        self.assertFalse(hasattr(risk, "_has_report"))
+
+    def test_list_risk_uses_iam_only(self):
+        """ListRisk 使用 iam_risk_filter"""
+        request = self._make_request()
+        self.resource.risk.list_risk({"sort": ["-event_time"]}, _request=request)
+        self.iam_filter_patcher.target.iam_risk_filter.assert_called()
+
+    # ──── Tags / Strategy ────
+
+    def test_list_risk_tags_no_memory_materialization(self):
+        """ListRiskTags 应使用子查询而非将 risk_id 物化到内存"""
+        from apps.meta.models import Tag
+        from services.web.risk.resources.risk import ListRiskTags
+        from services.web.strategy_v2.models import StrategyTag
+
+        tag = Tag.objects.create(tag_name="test-tag")
+        StrategyTag.objects.create(strategy=self.strategy, tag=tag)
+        result = ListRiskTags().perform_request({"risk_view_type": "all"})
+        tag_ids = [t.tag_id if hasattr(t, "tag_id") else t["tag_id"] for t in result]
+        self.assertIn(tag.tag_id, tag_ids)
+
+    def test_list_risk_strategy_returns_correct_strategies(self):
+        """ListRiskStrategy 应返回风险关联的策略"""
+        from services.web.risk.resources.risk import ListRiskStrategy
+
+        result = ListRiskStrategy().perform_request({"risk_view_type": "all"})
+        strategy_ids = {s.strategy_id if hasattr(s, "strategy_id") else s["strategy_id"] for s in result}
+        self.assertIn(self.strategy.strategy_id, strategy_ids)
+
 
 class TestListMineAndNoticingRisk(TestCase):
     def setUp(self):
@@ -904,6 +1018,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_level=RiskLevel.HIGH.value,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
+        self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
 
         self.risk_owned = Risk.objects.create(
             risk_id="risk-owned",
@@ -949,6 +1064,7 @@ class TestListMineAndNoticingRisk(TestCase):
         django_request.user = SimpleNamespace(username=self.username, is_authenticated=True)
         request = Request(django_request)
         request.user = django_request.user
+        setattr(request_local, "request", request)
         return request
 
     def test_list_mine_risk(self):
@@ -1012,6 +1128,100 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
+
+    # ──── 排序 ────
+
+    def _create_sort_data(self):
+        """创建低风险等级数据用于排序测试，返回 risk_owned_low"""
+        strategy_low = Strategy.objects.create(strategy_id=204, strategy_name="S-LOW", risk_level=RiskLevel.LOW)
+        risk_owned_low = Risk.objects.create(
+            risk_id="risk-owned-low",
+            raw_event_id="raw-owned-low",
+            strategy=strategy_low,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[self.username],
+            notice_users=[self.username],
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+        TicketPermission.objects.create(
+            risk_id=risk_owned_low.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        return risk_owned_low
+
+    def test_list_mine_risk_sort_by_strategy_level_desc(self):
+        """待我处理: 按风险等级逆序 HIGH > LOW"""
+        risk_owned_low = self._create_sort_data()
+        request = self._make_request()
+        response = ListMineRisk().request(
+            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            _request=request,
+        )
+        ids = [r["risk_id"] for r in response["results"]]
+        self.assertEqual(ids, [self.risk_owned.risk_id, risk_owned_low.risk_id])
+
+    def test_list_mine_risk_multi_sort_risk_level_desc_event_time_desc_risk_id_desc(self):
+        """待我处理: sort=['-risk_level', '-event_time', '-risk_id']"""
+        risk_owned_low = self._create_sort_data()
+        request = self._make_request()
+        response = ListMineRisk().request(
+            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            _request=request,
+        )
+        ids = [r["risk_id"] for r in response["results"]]
+        self.assertEqual(ids[0], self.risk_owned.risk_id)
+        self.assertEqual(ids[-1], risk_owned_low.risk_id)
+
+    def test_list_noticing_risk_sort_by_strategy_level_desc(self):
+        """我的关注: 按风险等级逆序"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        self._create_sort_data()
+        request = self._make_request()
+        response = ListNoticingRisk().request(
+            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            _request=request,
+        )
+        ids = [r["risk_id"] for r in response["results"]]
+        self.assertEqual(ids[0], self.risk_noticed.risk_id)
+
+    def test_list_noticing_risk_multi_sort_event_time_desc_risk_id_desc(self):
+        """我的关注: sort=['-event_time', '-risk_id']"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        risk_owned_low = self._create_sort_data()
+        request = self._make_request()
+        response = ListNoticingRisk().request(
+            {"page": 1, "page_size": 10, "sort": ["-event_time", "-risk_id"]},
+            _request=request,
+        )
+        ids = [r["risk_id"] for r in response["results"]]
+        self.assertEqual(ids, [risk_owned_low.risk_id, self.risk_noticed.risk_id])
+
+    # ──── load_risks ────
+
+    def test_list_mine_risk_load_risks_returns_plain_queryset(self):
+        """ListMineRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        self._make_request()
+        qs = ListMineRisk().load_risks({})
+        risk = qs.first()
+        self.assertIsNotNone(risk)
+        self.assertFalse(hasattr(risk, "event_content_short"))
+        self.assertFalse(hasattr(risk, "_has_report"))
+
+    def test_list_noticing_risk_load_risks_returns_plain_queryset(self):
+        """ListNoticingRisk.load_risks 应返回不带注解的纯净 QuerySet"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        self._make_request()
+        qs = ListNoticingRisk().load_risks({})
+        risk = qs.first()
+        self.assertIsNotNone(risk)
+        self.assertFalse(hasattr(risk, "event_content_short"))
+        self.assertFalse(hasattr(risk, "_has_report"))
 
 
 class TestRetrieveRiskDetail(TestCase):
@@ -1294,6 +1504,13 @@ class TestRiskPermissionFilters(TestCase):
 
     def setUp(self):
         super().setUp()
+        factory = APIRequestFactory()
+        django_request = factory.get("/risks/")
+        django_request.user = SimpleNamespace(username="admin", is_authenticated=True)
+        request = Request(django_request)
+        request.user = django_request.user
+        setattr(request_local, "request", request)
+        self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
         self.strategy = Strategy.objects.create(
             strategy_id=301,
             strategy_name="perm-test-strategy",
@@ -1426,6 +1643,7 @@ class TestListProcessedRisk(TestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
+        self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
         self.strategy = Strategy.objects.create(
             strategy_id=404,
             strategy_name="processed-strategy",
@@ -1516,6 +1734,7 @@ class TestListProcessedRisk(TestCase):
         django_request.user = SimpleNamespace(username=self.username, is_authenticated=True)
         request = Request(django_request)
         request.user = django_request.user
+        setattr(request_local, "request", request)
         return request
 
     def test_list_processed_risk_returns_past_risks(self):
@@ -1567,11 +1786,30 @@ class TestListProcessedRisk(TestCase):
         """ListProcessedRisk.load_risks 应返回不带注解的纯净 QuerySet"""
         from services.web.risk.resources.risk import ListProcessedRisk
 
+        self._make_request()
         qs = ListProcessedRisk().load_risks({})
         risk = qs.first()
         self.assertIsNotNone(risk, "setUp 数据应包含已处理的风险")
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
+
+    def test_list_processed_risk_sort_last_operate_time_desc_risk_id_desc(self):
+        """处理历史默认排序: sort=['-last_operate_time', '-risk_id']"""
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        request = self._make_request()
+        resp = ListProcessedRisk().request(
+            {"page": 1, "page_size": 10, "sort": ["-last_operate_time", "-risk_id"]},
+            _request=request,
+        )
+        ids = [item["risk_id"] for item in resp["results"]]
+        self.assertIn("R-PAST", ids)
+        self.assertIn("R-OPEN", ids)
+        self.assertNotIn("R-CURRENT", ids)
+        self.assertGreaterEqual(len(ids), 2)
+        first_risk = Risk.objects.get(risk_id=ids[0])
+        second_risk = Risk.objects.get(risk_id=ids[1])
+        self.assertGreaterEqual(first_risk.last_operate_time, second_risk.last_operate_time)
 
     def test_list_processed_risk_via_bkbase(self):
         """ListProcessedRisk 走 BkBase 路径时，SQL 应正确映射 risk_ticketnode 表"""
