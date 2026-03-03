@@ -21,6 +21,8 @@ from django.utils.dateparse import parse_datetime
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
+from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD
+
 logger = logging.getLogger(__name__)
 
 
@@ -312,46 +314,63 @@ class BkBaseQueryExpressionBuilder:
 
 
 class BkBaseFieldResolver:
-    """负责解析排序字段、事件过滤等基础信息。"""
+    """
+    解析 BKBase 查询所需的排序字段与事件过滤条件。
+
+    职责：
+    - 将前端传入的 order_fields / event_filters 解析为 BKBase SQL 构建所需的结构化信息
+    - 判断是否需要 JOIN 事件表、是否需要去重、事件排序字段是否需要数值 CAST
+    """
 
     EVENT_DATA_PREFIX = "event_data."
 
     def __init__(
         self,
-        order_field: str,
+        order_fields: List[str],
         event_filters: Sequence[Dict[str, Any]],
         duplicate_field_map: Dict[int, Dict[str, Sequence[str]]],
     ) -> None:
-        self.order_field = order_field or ""
+        self.order_fields = order_fields or []
         self._event_filter_specs: Tuple[EventFilterSpec, ...] = self._build_event_filter_specs(event_filters)
         self.duplicate_field_map = duplicate_field_map or {}
         self._numeric_event_filter_fields = self._collect_numeric_event_filter_fields()
 
     def resolve_value_fields(self, base_fields: Iterable[str]) -> List[str]:
+        """
+        合并 base_fields 与排序字段，返回 BKBase SELECT 需要的所有字段名。
+
+        - event_data.xxx 字段通过 JSON_EXTRACT 获取，不加入 value_fields
+        - strategy__risk_level 排序需要 event_time 参与 CASE/WHEN 排名，自动补充
+        """
         fields = list(base_fields)
-        order_field_name = self.order_field.lstrip("-")
-        if order_field_name and not self._is_event_order_field() and order_field_name not in fields:
-            fields.append(order_field_name)
-        if order_field_name == "strategy__risk_level" and "event_time" not in fields:
+        for order_field in self.order_fields:
+            name = order_field.lstrip("-")
+            if name.startswith(self.EVENT_DATA_PREFIX):
+                continue
+            if name not in fields:
+                fields.append(name)
+        if any(f.lstrip("-") == RISK_LEVEL_ORDER_FIELD for f in self.order_fields) and "event_time" not in fields:
             fields.append("event_time")
         return fields
 
     def event_order_field(self) -> Optional[str]:
-        normalized = self.order_field.lstrip("-")
-        if normalized.startswith(self.EVENT_DATA_PREFIX):
-            return normalized[len(self.EVENT_DATA_PREFIX) :].strip() or None
+        """返回 order_fields 中第一个 event_data.xxx 的字段名（去掉前缀），用于 BKBase SQL 的 JSON_EXTRACT 排序。"""
+        for order_field in self.order_fields:
+            normalized = order_field.lstrip("-")
+            if normalized.startswith(self.EVENT_DATA_PREFIX):
+                return normalized[len(self.EVENT_DATA_PREFIX) :].strip() or None
         return None
 
     def needs_deduplicate(self) -> bool:
+        """同一策略下存在多个事件字段映射到同一 display_name 时，需要去重。"""
         return bool(self.duplicate_field_map)
 
     def requires_event_join(self) -> bool:
+        """有事件筛选条件时，需要 JOIN 事件表。"""
         return bool(self.event_filters)
 
-    def _is_event_order_field(self) -> bool:
-        return self.event_order_field() is not None
-
     def event_order_requires_numeric_cast(self) -> bool:
+        """事件排序字段在筛选条件中使用了数值比较运算符（>、>=、<、<=）时，需要 CAST 为 DOUBLE。"""
         normalized = self.event_order_field()
         if not normalized:
             return False
@@ -773,8 +792,7 @@ class FinalSelectAssembler(SQLHelper):
         base_query: exp.Select,
         matched_event: Optional[exp.Subquery],
         *,
-        order_field: str,
-        order_direction: str,
+        order_fields: List[str],
         limit: int,
         offset: int,
     ) -> exp.Select:
@@ -803,7 +821,7 @@ class FinalSelectAssembler(SQLHelper):
                 projections.append(exp.alias_(order_expression, "__order_event_field"))
             joined.set("expressions", projections)
 
-        order_expressions = self._build_order_expressions(order_field, order_direction, matched_event is not None)
+        order_expressions = self._build_order_expressions(order_fields, matched_event is not None)
         if order_expressions:
             joined = joined.order_by(*order_expressions)
         if limit:
@@ -841,34 +859,43 @@ class FinalSelectAssembler(SQLHelper):
 
     def _build_order_expressions(
         self,
-        order_field: str,
-        order_direction: str,
+        order_fields: List[str],
         has_event_join: bool,
     ) -> List[exp.Expression]:
-        if not order_field:
+        """
+        将 order_fields 列表转换为 sqlglot ORDER BY 表达式列表。
+
+        每个字段按类型分三种处理方式：
+        1. event_data.xxx  → __order_event_field + dteventtimestamp DESC（只取第一个，相同值按时间倒序）
+        2. strategy__risk_level → CASE/WHEN 将 LOW/MIDDLE/HIGH 映射为 0/1/2 排名
+        3. 其他普通字段      → 直接引用 base_query.field_name
+        """
+        if not order_fields:
             return []
-        descending = order_direction.upper() == "DESC"
+
         event_field = self.resolver.event_order_field()
         if event_field and has_event_join:
-            return [
-                exp.Ordered(this=exp.column("__order_event_field"), desc=descending),
-                exp.Ordered(
-                    this=self.column("matched_event", "dteventtimestamp"),
-                    desc=True,
-                ),
-            ]
-        field_name = order_field.lstrip("-")
-        from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD  # noqa
-        from services.web.strategy_v2.constants import RiskLevel  # noqa
+            # 有事件字段排序时，仅按事件字段 + dteventtimestamp DESC 排序，其他排序字段忽略
+            event_raw = next(
+                (f for f in order_fields if f.lstrip("-").startswith(self.resolver.EVENT_DATA_PREFIX)), None
+            )
+            if event_raw is not None:
+                return [
+                    exp.Ordered(this=exp.column("__order_event_field"), desc=event_raw.startswith("-")),
+                    exp.Ordered(this=self.column("matched_event", "dteventtimestamp"), desc=True),
+                ]
 
-        base_column = self._base_query_column(field_name)
-        if field_name == RISK_LEVEL_ORDER_FIELD:
-            rank_expr = self._build_risk_level_rank_expression(base_column)
-            return [
-                exp.Ordered(this=rank_expr, desc=descending),
-                exp.Ordered(this=self._base_query_column("event_time"), desc=True),
-            ]
-        return [exp.Ordered(this=base_column, desc=descending)]
+        expressions = []
+        for field in order_fields:
+            bare = field.lstrip("-")
+            descending = field.startswith("-")
+
+            if bare == RISK_LEVEL_ORDER_FIELD:
+                rank_expr = self._build_risk_level_rank_expression(self._base_query_column(bare))
+                expressions.append(exp.Ordered(this=rank_expr, desc=descending))
+            else:
+                expressions.append(exp.Ordered(this=self._base_query_column(bare), desc=descending))
+        return expressions
 
     def _build_join_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
         event_timestamp = self.column(alias, "dteventtimestamp")
@@ -920,8 +947,7 @@ class BkBaseDataQueryBuilder:
         self,
         components: BkBaseQueryComponents,
         *,
-        order_field: str,
-        order_direction: str,
+        order_fields: List[str],
         limit: int,
         offset: int,
     ) -> exp.Select:
@@ -930,8 +956,7 @@ class BkBaseDataQueryBuilder:
         return self.assembler.assemble_data_query(
             clones.base_query,
             clones.matched_event,
-            order_field=order_field,
-            order_direction=order_direction,
+            order_fields=order_fields,
             limit=limit,
             offset=offset,
         )
@@ -940,9 +965,9 @@ class BkBaseDataQueryBuilder:
 class ManualUnsyncedRiskPrepender:
     """管理未同步手工风险的计数与分页填充。"""
 
-    def __init__(self, base_queryset: Optional[QuerySet], order_field: str, order_func):
+    def __init__(self, base_queryset: Optional[QuerySet], order_fields: List[str], order_func):
         self.queryset = base_queryset.filter(manual_synced=False) if base_queryset is not None else None
-        self.order_field = order_field
+        self.order_fields = order_fields
         self.order_func = order_func
         self._count: Optional[int] = None
 
@@ -962,7 +987,7 @@ class ManualUnsyncedRiskPrepender:
         total = self.count()
         if offset >= total:
             return []
-        ordered = self.order_func(self.queryset, self.order_field)
+        ordered = self.order_func(self.queryset, self.order_fields)
         return list(ordered.values_list("risk_id", flat=True)[offset : offset + limit])
 
 
@@ -1053,8 +1078,7 @@ class BkBaseDataExecutor:
         self,
         base_expression: exp.Expression,
         *,
-        order_field: str,
-        order_direction: str,
+        order_fields: List[str],
         limit: int,
         offset: int,
         components: Optional[BkBaseQueryComponents] = None,
@@ -1062,8 +1086,7 @@ class BkBaseDataExecutor:
         base_components = components or self.components_builder.build(base_expression)
         data_query = self.data_query_builder.build(
             base_components,
-            order_field=order_field,
-            order_direction=order_direction,
+            order_fields=order_fields,
             limit=limit,
             offset=offset,
         )
@@ -1154,8 +1177,7 @@ class BkBaseQueryPlanner:
         self,
         request,
         *,
-        order_field: str,
-        order_direction: str,
+        order_fields: List[str],
     ) -> Tuple[List[Dict[str, Any]], Any]:
         total, components = self.count_executor.execute(self.queryset_expression)
         page, limit, offset = self.pagination_planner.paginate(total, request)
@@ -1165,8 +1187,7 @@ class BkBaseQueryPlanner:
             # 复用 count 阶段生成的组件，避免重复构造冗长的 sqlglot AST。
             data_rows = self.data_executor.execute(
                 self.queryset_expression,
-                order_field=order_field,
-                order_direction=order_direction,
+                order_fields=order_fields,
                 limit=limit,
                 offset=offset,
                 components=components,
