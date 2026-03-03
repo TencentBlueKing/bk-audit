@@ -276,6 +276,7 @@
       label: () => t('最后一次处理时间'),
       field: () => 'last_operate_time',
       width: 160,
+      sort: 'custom',
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
     {
@@ -493,7 +494,6 @@
       risk_label: '',
       event_content: '',
       risk_level: '',
-      use_bkbase: true,
       title: '',
       notice_users: '',
       has_report: '',
@@ -502,6 +502,10 @@
       ...params,
       ...searchModel.value,
     };
+    // 默认排序：按最后处理时间倒序，其次按风险ID倒序
+    if (!dataParams.sort) {
+      dataParams.sort = ['-last_operate_time', '-risk_id'];
+    }
     listRef.value.fetchData(dataParams);
   };
 
