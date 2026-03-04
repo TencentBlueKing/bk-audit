@@ -1159,7 +1159,7 @@ class TestSyncManualRiskStatus(TestCase):
 
         synced_target = Risk.objects.get(pk=target.pk)
         self.assertTrue(synced_target.manual_synced)
-        self.assertEqual(synced_target.display_status, RiskDisplayStatus.NEW)
+        self.assertEqual(synced_target.display_status, RiskDisplayStatus.STAND_BY)
         still_unsynced = Risk.objects.get(pk=untouched.pk)
         self.assertFalse(still_unsynced.manual_synced)
         self.assertEqual(still_unsynced.display_status, RiskDisplayStatus.STAND_BY)

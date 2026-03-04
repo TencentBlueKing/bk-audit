@@ -51,7 +51,6 @@ from services.web.risk.constants import (
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
-    RiskDisplayStatus,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -264,9 +263,7 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
         resp = api.bk_base.query_sync(sql=sql) or {}
         found_ids = {row.get("risk_id") for row in resp.get("list") or [] if row.get("risk_id")}
         if found_ids:
-            _ = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(
-                manual_synced=True, display_status=RiskDisplayStatus.NEW
-            )
+            _ = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(manual_synced=True)
             logger_celery.info("[SyncManualRiskStatus] Updated %s risks in chunk", found_ids)
 
 
