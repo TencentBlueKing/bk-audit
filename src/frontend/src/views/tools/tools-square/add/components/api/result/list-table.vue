@@ -87,7 +87,7 @@
               </div>
               <div
                 class="field-value"
-                style="flex: 0 0 50px;" />
+                :style="`flex: 0 0 ${addList.length > 0 ? 80 : 50}px;`" />
             </div>
           </div>
           <vuedraggable
@@ -247,12 +247,39 @@
                       </bk-form-item>
                     </div>
                     <div
-                      class="field-value"
-                      style="flex: 0 0 50px;border-right: none !important;">
-                      <audit-icon
-                        class="reduce-fill field-icon"
-                        type="reduce-fill"
-                        @click="handleDelect(element.json_path)" />
+                      class="field-value operation-cell"
+                      :style="`flex: 0 0 ${addList.length > 0 ? 80 : 50}px;border-right: none !important;`">
+                      <bk-form-item
+                        error-display-type="tooltips"
+                        label=""
+                        label-width="0">
+                        <bk-popover
+                          v-if="addList.length > 0"
+                          :ref="(el: any) => addPopoverRefs[index] = el"
+                          ext-cls="field-required-pop"
+                          placement="bottom"
+                          theme="light"
+                          trigger="click">
+                          <audit-icon
+                            class="add-fill field-icon"
+                            type="add-fill" />
+                          <template #content>
+                            <div class="field-required-pop-hideen">
+                              <div
+                                v-for="(addItem, addIndex) in addList"
+                                :key="addIndex"
+                                class="field-required-item"
+                                @click="handleInsertAfter(index, addItem)">
+                                {{ addItem.name }}
+                              </div>
+                            </div>
+                          </template>
+                        </bk-popover>
+                        <audit-icon
+                          class="reduce-fill field-icon"
+                          type="reduce-fill"
+                          @click="handleDelect(element.json_path)" />
+                      </bk-form-item>
                     </div>
                   </div>
                 </div>
@@ -372,6 +399,7 @@
   });
   const list = ref<any[]>([]);
   const addList = ref<any[]>([]);
+  const addPopoverRefs = ref<Record<number, any>>({});
   const showFieldDict = ref(false);
   const showFieldReference = ref(false);
 
@@ -559,6 +587,18 @@
     list.value = [...list.value, item];
     // 从addList.value中移除项目
     addList.value = addList.value.filter((addItem: any) => addItem.json_path !== item.json_path);
+  };
+
+  // 在指定行下方插入字段
+  const handleInsertAfter = (index: number, item: any) => {
+    // 关闭 popover
+    if (addPopoverRefs.value[index]) {
+      addPopoverRefs.value[index].hide();
+    }
+    // 从 addList 中移除已插入的项目
+    addList.value = addList.value.filter((addItem: any) => addItem.json_path !== item.json_path);
+    // 在当前行下方插入
+    list.value.splice(index + 1, 0, item);
   };
 
   // 在树形结构中查找节点的函数
@@ -920,15 +960,26 @@
 }
 
 .field-icon {
-  margin-left: 20px;
+  margin-left: 16px;
+  font-size: 14px;
   color: #c4c6cc;
   cursor: pointer;
+}
 
+.add-fill {
+  &:hover {
+    /* 新增 icon hover 加深一个色号 */
+    color: #979ba5;
+  }
+}
+
+.reduce-fill {
   &:hover {
     /* 删除 icon hover 变红色 */
     color: #ea3636;
   }
 }
+
 
 .add-field {
   margin-top: 10px;
