@@ -683,6 +683,7 @@ class ListProcessedRisk(ListRisk):
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
         username = get_request_username()
+        # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
         ).values("risk_id")
