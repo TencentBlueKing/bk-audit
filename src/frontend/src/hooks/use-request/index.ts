@@ -33,7 +33,9 @@ interface IOptions<T> {
   manual?: boolean;
   defaultParams?: object;
   loop?: boolean;
+  loopOnError?: boolean; // 轮询时错误也继续轮询
   onSuccess?: (result:T) => void;
+  onFinally?: () => void; // 请求完成时调用（无论成功还是失败）
   holdLoading?: boolean;
 }
 interface IResult<T> {
@@ -78,15 +80,18 @@ export default function <T> (
     })();
     const handler = requestHandler.then((result) => {
       data.value = result;
+      error.value = false; // 成功时清除错误状态
       options.onSuccess?.(data.value);
       return result;
     })
-      .finally(() => {
-        loading.value = false;
-      })
       .catch((errorMsg) => {
         error.value = true;
         errorMessage.value = errorMsg.message;
+        throw errorMsg;
+      })
+      .finally(() => {
+        loading.value = false;
+        options.onFinally?.();
       }) as Promise<T>;
     cancelTokenSource = getCancelTokenSource();
     return handler;
@@ -109,6 +114,7 @@ export default function <T> (
       service(paramsMemo)
         .then((result) => {
           data.value = result;
+          error.value = false;
           if (isCancelled) {
             return isCancelled;
           }
@@ -118,6 +124,12 @@ export default function <T> (
         })
         .catch(() => {
           error.value = true;
+          // 如果配置了 loopOnError，错误时也继续轮询
+          if (options.loopOnError && !isCancelled) {
+            timer = setTimeout(() => {
+              exexHandler();
+            }, 2000);
+          }
         });
     };
     exexHandler();

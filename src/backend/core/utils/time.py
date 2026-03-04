@@ -16,7 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import datetime
-from typing import Union
+from datetime import timedelta
+from typing import Optional, Union
 
 import arrow
 from arrow import Arrow
@@ -24,6 +25,28 @@ from blueapps.utils.logger import logger
 from dateutil.tz import tzutc
 from django.utils import timezone
 from rest_framework.settings import api_settings
+
+
+def ceil_to_second(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """将时间向上取整到秒
+
+    如果存在微秒，则去掉微秒并加1秒，实现"向上取整"效果。
+    主要用于 SQL 查询的时间范围，避免因微秒精度导致的边界丢失。
+
+    Args:
+        dt: datetime 对象
+
+    Returns:
+        向上取整后的 datetime 对象；如果输入为 None 则返回 None
+    """
+    if dt is None:
+        return None
+
+    # 如果有微秒，去掉微秒并加1秒
+    if dt.microsecond:
+        dt = dt.replace(microsecond=0) + timedelta(seconds=1)
+
+    return dt
 
 
 def mstimestamp_to_date_string(timestamp: int) -> str:

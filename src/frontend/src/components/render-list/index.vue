@@ -26,11 +26,12 @@
         v-bind="$attrs"
         :columns="columns"
         :data="listData.results"
+        :height="tableHeight"
         :max-height="tableMaxHeight"
         :min-height="300"
         :pagination="pagination"
-        :pagination-heihgt="60"
         remote-pagination
+        :scrollbar="false"
         :settings="settings"
         @column-sort="handleColumnSortChange"
         @page-limit-change="handlePageLimitChange"
@@ -171,12 +172,14 @@
     layout: ['total', 'limit', 'list'],
   });
   const tableMaxHeight = ref(0);
-
+  const tableHeight = ref<string | number>('auto');
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
 
   let isReady = false;
   const isLoading = ref(false);
+  // 新增：用户是否手动选择了分页大小的标志
+  const isUserSelectedPageSize = ref(false);
   const {
     getSearchParams,
     replaceSearchParams,
@@ -219,7 +222,9 @@
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
-          run(params);
+          run(params).finally(() => {
+            isLoading.value = false;
+          });
           replaceSearchParams(params);
         }
       });
@@ -245,6 +250,8 @@
         order_type: orderType,
       };
     }
+    // 从URL参数初始化时重置用户选择标志
+    isUserSelectedPageSize.value = false;
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
@@ -276,6 +283,8 @@
   };
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
+    // 用户手动选择分页大小，设置标志
+    isUserSelectedPageSize.value = true;
     pagination.limit = pageLimit;
     isUnload.value = false;
     isLoading.value = true;
@@ -290,6 +299,8 @@
   };
   // 情况搜索条件
   const handleClearSearch  = () => {
+    // 清空搜索条件时重置用户选择标志
+    isUserSelectedPageSize.value = false;
     emits('clearSearch');
   };
   onMounted(() => {
@@ -297,14 +308,21 @@
     calcTableHeight();
   });
 
+  const handleResize = _.debounce(() => {
+    calcTableHeight();
+  }, 120);
+
   // 监听通知中心状态，重新计算表格高度
   on('show-notice', () => {
     calcTableHeight();
   });
 
+  window.addEventListener('resize', handleResize);
+
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
     off('show-notice');
+    window.removeEventListener('resize', handleResize);
   });
 
   // 计算表格尺寸信息
@@ -331,24 +349,57 @@
   const initTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
+      const nextHeight = dimensions.tableHeaderHeight
+        + dimensions.rowNum * dimensions.tableRowHeight
+        + dimensions.paginationHeight
+        + 8;
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8 < 300 ? 300 : dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+      tableHeight.value = tableMaxHeight.value;
     });
   };
 
   const calcTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
+      const nextLimit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+      const isLimitChanged = nextLimit !== pagination.limit;
       const pageLimit = new Set([
         ...pagination.limitList,
-        dimensions.rowNum,
+        nextLimit,
       ]);
-      pagination.limit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+
+      // 如果用户已经手动选择了分页大小，则不再自动调整分页大小
+      if (isUserSelectedPageSize.value) {
+        // 只更新表格高度，不修改分页大小
+        const nextHeight = dimensions.tableHeaderHeight
+          + dimensions.rowNum * dimensions.tableRowHeight
+          + dimensions.paginationHeight
+          + 8;
+        // eslint-disable-next-line max-len
+        tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+        tableHeight.value = tableMaxHeight.value;
+        return;
+      }
+
+      pagination.limit = nextLimit;
       if (pagination.limit > 10) {
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
       }
+      const nextHeight = dimensions.tableHeaderHeight
+        + dimensions.rowNum * dimensions.tableRowHeight
+        + dimensions.paginationHeight
+        + 8;
       // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8 < 300 ? 300 : dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      tableMaxHeight.value = nextHeight < 300 ? 300 : nextHeight;
+      tableHeight.value = tableMaxHeight.value;
+
+      if (isLimitChanged && isReady) {
+        pagination.current = 1;
+        isUnload.value = false;
+        isLoading.value = true;
+        fetchListData();
+      }
     });
   };
 
@@ -358,11 +409,22 @@
         order_field: orderField,
         order_type: orderType,
       } = getSearchParams();
+      const normalizedParams = Object.keys(params).reduce((result, key) => {
+        const value = params[key];
+        if (value === undefined || value === null || value === '') {
+          return result;
+        }
+        if (Array.isArray(value) && value.length === 0) {
+          return result;
+        }
+        return {
+          ...result,
+          [key]: value,
+        };
+      }, {} as Record<string, any>);
       paramsMemo = {
-        ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
-        ...params,
+        ...(orderField && orderType ? { order_field: orderField, order_type: orderType } : {}),
+        ...normalizedParams,
       };
       if (isReady) {
         pagination.current = 1;
@@ -376,6 +438,8 @@
         pagination.current = Number(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       }
+      // 重置用户选择标志，允许重新计算分页大小
+      isUserSelectedPageSize.value = false;
       isLoading.value = true;
       fetchListData();
     },
@@ -410,6 +474,8 @@
     },
     initData() {
       isLoading.value = false;
+      // 初始化数据时重置用户选择标志
+      isUserSelectedPageSize.value = false;
       fetchListData();
     },
   });

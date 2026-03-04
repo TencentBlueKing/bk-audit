@@ -55,6 +55,14 @@
         <router-link
           class="main-navigation-nav "
           :class="{
+            active: curNavName === 'toolsSquare'
+          }"
+          :to="{ name:'toolsSquare', query: {} }">
+          {{ t('工具广场') }}
+        </router-link>
+        <router-link
+          class="main-navigation-nav "
+          :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
           :to="{ name:'analysisManage', query: {} }">
@@ -152,20 +160,6 @@
           </audit-menu-item-group>
           <audit-menu-item-group>
             <template #title>
-              <div>{{ t('工具') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('工具') }}</div>
-            </template>
-            <audit-menu-item index="tools">
-              <audit-icon
-                class="menu-item-icon"
-                type="gongju" />
-              {{ t('工具') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
               <div>{{ t('接入') }}</div>
             </template>
             <template #flod-title>
@@ -193,6 +187,22 @@
             </audit-menu-item>
           </audit-menu-item-group>
         </template>
+        <template v-else-if="curNavName === 'toolsSquare'">
+          <audit-menu-item-group>
+            <template #title>
+              <div>{{ t('工具广场') }}</div>
+            </template>
+            <template #flod-title>
+              <div>{{ t('工具广场') }}</div>
+            </template>
+            <audit-menu-item index="toolsSquare">
+              <audit-icon
+                class="menu-item-icon"
+                type="gongju" />
+              {{ t('工具广场') }}
+            </audit-menu-item>
+          </audit-menu-item-group>
+        </template>
         <template v-else-if="curNavName === 'auditRiskManage'">
           <audit-menu-item index="handleManage">
             <audit-icon
@@ -200,13 +210,21 @@
               type="daiwochuli" />
             {{ t('待我处理') }}
           </audit-menu-item>
+          <audit-menu-item index="processedManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="yunxingjilu" />
+            {{ t('处理历史') }}
+          </audit-menu-item>
           <audit-menu-item index="attentionManage">
             <audit-icon
               class="menu-item-icon"
               type="wodeguanzhu" />
             {{ t('我的关注') }}
           </audit-menu-item>
-          <audit-menu-item index="riskManage">
+          <audit-menu-item
+            v-if="hasAllRiskPermission"
+            index="riskManage">
             <audit-icon
               class="menu-item-icon"
               type="gaojingshijian" />
@@ -471,6 +489,19 @@
     manual: true,
     onSuccess: (data) => {
       permissionCreateSystem.value = data.create_system;
+    },
+  });
+
+  // 检查所有风险权限
+  const hasAllRiskPermission = ref(false);
+  useRequest(IamManageService.checkAny, {
+    defaultParams: {
+      action_ids: 'list_risk_v2',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      hasAllRiskPermission.value = data.list_risk_v2 || false;
     },
   });
 

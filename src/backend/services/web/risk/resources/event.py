@@ -209,3 +209,17 @@ class ListEvent(EventMeta):
         _ = validated_request_data.pop("_request", None)
         validated_request_data.update({"raw_event_id": risk.raw_event_id, "strategy_id": str(risk.strategy_id)})
         return EventHandler.search_event(**validated_request_data)
+
+
+class ListEventAPIGW(EventMeta):
+    """APIGW 获取事件列表接口"""
+
+    name = gettext_lazy("获取事件列表(APIGW)")
+    RequestSerializer = ListEventRequestSerializer
+    ResponseSerializer = ListEventResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk = get_object_or_404(Risk, risk_id=validated_request_data.pop("risk_id"))
+        _ = validated_request_data.pop("_request", None)
+        validated_request_data.update({"raw_event_id": risk.raw_event_id, "strategy_id": str(risk.strategy_id)})
+        return EventHandler.search_event(**validated_request_data)

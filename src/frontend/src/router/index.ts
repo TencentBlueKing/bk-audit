@@ -20,6 +20,8 @@ import {
   type RouteRecordRaw,
 } from 'vue-router';
 
+import IamManageService from '@service/iam-manage';
+
 import type ConfigModel from '@model/root/config';
 
 import NotFound from '@views/404.vue';
@@ -31,6 +33,7 @@ import LinkDataManage from '@views/link-data-manage/routes';
 import NewSystemManage from '@views/new-system-manage/routes';
 import NoticeGroup from '@views/notice-group/routes';
 import ApplicationManage from '@views/process-application-manage/routes';
+import ProcessedManage from '@views/processed-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
 import RuleManage from '@views/rule-manage/routes';
 import StatementManage from '@views/statement-manage/routes';
@@ -60,6 +63,7 @@ export default (config: ConfigModel) => {
         EventManage,
         NoticeGroup,
         RiskManage,
+        ProcessedManage,
         HandleManage,
         ApplicationManage,
         RuleManage,
@@ -87,7 +91,19 @@ export default (config: ConfigModel) => {
   // 全局前置守卫（统一处理所有路由跳转）
   router.beforeEach(async (to, from, next) => {
     try {
-    // 显示确认弹窗
+      // 检查权限：如果路由需要权限且用户没有权限，则重定向到首页
+      if (to.meta?.permission) {
+        const permission = to.meta.permission as string;
+        const hasPermission = await IamManageService.checkAny({ action_ids: permission });
+
+        if (!hasPermission[permission]) {
+          // 没有权限，重定向到首页
+          next({ name: 'handleManage' });
+          return;
+        }
+      }
+
+      // 显示确认弹窗
       const confirmed = await changeConfirm();
       if (confirmed) {
         lastRouterHrefCache = to.fullPath;

@@ -97,7 +97,7 @@
               <bk-tag :theme="statusToMap[data.status].theme">
                 <p style="display: flex;align-items: center;">
                   <audit-icon
-                    :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
+                    :style="`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`"
                     :type="statusToMap[data.status].icon" />
                   {{ riskStatusCommon.find(item=>item.id===data.status)?.name === '' ? '--' :
                     riskStatusCommon.find(item=>item.id===data.status)?.name }}
@@ -267,6 +267,11 @@
       theme: 'success',
       icon: 'taocanchulizhong',
       color: '#0CA668',
+    },
+    processing: {
+      theme: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
     },
   };
   // 判断值是否为数组（包括字符串形式的数组）

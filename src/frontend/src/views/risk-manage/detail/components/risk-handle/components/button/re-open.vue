@@ -43,8 +43,8 @@
       </audit-form>
     </template>
     <auth-button
-      action-id="edit_risk_v2"
-      :permission="data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.username)"
+      action-id="process_risk"
+      :permission="data.permission.process_risk || data.current_operator.includes(userInfo.username)"
       :resource="data.risk_id"
       style="font-size: 12px;"
       text

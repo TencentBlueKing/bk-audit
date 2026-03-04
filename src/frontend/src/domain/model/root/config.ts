@@ -49,6 +49,9 @@ export default class Config {
   help_info:{
     schema: string;
     query_string: string;
+    ai_practices: {
+      ai_summary: string;
+    };
   };
   bk_biz_id: number;
   shared_res_url: string;
@@ -69,7 +72,10 @@ export default class Config {
   tool: {
     vision_share_permission_url: string;
   };
-
+  audit_doc_config: {
+    audit_access_guide: string;
+    audit_operation_log_record_standards: string;
+  };
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
     this.app_code = payload.app_code;
@@ -97,6 +103,7 @@ export default class Config {
     this.metric = payload.metric;
     this.help_info = this.initHelpInfo(payload.help_info);
     this.tool = payload.tool;
+    this.audit_doc_config = payload.audit_doc_config;
   }
 
   initHelpInfo(params: Config['help_info']) {
@@ -104,6 +111,9 @@ export default class Config {
       return {
         schema: '',
         query_string: '',
+        ai_practices: {
+          ai_summary: '',
+        },
       };
     }
     return params;

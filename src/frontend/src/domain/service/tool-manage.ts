@@ -126,6 +126,16 @@ export default  {
     }));
   },
   /**
+     * @desc 收藏/取消收藏工具
+     * @param { Object } params
+     */
+  toggleFavorite(params: {
+      uid: string,
+      favorite: boolean,
+    }) {
+    return ToolManageSources.toggleFavorite(params).then(({ data }) =>  data);
+  },
+  /**
      * @desc 获取图表列表
      * @param { Object }
      */

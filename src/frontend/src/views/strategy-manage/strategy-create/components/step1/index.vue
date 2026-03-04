@@ -472,6 +472,14 @@
         trigger: 'change',
       },
     ],
+    // 调度方式
+    'configs.data_source.source_type': [
+      {
+        validator: (value: string) => !!value,
+        message: t('调度方式不能为空'),
+        trigger: 'change',
+      },
+    ],
   };
 
   const strategyTagMap = ref<Record<string, string>>({});

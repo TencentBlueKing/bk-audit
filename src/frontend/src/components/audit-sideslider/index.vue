@@ -16,8 +16,8 @@
 -->
 <template>
   <bk-sideslider
-    v-bind="$attrs"
-    :before-close="beforeCloseCallback"
+    v-bind="filteredAttrs"
+    :before-close="customBeforeClose || beforeCloseCallback"
     :is-show="isShow"
     :title="t($attrs.title as string)"
     @update:is-show="handleUpdateShow">
@@ -64,7 +64,9 @@
 </script>
 <script setup lang="ts">
   import {
+    computed,
     ref,
+    useAttrs,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -80,13 +82,16 @@
     cancelText?: string,
     showHeaderSlot?: boolean,
     showFooterSlot?: boolean,
+    beforeClose?: () => Promise<boolean> | boolean,
   }
   const props = withDefaults(defineProps<Props>(), {
     isShow: false,
     showFooter: true,
     confirmText: '提交',
     cancelText: '取消',
+    showHeaderSlot: false,
     showFooterSlot: false,
+    beforeClose: undefined,
   });
   const emit = defineEmits<Emits>();
   interface Emits{
@@ -109,8 +114,16 @@
   });
 
   const getModelProvier = useModelProvider();
+  const $attrs = useAttrs();
 
+  const customBeforeClose = props.beforeClose;
   const beforeCloseCallback = () => changeConfirm();
+
+  // 从 $attrs 中排除 before-close，因为我们显式地设置了它
+  const filteredAttrs = computed(() => {
+    const { beforeClose, ...rest } = $attrs;
+    return rest;
+  });
   const close = () => {
     window.changeConfirm = pageChangeConfirm;
     emit('update:isShow', false);

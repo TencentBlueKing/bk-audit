@@ -28,8 +28,11 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
+    AUDIT_DOC_CONFIG_KEY,
+    AI_PRACTICES_KEY,
     BKBASE_WEB_URL_KEY,
     BKVISION_WEB_URL_KEY,
+    DEFAULT_AI_PRACTICES,
     DEFAULT_QUERY_STRING_HELP_ENV_KEY,
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
@@ -37,6 +40,7 @@ from services.web.entry.constants import (
     IAM_WEB_URL_KEY,
     IEG_STD_OP_DOC_URL_KEY,
     PERMISSION_MODEL_IWIKI_URL_KEY,
+    SDK_CONFIG_KEY,
     SEARCH_RULE_IWIKI_URL_KEY,
     V3_SYSTEM_CREATE_URL_KEY,
     VISION_SHARE_PERMISSION_URL_KEY,
@@ -82,7 +86,11 @@ class EntryHandler(object):
             # TAM
             "aegis_id": settings.AEGIS_ID,
             # 页面信息
-            "help_info": {"query_string": cls.get_query_help(), "schema": cls.get_schema_help()},
+            "help_info": {
+                "query_string": cls.get_query_help(),
+                "schema": cls.get_schema_help(),
+                "ai_practices": GlobalMetaConfig.get(AI_PRACTICES_KEY, default=DEFAULT_AI_PRACTICES),
+            },
             # 语言
             "language": {
                 "available": [{"id": lang_code, "name": desc} for lang_code, desc in settings.LANGUAGES],
@@ -117,6 +125,8 @@ class EntryHandler(object):
             },
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
+            "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
+            "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
         }
         return data
 

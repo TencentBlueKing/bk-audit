@@ -49,6 +49,15 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 编辑风险标题
+  updateRiskTitle(params: {
+    risk_id: string | number,
+    title: string
+  }) {
+    return Request.put(`${this.module}/${params.risk_id}/`, {
+      params,
+    });
+  }
   // 获取待我处理的风险列表
   getTodoRiskList(params: {
       page: number,
@@ -64,6 +73,16 @@ class RiskManage extends ModuleBase {
     page_size: number
   }, payload = {} as IRequestPayload) {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+      payload,
+    });
+  }
+  // 获取处理历史风险列表
+  getProcessedRiskList(params: {
+    page: number,
+    page_size: number
+  }, payload = {} as IRequestPayload) {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/processed/?page=${params.page}&page_size=${params.page_size}`, {
       params,
       payload,
     });
@@ -212,6 +231,48 @@ class RiskManage extends ModuleBase {
   }
   addEvent(params: Record<string, any>) {
     return Request.post(`${this.api}/events/`, {
+      params,
+    });
+  }
+  getReportRiskVar(params:  Record<string, any>) {
+    return Request.get(`${this.path}/report/risk_variables/`, {
+      params,
+    });
+  }
+
+  getReportPreview(params: {
+    risk_id: string,
+    report_config: {
+      template: string,
+      frontend_template: string,
+      ai_variables: Array<{
+        name: string,
+        prompt_template: string
+      }>
+    }
+  }) {
+    return Request.post(`${this.path}/report/preview/`, {
+      params,
+    });
+  }
+
+
+  getAiPreview(params: {
+    id: string,
+    risk_id: string,
+    ai_variables: Array<{
+      name: string,
+      prompt_template: string
+    }>
+  }) {
+    return Request.post(`${this.api}/risk_report/${params.id}/ai_preview/`, {
+      params,
+    });
+  }
+  getTaskRiskReport(params: {
+    task_id: string,
+  }) {
+    return Request.get(`${this.api}/risk_report/task/`, {
       params,
     });
   }

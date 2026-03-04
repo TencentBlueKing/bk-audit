@@ -221,9 +221,7 @@
 <style lang="postcss" scoped>
 .render-label-box {
   position: relative;
-  height: calc(100vh - 144px);
-
-  /* background-color: #f5f7fa; */
+  height: calc(100vh);
 
   .render-label {
     position: relative;

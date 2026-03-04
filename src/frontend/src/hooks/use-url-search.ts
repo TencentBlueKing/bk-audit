@@ -18,6 +18,9 @@ import { buildURLParams } from '@utils/assist';
 
 export default function () {
   const searchParams = new URLSearchParams(window.location.search);
+  const notifyUrlChange = () => {
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
   const getSearchParams = () => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
@@ -77,6 +80,7 @@ export default function () {
       }
     });
     window.history.replaceState({}, '', `?${curSearchParams.toString()}`);
+    notifyUrlChange();
   };
 
   const removeSearchParam = (paramKey: string | Array<string>) => {
@@ -86,10 +90,12 @@ export default function () {
       curSearchParams.delete(key);
     });
     window.history.replaceState({}, '', `?${curSearchParams.toString()}`);
+    notifyUrlChange();
   };
 
   const replaceSearchParams = (params: Record<string, any>) => {
     window.history.replaceState({}, '', `?${buildURLParams(params)}`);
+    notifyUrlChange();
   };
 
   return {

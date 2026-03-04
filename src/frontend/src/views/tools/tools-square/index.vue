@@ -115,7 +115,7 @@
 .tools-square {
   position: absolute;
   display: flex;
-  width: 100%;
+  width: 100vw;
   height: 100%;
   background-color: #fff;
   inset: 0;
@@ -135,6 +135,7 @@
     width: 100%;
     height: 100%;
     margin-top: 0;
+    background-color: #f5f7fa;
 
     .content-tag {
       margin-left: 20px;

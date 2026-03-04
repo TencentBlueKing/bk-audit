@@ -28,6 +28,14 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 检查当前用户是否拥有任意权限策略
+   * @param { Object } params
+   */
+  checkAny(params: { action_ids: string }) {
+    return IamManageSource.checkAny(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取权限申请数据
    * @param { Object } params
    */
