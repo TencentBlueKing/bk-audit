@@ -303,6 +303,7 @@ class RiskInfoSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
 
 class RiskProviderSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    last_operate_time = serializers.DateTimeField(label=gettext_lazy("Last Operate Time"))
     event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
     event_end_time_timestamp = TimestampIntegerField(
         label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
