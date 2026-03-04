@@ -34,14 +34,14 @@ export default class BatchSubscriptionStatus {
   pending: number;
 
   static iconMap: Record<string, string> = {
-    [STATUS_SUCCESS]: 'normal',
+    [STATUS_SUCCESS]: 'completed',
     [STATUS_RUNNING]: 'loading',
-    [STATUS_FAILED]: 'abnormal',
-    [STATUS_PARTFAILED]: 'abnormal',
+    [STATUS_FAILED]: 'cuo',
+    [STATUS_PARTFAILED]: 'cuo',
     [STATUS_PREPARE]: 'loading',
-    [STATUS_UNKNOWN]: 'unknown',
-    [STATUS_TERMINATED]: 'unknown',
-    [STATUS_WARNING]: 'warning',
+    [STATUS_UNKNOWN]: 'cuo',
+    [STATUS_TERMINATED]: 'cuo',
+    [STATUS_WARNING]: 'weiwancheng',
   };
 
   static operationMap:  Record<string, string> = {

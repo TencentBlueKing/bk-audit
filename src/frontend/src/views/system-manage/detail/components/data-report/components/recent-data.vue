@@ -21,25 +21,15 @@
     :loading="loading"
     name="systemDetailRecentData"
     :once="false"
-    :style="{ height: boxHeight }">
+    style="height: 546px;">
     <apply-permission-catch :key="data.id">
-      <div class="title">
-        <span> {{ t('最近数据') }}<span v-if="data.name"> - {{ data.name }}</span></span>
-        <span
-          class="refresh-btn">
-          <audit-icon
-            v-bk-tooltips="t('刷新')"
-            type="refresh"
-            @click="handleRefresh" />
-        </span>
-      </div>
       <div ref="tableWrapperRef">
         <bk-table
           v-if="data.type !== 'bkbase'"
           :border="['outer', 'row']"
           :columns="tableColumn"
           :data="tableData"
-          :max-height="tableData.length?tableMaxHeight:320">
+          :max-height="530">
           <template #empty>
             <bk-exception
               scene="part"
@@ -54,7 +44,7 @@
           :border="['outer', 'row']"
           :columns="dataIdTableColumn"
           :data="dataIdTableData"
-          :max-height="dataIdTableData.length ? tableMaxHeight : 320">
+          :max-height="530">
           <template #empty>
             <bk-exception
               scene="part"
@@ -66,13 +56,23 @@
         </bk-table>
       </div>
     </apply-permission-catch>
+    <div
+      class="fold-button"
+      style=" margin-top: 8px;text-align: right;">
+      <bk-button
+        style="font-size: 12px;"
+        text
+        theme="primary"
+        @click="handleFold">
+        {{ t('收起') }}
+      </bk-button>
+    </div>
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
     nextTick,
-    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -88,7 +88,6 @@
 
   import {
     execCopy,
-    getOffset,
   } from '@utils/assist';
 
   import type DataIdTopicLogModel from '@/domain/model/dataid/dataid-tail';
@@ -99,12 +98,14 @@
       name: string;
       type?:string
     };
-    id: string
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  interface Emits {
+    (e: 'fold'): void
+  }
+
+  const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
   const route = useRoute();
   const { t } = useI18n();
   const tableColumn = [
@@ -200,9 +201,6 @@
     },
   ] as Column[];
   const rootRef = ref();
-  const boxHeight = ref('auto');
-  const tableWrapperRef = ref();
-  const tableMaxHeight = ref(0);
   const poverWidth = ref();
   const loading = ref(false);
   const tableData = ref<CollectorTailLogModel[]>([]);
@@ -257,7 +255,7 @@
     loading.value = true;
     if (id === 'api') {
       fetchApiPushTailLog({
-        system_id: route.params.id || props.id,
+        system_id: route.params.id,
       }).finally(() => {
         loading.value = false;
       });
@@ -274,30 +272,9 @@
         loading.value = false;
       });
     }
+  }, {
+    immediate: true,
   });
-
-  const handleRefresh = () => {
-    loading.value = true;
-    if (props.data.id === 'api') {
-      fetchApiPushTailLog({
-        system_id: route.params.id || props.id,
-      }).finally(() => {
-        loading.value = false;
-      });
-    } else if (props.data.type !== 'bkbase') {
-      fetchTailLog({
-        collector_config_id: props.data.id,
-      }).finally(() => {
-        loading.value = false;
-      });
-    } else {
-      fetchDataIdTail({
-        bk_data_id: props.data.id,
-      }).finally(() => {
-        loading.value = false;
-      });
-    }
-  };
 
   const handleCopyDataIdData = (data: DataIdTopicLogModel) => {
     execCopy(data.value, t('复制成功'));
@@ -306,23 +283,18 @@
     execCopy(data.originData, t('复制成功'));
   };
 
-
-  onMounted(() => {
-    const { top: boxOffsetTop } = getOffset(rootRef.value.$el);
-    boxHeight.value = `calc(100vh - ${boxOffsetTop + 20}px)`;
-
-    const { top } = getOffset(tableWrapperRef.value);
-    tableMaxHeight.value = window.innerHeight - top - 40;
-  });
+  const handleFold = () => {
+    emit('fold');
+  };
 
 </script>
 <style lang="postcss">
   .recent-data-card {
-    padding: 16px 24px;
+    /* padding: 16px 24px;
     overflow: hidden;
     background-color: #fff;
     border-radius: 2px;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%); */
 
     .title {
       display: flex;

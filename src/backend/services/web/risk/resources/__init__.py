@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from services.web.risk.resources.event import *  # noqa
 from services.web.risk.resources.experience import *  # noqa
 from services.web.risk.resources.process_application import *  # noqa
+from services.web.risk.resources.report import *  # noqa
 from services.web.risk.resources.risk import *  # noqa
 from services.web.risk.resources.rule import *  # noqa
 from services.web.risk.resources.subscription import *  # noqa

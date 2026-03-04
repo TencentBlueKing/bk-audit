@@ -32,6 +32,7 @@ from apps.meta.utils.fields import (
 )
 from core.choices import TextChoices, register_choices
 from core.exporter.constants import ExportField
+from core.sql.constants import AggregateType, FieldType
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
 BKM_ALERT_SYNC_HOURS = int(os.getenv("BKAPP_BKM_ALERT_SYNC_HOURS", 3))
@@ -81,6 +82,11 @@ RISK_SHOW_FIELDS = [
     "event_source",
     "operator",
 ]
+
+# 风险渲染锁
+RISK_RENDER_LOCK_KEY = "risk:render:lock:{risk_id}"
+# 风险事件最新时间
+RISK_EVENT_LATEST_TIME_KEY = "risk:event:latest:{risk_id}"
 
 
 @dataclass
@@ -705,3 +711,95 @@ class EventFilterOperator(TextChoices):
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+
+
+@register_choices("risk_report_status")
+class RiskReportStatus(TextChoices):
+    """
+    风险报告状态
+    """
+
+    AUTO = "auto", gettext_lazy("自动生成")
+    MANUAL = "manual", gettext_lazy("人工编辑")
+
+
+@register_choices("aggregation_function")
+class AggregationFunction(TextChoices):
+    """
+    聚合函数枚举
+
+    用于报告模板中事件变量的聚合计算。
+    """
+
+    SUM = "sum", gettext_lazy("求和")
+    AVG = "avg", gettext_lazy("平均值")
+    MAX = "max", gettext_lazy("最大值")
+    MIN = "min", gettext_lazy("最小值")
+    COUNT = "count", gettext_lazy("计数")
+    COUNT_DISTINCT = "count_distinct", gettext_lazy("去重计数")
+    LATEST = "latest", gettext_lazy("最新值")
+    FIRST = "first", gettext_lazy("首次值")
+    LIST = "list", gettext_lazy("列表")
+    LIST_DISTINCT = "list_distinct", gettext_lazy("去重列表")
+
+    @classmethod
+    def get_supported_field_types(cls, agg_func: str) -> List[str]:
+        """
+        获取聚合函数支持的字段类型
+
+        Args:
+            agg_func: 聚合函数名称
+
+        Returns:
+            支持的字段类型列表，空列表表示支持所有类型
+        """
+        from api.bk_base.constants import BkBaseFieldType
+
+        numeric_types = [
+            BkBaseFieldType.INT,
+            BkBaseFieldType.LONG,
+            BkBaseFieldType.FLOAT,
+            BkBaseFieldType.DOUBLE,
+        ]
+        numeric_and_timestamp_types = numeric_types + [BkBaseFieldType.TIMESTAMP]
+
+        type_mapping = {
+            cls.SUM: numeric_types,
+            cls.AVG: numeric_types,
+            cls.MAX: numeric_and_timestamp_types,
+            cls.MIN: numeric_and_timestamp_types,
+            # 以下函数支持所有类型，返回空列表
+            cls.COUNT: [],
+            cls.COUNT_DISTINCT: [],
+            cls.LATEST: [],
+            cls.FIRST: [],
+            cls.LIST: [],
+            cls.LIST_DISTINCT: [],
+        }
+        return type_mapping.get(agg_func, [])
+
+
+# ===== EventProvider 相关常量 =====
+
+# 查询失败占位符
+EVENT_QUERY_FAILED = gettext_lazy("查询失败")
+
+# AggregationFunction → AggregateType 映射
+# first/latest 不走聚合 SQL，不在此映射
+AGGREGATION_FUNCTION_TO_SQL_TYPE = {
+    AggregationFunction.SUM: AggregateType.SUM,
+    AggregationFunction.AVG: AggregateType.AVG,
+    AggregationFunction.MAX: AggregateType.MAX,
+    AggregationFunction.MIN: AggregateType.MIN,
+    AggregationFunction.COUNT: AggregateType.COUNT,
+    AggregationFunction.COUNT_DISTINCT: AggregateType.DISCOUNT,
+    AggregationFunction.LIST: AggregateType.LIST,
+    AggregationFunction.LIST_DISTINCT: AggregateType.LIST_DISTINCT,
+}
+
+# 聚合类型 → 默认字段类型映射
+# sum/avg 默认 LONG，其他默认 STRING
+DEFAULT_FIELD_TYPE_BY_AGGREGATE = {
+    AggregationFunction.SUM: FieldType.LONG,
+    AggregationFunction.AVG: FieldType.LONG,
+}

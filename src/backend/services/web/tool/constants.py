@@ -266,6 +266,7 @@ class ToolTagsEnum(TextChoices):
     ALL_TOOLS = "-3", gettext_lazy("全部工具")
     MY_CREATED_TOOLS = "-4", gettext_lazy("我创建的")
     RECENTLY_USED_TOOLS = "-5", gettext_lazy("最近使用")
+    FAVORITE_TOOLS = "-6", gettext_lazy("我的收藏")
 
 
 # ==========================================

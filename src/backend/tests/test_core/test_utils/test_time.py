@@ -21,11 +21,71 @@ from unittest.mock import patch
 import arrow
 from django.utils import timezone
 
-from core.utils.time import parse_datetime
-from tests.base import TestCase
+from core.utils.time import format_date_string, parse_datetime
 
 
-class TestParseDatetime(TestCase):
+class TestFormatDateString:
+    """测试 format_date_string 函数"""
+
+    @patch("core.utils.time.timezone.get_default_timezone")
+    def test_format_utc_timezone_string_replaced(self, mock_get_default_timezone):
+        """测试 UTC 时区字符串（Z结尾）直接替换为本地时区，保持时间值不变"""
+        local_tz = timezone.get_fixed_timezone(480)  # UTC+8
+        mock_get_default_timezone.return_value = local_tz
+
+        # 注意：带 Z 后缀的 UTC 时间，替换时区但保持时间值
+        date_string = "2022-01-01T00:00:00Z"
+        result = format_date_string(date_string)
+
+        # 00:00:00 UTC 替换为 00:00:00+08:00（保持时间值）
+        assert result == "2022-01-01 00:00:00"
+
+    @patch("core.utils.time.timezone.get_default_timezone")
+    def test_format_with_explicit_timezone(self, mock_get_default_timezone):
+        """测试带明确时区的字符串（非 Z 结尾）转换为本地时区"""
+        local_tz = timezone.get_fixed_timezone(480)  # UTC+8
+        mock_get_default_timezone.return_value = local_tz
+
+        # +00:00 与 Z 行为不同，会执行 astimezone 转换
+        date_string = "2022-01-01T00:00:00+00:00"
+        result = format_date_string(date_string)
+
+        # 00:00:00+00:00 转换为 08:00:00+08:00
+        assert result == "2022-01-01 08:00:00"
+
+    @patch("core.utils.time.timezone.get_default_timezone")
+    def test_format_custom_output_format(self, mock_get_default_timezone):
+        """测试自定义输出格式"""
+        local_tz = timezone.get_fixed_timezone(480)  # UTC+8
+        mock_get_default_timezone.return_value = local_tz
+
+        # 使用 +00:00 触发时区转换
+        date_string = "2022-01-01T00:00:00+00:00"
+        result = format_date_string(date_string, output_format="%Y年%m月%d日 %H:%M")
+
+        assert result == "2022年01月01日 08:00"
+
+    def test_format_invalid_string_returns_original(self):
+        """测试无效字符串返回原值"""
+        invalid_string = "not-a-date"
+        result = format_date_string(invalid_string)
+
+        assert result == invalid_string
+
+    @patch("core.utils.time.timezone.get_default_timezone")
+    def test_format_iso_string_without_timezone(self, mock_get_default_timezone):
+        """测试不带时区的 ISO 格式字符串"""
+        local_tz = timezone.get_fixed_timezone(480)  # UTC+8
+        mock_get_default_timezone.return_value = local_tz
+
+        date_string = "2022-01-01T16:00:00"
+        result = format_date_string(date_string)
+
+        # 无时区字符串被 arrow 解析为 UTC，替换为本地时区后保持相同时间
+        assert result == "2022-01-01 16:00:00"
+
+
+class TestParseDatetime:
     """测试 parse_datetime 函数"""
 
     def test_parse_integer_timestamp(self):
@@ -33,26 +93,26 @@ class TestParseDatetime(TestCase):
         timestamp = 1640995200  # 2022-01-01 00:00:00 UTC
         result = parse_datetime(timestamp)
 
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.timestamp(), timestamp)
+        assert isinstance(result, arrow.Arrow)
+        assert result.timestamp() == timestamp
 
     def test_parse_float_timestamp(self):
         """测试解析浮点数时间戳"""
         timestamp = 1640995200.5  # 2022-01-01 00:00:00.5 UTC
         result = parse_datetime(timestamp)
 
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.timestamp(), timestamp)
+        assert isinstance(result, arrow.Arrow)
+        assert result.timestamp() == timestamp
 
     def test_parse_string_with_timezone(self):
         """测试解析带时区的字符串"""
         date_string = "2022-01-01T08:00:00+08:00"
         result = parse_datetime(date_string)
 
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.format("YYYY-MM-DD HH:mm:ss"), "2022-01-01 08:00:00")
+        assert isinstance(result, arrow.Arrow)
+        assert result.format("YYYY-MM-DD HH:mm:ss") == "2022-01-01 08:00:00"
 
-    @patch('django.utils.timezone.get_default_timezone')
+    @patch("core.utils.time.timezone.get_default_timezone")
     def test_parse_string_utc_timezone_replaced(self, mock_get_default_timezone):
         """测试解析UTC时区字符串时替换为本地时区"""
         # 模拟本地时区
@@ -63,30 +123,30 @@ class TestParseDatetime(TestCase):
         date_string = "2022-01-01T00:00:00Z"
         result = parse_datetime(date_string)
 
-        self.assertIsInstance(result, arrow.Arrow)
+        assert isinstance(result, arrow.Arrow)
         # 验证时区被替换为本地时区
-        self.assertEqual(result.tzinfo, local_tz)
+        assert result.tzinfo == local_tz
 
     def test_parse_string_without_timezone(self):
         """测试解析不带时区的字符串"""
         date_string = "2022-01-01T08:00:00"
         result = parse_datetime(date_string)
 
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.format("YYYY-MM-DD HH:mm:ss"), "2022-01-01 08:00:00")
+        assert isinstance(result, arrow.Arrow)
+        assert result.format("YYYY-MM-DD HH:mm:ss") == "2022-01-01 08:00:00"
 
     def test_parse_iso_format_string(self):
         """测试解析ISO格式字符串"""
         date_string = "2022-01-01T08:00:00.123456"
         result = parse_datetime(date_string)
 
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.year, 2022)
-        self.assertEqual(result.month, 1)
-        self.assertEqual(result.day, 1)
-        self.assertEqual(result.hour, 8)
-        self.assertEqual(result.minute, 0)
-        self.assertEqual(result.second, 0)
+        assert isinstance(result, arrow.Arrow)
+        assert result.year == 2022
+        assert result.month == 1
+        assert result.day == 1
+        assert result.hour == 8
+        assert result.minute == 0
+        assert result.second == 0
 
     def test_parse_various_string_formats(self):
         """测试解析各种字符串格式"""
@@ -97,21 +157,20 @@ class TestParseDatetime(TestCase):
         ]
 
         for date_string in test_cases:
-            with self.subTest(date_string=date_string):
-                result = parse_datetime(date_string)
-                self.assertIsInstance(result, arrow.Arrow)
-                self.assertEqual(result.year, 2022)
-                self.assertEqual(result.month, 1)
-                self.assertEqual(result.day, 1)
+            result = parse_datetime(date_string)
+            assert isinstance(result, arrow.Arrow)
+            assert result.year == 2022
+            assert result.month == 1
+            assert result.day == 1
 
     def test_edge_cases(self):
         """测试边界情况"""
         # 测试零时间戳
         result = parse_datetime(0)
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.timestamp(), 0)
+        assert isinstance(result, arrow.Arrow)
+        assert result.timestamp() == 0
 
         # 测试负时间戳
         result = parse_datetime(-1)
-        self.assertIsInstance(result, arrow.Arrow)
-        self.assertEqual(result.timestamp(), -1)
+        assert isinstance(result, arrow.Arrow)
+        assert result.timestamp() == -1

@@ -18,10 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 from services.web.risk.handlers.bkm import BKMAlertSyncHandler
 from services.web.risk.handlers.event import EventHandler
+from services.web.risk.handlers.report import RiskReportHandler
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 
 __all__ = [
     "BKMAlertSyncHandler",
     "EventHandler",
+    "RiskReportHandler",
     "RiskEventSubscriptionSQLBuilder",
 ]

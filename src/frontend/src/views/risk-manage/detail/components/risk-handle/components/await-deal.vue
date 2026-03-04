@@ -108,7 +108,8 @@
                   :property="`pa_params.${val.key}`"
                   required
                   :rules="[
-                    { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                    { message: t('不能为空'),
+                      validator: (value: any) => handlePaValidate(value) },
                   ]"
                   style="margin-bottom: 16px;">
                   <application-parameter
@@ -171,9 +172,9 @@
       </template>
       <bk-form-item label="">
         <auth-button
-          action-id="edit_risk_v2"
+          action-id="process_risk"
           :loading="loading"
-          :permission="detailData.permission.edit_risk_v2 || detailData.current_operator.includes(userInfo.username)"
+          :permission="detailData.permission.process_risk || detailData.current_operator.includes(userInfo.username)"
           :resource="detailData.risk_id"
           style="min-width: 72px;"
           theme="primary"
@@ -191,6 +192,7 @@
 </template>
 
 <script setup lang='ts'>
+  import DOMPurify from 'dompurify';
   import {
     computed,
     ref,
@@ -198,6 +200,7 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
+    onBeforeRouteLeave,
     useRoute,
     useRouter,
   } from 'vue-router';
@@ -347,15 +350,19 @@
     }
   };
 
-  const handlePaValidate = (value: {field: string, value: string}) => {
+  const handlePaValidate = (value: { field: string; value: string }) => {
+    const isEmpty = (v: any) => v === undefined
+      || v === null
+      || v === ''
+      || (Array.isArray(v) && v.length === 0);
     if (!value || typeof value !== 'object') return false;
     const { field, value: val } = value;
-    // 检查field和value是否都为空（包括undefined、null、空字符串、）
-    const isFieldEmpty = field === undefined || field === null || field === '';
-    const isValueEmpty = val === undefined || val === null || val === '' ;
-    // 只有当field和value都为空时才返回false，否则返回true
+    const isFieldEmpty = isEmpty(field);
+    const isValueEmpty = isEmpty(val);
+    // field 和 value 同时为空，才算不通过
     return !(isFieldEmpty && isValueEmpty);
   };
+
 
   //  获取风险可用字段
   const {
@@ -492,13 +499,48 @@
       }
     });
   };
+
+  // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
+  const isRichTextNotEmpty = (html: string) => {
+    if (!html) return false;
+    // 使用 DOMPurify 安全地去除所有HTML标签，只保留纯文本内容
+    const text = DOMPurify.sanitize(html, { ALLOWED_TAGS: [] }).trim();
+    return text.length > 0;
+  };
+
+  // 判断当前表单是否有实质性用户输入
+  const hasSubstantialInput = () => {
+    const { method, description, new_operators: newOperators, pa_id: paId } = formData.value;
+    switch (method) {
+    case 'closeOrder':
+      return isRichTextNotEmpty(description);
+    case 'transfer':
+      return isRichTextNotEmpty(description) || (newOperators && newOperators.length > 0);
+    case 'ProcessPackage':
+      return !!paId;
+    default:
+      return false;
+    }
+  };
+
   const handleCancel = () => {
+    // 取消按钮点击时，如果没有实质性输入则重置 changeConfirm
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
     router.push({
       name: route.name === 'riskManageDetail'
         ? 'riskManageList'
         : 'handleManageList',
     });
   };
+
+  // 路由离开前判断：如果没有实质性输入，则不弹确认弹窗
+  onBeforeRouteLeave(() => {
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
+  });
 
   watch(
     () => formData.value, (val) => {

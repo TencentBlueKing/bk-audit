@@ -27,7 +27,7 @@ from bk_resource import Resource, api, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.translation import gettext_lazy
 from pypinyin import lazy_pinyin
 
@@ -62,11 +62,13 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
-from services.web.tool.models import Tool, ToolTag
+from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
+    GetToolDetailByNameAPIGWRequestSerializer,
+    GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
     ListToolTagsResponseSerializer,
     SqlAnalyseRequestSerializer,
@@ -74,6 +76,8 @@ from services.web.tool.serializers import (
     SqlAnalyseWithToolRequestSerializer,
     ToolCreateRequestSerializer,
     ToolExecuteDebugSerializer,
+    ToolFavoriteReqSerializer,
+    ToolFavoriteRespSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolResponseSerializer,
@@ -182,6 +186,7 @@ class ListToolTags(ToolBase):
             t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
 
         tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
+
         tag_count = [
             {
                 "tag_name": str(ToolTagsEnum.ALL_TOOLS.label),
@@ -273,19 +278,33 @@ class ListTool(ToolBase):
         recent_used = validated_request_data["recent_used"]
         recent_tool_uids = []
 
+        # 判断是否筛选收藏的工具（通过虚拟标签 FAVORITE_TOOLS）
+        favorite = int(ToolTagsEnum.FAVORITE_TOOLS.value) in tags
+
         current_user = get_request_username()
         permission = ToolPermission(username=current_user)
         authed_tool_filter = permission.authed_tool_filter
-        queryset = Tool.all_latest_tools().filter(authed_tool_filter)
+
+        # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
+        favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
+        queryset = Tool.all_latest_tools().filter(authed_tool_filter).annotate(favorite=Exists(favorite_subquery))
+
+        # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
             int(tag_id) in tags
             for tag_id in [
                 ToolTagsEnum.ALL_TOOLS.value,
                 ToolTagsEnum.MY_CREATED_TOOLS.value,
                 ToolTagsEnum.RECENTLY_USED_TOOLS.value,
+                ToolTagsEnum.FAVORITE_TOOLS.value,
             ]
         ):
             tags = []
+
+        # 筛选收藏的工具
+        if favorite:
+            queryset = queryset.filter(favorite=True)
+
         if recent_used:
             recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
             if not recent_tool_uids:
@@ -308,6 +327,7 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
+        # 排序逻辑：收藏优先 + 名称 ASCII 正序
         if recent_used and recent_tool_uids:
             queryset = preserved_order_sort(
                 queryset,
@@ -315,7 +335,8 @@ class ListTool(ToolBase):
                 value_list=recent_tool_uids,
             )
         else:
-            queryset = queryset.order_by("-updated_at")
+            queryset = queryset.order_by("-favorite", "name")
+
         paged_tools, page = paginate_data(queryset=queryset, request=request)
         tool_uids = [t.uid for t in paged_tools]
 
@@ -565,10 +586,11 @@ class UpdateTool(ToolBase):
         """
 
         new_config = validated_request_data["config"]
+        new_name = validated_request_data.get("name", old_tool.name)
         new_tool_data = {
             "uid": old_tool.uid,
             "tool_type": old_tool.tool_type,
-            "name": validated_request_data.get("name", old_tool.name),
+            "name": new_name,
             "description": validated_request_data.get("description", old_tool.description),
             "namespace": validated_request_data.get("namespace", old_tool.namespace),
             "version": old_tool.version + 1,
@@ -890,7 +912,12 @@ class ListToolAll(ToolBase):
         return response_data
 
     def perform_request(self, validated_request_data):
-        tool_qs = Tool.all_latest_tools().order_by("-updated_at")
+        current_user = get_request_username()
+
+        # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
+        favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
+        tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery)).order_by("name")
+
         tool_uids = [tool.uid for tool in tool_qs]
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
 
@@ -907,7 +934,6 @@ class ListToolAll(ToolBase):
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
         serialized_data = self.ResponseSerializer(tool_qs, many=True).data
 
-        current_user = get_request_username()
         permission = ToolPermission(username=current_user)
         tool_tag_ids = list(tool_tags.values_list("tag_id", flat=True).distinct())
         data = permission.wrapper_tool_permission_field(tool_list=serialized_data, tool_tag_ids=tool_tag_ids)
@@ -935,10 +961,17 @@ class GetToolDetail(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
 
+        current_user = get_request_username()
+
         tag_ids = list(ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True))
         strategies_ids = list(StrategyTool.objects.filter(tool_uid=tool.uid).values_list("strategy_id", flat=True))
         setattr(tool, "tags", [str(tid) for tid in tag_ids])
         setattr(tool, "strategies", [str(sid) for sid in strategies_ids])
+
+        # 查询当前用户对该工具的收藏状态（使用 tool_uid 关联）
+        favorite = ToolFavorite.objects.filter(tool_uid=tool.uid, username=current_user).exists()
+        setattr(tool, "favorite", favorite)
+
         # 如果是SQL工具且有引用表，检查表权限
         if tool.tool_type == ToolTypeEnum.DATA_SEARCH and tool.config.get("referenced_tables"):
             tables = [table["table_name"] for table in tool.config["referenced_tables"]]
@@ -954,7 +987,6 @@ class GetToolDetail(ToolBase):
         data = self.ResponseSerializer(instance=tool).data
 
         # 权限注入与脱敏
-        current_user = get_request_username()
         permission = ToolPermission(username=current_user)
         data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
 
@@ -1081,3 +1113,85 @@ class UserQueryTableAuthCheck(ToolBase):
             for table in tables
         ]
         return api.bk_base.user_auth_batch_check({"permissions": permissions})
+
+
+class FavoriteTool(ToolBase):
+    """收藏/取消收藏工具"""
+
+    name = gettext_lazy("收藏工具")
+    RequestSerializer = ToolFavoriteReqSerializer
+    ResponseSerializer = ToolFavoriteRespSerializer
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        favorite = validated_request_data["favorite"]
+        username = get_request_username()
+
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+
+        if favorite:
+            ToolFavorite.objects.get_or_create(tool_uid=tool.uid, username=username)
+        else:
+            ToolFavorite.objects.filter(tool_uid=tool.uid, username=username).delete()
+
+        return {"favorite": favorite}
+
+
+class GetToolDetailByNameAPIGW(ToolBase):
+    """
+    通过工具名称获取工具详情(APIGW)
+
+    仅做应用权限校验，不校验用户权限。
+    支持 lite_mode 模式，默认只返回 input_variable 定义。
+
+    请求参数：
+    ```json
+    {
+        "name": "工具名称",
+        "lite_mode": true  // 可选，默认 true，只返回 input_variable
+    }
+    ```
+
+    响应结构（lite_mode=true）：
+    ```json
+    {
+        "uid": "xxx",
+        "name": "xxx",
+        "tool_type": "data_search",
+        "version": 1,
+        "description": "xxx",
+        "namespace": "xxx",
+        "config": {
+            "input_variable": [...]
+        }
+    }
+    ```
+
+    响应结构（lite_mode=false）：返回完整的工具配置
+    """
+
+    name = gettext_lazy("通过名称获取工具详情(APIGW)")
+    RequestSerializer = GetToolDetailByNameAPIGWRequestSerializer
+    ResponseSerializer = GetToolDetailByNameAPIGWResponseSerializer
+
+    def validate_response_data(self, response_data):
+        return response_data
+
+    def perform_request(self, validated_request_data):
+        from core.utils.tools import get_app_info
+
+        # 仅做应用权限校验
+        get_app_info()
+
+        tool_name = validated_request_data["name"]
+        lite_mode = validated_request_data.get("lite_mode", True)
+
+        # 通过名称查找最新版本的工具
+        tool = Tool.all_latest_tools().filter(name=tool_name).first()
+        if not tool:
+            raise ToolDoesNotExist()
+
+        serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
+        return serializer.data

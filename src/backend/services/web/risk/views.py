@@ -21,7 +21,11 @@ from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission, insert_permission_field
+from apps.permission.handlers.drf import (
+    IAMPermission,
+    InstanceActionPermission,
+    insert_permission_field,
+)
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
@@ -76,6 +80,16 @@ class RisksAPIGWViewSet(ResourceViewSet):
     ]
 
 
+class EventAPIGWViewSet(APIGWViewSet):
+    """
+    Event APIGW - 托管事件相关的 APIGW 接口，校验 app 信息
+    """
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.list_event_apigw),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks
@@ -99,6 +113,9 @@ class RisksViewSet(ResourceViewSet):
             ]
         if self.action in ["bulk_trans"]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
+        # 风险编辑相关权限
+        if self.action in ["update"]:
+            return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
         return []
 
     def get_bulk_risk_ids(self) -> List[str]:
@@ -112,7 +129,7 @@ class RisksViewSet(ResourceViewSet):
             resource.risk.list_risk,
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -124,7 +141,7 @@ class RisksViewSet(ResourceViewSet):
             endpoint="todo",
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -136,7 +153,7 @@ class RisksViewSet(ResourceViewSet):
             endpoint="watch",
             decorators=[
                 insert_permission_field(
-                    actions=[ActionEnum.EDIT_RISK],
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
                     data_field=lambda data: data["results"],
                     id_field=lambda risk: risk["risk_id"],
                 )
@@ -159,6 +176,38 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.reopen_risk, endpoint="reopen", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.process_risk_ticket, endpoint="process_risk_ticket", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.risk_export, endpoint="export"),
+        # 风险编辑
+        ResourceRoute("PUT", resource.risk.update_risk, pk_field="risk_id"),
+        # 风险简要列表（用于策略配置时选择风险单进行预览）
+        ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief", enable_paginate=True),
+    ]
+
+
+class RiskReportViewSet(ResourceViewSet):
+    """
+    风险报告管理
+
+    提供风险报告的创建、编辑、生成等功能。
+    路由前缀：/api/v1/risk_report/{risk_id}/
+    """
+
+    def get_permissions(self):
+        # 所有报告相关操作都需要风险编辑权限
+        if self.action not in ["task"]:
+            return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
+        return []
+
+    resource_routes = [
+        # POST /api/v1/risk_report/{risk_id}/save/ -> 创建报告
+        ResourceRoute("POST", resource.risk.create_risk_report, pk_field="risk_id", endpoint="save"),
+        # PUT /api/v1/risk_report/{risk_id}/ -> 编辑报告
+        ResourceRoute("PUT", resource.risk.update_risk_report, pk_field="risk_id"),
+        # POST /api/v1/risk_report/{risk_id}/generate/ -> 生成报告
+        ResourceRoute("POST", resource.risk.generate_risk_report, pk_field="risk_id", endpoint="generate"),
+        # AI 智能体预览
+        ResourceRoute("POST", resource.risk.ai_preview, pk_field="risk_id", endpoint="ai_preview"),
+        # 查询任务结果 (task_id 通过查询参数传递: ?task_id=xxx)
+        ResourceRoute("GET", resource.risk.get_task_result, endpoint="task"),
     ]
 
 

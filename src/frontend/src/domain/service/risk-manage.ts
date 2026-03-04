@@ -46,6 +46,15 @@ export default {
       }));
   },
   /**
+   * @desc 编辑风险标题
+   */
+  updateRiskTitle(params: {
+    risk_id: number | string,
+    title: string
+  }) {
+    return RiskManageSource.updateRiskTitle(params).then(({ data }) => data);
+  },
+  /**
    * @desc 获取待我处理风险列表
    */
   fetchTodoRiskList(params: {
@@ -66,6 +75,21 @@ export default {
     page_size: number
   }) {
     return RiskManageSource.getWatchRiskList(params, {
+      permission: 'page',
+    })
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
+   * @desc 获取处理历史风险列表
+   */
+  fetchProcessedRiskList(params: {
+    page: number,
+    page_size: number
+  }) {
+    return RiskManageSource.getProcessedRiskList(params, {
       permission: 'page',
     })
       .then(({ data }) => ({
@@ -225,6 +249,54 @@ export default {
    */
   addEvent(params: Record<string, any>) {
     return RiskManageSource.addEvent(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 获取报告风险变量列表
+   */
+  getReportRiskVar(params:  Record<string, any>) {
+    return RiskManageSource.getReportRiskVar(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc AI智能体预览
+   */
+  getAiPreview(params: {
+    id: string,
+    risk_id: string,
+    ai_variables: Array<{
+      name: string,
+      prompt_template: string
+    }>
+  }) {
+    return RiskManageSource.getAiPreview(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 报告预览
+   */
+  getReportPreview(params: {
+    risk_id: string,
+    report_config: {
+      template: string,
+      frontend_template: string,
+      ai_variables: Array<{
+        name: string,
+        prompt_template: string
+      }>
+    }
+  }) {
+    return RiskManageSource.getReportPreview(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 查询任务结果
+   */
+  getTaskRiskReport(params: {
+    task_id: string,
+  }) {
+    return RiskManageSource.getTaskRiskReport(params)
       .then(({ data }) => data);
   },
 };

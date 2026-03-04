@@ -166,7 +166,7 @@
       <div class="dispatch-wrap">
         <bk-form-item
           :label="t('调度方式')"
-          property="source_type"
+          property="configs.data_source.source_type"
           style="margin-bottom: 12px">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"

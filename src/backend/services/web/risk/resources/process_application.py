@@ -94,7 +94,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
                 actions=[
                     ActionEnum.LIST_PA,
                     ActionEnum.LIST_RISK,
-                    ActionEnum.EDIT_RISK,
+                    ActionEnum.PROCESS_RISK,
                     ActionEnum.CREATE_RULE,
                     ActionEnum.EDIT_RULE,
                     ActionEnum.LIST_RULE,

@@ -188,7 +188,8 @@
               <audit-icon
                 :class="isSuccess ? 'corret-fill' : `delete-fill`"
                 :type="isSuccess ? 'corret-fill' : `delete-fill`" />
-              <span class="corret-fill-text">{{ t(isSuccess ? '调试成功' : '调试失败') }}</span>
+              <span class="corret-fill-text">{{ t(isSuccess ? '调试成功' :
+                '调试失败') }}</span>
             </span>
           </div>
         </div>
@@ -546,8 +547,10 @@
         // 确保所有认证字段存在
         const allAuthFields = ['bk_app_code', 'bk_app_secret', 'app_code', 'app_secret', 'secret_id', 'secret_key'];
         allAuthFields.forEach((field) => {
-          if (!formData.value.api_config.auth_config.config[field]) {
-            formData.value.api_config.auth_config.config[field] = '';
+          const { config } = formData.value.api_config.auth_config;
+          const fieldKey = field as keyof typeof config;
+          if (!config[fieldKey]) {
+            config[fieldKey] = '';
           }
         });
         setTimeout(() => {
@@ -591,8 +594,7 @@
 .headers-config {
   display: flex;
   width: 100%;
-  padding-bottom: 10px;
-  margin-top: 10px;
+  margin-top: 8px;
   align-items: center;
 
   .config-input {

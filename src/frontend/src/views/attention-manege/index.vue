@@ -24,13 +24,17 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
 
-    <div class="risk-manage-list">
+    <div
+      class="risk-manage-list"
+      :class="{ 'is-table-empty': isTableEmpty }">
       <render-list
         ref="listRef"
+        :border="isTableEmpty ? [] : ['outer']"
         :columns="tableColumn"
         :data-source="dataSource"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
     </div>
@@ -40,9 +44,11 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    nextTick,
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -121,6 +127,11 @@
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },
+    processing: {
+      tag: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
+    },
   };
   const selectedItemList = ref<FieldItem[]>([]);
 
@@ -193,9 +204,9 @@
           ? (
           <div style='display: flex;align-items: center;height: 100%;'>
             <bk-tag
-              theme={statusToMap[data.status].tag}>
+              theme={statusToMap[data.status]?.tag}>
               <p style='display: flex;align-items: center;'>
-                <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}` } />
+                <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}` } />
                 <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
               </p>
             </bk-tag>
@@ -206,9 +217,9 @@
           )
           : (
           <bk-tag
-            theme={statusToMap[data.status].tag}>
+            theme={statusToMap[data.status]?.tag}>
             <p style='display: flex;align-items: center;'>
-              <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}` } />
+              <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}` } />
               <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
             </p>
           </bk-tag>)
@@ -264,6 +275,30 @@
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
     {
+      label: () => t('事件调查报告'),
+      field: () => 'has_report',
+      filter: {
+        list: [
+          {
+            text: t('已生成'),
+            value: true,
+          },
+          {
+            text: t('未生成'),
+            value: false,
+          },
+        ],
+        filterScope: 'all',
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+        multiple: false, // 单选模式
+      },
+      width: 160,
+      render: ({ data }: { data: RiskManageModel }) => <bk-tag
+        >{ data.has_report ? t('已生成') : t('未生成') }</bk-tag>,
+    },
+    {
       label: () => t('风险标记'),
       field: () => 'risk_label',
       width: 100,
@@ -278,6 +313,20 @@
   ] as Column[];
 
   const tableColumn = ref(initTableColumns);
+
+  const isTableEmpty = ref(false);
+  // 空数据时重置滚动条位置
+  watch(isTableEmpty, (isEmpty) => {
+    if (isEmpty) {
+      nextTick(() => {
+        const tableBody = listRef.value?.$el?.querySelector('.bk-table-body');
+        if (tableBody) {
+          tableBody.scrollLeft = 0;
+          tableBody.scrollTop = 0;
+        }
+      });
+    }
+  });
 
   // let timeout: number| undefined = undefined;
 
@@ -319,7 +368,7 @@
       }, [] as Array<{
         label: string, field: string, disabled: boolean,
       }>) || [],
-      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'].concat(fieldNames),
       showLineHeight: false,
       trigger: 'manual' as const,  // 添加 as const 类型断言
     };
@@ -397,6 +446,9 @@
       tableColumn.value =  initColumns();
     }
     settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
+
+    // 控制表格空数据时的样式状态
+    isTableEmpty.value = !results.length;
 
     // startPolling(results);
     if (!results.length) return;
@@ -487,6 +539,42 @@
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
   };
+  // 列筛选处理（跨页过滤）
+  const handleColumnFilter = (checkedObj: Record<string, any>) => {
+    const checkField = checkedObj.column.field();
+    // 事件调查报告字段只支持单选，多选时传空值
+    let value = '';
+    if (checkField === 'has_report') {
+      const checkedValues = checkedObj.checked;
+      // 多选时（数组长度 > 1）传空值
+      if (Array.isArray(checkedValues) && checkedValues.length > 1) {
+        value = '';
+      } else if (Array.isArray(checkedValues) && checkedValues.length === 1) {
+        // 单选时正常处理
+        const item = checkedValues[0];
+        // eslint-disable-next-line no-nested-ternary
+        value = typeof item === 'boolean' ? (item ? 'true' : 'false') : String(item);
+      }
+    } else {
+      // 其他字段正常处理多选
+      const checkedValues = checkedObj.checked;
+      // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
+      value = checkedValues.map((item: any) => {
+        if (typeof item === 'boolean') {
+          return item ? 'true' : 'false';
+        }
+        return String(item);
+      }).join(',');
+    }
+
+    // 更新搜索模型，将筛选条件添加到搜索参数中
+    searchModel.value = {
+      ...searchModel.value,
+      [checkField]: value || '',
+    };
+    // 重新获取数据，实现跨页过滤
+    fetchList();
+  };
   const fetchList = () => {
     if (!listRef.value) return;
     const params = {
@@ -563,11 +651,16 @@
     margin-top: 16px;
     background-color: white;
 
-    /* 解决表格悬浮超出 */
+    /* 数据为空时隐藏右侧固定列和滚动条 */
+    &.is-table-empty {
+      .bk-table-fixed {
+        visibility: hidden;
+      }
 
-    /* .bk-table .bk-table-fixed .column_fixed {
-      bottom: 2px !important;
-    } */
+      .bk-exception {
+        border-bottom: none;
+      }
+    }
   }
 
 }

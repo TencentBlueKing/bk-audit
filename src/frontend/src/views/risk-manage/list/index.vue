@@ -23,7 +23,9 @@
       @change="handleSearchChange"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
-    <div class="risk-manage-list">
+    <div
+      class="risk-manage-list"
+      :class="{ 'is-table-empty': isTableEmpty }">
       <div class="add-button">
         <bk-button
           theme="primary"
@@ -36,6 +38,7 @@
       </div>
       <render-list
         ref="listRef"
+        :border="isTableEmpty ? [] : ['outer']"
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
@@ -43,6 +46,7 @@
         :row-class="handleRowClass"
         :settings="settings"
         @clear-search="handleClearSearch"
+        @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
     </div>
@@ -62,6 +66,7 @@
     onMounted,
     onUnmounted,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -137,6 +142,11 @@
       tag: 'success',
       icon: 'taocanchulizhong',
       color: '#0CA668',
+    },
+    processing: {
+      tag: 'info',
+      icon: 'loading',
+      color: '#3A84FF',
     },
   };
 
@@ -230,9 +240,9 @@
             ? (
               <div style='display: flex;align-items: center;height: 100%;'>
                 <bk-tag
-                  theme={statusToMap[data.status].tag}>
+                  theme={statusToMap[data.status]?.tag}>
                   <p style='display: flex;align-items: center;'>
-                    <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                    <audit-icon type={statusToMap[data.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`} />
                     <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
                   </p>
                 </bk-tag>
@@ -243,9 +253,9 @@
             )
             : (
               <bk-tag
-                theme={statusToMap[data.status].tag}>
+                theme={statusToMap[data.status]?.tag}>
                 <p style='display: flex;align-items: center;'>
-                  <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                  <audit-icon type={statusToMap[data.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`} />
                   <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
                 </p>
               </bk-tag>))
@@ -297,6 +307,30 @@
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
     {
+      label: () => t('事件调查报告'),
+      field: () => 'has_report',
+      filter: {
+        list: [
+          {
+            text: t('已生成'),
+            value: true,
+          },
+          {
+            text: t('未生成'),
+            value: false,
+          },
+        ],
+        filterScope: 'all',
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+        multiple: false, // 单选模式
+      },
+      width: 160,
+      render: ({ data }: { data: RiskManageModel }) => <bk-tag
+        >{ data.has_report ? t('已生成') : t('未生成') }</bk-tag>,
+    },
+    {
       label: () => t('风险标记'),
       field: () => 'risk_label',
       width: 110,
@@ -314,49 +348,74 @@
       width: 148,
       fixed: 'right',
       render: ({ data }: { data: RiskManageModel }) => (
-        data.status === 'stand_by' ? <div>
-        <bk-button text  class='mr16'>{t('--')}</bk-button></div>
-        :     (<p>
-        {
-          ['for_approve', 'auto_process'].includes(data.status)
-            ? (
-              <bk-button
-                v-bk-tooltips={t('当前状态不支持人工处理')}
-                text
-                theme='primary'
-                class='mr16 is-disabled'>
-                {t('处理')}
-              </bk-button>
+        data.status === 'stand_by'
+          ? <div>
+            <bk-button text  class='mr16'>--</bk-button>
+          </div>
+          : (<p>
+          {
+            ['for_approve', 'auto_process'].includes(data.status)
+              ? (
+                <bk-button
+                  v-bk-tooltips={t('当前状态不支持人工处理')}
+                  text
+                  theme='primary'
+                  class='mr16 is-disabled'>
+                  {t('处理')}
+                </bk-button>
+              )
+              : (
+                <auth-button
+                  text
+                  theme='primary'
+                  class='mr16'
+                  permission={data.permission.process_risk || data.current_operator.includes(userInfo.value.username)}
+                  action-id='process_risk'
+                  resource={data.risk_id}
+                  onClick={() => handleToDetail(data)}>
+                  {t('处理')}
+                </auth-button>
             )
-            : (
-              <auth-button
-                text
-                theme='primary'
-                class='mr16'
-                permission={data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.value.username)}
-                action-id='edit_risk_v2'
-                resource={data.risk_id}
-                onClick={() => handleToDetail(data)}>
-                {t('处理')}
-              </auth-button>
-           )
-        }
-        {
-          data.status === 'auto_process'
-            ? <bk-button text theme='primary'
-              class="is-disabled"
-              v-bk-tooltips={{
-                content: data.risk_label === 'normal'
-                  ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                  : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-              }}>
-                {data.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-              </bk-button>
-            : <MarkRiskLabel
-                onUpdate={() => fetchList()}
-                userInfo={userInfo.value}
-                data={data} />
           }
+          {
+            data.status === 'auto_process'
+              ? <bk-button text theme='primary'
+                class="is-disabled"
+                v-bk-tooltips={{
+                  content: data.risk_label === 'normal'
+                    ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                    : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+                }}>
+                  {data.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
+                </bk-button>
+              : <MarkRiskLabel
+                  onUpdate={() => fetchList()}
+                  userInfo={userInfo.value}
+                  data={data} />
+          }
+          <bk-dropdown
+            style="margin-left: 8px">
+            {{
+              default: () => <bk-button text>
+                <audit-icon type="more" />
+              </bk-button>,
+              content: () => (
+                <bk-dropdown-menu>
+                  <bk-dropdown-item>
+                    <auth-button
+                      style="width: 100%;"
+                      actionId="edit_risk_v2"
+                      permission={data.permission.edit_risk_v2}
+                      resource={data.strategy_id}
+                      onClick={() => handleGenerateReport(data)}
+                      text>
+                      {data.has_report ? t('编辑调查报告') : t('创建调查报告')}
+                    </auth-button>
+                  </bk-dropdown-item>
+                </bk-dropdown-menu>
+              ),
+            }}
+          </bk-dropdown>
           </p>)
       ),
     },
@@ -365,6 +424,19 @@
   const tableColumn = ref(initTableColumns);
 
 
+  const isTableEmpty = ref(false);
+  // 空数据时重置滚动条位置
+  watch(isTableEmpty, (isEmpty) => {
+    if (isEmpty) {
+      nextTick(() => {
+        const tableBody = listRef.value?.$el?.querySelector('.bk-table-body');
+        if (tableBody) {
+          tableBody.scrollLeft = 0;
+          tableBody.scrollTop = 0;
+        }
+      });
+    }
+  });
   const listRef = ref();
   const addRiskRef = ref();
   const searchBoxRef = ref();
@@ -401,7 +473,7 @@
       }, [] as Array<{
         label: string, field: string, disabled: boolean,
       }>) || [],
-      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'].concat(fieldNames),
       showLineHeight: false,
       trigger: 'manual' as const,  // 添加 as const 类型断言
     };
@@ -500,14 +572,22 @@
       tableColumn.value =  initColumns();
     }
     settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
-    if (!results.length) return;
+
+    // 控制表格空数据时的样式状态
+    isTableEmpty.value = !results.length;
+
+    if (!results.length) {
+      return;
+    }
+
+
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
     if (results.some(item => item.status === 'stand_by')) {
       // 执行定时器
-      timeout = setTimeout(() => {
+      safeSetTimeout(() => {
         const addEventRiskIds = JSON.parse(sessionStorage.getItem('addEventRiskIds') || '[]');
         if (addEventRiskIds.length === 0) {
           listRef.value?.initData();
@@ -517,7 +597,9 @@
           page: 1,
           page_size: 20,
         }).then((data) => {
-          listRef.value?.initListData(data.results, 'risk_id');
+          if (isComponentMounted.value) {
+            listRef.value?.initListData(data.results, 'risk_id');
+          }
         });
       }, 5000);
     } else {
@@ -610,6 +692,42 @@
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
   };
+  // 列筛选处理（跨页过滤）
+  const handleColumnFilter = (checkedObj: Record<string, any>) => {
+    const checkField = checkedObj.column.field();
+    // 事件调查报告字段只支持单选，多选时传空值
+    let value = '';
+    if (checkField === 'has_report') {
+      const checkedValues = checkedObj.checked;
+      // 多选时（数组长度 > 1）传空值
+      if (Array.isArray(checkedValues) && checkedValues.length > 1) {
+        value = '';
+      } else if (Array.isArray(checkedValues) && checkedValues.length === 1) {
+        // 单选时正常处理
+        const item = checkedValues[0];
+        // eslint-disable-next-line no-nested-ternary
+        value = typeof item === 'boolean' ? (item ? 'true' : 'false') : String(item);
+      }
+    } else {
+      // 其他字段正常处理多选
+      const checkedValues = checkedObj.checked;
+      // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
+      value = checkedValues.map((item: any) => {
+        if (typeof item === 'boolean') {
+          return item ? 'true' : 'false';
+        }
+        return String(item);
+      }).join(',');
+    }
+
+    // 更新搜索模型，将筛选条件添加到搜索参数中
+    searchModel.value = {
+      ...searchModel.value,
+      [checkField]: value || '',
+    };
+    // 重新获取数据，实现跨页过滤
+    fetchList();
+  };
   const fetchList = () => {
     if (!listRef.value) return;
     const params = {
@@ -635,6 +753,18 @@
     listRef.value.fetchData(dataParams);
   };
 
+  const handleGenerateReport = (data: RiskManageModel) => {
+    router.push({
+      name: 'riskManageDetail',
+      params: {
+        riskId: data.risk_id,
+      },
+      query: {
+        openEditReport: data.has_report ? 'true' : 'false',
+      },
+    });
+  };
+
   // 新增风险
   const handleAddRisk = () => {
     addRiskRef.value.show();
@@ -651,12 +781,24 @@
       sessionStorage.removeItem('addEventRiskIds');
     });
   });
+  const isComponentMounted = ref(true);
+
   onUnmounted(() => {
+    isComponentMounted.value = false;
     if (timeout) {
       clearTimeout(timeout);
       timeout = undefined;
     }
   });
+
+  // 添加定时器执行前的组件状态检查
+  const safeSetTimeout = (callback: () => void, delay: number) => {
+    timeout = setTimeout(() => {
+      if (isComponentMounted.value) {
+        callback();
+      }
+    }, delay);
+  };
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {
@@ -707,8 +849,18 @@
         font-size: 12px;
       }
     }
-  }
 
+    /* 数据为空时隐藏右侧固定列和滚动条 */
+    &.is-table-empty {
+      .bk-table-fixed {
+        visibility: hidden;
+      }
+
+      .bk-exception {
+        border-bottom: none;
+      }
+    }
+  }
 }
 
 .risk-label-status {

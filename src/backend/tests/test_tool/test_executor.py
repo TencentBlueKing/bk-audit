@@ -481,7 +481,7 @@ class TestToolExecutorFactory(TestCase):
         # SQL 工具（去掉 *）
         self.sql_tool = Tool.objects.create(
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
-            name="vision_tool",
+            name="sql_tool",
             version=1,
             config=SQLDataSearchConfig(
                 sql="SELECT a FROM table",

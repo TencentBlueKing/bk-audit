@@ -38,6 +38,8 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     LogReportStatus,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
 )
@@ -46,6 +48,17 @@ from services.web.databus.models import (
     Snapshot,
     SnapshotCheckStatistic,
 )
+
+
+class RecordLogTypeMixin(serializers.Serializer):
+    """日志接入方式和SDK选择的通用字段 Mixin"""
+
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
 
 
 class SnapshotStatusRequestSerializer(serializers.Serializer):
@@ -69,7 +82,7 @@ class TargetNodeSerializer(serializers.Serializer):
     bk_supplier_id = serializers.CharField(label=gettext_lazy("供应商id"), required=False)
 
 
-class CollectorCreateRequestSerializer(serializers.Serializer):
+class CollectorCreateRequestSerializer(RecordLogTypeMixin):
     namespace = serializers.CharField()
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"))
@@ -153,7 +166,7 @@ class BulkSystemCollectorsStatusResponseSerializer(serializers.Serializer):
     system_id1 = CollectorStatusSerializer()
 
 
-class UpdateCollectorRequestSerializer(serializers.Serializer):
+class UpdateCollectorRequestSerializer(RecordLogTypeMixin):
     platform_username = serializers.CharField(label=gettext_lazy("数据平台用户"), required=False)
     collector_config_id = serializers.IntegerField(label=gettext_lazy("采集项ID"))
     collector_config_name = serializers.RegexField(
@@ -272,7 +285,7 @@ class GetBcsYamlTemplateResponseSerializer(serializers.Serializer):
     yaml_config = serializers.CharField()
 
 
-class BcsCollectorBaseSerializer(serializers.Serializer):
+class BcsCollectorBaseSerializer(RecordLogTypeMixin):
     bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"))
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
@@ -309,6 +322,7 @@ class CreateApiPushRequestSerializer(serializers.Serializer):
 
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    custom_collector_config_name = serializers.CharField(label=gettext_lazy("用户自定义名称"), required=False)
 
 
 class GetApiPushRequestSerializer(serializers.Serializer):
@@ -404,7 +418,7 @@ class DataIdEtlPreviewRequestSerializer(serializers.Serializer):
     data = serializers.CharField(label=gettext_lazy("原始日志"))
 
 
-class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
+class ApplyDataIdSourceRequestSerializer(RecordLogTypeMixin):
     """
     Apply Data ID Source
     """
@@ -412,6 +426,8 @@ class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     bk_data_id = serializers.IntegerField(label=gettext_lazy("DataID"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    custom_collector_en_name = serializers.CharField(label=gettext_lazy("自定义英文名"), required=False)
+    custom_collector_ch_name = serializers.CharField(label=gettext_lazy("自定义中文名"), required=False)
 
 
 class DataIdEtlStorageRequestSerializer(serializers.Serializer):

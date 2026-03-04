@@ -26,7 +26,7 @@ from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
-from django.db.models import Field, Max, Q, QuerySet
+from django.db.models import Exists, Field, Max, OuterRef, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
 from pydantic import ValidationError as PydanticValidationError
@@ -41,6 +41,7 @@ from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
     RiskLabel,
+    RiskReportStatus,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -166,6 +167,21 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
     manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=True)
+    auto_generate_report = models.BooleanField(
+        gettext_lazy("是否开启自动生成报告"),
+        default=True,
+        help_text=gettext_lazy("开启后风险产生新事件时会自动生成报告"),
+    )
+
+    def can_auto_generate_report(self) -> bool:
+        """
+        判断是否可以自动生成报告
+        条件：
+        1. 策略开启报告功能 (report_enabled)
+        2. 策略开启自动渲染 (report_auto_render)
+        3. 风险开启自动生成 (auto_generate_report)
+        """
+        return bool(self.strategy.report_enabled and self.strategy.report_auto_render and self.auto_generate_report)
 
     class Meta:
         verbose_name = gettext_lazy("Risk")
@@ -203,10 +219,13 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     def annotated_queryset(cls) -> QuerySet["Risk"]:
         """
         返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
+        以及 _has_report 标记（用于避免 N+1 查询）
         """
-        return cls.objects.annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH)).defer(
-            "event_content"
-        )
+
+        return cls.objects.annotate(
+            event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH),
+            _has_report=Exists(RiskReport.objects.filter(risk_id=OuterRef("risk_id"))),
+        ).defer("event_content")
 
     @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
@@ -614,3 +633,37 @@ class RiskEventSubscription(SoftDeleteModel):
         将 WhereCondition 序列化为 JSON 存储；没有条件时写入空 dict。
         """
         self.condition = where.model_dump(exclude_none=True) if where else {}
+
+
+class RiskReport(OperateRecordModel):
+    """
+    风险报告表
+    """
+
+    risk = models.OneToOneField(
+        Risk,
+        on_delete=models.CASCADE,
+        related_name="report",
+        verbose_name=gettext_lazy("关联风险"),
+        primary_key=True,
+    )
+
+    content = models.TextField(
+        verbose_name=gettext_lazy("报告内容"),
+        blank=True,
+        default="",
+    )
+
+    status = models.CharField(
+        verbose_name=gettext_lazy("报告状态"),
+        max_length=20,
+        choices=RiskReportStatus.choices,
+        default=RiskReportStatus.AUTO,
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("风险报告")
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f"RiskReport({self.risk_id})"
