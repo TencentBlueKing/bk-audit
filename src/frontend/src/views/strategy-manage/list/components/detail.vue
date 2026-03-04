@@ -26,7 +26,9 @@
         :name="item.name">
         <scroll-faker>
           <component
-            :is="renderCom"
+            :is="comMap[item.name]"
+            v-if="active === item.name"
+            :active-tab="active"
             :data="data"
             :strategy-map="strategyMap"
             style="height: calc(100% - 50px)"
@@ -38,8 +40,8 @@
 </template>
 <script setup lang="ts">
   import {
-    computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -48,6 +50,7 @@
   import RiskDetection from './risk-detection.vue';
   import RiskDisplay from './risk-display.vue';
   import RiskOther from './risk-other.vue';
+  import StrategyEventReport from './strategy-event-report.vue';
 
   interface Props {
     data: StrategyModel,
@@ -56,21 +59,31 @@
   }
 
   defineProps<Props>();
+  const emits = defineEmits(['tab-change']);
   const { t } = useI18n();
 
-  const renderCom = computed(() => comMap[active.value]);
   const comMap: Record<string, any> = {
     riskDetection: RiskDetection,
     riskDisplay: RiskDisplay,
+    eventReport: StrategyEventReport,
     riskOther: RiskOther,
   };
 
   const panels = [
     { name: 'riskDetection', label: t('风险发现') },
     { name: 'riskDisplay', label: t('单据展示') },
+    { name: 'eventReport', label: t('事件调查报告') },
     { name: 'riskOther', label: t('其他配置') },
   ];
   const active = ref<keyof typeof comMap>('riskDetection');
+
+  watch(
+    active,
+    (val) => {
+      emits('tab-change', val);
+    },
+    { immediate: true },
+  );
 
 </script>
 <style scoped lang="postcss">
