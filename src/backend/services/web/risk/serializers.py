@@ -303,6 +303,7 @@ class RiskInfoSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
 
 class RiskProviderSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    last_operate_time = serializers.DateTimeField(label=gettext_lazy("Last Operate Time"))
     event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
     event_end_time_timestamp = TimestampIntegerField(
         label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
@@ -427,12 +428,6 @@ class ListRiskRequestSerializer(serializers.Serializer):
     tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
-    use_bkbase = serializers.BooleanField(
-        label=gettext_lazy("是否通过BKBase查询"),
-        required=False,
-        default=False,
-        help_text=gettext_lazy("已废弃：由 event_filters 自动决定，传入无效"),
-    )
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
@@ -446,6 +441,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
         help_text=gettext_lazy(
             '多字段排序，如 ["-risk_level", "-event_time", "-risk_id"]。'
             "每个元素为字段名，前缀 - 表示倒序。"
+            "可用字段：risk_level(风险等级)、event_time(首次发现时间)、"
+            "last_operate_time(最后处理时间)、risk_id、display_status、event_data.xxx 等。"
             "替代已废弃的 order_field + order_type 参数。"
         ),
     )
