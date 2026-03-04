@@ -40,7 +40,7 @@
       v-for="(item, key) in tableData"
       :key="key">
       <!-- strategyType === 'rule'时不显示 event_evidence_field_configs -->
-      <template v-if="strategyType === 'rule' && key === 'event_evidence_field_configs'" />
+      <template v-if="(strategyType === 'rule' && key === 'event_evidence_field_configs') || !item || !item.length" />
       <div
         v-else
         class="table-section">
