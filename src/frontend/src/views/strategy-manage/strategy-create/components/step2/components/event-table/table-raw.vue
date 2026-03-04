@@ -54,19 +54,22 @@
       </template>
     </vuedraggable>
   </template>
-  <div
-    v-else
-    class="table-row empty-row">
-    <div class="empty-message">
-      {{ t('暂未获取到相关字段，请先进入下一步') }}
+  <template v-else>
+    <div
+      v-if="!isEditMode && !isCloneMode"
+      class="table-row empty-row">
+      <div class="empty-message">
+        {{ t('暂未获取到相关字段，请先进入下一步') }}
+      </div>
     </div>
-  </div>
+  </template>
 </template>
 
 <script setup lang='ts'>
   import _ from 'lodash';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
@@ -103,8 +106,11 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
 
   const fieldCellRef = ref();
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
