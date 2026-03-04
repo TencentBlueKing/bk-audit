@@ -35,7 +35,6 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     EventFilterOperator,
     EventMappingFields,
-    RiskDisplayStatus,
     RiskLabel,
     RiskRuleOperator,
     RiskViewType,
@@ -238,20 +237,8 @@ class RiskReportSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class RiskDisplayStatusMixin:
-    """将 display_status 以 status 字段名暴露给前端，屏蔽内部字段改动"""
-
-    def to_representation(self, instance: Risk):
-        data = super().to_representation(instance)
-        display_status = data.pop("display_status", None)
-        if getattr(instance, "manual_synced", True) is False:
-            data["status"] = RiskDisplayStatus.STAND_BY.value
-        elif display_status is not None:
-            data["status"] = display_status
-        return data
-
-
-class RiskInfoSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
+class RiskInfoSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(source="display_status", read_only=True)
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
@@ -298,7 +285,7 @@ class RiskInfoSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
 
     class Meta:
         model = Risk
-        exclude = ["strategy"]
+        exclude = ["strategy", "display_status"]
 
 
 class RiskProviderSerializer(serializers.ModelSerializer):
@@ -555,11 +542,12 @@ class ListRiskStrategyRespSerializer(serializers.ModelSerializer):
         fields = ["label", "value"]
 
 
-class ListRiskResponseSerializer(RiskDisplayStatusMixin, serializers.ModelSerializer):
+class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
     List Risk
     """
 
+    status = serializers.CharField(source="display_status", read_only=True)
     experiences = serializers.IntegerField(required=False)
     event_data = serializers.SerializerMethodField()
     event_content = serializers.SerializerMethodField()
@@ -632,7 +620,6 @@ class ListRiskResponseSerializer(RiskDisplayStatusMixin, serializers.ModelSerial
             "event_end_time",
             "operator",
             "status",
-            "display_status",  # 通过 to_representation 映射为 status 暴露给前端
             "current_operator",
             "notice_users",
             "event_data",

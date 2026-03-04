@@ -790,6 +790,7 @@ class TestListRiskResource(TestCase):
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         sql_log: List[str] = []
 
@@ -839,6 +840,7 @@ class TestListRiskResource(TestCase):
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         sql_log: List[str] = []
 
@@ -1102,6 +1104,7 @@ class TestRetrieveRiskDetail(TestCase):
             title="manual-unsynced-status",
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
 
         data = self.resource.risk.retrieve_risk({"risk_id": unsynced_risk.risk_id})
@@ -1133,6 +1136,7 @@ class TestSyncManualRiskStatus(TestCase):
             title="manual-unsynced",
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         untouched = Risk.objects.create(
             risk_id="risk-still-unsynced",
@@ -1142,6 +1146,7 @@ class TestSyncManualRiskStatus(TestCase):
             title="manual-unsynced-2",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             manual_synced=False,
+            display_status=RiskDisplayStatus.STAND_BY,
         )
         called_sql = {}
 
@@ -1152,8 +1157,12 @@ class TestSyncManualRiskStatus(TestCase):
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             _sync_manual_risk_status(batch_size=10)
 
-        self.assertTrue(Risk.objects.get(pk=target.pk).manual_synced)
-        self.assertFalse(Risk.objects.get(pk=untouched.pk).manual_synced)
+        synced_target = Risk.objects.get(pk=target.pk)
+        self.assertTrue(synced_target.manual_synced)
+        self.assertEqual(synced_target.display_status, RiskDisplayStatus.NEW)
+        still_unsynced = Risk.objects.get(pk=untouched.pk)
+        self.assertFalse(still_unsynced.manual_synced)
+        self.assertEqual(still_unsynced.display_status, RiskDisplayStatus.STAND_BY)
         self.assertIn(target.risk_id, called_sql.get("value", ""))
 
 
