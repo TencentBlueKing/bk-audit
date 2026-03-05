@@ -109,7 +109,6 @@
     if (Array.isArray(props.data)) {
       return props.data;
     }
-    console.log('props', props);
     return   props.data === undefined ? [] : props.data.split(',');
   });
   const renderData = computed(() =>  {
