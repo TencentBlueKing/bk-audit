@@ -98,7 +98,6 @@ from services.web.databus.collector.snapshot.join.base import (
 )
 from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
 from services.web.databus.constants import (
-    API_PUSH_COLLECTOR_NAME_CH,
     API_PUSH_COLLECTOR_NAME_FORMAT,
     BKBASE_API_MAX_PAGESIZE,
     COLLECTOR_NAME_MAX_LENGTH,
@@ -677,7 +676,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
         # 创建自定义上报
         custom_params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
-            "collector_config_name": API_PUSH_COLLECTOR_NAME_CH,
+            "collector_config_name": collector_config_name,
             "collector_config_name_en": collector_config_name,
             "custom_type": CustomTypeEnum.OTLP_LOG.value,
             "category_id": DEFAULT_CATEGORY_ID,
@@ -692,7 +691,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
             bk_data_id=result["bk_data_id"],
             collector_plugin_id=plugin_id,
             collector_config_id=result["collector_config_id"],
-            collector_config_name=API_PUSH_COLLECTOR_NAME_CH,
+            collector_config_name=collector_config_name,
             collector_config_name_en=collector_config_name,
             custom_type=CustomTypeEnum.OTLP_LOG.value,
             description=collector_config_name,
