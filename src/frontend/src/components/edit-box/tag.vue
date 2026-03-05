@@ -109,8 +109,8 @@
     if (Array.isArray(props.data)) {
       return props.data;
     }
-
-    return  props.data.split(',');
+    console.log('props', props);
+    return   props.data === undefined ? [] : props.data.split(',');
   });
   const renderData = computed(() =>  {
     // 1. 如果是真正的数组，直接连接
