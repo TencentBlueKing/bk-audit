@@ -24,17 +24,15 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
 
-    <div
-      class="risk-manage-list"
-      :class="{ 'is-table-empty': isTableEmpty }">
-      <render-list
+    <div class="risk-manage-list">
+      <tdesign-list
         ref="listRef"
-        :border="isTableEmpty ? [] : ['outer']"
-        :columns="tableColumn"
+        :columns="initTableColumns"
         :data-source="dataSource"
+        need-empty-search-tip
+        row-key="risk_id"
         :settings="settings"
         @clear-search="handleClearSearch"
-        @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
     </div>
@@ -42,13 +40,11 @@
 </template>
 
 <script setup lang='tsx'>
-  import type { Column } from 'bkui-vue/lib/table/props';
   import {
-    nextTick,
+    computed,
     onMounted,
     onUnmounted,
     ref,
-    watch,
   } from 'vue';
   import {
     useI18n,
@@ -69,27 +65,19 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
+  import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
+  import TdesignList from '@components/tdesign-list/index.vue';
 
   import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
   import FieldConfig from './components/config';
-
-  import useTableSettings from '@/hooks/use-table-settings';
 
   const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{
     checked: Array<string>,
     fields: Record<string, any>[],
     size: string
-  }
-
-  interface FieldItem {
-    id: string;
-    field_name: string;
-    display_name: string;
-    operator?: string;
-    value?: string | string[];
   }
 
   const strategyTagMap = ref<Record<string, string>>({});
@@ -133,203 +121,190 @@
       color: '#3A84FF',
     },
   };
-  const selectedItemList = ref<FieldItem[]>([]);
 
+  // 直接按 TDesign PrimaryTable 格式定义列配置
   const initTableColumns = [
     {
-      type: 'selection',
-      label: '',
+      // 选择列
+      type: 'multiple',
+      colKey: 'row-select',
       width: 80,
       fixed: 'left',
     },
     {
-      label: () => t('风险ID'),
-      field: () => 'risk_id',
+      title: t('风险ID'),
+      colKey: 'risk_id',
       width: 200,
-      fixed: true,
       minWidth: 180,
-      render: ({ data }: { data: RiskManageModel }) => {
+      fixed: 'left',
+      ellipsis: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => {
         const to = {
           name: 'attentionManageDetail',
           params: {
-            riskId: data.risk_id,
+            riskId: row.risk_id,
           },
         };
         return <router-link to={to}>
-          <Tooltips data={data.risk_id} />
+          <Tooltips data={row.risk_id} />
         </router-link>;
       },
     },
     {
-      label: () => t('风险标题'),
-      field: () => 'title',
+      title: t('风险标题'),
+      colKey: 'title',
       minWidth: 320,
-      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.title} />,
+      ellipsis: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <Tooltips data={row.title} />,
     },
     {
-      label: () => t('风险描述'),
-      field: () => 'event_content',
+      title: t('风险描述'),
+      colKey: 'event_content',
       minWidth: 320,
-      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.event_content} />,
+      ellipsis: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <Tooltips data={row.event_content} />,
     },
     {
-      label: () => t('风险等级'),
-      field: () => 'risk_id',
-      sort: 'custom',
-      width: 90,
-      render: ({ data }: { data: RiskManageModel }) => <>
-          <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
-        </>,
-    },
-    {
-      label: () => t('风险标签'),
-      field: () => 'tags',
+      title: t('风险等级'),
+      colKey: 'risk_level',
       width: 120,
-      render: ({ data }: { data: RiskManageModel }) => {
-        const tags = data.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={data.strategy_id} />;
+      sortType: 'all',
+      sorter: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <>
+        <RiskLevel levelData={levelData.value} data={row}></RiskLevel>
+      </>,
+    },
+    {
+      title: t('风险标签'),
+      colKey: 'tags',
+      width: 120,
+      cell: (h: any, { row }: { row: RiskManageModel }) => {
+        const tags = row.tags.map(item => strategyTagMap.value[item] || item);
+        return <EditTag data={tags} key={row.strategy_id} />;
       },
     },
     {
-      label: () => t('责任人'),
-      field: () => 'operator',
-      width: 110,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator} />,
+      title: t('责任人'),
+      colKey: 'operator',
+      width: 160,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator} />,
     },
     {
-      label: () => t('处理状态'),
-      field: () => 'status',
+      title: t('处理状态'),
+      colKey: 'status',
       width: 110,
-      render: ({ data }: { data: RiskManageModel }) => (
-        data.status === 'closed' && data.experiences > 0
+      cell: (h: any, { row }: { row: RiskManageModel }) => (
+        row.status === 'closed' && row.experiences > 0
           ? (
           <div style='display: flex;align-items: center;height: 100%;'>
             <bk-tag
-              theme={statusToMap[data.status]?.tag}>
+              theme={statusToMap[row.status]?.tag}>
               <p style='display: flex;align-items: center;'>
-                <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}` } />
-                <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
+                <audit-icon type={statusToMap[row.status].icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+                <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
               </p>
             </bk-tag>
-              <bk-button text theme='primary' onClick={ () => handleToDetail(data, true)}>
-              <audit-icon v-bk-tooltips={ t('已填写“风险总结”')} type="report" style='font-size: 14px;'/>
+            <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
+              <audit-icon v-bk-tooltips={t('已填写"风险总结"')} type="report" style='font-size: 14px;' />
             </bk-button>
           </div>
-          )
+        )
           : (
           <bk-tag
-            theme={statusToMap[data.status]?.tag}>
+            theme={statusToMap[row.status]?.tag}>
             <p style='display: flex;align-items: center;'>
-              <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}` } />
-              <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
+              <audit-icon type={statusToMap[row.status].icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+              <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
             </p>
           </bk-tag>)
       ),
     },
     {
-      label: () => t('首次发现时间'),
-      field: () => 'event_time',
-      sort: 'custom',
+      title: t('首次发现时间'),
+      colKey: 'event_time',
       width: 168,
+      minWidth: 168,
+      sortType: 'all',
+      sorter: true,
     },
     {
-      label: () => t('风险命中策略(ID)'),
-      field: () => 'strategy_id',
-      showOverflowTooltip: true,
-      minWidth: 170,
-      render: ({ data }: { data: RiskManageModel }) => {
+      title: t('风险命中策略(ID)'),
+      colKey: 'strategy_id',
+      width: 200,
+      ellipsis: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
           query: {
-            strategy_id: data.strategy_id,
+            strategy_id: row.strategy_id,
           },
         };
         const strategyName = strategyList.value
-          .find(item => item.value === data.strategy_id)?.label;
+          .find(item => item.value === row.strategy_id)?.label;
         return strategyName
           ? (
-            <router-link to={to}>
-              <span>{`${strategyName}(${data.strategy_id})`}</span>
-            </router-link>
+          <router-link to={to} target='_blank'>
+            <span>{`${strategyName}(${row.strategy_id})`}</span>
+          </router-link>
           ) : (
           <span>--</span>
         );
       },
     },
     {
-      label: () => t('关注人'),
-      field: () => 'notice_users',
+      title: t('关注人'),
+      colKey: 'notice_users',
       width: 200,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.notice_users} />,
     },
     {
-      label: () => t('当前处理人'),
-      field: () => 'current_operator',
+      title: t('当前处理人'),
+      colKey: 'current_operator',
       width: 200,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.current_operator} />,
     },
     {
-      label: () => t('最后一次处理时间'),
-      field: () => 'last_operate_time',
-      sort: 'custom',
+      title: t('最后一次处理时间'),
+      colKey: 'last_operate_time',
       width: 160,
-      render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
+      sorter: true,
+      cell: (h: any, { row }: { row: RiskManageModel }) => row.last_operate_time || '--',
     },
     {
-      label: () => t('事件调查报告'),
-      field: () => 'has_report',
+      title: t('事件调查报告'),
+      colKey: 'has_report',
+      width: 160,
       filter: {
+        type: 'single',
+        showConfirmAndReset: true,
+        resetValue: undefined,
         list: [
           {
-            text: t('已生成'),
+            label: t('已生成'),
             value: true,
           },
           {
-            text: t('未生成'),
+            label: t('未生成'),
             value: false,
           },
         ],
-        filterScope: 'all',
-        checked: [],
-        btnSave: t('确定'),
-        btnReset: t('重置'),
-        multiple: false, // 单选模式
       },
-      width: 160,
-      render: ({ data }: { data: RiskManageModel }) => <bk-tag
-        >{ data.has_report ? t('已生成') : t('未生成') }</bk-tag>,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <bk-tag
+    >{row.has_report ? t('已生成') : t('未生成')}</bk-tag>,
     },
     {
-      label: () => t('风险标记'),
-      field: () => 'risk_label',
-      width: 100,
-      render: ({ data }: { data: RiskManageModel }) => <span
-        class={{
-          misreport: data.risk_label === 'misreport',
-          'risk-label-status': true,
-        }}>
-          {data.risk_label === 'normal' ? t('正常') : t('误报')}
-        </span>,
+      title: t('风险标记'),
+      colKey: 'risk_label',
+      width: 110,
+      cell: (h: any, { row }: { row: RiskManageModel }) => <span
+      class={{
+        misreport: row.risk_label === 'misreport',
+        'risk-label-status': true,
+      }}>
+      {row.risk_label === 'normal' ? t('正常') : t('误报')}
+    </span>,
     },
-  ] as Column[];
-
-  const tableColumn = ref(initTableColumns);
-
-  const isTableEmpty = ref(false);
-  // 空数据时重置滚动条位置
-  watch(isTableEmpty, (isEmpty) => {
-    if (isEmpty) {
-      nextTick(() => {
-        const tableBody = listRef.value?.$el?.querySelector('.bk-table-body');
-        if (tableBody) {
-          tableBody.scrollLeft = 0;
-          tableBody.scrollTop = 0;
-        }
-      });
-    }
-  });
-
-  // let timeout: number| undefined = undefined;
+  ];
 
   const { messageWarn } = useMessage();
   const listRef = ref();
@@ -344,39 +319,27 @@
     }
     searchBoxRef.value.exportData(selectedData, 'watch');
   };
-  const disabledMap: Record<string, string> = {
-    risk_id: 'risk_id',
-    event_content: 'event_content',
-    operator: 'operator',
-    status: 'status',
-    current_operator: 'current_operator',
-  };
-  const initSettings = () => {
-    const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
-    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns;
-    return  {
-      fields: list.reduce((res, item, index) => {
-        if (item.field) {
-          const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
-          const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
-          res.push({
-            label: String(labelValue),
-            field: String(fieldValue),
-            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(String(fieldValue)),
-          });
-        }
-        return res;
-      }, [] as Array<{
-        label: string, field: string, disabled: boolean,
-      }>) || [],
-      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'].concat(fieldNames),
-      showLineHeight: false,
-      trigger: 'manual' as const,  // 添加 as const 类型断言
-    };
-  };
-  const settings  = ref();
 
-  settings.value = useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
+  // 默认的可配置列键
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+
+  // 从 localStorage 读取保存的设置
+  const settings = computed(() => {
+    const jsonStr = localStorage.getItem('audit-attention-risk-list-setting');
+    if (jsonStr) {
+      try {
+        const savedSettings = JSON.parse(jsonStr);
+        // 如果保存的设置中有 checked 字段，使用它；否则使用默认设置
+        return savedSettings.checked && Array.isArray(savedSettings.checked)
+          ? savedSettings.checked
+          : defaultSettings;
+      } catch (e) {
+        console.error('本地设置解析失败，使用默认配置', e);
+        return defaultSettings;
+      }
+    }
+    return defaultSettings;
+  });
 
 
   // 获取标签列表
@@ -441,54 +404,12 @@
 
   // 记录轮训的数据
   // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
-  const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
-    selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
-    if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
-      tableColumn.value =  initColumns();
-    }
-    settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
-
-    // 控制表格空数据时的样式状态
-    isTableEmpty.value = !results.length;
-
-    // startPolling(results);
+  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
     if (!results.length) return;
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
-  };
-
-  const  initColumns = () => {
-    if (selectedItemList.value.length === 0) {
-      return [...initTableColumns];
-    }
-    const params = getSearchParamsPost('event_filters');
-    const columns = [...initTableColumns]; // 创建副本避免修改原始数组
-    // 选中的列
-    let selectedColumns: Column[] = [];
-    const noValue = selectedItemList.value.filter(item => item.value !== '');
-    selectedColumns = noValue.map((item) => {
-      const sortVal = params?.order_field === `event_data.${item.field_name}` ? params?.order_type :  '';
-      return {
-        label: item.display_name,
-        field: `event_data.${item.field_name}`,
-        width: 120,
-        showOverflowTooltip: true,
-        sort: {
-          value: sortVal,
-        },
-        render: (args: any) => {
-          const data = args.data as RiskManageModel;
-          return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
-        },
-      };
-    }) as Column[];
-    // 在操作列之前插入选中的列
-    const operationColumnIndex = columns.findIndex(col => col.fixed === 'right');
-    const insertIndex = operationColumnIndex > -1 ? operationColumnIndex : columns.length - 1;
-    columns.splice(insertIndex, 0, ...selectedColumns);
-    return  columns;
   };
   // 开始轮训
   // const startPolling = (results: Array<RiskManageModel>) => {
@@ -539,42 +460,6 @@
   };
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
-  };
-  // 列筛选处理（跨页过滤）
-  const handleColumnFilter = (checkedObj: Record<string, any>) => {
-    const checkField = checkedObj.column.field();
-    // 事件调查报告字段只支持单选，多选时传空值
-    let value = '';
-    if (checkField === 'has_report') {
-      const checkedValues = checkedObj.checked;
-      // 多选时（数组长度 > 1）传空值
-      if (Array.isArray(checkedValues) && checkedValues.length > 1) {
-        value = '';
-      } else if (Array.isArray(checkedValues) && checkedValues.length === 1) {
-        // 单选时正常处理
-        const item = checkedValues[0];
-        // eslint-disable-next-line no-nested-ternary
-        value = typeof item === 'boolean' ? (item ? 'true' : 'false') : String(item);
-      }
-    } else {
-      // 其他字段正常处理多选
-      const checkedValues = checkedObj.checked;
-      // 将筛选值转换为字符串，布尔值转换为 'true'/'false'
-      value = checkedValues.map((item: any) => {
-        if (typeof item === 'boolean') {
-          return item ? 'true' : 'false';
-        }
-        return String(item);
-      }).join(',');
-    }
-
-    // 更新搜索模型，将筛选条件添加到搜索参数中
-    searchModel.value = {
-      ...searchModel.value,
-      [checkField]: value || '',
-    };
-    // 重新获取数据，实现跨页过滤
-    fetchList();
   };
   const fetchList = () => {
     if (!listRef.value) return;
@@ -654,17 +539,6 @@
   .risk-manage-list {
     margin-top: 16px;
     background-color: white;
-
-    /* 数据为空时隐藏右侧固定列和滚动条 */
-    &.is-table-empty {
-      .bk-table-fixed {
-        visibility: hidden;
-      }
-
-      .bk-exception {
-        border-bottom: none;
-      }
-    }
   }
 
 }
