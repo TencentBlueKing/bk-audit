@@ -20,7 +20,7 @@ import base64
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Union
 from urllib.parse import urlparse
 
@@ -140,7 +140,7 @@ class IEOPAuthHandler(BaseAuthHandler):
         path = self.path
 
         # Date 头需使用 UTC 时间并标注 GMT
-        date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
 
         # 生成签名
         signature = self._generate_signature(method, path, date)
