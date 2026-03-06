@@ -17,17 +17,24 @@
 <template>
   <div
     ref="rootRef"
-    class="audit-tdesign-list">
-    <bk-loading :loading="isLoading">
+    class="audit-tdesign-list"
+    :class="[{ 'is-loading': isLoading }]">
+    <bk-loading
+      :loading="isLoading"
+      style="z-index: 9999;">
       <primary-table
         ref="tableRef"
+        v-model:selected-row-keys="selectedRowKeys"
         :border="border"
         class="tdesign-list"
-        :columns="columns"
+        :columns="tableColumns"
         :data="tableData"
         :height="height"
-        :max-height="maxHeight"
+        :max-height="tableMaxHeight"
+        :row-key="rowKey as any"
         v-bind="$attrs"
+        @filter-change="handleFilterChange"
+        @select-change="handleSelectChange"
         @sort-change="handleSortChange">
         <template
           v-for="(slotData, name) in $slots"
@@ -81,25 +88,14 @@
           :layout="pagination.layout"
           :limit="pagination.limit"
           :limit-list="pagination.limitList"
+          location="left"
           @change="handlePageChange"
           @limit-change="handlePageLimitChange" />
       </div>
     </bk-loading>
   </div>
 </template>
-<script lang="ts">
-  export interface IPagination {
-    count: number;
-    current: number;
-    limit: number;
-    limitList: Array<number>;
-    align: string,
-    layout: Array<string>;
-  }
-</script>
-<script setup lang="ts">
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  import _ from 'lodash';
+<script setup lang='tsx'>
   import {
     computed,
     nextTick,
@@ -108,8 +104,10 @@
     reactive,
     type Ref,
     ref,
+    useAttrs,
     useSlots,
-    watch  } from 'vue';
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useEventBus from '@hooks/use-event-bus';
@@ -126,38 +124,44 @@
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
+  export interface IPagination {
+    count: number;
+    current: number;
+    limit: number;
+    limitList: Array<number>;
+    align: string,
+    layout: Array<string>;
+    location: string;
+  }
+
   interface Props {
     columns: any[],
-    reverseSortFields?:Array<string>, // 颠倒排序的字段数组
-    dataSource: (params: any)=> Promise<IRequestResponsePaginationData<any>>,
+    reverseSortFields?: Array<string>, // 颠倒排序的字段数组
+    dataSource: (params: any) => Promise<IRequestResponsePaginationData<any>>,
     paginationValidator?: (pagination: IPagination) => boolean,
     isNeedHideClearSearchTip?: boolean,
     border?: boolean,
-    needEmptySearchTip?:boolean,
+    needEmptySearchTip?: boolean,
     height?: number | string,
-    maxHeight?: number | string
-    noUseRresults?:boolean
+    noUseRresults?: boolean;
+    settings?: any[];
+    rowKey?: string | ((row: any) => string | number);
   }
 
-  interface ISettings{
-    checked: Array<string>,
-    fields: Record<string, any>[],
-    size: string
-  }
   interface Emits {
     (e: 'requestSuccess', value: any): void,
     (e: 'clearSearch'): void,
-    (e:'onSettingChange', setting: ISettings): void,
+    (e: 'on-setting-change', value: any): void,
   }
   interface Exposes {
     fetchData: (params: Record<string, any>) => void,
     loading: Ref<boolean>,
     refreshList: () => void,
-    getListData:()=> Array<Record<string, any>>,
-    getSelection:()=> void
+    getListData: () => Array<Record<string, any>>,
+    getSelection: () => void
     initTableHeight: () => void,
     listDataUnshift: (data: Record<string, any>) => void,
-    initListData:(data: any, key: string) => void
+    initListData: (data: any, key: string) => void
     initData: () => void
   }
 
@@ -168,10 +172,226 @@
     border: true,
     isNeedHideClearSearchTip: false,
     height: 'auto',
-    maxHeight: 'auto',
     noUseRresults: false,
-  }) ;
+    settings: () => [],
+    rowKey: 'id',
+  });
   const emits = defineEmits<Emits>();
+  const attrs = useAttrs();
+
+  // 从 $attrs 中获取 row-key（kebab-case），如果没有则使用 props.rowKey
+  const rowKey = computed(() => (attrs['row-key'] as string | ((row: any) => string | number)) || props.rowKey);
+
+  // 管理选中的行键
+  const selectedRowKeys = ref<(string | number)[]>([]);
+
+  // 处理选择变更事件
+  const handleSelectChange = (value: (string | number)[]) => {
+    selectedRowKeys.value = value || [];
+  };
+
+  // 列控制相关状态
+  // 排除：选择列、操作列（操作列固定显示，不可配置）
+  const allColumnKeys = computed(() => props.columns
+    .filter(column => column.colKey
+      && column.colKey !== 'row-select'
+      && column.colKey !== 'action')
+    .map(column => column.colKey));
+
+  // 从 localStorage 读取保存的设置
+  const getSavedSettings = () => {
+    // 如果父组件传入了 settings，使用 settings 作为默认可见列
+    if (props.settings && props.settings.length > 0) {
+      return [...props.settings];
+    }
+    // 否则默认显示所有列
+    return [...allColumnKeys.value];
+  };
+
+  const visibleColumnKeys = ref<string[]>([]);
+  // 弹窗中的临时选择
+  const tempVisibleColumnKeys = ref<string[]>([]);
+
+  // 初始化可见列
+  const initVisibleColumns = () => {
+    const savedSettings = getSavedSettings();
+    visibleColumnKeys.value = savedSettings;
+    tempVisibleColumnKeys.value = [...savedSettings];
+  };
+
+  // 监听 settings 变化，更新可见列
+  watch(() => props.settings, () => {
+    initVisibleColumns();
+  }, { immediate: true, deep: true });
+
+  // 监听 allColumnKeys 变化，确保可见列包含所有可配置的列
+  watch(allColumnKeys, () => {
+    if (visibleColumnKeys.value.length === 0) {
+      initVisibleColumns();
+    }
+  }, { immediate: true });
+  // 控制popover显示
+  const popoverRef = ref();
+
+  const isCheckAll = computed(() => tempVisibleColumnKeys.value.length === allColumnKeys.value.length);
+
+  // 移除列的 fixed 属性（loading 时使用）
+  const removeFixed = (col: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { fixed, ...rest } = col;
+    return rest;
+  };
+
+  // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
+  const tableColumns = computed(() => {
+    if (props.settings.length === 0) {
+      // loading 时移除所有列的 fixed 属性，避免固定列 z-index 穿透 loading 遮罩
+      if (isLoading.value) {
+        return props.columns.map(removeFixed);
+      }
+      return props.columns;
+    }
+
+    // 过滤显示的列
+    const filteredColumns = props.columns.filter((column) => {
+      // 选择列 / 操作列 始终显示
+      if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
+        return true;
+      }
+      return visibleColumnKeys.value.includes(column.colKey);
+    });
+
+    // 找到最后一列（操作列），为其添加设置按钮
+    const lastColumnIndex = filteredColumns.length - 1;
+    if (lastColumnIndex >= 0) {
+      const lastColumn = filteredColumns[lastColumnIndex];
+      const lastTitle = typeof lastColumn.title === 'function'
+        ? lastColumn.title()
+        : lastColumn.title;
+
+      filteredColumns[lastColumnIndex] = {
+        ...lastColumn,
+        title: () => (
+        <div class="operation-column-header">
+          <span>{lastTitle}</span>
+          <bk-popover
+            ref={popoverRef}
+            theme="light"
+            placement="bottom-end"
+            trigger="click"
+            width="500"
+            onShow={handlePopoverShow}
+            v-slots={{
+              content: () => (
+                <div class="column-popover">
+                  <div class="column-popover-header">
+                    <div class="column-popover-title">
+                      {t('表格设置')}
+                    </div>
+                    <bk-button
+                      text
+                      class="column-popover-close"
+                      onClick={() => {
+                        popoverRef.value?.hide();
+                      }}>
+                      <audit-icon type="close" />
+                    </bk-button>
+                  </div>
+                  <div class="column-popover-section">
+                    <div class="column-popover-section-header">
+                      <div class="column-popover-section-title">
+                        {t('字段显示设置')}
+                      </div>
+                      <bk-checkbox
+                        modelValue={isCheckAll.value}
+                        onChange={handleCheckAllChange}>
+                        {t('全选')}
+                      </bk-checkbox>
+                    </div>
+                    <bk-checkbox-group
+                      modelValue={tempVisibleColumnKeys.value}
+                      onChange={handleTempKeysChange}>
+                      <div class="column-popover-grid">
+                        {allColumnKeys.value.map((col: any) => {
+                          const column = props.columns.find((item: any) => item.colKey === col);
+                          const columnTitle = typeof column?.title === 'function'
+                            ? column.title()
+                            : column?.title || col;
+                          return (
+                            <bk-checkbox
+                              class="column-popover-grid-item"
+                              key={col}
+                              label={col}>
+                              {columnTitle}
+                            </bk-checkbox>
+                          );
+                        })}
+                      </div>
+                    </bk-checkbox-group>
+                  </div>
+                  <div class="column-popover-footer">
+                    <bk-button
+                      theme="primary"
+                      size="small"
+                      onClick={handleColumnConfirm}>
+                      {t('确认')}
+                    </bk-button>
+                    <bk-button
+                      size="small"
+                      class="ml16"
+                      onClick={handleColumnCancel}>
+                      {t('取消')}
+                    </bk-button>
+                  </div>
+                </div>
+              ),
+            }}>
+            <audit-icon type="setting" class="setting-btn-icon" />
+          </bk-popover>
+        </div>
+      ),
+      };
+    }
+
+    // loading 时移除所有列的 fixed 属性，避免固定列 z-index 穿透 loading 遮罩
+    if (isLoading.value) {
+      return filteredColumns.map(removeFixed);
+    }
+    return filteredColumns;
+  });
+
+  const handlePopoverShow = () => {
+    // 打开 popover 时，初始化临时选择为当前选择
+    tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
+  };
+
+  const handleColumnConfirm = () => {
+    visibleColumnKeys.value = [...tempVisibleColumnKeys.value];
+    // 触发设置变更事件，让父组件保存设置
+    emits('on-setting-change', {
+      checked: visibleColumnKeys.value,
+      fields: allColumnKeys.value.map(key => ({
+        field: key,
+        label: props.columns.find((col: any) => col.colKey === key)?.title || key,
+      })),
+      size: 'medium',
+    });
+    popoverRef.value?.hide();
+  };
+
+  const handleColumnCancel = () => {
+    // 取消时，恢复临时选择为当前选择
+    tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
+    popoverRef.value?.hide();
+  };
+
+  const handleCheckAllChange = (checked: boolean) => {
+    tempVisibleColumnKeys.value = checked ? [...allColumnKeys.value] : [];
+  };
+
+  const handleTempKeysChange = (keys: string[]) => {
+    tempVisibleColumnKeys.value = keys;
+  };
   const isUnload = ref(true);
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
@@ -185,8 +405,9 @@
     current: 1,
     limit: 10,
     limitList: [10, 20, 50, 100, 500],
-    align: 'right',
+    align: 'left',
     layout: ['total', 'limit', 'list'],
+    location: 'left',
   });
 
   let paramsMemo: Record<string, any> = {};
@@ -241,6 +462,7 @@
 
   const fetchListData = () => {
     isReady = true;
+    isLoading.value = true;
     Promise.resolve()
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
@@ -249,15 +471,44 @@
           const currentLimit = pagination.limit;
           const params = {
             ...paramsMemo,
-            page: isUnload.value ? 1 :  pagination.current,
+            page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
+          isLoading.value = true;
           run(params);
           replaceSearchParams(params);
         }
       });
+  };
+
+  // 处理筛选变更
+  const handleFilterChange = (filters: Record<string, any>) => {
+    // TDesign 会返回 { colKey: value | value[] }
+    const nextParams: Record<string, any> = { ...paramsMemo };
+
+    Object.keys(filters || {}).forEach((key) => {
+      const value = filters[key];
+
+      // 数组：多选或单选但返回数组
+      if (Array.isArray(value)) {
+        if (!value.length) {
+          delete nextParams[key];
+        } else {
+          // 后端大多接受逗号分隔的字符串；如果只选一个就是单值
+          nextParams[key] = value.length === 1 ? value[0] : value.join(',');
+        }
+      } else if (value === undefined || value === null || value === '') {
+        delete nextParams[key];
+      } else {
+        nextParams[key] = value;
+      }
+    });
+
+    paramsMemo = nextParams;
+    isLoading.value = true;
+    fetchListData();
   };
   // 解析 URL 上面的分页信息
   const parseURL = () => {
@@ -290,15 +541,12 @@
     isReady = false;
   };
 
-  const handleSortChange = (sort: any, options?: any) => {
-    // TDesign 的 sort-change 事件可能传递不同的数据结构
-    // 处理数组格式的排序信息
+  const handleSortChange = (sort: any) => {
     let sortInfo: Array<{ sortBy: string; descending: boolean }> = [];
 
     if (Array.isArray(sort)) {
       sortInfo = sort;
     } else if (sort && typeof sort === 'object') {
-      // 如果是对象格式，转换为数组格式
       if (sort.sortBy !== undefined) {
         sortInfo = [{
           sortBy: sort.sortBy,
@@ -313,20 +561,24 @@
         ...paramsMemo,
         order_field: undefined,
         order_type: undefined,
+        sort: undefined,
       };
     } else {
       const firstSort = sortInfo[0];
       let orderType = firstSort.descending ? 'desc' : 'asc';
 
-      // 颠倒排序
+      // 颠倒排序（兼容旧逻辑）
       if (props.reverseSortFields && props.reverseSortFields.includes(firstSort.sortBy)) {
         orderType = orderType === 'asc' ? 'desc' : 'asc';
       }
 
+      // 同时兼容两种后端参数形式：order_field/order_type 和 sort 数组
+      const sortPrefix = orderType === 'desc' ? '-' : '';
       paramsMemo = {
         ...paramsMemo,
         order_field: firstSort.sortBy,
         order_type: orderType,
+        sort: [`${sortPrefix}${firstSort.sortBy}`],
       };
     }
     isLoading.value = true;
@@ -358,7 +610,7 @@
   };
 
   // 清空搜索条件
-  const handleClearSearch  = () => {
+  const handleClearSearch = () => {
     emits('clearSearch');
   };
   onMounted(() => {
@@ -368,6 +620,9 @@
     nextTick(() => {
       fetchListData();
     });
+    setTimeout(() => {
+      isLoading.value = true;
+    }, 0);
   });
 
   // 监听通知中心状态，重新计算表格高度
@@ -391,7 +646,7 @@
 
     const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
 
-    const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight);
+    const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight) - 1;
     return {
       tableHeaderHeight,
       paginationHeight,
@@ -404,25 +659,28 @@
   const initTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      // tableMaxHeight 只包含表头和数据行高度，不包含分页高度（分页在表格外部）
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + 8;
     });
   };
 
   const calcTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
-      // 不再自动设置 pagination.limit，保持用户选择的默认值 10
-      // 只更新 limitList 以包含计算出的行数（如果大于 10）
+      // 当计算出的行数大于 10 时，更新 limitList 并在首次加载时自动设置每页条数
       if (dimensions.rowNum > 10) {
         const pageLimit = new Set([
           ...pagination.limitList,
           dimensions.rowNum,
         ]);
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
+        // 首次加载时，自动将每页条数设置为根据表格高度计算出的行数
+        if (isUnload.value) {
+          pagination.limit = dimensions.rowNum;
+        }
       }
-      // eslint-disable-next-line max-len
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+      // tableMaxHeight 只包含表头和数据行高度，不包含分页高度（分页在表格外部）
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + 8;
     });
   };
 
@@ -462,7 +720,16 @@
       return listData.value.results;
     },
     getSelection() {
-      return tableRef.value?.getSelectedRowData?.() || [];
+      if (!selectedRowKeys.value || selectedRowKeys.value.length === 0) {
+        return [];
+      }
+      // 通过 selectedRowKeys 和 tableData 获取选中的行数据
+      const data = tableData.value || [];
+      const currentRowKey = rowKey.value;
+      return data.filter((row: any) => {
+        const key = typeof currentRowKey === 'function' ? currentRowKey(row) : row[currentRowKey];
+        return selectedRowKeys.value.includes(key);
+      });
     },
     initTableHeight() {
       initTableHeight();
@@ -480,61 +747,132 @@
         }
         return item;
       });
-      emits('requestSuccess',  listData.value);
+      emits('requestSuccess', listData.value);
     },
     initData() {
-      isLoading.value = false;
       fetchListData();
     },
   });
 </script>
 
-<style lang="postcss" scoped>
-  .tdesign-list {
-    :deep(.new-row) {
-      td {
-        background-color: #e4faf0 !important;
-      }
+<style lang="postcss">
+
+
+.tdesign-list {
+  :deep(.new-row) {
+    td {
+      background-color: #e4faf0 !important;
     }
   }
+}
 
-  .tdesign-list-pagination {
-    width: 100%;
-    padding: 12px 16px;
-    margin-top: 16px;
-    background-color: #fff;
-    border-top: 1px solid #dcdee5;
+.tdesign-list-pagination {
+  width: 100%;
+  padding: 12px 16px;
+  margin-top: 16px;
+  background-color: #fff;
 
-    :deep(.bk-pagination) {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      min-height: 32px;
-
-      .bk-pagination-info {
-        margin-right: 16px;
-        font-size: 12px;
-        color: #63656e;
-        white-space: nowrap;
-        flex: 0 0 auto;
-      }
-
-      .bk-pagination-limit {
-        margin: 0 16px;
-        font-size: 12px;
-        color: #63656e;
-        white-space: nowrap;
-        flex: 0 0 auto;
-      }
-
-      .bk-pagination-list {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        margin-left: auto;
-        gap: 4px;
-      }
+  .bk-pagination {
+    .is-last {
+      margin-left: auto;
     }
   }
+}
+
+.operation-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+
+  .setting-btn-icon {
+    padding: 0;
+    margin-left: auto;
+    font-size: 16px;
+    color: #c4c6cc;
+    cursor: pointer;
+
+    &:hover {
+      color: #979ba5;
+    }
+  }
+}
+
+.column-popover {
+  min-width: 480px;
+  padding: 0;
+}
+
+.column-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+
+  .column-popover-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #313238;
+  }
+
+  .column-popover-close {
+    display: flex;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 16px;
+    color: #979ba5;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      color: #63656e;
+    }
+  }
+}
+
+.column-popover-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+
+  .column-popover-section-title {
+    font-size: 14px;
+    color: #313238;
+  }
+}
+
+.column-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px 0;
+  overflow-y: auto;
+  align-items: start;
+
+  .bk-checkbox~.bk-checkbox {
+    margin-left: 0 !important;
+  }
+}
+
+
+.column-popover-footer {
+  display: flex;
+  width: 100%;
+  padding: 12px 16px 0;
+  margin-top: 16px;
+  border-top: 1px solid #dcdee5;
+  justify-content: end;
+}
+
+.column-popover-grid-item {
+  display: block;
+  width: 150px;
+  margin: 0;
+  justify-content: start;
+
+}
+
+
 </style>
