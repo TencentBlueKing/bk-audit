@@ -23,6 +23,7 @@
       @change="handleSearchChange"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
+    <ai-analyzes :total="totalCount" />
     <div class="risk-manage-list">
       <div class="add-button">
         <bk-button
@@ -85,6 +86,7 @@
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import addRisk from './add-risk/index.vue';
+  import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
   import NlSearchBox from './components/nl-search-box/index.vue';
@@ -434,6 +436,7 @@
   const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
+  const totalCount = ref(0);
 
   // 导出数据
   const handleExport = () => {
@@ -509,8 +512,9 @@
     },
   });
 
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
+  const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
     window.changeConfirm = false;
+    totalCount.value = total || 0;
 
     if (!results.length) {
       return;
