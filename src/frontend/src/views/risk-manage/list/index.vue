@@ -82,13 +82,13 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
-  import NlSearchBox from '@components/nl-search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import addRisk from './add-risk/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
+  import NlSearchBox from './components/nl-search-box/index.vue';
   import RiskLevel from './components/risk-level.vue';
 
   const dataSource = RiskManageService.fetchRiskList;
