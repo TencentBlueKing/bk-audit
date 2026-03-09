@@ -117,7 +117,7 @@
     if (tagRef.value?.contains(target)) return;
     // 点击在日期面板弹出层内部 → 不关闭
     const pickerDropdowns = document.querySelectorAll('.bk-date-picker-dropdown');
-    for (const dropdown of pickerDropdowns) {
+    for (const dropdown of Array.from(pickerDropdowns)) {
       if (dropdown.contains(target)) return;
     }
     // 其他区域 → 关闭面板
