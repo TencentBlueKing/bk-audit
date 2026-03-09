@@ -32,6 +32,7 @@
         :data-source="dataSource"
         need-empty-search-tip
         row-key="risk_id"
+        secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
