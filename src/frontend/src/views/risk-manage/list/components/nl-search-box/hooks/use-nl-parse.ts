@@ -46,7 +46,7 @@ export default function useNLParse(fieldConfig: Record<string, IFieldConfig>) {
     loading: isParsing,
     run: runParse,
   } = useRequest(RiskManageService.nlSearchParse, {
-    defaultValue: null,
+    defaultValue: null as unknown as INLParseResponse,
     onSuccess(data: INLParseResponse) {
       parseResult.value = data;
       parseMessage.value = data?.message || '';
