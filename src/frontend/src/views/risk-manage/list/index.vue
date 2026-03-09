@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="risk-manage-list-page-wrap">
-    <search-box
+    <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
       is-export
@@ -82,7 +82,7 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
-  import SearchBox from '@components/search-box/index.vue';
+  import NlSearchBox from '@components/nl-search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
