@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AddCondition: typeof import('./src/components/nl-search-box/components/add-condition.vue')['default']
     AnalysisList: typeof import('./src/components/skeleton-loading/components/analysis-list.vue')['default']
     ApplicationParameter: typeof import('./src/components/application-parameter/index.vue')['default']
     AuditCollapsePanel: typeof import('./src/components/audit-collapse-panel/index.vue')['default']
@@ -21,6 +22,7 @@ declare module 'vue' {
     Catch: typeof import('./src/components/apply-permission/catch.vue')['default']
     ChartTableList: typeof import('./src/components/skeleton-loading/components/chart-table-list.vue')['default']
     CollapseBox: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/index.vue')['default']
+    ConditionTags: typeof import('./src/components/nl-search-box/components/condition-tags.vue')['default']
     ContentItem: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/content-item.vue')['default']
     CreateCollectorStep2: typeof import('./src/components/skeleton-loading/components/create-collector-step2.vue')['default']
     CreateNoticeGroup: typeof import('./src/components/skeleton-loading/components/create-notice-group.vue')['default']
@@ -38,6 +40,8 @@ declare module 'vue' {
     ItemGroup: typeof import('./src/components/audit-menu/item-group.vue')['default']
     ListCheck: typeof import('./src/components/ip-selector/selector-box/components/list-check.vue')['default']
     MultipleLineClamp: typeof import('./src/components/multiple-line-clamp/index.vue')['default']
+    NlInput: typeof import('./src/components/nl-search-box/components/nl-input.vue')['default']
+    NlSearchBox: typeof import('./src/components/nl-search-box/index.vue')['default']
     NoticeGroup: typeof import('./src/components/skeleton-loading/components/notice-group.vue')['default']
     Option: typeof import('./src/components/auth/option.vue')['default']
     Page: typeof import('./src/components/apply-permission/page.vue')['default']
@@ -77,6 +81,10 @@ declare module 'vue' {
     SystemDetailRecentData: typeof import('./src/components/skeleton-loading/components/system-detail-recent-data.vue')['default']
     SystemList: typeof import('./src/components/skeleton-loading/components/system-list.vue')['default']
     Tag: typeof import('./src/components/edit-box/tag.vue')['default']
+    TagDatetimerange: typeof import('./src/components/nl-search-box/components/condition-tag-editors/tag-datetimerange.vue')['default']
+    TagInput: typeof import('./src/components/nl-search-box/components/condition-tag-editors/tag-input.vue')['default']
+    TagSelect: typeof import('./src/components/nl-search-box/components/condition-tag-editors/tag-select.vue')['default']
+    TagUserSelector: typeof import('./src/components/nl-search-box/components/condition-tag-editors/tag-user-selector.vue')['default']
     TdesignList: typeof import('./src/components/tdesign-list/index.vue')['default']
     TypeTab: typeof import('./src/components/ip-selector/selector-box/components/type-tab.vue')['default']
     UserSelector: typeof import('./src/components/search-box/components/render-field-config/components/user-selector.vue')['default']

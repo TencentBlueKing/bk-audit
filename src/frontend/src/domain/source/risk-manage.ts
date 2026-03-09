@@ -276,5 +276,23 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+
+  // 自然语言搜索解析
+  nlSearchParse(params: {
+    query: string,
+    available_fields: Array<{
+      name: string,
+      label: string,
+      type: string,
+    }>,
+  }) {
+    return Request.post<{
+      conditions: Record<string, any>,
+      message: string,
+      confidence: number,
+    }>(`${this.module}/nl_search_parse/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();
