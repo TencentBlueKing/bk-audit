@@ -137,6 +137,7 @@
   interface Props {
     columns: any[],
     reverseSortFields?: Array<string>, // 颠倒排序的字段数组
+    secondarySortField?: string, // 次级排序字段
     dataSource: (params: any) => Promise<IRequestResponsePaginationData<any>>,
     paginationValidator?: (pagination: IPagination) => boolean,
     isNeedHideClearSearchTip?: boolean,
@@ -167,6 +168,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     reverseSortFields: () => [],
+    secondarySortField: '',
     needEmptySearchTip: true,
     paginationValidator: undefined,
     border: true,
@@ -574,12 +576,24 @@
 
       // 同时兼容两种后端参数形式：order_field/order_type 和 sort 数组
       const sortPrefix = orderType === 'desc' ? '-' : '';
-      paramsMemo = {
-        ...paramsMemo,
-        order_field: firstSort.sortBy,
-        order_type: orderType,
-        sort: [`${sortPrefix}${firstSort.sortBy}`],
-      };
+      const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
+
+      const nextParams = { ...paramsMemo };
+
+      if (props.secondarySortField) {
+        if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
+          sortArray.push(props.secondarySortField);
+        }
+        delete nextParams.order_field;
+        delete nextParams.order_type;
+        nextParams.sort = sortArray;
+      } else {
+        nextParams.order_field = firstSort.sortBy;
+        nextParams.order_type = orderType;
+        nextParams.sort = sortArray;
+      }
+
+      paramsMemo = nextParams;
     }
     isLoading.value = true;
     fetchListData();
