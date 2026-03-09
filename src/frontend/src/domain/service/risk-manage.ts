@@ -299,4 +299,18 @@ export default {
     return RiskManageSource.getTaskRiskReport(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 自然语言搜索解析
+   */
+  nlSearchParse(params: {
+    query: string,
+    available_fields: Array<{
+      name: string,
+      label: string,
+      type: string,
+    }>,
+  }) {
+    return RiskManageSource.nlSearchParse(params)
+      .then(({ data }) => data);
+  },
 };
