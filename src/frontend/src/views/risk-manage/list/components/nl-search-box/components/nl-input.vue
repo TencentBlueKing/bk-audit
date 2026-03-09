@@ -43,7 +43,7 @@
         <img
           v-else
           class="nl-input-submit-icon"
-          :src="inputValue.trim() ? submitBlueImg : submitGrayImg">
+          :src="inputValue.trim() ? submitBlue : submitGray">
       </div>
     </div>
   </div>
@@ -54,8 +54,8 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import submitBlueImg from '@/images/submit-blue.png';
-  import submitGrayImg from '@/images/submit-gray.png';
+  import submitBlue from '@/images/submit-blue.svg';
+  import submitGray from '@/images/submit-gray.svg';
 
   interface Props {
     loading?: boolean;
@@ -129,7 +129,6 @@
         border-radius: 2px;
         content: '';
         inset: 0;
-        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         mask-composite: xor;
         mask-composite: exclude;
