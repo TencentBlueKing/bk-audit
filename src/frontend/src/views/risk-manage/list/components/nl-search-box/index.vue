@@ -20,7 +20,7 @@
     <div class="nl-search-header">
       <img
         class="nl-search-header-icon"
-        src="@/images/aixiaojing.png">
+        src="@/images/aixiaojing.svg">
       <span class="nl-search-header-title">{{ t('智能搜索') }}</span>
     </div>
 
