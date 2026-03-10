@@ -471,11 +471,21 @@
         if (result) {
           // 确保使用当前的 pagination.limit 值
           const currentLimit = pagination.limit;
-          const params = {
+          const params: Record<string, any> = {
             ...paramsMemo,
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
           };
+          // 若 event_filters 非空，在保留原有 sort 的基础上追加对应的 event_data.xxx 排序字段（后端走 BKBase 查询）
+          if (Array.isArray(params.event_filters) && params.event_filters.length > 0) {
+            const eventSortFields = params.event_filters
+              .filter((f: any) => f && typeof f.field === 'string')
+              .map((f: any) => `-event_data.${f.field}`);
+            if (eventSortFields.length > 0) {
+              const existingSort = Array.isArray(params.sort) ? [...params.sort] : [];
+              params.sort = [...existingSort, ...eventSortFields];
+            }
+          }
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           isLoading.value = true;
