@@ -132,6 +132,13 @@
           {{ t(isEnvent ? '下一步' : '跳过') }}
         </bk-button>
         <bk-button
+          v-if="isEditMode"
+          class="ml8"
+          theme="primary"
+          @click="handleSaveCurrentStep">
+          {{ t('保存当前步骤') }}
+        </bk-button>
+        <bk-button
           class="ml8"
           @click="handleCancel">
           {{ t('取消') }}
@@ -162,8 +169,8 @@
   import { formatDate } from '@/utils/assist/timestamp-conversion';
 
   interface IFormData {
-    processor_groups: Array<number>,
-    notice_groups: Array<number>,
+    processor_groups: Array<any>,
+    notice_groups: Array<any>,
     report_enabled: boolean,
     report_config: Record<string, any>,
     report_auto_render: boolean,
@@ -188,6 +195,7 @@
   interface Emits {
     (e: 'previousStep', step: number): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: Partial<IFormData>): void;
     (e: 'submitData'): void;
   }
 
@@ -390,6 +398,27 @@
       report_auto_render: isAutoGetReports.value,
     });
   };
+
+  // 保存当前步骤（编辑态）：效果与「其他配置」的提交一致
+  const handleSaveCurrentStep = () => {
+    if (isEnvent.value && aiEditorRef.value && !aiEditorRef.value.hasContent()) {
+      editorError.value = true;
+      return;
+    }
+    if (isEnvent.value) {
+      reportInfo.value.enabled = true;
+      reportInfo.value.config = buildReportConfig();
+    } else {
+      reportInfo.value.enabled = false;
+      reportInfo.value.config = buildReportConfig();
+    }
+    emits('saveCurrentStep', {
+      report_enabled: reportInfo.value.enabled,
+      report_config: reportInfo.value.config,
+      report_auto_render: isAutoGetReports.value,
+    });
+  };
+
   const handleCancel = () => {
     router.push({
       name: 'strategyList',
