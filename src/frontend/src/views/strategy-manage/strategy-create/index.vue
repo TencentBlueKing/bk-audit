@@ -37,9 +37,31 @@
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: any) => currentStep = step"
+      @save-current-step="handleSaveCurrentStep"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
   </keep-alive>
+
+  <!-- 保存中 loading：Dialog 实现，esc 不关闭、无底部按钮 -->
+  <bk-dialog
+    v-model:is-show="showSaveDialog"
+    :close-icon="false"
+    :esc-close="false"
+    :quick-close="false"
+    show-mask
+    width="400">
+    <div class="save-dialog-body">
+      <bk-loading
+        loading
+        mode="spin"
+        size="small"
+        theme="primary" />
+      <div class="save-dialog-text">
+        {{ t('正在保存，请稍候...') }}
+      </div>
+    </div>
+    <template #footer />
+  </bk-dialog>
 
   <audit-sideslider
     ref="sidesliderRef"
@@ -60,10 +82,12 @@
     computed,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import StrategyModel from '@model/strategy/strategy';
@@ -96,8 +120,8 @@
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
     risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'],
-    processor_groups: [],
-    notice_groups: []
+    processor_groups: Array<any>,
+    notice_groups: Array<any>,
     report_enabled: boolean,
     report_auto_render: boolean,
     report_config: Record<string, any>,
@@ -142,6 +166,22 @@
   const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
   const editData = ref(new StrategyModel());
+  // 编辑态：标签 ID -> 名称，用于提交前将 tags 转为名称（接口返回的是 ID，提交需名称）
+  const tagIdToNameMap = ref<Record<string, string>>({});
+  let tagMapPromise: Promise<void> | null = null;
+  const ensureTagMapLoaded = () => {
+    if (Object.keys(tagIdToNameMap.value).length > 0) return Promise.resolve();
+    if (!tagMapPromise) {
+      tagMapPromise = MetaManageService.fetchTags().then((data: Array<{ tag_id: string; tag_name: string }>) => {
+        data.forEach((item) => {
+          if (item.tag_id !== '-1') {
+            tagIdToNameMap.value[item.tag_id] = item.tag_name;
+          }
+        });
+      });
+    }
+    return tagMapPromise;
+  };
   const formData = ref<IFormData>({
     strategy_name: '',
     tags: [],
@@ -226,14 +266,47 @@
         }
         return item;
       });
+      // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「保存当前步骤」时提交的是全量数据
+      const d = editData.value;
+      formData.value = {
+        strategy_name: d.strategy_name ?? '',
+        tags: d.tags ?? [],
+        description: d.description ?? '',
+        control_id: d.control_id ?? '',
+        control_version: d.control_version,
+        configs: _.cloneDeep(d.configs ?? {}),
+        status: d.status ?? '',
+        risk_level: d.risk_level ?? '',
+        risk_hazard: d.risk_hazard ?? '',
+        risk_guidance: d.risk_guidance ?? '',
+        risk_title: d.risk_title ?? '',
+        strategy_type: d.strategy_type ?? '',
+        event_data_field_configs: _.cloneDeep(d.event_data_field_configs ?? []),
+        event_basic_field_configs: _.cloneDeep(d.event_basic_field_configs ?? []),
+        event_evidence_field_configs: _.cloneDeep(d.event_evidence_field_configs ?? []),
+        risk_meta_field_config: _.cloneDeep(d.risk_meta_field_config ?? []),
+        processor_groups: Array.isArray(d.processor_groups) ? [...d.processor_groups] : [],
+        notice_groups: Array.isArray(d.notice_groups) ? [...d.notice_groups] : [],
+        report_enabled: d.report_enabled ?? false,
+        report_auto_render: d.report_auto_render ?? false,
+        report_config: _.cloneDeep(d.report_config ?? {}),
+      };
+      if (d.strategy_id) {
+        formData.value.strategy_id = d.strategy_id;
+      }
       // 确保先在第 1 步挂载并完成表单初始化，再跳转到目标步骤
       currentStep.value = targetStep.value;
     },
   });
 
+  // 保存中的 Dialog 显示状态，等接口请求结束后再关闭
+  const showSaveDialog = ref(false);
+  const saveDialogOpenedByDoSave = ref(false);
+
   // 保存接口
   const {
     run: saveStrategy,
+    loading: isSaveLoading,
   } = useRequest(isEditMode
     ? StrategyManageService.updateStrategy
     : StrategyManageService.saveStrategy, {
@@ -288,6 +361,14 @@
     },
   });
 
+  // 等保存接口请求完成（loading 变为 false）后再关闭 Dialog
+  watch(isSaveLoading, (loading) => {
+    if (!loading && saveDialogOpenedByDoSave.value) {
+      showSaveDialog.value = false;
+      saveDialogOpenedByDoSave.value = false;
+    }
+  });
+
   // 启用该策略
   const {
     run: fetchSwitchStrategy,
@@ -302,9 +383,25 @@
     },
   });
 
+  // 提交前统一把 tags 从 ID 转为名称（编辑接口返回 tags 为 ID，提交需名称；未进过第一步时 formData.tags 仍是 ID）
+  const normalizeSubmitParams = (params: Record<string, any>) => {
+    const next = _.cloneDeep(params);
+    if (next.tags?.length && tagIdToNameMap.value && Object.keys(tagIdToNameMap.value).length > 0) {
+      next.tags = next.tags.map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
+    }
+    return next;
+  };
+
+  const doSave = async () => {
+    await ensureTagMapLoaded();
+    const params = normalizeSubmitParams(formData.value);
+    saveDialogOpenedByDoSave.value = true;
+    showSaveDialog.value = true;
+    saveStrategy(params);
+  };
+
   // 提交
   const handleSubmit = () => {
-    const params = _.cloneDeep(formData.value);
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
@@ -316,11 +413,11 @@
         contentAlign: 'center',
         footerAlign: 'center',
         onConfirm() {
-          saveStrategy(params);
+          doSave();
         },
       });
     } else {
-      saveStrategy(params);
+      doSave();
     }
   };
 
@@ -328,6 +425,12 @@
     // 更新formData
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
+  };
+
+  // 保存当前步骤：合并当前步骤数据后提交，效果与「其他配置」的提交按钮一致
+  const handleSaveCurrentStep = (params: any) => {
+    Object.assign(formData.value, params);
+    handleSubmit();
   };
 
   const handleCancel = () => {
@@ -341,6 +444,8 @@
       fetchStrategyInfo({
         strategy_id: route.params.id,
       });
+      // 编辑/克隆态预拉标签列表，用于提交前将 tags ID 转名称
+      ensureTagMapLoaded();
     }
   });
 
@@ -358,5 +463,21 @@
       display: flex;
     }
   }
+}
+
+.save-dialog-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  padding: 16px 0;
+}
+
+.save-dialog-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #63656e;
+  text-align: center;
 }
 </style>
