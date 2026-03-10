@@ -50,7 +50,13 @@
   </div>
   <analyze-dialog
     ref="analyzeDialogRef"
-    :total="total" />
+    :total="total"
+    @analyze-finished="handleAnalyzeFinished" />
+
+  <report-drawer
+    v-model:isShow="showReportDrawer"
+    :meta-list="currentReportMeta"
+    :title="currentReportTitle" />
 </template>
 
 <script setup lang="tsx">
@@ -58,6 +64,7 @@
   import { useI18n } from 'vue-i18n';
 
   import AnalyzeDialog from './dialog.vue';
+  import ReportDrawer from './report-drawer.vue';
 
   interface Props {
     total?: number;
@@ -70,12 +77,31 @@
   const { t } = useI18n();
 
   const analyzeDialogRef = ref<InstanceType<typeof AnalyzeDialog>>();
+  const showReportDrawer = ref(false);
+  const currentReportTitle = ref('');
+  const currentReportMeta = ref<Array<{ key: string, label: string, value: string }>>([]);
 
   const handleAnalyze = () => {
     analyzeDialogRef.value?.show();
   };
 
   const handleHistory = () => {
+  };
+
+  const handleAnalyzeFinished = (payload: { type: 'recommend' | 'custom', title?: string, requirement?: string }) => {
+    if (payload.type === 'recommend') {
+      currentReportTitle.value = payload.title || t('智能分析报告');
+    } else {
+      currentReportTitle.value = t('自定义分析报告');
+    }
+    currentReportMeta.value = [
+      { key: 'type', label: t('报告类型'), value: t('人员调查') },
+      { key: 'scope', label: t('分析范围'), value: t('责任人-张三') },
+      { key: 'count', label: t('风险条数'), value: `11 ${t('条')}` },
+      { key: 'creator', label: t('生成人'), value: 'admin' },
+      { key: 'time', label: t('生成时间'), value: '2026-02-03 14:50' },
+    ];
+    showReportDrawer.value = true;
   };
 </script>
 
