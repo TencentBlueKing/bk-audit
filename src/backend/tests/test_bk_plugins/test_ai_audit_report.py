@@ -24,6 +24,8 @@ from django.conf import settings
 from django.test import override_settings
 
 from api.bk_plugins_ai_audit_report.default import ChatCompletion
+from api.constants import AIAgentCode
+from api.utils import get_agent_base_url
 from tests.base import TestCase
 
 from .constants import CHAT_COMPLETION_PARAMS, CHAT_COMPLETION_RESPONSE
@@ -52,27 +54,35 @@ class TestAIAuditReportAuth(TestCase):
 
     def test_app_code_default(self):
         """测试默认 APP_CODE（未配置自定义值时使用系统默认值）"""
-        with override_settings(AI_AUDIT_REPORT_APP_CODE=""):
+        with override_settings(AI_AGENT_APP_CODE="", AI_AUDIT_REPORT_APP_CODE=""):
             self.assertEqual(self.resource.app_code, settings.APP_CODE)
 
     def test_app_code_custom(self):
-        """测试自定义 APP_CODE"""
-        custom_app_code = "custom_ai_audit_app"
-        with override_settings(AI_AUDIT_REPORT_APP_CODE=custom_app_code):
-            self.assertEqual(self.resource.app_code, custom_app_code)
+        """测试自定义 APP_CODE（AI_AGENT_APP_CODE 优先）"""
+        with override_settings(AI_AGENT_APP_CODE="agent_app", AI_AUDIT_REPORT_APP_CODE="report_app"):
+            self.assertEqual(self.resource.app_code, "agent_app")
+
+    def test_app_code_fallback_to_report(self):
+        """测试 APP_CODE 回退到 AI_AUDIT_REPORT_APP_CODE"""
+        with override_settings(AI_AGENT_APP_CODE="", AI_AUDIT_REPORT_APP_CODE="report_app"):
+            self.assertEqual(self.resource.app_code, "report_app")
 
     def test_secret_key_default(self):
         """测试默认 SECRET_KEY（未配置自定义值时使用系统默认值）"""
-        with override_settings(AI_AUDIT_REPORT_SECRET_KEY=""):
+        with override_settings(AI_AGENT_SECRET_KEY="", AI_AUDIT_REPORT_SECRET_KEY=""):
             self.assertEqual(self.resource.secret_key, settings.SECRET_KEY)
 
     def test_secret_key_custom(self):
-        """测试自定义 SECRET_KEY"""
-        custom_secret_key = "custom_ai_audit_secret"
-        with override_settings(AI_AUDIT_REPORT_SECRET_KEY=custom_secret_key):
-            self.assertEqual(self.resource.secret_key, custom_secret_key)
+        """测试自定义 SECRET_KEY（AI_AGENT_SECRET_KEY 优先）"""
+        with override_settings(AI_AGENT_SECRET_KEY="agent_secret", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
+            self.assertEqual(self.resource.secret_key, "agent_secret")
 
-    @mock.patch("api.bk_plugins_ai_audit_report.default.is_backend", return_value=True)
+    def test_secret_key_fallback_to_report(self):
+        """测试 SECRET_KEY 回退到 AI_AUDIT_REPORT_SECRET_KEY"""
+        with override_settings(AI_AGENT_SECRET_KEY="", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
+            self.assertEqual(self.resource.secret_key, "report_secret")
+
+    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
     def test_add_esb_info_backend_with_custom_auth(self, mock_platform_auth, mock_is_backend):
         """测试后台模式下使用自定义认证信息"""
@@ -80,6 +90,8 @@ class TestAIAuditReportAuth(TestCase):
         custom_secret_key = "custom_ai_audit_secret"
 
         with override_settings(
+            AI_AGENT_APP_CODE="",
+            AI_AGENT_SECRET_KEY="",
             AI_AUDIT_REPORT_APP_CODE=custom_app_code,
             AI_AUDIT_REPORT_SECRET_KEY=custom_secret_key,
         ):
@@ -90,11 +102,13 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), custom_app_code)
             self.assertEqual(result.get("bk_app_secret"), custom_secret_key)
 
-    @mock.patch("api.bk_plugins_ai_audit_report.default.is_backend", return_value=True)
+    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
     def test_add_esb_info_backend_with_default_auth(self, mock_platform_auth, mock_is_backend):
         """测试后台模式下使用默认认证信息"""
         with override_settings(
+            AI_AGENT_APP_CODE="",
+            AI_AGENT_SECRET_KEY="",
             AI_AUDIT_REPORT_APP_CODE="",
             AI_AUDIT_REPORT_SECRET_KEY="",
         ):
@@ -105,7 +119,7 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), settings.APP_CODE)
             self.assertEqual(result.get("bk_app_secret"), settings.SECRET_KEY)
 
-    @mock.patch("api.bk_plugins_ai_audit_report.default.is_backend", return_value=True)
+    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
     def test_add_esb_info_backend_removes_internal_params(self, mock_platform_auth, mock_is_backend):
         """测试后台模式下移除内部参数"""
@@ -116,7 +130,7 @@ class TestAIAuditReportAuth(TestCase):
         self.assertNotIn("_is_backend", result)
         self.assertNotIn("_request", result)
 
-    @mock.patch("api.bk_plugins_ai_audit_report.default.is_backend", return_value=False)
+    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=False)
     @mock.patch("blueapps.utils.request_provider.get_local_request", return_value=None)
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params: params)
     @mock.patch.object(ChatCompletion, "build_auth_args", return_value={})
@@ -128,6 +142,8 @@ class TestAIAuditReportAuth(TestCase):
         custom_secret_key = "custom_ai_audit_secret"
 
         with override_settings(
+            AI_AGENT_APP_CODE="",
+            AI_AGENT_SECRET_KEY="",
             AI_AUDIT_REPORT_APP_CODE=custom_app_code,
             AI_AUDIT_REPORT_SECRET_KEY=custom_secret_key,
         ):
@@ -138,7 +154,7 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), custom_app_code)
             self.assertEqual(result.get("bk_app_secret"), custom_secret_key)
 
-    @mock.patch("api.bk_plugins_ai_audit_report.default.is_backend", return_value=False)
+    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=False)
     @mock.patch("blueapps.utils.request_provider.get_local_request")
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params: params)
     @mock.patch.object(ChatCompletion, "build_auth_args", return_value={"bk_token": "test_token"})
@@ -273,3 +289,96 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, "plain")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_non_stream_parses_choices_delta(self, mock_build_header, mock_build_url):
+        """非流式响应：choices[0].delta.content 格式（AI 开发平台实际返回格式）"""
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {
+            "result": True,
+            "data": {
+                "choices": [{"delta": {"role": "assistant", "content": '{"risk_level": "HIGH"}'}}],
+                "model": "qwen3-nothinking",
+            },
+            "code": "success",
+            "message": "ok",
+        }
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": False},
+            }
+        )
+
+        self.assertEqual(result, '{"risk_level": "HIGH"}')
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_non_stream_parses_choices_message(self, mock_build_header, mock_build_url):
+        """非流式响应：choices[0].message.content 格式（OpenAI 标准格式）"""
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {
+            "result": True,
+            "data": {
+                "choices": [{"message": {"role": "assistant", "content": "hello world"}}],
+            },
+            "code": 0,
+        }
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": False},
+            }
+        )
+
+        self.assertEqual(result, "hello world")
+
+
+class TestGetAgentBaseUrl(TestCase):
+    """测试 get_agent_base_url 三层优先级"""
+
+    def test_priority1_env_api_url(self):
+        """优先级 1：BKAPP_AI_{CODE}_API_URL 直接返回"""
+        with mock.patch.dict("os.environ", {"BKAPP_AI_AUDIT_REPORT_API_URL": "http://custom-url"}):
+            result = get_agent_base_url(AIAgentCode.AUDIT_REPORT)
+            self.assertEqual(result, "http://custom-url")
+
+    @mock.patch.dict(
+        "os.environ", {"BKAPP_AI_RISK_SEARCH_API_URL": "", "BKAPP_AI_RISK_SEARCH_APIGW_NAME": "my-custom-gw"}
+    )
+    def test_priority2_env_apigw_name(self):
+        """优先级 2：BKAPP_AI_{CODE}_APIGW_NAME 覆盖网关名"""
+        result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
+        self.assertIn("my-custom-gw", result)
+
+    @mock.patch.dict("os.environ", {"BKAPP_AI_AUDIT_REPORT_API_URL": "", "BKAPP_AI_AUDIT_REPORT_APIGW_NAME": ""})
+    def test_priority3_default_apigw_name(self):
+        """优先级 3：使用枚举 value 作为默认网关名"""
+        result = get_agent_base_url(AIAgentCode.AUDIT_REPORT)
+        self.assertIn("bp-ai-audit-report", result)
+
+    def test_priority1_overrides_priority2(self):
+        """API_URL 优先于 APIGW_NAME"""
+        with mock.patch.dict(
+            "os.environ",
+            {"BKAPP_AI_RISK_SEARCH_API_URL": "http://direct", "BKAPP_AI_RISK_SEARCH_APIGW_NAME": "other-gw"},
+        ):
+            result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
+            self.assertEqual(result, "http://direct")

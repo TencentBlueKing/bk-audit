@@ -58,3 +58,4 @@ bkcodeai.json
 AGENTS.md
 .claude
 *debug*
+.playwright-cli

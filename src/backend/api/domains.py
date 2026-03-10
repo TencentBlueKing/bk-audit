@@ -18,8 +18,8 @@ to the current version of the project delivered to anyone in the future.
 
 from django.conf import settings
 
-from api.constants import APIProvider
-from api.utils import get_endpoint
+from api.constants import AIAgentCode, APIProvider
+from api.utils import get_agent_base_url, get_endpoint
 
 APIGW_ENABLED = settings.USE_APIGW
 
@@ -74,7 +74,5 @@ if not BK_VISION_API_URL:
 # BK IAM V4
 BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="dev")
 
-# AI Audit Report (智能体插件)
-AI_AUDIT_REPORT_API_URL = settings.AI_AUDIT_REPORT_API_URL or get_endpoint(
-    settings.AI_AUDIT_REPORT_APIGW_NAME, APIProvider.APIGW, stage="prod"
-)
+# AI 智能体（审计报告 — 保留 domains 入口供 bk_plugins_ai_audit_report 使用）
+AI_AUDIT_REPORT_API_URL = get_agent_base_url(AIAgentCode.AUDIT_REPORT)
