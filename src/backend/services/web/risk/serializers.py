@@ -1207,3 +1207,77 @@ class GenerateRiskReportResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+class EventFieldsForAIRequestSerializer(serializers.Serializer):
+    strategy_ids = serializers.CharField(
+        label=gettext_lazy("Strategy IDs"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("逗号分隔的策略 ID 列表"),
+    )
+    keyword = serializers.CharField(
+        label=gettext_lazy("Keyword"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按字段名或显示名模糊搜索，多个关键字用逗号分隔（OR 匹配）"),
+    )
+
+    def validate_strategy_ids(self, value):
+        if not value:
+            return []
+        result = []
+        for item in value.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                result.append(int(item))
+            except ValueError:
+                raise serializers.ValidationError(gettext_lazy("策略 ID 必须为整数，无效值：%s") % item)
+        return result
+
+
+class EventFieldsBriefItemSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"), required=False)
+
+
+class EventFieldsBriefResponseSerializer(serializers.Serializer):
+    results = EventFieldsBriefItemSerializer(
+        many=True,
+        label=gettext_lazy("字段列表"),
+        help_text=gettext_lazy("最多返回 AI_EVENT_FIELDS_BRIEF_MAX 条（默认100，可通过环境变量 BKAPP_AI_EVENT_FIELDS_BRIEF_MAX 调整）"),
+    )
+
+
+class NL2RiskTagItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label=gettext_lazy("Tag ID"))
+    name = serializers.CharField(label=gettext_lazy("Tag Name"))
+
+
+class NL2RiskStrategyItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    name = serializers.CharField(label=gettext_lazy("Strategy Name"))
+
+
+class NL2RiskFilterRequestSerializer(serializers.Serializer):
+    query = serializers.CharField(label=gettext_lazy("Natural Language Query"), allow_blank=False)
+    tags = NL2RiskTagItemSerializer(label=gettext_lazy("Tags"), many=True, required=False, default=list)
+    strategies = NL2RiskStrategyItemSerializer(
+        label=gettext_lazy("Strategies"), many=True, required=False, default=list
+    )
+    thread_id = serializers.CharField(
+        label=gettext_lazy("Thread ID"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("会话标识，用于多轮对话。不传则每次生成新的。"),
+    )
+
+
+class NL2RiskFilterResponseSerializer(serializers.Serializer):
+    filter_conditions = serializers.DictField(label=gettext_lazy("Filter Conditions"), default=dict)
+    thread_id = serializers.CharField(label=gettext_lazy("Thread ID"))
+    message = serializers.CharField(label=gettext_lazy("AI Message"), default="", allow_blank=True)

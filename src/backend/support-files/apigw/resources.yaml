@@ -1,9 +1,9 @@
-swagger: '2.0'
+swagger: "2.0"
 basePath: /
 info:
-  version: '0.1'
+  version: "0.1"
   title: API Gateway Resources
-  description: ''
+  description: ""
 schemes:
   - http
 paths:
@@ -11,10 +11,10 @@ paths:
     get:
       operationId: asset_pull_info
       description: 获取反向拉取鉴权信息
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -25,20 +25,20 @@ paths:
           path: /api/v1/meta/meta/asset_pull_info/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risks/fields/:
     get:
       operationId: get_risk_fields
       description: 获取风险字段列表
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -49,17 +49,66 @@ paths:
           path: /api/v1/risk_apigw/risk_fields_by_strategy/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
+  /risks/event_fields_brief/:
+    get:
+      operationId: list_event_fields_by_strategy_brief
+      description: 获取风险关联事件的可用筛选字段（简化版）。当用户查询涉及事件数据字段时，调用此接口获取可用字段列表。返回字段的 field_name 和 display_name，按 field_name 去重。
+      tags: []
+      parameters:
+        - in: query
+          name: strategy_ids
+          type: string
+          required: false
+          description: 策略ID列表，逗号分隔。不传则返回所有策略的字段。
+        - in: query
+          name: keyword
+          type: string
+          required: false
+          description: 按字段名或显示名模糊搜索，多个关键字用逗号分隔（OR 匹配）。例如 "源IP,来源IP" 可匹配 display_name 中包含"源IP"或"来源IP"的字段。
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              results:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 字段显示名（与 field_name 相同时不返回）
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/risks_apigw/event_fields_brief/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: []
+        descriptionEn: List event fields by strategy (brief). Returns field_name and display_name, deduplicated by field_name.
   /risks/{id}/:
     get:
       operationId: retrieve_risk
       description: 获取风险详情
-      tags: [ ]
+      tags: []
       parameters:
         - in: path
           name: id
@@ -67,7 +116,7 @@ paths:
           required: true
           description: 风险ID
       responses:
-        '200':
+        "200":
           description: 成功
           schema:
             type: object
@@ -235,7 +284,7 @@ paths:
                 description: 手动建的单是否已同步
                 default: true
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -246,17 +295,17 @@ paths:
           path: /api/v1/risk_apigw/{id}/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risks/{id}/strategy_info/:
     get:
       operationId: retrieve_risk_strategy_info
       description: 获取风险关联策略的配置信息
-      tags: [ ]
+      tags: []
       parameters:
         - in: path
           name: id
@@ -264,7 +313,7 @@ paths:
           required: true
           description: 风险ID
       responses:
-        '200':
+        "200":
           description: 成功
           schema:
             type: object
@@ -614,7 +663,7 @@ paths:
                       type: string
                       description: 字段类型
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -625,17 +674,17 @@ paths:
           path: /api/v1/risk_apigw/{id}/strategy_info/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risks/events/:
     get:
       operationId: list_risk_event_apigw
       description: 获取风险关联的事件列表
-      tags: [ ]
+      tags: []
       parameters:
         - in: query
           name: risk_id
@@ -673,7 +722,7 @@ paths:
           minimum: 1
           default: 10
       responses:
-        '200':
+        "200":
           description: 成功
           schema:
             type: object
@@ -698,7 +747,7 @@ paths:
                 format: date-time
                 description: 事件结束时间
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -709,11 +758,11 @@ paths:
           path: /api/v1/event_apigw/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risks/:
     post:
@@ -922,10 +971,10 @@ paths:
     get:
       operationId: retrieve_risk_detail
       description: 获取风险内容
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -936,20 +985,20 @@ paths:
           path: /api/v1/risks/{id}/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risks/{id}/process_risk_ticket/:
     post:
       operationId: process_risk_ticket
       description: 风险单据流转
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -960,20 +1009,20 @@ paths:
           path: /api/v1/risks/{id}/process_risk_ticket/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /risk/event_subscription/query/:
     post:
       operationId: risk_event_subscription_query
       description: 查询风险事件订阅数据
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -984,20 +1033,20 @@ paths:
           path: /api/v1/risk_event_subscription_apigw/subscription/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /log_subscription/query/:
     post:
       operationId: log_subscription_query
       description: 查询日志订阅数据
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1008,18 +1057,18 @@ paths:
           path: /api/v1/log_subscription/log_subscription_apigw/query/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
 
   /{namespace}/tools/{uid}/execute/:
     post:
       operationId: execute_tool
       description: 执行工具
-      tags: [ ]
+      tags: []
       parameters:
         - in: path
           name: namespace
@@ -1073,7 +1122,7 @@ paths:
                 type: string
                 description: 事件结束时间（用于 list_event 获取事件数据）
       responses:
-        '200':
+        "200":
           description: 执行成功
           schema:
             type: object
@@ -1092,7 +1141,7 @@ paths:
                   - api
                   - bk_vision
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1103,18 +1152,18 @@ paths:
           path: /api/v1/namespaces/{namespace}/tool_apigw/{uid}/execute/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
 
   /tools/detail_by_name/:
     get:
       operationId: get_tool_detail_by_name
       description: 根据工具名称获取工具详情
-      tags: [ ]
+      tags: []
       parameters:
         - in: query
           name: name
@@ -1122,7 +1171,7 @@ paths:
           required: true
           description: 工具名称
       responses:
-        '200':
+        "200":
           description: 成功
           schema:
             type: object
@@ -1169,7 +1218,7 @@ paths:
                           type: boolean
                           description: 是否必填
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1180,21 +1229,21 @@ paths:
           path: /api/v1/namespaces/{namespace}/tool_apigw/detail_by_name/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: false
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
 
   /{namespace}/strategies/all/:
     get:
       operationId: get_all_strategy
       description: 获取命名空间下所有策略
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1205,20 +1254,20 @@ paths:
           path: /api/v1/namespaces/{namespace}/strategy/all/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /{namespace}/strategies/:
     get:
       operationId: list_strategies
       description: 获取策略信息
-      tags: [ ]
+      tags: []
       responses:
         default:
-          description: ''
+          description: ""
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1229,17 +1278,17 @@ paths:
           path: /api/v1/namespaces/{namespace}/strategy/
           matchSubpath: false
           timeout: 0
-          upstreams: { }
-          transformHeaders: { }
+          upstreams: {}
+          transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
-        disabledStages: [ ]
+        disabledStages: []
         descriptionEn:
   /backent_api:
     x-bk-apigateway-method-any:
       operationId: bk_audit_backent_api
-      description: '审计后端服务'
-      tags: [ ]
+      description: "审计后端服务"
+      tags: []
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: false
@@ -1251,7 +1300,7 @@ paths:
           path: /
           matchSubpath: true
           timeout: 0
-        pluginConfigs: [ ]
+        pluginConfigs: []
         authConfig:
           userVerifiedRequired: true
           appVerifiedRequired: true

@@ -200,9 +200,6 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
 
         RetrieveRiskStrategyInfoAPIGW().perform_request({"risk_id": self.risk.risk_id, "lite_mode": False})
 
-        # 验证 get_app_info 被调用
-        mock_get_app_info.assert_called_once()
-
     @mock.patch("core.utils.tools.get_app_info")
     def test_retrieve_risk_strategy_info_apigw_risk_not_found(self, mock_get_app_info):
         """

@@ -72,6 +72,7 @@ class RiskAPIGWViewSet(APIGWViewSet):
             "GET", resource.risk.retrieve_risk_strategy_info_apigw, pk_field="risk_id", endpoint="strategy_info"
         ),
         ResourceRoute("GET", resource.risk.get_risk_fields_by_strategy, endpoint="risk_fields_by_strategy"),
+        ResourceRoute("GET", resource.risk.list_event_fields_by_strategy_brief, endpoint="event_fields_brief"),
     ]
 
 
@@ -187,6 +188,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.risk.update_risk, pk_field="risk_id"),
         # 风险简要列表（用于策略配置时选择风险单进行预览）
         ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief", enable_paginate=True),
+        ResourceRoute("POST", resource.risk.nl2_risk_filter, endpoint="nl2risk_filter"),
     ]
 
 
