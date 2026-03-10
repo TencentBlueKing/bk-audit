@@ -218,6 +218,13 @@
           {{ t('下一步') }}
         </bk-button>
         <bk-button
+          v-if="isEditMode"
+          class="ml8"
+          theme="primary"
+          @click="handleSaveCurrentStep">
+          {{ t('保存当前步骤') }}
+        </bk-button>
+        <bk-button
           class="ml8"
           @click="handleCancel">
           {{ t('取消') }}
@@ -282,6 +289,7 @@
 
   interface Emits {
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: Record<string, any>): void;
   }
   interface Props {
     editData: StrategyModel
@@ -636,29 +644,45 @@
       tastQueue.push(comRef.value.getValue?.());
     }
     Promise.all(tastQueue).then(() => {
-      if (!isEditMode) {
-        delete formData.value.strategy_id;
-      }
-      const baseParams = { ...formData.value };
-      if (baseParams.tags) {
-        baseParams.tags = baseParams.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
-      }
-      // 获取审计参数（自定义规则审计、引入模型审计）
-      const fields = comRef.value.getFields();
-      // 非联表不需要link_table参数
-      if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
-        fields.configs.data_source.link_table = null;
-      }
-      // 非周期不需要schedule_config
-      if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
-        fields.configs.schedule_config = undefined;
-      }
-      // 合并参数
-      const params = {
-        ...baseParams,
-        ...fields,
-      };
+      const params = buildStepParams();
       emits('nextStep', 2, params);
+    });
+  };
+
+  // 构建当前步骤提交参数（与下一步一致）
+  const buildStepParams = () => {
+    if (!isEditMode) {
+      delete formData.value.strategy_id;
+    }
+    const baseParams = { ...formData.value };
+    if (baseParams.tags) {
+      baseParams.tags = baseParams.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+    }
+    // 获取审计参数（自定义规则审计、引入模型审计）
+    const fields = comRef.value.getFields();
+    // 非联表不需要link_table参数
+    if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
+      fields.configs.data_source.link_table = null;
+    }
+    // 非周期不需要schedule_config
+    if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
+      fields.configs.schedule_config = undefined;
+    }
+    return {
+      ...baseParams,
+      ...fields,
+    };
+  };
+
+  // 保存当前步骤（编辑态）：校验后提交，效果与「其他配置」的提交一致
+  const handleSaveCurrentStep = () => {
+    const tastQueue = [formRef.value.validate()];
+    if (formData.value.strategy_type) {
+      tastQueue.push(comRef.value.getValue?.());
+    }
+    Promise.all(tastQueue).then(() => {
+      const params = buildStepParams();
+      emits('saveCurrentStep', params);
     });
   };
 
