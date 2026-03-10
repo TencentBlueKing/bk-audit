@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import time
 
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -43,4 +45,12 @@ class Command(BaseCommand):
             f"--file={definition_path}",
             *stage_args,
         )
+        # 发布需要等待，这里暂停30s
+        logger.info("Sleep for 30s and wait for apigw-release to complete.")
+        time.sleep(30)
+        # 同步 MCP Server 配置（需在版本发布后执行；命令可能不存在于旧版 apigw-manager）
+        try:
+            call_command("sync_apigw_mcp", f"--file={definition_path}", *stage_args)
+        except Exception:
+            logger.warning("sync_apigw_mcp skipped (command not available or failed)")
         call_command("fetch_apigw_public_key")

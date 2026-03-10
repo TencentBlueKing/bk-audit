@@ -31,6 +31,7 @@ from core.sql.constants import FieldType, Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
     ManualEvent,
+    NL2RiskFilterLog,
     ProcessApplication,
     Risk,
     RiskEventSubscription,
@@ -320,3 +321,33 @@ class RiskReportAdmin(admin.ModelAdmin):
         return ""
 
     content_short.short_description = _("报告内容摘要")
+
+
+@admin.register(NL2RiskFilterLog)
+class NL2RiskFilterLogAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "query",
+        "status",
+        "created_by",
+        "created_at",
+    ]
+    search_fields = ["query", "created_by", "error_message"]
+    list_filter = ["status", "created_by", "created_at"]
+    readonly_fields = [
+        "query",
+        "request_params",
+        "response_data",
+        "status",
+        "error_message",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
