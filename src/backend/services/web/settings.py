@@ -30,3 +30,7 @@ RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
 AI_PROVIDER_CACHE_TIMEOUT = int(os.getenv("BKAPP_AI_PROVIDER_CACHE_TIMEOUT", 7200))
 # 报告内容最小有效长度，低于此长度上报质量告警（通过 BKAPP_REPORT_CONTENT_MIN_LENGTH 可配置）
 REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10))
+
+# ============== AI 风险检索相关配置 ==============
+# MCP 事件字段简化接口返回上限
+AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))

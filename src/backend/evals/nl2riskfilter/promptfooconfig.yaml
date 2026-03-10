@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'NL2RiskFilter AI 能力评估（4模型全量评测）'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'qwen3-8b'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'qwen3-8b'
+      non_thinking_llm: 'qwen3-8b'
+
+  - id: 'python:providers/provider.py'
+    label: 'hy3-preview'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'hy3-preview'
+      non_thinking_llm: 'hy3-preview'
+
+  - id: 'python:providers/provider.py'
+    label: 'gptoss-120b'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'gptoss-120b'
+      non_thinking_llm: 'gptoss-120b'
+
+  - id: 'python:providers/provider.py'
+    label: 'gpt_4o_mini'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'gpt_4o_mini'
+      non_thinking_llm: 'gpt_4o_mini'
+
+defaultTest:
+  options:
+    provider:
+      id: 'python:../providers/bk_llm_provider.py'
+      config:
+        model: 'claude-sonnet-4-5-20250929-v1'
+  vars:
+    username: '{{env.BKAPP_EVAL_USERNAME}}'
+  assert:
+    - type: python
+      value: 'file://assertions/check_filters.py:passes_serializer_validation'
+    - type: latency
+      threshold: 20000
+
+evaluateOptions:
+  maxConcurrency: 8
+  repeat: 2
+
+tests:
+  - file://tests/normal.yaml
+  - file://tests/complex.yaml
+  - file://tests/boundary.yaml
+  - file://tests/challenge.yaml

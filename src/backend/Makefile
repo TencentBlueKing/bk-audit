@@ -22,3 +22,14 @@ deps_dev:
 .PHONY: clean_deps
 clean_deps:
 	@rm -f requirements.txt requirements_dev.txt
+
+# ── AI Prompts ──────────────────────────────────────────
+
+# 生成所有 AI 系统提示词
+.PHONY: prompts
+prompts: prompt-nl2riskfilter
+
+# 生成 NL2RiskFilter 系统提示词
+.PHONY: prompt-nl2riskfilter
+prompt-nl2riskfilter:
+	@python -m services.web.ai.prompts.nl2riskfilter.generate
