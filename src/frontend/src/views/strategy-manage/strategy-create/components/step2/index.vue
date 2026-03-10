@@ -122,6 +122,13 @@
         {{ t('下一步') }}
       </bk-button>
       <bk-button
+        v-if="isEditMode"
+        class="ml8"
+        theme="primary"
+        @click="handleSaveCurrentStep">
+        {{ t('保存当前步骤') }}
+      </bk-button>
+      <bk-button
         class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
@@ -162,6 +169,7 @@
   interface Emits {
     (e: 'previousStep', step: number): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: IFormData): void;
     (e: 'showPreview'): void;
   }
   interface Props {
@@ -257,29 +265,37 @@
     });
   };
 
+  const buildStepParams = (): IFormData => {
+    const params: IFormData = _.cloneDeep(Object.assign(
+      {},
+      formData.value, eventRef.value.getData(),
+      strategyTableRef.value.getData(),
+    ));
+    params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+      cleanMapConfig(item);
+      cleanDrillConfig(item);
+      return item;
+    });
+    params.risk_meta_field_config = params.risk_meta_field_config.map((item) => {
+      cleanMapConfig(item);
+      cleanDrillConfig(item);
+      return item;
+    });
+    params.event_data_field_configs = params.event_data_field_configs.map(cleanDrillConfig);
+    params.event_evidence_field_configs = params.event_evidence_field_configs.map(cleanDrillConfig);
+    return params;
+  };
+
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      const params: IFormData = _.cloneDeep(Object.assign(
-        {},
-        formData.value, eventRef.value.getData(),
-        strategyTableRef.value.getData(),
-      ));
-      // 统一处理配置字段
-      params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
-        cleanMapConfig(item);
-        cleanDrillConfig(item);
-        return item;
-      });
-      params.risk_meta_field_config = params.risk_meta_field_config.map((item) => {
-        cleanMapConfig(item);
-        cleanDrillConfig(item);
-        return item;
-      });
+      emits('nextStep', 3, buildStepParams());
+    });
+  };
 
-      params.event_data_field_configs = params.event_data_field_configs.map(cleanDrillConfig);
-      params.event_evidence_field_configs = params.event_evidence_field_configs.map(cleanDrillConfig);
-
-      emits('nextStep', 3, params);
+  // 保存当前步骤（编辑态）：效果与「其他配置」的提交一致
+  const handleSaveCurrentStep = () => {
+    Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
+      emits('saveCurrentStep', buildStepParams());
     });
   };
 

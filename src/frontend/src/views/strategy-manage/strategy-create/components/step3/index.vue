@@ -194,8 +194,8 @@
   import useRequest from '@/hooks/use-request';
 
   interface IFormData {
-    processor_groups: Array<number>,
-    notice_groups: Array<number>,
+    processor_groups: Array<any>,
+    notice_groups: Array<any>,
   }
 
   interface Emits {
