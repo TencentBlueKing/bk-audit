@@ -15,33 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from django.utils.translation import gettext_lazy
-
-from apps.exceptions import CoreException
-
-
-class RiskException(CoreException):
-    MODULE_CODE = CoreException.Modules.RISK
-
-
-class ExportRiskNoPermission(RiskException):
-    MESSAGE = gettext_lazy("您没有权限导出风险:{risk_ids}")
-    STATUS_CODE = 400
-    ERROR_CODE = "001"
-
-    def __init__(self, risk_ids: str, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(risk_ids=risk_ids)
-        super().__init__(*args, **kwargs)
-
-
-class RiskEventSubscriptionNotFound(RiskException):
-    MESSAGE = gettext_lazy("订阅 Token 不存在或未启用")
-    STATUS_CODE = 404
-    ERROR_CODE = "002"
-
-
-class NL2RiskFilterServiceError(RiskException):
-    MESSAGE = gettext_lazy("AI 服务暂时不可用，请使用手动筛选")
-    STATUS_CODE = 503
-    ERROR_CODE = "003"
