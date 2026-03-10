@@ -197,9 +197,14 @@ BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
-# AI Audit Report (智能体)
-AI_AUDIT_REPORT_APIGW_NAME = os.getenv("BKAPP_AI_AUDIT_REPORT_APIGW_NAME", "bp-ai-audit-report")
-AI_AUDIT_REPORT_API_URL = os.getenv("BKAPP_AI_AUDIT_REPORT_API_URL", "")
+# AI 智能体
+# URL 路由由 get_agent_base_url() 根据 AIAgentCode 枚举自动解析，优先级：
+#   1. BKAPP_AI_{AGENT_CODE}_API_URL     — 完整 URL 直接使用
+#   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
+#   3. get_endpoint(apigw_name, APIGW, stage="prod") — 自动生成
+# 认证配置（所有 agent 共用，旧变量保留向后兼容）
+AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
+AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
 AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
 
