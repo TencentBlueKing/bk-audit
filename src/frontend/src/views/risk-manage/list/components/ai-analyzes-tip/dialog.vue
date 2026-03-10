@@ -137,6 +137,8 @@
     total: 0,
   });
 
+  const emit = defineEmits(['analyze-finished']);
+
   const { t } = useI18n();
 
   const isShow = ref(false);
@@ -176,9 +178,13 @@
     isAnalyzing.value = true;
     console.log('Selected report:', title);
     // 模拟分析完成
-    // setTimeout(() => {
-    //   isAnalyzing.value = false;
-    // }, 2000);
+    setTimeout(() => {
+      isAnalyzing.value = false;
+      emit('analyze-finished', {
+        type: 'recommend',
+        title,
+      });
+    }, 2000);
   };
 
   const toggleCustom = () => {
@@ -189,10 +195,14 @@
     if (!customRequirement.value.trim()) return;
     isAnalyzing.value = true;
 
-    // // 模拟分析完成
-    // setTimeout(() => {
-    //   isAnalyzing.value = false;
-    // }, 2000);
+    // 模拟分析完成
+    setTimeout(() => {
+      isAnalyzing.value = false;
+      emit('analyze-finished', {
+        type: 'custom',
+        requirement: customRequirement.value,
+      });
+    }, 2000);
   };
 
   defineExpose({
