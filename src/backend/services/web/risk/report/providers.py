@@ -215,8 +215,6 @@ class AIProvider(Provider):
                 chat_history=[],
                 execute_kwargs={"stream": True},
             )
-            if isinstance(result, dict):
-                return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
             return result or ""
         except Exception as e:
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"

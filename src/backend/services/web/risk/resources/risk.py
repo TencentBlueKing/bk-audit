@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 import logging
+import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
@@ -37,6 +38,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
+from api.constants import AIAgentCode
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
 from apps.meta.constants import ConfigLevelChoices
@@ -51,7 +53,6 @@ from core.models import get_request_username
 from core.utils.data import choices_to_dict, data2string, preserved_order_sort
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
-from core.utils.tools import get_app_info
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
@@ -89,8 +90,15 @@ from services.web.risk.converter.bkbase import (
     FinalSelectAssembler,
     ManualUnsyncedRiskPrepender,
 )
-from services.web.risk.exceptions import ExportRiskNoPermission
+from services.web.risk.exceptions import (
+    ExportRiskNoPermission,
+    NL2RiskFilterServiceError,
+)
 from services.web.risk.handlers import EventHandler
+from services.web.risk.handlers.nl2riskfilter import (
+    build_nl2risk_user_message,
+    extract_json_from_text,
+)
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -117,6 +125,8 @@ from services.web.risk.serializers import (
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
+    EventFieldsBriefResponseSerializer,
+    EventFieldsForAIRequestSerializer,
     ForceRevokeApproveTicketReqSerializer,
     ForceRevokeAutoProcessReqSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
@@ -131,6 +141,8 @@ from services.web.risk.serializers import (
     ListRiskStrategyRespSerializer,
     ListRiskTagsRespSerializer,
     ManualEventSerializer,
+    NL2RiskFilterRequestSerializer,
+    NL2RiskFilterResponseSerializer,
     ReopenRiskReqSerializer,
     RetrieveRiskStrategyInfoAPIGWRequestSerializer,
     RetrieveRiskStrategyInfoAPIGWResponseSerializer,
@@ -270,9 +282,6 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
     audit_action = None
 
     def perform_request(self, validated_request_data):
-        from core.utils import tools as core_tools
-
-        core_tools.get_app_info()
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
         if not strategy:
@@ -287,7 +296,6 @@ class RetrieveRiskAPIGW(RetrieveRisk):
     audit_action = None
 
     def perform_request(self, validated_request_data):
-        get_app_info()
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         return RiskInfoSerializer(risk).data
 
@@ -1026,7 +1034,6 @@ class GetRiskFieldsByStrategy(RiskMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        get_app_info()
         # 获取基础字段
         fields = [
             {
@@ -1238,6 +1245,82 @@ class ListRiskBrief(RiskMeta):
         # 只返回精简字段，不限制数量
         # 优化：使用 values 减少数据传输量
         return queryset.values("risk_id", "title", "strategy_id", "created_at").order_by("-created_at")
+
+
+class NL2RiskFilter(RiskMeta):
+    name = gettext_lazy("自然语言转风险筛选条件")
+    RequestSerializer = NL2RiskFilterRequestSerializer
+    ResponseSerializer = NL2RiskFilterResponseSerializer
+    audit_action = ActionEnum.LIST_RISK
+
+    def perform_request(self, validated_request_data):
+        query = validated_request_data["query"]
+        tags = validated_request_data.get("tags", [])
+        strategies = validated_request_data.get("strategies", [])
+        thread_id = validated_request_data.get("thread_id") or str(uuid.uuid4())
+        username = get_request_username()
+
+        user_message = build_nl2risk_user_message(query=query, tags=tags, strategies=strategies, username=username)
+
+        try:
+            result = api.bk_plugins_ai_agent.chat_completion(
+                agent_code=AIAgentCode.RISK_SEARCH,
+                user=username,
+                input=user_message,
+                chat_history=[],
+                execute_kwargs={"stream": False, "thread_id": thread_id},
+            )
+        except Exception as e:
+            logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
+            raise NL2RiskFilterServiceError()
+
+        raw_text = str(result)
+        filter_conditions = extract_json_from_text(raw_text)
+        message = "" if filter_conditions else raw_text.strip()
+        return {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
+
+
+class ListEventFieldsByStrategyBrief(ListEventFieldsByStrategy):
+    """简化版事件字段接口（供 APIGW/MCP 使用）
+
+    复用 ListEventFieldsByStrategy 的查询逻辑，对结果做简化：
+    1. 按 field_name 去重合并（优先保留有意义的 display_name）
+    2. field_name == display_name 时只返回 field_name
+    """
+
+    name = gettext_lazy("获取事件字段（简化版）")
+    RequestSerializer = EventFieldsForAIRequestSerializer
+    ResponseSerializer = EventFieldsBriefResponseSerializer
+    many_response_data = False
+
+    def perform_request(self, validated_request_data):
+        strategy_ids = validated_request_data.get("strategy_ids", [])
+        raw_results = super().perform_request({"strategy_ids": strategy_ids})
+
+        field_map = {}
+        for item in raw_results:
+            fn = item["field_name"]
+            dn = item["display_name"]
+            if fn not in field_map:
+                field_map[fn] = dn
+            elif field_map[fn] == fn and dn != fn:
+                field_map[fn] = dn
+
+        keywords = [k.strip().lower() for k in validated_request_data.get("keyword", "").split(",") if k.strip()]
+
+        results = []
+        for fn, dn in sorted(field_map.items()):
+            if keywords:
+                fn_lower, dn_lower = fn.lower(), dn.lower()
+                if not any(kw in fn_lower or kw in dn_lower for kw in keywords):
+                    continue
+            entry = {"field_name": fn}
+            if dn != fn:
+                entry["display_name"] = dn
+            results.append(entry)
+            if len(results) >= settings.AI_EVENT_FIELDS_BRIEF_MAX:
+                break
+        return {"results": results}
 
 
 class UpdateRisk(RiskMeta):
