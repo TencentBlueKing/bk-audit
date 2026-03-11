@@ -28,7 +28,6 @@
         @click.stop />
       <template #content>
         <div class="risk-table-popover-content">
-          666
           <bk-table
             :border="['outer', 'row']"
             :columns="riskTableColumns"
