@@ -426,7 +426,7 @@ export default {
     新增: 'Add',
     '确认取消当前操作?': 'Confirm cancel the current operation?',
     '已填写的内容将会丢失，请谨慎操作！': 'The content you have filled in will be lost, please operate with caution!',
-    留着当前页: 'Keep the current page',
+    留在当前页: 'Keep the current page',
     确认取消: 'Cancel',
     完成并下一步: 'Finish and move on',
     确认接入该系统: 'Confirm access to the system',
