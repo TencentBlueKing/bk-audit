@@ -553,7 +553,7 @@ export default {
   操作ID: 'Operation ID',
   '确认取消当前操作?': 'Confirm cancel the current operation?',
   '已填写的内容将会丢失，请谨慎操作！': 'The content you have filled in will be lost, please operate with caution!',
-  留着当前页: 'Keep the current page',
+  留在当前页: 'Keep the current page',
   确认取消: 'Cancel',
   完成并下一步: 'Finish and move on',
   '资源，指资源类型，如果系统要对某些操作实现数据级（资源）的权限控制，则需引入资源。同': 'Resource refers to the resource type. If the system wants to implement data-level (resource) permission control for some operations, it needs to introduce resources.',
