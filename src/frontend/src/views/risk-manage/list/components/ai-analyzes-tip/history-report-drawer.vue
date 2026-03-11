@@ -33,13 +33,13 @@
           @clear="handleSearch"
           @enter="handleSearch" />
       </div>
-
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
         row-key="id"
-        :settings="[]" />
+        :settings="[]"
+        table-max-height="calc(100vh - 210px)" />
     </div>
   </audit-sideslider>
 </template>
