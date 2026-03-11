@@ -25,12 +25,12 @@
       <primary-table
         ref="tableRef"
         v-model:selected-row-keys="selectedRowKeys"
-        :border="border"
+        :bordered="border"
         class="tdesign-list"
         :columns="tableColumns"
         :data="tableData"
         :height="height"
-        :max-height="tableMaxHeight"
+        :max-height="effectiveTableMaxHeight"
         :row-key="rowKey as any"
         v-bind="$attrs"
         @filter-change="handleFilterChange"
@@ -147,6 +147,8 @@
     noUseRresults?: boolean;
     settings?: any[];
     rowKey?: string | ((row: any) => string | number);
+    /** 表格最大高度，传入时优先使用，不传则使用内部计算值 */
+    tableMaxHeight?: number | string;
   }
 
   interface Emits {
@@ -171,12 +173,13 @@
     secondarySortField: '',
     needEmptySearchTip: true,
     paginationValidator: undefined,
-    border: true,
+    border: false,
     isNeedHideClearSearchTip: false,
     height: 'auto',
     noUseRresults: false,
     settings: () => [],
     rowKey: 'id',
+    tableMaxHeight: undefined,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -401,7 +404,12 @@
   const tableRef = ref();
   const rootRef = ref();
   const { t } = useI18n();
-  const tableMaxHeight = ref<number | string>('auto');
+  const internalTableMaxHeight = ref<number | string>('auto');
+  const effectiveTableMaxHeight = computed(() => (
+    props.tableMaxHeight !== undefined && props.tableMaxHeight !== null
+      ? props.tableMaxHeight
+      : internalTableMaxHeight.value
+  ));
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
@@ -644,57 +652,96 @@
     calcTableHeight();
   });
 
+  // 传入的 tableMaxHeight 变化时，重新计算每页条数
+  watch(() => props.tableMaxHeight, () => {
+    calcTableHeight();
+  });
+
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
     off('show-notice');
   });
 
+  const TABLE_HEADER_HEIGHT = 44;
+  const TABLE_ROW_HEIGHT = 44;
+  const TABLE_PADDING = 8;
+
+  /** 根据传入的表格高度计算可显示行数 */
+  const getRowNumFromHeight = (height: number | string): number => {
+    let pixelHeight: number;
+    if (typeof height === 'number') {
+      pixelHeight = height;
+    } else if (typeof height === 'string' && height !== 'auto') {
+      // 支持 calc(100vh - 210px) 等表达式
+      const calcMatch = height.match(/calc\s*\(\s*100vh\s*-\s*(\d+)px\s*\)/);
+      if (calcMatch) {
+        pixelHeight = window.innerHeight - parseInt(calcMatch[1], 10);
+      } else {
+        const num = parseInt(height, 10);
+        pixelHeight = Number.isNaN(num) ? 0 : num;
+      }
+    } else {
+      return 0;
+    }
+    return Math.max(0, Math.floor((pixelHeight - TABLE_HEADER_HEIGHT - TABLE_PADDING) / TABLE_ROW_HEIGHT) - 1);
+  };
+
   // 计算表格尺寸信息
   const calculateTableDimensions = () => {
     const { top } = getOffset(rootRef.value);
     const windowInnerHeight = window.innerHeight;
-    const tableHeaderHeight = 42;
     const paginationHeight = 60;
     const pageOffsetBottom = 20;
-    const tableRowHeight = 42;
 
-    const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
+    const tableRowTotalHeight = windowInnerHeight - top - TABLE_HEADER_HEIGHT - paginationHeight - pageOffsetBottom;
 
-    const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight) - 1;
+    const rawRowNum = Math.floor(tableRowTotalHeight / TABLE_ROW_HEIGHT);
+    const rowNum = Math.max(0, rawRowNum - 2); // -2 避免多一行导致出现滚动条
     return {
-      tableHeaderHeight,
+      tableHeaderHeight: TABLE_HEADER_HEIGHT,
       paginationHeight,
-      tableRowHeight,
+      tableRowHeight: TABLE_ROW_HEIGHT,
       rowNum,
     };
   };
 
-  // 初始化表格高度
+  // 初始化表格高度（增高一行避免出现滚动条）
   const initTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
-      // tableMaxHeight 只包含表头和数据行高度，不包含分页高度（分页在表格外部）
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + 8;
+      internalTableMaxHeight.value = dimensions.tableHeaderHeight
+        + dimensions.rowNum * dimensions.tableRowHeight + TABLE_PADDING + TABLE_ROW_HEIGHT;
     });
   };
 
   const calcTableHeight = () => {
     nextTick(() => {
       const dimensions = calculateTableDimensions();
-      // 当计算出的行数大于 10 时，更新 limitList 并在首次加载时自动设置每页条数
-      if (dimensions.rowNum > 10) {
+      // 传入 tableMaxHeight 时，根据传入高度计算行数；默认时也 -1（已在 calculateTableDimensions 中处理）
+      const rowNum = (props.tableMaxHeight !== undefined && props.tableMaxHeight !== null)
+        ? getRowNumFromHeight(props.tableMaxHeight)
+        : dimensions.rowNum;
+
+      // 当计算出的行数大于 10 时，更新 limitList；传入 tableMaxHeight 时无论行数多少都更新
+      const shouldUpdateLimit = rowNum > 10
+        || (props.tableMaxHeight !== undefined && props.tableMaxHeight !== null && rowNum >= 1);
+      if (shouldUpdateLimit) {
         const pageLimit = new Set([
           ...pagination.limitList,
-          dimensions.rowNum,
+          rowNum,
         ]);
         pagination.limitList = [...pageLimit].sort((a, b) => a - b);
         // 首次加载时，自动将每页条数设置为根据表格高度计算出的行数
         if (isUnload.value) {
-          pagination.limit = dimensions.rowNum;
+          pagination.limit = rowNum;
         }
       }
-      // tableMaxHeight 只包含表头和数据行高度，不包含分页高度（分页在表格外部）
-      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + 8;
+
+      // 未传入 tableMaxHeight 时，使用内部计算值（增高一行避免出现滚动条）
+      if (props.tableMaxHeight === undefined || props.tableMaxHeight === null) {
+        internalTableMaxHeight.value = dimensions.tableHeaderHeight
+          + dimensions.rowNum * dimensions.tableRowHeight + TABLE_PADDING + TABLE_ROW_HEIGHT;
+      }
     });
   };
 
@@ -771,6 +818,9 @@
 
 <style lang="postcss">
 
+.audit-tdesign-list {
+  border: 1px solid #e1e6f0;
+}
 
 .tdesign-list {
   :deep(.new-row) {
