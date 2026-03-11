@@ -149,6 +149,8 @@
     rowKey?: string | ((row: any) => string | number);
     /** 表格最大高度，传入时优先使用，不传则使用内部计算值 */
     tableMaxHeight?: number | string;
+    /** 搜索参数（含 event_filters 等），排序时合并以保留其他参数 */
+    searchParams?: Record<string, any>;
   }
 
   interface Emits {
@@ -180,6 +182,7 @@
     settings: () => [],
     rowKey: 'id',
     tableMaxHeight: undefined,
+    searchParams: undefined,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -229,10 +232,18 @@
     initVisibleColumns();
   }, { immediate: true, deep: true });
 
-  // 监听 allColumnKeys 变化，确保可见列包含所有可配置的列
-  watch(allColumnKeys, () => {
+  // 监听 allColumnKeys 变化：新增列（如 event_data.xxx）默认勾选
+  watch(allColumnKeys, (newKeys) => {
     if (visibleColumnKeys.value.length === 0) {
       initVisibleColumns();
+    } else {
+      // 将新增的列（如 event_filters 动态列）合并进可见列，默认勾选
+      const currentKeys = new Set(visibleColumnKeys.value);
+      const addedKeys = newKeys.filter((key: string) => !currentKeys.has(key));
+      if (addedKeys.length > 0) {
+        visibleColumnKeys.value = [...visibleColumnKeys.value, ...addedKeys];
+        tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
+      }
     }
   }, { immediate: true });
   // 控制popover显示
@@ -259,8 +270,11 @@
 
     // 过滤显示的列
     const filteredColumns = props.columns.filter((column) => {
-      // 选择列 / 操作列 始终显示
+      // 选择列 / 操作列 / event_filters 动态列 始终显示
       if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
+        return true;
+      }
+      if (column.colKey.startsWith('event_data.')) {
         return true;
       }
       return visibleColumnKeys.value.includes(column.colKey);
@@ -484,16 +498,6 @@
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
           };
-          // 若 event_filters 非空，在保留原有 sort 的基础上追加对应的 event_data.xxx 排序字段（后端走 BKBase 查询）
-          if (Array.isArray(params.event_filters) && params.event_filters.length > 0) {
-            const eventSortFields = params.event_filters
-              .filter((f: any) => f && typeof f.field === 'string')
-              .map((f: any) => `-event_data.${f.field}`);
-            if (eventSortFields.length > 0) {
-              const existingSort = Array.isArray(params.sort) ? [...params.sort] : [];
-              params.sort = [...existingSort, ...eventSortFields];
-            }
-          }
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           isLoading.value = true;
@@ -596,12 +600,18 @@
       const sortPrefix = orderType === 'desc' ? '-' : '';
       const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
 
-      const nextParams = { ...paramsMemo };
+      // 合并 searchParams 以保留 event_filters 等搜索参数，避免排序时丢失
+      const baseParams = { ...(props.searchParams || {}), ...paramsMemo };
+      const nextParams = { ...baseParams };
 
-      if (props.secondarySortField) {
+      // event_data.xxx 列排序时 sort 只保留该字段，不追加 secondarySortField
+      const isEventDataSort = firstSort.sortBy.startsWith('event_data.');
+      if (props.secondarySortField && !isEventDataSort) {
         if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
           sortArray.push(props.secondarySortField);
         }
+      }
+      if (props.secondarySortField || isEventDataSort) {
         delete nextParams.order_field;
         delete nextParams.order_type;
         nextParams.sort = sortArray;

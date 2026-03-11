@@ -27,10 +27,11 @@
     <div class="risk-manage-list">
       <tdesign-list
         ref="listRef"
-        :columns="initTableColumns"
+        :columns="tableColumns"
         :data-source="dataSource"
         need-empty-search-tip
         row-key="risk_id"
+        :search-params="searchModel"
         secondary-sort-field="-event_time"
         :settings="settings"
         @clear-search="handleClearSearch"
@@ -306,6 +307,29 @@
     </span>,
     },
   ];
+
+  // 根据 event_filters 动态添加关联事件列，插入到操作列之前
+  const tableColumns = computed(() => {
+    const eventFilters = searchModel.value?.event_filters;
+    if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
+      return initTableColumns;
+    }
+    const actionIndex = initTableColumns.findIndex((c: any) => c.colKey === 'action');
+    const beforeAction = actionIndex >= 0 ? initTableColumns.slice(0, actionIndex) : initTableColumns;
+    const afterAction = actionIndex >= 0 ? initTableColumns.slice(actionIndex) : [];
+    const eventColumns = eventFilters
+      .filter((f: any) => f && typeof f.field === 'string')
+      .map((f: any) => ({
+        title: f.display_name || f.field,
+        colKey: `event_data.${f.field}`,
+        minWidth: 120,
+        ellipsis: true,
+        sortType: 'all' as const,
+        sorter: true,
+        cell: (h: any, { row }: { row: any }) => <Tooltips data={row.event_data?.[f.field] ?? '--'} />,
+      }));
+    return [...beforeAction, ...eventColumns, ...afterAction];
+  });
 
   const { messageWarn } = useMessage();
   const listRef = ref();
