@@ -57,6 +57,11 @@
     v-model:isShow="showReportDrawer"
     :meta-list="currentReportMeta"
     :title="currentReportTitle" />
+
+  <history-report-drawer
+    v-model:isShow="showHistoryDrawer"
+    @open-report="handleOpenReport"
+    @view-risks="handleViewRisks" />
 </template>
 
 <script setup lang="tsx">
@@ -64,6 +69,8 @@
   import { useI18n } from 'vue-i18n';
 
   import AnalyzeDialog from './dialog.vue';
+  import type { HistoryReportItem } from './history-report-drawer.vue';
+  import HistoryReportDrawer from './history-report-drawer.vue';
   import ReportDrawer from './report-drawer.vue';
 
   interface Props {
@@ -78,6 +85,7 @@
 
   const analyzeDialogRef = ref<InstanceType<typeof AnalyzeDialog>>();
   const showReportDrawer = ref(false);
+  const showHistoryDrawer = ref(false);
   const currentReportTitle = ref('');
   const currentReportMeta = ref<Array<{ key: string, label: string, value: string }>>([]);
 
@@ -86,6 +94,24 @@
   };
 
   const handleHistory = () => {
+    showHistoryDrawer.value = true;
+  };
+
+  const handleOpenReport = (row: HistoryReportItem) => {
+    currentReportTitle.value = row.title;
+    currentReportMeta.value = [
+      { key: 'type', label: t('报告类型'), value: row.reportTypeLabel },
+      { key: 'scope', label: t('分析范围'), value: row.analysisScope },
+      { key: 'count', label: t('风险条数'), value: `${row.riskCount} ${t('条')}` },
+      { key: 'creator', label: t('生成人'), value: row.creator },
+      { key: 'time', label: t('生成时间'), value: row.createTime },
+    ];
+    showHistoryDrawer.value = false;
+    showReportDrawer.value = true;
+  };
+
+  const handleViewRisks = () => {
+    // TODO: 跳转到关联风险列表或弹窗
   };
 
   const handleAnalyzeFinished = (payload: { type: 'recommend' | 'custom', title?: string, requirement?: string }) => {
