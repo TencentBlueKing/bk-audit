@@ -54,7 +54,7 @@
           <div style="display: flex;width: 100%;">
             <div
               class="list"
-              :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
+              :style="isShowSide ? 'width: 0; min-width: 0; max-width: 0;' : 'min-width: 164px;'">
               <scroll-faker @scroll="handleScroll">
                 <transition name="draw">
                   <div>
