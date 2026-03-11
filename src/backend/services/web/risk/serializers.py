@@ -515,6 +515,15 @@ class ListRiskRequestSerializer(serializers.Serializer):
         return data
 
 
+class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
+    """
+    APIGW 获取风险列表 - 继承 ListRiskRequestSerializer，逻辑完全一致，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权）
+    分页由 DRF 分页器统一处理（通过 URL 参数 page/page_size）
+    """
+
+    pass
+
+
 class ListRiskMetaRequestSerializer(serializers.Serializer):
     risk_view_type = serializers.ChoiceField(
         label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices

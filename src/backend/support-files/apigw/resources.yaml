@@ -715,6 +715,209 @@ paths:
           userVerifiedRequired: false
         disabledStages: [ ]
         descriptionEn:
+  /risks/list/:
+    post:
+      operationId: list_risk_apigw
+      description: 获取风险列表
+      tags: [ ]
+      parameters:
+        - in: query
+          name: page
+          type: integer
+          required: false
+          description: 页码
+          minimum: 1
+          default: 1
+        - in: query
+          name: page_size
+          type: integer
+          required: false
+          description: 每页数量
+          minimum: 1
+          default: 10
+        - in: body
+          name: body
+          required: false
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险ID（多个用逗号分隔）
+              strategy_id:
+                type: string
+                description: 策略ID（多个用逗号分隔）
+              operator:
+                type: string
+                description: 责任人（支持模糊匹配）
+              status:
+                type: string
+                description: 风险状态（多个用逗号分隔）
+                enum:
+                  - stand_by
+                  - new
+                  - await_deal
+                  - for_approve
+                  - auto_process
+                  - closed
+              start_time:
+                type: string
+                format: date-time
+                description: 开始时间（格式：YYYY-MM-DD HH:MM:SS）
+              end_time:
+                type: string
+                format: date-time
+                description: 结束时间（格式：YYYY-MM-DD HH:MM:SS）
+              event_type:
+                type: string
+                description: 风险类型（支持模糊匹配）
+              current_operator:
+                type: string
+                description: 当前处理人（支持模糊匹配）
+              notice_users:
+                type: string
+                description: 关注人（支持模糊匹配）
+              tags:
+                type: string
+                description: 标签ID（多个用逗号分隔）
+              event_content:
+                type: string
+                description: 风险描述（支持模糊匹配）
+              risk_label:
+                type: string
+                description: 风险标记
+                enum:
+                  - normal
+                  - misreport
+              risk_level:
+                type: string
+                description: 风险等级
+                enum:
+                  - LOW
+                  - MIDDLE
+                  - HIGH
+              title:
+                type: string
+                description: 风险标题（支持模糊匹配）
+              order_field:
+                type: string
+                description: 排序字段（默认 -event_time，前缀 - 表示倒序；risk_level 表示按风险等级排序）
+                default: -event_time
+              order_type:
+                type: string
+                description: 排序方式
+                enum:
+                  - asc
+                  - desc
+              has_report:
+                type: boolean
+                description: 是否已生成报告
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: 当前页码
+              num_pages:
+                type: integer
+                description: 总页数
+              total:
+                type: integer
+                description: 总记录数
+              results:
+                type: array
+                description: 风险列表
+                items:
+                  type: object
+                  properties:
+                    risk_id:
+                      type: string
+                      description: 风险ID
+                    event_content:
+                      type: string
+                      description: 风险描述
+                    raw_event_id:
+                      type: string
+                      description: 原始事件ID
+                    strategy_id:
+                      type: integer
+                      description: 策略ID
+                    event_evidence:
+                      type: string
+                      description: 风险证据
+                    event_type:
+                      type: array
+                      items:
+                        type: string
+                      description: 风险类型
+                    event_data:
+                      type: object
+                      description: 事件数据
+                    event_time:
+                      type: string
+                      format: date-time
+                      description: 首次发现时间
+                    event_end_time:
+                      type: string
+                      format: date-time
+                      description: 最后发现时间
+                    event_source:
+                      type: string
+                      description: 事件来源
+                    operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 责任人
+                    status:
+                      type: string
+                      description: 风险状态
+                    current_operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 当前处理人
+                    notice_users:
+                      type: array
+                      items:
+                        type: string
+                      description: 关注人
+                    risk_label:
+                      type: string
+                      description: 风险标记
+                    last_operate_time:
+                      type: string
+                      format: date-time
+                      description: 最后操作时间
+                    title:
+                      type: string
+                      description: 风险标题
+                    tags:
+                      type: array
+                      items:
+                        type: integer
+                      description: 标签ID列表
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/risk_list_apigw/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
   /risks/{id}/detail/:
     get:
       operationId: retrieve_risk_detail

@@ -90,6 +90,16 @@ class EventAPIGWViewSet(APIGWViewSet):
     ]
 
 
+class RiskListAPIGWViewSet(APIGWViewSet):
+    """
+    Risk List APIGW - 托管风险列表相关的 APIGW 接口，校验 app 信息
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.list_risk_apigw),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks
