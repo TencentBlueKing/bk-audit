@@ -85,7 +85,7 @@
               <template #content>
                 <div v-if="isCurrentValue">
                   <div style="font-size: 12px;font-weight: 700;">
-                    {{ t('当前值：') }}
+                    {{ t('参考值：') }}
                   </div>
                   <div class="current-value">
                     {{ getCurrentValue(item.id) }}
@@ -114,7 +114,7 @@
               <template #content>
                 <div v-if="isCurrentValue">
                   <div style="font-size: 12px;font-weight: 700;">
-                    {{ t('当前值：') }}
+                    {{ t('参考值：') }}
                   </div>
                   <div class="current-value">
                     {{ item.value }}
