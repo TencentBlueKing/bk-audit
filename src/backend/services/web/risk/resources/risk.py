@@ -133,6 +133,7 @@ from services.web.risk.serializers import (
     GetRiskFieldsByStrategyResponseSerializer,
     ListEventFieldsByStrategyRequestSerializer,
     ListEventFieldsByStrategyResponseSerializer,
+    ListRiskAPIGWRequestSerializer,
     ListRiskBriefRequestSerializer,
     ListRiskBriefResponseSerializer,
     ListRiskMetaRequestSerializer,
@@ -655,6 +656,21 @@ class ListRisk(RiskMeta):
         table_name = resolved_table_map.get("risk_event", "risk_event")
         formatted = builder.format_table_identifier(table_name)
         return formatted or "risk_event"
+
+
+class ListRiskAPIGW(ListRisk):
+    """APIGW 获取风险列表接口 - 继承 ListRisk，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权），其他逻辑完全一致"""
+
+    name = gettext_lazy("获取风险列表(APIGW)")
+    RequestSerializer = ListRiskAPIGWRequestSerializer
+    bind_request = True
+    audit_action = None
+
+    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+        """APIGW 不走 IAM 鉴权，仅校验 App 身份后直接查询全部风险"""
+        get_app_info()
+        q = self._build_filter_query(validated_request_data)
+        return Risk.objects.filter(q).distinct()
 
 
 class ListMineRisk(ListRisk):
