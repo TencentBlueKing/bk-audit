@@ -246,6 +246,9 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     report_enabled = serializers.BooleanField(source="strategy.report_enabled", default=False, read_only=True)
     report_auto_render = serializers.BooleanField(source="strategy.report_auto_render", default=True, read_only=True)
     report = RiskReportSerializer(read_only=True)
+    operator = serializers.JSONField(label=gettext_lazy("Operator"))
+    current_operator = serializers.JSONField(label=gettext_lazy("Current Operator"))
+    notice_users = serializers.JSONField(label=gettext_lazy("Notice Users"))
 
     def get_has_report(self, obj: Risk) -> bool:
         """检查风险是否有报告"""
@@ -298,6 +301,9 @@ class RiskProviderSerializer(serializers.ModelSerializer):
     last_operate_time_timestamp = TimestampIntegerField(
         label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
     )
+    operator = serializers.JSONField(label=gettext_lazy("Operator"))
+    current_operator = serializers.JSONField(label=gettext_lazy("Current Operator"))
+    notice_users = serializers.JSONField(label=gettext_lazy("Notice Users"))
 
     class Meta:
         model = Risk
@@ -572,6 +578,9 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     has_report = serializers.SerializerMethodField()
     report_enabled = serializers.BooleanField(source="strategy.report_enabled", default=False, read_only=True)
     report_auto_render = serializers.BooleanField(source="strategy.report_auto_render", default=True, read_only=True)
+    operator = serializers.JSONField(label=gettext_lazy("Operator"))
+    current_operator = serializers.JSONField(label=gettext_lazy("Current Operator"))
+    notice_users = serializers.JSONField(label=gettext_lazy("Notice Users"))
 
     def get_has_report(self, obj: Risk):
         """

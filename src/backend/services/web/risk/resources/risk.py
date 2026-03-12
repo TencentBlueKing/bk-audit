@@ -50,7 +50,12 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
+from core.utils.data import (
+    build_preserved_order_queryset,
+    choices_to_dict,
+    data2string,
+    wrap_comma,
+)
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from services.web.databus.constants import (
@@ -576,13 +581,15 @@ class ListRisk(RiskMeta):
         if has_report is not None:
             q &= Q(has_report=has_report)
 
+        _COMMA_WRAP_FIELDS = {"operator__contains", "current_operator__contains", "notice_users__contains"}
+
         for key, val in validated_request_data.items():
             if not val:
                 continue
-            # 普通匹配，针对单值匹配
             _q = Q()
             for i in val:
-                _q |= Q(**{key: i})
+                v = wrap_comma(i) if key in _COMMA_WRAP_FIELDS else i
+                _q |= Q(**{key: v})
             q &= _q
         return q
 
@@ -678,9 +685,10 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
+        username = get_request_username()
         return (
             Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-            .filter(q, current_operator__contains=get_request_username())
+            .filter(q, current_operator__contains=wrap_comma(username))
             .distinct()
         )
 
@@ -690,9 +698,10 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
+        username = get_request_username()
         return (
             Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-            .filter(q, notice_users__contains=get_request_username())
+            .filter(q, notice_users__contains=wrap_comma(username))
             .distinct()
         )
 
@@ -707,11 +716,12 @@ class ListProcessedRisk(ListRisk):
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
         username = get_request_username()
-        # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
         ).values("risk_id")
-        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
+        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(
+            current_operator__contains=wrap_comma(username)
+        )
 
 
 class ListRiskFields(RiskMeta):
