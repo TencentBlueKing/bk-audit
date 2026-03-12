@@ -369,6 +369,8 @@ export default {
     提交并下一步: 'Submit and proceed next',
     保存当前步骤: 'Save Current Step',
     '正在保存，请稍候...': 'Saving, please wait...',
+    '更新中,请稍后...': 'Updating, please wait...',
+    '创建中,请稍后...': 'Creating, please wait...',
     当前系统未完成配置: 'The current system has not been fully configured',
     系统信息: 'System information',
     日志上报: 'Log reporting',
