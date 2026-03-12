@@ -367,6 +367,8 @@
   };
 
   const urlToolsIds = ref<Set<string>>(new Set());
+  // 防止复制链接打开时重复打开弹窗（fetchToolsList 的 onSuccess 可能被多次触发）
+  const processedUrlToolId = ref<string | null>(null);
   const {
     removeSearchParam,
     appendSearchParams,
@@ -388,7 +390,16 @@
   });
 
   const openUrlTools = () => {
-    const toolIds = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+    const toolIdParam = route.query.tool_id;
+    if (!toolIdParam) return;
+
+    const toolIdKey = typeof toolIdParam === 'string' ? toolIdParam : '';
+    if (processedUrlToolId.value === toolIdKey) {
+      return; // 已处理过该 tool_id，防止重复打开弹窗
+    }
+    processedUrlToolId.value = toolIdKey;
+
+    const toolIds = toolIdKey.split(',');
     urlToolsIds.value = new Set(toolIds);
     allOpenToolsData.value = toolIds;
     if (urlToolsIds.value.size > 0) {
