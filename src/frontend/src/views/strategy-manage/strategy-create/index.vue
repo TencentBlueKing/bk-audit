@@ -57,7 +57,7 @@
         size="small"
         theme="primary" />
       <div class="save-dialog-text">
-        {{ t('正在保存，请稍候...') }}
+        {{ isEditMode ? t('更新中,请稍后...') : t('创建中,请稍后...') }}
       </div>
     </div>
     <template #footer />
