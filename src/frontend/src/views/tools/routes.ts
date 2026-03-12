@@ -41,6 +41,7 @@ export default {
       name: 'toolsAdd',
       meta: {
         title: '创建工具',
+        hideSidebar: true,
       },
     },
     {
@@ -50,6 +51,7 @@ export default {
       meta: {
         title: '编辑工具',
         skeleton: 'strategyEdit',
+        hideSidebar: true,
       },
     },
   ],
