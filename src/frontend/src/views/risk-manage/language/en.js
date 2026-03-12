@@ -154,5 +154,6 @@ export default {
     基础配置: 'Basic configuration',
     审计策略: 'Audit strategy',
     责任人: 'Responsible person',
+    参考值: 'Reference value',
   },
 };
