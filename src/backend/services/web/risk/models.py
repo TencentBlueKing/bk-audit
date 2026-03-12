@@ -22,6 +22,7 @@ from typing import List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
+from blueapps.utils.db import MultiStrSplitCharField
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -144,7 +145,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     event_source = models.CharField(
         EventMappingFields.EVENT_SOURCE.description, max_length=255, db_index=True, null=True, blank=True
     )
-    operator = models.JSONField(EventMappingFields.OPERATOR.description, null=True, blank=True)
+    operator = MultiStrSplitCharField(EventMappingFields.OPERATOR.description, max_length=512, default="", blank=True)
     status = models.CharField(
         gettext_lazy("Risk Status"), choices=RiskStatus.choices, default=RiskStatus.NEW, max_length=32, db_index=True
     )
@@ -160,10 +161,8 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     origin_operator = models.JSONField(
         gettext_lazy("Origin Operator"), max_length=64, null=True, blank=True, default=list
     )
-    current_operator = models.JSONField(
-        gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
-    )
-    notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
+    current_operator = MultiStrSplitCharField(gettext_lazy("Current Operator"), max_length=512, default="", blank=True)
+    notice_users = MultiStrSplitCharField(gettext_lazy("Notice Users"), max_length=512, default="", blank=True)
     risk_label = models.CharField(
         gettext_lazy("Risk Label"),
         max_length=32,
@@ -239,14 +238,19 @@ class Risk(StrategyTagMixin, OperateRecordModel):
 
     # ──── 组合权限 ────
 
+    _IAM_ANY_Q = ~Q(pk=None)
+
     @classmethod
     def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
         组合权限：IAM 策略 + 本地 TicketPermission
-        用于 ListRiskByPA / RiskExport / ListRiskByRule 等需要完整权限校验的场景
+        超管场景（IAM 返回 op=any）时直接使用 IAM 结果，跳过 OR 合并以避免索引失效。
         """
 
-        return cls.local_risk_filter() | cls.iam_risk_filter(action)
+        iam_filter = cls.iam_risk_filter(action)
+        if iam_filter == cls._IAM_ANY_Q:
+            return iam_filter
+        return cls.local_risk_filter() | iam_filter
 
     # ──── QuerySet 快捷方法 ────
 

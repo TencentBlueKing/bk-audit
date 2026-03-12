@@ -270,6 +270,14 @@ def data2string(data: Any, char: str = ",") -> str:
     return char.join([str(d) for d in data])
 
 
+def wrap_comma(value: str) -> str:
+    """
+    为 MultiStrSplitCharField 的 __contains 查询包装逗号。
+    存储格式为 ",val1,val2,"，查询时需要 LIKE '%,val,%' 以避免子串误匹配。
+    """
+    return f",{value},"
+
+
 def build_preserved_order_queryset(
     qs: QuerySet,
     ordering_field: str,
