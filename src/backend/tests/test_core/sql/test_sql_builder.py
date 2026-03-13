@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -49,9 +48,10 @@ from core.sql.model import (
 )
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
+from tests.base import TestCase
 
 
-class TestSQLGenerator(SimpleTestCase):
+class TestSQLGenerator(TestCase):
     def setUp(self):
         self.query_builder = QueryBuilder()
 
@@ -1129,7 +1129,7 @@ class TestSQLGenerator(SimpleTestCase):
         self.assertEqual(str(query), expected_sql, msg=f"\nExpected:\n{expected_sql}\nGot:\n{str(query)}")
 
 
-class TestSQLFunctions(SimpleTestCase):
+class TestSQLFunctions(TestCase):
     """核心函数输出验证"""
 
     def test_json_contains_function(self):
@@ -1147,7 +1147,7 @@ class TestSQLFunctions(SimpleTestCase):
         self.assertEqual(str(expr), "CONCAT('a','b')")
 
 
-class TestDorisVariantFieldSanitize(SimpleTestCase):
+class TestDorisVariantFieldSanitize(TestCase):
     def test_sanitize_variant_key_type_and_empty(self):
         """_sanitize_variant_key 对类型和空字符串做校验"""
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
