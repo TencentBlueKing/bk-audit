@@ -360,13 +360,13 @@ class ListRisk(RiskMeta):
         return start_date, end_date
 
     def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str]):
-        # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
-        risks = self._apply_ordering(base_queryset, order_fields).only("pk")
+        ordered_qs = self._apply_ordering(base_queryset, order_fields).only("pk")
         paged_queryset, page = paginate_queryset(
-            queryset=risks,
+            queryset=ordered_qs,
             request=request,
             # 数据加载阶段套上展示注解（event_content_short / _has_report）
             base_queryset=Risk.annotated_queryset(),
+            count_queryset=base_queryset,
         )
         paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_fields)
         paged_risks = list(paged_queryset)

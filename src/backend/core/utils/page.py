@@ -34,15 +34,54 @@ def paginate_data(queryset: QuerySet, request: Request) -> Tuple[List, PageNumbe
     return paged_queryset, page
 
 
+class _PreCountQuerySet:
+    """
+    包装 QuerySet，使 .count() 返回预计算的值，
+    避免 DRF Paginator 对带 JOIN/CASE 的排序 QS 执行昂贵的 COUNT SQL。
+    其余操作（切片、迭代等）委托给原始 QuerySet。
+    """
+
+    def __init__(self, queryset: QuerySet, count: int):
+        self._queryset = queryset
+        self._count = count
+
+    def count(self):
+        return self._count
+
+    @property
+    def ordered(self):
+        return self._queryset.ordered
+
+    def __getitem__(self, key):
+        return self._queryset[key]
+
+    def __len__(self):
+        return self._count
+
+
 def paginate_queryset(
-    queryset: QuerySet, request: Request, base_queryset: QuerySet = None
+    queryset: QuerySet,
+    request: Request,
+    base_queryset: QuerySet = None,
+    count_queryset: QuerySet = None,
 ) -> (QuerySet, PageNumberPagination):
     """
     分页 QuerySet
+
+    Args:
+        queryset: 带排序的 QuerySet，用于分页切片（ORDER BY + LIMIT）
+        request: DRF 请求对象
+        base_queryset: 数据加载阶段使用的 QuerySet（如带注解的版本）
+        count_queryset: 用于 COUNT 的轻量 QuerySet（不带排序注解/JOIN），
+                        避免 COUNT SQL 包含无用的 JOIN 和 CASE/WHEN
     """
 
     page: PageNumberPagination = api_settings.DEFAULT_PAGINATION_CLASS()
-    paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
+    if count_queryset is not None:
+        count = count_queryset.count()
+        paged_queryset = page.paginate_queryset(queryset=_PreCountQuerySet(queryset, count), request=request)
+    else:
+        paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
     if base_queryset is None:
         base_queryset = queryset.model.objects
     return base_queryset.filter(pk__in=[item.pk for item in paged_queryset]), page

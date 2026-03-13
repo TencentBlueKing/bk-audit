@@ -74,6 +74,7 @@ class RiskExperienceRecordTest(TicketTest):
         """保存经验不应变更当前处理人"""
 
         with RiskContext() as risk:
+            risk.refresh_from_db()
             original_operator = risk.current_operator
             RiskExperienceRecord(risk_id=risk.risk_id, operator=uuid.uuid1().hex).run()
             risk.refresh_from_db()
