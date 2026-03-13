@@ -22,6 +22,75 @@
     <bk-loading
       :loading="isLoading"
       style="z-index: 9999;">
+      <div
+        v-if="settings.length > 0"
+        class="setings">
+        <bk-popover
+          ref="popoverRef"
+          placement="bottom-end"
+          theme="light"
+          trigger="click"
+          width="500"
+          @show="handlePopoverShow">
+          <template #content>
+            <div class="column-popover">
+              <div class="column-popover-header">
+                <div class="column-popover-title">
+                  {{ t('表格设置') }}
+                </div>
+                <bk-button
+                  class="column-popover-close"
+                  text
+                  @click="closeColumnPopover">
+                  <audit-icon type="close" />
+                </bk-button>
+              </div>
+              <div class="column-popover-section">
+                <div class="column-popover-section-header">
+                  <div class="column-popover-section-title">
+                    {{ t('字段显示设置') }}
+                  </div>
+                  <bk-checkbox
+                    :model-value="isCheckAll"
+                    @change="handleCheckAllChange">
+                    {{ t('全选') }}
+                  </bk-checkbox>
+                </div>
+                <bk-checkbox-group
+                  :model-value="tempVisibleColumnKeys"
+                  @change="handleTempKeysChange">
+                  <div class="column-popover-grid">
+                    <bk-checkbox
+                      v-for="col in allColumnKeys"
+                      :key="col"
+                      class="column-popover-grid-item"
+                      :label="col">
+                      {{ columnTitleForKey(col) }}
+                    </bk-checkbox>
+                  </div>
+                </bk-checkbox-group>
+              </div>
+              <div class="column-popover-footer">
+                <bk-button
+                  size="small"
+                  theme="primary"
+                  @click="handleColumnConfirm">
+                  {{ t('确认') }}
+                </bk-button>
+                <bk-button
+                  class="ml16"
+                  size="small"
+                  @click="handleColumnCancel">
+                  {{ t('取消') }}
+                </bk-button>
+              </div>
+            </div>
+          </template>
+          <audit-icon
+            class="setting-btn-icon"
+            type="setting" />
+        </bk-popover>
+      </div>
       <primary-table
         ref="tableRef"
         v-model:selected-row-keys="selectedRowKeys"
@@ -237,6 +306,16 @@
   }, { immediate: true });
   // 控制popover显示
   const popoverRef = ref();
+  const columnTitleForKey = (col: string) => {
+    const column = props.columns.find((item: any) => item.colKey === col);
+    if (typeof column?.title === 'function') {
+      return column.title();
+    }
+    return column?.title || col;
+  };
+  const closeColumnPopover = () => {
+    popoverRef.value?.hide?.();
+  };
 
   const isCheckAll = computed(() => tempVisibleColumnKeys.value.length === allColumnKeys.value.length);
 
@@ -266,98 +345,6 @@
       return visibleColumnKeys.value.includes(column.colKey);
     });
 
-    // 找到最后一列（操作列），为其添加设置按钮
-    const lastColumnIndex = filteredColumns.length - 1;
-    if (lastColumnIndex >= 0) {
-      const lastColumn = filteredColumns[lastColumnIndex];
-      const lastTitle = typeof lastColumn.title === 'function'
-        ? lastColumn.title()
-        : lastColumn.title;
-
-      filteredColumns[lastColumnIndex] = {
-        ...lastColumn,
-        title: () => (
-        <div class="operation-column-header">
-          <span>{lastTitle}</span>
-          <bk-popover
-            ref={popoverRef}
-            theme="light"
-            placement="bottom-end"
-            trigger="click"
-            width="500"
-            onShow={handlePopoverShow}
-            v-slots={{
-              content: () => (
-                <div class="column-popover">
-                  <div class="column-popover-header">
-                    <div class="column-popover-title">
-                      {t('表格设置')}
-                    </div>
-                    <bk-button
-                      text
-                      class="column-popover-close"
-                      onClick={() => {
-                        popoverRef.value?.hide();
-                      }}>
-                      <audit-icon type="close" />
-                    </bk-button>
-                  </div>
-                  <div class="column-popover-section">
-                    <div class="column-popover-section-header">
-                      <div class="column-popover-section-title">
-                        {t('字段显示设置')}
-                      </div>
-                      <bk-checkbox
-                        modelValue={isCheckAll.value}
-                        onChange={handleCheckAllChange}>
-                        {t('全选')}
-                      </bk-checkbox>
-                    </div>
-                    <bk-checkbox-group
-                      modelValue={tempVisibleColumnKeys.value}
-                      onChange={handleTempKeysChange}>
-                      <div class="column-popover-grid">
-                        {allColumnKeys.value.map((col: any) => {
-                          const column = props.columns.find((item: any) => item.colKey === col);
-                          const columnTitle = typeof column?.title === 'function'
-                            ? column.title()
-                            : column?.title || col;
-                          return (
-                            <bk-checkbox
-                              class="column-popover-grid-item"
-                              key={col}
-                              label={col}>
-                              {columnTitle}
-                            </bk-checkbox>
-                          );
-                        })}
-                      </div>
-                    </bk-checkbox-group>
-                  </div>
-                  <div class="column-popover-footer">
-                    <bk-button
-                      theme="primary"
-                      size="small"
-                      onClick={handleColumnConfirm}>
-                      {t('确认')}
-                    </bk-button>
-                    <bk-button
-                      size="small"
-                      class="ml16"
-                      onClick={handleColumnCancel}>
-                      {t('取消')}
-                    </bk-button>
-                  </div>
-                </div>
-              ),
-            }}>
-            <audit-icon type="setting" class="setting-btn-icon" />
-          </bk-popover>
-        </div>
-      ),
-      };
-    }
-
     // loading 时移除所有列的 fixed 属性，避免固定列 z-index 穿透 loading 遮罩
     if (isLoading.value) {
       return filteredColumns.map(removeFixed);
@@ -377,7 +364,7 @@
       checked: visibleColumnKeys.value,
       fields: allColumnKeys.value.map(key => ({
         field: key,
-        label: props.columns.find((col: any) => col.colKey === key)?.title || key,
+        label: columnTitleForKey(key),
       })),
       size: 'medium',
     });
@@ -539,7 +526,7 @@
         // 非首次加载时，从 URL 读取 page_size
         pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
       }
-      pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
+      pagination.limitList = Array.from(new Set([...pagination.limitList, pagination.limit])).sort((a, b) => a - b);
     }
     if (orderField && orderType) {
       paramsMemo = {
@@ -730,7 +717,7 @@
           ...pagination.limitList,
           rowNum,
         ]);
-        pagination.limitList = [...pageLimit].sort((a, b) => a - b);
+        pagination.limitList = Array.from(pageLimit).sort((a, b) => a - b);
         // 首次加载时，自动将每页条数设置为根据表格高度计算出的行数
         if (isUnload.value) {
           pagination.limit = rowNum;
@@ -819,7 +806,32 @@
 <style lang="postcss">
 
 .audit-tdesign-list {
+  position: relative;
   border: 1px solid #e1e6f0;
+}
+
+.setings {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  width: 50px;
+  height: 42px;
+  background-color: #fafbfd;
+  border-radius: 4px;
+
+  .setting-btn-icon {
+    display: block;
+    padding: 0;
+    font-size: 16px;
+    line-height: 42px;
+    color: #c4c6cc;
+    cursor: pointer;
+
+    &:hover {
+      color: #979ba5;
+    }
+  }
 }
 
 .tdesign-list {
