@@ -239,14 +239,19 @@ class Risk(StrategyTagMixin, OperateRecordModel):
 
     # ──── 组合权限 ────
 
+    _IAM_ANY_Q = ~Q(pk=None)
+
     @classmethod
     def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
         组合权限：IAM 策略 + 本地 TicketPermission
-        用于 ListRiskByPA / RiskExport / ListRiskByRule 等需要完整权限校验的场景
+        超管场景（IAM 返回 op=any）时直接使用 IAM 结果，跳过 OR 合并以避免索引失效。
         """
 
-        return cls.local_risk_filter() | cls.iam_risk_filter(action)
+        iam_filter = cls.iam_risk_filter(action)
+        if iam_filter == cls._IAM_ANY_Q:
+            return iam_filter
+        return cls.local_risk_filter() | iam_filter
 
     # ──── QuerySet 快捷方法 ────
 
