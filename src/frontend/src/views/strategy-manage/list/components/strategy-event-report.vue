@@ -26,15 +26,14 @@
     <div
       v-else
       class="strategy-event-report">
-      <render-info-block class="mb16">
-        <render-info-item :label="t('状态')">
-          {{ strategyData.report_status === 'auto' ? t('模板生成') : t('人工编辑') || '--' }}
+      <render-info-block class="strategy-event-block">
+        <render-info-item :label="t('事件调查报告状态')">
+          {{ strategyData.report_enabled ? t('已开启') : t('已关闭') }}
         </render-info-item>
         <render-info-item
-          :label="t('状态说明')"
+          :label="t('自动生成报告')"
           style="padding-top: 10px;">
-          {{ strategyData.report_status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
-            t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
+          {{ strategyData.report_auto_render ? t('已开启') : t('已关闭') }}
         </render-info-item>
         <render-info-item
           :label="t('更新人')"
@@ -176,6 +175,12 @@
 </script>
 
 <style scoped lang="postcss">
+.strategy-event-block {
+  :deep(.info-label) {
+    min-width: 110px;
+  }
+}
+
 .strategy-event-report-wrapper {
   display: flex;
   width: 100%;
