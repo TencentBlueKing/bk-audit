@@ -48,7 +48,7 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import choices_to_dict, data2string, preserved_order_sort
+from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
@@ -301,7 +301,7 @@ class ListRisk(RiskMeta):
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
-        order_field = validated_request_data.pop("order_field", "-event_time")
+        order_fields = validated_request_data.pop("order_fields", [])
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
@@ -313,7 +313,7 @@ class ListRisk(RiskMeta):
             paged_risks, page, sql_statements = self.retrieve_via_bkbase(
                 base_queryset=base_queryset,
                 request=request,
-                order_field=order_field,
+                order_fields=order_fields,
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
@@ -322,7 +322,7 @@ class ListRisk(RiskMeta):
             )
 
         paged_risks, page, risk_ids = self.retrieve_via_db(
-            base_queryset=base_queryset, request=request, order_field=order_field
+            base_queryset=base_queryset, request=request, order_fields=order_fields
         )
 
         experiences = self._fetch_experiences(risk_ids)
@@ -350,16 +350,16 @@ class ListRisk(RiskMeta):
         end_date = end_dt.date().strftime("%Y%m%d")
         return start_date, end_date
 
-    def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
-        # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
-        risks = self._apply_ordering(base_queryset, order_field).only("pk")
+    def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str]):
+        ordered_qs = self._apply_ordering(base_queryset, order_fields).only("pk")
         paged_queryset, page = paginate_queryset(
-            queryset=risks,
+            queryset=ordered_qs,
             request=request,
             # 数据加载阶段套上展示注解（event_content_short / _has_report）
             base_queryset=Risk.annotated_queryset(),
+            count_queryset=base_queryset,
         )
-        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
+        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_fields)
         paged_risks = list(paged_queryset)
         risk_ids = [risk.risk_id for risk in paged_risks]
         return paged_risks, page, risk_ids
@@ -444,16 +444,13 @@ class ListRisk(RiskMeta):
         self,
         base_queryset: QuerySet,
         request,
-        order_field: str,
+        order_fields: List[str],
         event_filters: List[Dict[str, Any]],
         thedate_range: Optional[Tuple[str, str]] = None,
     ):
-        order_field_name = order_field.lstrip("-")
-        order_direction = "DESC" if order_field.startswith("-") else "ASC"
-
-        manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_field, self._apply_ordering)
+        manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_fields, self._apply_ordering)
         manual_unsynced_count = manual_helper.count()
-        resolver = BkBaseFieldResolver(order_field, event_filters, self._duplicate_event_field_map)
+        resolver = BkBaseFieldResolver(order_fields, event_filters, self._duplicate_event_field_map)
         value_fields = resolver.resolve_value_fields(
             ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
         )
@@ -516,8 +513,7 @@ class ListRisk(RiskMeta):
         if bkbase_limit and bkbase_total:
             risk_rows = data_executor.execute(
                 base_expression,
-                order_field=order_field_name,
-                order_direction=order_direction,
+                order_fields=order_fields,
                 limit=bkbase_limit,
                 offset=bkbase_offset,
                 components=components,
@@ -535,23 +531,24 @@ class ListRisk(RiskMeta):
 
         return paged_risks, page, sql_runner.sql_statements
 
-    def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
-        """Apply ordering, including custom order for strategy risk level.
-
-        - Use ORM order_by for general fields
-        - For strategy__risk_level, use custom numeric order: asc => LOW<MIDDLE<HIGH, desc => HIGH>MIDDLE>LOW
-        """
-        if not order_field:
+    def _apply_ordering(self, queryset: QuerySet["Risk"], order_fields: List[str]) -> QuerySet["Risk"]:
+        if not order_fields:
             return queryset
-        field = order_field.lstrip("-")
-        if field == RISK_LEVEL_ORDER_FIELD:
-            return preserved_order_sort(
-                queryset,
-                ordering_field=order_field,
-                value_list=[RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
-                extra_order_by=["-event_time"],
-            )
-        return queryset.order_by(order_field)
+
+        orm_order_args = []
+        for field in order_fields:
+            if field.lstrip("-") == RISK_LEVEL_ORDER_FIELD:
+                queryset, sort_key = build_preserved_order_queryset(
+                    queryset,
+                    field,
+                    [RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
+                    annotate_name="_risk_level_order",
+                )
+                orm_order_args.append(sort_key)
+            else:
+                orm_order_args.append(field)
+
+        return queryset.order_by(*orm_order_args)
 
     def _build_filter_query(self, validated_request_data: dict) -> Q:
         """通用筛选条件构造：从请求参数中提取风险等级、标签等筛选条件并构造 Q 表达式，供所有 ListRisk 子类共享。"""
