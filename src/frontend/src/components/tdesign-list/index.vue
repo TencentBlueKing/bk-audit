@@ -813,11 +813,9 @@
 .setings {
   position: absolute;
   top: 0;
-  right: 0;
+  right: 5px;
   z-index: 1000;
-  width: 50px;
   height: 42px;
-  background-color: #fafbfd;
   border-radius: 4px;
 
   .setting-btn-icon {
