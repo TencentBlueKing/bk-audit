@@ -367,7 +367,7 @@ export default {
     '调用鉴权接口进行该系统的鉴权。': ' to be able to call the authentication interface to authenticate the system',
     请输入资源回调url: 'Please enter the resource callback url',
     提交并下一步: 'Submit and proceed next',
-    保存当前步骤: 'Save Current Step',
+    提交: 'Save',
     '正在保存，请稍候...': 'Saving, please wait...',
     '更新中,请稍后...': 'Updating, please wait...',
     '创建中,请稍后...': 'Creating, please wait...',

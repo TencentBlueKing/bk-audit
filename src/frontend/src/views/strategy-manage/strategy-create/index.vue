@@ -20,6 +20,7 @@
     <bk-steps
       v-model:cur-step="currentStep"
       class="strategy-upgrade-step"
+      :line-type="isEditMode ? 'solid' : 'dashed'"
       :steps="steps" />
   </teleport>
 
@@ -36,7 +37,6 @@
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
-      @previous-step="(step: any) => currentStep = step"
       @save-current-step="handleSaveCurrentStep"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
@@ -82,8 +82,8 @@
     computed,
     onMounted,
     ref,
-    watch,
-  } from 'vue';
+    toRaw,
+    watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -101,6 +101,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+
 
   interface IFormData {
     strategy_id?: number,
@@ -204,14 +205,16 @@
     report_auto_render: false,
     report_config: {},
   });
-
+  // 进入编辑时的初始表单快照（只在编辑态使用，用于还原）
+  const initialFormData = ref<IFormData | null>(null);
   // 编辑状态获取数据
   const {
     run: fetchStrategyInfo,
     loading: isEditDataLoading,
   } = useRequest(StrategyManageService.fetchStrategyInfo, {
     defaultValue: new StrategyModel(),
-    onSuccess: (data) => {
+    // 编辑态：接口返回 tags 为 ID，这里统一转换为名称，保证表单和各步骤内部拿到的都是名称
+    onSuccess: async (data) => {
       // // eslint-disable-next-line prefer-destructuring
       editData.value = data;
       editData.value.event_basic_field_configs = editData.value.event_basic_field_configs.map((item) => {
@@ -266,11 +269,16 @@
         }
         return item;
       });
-      // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「保存当前步骤」时提交的是全量数据
+      // 确保标签映射已加载后，再用接口返回的数据初始化表单（将 tags 从 ID 转为名称）
+      await ensureTagMapLoaded();
       const d = editData.value;
+      const normalizedTags = (d.tags ?? []).map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
+      d.tags = normalizedTags;
+      // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「提交」时提交的是全量数据
       formData.value = {
         strategy_name: d.strategy_name ?? '',
-        tags: d.tags ?? [],
+        // 此处使用名称而非 ID
+        tags: normalizedTags,
         description: d.description ?? '',
         control_id: d.control_id ?? '',
         control_version: d.control_version,
@@ -294,6 +302,10 @@
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;
       }
+      // 进入编辑时记录一份接口返回的原始值快照（用于还原），其中 tags 已是名称
+      if (isEditMode && !initialFormData.value) {
+        initialFormData.value = _.cloneDeep(formData.value);
+      }
       // 确保先在第 1 步挂载并完成表单初始化，再跳转到目标步骤
       currentStep.value = targetStep.value;
     },
@@ -302,6 +314,10 @@
   // 保存中的 Dialog 显示状态，等接口请求结束后再关闭
   const showSaveDialog = ref(false);
   const saveDialogOpenedByDoSave = ref(false);
+  // 是否在保存成功后停留在当前页，仅刷新本页数据（不返回列表）
+  const stayOnPageAfterSave = ref(false);
+  // 从「下一步」弹窗触发保存时，保存成功后需要前往的目标步骤
+  const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | null>(null);
 
   // 保存接口
   const {
@@ -312,6 +328,22 @@
     : StrategyManageService.saveStrategy, {
     defaultValue: {},
     onSuccess: (data) => {
+      // 编辑态：来自「下一步」弹窗的保存，要求不返回列表，只刷新当前页数据
+      if (isEditMode && stayOnPageAfterSave.value) {
+        stayOnPageAfterSave.value = false;
+        window.changeConfirm = false;
+        // 更新进入编辑时的快照为当前已保存的数据，后续对比以新快照为准
+        if (formData.value) {
+          initialFormData.value = _.cloneDeep(formData.value);
+        }
+        // 保存成功后再切换到目标步骤
+        if (pendingStepAfterSave.value) {
+          currentStep.value = pendingStepAfterSave.value;
+          pendingStepAfterSave.value = null;
+        }
+        messageSuccess(t('保存成功'));
+        return;
+      }
       if (isEditMode && formData.value.status === 'running') {
         window.changeConfirm = false;
         router.push({
@@ -406,7 +438,7 @@
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
         title: t('策略提交确认'),
-        subTitle: t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。'),
+        subTitle: isEditMode ? t('本次将提交所有已修改的内容') : t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。'),
         confirmText: t('提交'),
         cancelText: t('取消'),
         headerAlign: 'center',
@@ -421,13 +453,84 @@
     }
   };
 
+  // 对比时统一转成字符串，避免 Proxy / 引用不一致导致误判
+  const stringifyForCompare = (val: any) => {
+    const raw = toRaw(val);
+    if (_.isNil(raw)) return '';
+    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+      return String(raw);
+    }
+    try {
+      return JSON.stringify(raw);
+    } catch (e) {
+      return String(raw);
+    }
+  };
+
   const handleNextStep = (step: number, params: any) => {
-    // 更新formData
+    // 和进入编辑时的快照对比本次步骤返回的数据是否有变化
+    // 只对比 params 中「有值」的字段（排除 undefined / null / 空字符串）
+    let hasChanged = false;
+    const changedFields: Record<string, { snapshot: any, current: any }> = {};
+
+    if (initialFormData.value && params) {
+      Object.keys(params).forEach((key) => {
+        const currentVal = (params as any)[key];
+        // 没有值的字段不参与对比
+        if (_.isNil(currentVal) || currentVal === '') {
+          return;
+        }
+        // 对象类型（如 configs 等复杂配置）不参与本次“是否有变更”的判断，避免深层次细节差异导致一直为 true
+        if (typeof currentVal === 'object') {
+          return;
+        }
+        const snapshotVal = (initialFormData.value as any)[key];
+        const snapshotStr = stringifyForCompare(snapshotVal);
+        const currentStr = stringifyForCompare(currentVal);
+        if (snapshotStr !== currentStr) {
+          hasChanged = true;
+          changedFields[key] = {
+            snapshot: snapshotVal,
+            current: currentVal,
+          };
+        }
+      });
+    }
+
+    if (hasChanged) {
+      InfoBox({
+        title: t('存在未保存的修改'),
+        subTitle: t('是否保存当前修改'),
+        confirmText: t('保存'),
+        cancelText: t('不保存'),
+        closeIcon: false,
+        headerAlign: 'center',
+        contentAlign: 'center',
+        footerAlign: 'center',
+        onConfirm() {
+          // 保存：编辑态直接调用保存接口；保存成功后再前往下一步
+          Object.assign(formData.value, params);
+          if (isEditMode) {
+            stayOnPageAfterSave.value = true;
+            pendingStepAfterSave.value = normalizeStep(step);
+            doSave();
+          }
+        },
+        onClose() {
+          // 关闭时继续后续流程
+          Object.assign(formData.value, params);
+          currentStep.value = normalizeStep(step);
+        },
+      });
+      return;
+    }
+
+    // 未变化时直接进入下一步
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
 
-  // 保存当前步骤：合并当前步骤数据后提交，效果与「其他配置」的提交按钮一致
+  // 提交：合并当前步骤数据后提交，效果与「其他配置」的提交按钮一致
   const handleSaveCurrentStep = (params: any) => {
     Object.assign(formData.value, params);
     handleSubmit();
