@@ -18,6 +18,7 @@
   <bk-popover
     ref="popoverRef"
     :arrow="false"
+    ext-cls="nl-add-condition-popover"
     :is-show="isShow"
     placement="bottom-start"
     theme="light"
@@ -25,9 +26,10 @@
     @after-hidden="isShow = false">
     <span
       class="nl-add-condition-trigger"
+      :class="{ 'is-active': isShow }"
       @click="isShow = !isShow">
       <audit-icon
-        style="margin-right: 4px;"
+        class="nl-add-condition-icon"
         type="add" />
       <span>{{ t('添加条件') }}</span>
     </span>
@@ -35,30 +37,32 @@
       <div class="nl-add-condition-panel">
         <!-- Tab 切换：风险字段 / 事件字段 -->
         <div class="panel-tabs">
-          <div
+          <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'risk' }"
             @click="activeTab = 'risk'">
             {{ t('风险字段') }}
-          </div>
-          <div
-            v-if="eventFields.length > 0"
+          </span>
+          <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'event' }"
             @click="activeTab = 'event'">
             {{ t('事件字段') }}
-          </div>
+          </span>
         </div>
 
         <!-- 搜索过滤 -->
         <div class="panel-search">
+          <audit-icon
+            class="nl-tag-search-icon"
+            type="search1" />
           <bk-input
             v-model="searchKeyword"
             clearable
-            :placeholder="t('搜索字段')"
+            :placeholder="t('搜索字段名称')"
+            prefix-icon="bk-icon icon-search"
             size="small" />
         </div>
-
         <!-- 字段列表 -->
         <div class="panel-field-list">
           <template v-if="activeTab === 'risk'">
@@ -66,13 +70,16 @@
               v-for="(config, fieldName) in filteredRiskFields"
               :key="fieldName"
               class="field-item"
-              :class="{ 'is-selected': isFieldSelected(fieldName as string) }"
               @click="handleSelectField(fieldName as string, config)">
-              <span>{{ t(config.label) }}</span>
-              <audit-icon
-                v-if="isFieldSelected(fieldName as string)"
-                style="color: #3a84ff;"
-                type="check-line" />
+              <span
+                v-bk-tooltips="{
+                  content: t(config.label),
+                  disabled: !overflowFlags[`risk_${fieldName}`],
+                }"
+                class="field-item-label"
+                @mouseenter="(e: MouseEvent) => checkOverflow(`risk_${fieldName}`, e)">
+                {{ t(config.label) }}
+              </span>
             </div>
           </template>
           <template v-else>
@@ -80,13 +87,16 @@
               v-for="item in filteredEventFields"
               :key="item.id"
               class="field-item"
-              :class="{ 'is-selected': isEventFieldSelected(item.id) }"
               @click="handleSelectEventField(item)">
-              <span>{{ `${item.display_name}[${item.field_name}]` }}</span>
-              <audit-icon
-                v-if="isEventFieldSelected(item.id)"
-                style="color: #3a84ff;"
-                type="check-line" />
+              <span
+                v-bk-tooltips="{
+                  content: `${item.display_name}[${item.field_name}]`,
+                  disabled: !overflowFlags[`event_${item.id}`],
+                }"
+                class="field-item-label"
+                @mouseenter="(e: MouseEvent) => checkOverflow(`event_${item.id}`, e)">
+                {{ `${item.display_name}[${item.field_name}]` }}
+              </span>
             </div>
           </template>
 
@@ -128,29 +138,47 @@
   const { t } = useI18n();
   const popoverRef = ref();
   const isShow = ref(false);
+  // 记录每个字段项是否溢出，用于控制 tooltip 显示
+  const overflowFlags = ref<Record<string, boolean>>({});
+
+  // 鼠标进入时检测 DOM 元素文字是否溢出
+  const checkOverflow = (key: string, e: MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el) {
+      overflowFlags.value[key] = el.scrollWidth > el.clientWidth;
+    }
+  };
   const activeTab = ref<'risk' | 'event'>('risk');
   const searchKeyword = ref('');
 
-  // 过滤风险字段
+  // 过滤风险字段（排除已添加的字段，且排除 datetimerange 类型，因为首次发现时间始终存在不可添加）
   const filteredRiskFields = computed(() => {
     const keyword = searchKeyword.value.trim().toLowerCase();
-    if (!keyword) return props.fieldConfig;
 
     return Object.entries(props.fieldConfig).reduce((acc, [name, config]) => {
-      if (config.label.toLowerCase().includes(keyword) || name.toLowerCase().includes(keyword)) {
-        Object.assign(acc, { [name]: config });
+      // 排除已选中的字段
+      if (props.selectedFields.includes(name)) return acc;
+      // 排除 datetimerange 类型（首次发现时间始终展示，无需手动添加）
+      if (config.type === 'datetimerange') return acc;
+      // 搜索过滤
+      if (keyword && !config.label.toLowerCase().includes(keyword) && !name.toLowerCase().includes(keyword)) {
+        return acc;
       }
+      Object.assign(acc, { [name]: config });
       return acc;
     }, {} as Record<string, IFieldConfig>);
   });
 
-  // 过滤事件字段
+  // 过滤事件字段（排除已添加的字段）
   const filteredEventFields = computed(() => {
     const keyword = searchKeyword.value.trim().toLowerCase();
-    if (!keyword) return props.eventFields;
+    let list = props.eventFields.filter(item => !props.selectedEventFieldIds.includes(item.id));
 
-    return props.eventFields.filter(item => item.display_name.toLowerCase().includes(keyword)
-      || item.field_name.toLowerCase().includes(keyword));
+    if (keyword) {
+      list = list.filter(item => item.display_name.toLowerCase().includes(keyword)
+        || item.field_name.toLowerCase().includes(keyword));
+    }
+    return list;
   });
 
   // 列表是否为空
@@ -161,83 +189,143 @@
     return filteredEventFields.value.length === 0;
   });
 
-  // 判断风险字段是否已选中
-  const isFieldSelected = (fieldName: string) => props.selectedFields.includes(fieldName);
-
-  // 判断事件字段是否已选中
-  const isEventFieldSelected = (id: string) => props.selectedEventFieldIds.includes(id);
-
-  // 选择风险字段
+  // 选择风险字段（点击后添加并关闭下拉）
   const handleSelectField = (fieldName: string, config: IFieldConfig) => {
     emit('addField', fieldName, config);
+    isShow.value = false;
   };
 
-  // 选择/取消事件字段
+  // 选择事件字段（点击后添加并关闭下拉）
   const handleSelectEventField = (item: Record<string, any>) => {
-    if (isEventFieldSelected(item.id)) {
-      emit('removeEventField', item.id);
-    } else {
-      emit('addEventField', item);
-    }
+    emit('addEventField', item);
+    isShow.value = false;
   };
 </script>
 <style lang="postcss">
   .nl-add-condition-trigger {
     display: inline-flex;
-    height: 22px;
-    padding: 0 8px;
-    margin-bottom: 4px;
+    height: 26px;
+    padding: 7px 10px;
     font-size: 12px;
-    color: #3a84ff;
+    color: #4d4f56;
+    white-space: nowrap;
     cursor: pointer;
-    align-items: center;
+    background: transparent;
+    border: 1px dashed #c4c6cc;
+    border-radius: 2px;
     transition: all .15s;
+    align-items: center;
+
+    .nl-add-condition-icon {
+      margin-right: 4px;
+      color: #979ba5;
+      transition: color .15s;
+    }
 
     &:hover {
-      color: #699df4;
+      color: #63656e;
+      background: #fff;
+      border-color: #c4c6cc;
+    }
+
+    &.is-active,
+    &:active {
+      color: #3a84ff;
+      background: transparent;
+      border-color: #3a84ff;
+
+      .nl-add-condition-icon {
+        color: #3a84ff;
+      }
     }
   }
 
   .nl-add-condition-panel {
-    width: 280px;
+    width: max-content;
+    max-width: 400px;
+    min-width: 240px;
+    padding: 0;
+    gap: 9px;
 
     .panel-tabs {
       display: flex;
-      border-bottom: 1px solid #dcdee5;
+      gap: 8px;
+      padding: 4px;
+      background-color: #f0f1f5;
 
       .panel-tab-item {
-        flex: 1;
-        height: 36px;
+        display: inline-flex;
+        height: 22px;
+        padding: 0 30px;
         font-size: 12px;
-        line-height: 36px;
+        line-height: 32px;
         color: #63656e;
         text-align: center;
         cursor: pointer;
+        background: transparent;
+        border: 1px solid transparent;
         transition: all .15s;
-
-        &:hover {
-          color: #3a84ff;
-        }
+        align-items: center;
+        justify-content: center;
+        flex: 1;
 
         &.active {
           color: #3a84ff;
-          border-bottom: 2px solid #3a84ff;
+          background: #fff;
         }
       }
     }
 
     .panel-search {
-      padding: 8px;
+      display: flex;
+      padding: 4px 12px;
+      margin-bottom: 2px;
+      border-bottom: 1px solid #dcdee5;
+      align-items: center;
+
+      .nl-tag-search-icon {
+        margin-right: 6px;
+        font-size: 15px;
+        color: #979ba5;
+        flex-shrink: 0;
+      }
+
+      .bk-input {
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+
+        &.is-focused {
+          border-bottom-color: #3a84ff;
+          box-shadow: none;
+        }
+      }
     }
 
     .panel-field-list {
-      max-height: 240px;
-      overflow-y: auto;
+      max-height: 260px;
+      padding-bottom: 4px;
+      overflow: hidden auto;
+
+      /* 窄灰色滚动条 - 纵向 */
+      &::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c4c6cc;
+        border-radius: 2px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
 
       .field-item {
         display: flex;
-        height: 32px;
-        padding: 0 12px;
+        min-height: 36px;
+        padding: 6px 16px;
         font-size: 12px;
         color: #63656e;
         cursor: pointer;
@@ -246,12 +334,19 @@
         transition: background .15s;
 
         &:hover {
-          background: #e1ecff;
+          background: #f5f7fa;
         }
 
         &.is-selected {
           color: #3a84ff;
-          background: #f0f5ff;
+        }
+
+        .field-item-label {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1;
         }
       }
 
@@ -262,5 +357,10 @@
         text-align: center;
       }
     }
+  }
+
+  /* popover 主题样式 - 减少默认 padding */
+  .nl-add-condition-popover.bk-popover.bk-pop2-content {
+    padding: 6px;
   }
 </style>

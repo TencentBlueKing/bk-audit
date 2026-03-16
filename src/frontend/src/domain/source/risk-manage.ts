@@ -277,20 +277,18 @@ class RiskManage extends ModuleBase {
     });
   }
 
-  // 自然语言搜索解析
-  nlSearchParse(params: {
+  // 自然语言转风险筛选条件（nl2risk_filter）
+  nl2RiskFilter(params: {
     query: string,
-    available_fields: Array<{
-      name: string,
-      label: string,
-      type: string,
-    }>,
+    tags?: Array<{ id: number; name: string }>,
+    strategies?: Array<{ id: number; name: string }>,
+    thread_id?: string,
   }) {
     return Request.post<{
-      conditions: Record<string, any>,
+      filter_conditions: Record<string, any>,
+      thread_id: string,
       message: string,
-      confidence: number,
-    }>(`${this.module}/nl_search_parse/`, {
+    }>(`${this.module}/nl2risk_filter/`, {
       params,
     });
   }

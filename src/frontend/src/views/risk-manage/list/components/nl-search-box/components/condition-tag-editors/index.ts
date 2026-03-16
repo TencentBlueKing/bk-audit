@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 export { default as TagDatetimerange } from './tag-datetimerange.vue';
+export { default as TagEventField } from './tag-event-field.vue';
 export { default as TagInput } from './tag-input.vue';
 export { default as TagSelect } from './tag-select.vue';
 export { default as TagUserSelector } from './tag-user-selector.vue';
