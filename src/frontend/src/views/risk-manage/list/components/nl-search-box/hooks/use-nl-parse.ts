@@ -15,73 +15,114 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import _ from 'lodash';
 import { ref } from 'vue';
 
 import RiskManageService from '@service/risk-manage';
 
 import useRequest from '@hooks/use-request';
 
-import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
-
-import type { INLParseResponse } from '../types';
+import type { INL2RiskFilterResponse } from '../types';
 
 /**
  * 自然语言搜索解析 Hook
- * 负责将用户输入的自然语言文本发送给后端 NLP 接口进行解析，
- * 返回结构化的搜索条件
+ * 负责调用 nl2risk_filter 接口，将用户自然语言转为结构化筛选条件
+ * 支持 thread_id 多轮对话
  */
-export default function useNLParse(fieldConfig: Record<string, IFieldConfig>) {
-  const parseResult = ref<INLParseResponse | null>(null);
+export default function useNLParse() {
+  const parseResult = ref<INL2RiskFilterResponse | null>(null);
   const parseMessage = ref('');
+  const threadId = ref('');
 
-  // 构建可用字段列表，传给后端帮助 NLP 理解
-  const buildAvailableFields = () => Object.entries(fieldConfig).map(([name, config]) => ({
-    name,
-    label: config.label,
-    type: config.type,
-  }));
-
-  // 调用后端 NLP 解析接口
+  // 调用 nl2risk_filter 接口
   const {
     loading: isParsing,
-    run: runParse,
-  } = useRequest(RiskManageService.nlSearchParse, {
-    defaultValue: null as unknown as INLParseResponse,
-    onSuccess(data: INLParseResponse) {
-      parseResult.value = data;
-      parseMessage.value = data?.message || '';
-    },
+    run: runNl2RiskFilter,
+  } = useRequest(RiskManageService.nl2RiskFilter, {
+    defaultValue: null as unknown as INL2RiskFilterResponse,
   });
 
   /**
    * 解析自然语言查询
    * @param query 用户输入的自然语言文本
-   * @returns 解析后的结构化条件
+   * @param tags 当前用户有权限的标签列表
+   * @param strategies 当前用户有权限的策略列表
+   * @returns { filterConditions, message } 或 null
    */
-  const parse = async (query: string): Promise<Record<string, any> | null> => {
+  const parse = async (
+    query: string,
+    tags?: Array<{ id: number; name: string }>,
+    strategies?: Array<{ id: number; name: string }>,
+  ): Promise<{
+    filterConditions: Record<string, any>;
+    message: string;
+  } | null> => {
     if (!query.trim()) return null;
 
-    const result = await runParse({
-      query,
-      available_fields: buildAvailableFields(),
-    });
+    try {
+      const params: Record<string, any> = {
+        query,
+      };
+      if (tags && tags.length > 0) {
+        params.tags = tags;
+      }
+      if (strategies && strategies.length > 0) {
+        params.strategies = strategies;
+      }
+      // 多轮对话：传入上次的 thread_id
+      if (threadId.value) {
+        params.thread_id = threadId.value;
+      }
 
-    if (result?.conditions) {
-      return result.conditions;
+      const result = await runNl2RiskFilter(params);
+
+      if (!result) return null;
+
+      parseResult.value = result;
+
+      // 保存 thread_id，用于后续多轮对话
+      if (result.thread_id) {
+        threadId.value = result.thread_id;
+      }
+
+      const filterConditions = result.filter_conditions || {};
+      const message = result.message || '';
+
+      // AI 无法解析：filter_conditions 为空对象，message 有值
+      const isEmptyConditions = _.isEmpty(filterConditions);
+      if (isEmptyConditions && message) {
+        parseMessage.value = message;
+        return { filterConditions: {}, message };
+      }
+
+      // AI 正常解析：filter_conditions 有值
+      if (!isEmptyConditions) {
+        parseMessage.value = '';
+        return { filterConditions, message: '' };
+      }
+
+      // 兜底：两者都为空
+      parseMessage.value = '';
+      return { filterConditions: {}, message: '' };
+    } catch (error) {
+      // AI 服务异常（HTTP 503 等）：返回错误提示信息
+      parseMessage.value = 'AI 服务暂时不可用，请使用手动筛选';
+      return { filterConditions: {}, message: 'AI 服务暂时不可用，请使用手动筛选' };
     }
-    return null;
   };
 
-  // 清除解析结果
+  // 清除解析结果和 thread_id
   const clearParseResult = () => {
     parseResult.value = null;
     parseMessage.value = '';
+    threadId.value = '';
   };
 
   return {
     isParsing,
     parseResult,
     parseMessage,
+    threadId,
     parse,
     clearParseResult,
   };

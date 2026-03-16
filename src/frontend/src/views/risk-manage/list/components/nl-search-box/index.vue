@@ -30,66 +30,36 @@
       :loading="isParsing"
       @submit="handleNLSubmit" />
 
+    <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示，放在输入框下方） -->
+    <div
+      v-if="showParseWarning"
+      class="nl-search-warning-tips">
+      <div class="nl-search-warning-content">
+        <img
+          class="nl-search-warning-icon"
+          src="@/images/info.svg">
+        <span>{{ t('未识别到有效搜索条件，请输入责任人、风险等级、处理状态等关键词') }}</span>
+      </div>
+      <audit-icon
+        class="nl-search-warning-close"
+        type="close"
+        @click="handleCloseWarning" />
+    </div>
+
     <!-- 条件标签区域 + 添加条件 + 操作按钮 -->
     <div class="nl-search-condition-area">
-      <!-- 解析后的条件标签 -->
+      <!-- 解析后的条件标签 + 添加条件 -->
       <condition-tags
+        :condition-list="conditionList"
+        :event-field-items="selectedItemList"
         :field-config="fieldConfig"
         :search-model="searchModel"
         @clear-all="handleClear"
         @remove="handleRemoveCondition"
-        @update="handleUpdateCondition" />
-
-      <!-- 事件字段条件列表 -->
-      <div
-        v-if="selectedItemList.length > 0"
-        class="nl-event-filters">
-        <div
-          v-for="item in selectedItemList"
-          :key="item.id"
-          class="event-filter-item">
-          <div class="filter-item-label">
-            <span>{{ `${item.display_name}[${item.field_name}]` }}</span>
-            <audit-icon
-              class="close-btn"
-              type="close"
-              @click="handleRemoveEventField(item.id)" />
-          </div>
-          <div class="filter-item-value">
-            <bk-select
-              v-model="item.operator"
-              class="bk-select"
-              :clearable="false"
-              :placeholder="t('请选择')"
-              style="width: 150px; padding-right: 5px;"
-              @change="handleOperatorChange(item)">
-              <bk-option
-                v-for="condition in conditionList"
-                :id="condition.id"
-                :key="condition.id"
-                :name="condition.name" />
-            </bk-select>
-            <bk-tag-input
-              v-if="item.operator === 'IN' || item.operator === 'NOT IN'"
-              v-model="item.value"
-              allow-create
-              collapse-tags
-              has-delete-icon
-              :list="[]"
-              :paste-fn="pasteFn"
-              :placeholder="t('请输入并按回车键结束')"
-              style="width: 100%;"
-              @change="(val: any) => handleEventValueChange(val, item)" />
-            <bk-input
-              v-else
-              v-model="item.value"
-              :placeholder="t('')" />
-          </div>
-        </div>
-      </div>
-
-      <!-- 添加条件 + 操作按钮 -->
-      <div class="nl-search-actions">
+        @remove-event-field="handleRemoveEventField"
+        @update="handleUpdateCondition"
+        @update-event-operator="handleUpdateEventOperator"
+        @update-event-value="handleUpdateEventValue">
         <add-condition
           :event-fields="selectedItems"
           :field-config="fieldConfig"
@@ -98,44 +68,7 @@
           @add-event-field="handleAddEventField"
           @add-field="handleAddField"
           @remove-event-field="handleRemoveEventField" />
-
-        <div class="nl-search-buttons">
-          <bk-button
-            class="mr8"
-            theme="primary"
-            @click="handleSubmit">
-            {{ t('查询') }}
-          </bk-button>
-          <bk-button
-            class="mr8"
-            @click="handleClear">
-            {{ t('重置') }}
-          </bk-button>
-          <bk-button
-            v-if="isReassignment"
-            class="mr8"
-            @click="handleBatch">
-            {{ t('批量转单') }}
-          </bk-button>
-          <bk-button
-            v-if="isExport"
-            class="mr8"
-            :loading="isExportLoading"
-            @click="handleExport">
-            {{ t('批量导出') }}
-          </bk-button>
-        </div>
-      </div>
-    </div>
-
-    <!-- NLP 解析结果提示 -->
-    <div
-      v-if="parseMessage"
-      class="nl-search-tips">
-      <audit-icon
-        style="margin-right: 4px; color: #3a84ff;"
-        type="info" />
-      <span>{{ parseMessage }}</span>
+      </condition-tags>
     </div>
   </div>
 </template>
@@ -152,6 +85,7 @@
 
   import MetaManageService from '@service/meta-manage';
   import RiskManageService from '@service/risk-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -170,17 +104,13 @@
     (e: 'export'): void;
     (e: 'batch'): void;
     (e: 'modelValueWatch', value: Record<string, any>): void;
+    (e: 'parsing', value: boolean): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
-    isReassignment?: boolean;
-    isExport?: boolean;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    isReassignment: false,
-    isExport: false,
-  });
+  const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -202,8 +132,8 @@
   // ========================
   const searchModel = ref<Record<string, any>>({
     datetime: [
-      dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD'),
-      dayjs().format('YYYY-MM-DD'),
+      dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      dayjs().format('YYYY-MM-DD HH:mm:ss'),
     ],
     datetime_origin: [
       'now-6M',
@@ -269,76 +199,227 @@
   // 当前已选择的风险字段名列表（用于 add-condition 组件判断哪些已选中）
   const selectedFieldNames = computed(() => Object.keys(searchModel.value).filter(key => key !== 'datetime_origin' && props.fieldConfig[key]));
 
-  const pasteFn = (value: string) => ([{ id: value, name: value }]);
+
+  // ========================
+  // 获取风险标签和策略列表（用于传给 nl2risk_filter 接口）
+  // ========================
+  const {
+    data: riskTagsList,
+  } = useRequest(RiskManageService.fetchRiskTags, {
+    defaultParams: {
+      page: 1,
+      page_size: 200,
+    },
+    defaultValue: [],
+    manual: true,
+  });
+
+  const {
+    data: strategyList,
+  } = useRequest(StrategyManageService.fetchAllStrategyList, {
+    manual: true,
+    defaultValue: [],
+  });
 
   // ========================
   // NLP 自然语言解析
   // ========================
   const {
     isParsing,
-    parseMessage,
     parse,
     clearParseResult,
-  } = useNLParse(props.fieldConfig);
+  } = useNLParse();
 
-  // 自然语言搜索提交
-  const handleNLSubmit = async (query: string) => {
-    const conditions = await parse(query);
-    if (!conditions) return;
+  // 是否显示未识别警告提示
+  const showParseWarning = ref(false);
 
-    // 将 NLP 解析结果合并到 searchModel
-    // 先重置非 datetime 字段
+  // 关闭警告提示
+  const handleCloseWarning = () => {
+    showParseWarning.value = false;
+  };
+
+  /**
+   * 将 filter_conditions 中的字段映射到 searchModel
+   * filter_conditions 的结构与 ListRisk 接口请求参数一致
+   */
+
+  // 字段转换类型：wrap-array 单值包数组, split-array 逗号分隔转数组, direct 直接赋值, bool-array 布尔转字符串数组
+  type FieldTransform = 'wrap-array' | 'split-array' | 'direct' | 'bool-array';
+
+  // 字段映射表：字段名 → 转换类型
+  const fieldTransformMap: Record<string, FieldTransform> = {
+    // 单值包装为数组的字段
+    risk_level: 'wrap-array',
+    status: 'wrap-array',
+    operator: 'wrap-array',
+    current_operator: 'wrap-array',
+    notice_users: 'wrap-array',
+    risk_label: 'wrap-array',
+    // 逗号分隔字符串转数组的字段
+    strategy_id: 'split-array',
+    tags: 'split-array',
+    // 直接赋值的字段
+    risk_id: 'direct',
+    event_content: 'direct',
+    title: 'direct',
+    // 布尔值转字符串数组的字段
+    has_report: 'bool-array',
+  };
+
+  // 根据转换类型对字段值进行转换
+  const transformFieldValue = (value: any, transform: FieldTransform) => {
+    switch (transform) {
+    case 'wrap-array':
+      return [value];
+    case 'split-array':
+      return value.split(',').map((id: string) => id.trim());
+    case 'direct':
+      return value;
+    case 'bool-array':
+      return [String(value)];
+    default:
+      return value;
+    }
+  };
+
+  const applyFilterConditions = (filterConditions: Record<string, any>) => {
+    // 先重置 searchModel，保留默认日期
     const newModel: Record<string, any> = {
       datetime: searchModel.value.datetime,
       datetime_origin: searchModel.value.datetime_origin,
     };
 
-    // 合并解析出的条件
-    Object.entries(conditions).forEach(([key, value]) => {
-      if (key === 'datetime' || key === 'datetime_origin') {
-        newModel[key] = value;
-      } else if (props.fieldConfig[key]) {
-        newModel[key] = value;
+    // 处理时间范围
+    if (filterConditions.start_time || filterConditions.end_time) {
+      const startTime = filterConditions.start_time
+        ? dayjs(filterConditions.start_time).format('YYYY-MM-DD')
+        : newModel.datetime[0];
+      const endTime = filterConditions.end_time
+        ? dayjs(filterConditions.end_time).format('YYYY-MM-DD')
+        : newModel.datetime[1];
+      newModel.datetime = [startTime, endTime];
+      newModel.datetime_origin = [startTime, endTime];
+    }
+
+    // 批量处理映射表中的字段
+    Object.entries(fieldTransformMap).forEach(([field, transform]) => {
+      const value = filterConditions[field];
+      // has_report 为布尔值，需要用 undefined 判断；其他字段用 truthiness 判断
+      const hasValue = transform === 'bool-array' ? value !== undefined : Boolean(value);
+      if (hasValue) {
+        newModel[field] = transformFieldValue(value, transform);
       }
     });
 
     searchModel.value = newModel;
 
-    // 通知父组件字段变化（用于获取事件字段）
-    emit('modelValueWatch', searchModel.value);
+    // 处理事件字段筛选 event_filters
+    if (Array.isArray(filterConditions.event_filters)) {
+      selectedItemList.value = filterConditions.event_filters.map((ef: any) => ({
+        id: `${ef.field}:${ef.display_name}`,
+        field_name: ef.field,
+        display_name: ef.display_name,
+        operator: ef.operator,
+        value: (() => {
+          const isInOperator = ef.operator === 'IN' || ef.operator === 'NOT IN';
+          if (isInOperator && typeof ef.value === 'string') {
+            return ef.value.split(',');
+          }
+          return ef.value;
+        })(),
+      }));
+      selectedVal.value = selectedItemList.value.map(item => item.id);
+      selectedItemListOperator.value = selectedItemList.value.map(item => ({
+        id: item.id,
+        operator: item.operator,
+      }));
+    }
 
-    // 触发搜索
-    handleSubmit();
+    // 处理排序 sort
+    if (Array.isArray(filterConditions.sort)) {
+      newModel.sort = filterConditions.sort;
+    }
+  };
+
+  // 自然语言搜索提交
+  const handleNLSubmit = async (query: string) => {
+    // 通知父组件：NL 解析开始，列表进入 loading 状态
+    emit('parsing', true);
+
+    // 构建 tags 参数
+    const tags = riskTagsList.value
+      .filter((item: any) => item && item.id && item.name)
+      .map((item: any) => ({ id: Number(item.id), name: item.name }));
+
+    // 构建 strategies 参数
+    const strategies = strategyList.value
+      .filter((item: any) => item && (item.value || item.id))
+      .map((item: any) => ({
+        id: Number(item.value || item.id),
+        name: item.label || item.name || '',
+      }));
+
+    const result = await parse(query, tags, strategies);
+    if (!result) {
+      // 解析失败，取消列表 loading
+      emit('parsing', false);
+      return;
+    }
+
+    const { filterConditions, message } = result;
+
+    // AI 服务异常或无法理解：filter_conditions 为空，message 有值
+    if (_.isEmpty(filterConditions) && message) {
+      // 显示警告提示（红色警告提示框）
+      showParseWarning.value = true;
+      // 解析结果为空，取消列表 loading
+      emit('parsing', false);
+      return;
+    }
+
+    // AI 正常解析：filter_conditions 有值
+    if (!_.isEmpty(filterConditions)) {
+      // 隐藏之前的警告提示
+      showParseWarning.value = false;
+
+      // 将 filter_conditions 填充到筛选表单
+      applyFilterConditions(filterConditions);
+
+      // 通知父组件字段变化（用于获取事件字段）
+      emit('modelValueWatch', searchModel.value);
+
+      // 触发搜索（列表 loading 会由 fetchData 接管，无需手动取消）
+      handleSubmit();
+
+      // 弹出搜索成功 Message 提示
+      messageSuccess(t('智能搜索成功'));
+    } else {
+      // 兜底：条件为空且无 message，取消列表 loading
+      emit('parsing', false);
+    }
   };
 
   // ========================
   // 手动添加/编辑/删除条件
   // ========================
-  // 添加风险字段条件
+  // 添加风险字段条件（已添加的字段不会出现在下拉列表中，因此仅做添加）
   const handleAddField = (fieldName: string, config: IFieldConfig) => {
-    if (searchModel.value[fieldName] !== undefined) {
-      // 已存在，移除
-      const newModel = { ...searchModel.value };
-      delete newModel[fieldName];
-      searchModel.value = newModel;
-    } else {
-      // 添加默认空值
-      let defaultValue: any = '';
-      if (config.type === 'select') {
-        defaultValue = [];
-      } else if (config.type === 'datetimerange') {
-        defaultValue = [
-          dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD'),
-          dayjs().format('YYYY-MM-DD'),
-        ];
-      } else if (config.type === 'user-selector') {
-        defaultValue = [];
-      }
-      searchModel.value = {
-        ...searchModel.value,
-        [fieldName]: defaultValue,
-      };
+    // 添加默认空值
+    let defaultValue: any = '';
+    if (config.type === 'select') {
+      defaultValue = [];
+    } else if (config.type === 'datetimerange') {
+      defaultValue = [
+        dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      ];
+    } else if (config.type === 'user-selector') {
+      defaultValue = [];
     }
+    searchModel.value = {
+      ...searchModel.value,
+      [fieldName]: defaultValue,
+    };
   };
 
   // 移除单个条件
@@ -361,8 +442,12 @@
             : item
         ));
         searchModel.value.datetime = formatted;
+        // 手动选择具体日期时，datetime_origin 设为具体日期（非快捷选项）
         searchModel.value.datetime_origin = formatted;
       }
+    } else if (fieldName === 'datetime_origin') {
+      // 快捷选项变更时同步 datetime_origin（如 ['now-6M', 'now']）
+      searchModel.value.datetime_origin = value;
     } else {
       searchModel.value[fieldName] = value;
     }
@@ -371,6 +456,21 @@
   // ========================
   // 事件字段操作（与 search-box 一致）
   // ========================
+  // 事件字段标签 —— 更新操作符
+  const handleUpdateEventOperator = (id: string, operator: string) => {
+    handleOperatorChange({ id, operator });
+  };
+
+  // 事件字段标签 —— 更新值
+  const handleUpdateEventValue = (id: string, value: any) => {
+    selectedItemList.value = selectedItemList.value.map((item) => {
+      if (item.id === id) {
+        return { ...item, value };
+      }
+      return item;
+    });
+  };
+
   const handleOperatorChange = (val: Record<string, any>) => {
     const isNewOperatorInOrNotIn = val.operator === 'IN' || val.operator === 'NOT IN';
     const currentItem = selectedItemListOperator.value.find((item: Record<string, any>) => item.id === val.id);
@@ -378,14 +478,13 @@
 
     selectedItemList.value = selectedItemList.value.map((item) => {
       if (item.id === val.id) {
-        if (isOldOperatorInOrNotIn && isNewOperatorInOrNotIn) {
-          return { ...item, operator: val.operator, value: item.value };
-        } if (isOldOperatorInOrNotIn && !isNewOperatorInOrNotIn) {
-          return { ...item, operator: val.operator, value: '' };
-        } if (!isOldOperatorInOrNotIn && isNewOperatorInOrNotIn) {
-          return { ...item, operator: val.operator, value: [] };
+        let newValue = item.value;
+        if (isOldOperatorInOrNotIn && !isNewOperatorInOrNotIn) {
+          newValue = '';
+        } else if (!isOldOperatorInOrNotIn && isNewOperatorInOrNotIn) {
+          newValue = [];
         }
-        return { ...item, operator: val.operator, value: item.value };
+        return { ...item, operator: val.operator, value: newValue };
       }
       return item;
     });
@@ -395,29 +494,6 @@
     }));
   };
 
-  const handleEventValueChange = (val: any[], changeItem: Record<string, any>) => {
-    let processedVal = val;
-    if (Array.isArray(val)) {
-      const flattenedValues: any[] = [];
-      val.forEach((item) => {
-        if (typeof item === 'string' && item.includes(',')) {
-          const splitItems = item.split(',').map(s => s.trim())
-            .filter(s => s !== '');
-          flattenedValues.push(...splitItems);
-        } else {
-          flattenedValues.push(item);
-        }
-      });
-      processedVal = [...new Set(flattenedValues)];
-    }
-
-    selectedItemList.value = selectedItemList.value.map((item) => {
-      if (item.id === changeItem.id) {
-        return { ...item, value: processedVal };
-      }
-      return item;
-    });
-  };
 
   const handleAddEventField = (item: Record<string, any>) => {
     selectedItemList.value.push({
@@ -484,15 +560,31 @@
 
   // 提交搜索
   const handleSubmit = (isClear = false) => {
-    emit('change', getSearchParams(), eventFiltersParams.value, isClear);
+    // 将搜索参数同步到 URL（刷新后可恢复）
+    const searchParams = getSearchParams();
+    const replaceUrl: Record<string, any> = { ...searchParams };
+    // 同步 datetime_origin
+    if (searchModel.value.datetime_origin) {
+      const origin = searchModel.value.datetime_origin;
+      if (Array.isArray(origin) && origin.length > 0) {
+        replaceUrl.datetime_origin = origin.join(',');
+      }
+    }
+    // 同步 event_filters
+    if (eventFiltersParams.value.length > 0) {
+      replaceUrl.event_filters = eventFiltersParams.value;
+    }
+    replaceSearchParams(replaceUrl);
+
+    emit('change', searchParams, eventFiltersParams.value, isClear);
   };
 
   // 重置
   const handleClear = () => {
     searchModel.value = {
       datetime: [
-        dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD'),
-        dayjs().format('YYYY-MM-DD'),
+        dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        dayjs().format('YYYY-MM-DD HH:mm:ss'),
       ],
       datetime_origin: [
         'now-6M',
@@ -505,15 +597,14 @@
       operator: '=',
     }));
     selectedVal.value = selectedItemList.value.map(item => item.id);
+    showParseWarning.value = false;
     clearParseResult();
     nlInputRef.value?.clear();
+    // 清空 URL 上的搜索参数
+    replaceSearchParams({});
     handleSubmit(true);
   };
 
-  // 批量转单
-  const handleBatch = () => {
-    emit('batch');
-  };
 
   // 导出
   const {
@@ -524,10 +615,6 @@
       messageSuccess(t('导出成功'));
     },
   });
-
-  const handleExport = () => {
-    emit('export');
-  };
 
   const handleExportData = (val: string[], type: string) => {
     isExportLoading.value = true;
@@ -654,56 +741,45 @@
       padding: 0 24px 16px;
     }
 
-    .nl-event-filters {
-      display: grid;
-      margin-bottom: 12px;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px 16px;
-
-      .event-filter-item {
-        .filter-item-label {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          font-size: 12px;
-          line-height: 20px;
-          color: #63656e;
-
-          .close-btn {
-            color: #63656e;
-            cursor: pointer;
-          }
-        }
-
-        .filter-item-value {
-          display: flex;
-          padding-top: 6px;
-        }
-      }
-    }
-
-    .nl-search-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-
-      .nl-search-buttons {
-        display: flex;
-        align-items: center;
-      }
-    }
-
-    .nl-search-tips {
+    .nl-search-warning-tips {
       position: relative;
       z-index: 1;
       display: flex;
-      padding: 8px 16px;
+      padding: 6px 8px;
+      margin: 0 24px 8px;
       font-size: 12px;
-      color: #63656e;
-      background: #f5f7fa;
-      border-top: 1px solid #f0f1f5;
+      color: #4d4f56;
+      background: #ffeded;
+      border: 1px solid #f8b4b4;
+      border-radius: 2px;
       align-items: center;
+      justify-content: space-between;
+
+      .nl-search-warning-content {
+        display: flex;
+        align-items: center;
+        flex: 1;
+      }
+
+      .nl-search-warning-icon {
+        width: 14px;
+        height: 14px;
+        margin-right: 4px;
+        flex-shrink: 0;
+      }
+
+      .nl-search-warning-close {
+        margin-left: 8px;
+        font-size: 14px;
+        color: #979ba5;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: color .15s;
+
+        &:hover {
+          color: #63656e;
+        }
+      }
     }
   }
 </style>
