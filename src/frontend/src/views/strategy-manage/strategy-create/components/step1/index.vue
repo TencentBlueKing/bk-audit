@@ -222,7 +222,7 @@
           class="ml8"
           theme="primary"
           @click="handleSaveCurrentStep">
-          {{ t('保存当前步骤') }}
+          {{ t('提交') }}
         </bk-button>
         <bk-button
           class="ml8"
@@ -674,7 +674,7 @@
     };
   };
 
-  // 保存当前步骤（编辑态）：校验后提交，效果与「其他配置」的提交一致
+  // 提交（编辑态）：校验后提交，效果与「其他配置」的提交一致
   const handleSaveCurrentStep = () => {
     const tastQueue = [formRef.value.validate()];
     if (formData.value.strategy_type) {
