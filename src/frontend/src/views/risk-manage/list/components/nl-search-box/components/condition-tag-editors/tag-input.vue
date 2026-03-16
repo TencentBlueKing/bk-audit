@@ -16,7 +16,8 @@
 -->
 <template>
   <div
-    class="condition-tag-item"
+    ref="wrapperRef"
+    class="condition-tag-item nl-tag-input-item"
     :class="{ 'is-editing': isEditing }">
     <!-- 查看态 -->
     <template v-if="!isEditing">
@@ -28,6 +29,7 @@
           v-bk-tooltips="{
             content: fullDisplayValue,
             disabled: !isOverflow,
+            extCls: 'nl-tag-tooltip-wrap',
           }"
           class="tag-value-wrapper">
           <span class="tag-value">{{ displayValue }}</span>
@@ -38,17 +40,25 @@
         type="close"
         @click.stop="$emit('remove', tag.fieldName)" />
     </template>
-    <!-- 编辑态 -->
+    <!-- 编辑态：行内撑宽 + 原位向下撑高 -->
     <template v-else>
       <span class="tag-label">{{ t(tag.label) }}：</span>
-      <bk-input
-        ref="inputRef"
-        v-model="localValue"
-        class="nl-tag-inline-input"
-        :placeholder="t(`请输入${tag.label}`)"
-        size="small"
-        @blur="handleConfirm"
-        @enter="handleConfirm" />
+      <div class="nl-tag-input-edit-zone">
+        <textarea
+          ref="inputRef"
+          v-model="localValue"
+          class="nl-tag-inline-textarea"
+          :placeholder="t(`请输入${tag.label}`)"
+          rows="1"
+          @input="handleAutoResize"
+          @keydown.enter.exact.prevent="handleConfirm" />
+        <!-- 隐藏的测量元素，用于计算文本宽度 -->
+        <span
+          ref="measureRef"
+          class="nl-tag-measure-span">
+          {{ localValue || t(`请输入${tag.label}`) }}
+        </span>
+      </div>
       <audit-icon
         class="tag-remove-btn"
         type="close"
@@ -61,6 +71,7 @@
   import {
     computed,
     nextTick,
+    onBeforeUnmount,
     ref,
     watch,
   } from 'vue';
@@ -85,26 +96,34 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const MAX_SINGLE_LEN = 20;
+  // 标签值查看态最大展示字符数
+  const tagValueMaxDisplayLength = 20;
+  // 标签输入框自动撑宽范围
+  const tagInputMinWidth = 120;
+  const tagInputMaxWidth = 400;
 
   const localValue = ref('');
   const inputRef = ref();
+  const measureRef = ref<HTMLSpanElement>();
+  const wrapperRef = ref<HTMLElement>();
 
   const fullDisplayValue = computed(() => {
     const { value } = props.tag;
-    if (!value && value !== 0) return '--';
+    if (!value && value !== 0) {
+      return '--';
+    }
     return String(value);
   });
 
   const displayValue = computed(() => {
     const text = fullDisplayValue.value;
-    if (text.length > MAX_SINGLE_LEN) {
-      return `${text.slice(0, MAX_SINGLE_LEN)}...`;
+    if (text.length > tagValueMaxDisplayLength) {
+      return `${text.slice(0, tagValueMaxDisplayLength)}...`;
     }
     return text;
   });
 
-  const isOverflow = computed(() => String(props.tag.value).length > MAX_SINGLE_LEN);
+  const isOverflow = computed(() => String(props.tag.value).length > tagValueMaxDisplayLength);
 
   const handleStartEdit = () => {
     emit('startEdit', props.tag.fieldName);
@@ -115,24 +134,126 @@
     emit('finishEdit');
   };
 
+  // textarea 自动调整宽度和高度
+  // 先根据内容撑宽（最大 400px），宽度到上限后原位向下撑高
+  const handleAutoResize = () => {
+    const el = inputRef.value;
+    const measure = measureRef.value;
+    if (!el || !measure) {
+      return;
+    }
+
+    // 1. 根据隐藏 span 测量的文本宽度来设置 textarea 宽度
+    const textWidth = measure.scrollWidth + 4; // 加一点余量
+    const newWidth = Math.max(tagInputMinWidth, Math.min(textWidth, tagInputMaxWidth));
+    el.style.width = `${newWidth}px`;
+
+    // 2. 自动调整高度（当宽度达到上限后，内容换行原位向下撑高）
+    el.style.height = 'auto';
+    const scrollH = el.scrollHeight;
+    el.style.height = `${scrollH}px`;
+  };
+
+  // 点击外部区域关闭编辑态
+  const handleDocumentClick = (e: MouseEvent) => {
+    if (props.isEditing) {
+      const target = e.target as HTMLElement;
+      if (!wrapperRef.value?.contains(target)) {
+        handleConfirm();
+      }
+    }
+  };
+
   // 进入编辑态时自动聚焦
   watch(() => props.isEditing, async (val) => {
     if (val) {
       localValue.value = _.cloneDeep(props.tag.value) || '';
       await nextTick();
-      inputRef.value?.focus?.();
+      const el = inputRef.value;
+      if (el) {
+        el.focus?.();
+        handleAutoResize();
+      }
+      setTimeout(() => {
+        document.addEventListener('click', handleDocumentClick);
+      });
+    } else {
+      document.removeEventListener('click', handleDocumentClick);
     }
+  });
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClick);
   });
 </script>
 <style lang="postcss" scoped>
-  .nl-tag-inline-input {
-    width: 120px;
-
-    :deep(.bk-input--text) {
-      height: 20px;
-      font-size: 12px;
-      background: transparent;
-      border: none;
+  .nl-tag-input-item {
+    /* 编辑态：允许标签高度随内容撑高 */
+    &.is-editing {
+      height: auto;
+      min-height: 26px;
+      align-items: flex-start;
     }
+  }
+
+  .nl-tag-input-edit-zone {
+    position: relative;
+    display: inline-flex;
+    min-width: 120px;
+  }
+
+  .nl-tag-inline-textarea {
+    width: 120px;
+    max-width: 400px;
+    max-height: 200px;
+    min-width: 120px;
+    min-height: 20px;
+    padding: 0 4px;
+    overflow-y: auto;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 18px;
+    color: #63656e;
+    word-break: break-all;
+    background: #fff;
+    border: 1px solid #3a84ff;
+    border-radius: 2px;
+    outline: none;
+    box-sizing: border-box;
+    resize: none;
+
+    &::placeholder {
+      color: #c4c6cc;
+    }
+
+    /* 窄灰色滚动条 */
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #c4c6cc;
+      border-radius: 2px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+  }
+
+  /* 隐藏的测量 span，与 textarea 保持相同字体样式 */
+  .nl-tag-measure-span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 0;
+    padding: 0 4px;
+    overflow: hidden;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre;
+    pointer-events: none;
+    visibility: hidden;
   }
 </style>

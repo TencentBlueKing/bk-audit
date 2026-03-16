@@ -300,17 +300,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
-   * @desc 自然语言搜索解析
+   * @desc 自然语言转风险筛选条件（nl2risk_filter）
    */
-  nlSearchParse(params: {
+  nl2RiskFilter(params: {
     query: string,
-    available_fields: Array<{
-      name: string,
-      label: string,
-      type: string,
-    }>,
+    tags?: Array<{ id: number; name: string }>,
+    strategies?: Array<{ id: number; name: string }>,
+    thread_id?: string,
   }) {
-    return RiskManageSource.nlSearchParse(params)
+    return RiskManageSource.nl2RiskFilter(params)
       .then(({ data }) => data);
   },
 };
