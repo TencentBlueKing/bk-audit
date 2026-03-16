@@ -33,6 +33,7 @@
         v-bk-tooltips="{
           content: fullDisplayValue,
           disabled: !isOverflow,
+          extCls: 'nl-tag-tooltip-wrap',
         }"
         class="tag-value-wrapper">
         <span class="tag-value">{{ displayValue }}</span>
@@ -67,7 +68,16 @@
                 'is-selected': isOptionSelected(item),
               }"
               @click="handleToggleOption(item)">
-              <span>{{ item[labelName] }}</span>
+              <span
+                v-bk-tooltips="{
+                  content: item[labelName],
+                  disabled: !itemOverflowFlags[valName ? item[valName] : item.id],
+                  extCls: 'nl-tag-tooltip-wrap',
+                }"
+                class="nl-tag-select-item-label"
+                @mouseenter="(e: MouseEvent) => checkItemOverflow(valName ? item[valName] : item.id, e)">
+                {{ item[labelName] }}
+              </span>
               <audit-icon
                 v-if="isOptionSelected(item)"
                 style="color: #3a84ff;"
@@ -89,6 +99,7 @@
   import {
     computed,
     onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -177,6 +188,17 @@
     return labels.join('，').length > MAX_MULTI_LEN;
   });
 
+  // 记录每个下拉选项是否溢出，用于控制 tooltip 显示
+  const itemOverflowFlags = ref<Record<string, boolean>>({});
+
+  // 鼠标进入时检测 DOM 元素文字是否溢出
+  const checkItemOverflow = (key: string | number, e: MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el) {
+      itemOverflowFlags.value[key] = el.scrollWidth > el.clientWidth;
+    }
+  };
+
   // 判断选项是否被选中
   const isOptionSelected = (item: Record<string, any>) => {
     const val = item[valName.value];
@@ -252,6 +274,11 @@
     }
   };
 
+  // 组件挂载时预加载选项（确保非编辑态也能显示中文 label）
+  onMounted(() => {
+    loadOptions();
+  });
+
   // 监听编辑态切换，管理 document 点击事件和 popover 显示
   watch(() => props.isEditing, (val) => {
     isShow.value = val;
@@ -274,7 +301,7 @@
 </script>
 <style lang="postcss" scoped>
   .nl-tag-select-popover {
-    width: 240px;
+    width: 320px;
     padding: 8px;
 
     .nl-tag-search-input {
@@ -312,6 +339,20 @@
       max-height: 200px;
       overflow-y: auto;
 
+      /* 窄灰色滚动条 */
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c4c6cc;
+        border-radius: 2px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
       .nl-tag-select-item {
         display: flex;
         height: 32px;
@@ -321,6 +362,7 @@
         cursor: pointer;
         align-items: center;
         justify-content: space-between;
+        gap: 8px;
         transition: background .15s;
 
         &:hover {
@@ -329,6 +371,14 @@
 
         &.is-selected {
           color: #3a84ff;
+        }
+
+        .nl-tag-select-item-label {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
       }
 
