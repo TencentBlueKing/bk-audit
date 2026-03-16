@@ -18,69 +18,89 @@
   <div
     v-if="hasConditions"
     class="nl-condition-tags">
-    <!-- 条件标签列表 -->
-    <template
-      v-for="tag in conditionTags"
-      :key="tag.fieldName">
-      <!-- 日期类型 -->
-      <tag-datetimerange
-        v-if="tag.type === 'datetimerange'"
-        :is-editing="editingField === tag.fieldName"
-        :removable="tag.removable"
-        :search-model="searchModel"
-        :tag="tag"
-        @finish-edit="handleFinishEdit"
-        @remove="handleRemove"
-        @start-edit="handleStartEdit"
-        @update="handleUpdate" />
+    <!-- 第一行：首个条件标签 + 清空按钮固定在最右侧 -->
+    <div class="nl-condition-tags-first-row">
+      <div class="nl-condition-tags-content">
+        <!-- 条件标签列表 -->
+        <template
+          v-for="tag in conditionTags"
+          :key="tag.fieldName">
+          <!-- 日期类型 -->
+          <tag-datetimerange
+            v-if="tag.type === 'datetimerange'"
+            :is-editing="editingField === tag.fieldName"
+            :removable="tag.removable"
+            :search-model="searchModel"
+            :tag="tag"
+            @finish-edit="handleFinishEdit"
+            @remove="handleRemove"
+            @start-edit="handleStartEdit"
+            @update="handleUpdate" />
 
-      <!-- 下拉选择类型 -->
-      <tag-select
-        v-else-if="tag.type === 'select'"
-        :is-editing="editingField === tag.fieldName"
-        :options-cache="optionsCache"
-        :search-model="searchModel"
-        :tag="tag"
-        @finish-edit="handleFinishEdit"
-        @remove="handleRemove"
-        @start-edit="handleStartEdit"
-        @update="handleUpdate"
-        @update-cache="handleUpdateCache" />
+          <!-- 下拉选择类型 -->
+          <tag-select
+            v-else-if="tag.type === 'select'"
+            :is-editing="editingField === tag.fieldName"
+            :options-cache="optionsCache"
+            :search-model="searchModel"
+            :tag="tag"
+            @finish-edit="handleFinishEdit"
+            @remove="handleRemove"
+            @start-edit="handleStartEdit"
+            @update="handleUpdate"
+            @update-cache="handleUpdateCache" />
 
-      <!-- 人员选择类型 -->
-      <tag-user-selector
-        v-else-if="tag.type === 'user-selector'"
-        :is-editing="editingField === tag.fieldName"
-        :search-model="searchModel"
-        :tag="tag"
-        @finish-edit="handleFinishEdit"
-        @remove="handleRemove"
-        @start-edit="handleStartEdit"
-        @update="handleUpdate" />
+          <!-- 人员选择类型 -->
+          <tag-user-selector
+            v-else-if="tag.type === 'user-selector'"
+            :is-editing="editingField === tag.fieldName"
+            :search-model="searchModel"
+            :tag="tag"
+            @finish-edit="handleFinishEdit"
+            @remove="handleRemove"
+            @start-edit="handleStartEdit"
+            @update="handleUpdate" />
 
-      <!-- 输入类型 -->
-      <tag-input
-        v-else
-        :is-editing="editingField === tag.fieldName"
-        :search-model="searchModel"
-        :tag="tag"
-        @finish-edit="handleFinishEdit"
-        @remove="handleRemove"
-        @start-edit="handleStartEdit"
-        @update="handleUpdate" />
-    </template>
+          <!-- 输入类型 -->
+          <tag-input
+            v-else
+            :is-editing="editingField === tag.fieldName"
+            :search-model="searchModel"
+            :tag="tag"
+            @finish-edit="handleFinishEdit"
+            @remove="handleRemove"
+            @start-edit="handleStartEdit"
+            @update="handleUpdate" />
+        </template>
 
-    <!-- 清空按钮 -->
-    <div
-      v-if="conditionTags.length > 1"
-      v-bk-tooltips="t('清空搜索条件')"
-      class="condition-clear-btn"
-      @click="handleClearAll">
-      <audit-icon type="delete-fill" />
+        <!-- 事件字段条件标签 -->
+        <tag-event-field
+          v-for="item in eventFieldItems"
+          :key="item.id"
+          :condition-list="conditionList || []"
+          :item="item"
+          @remove="handleRemoveEventField"
+          @update-operator="handleUpdateEventOperator"
+          @update-value="handleUpdateEventValue" />
+
+        <!-- 添加条件（slot） -->
+        <slot />
+      </div>
+
+      <!-- 清空按钮固定在第一行最右侧（始终展示） -->
+      <div
+        class="condition-clear-btn"
+        @click="handleClearAll">
+        <img
+          class="clear-icon"
+          src="@/images/qingchu.svg">
+        <span>{{ t('清空') }}</span>
+      </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import {
     computed,
     ref,
@@ -94,6 +114,7 @@
 
   import {
     TagDatetimerange,
+    TagEventField,
     TagInput,
     TagSelect,
     TagUserSelector,
@@ -102,11 +123,16 @@
   interface Props {
     searchModel: Record<string, any>;
     fieldConfig: Record<string, IFieldConfig>;
+    eventFieldItems?: Array<Record<string, any>>;
+    conditionList?: Array<{ id: string; name: string }>;
   }
   interface Emits {
     (e: 'remove', fieldName: string): void;
     (e: 'clearAll'): void;
     (e: 'update', fieldName: string, value: any): void;
+    (e: 'removeEventField', id: string): void;
+    (e: 'updateEventOperator', id: string, operator: string): void;
+    (e: 'updateEventValue', id: string, value: any): void;
   }
 
   const props = defineProps<Props>();
@@ -120,51 +146,51 @@
   const optionsCache = ref<Record<string, Array<Record<string, any>>>>({});
 
   // ========================
-  // 条件标签列表（全部展示 fieldConfig 中的字段，后续对接接口再改为动态展示）
+  // 条件标签列表（根据 searchModel 中已有的字段动态展示，而非全部展示 fieldConfig）
   // ========================
   const conditionTags = computed<IConditionTag[]>(() => {
-    const tags: IConditionTag[] = [];
-    // 首先放入 datetimerange 类型的标签（首次发现时间），确保排第一且不可删除
     const datetimeTags: IConditionTag[] = [];
     const otherTags: IConditionTag[] = [];
 
+    // 先处理 datetime 类型（始终展示且排第一）
     Object.entries(props.fieldConfig).forEach(([fieldName, config]) => {
-      // 从 searchModel 中获取值，没有则给默认空值
-      const value = props.searchModel[fieldName];
-      const defaultValue = (() => {
-        switch (config.type) {
-        case 'select':
-        case 'user-selector':
-          return [];
-        case 'datetimerange':
-          return props.searchModel.datetime || [];
-        default:
-          return '';
-        }
-      })();
-
-      const tag: IConditionTag = {
-        fieldName,
-        label: config.label,
-        value: (value !== undefined && value !== null) ? value : defaultValue,
-        type: config.type,
-        config,
-        removable: config.type !== 'datetimerange', // 日期类型标签不可删除
-      };
-
       if (config.type === 'datetimerange') {
-        datetimeTags.push(tag);
-      } else {
-        otherTags.push(tag);
+        const value = props.searchModel[fieldName] || props.searchModel.datetime || [];
+        datetimeTags.push({
+          fieldName,
+          label: config.label,
+          value,
+          type: config.type,
+          config,
+          removable: false, // 日期类型标签不可删除
+        });
       }
     });
 
-    // 日期标签排第一，其余保持原顺序
-    tags.push(...datetimeTags, ...otherTags);
-    return tags;
+    // 其他字段：按 searchModel 中 key 的顺序遍历，确保新添加的字段排在最后
+    Object.keys(props.searchModel).forEach((fieldName) => {
+      // 跳过辅助字段和 datetime 类型
+      if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
+      const config = props.fieldConfig[fieldName];
+      if (!config) return;
+      if (config.type === 'datetimerange') return;
+
+      const value = props.searchModel[fieldName];
+      otherTags.push({
+        fieldName,
+        label: config.label,
+        value: (value !== undefined && value !== null) ? value : '',
+        type: config.type,
+        config,
+        removable: true, // 可删除
+      });
+    });
+
+    // 日期标签排第一，其余按 searchModel 中的添加顺序
+    return [...datetimeTags, ...otherTags];
   });
 
-  // 全部展示模式下始终为 true
+  // 有条件才显示
   const hasConditions = computed(() => conditionTags.value.length > 0);
 
   // ========================
@@ -187,6 +213,21 @@
   };
 
   // ========================
+  // 事件字段操作
+  // ========================
+  const handleRemoveEventField = (id: string) => {
+    emit('removeEventField', id);
+  };
+
+  const handleUpdateEventOperator = (id: string, operator: string) => {
+    emit('updateEventOperator', id, operator);
+  };
+
+  const handleUpdateEventValue = (id: string, value: any) => {
+    emit('updateEventValue', id, value);
+  };
+
+  // ========================
   // 移除 / 清空
   // ========================
   const handleRemove = (fieldName: string) => {
@@ -197,8 +238,19 @@
   };
 
   const handleClearAll = () => {
-    editingField.value = null;
-    emit('clearAll');
+    InfoBox({
+      title: t('确认清空所有搜索条件？'),
+      subTitle: t('清空后将恢复默认搜索条件'),
+      confirmText: t('确定'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm() {
+        editingField.value = null;
+        emit('clearAll');
+      },
+    });
   };
 
   // 监听 searchModel 变化
@@ -213,17 +265,28 @@
 </script>
 <style lang="postcss">
   .nl-condition-tags {
-    display: flex;
     font-size: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
+
+    .nl-condition-tags-first-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .nl-condition-tags-content {
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+      min-width: 0;
+    }
 
     /* 所有条件标签的通用样式 */
     .condition-tag-item {
       position: relative;
       display: inline-flex;
-      height: 22px;
+      height: 26px;
       max-width: 100%;
       padding: 3px 8px;
       font-size: 12px;
@@ -306,11 +369,20 @@
     .condition-clear-btn {
       display: flex;
       height: 22px;
-      color: #c4c6cc;
+      font-size: 12px;
+      color: #979ba5;
+      white-space: nowrap;
       cursor: pointer;
+      transition: all .15s;
       align-items: center;
       justify-content: center;
-      transition: all .15s;
+      flex-shrink: 0;
+
+      .clear-icon {
+        width: 14px;
+        height: 14px;
+        margin-right: 4px;
+      }
 
       &:hover {
         color: #ea3636;
@@ -324,9 +396,15 @@
   }
 
   /* popover 主题样式 - 去掉默认padding */
-  .tippy-box[data-theme~='nl-tag-popover'] {
-    .tippy-content {
-      padding: 0;
-    }
+  .bk-popover.bk-pop2-content[data-theme~='nl-tag-popover'] {
+    padding: 0;
+    pointer-events: auto !important;
+  }
+
+  /* tooltip 最大宽度限制，超出自动换行 */
+  .nl-tag-tooltip-wrap {
+    max-width: 400px;
+    word-break: break-all;
+    white-space: normal;
   }
 </style>

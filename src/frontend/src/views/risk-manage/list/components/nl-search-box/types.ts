@@ -17,21 +17,11 @@
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
-// NLP 解析请求参数
-export interface INLParseRequest {
-  query: string;
-  available_fields: Array<{
-    name: string;
-    label: string;
-    type: string;
-  }>;
-}
-
-// NLP 解析响应结果
-export interface INLParseResponse {
-  conditions: Record<string, any>;
+// nl2risk_filter 接口响应结果
+export interface INL2RiskFilterResponse {
+  filter_conditions: Record<string, any>;
+  thread_id: string;
   message: string;
-  confidence: number;
 }
 
 // 条件标签项

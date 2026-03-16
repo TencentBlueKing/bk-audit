@@ -22,7 +22,8 @@
       is-export
       @change="handleSearchChange"
       @export="handleExport"
-      @model-value-watch="handleModelValueWatch" />
+      @model-value-watch="handleModelValueWatch"
+      @parsing="handleParsing" />
     <ai-analyzes :total="totalCount" />
     <div class="risk-manage-list">
       <div class="add-button">
@@ -603,6 +604,13 @@
     };
     listRef.value.initTableHeight();
     fetchList();
+  };
+
+  // NL 解析状态变化时，给列表设置 loading
+  const handleParsing = (isParsing: boolean) => {
+    if (listRef.value) {
+      listRef.value.loading = isParsing;
+    }
   };
 
   const handleClearSearch = () => {
