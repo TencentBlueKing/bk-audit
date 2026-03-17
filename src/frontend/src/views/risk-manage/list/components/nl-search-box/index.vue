@@ -116,7 +116,6 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const nlInputRef = ref();
-  const isExportLoading = ref(false);
 
   // ========================
   // URL 参数同步（与 search-box 保持一致）
@@ -617,10 +616,7 @@
   });
 
   const handleExportData = (val: string[], type: string) => {
-    isExportLoading.value = true;
-    batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
-      isExportLoading.value = false;
-    });
+    batchExport({ risk_ids: val, risk_view_type: type });
   };
 
   // ========================

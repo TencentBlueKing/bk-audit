@@ -81,8 +81,6 @@
 
   interface Props {
     tag: IConditionTag;
-    // eslint-disable-next-line vue/no-unused-properties
-    searchModel: Record<string, any>;
     isEditing: boolean;
   }
   interface Emits {
