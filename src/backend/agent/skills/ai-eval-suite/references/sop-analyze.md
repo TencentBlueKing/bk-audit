@@ -150,6 +150,29 @@ npx promptfoo view
 → 进入 SOP 4（调优）
 ```
 
+## 使用分析脚本
+
+本 skill 内置了 `scripts/analyze_results.py`，可以自动解析 promptfoo 输出 JSON 并生成
+结构化的失败分析报告。
+
+```bash
+# 单次分析
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/results.json
+
+# 两轮对比（调优前 vs 调优后）
+python <skill-path>/scripts/analyze_results.py before.json after.json
+
+# 输出到文件
+python <skill-path>/scripts/analyze_results.py results.json -o report.md
+```
+
+脚本会自动：
+- 兼容 promptfoo 不同版本的 JSON 输出格式（`results.results` 和 `results.table.body`）
+- 按失败类型分类（空输出、格式错误、字段缺失、值错误、语义不符、超时、网络错误等）
+- 生成对比报告（新增通过、新增失败/回归、持续失败）
+
+如果脚本的分类不够精确，可以在脚本输出的基础上进一步人工分析。
+
 ## 分析原则
 
 1. **先看全局再看细节** — 先统计各类失败的数量分布，再逐个分析

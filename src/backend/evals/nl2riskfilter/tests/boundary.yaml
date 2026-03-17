@@ -52,15 +52,18 @@
     - type: python
       value: "file://assertions/check_filters.py:check_message_on_empty"
 
-# C5: 不存在的策略名称（传了真实策略列表，模型应基于可用策略返回结果）
+# C5: 不存在的策略名称
 - description: "C5-边界：不存在的策略ABC的风险"
   vars:
     query: "不存在的策略ABC的风险"
     tags: "[]"
     strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expect_empty: "true"
   assert:
     - type: python
-      value: "file://assertions/check_filters.py:is_non_empty_filter"
+      value: "file://assertions/check_filters.py:expect_empty_or_message"
+    - type: python
+      value: "file://assertions/check_filters.py:check_message_on_empty"
 
 # C6: 超长输入（有效内容重复，应能正常解析）
 - description: "C6-边界：超长重复输入"

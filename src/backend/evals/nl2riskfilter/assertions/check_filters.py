@@ -242,3 +242,104 @@ def partial_match(output, context):
         "score": score,
         "reason": f"部分匹配 {scored}/{total}: " + "; ".join(details),
     }
+
+
+def check_time_range(output, context):
+    """验证 start_time/end_time 是否在合理范围内
+
+    通过 vars 配置：
+      expected_time_delta_days: start_time 距今的天数（如 "7" 表示最近一周）
+      time_tolerance_hours: 容差小时数（默认 "2"）
+
+    验证逻辑：
+      - start_time 应接近 now - delta_days（±tolerance）
+      - end_time 应接近 now（±tolerance）
+    """
+    from datetime import datetime, timedelta
+
+    filters = _parse_output(output)
+    vars_ = context.get("vars", {})
+
+    delta_days_str = vars_.get("expected_time_delta_days")
+    if not delta_days_str:
+        return {"pass": True, "score": 1.0, "reason": "未配置 expected_time_delta_days，跳过时间验证"}
+
+    delta_days = float(delta_days_str)
+    tolerance_hours = float(vars_.get("time_tolerance_hours", "2"))
+    tolerance = timedelta(hours=tolerance_hours)
+    now = datetime.now()
+
+    details = []
+    total = 0
+    passed = 0
+
+    start_str = filters.get("start_time")
+    if start_str:
+        total += 1
+        try:
+            start_time = datetime.fromisoformat(start_str)
+            expected_start = now - timedelta(days=delta_days)
+            diff = abs(start_time - expected_start)
+            if diff <= tolerance:
+                passed += 1
+                details.append(f"✓ start_time 偏差 {diff} 在容差 ±{tolerance_hours}h 内")
+            else:
+                details.append(f"✗ start_time={start_str}, 期望≈{expected_start.isoformat()}, 偏差 {diff}")
+        except ValueError:
+            details.append(f"✗ start_time 格式无效: {start_str}")
+    else:
+        total += 1
+        details.append("✗ start_time 缺失")
+
+    end_str = filters.get("end_time")
+    if end_str:
+        total += 1
+        try:
+            end_time = datetime.fromisoformat(end_str)
+            diff = abs(end_time - now)
+            if diff <= tolerance:
+                passed += 1
+                details.append(f"✓ end_time 偏差 {diff} 在容差 ±{tolerance_hours}h 内")
+            else:
+                details.append(f"✗ end_time={end_str}, 期望≈{now.isoformat()}, 偏差 {diff}")
+        except ValueError:
+            details.append(f"✗ end_time 格式无效: {end_str}")
+    else:
+        total += 1
+        details.append("✗ end_time 缺失")
+
+    score = round(passed / total, 2) if total else 1.0
+    return {
+        "pass": score >= 0.5,
+        "score": score,
+        "reason": f"时间验证 {passed}/{total}: " + "; ".join(details),
+    }
+
+
+def check_sort(output, context):
+    """验证 sort 数组包含期望的排序字段
+
+    通过 vars 配置：
+      expected_sort: JSON 数组字符串，如 '["-risk_level"]'
+    """
+    filters = _parse_output(output)
+    vars_ = context.get("vars", {})
+
+    expected_raw = vars_.get("expected_sort")
+    if not expected_raw:
+        return {"pass": True, "score": 1.0, "reason": "未配置 expected_sort，跳过排序验证"}
+
+    expected_sort = json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw
+    actual_sort = filters.get("sort", [])
+
+    if not isinstance(actual_sort, list):
+        return {"pass": False, "score": 0.0, "reason": f"sort 不是数组: {actual_sort!r}"}
+
+    missing = [s for s in expected_sort if s not in actual_sort]
+    if missing:
+        return {
+            "pass": False,
+            "score": round(1 - len(missing) / len(expected_sort), 2),
+            "reason": f"sort 缺少: {missing}，实际: {actual_sort}",
+        }
+    return {"pass": True, "score": 1.0, "reason": f"sort 匹配: {actual_sort}"}

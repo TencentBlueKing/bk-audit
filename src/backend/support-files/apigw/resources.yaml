@@ -95,7 +95,7 @@ paths:
         backend:
           type: HTTP
           method: get
-          path: /api/v1/risks_apigw/event_fields_brief/
+          path: /api/v1/risk_apigw/event_fields_brief/
           matchSubpath: false
           timeout: 0
           upstreams: {}

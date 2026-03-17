@@ -58,6 +58,13 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | `references/project-structure.md` | 目录约定、promptfooconfig 模板、命名规范 |
 | `references/checklist.md` | 发布前自检清单 |
 
+内置脚本：
+
+| 文件 | 用途 |
+|------|------|
+| `scripts/bk_llm_provider.py` | 蓝鲸 LLM 网关 provider（OpenAI 标准协议），可作为 LLM-as-Judge grader 或独立 provider |
+| `scripts/analyze_results.py` | 评估结果分析脚本，解析 promptfoo 输出 JSON 并生成失败分类报告 |
+
 ## 快速判断：用户处于哪个阶段？
 
 | 用户说的话 | 对应 SOP | 动作 |
@@ -68,6 +75,26 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | "怎么修" / "调一下 prompt" / "换个模型试试" | SOP 4 | 读 `sop-tune.md` |
 | "改完了再跑一次" / "对比一下前后" | SOP 5 | 读 `sop-reeval.md` |
 | "从头到尾跑一遍" | SOP 1-5 | 按顺序执行 |
+
+## 公共 Provider 体系
+
+评估中有两类 provider 需要区分：
+
+```
+evals/providers/            ← 公共 provider（跨 suite 复用）
+  bk_llm_provider.py        ← 蓝鲸 LLM 网关（LLM-as-Judge / 独立调用）
+
+evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
+  provider.py               ← 调用真实业务接口
+```
+
+- **业务 provider** 每个 suite 自己编写，直接调用业务 API，走完整链路
+- **公共 provider** 放在 `evals/providers/`，各 suite 通过 `python:../providers/xxx.py` 引用
+- 使用 `llm-rubric` 等模型辅助断言时，必须通过 `defaultTest.options.provider` 指定 grader，
+  避免依赖 promptfoo 默认的 OpenAI key
+
+蓝鲸项目初始化时，可将本 skill 内置的 `scripts/bk_llm_provider.py` 复制到 `evals/providers/`
+作为 LLM-as-Judge 的 grader provider。详见 `references/sop-init.md` Step 3。
 
 ## 核心约束
 
@@ -92,4 +119,5 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
     ↓ 仍不够用时
 模型辅助断言（慢、花钱、有波动）  →  慎用
   llm-rubric / factuality / context-faithfulness
+  ⚠️ 必须通过 defaultTest.options.provider 指定 grader provider
 ```

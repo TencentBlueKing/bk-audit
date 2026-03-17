@@ -1,4 +1,4 @@
-# D. 挑战场景（12 个）— 当前模型不一定能通过，用于多模型对比评估
+# D. 挑战场景（14 个）— 当前模型不一定能通过，用于多模型对比评估
 #
 # 设计目的：暴露模型能力边界，为多模型对比提供区分度
 
@@ -54,7 +54,7 @@
     query: "帮我找找那个啥，就是最近几天出的比较严重的那些风险，好像是李四在管的"
     tags: "[]"
     strategies: "[]"
-    expected_keys: '["operator", "risk_level"]'
+    expected_keys: '["operator", "risk_level", "start_time"]'
   assert:
     - type: python
       value: "file://assertions/check_filters.py:partial_match"
@@ -66,6 +66,7 @@
     tags: "[]"
     strategies: "[]"
     expected_keys: '["status", "risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
   assert:
     - type: python
       value: "file://assertions/check_filters.py:partial_match"
@@ -133,13 +134,53 @@
       value: "file://assertions/check_filters.py:partial_match"
 
 # D12: 多轮对话模拟（单轮中包含追问语义）
-- description: "D12-挑战：单轮中包含追问语义"
+# 无 thread_id 时无上下文，返回空或仅 risk_level 均为合理行为
+- description: "D12-挑战：单轮中包含追问语义（无上下文）"
   vars:
     query: "之前查的那些风险，只看高危的"
     tags: "[]"
     strategies: "[]"
-    expected_keys: '["risk_level"]'
-    expected_values: '{"risk_level": "HIGH"}'
   assert:
     - type: python
-      value: "file://assertions/check_filters.py:partial_match"
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象（可以为空 {}）。验证以下条件之一：
+        1. 输出为空 {}（因为没有上下文，无法确定"之前查的"是什么，返回空合理）
+        2. 输出包含 risk_level 字段且值为 "HIGH"（模型尝试提取了可识别的部分）
+        满足任一条件则 pass。
+
+# D13: 通知人查询（notice_users）— LLM 评判
+- description: "D13-挑战：通知给王五的风险（LLM 评判）"
+  vars:
+    query: "通知给王五的风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象。验证以下条件：
+        1. 包含 notice_users 字段，值为 "王五"
+        2. 不包含无关的筛选字段
+        如果满足则 pass，否则 fail。
+
+# D14: 复合业务场景 — LLM 评判
+- description: "D14-挑战：我负责的已关闭的误报风险（多字段组合 LLM 评判）"
+  vars:
+    query: "我负责的已关闭的误报风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象，代表风险筛选条件。验证以下条件：
+        1. 包含 operator 字段（值应为当前请求人的用户名）
+        2. 包含 status 字段，值为 "closed"
+        3. 包含 risk_label 字段，值为 "misreport"
+        4. 不包含无关的筛选字段
+        满足 3 个及以上条件则 pass。
+      threshold: 0.75

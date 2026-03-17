@@ -87,3 +87,50 @@ npx promptfoo view
 ```bash
 npx promptfoo cache clear
 ```
+
+## 运行环境常见坑
+
+### Python 版本不匹配
+
+promptfoo 默认使用系统 Python 执行 `python:` provider。如果项目使用虚拟环境中的
+特定 Python 版本（如 3.11），而系统 Python 是 3.10，可能出现 `ImportError`
+（如 `cannot import name 'Self' from 'typing'`）。
+
+**解决方案**：通过 `PROMPTFOO_PYTHON` 环境变量指定 Python 路径：
+
+```bash
+export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
+```
+
+或在运行命令前激活虚拟环境，并确保 `PATH` 中虚拟环境的 Python 优先：
+
+```bash
+source .venv/bin/activate
+export PATH="$(pwd)/.venv/bin:$PATH"
+```
+
+### npx promptfoo 下载失败
+
+在内网环境或使用 npm 镜像时，`npx promptfoo` 可能因 403/网络错误无法下载。
+
+**解决方案**：
+1. 全局安装：`npm install -g promptfoo`，然后直接使用 `promptfoo` 命令
+2. 检查 npm 镜像配置：`npm config get registry`
+3. 如果之前成功运行过，npx 会缓存二进制文件，可以直接找到缓存路径执行
+
+### LLM-as-Judge 404 / 鉴权失败
+
+使用 `llm-rubric` 等模型辅助断言时，如果 grader provider 配置不正确会出现 404 或鉴权错误。
+
+**排查步骤**：
+1. 确认 `defaultTest.options.provider` 已正确配置（不要依赖 promptfoo 默认的 OpenAI key）
+2. 检查 `.env` 中 LLM 网关地址和鉴权信息是否完整
+3. 用 curl 单独测试 LLM 网关连通性
+4. 确认 provider 路径的相对位置正确（`python:../providers/xxx.py` 是相对于 config 文件）
+
+### Django provider 初始化失败
+
+如果业务 provider 依赖 Django 环境，确保：
+1. `DJANGO_SETTINGS_MODULE` 环境变量已设置
+2. provider 文件中正确设置了 `sys.path` 和 `django.setup()`
+3. 运行目录（cwd）是项目根目录，否则 Django 可能找不到配置文件

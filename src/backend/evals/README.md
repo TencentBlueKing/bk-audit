@@ -8,10 +8,12 @@
 evals/
 ├── README.md
 ├── .gitignore
+├── providers/                  # 公共 provider（跨评测套件复用）
+│   └── bk_llm_provider.py     # 蓝鲸 LLM 网关（OpenAI 标准协议）
 │
 ├── nl2riskfilter/              # NL2RiskFilter 评估项目
 │   ├── promptfooconfig.yaml    # 评估配置
-│   ├── providers/              # 自定义 provider
+│   ├── providers/              # 业务专用 provider
 │   ├── assertions/             # 自定义断言
 │   ├── tests/                  # 测试用例（按场景分文件）
 │   └── output/                 # 评估结果（.gitignore）
@@ -20,7 +22,8 @@ evals/
     └── ...
 ```
 
-每个 AI 能力一个独立目录，包含完整的 promptfoo 配置、provider、断言和测试用例。
+- `evals/providers/` — 公共 provider，各评测套件通过 `python:../providers/xxx.py` 引用
+- `evals/<能力>/providers/` — 业务专用 provider，走完整业务链路
 
 ## 快速开始
 
@@ -28,10 +31,11 @@ evals/
 
 ```bash
 # 设置评估用户（必须，无默认值）
-export EVAL_USERNAME=your_rtx
+export BKAPP_EVAL_USERNAME=your_rtx
 
-# 确保 .env 中配置了 AI 服务地址
-# BKAPP_AI_RISK_SEARCH_API_URL=http://...
+# 确保 .env 中配置了以下环境变量：
+# BKAPP_AI_RISK_SEARCH_API_URL — AI 风险检索服务地址
+# BKAPP_LLM_GW_ENDPOINT       — LLM 网关地址（LLM-as-Judge 用）
 
 # Python provider 依赖项目的 Django 环境（.venv），无需单独的 requirements.txt
 # 确保已激活项目虚拟环境，或设置 PROMPTFOO_PYTHON 指向项目 Python
@@ -100,4 +104,4 @@ npx promptfoo validate -c evals/nl2riskfilter/promptfooconfig.yaml
 
 | 项目 | 用例数 | 说明 |
 |------|--------|------|
-| `nl2riskfilter/` | 35 | 自然语言转风险筛选条件（NL2JSON） |
+| `nl2riskfilter/` | 45 | 自然语言转风险筛选条件（NL2JSON） |
