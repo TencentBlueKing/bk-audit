@@ -109,8 +109,6 @@
 
   interface Props {
     tag: IConditionTag;
-    // eslint-disable-next-line vue/no-unused-properties
-    searchModel: Record<string, any>;
     isEditing: boolean;
     optionsCache: Record<string, Array<Record<string, any>>>;
   }
@@ -247,8 +245,7 @@
   };
 
   const handlePopoverHidden = () => {
-    // 不在此处调用 finishEdit，完全由外部点击和 handleToggle 控制关闭
-    // 避免选择选项更新 searchModel 时 popover 意外关闭
+    // 由外部点击和 handleToggle 控制关闭
   };
 
   // 加载选项数据

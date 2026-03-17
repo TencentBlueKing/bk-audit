@@ -199,10 +199,6 @@
 
       &.is-active {
         cursor: pointer;
-
-        /* &:hover {
-          background: #e1ecff;
-        } */
       }
 
       &.is-loading {
