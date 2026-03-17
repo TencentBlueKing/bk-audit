@@ -1,0 +1,160 @@
+# A. 常规场景（10 个）— 普通条件查询
+#
+# 覆盖：时间、人员、"我的风险"、状态、标签、策略、组合、排序
+
+# A1: 时间范围 + 风险等级
+- description: "A1-常规：最近一周的高危风险"
+  vars:
+    query: "最近一周的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A2: 人员查询（operator）
+- description: "A2-常规：张三负责的风险"
+  vars:
+    query: "张三负责的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator"]'
+    expected_values: '{"operator": "张三"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A3: "我的风险"（必须映射 operator = 当前请求人）
+- description: "A3-常规：我的风险（必须映射当前请求人）"
+  vars:
+    query: "我的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator"]'
+    expected_values: '{"operator": "{{username}}"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A4: 状态筛选（"未处理" → await_deal）
+- description: "A4-常规：未处理的风险（display_status=await_deal）"
+  vars:
+    query: "未处理的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status"]'
+    expected_values: '{"status": "await_deal"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A5: 标签筛选（需传入标签列表，验证 id 映射）
+- description: "A5-常规：标签为重要的风险"
+  vars:
+    query: "标签为重要的风险"
+    tags: '[{"id": 1, "name": "重要"}, {"id": 2, "name": "紧急"}]'
+    strategies: "[]"
+    expected_keys: '["tags"]'
+    expected_values: '{"tags": "1"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A6: 策略筛选（使用真实策略 id=110）
+- description: "A6-常规：离线策略审计的风险"
+  vars:
+    query: "离线策略审计的风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}, {"id": 144, "name": "ITSM工单工时审计"}]'
+    expected_keys: '["strategy_id"]'
+    expected_values: '{"strategy_id": "110"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A7: 组合条件（时间 + 等级 + 人员）
+- description: "A7-常规：最近一个月张三负责的高危风险"
+  vars:
+    query: "最近一个月张三负责的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator", "risk_level"]'
+    expected_values: '{"operator": "张三", "risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A8: 排序
+- description: "A8-常规：今天的风险按等级降序"
+  vars:
+    query: "今天的风险，按风险等级从高到低排序"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["start_time"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# A9: 状态筛选（"处理中" → processing）
+- description: "A9-常规：处理中的风险（display_status=processing）"
+  vars:
+    query: "处理中的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status"]'
+    expected_values: '{"status": "processing"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# A10: 状态筛选（"待处理" → await_deal，与 A4 "未处理"同义验证）
+- description: "A10-常规：待处理的风险（display_status=await_deal）"
+  vars:
+    query: "待处理的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status"]'
+    expected_values: '{"status": "await_deal"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"

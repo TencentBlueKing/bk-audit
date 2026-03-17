@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'NL2RiskFilter AI 能力评估'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'NL2RiskFilter-Real'
+    config:
+      username: '{{env.EVAL_USERNAME}}'
+
+defaultTest:
+  vars:
+    username: '{{env.EVAL_USERNAME}}'
+  assert:
+    - type: python
+      value: 'file://assertions/check_filters.py:passes_serializer_validation'
+    - type: latency
+      threshold: 30000
+
+evaluateOptions:
+  maxConcurrency: 3
+  repeat: 3
+  delay: 500
+
+tests:
+  - file://tests/normal.yaml
+  - file://tests/complex.yaml
+  - file://tests/boundary.yaml
+  - file://tests/challenge.yaml
