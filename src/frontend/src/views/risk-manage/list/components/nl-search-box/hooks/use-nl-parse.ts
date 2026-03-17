@@ -120,9 +120,6 @@ export default function useNLParse() {
 
   return {
     isParsing,
-    parseResult,
-    parseMessage,
-    threadId,
     parse,
     clearParseResult,
   };

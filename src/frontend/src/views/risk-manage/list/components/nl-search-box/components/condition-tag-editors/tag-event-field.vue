@@ -353,11 +353,6 @@
       &.is-active {
         background: #fdeed8;
       }
-
-      /* &.is-active {
-        color: #3a84ff;
-        background: #e1ecff;
-      } */
     }
   }
 

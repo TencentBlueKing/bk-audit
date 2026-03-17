@@ -29,7 +29,7 @@
         append-to-body
         :clearable="false"
         format="yyyy-MM-dd"
-        :open="panelOpenState"
+        :open="isPanelOpen"
         :shortcut-selected-index="shortcutSelectedIndex"
         :shortcuts="shortcutsRange"
         type="daterange"
@@ -65,7 +65,6 @@
 
   interface Props {
     tag: IConditionTag;
-    // eslint-disable-next-line vue/no-unused-properties
     searchModel: Record<string, any>;
     // eslint-disable-next-line vue/no-unused-properties
     isEditing: boolean;
@@ -73,10 +72,8 @@
     removable?: boolean;
   }
   interface Emits {
-    (e: 'startEdit', fieldName: string): void;
     (e: 'update', fieldName: string, value: any): void;
     (e: 'remove', fieldName: string): void;
-    (e: 'finishEdit'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -91,24 +88,9 @@
   const isPanelOpen = ref(false);
   const measureText = ref('');
 
-  // bk-date-picker 的 open prop：
-  // - null: 由组件自身管理显隐（默认行为）
-  // - true/false: 由外部完全接管显隐
-  // 我们使用 null 作为初始值，点击时设为 true 打开面板，
-  // 之后保持 true（选择日期不关闭），只在点击外部时设为 false
-  // panelOpenState 控制 bk-date-picker 面板显隐：
-  // - true: 强制面板保持打开（选择日期后也不关闭）
-  // - false: 强制面板关闭
-  // 不再使用 null，完全由外部接管控制，避免组件内部自动关闭
-  const panelOpenState = computed(() => isPanelOpen.value);
-
-  // 点击 value 区域打开面板
   const handleTogglePanel = () => {
     isPanelOpen.value = !isPanelOpen.value;
   };
-
-  // 快捷选项 text 到 origin 值的映射
-  const shortcutTextToOriginMap: Record<string, string> = {};
 
   // 点击外部区域关闭面板
   const handleDocumentClick = (e: MouseEvent) => {
@@ -126,7 +108,6 @@
   };
 
 
-  // 快捷选项统一数据源：label（国际化文本）、days（往前推的天数）、origin（后端 origin 标识）
   const shortcutConfigs = [
     { label: '近1天',  days: 1,   origin: 'now-1d' },
     { label: '近3天',  days: 3,   origin: 'now-3d' },
@@ -138,7 +119,6 @@
     { label: '近12月', days: 365, origin: 'now-12M' },
   ];
 
-  // 生成 bk-date-picker 所需的 shortcuts 配置
   const shortcutsRange = shortcutConfigs.map(({ label, days }) => ({
     text: t(label),
     value() {
@@ -149,29 +129,20 @@
     },
   }));
 
-  // 快捷选项 origin 值到索引的映射
   const shortcutOriginMap: Record<string, number> = {};
   shortcutConfigs.forEach((item, idx) => {
     shortcutOriginMap[item.origin] = idx;
   });
 
-  // 初始化 快捷选项 text → origin 值 的映射
-  shortcutsRange.forEach((item, idx) => {
-    shortcutTextToOriginMap[item.text] = shortcutConfigs[idx].origin;
-  });
-
-  // 根据 datetime_origin 确定默认选中的快捷索引
   const shortcutSelectedIndex = computed(() => {
     const origin = props.searchModel.datetime_origin;
     if (Array.isArray(origin) && origin.length > 0) {
       const idx = shortcutOriginMap[origin[0]];
       if (idx !== undefined) return idx;
     }
-    // 当 datetime_origin 不匹配任何快捷选项时（如后端返回的具体日期），返回 -1 表示无选中
     return -1;
   });
 
-  // 将字符串日期转成 Date 对象，确保 bk-date-picker 能正确回显
   const parseDateValue = (val: any) => {
     if (!val || !Array.isArray(val) || val.length < 2) return [];
     return val.map((item: any) => {
@@ -184,10 +155,8 @@
     });
   };
 
-  // 本地值（日期范围数组）
   const localValue = ref<any>(parseDateValue(props.tag.value));
 
-  // 日期变更
   const handleChange = (value: any) => {
     if (!value || !Array.isArray(value) || value.length < 2) return;
     const formatted = value.map((item: any) => (
@@ -199,28 +168,22 @@
     emit('update', props.tag.fieldName, formatted);
   };
 
-  // 同步外部值变化
   watch(() => props.tag.value, (val) => {
     if (val) {
       localValue.value = parseDateValue(val);
     }
   }, { deep: true });
 
-  // 同步 searchModel.datetime 变化（后端返回具体日期时触发）
   watch(() => props.searchModel.datetime, (val) => {
     if (val && Array.isArray(val) && val.length >= 2) {
       localValue.value = parseDateValue(val);
     }
   }, { deep: true });
 
-  // 当 shortcutSelectedIndex 为 -1（后端返回具体日期，不匹配任何快捷选项）时，
-  // use-shortcut-text 模式下输入框不会自动显示日期文本，需要手动设置
   const getDisplayTextForInput = () => {
     if (shortcutSelectedIndex.value >= 0) {
-      // 匹配快捷选项，use-shortcut-text 会自动处理显示
       return '';
     }
-    // 不匹配快捷选项，需要手动构建日期显示文本
     const val = localValue.value;
     if (!val || !Array.isArray(val) || val.length < 2) return '';
     const start = val[0] instanceof Date ? dayjs(val[0]).format('YYYY-MM-DD') : val[0];
@@ -229,20 +192,16 @@
     return `${start} - ${end}`;
   };
 
-  // 动态调整 input 宽度以匹配显示文本，同时收缩外层容器消除空白
   let updateWidthTimer: ReturnType<typeof setTimeout> | null = null;
   const updateEditorWidth = async () => {
     await nextTick();
-    // 清理上一次的定时器，避免重复执行
     if (updateWidthTimer) {
       clearTimeout(updateWidthTimer);
     }
-    // 等待 DOM 更新后再获取 input 显示的文本
     updateWidthTimer = setTimeout(() => {
       const pickerEl = datePickerRef.value?.$el || datePickerRef.value;
       const editorInput = pickerEl?.querySelector('.bk-date-picker-editor') as HTMLInputElement | null;
       if (pickerEl && editorInput) {
-        // 当不匹配快捷选项时，手动将具体日期写入输入框
         const manualText = getDisplayTextForInput();
         if (manualText) {
           editorInput.value = manualText;
@@ -255,7 +214,6 @@
             const textWidth = measureRef.value.scrollWidth + 16; // 加上内边距余量
             const finalWidth = `${Math.max(40, textWidth)}px`;
             editorInput.style.width = finalWidth;
-            // 同时收缩外层 .bk-date-picker-rel 容器，消除多余空白
             const relEl = pickerEl.querySelector('.bk-date-picker-rel') as HTMLElement;
             if (relEl) {
               relEl.style.width = finalWidth;
@@ -266,24 +224,20 @@
     }, 0);
   };
 
-  // 值变化时重新计算宽度
   watch(localValue, () => {
     updateEditorWidth();
   }, { deep: true });
 
-  // 快捷选项选中变化时重新计算宽度
   watch(shortcutSelectedIndex, () => {
     updateEditorWidth();
   });
 
-  // 组件挂载后首次计算宽度
   onMounted(() => {
     document.addEventListener('click', handleDocumentClick, true);
     updateEditorWidth();
   });
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleDocumentClick, true);
-    // 清理 updateEditorWidth 中的定时器
     if (updateWidthTimer) {
       clearTimeout(updateWidthTimer);
       updateWidthTimer = null;

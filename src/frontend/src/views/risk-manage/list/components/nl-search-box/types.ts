@@ -34,21 +34,6 @@ export interface IConditionTag {
   removable?: boolean; // 是否可删除，默认 true
 }
 
-// 组件 Props
-export interface INLSearchBoxProps {
-  fieldConfig: Record<string, IFieldConfig>;
-  isExport?: boolean;
-  isReassignment?: boolean;
-}
-
-// 组件 Emits
-export interface INLSearchBoxEmits {
-  (e: 'change', value: Record<string, any>, otherValue?: any, isClear?: boolean): void;
-  (e: 'export'): void;
-  (e: 'batch'): void;
-  (e: 'modelValueWatch', value: Record<string, any>): void;
-}
-
 // 组件 Expose
 export interface INLSearchBoxExposes {
   clearValue: () => void;
