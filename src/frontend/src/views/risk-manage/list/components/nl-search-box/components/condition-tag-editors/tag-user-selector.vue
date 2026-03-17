@@ -262,7 +262,7 @@
   };
 
   const handlePopoverHidden = () => {
-    // 不在此处调用 finishEdit，完全由外部点击和 handleToggle 控制关闭
+    // 由外部点击和 handleToggle 控制关闭
   };
 
   // 监听编辑态切换
