@@ -37,6 +37,7 @@
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
+      @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
       @save-current-step="handleSaveCurrentStep"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
@@ -424,6 +425,13 @@
     return next;
   };
 
+  // 下一步/提交共用：将当前表单与步骤回传 params 合并成“完整数据结构”（数组按整体替换，避免 merge 按索引合并）
+  const buildMergedFormData = (params: any) => {
+    const base = _.cloneDeep(toRaw(formData.value));
+    const patch = toRaw(params ?? {});
+    return _.mergeWith(base, patch, (_objValue, srcValue) => (Array.isArray(srcValue) ? srcValue : undefined));
+  };
+
   const doSave = async () => {
     await ensureTagMapLoaded();
     const params = normalizeSubmitParams(formData.value);
@@ -453,71 +461,194 @@
     }
   };
 
-  // 对比时统一转成字符串，避免 Proxy / 引用不一致导致误判
-  const stringifyForCompare = (val: any) => {
-    const raw = toRaw(val);
-    if (_.isNil(raw)) return '';
-    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
-      return String(raw);
+  // 递归移除对象/数组中的 null、undefined 字段，使快照与当前值在语义上一致（无该键 与 键值为 null/undefined 视为相同）
+  const cleanNull = (val: any): any => {
+    if (_.isNil(val)) return val;
+    if (Array.isArray(val)) {
+      return val.map(item => cleanNull(item));
     }
+    if (typeof val === 'object') {
+      const next: Record<string, any> = {};
+      Object.keys(val).forEach((k) => {
+        const v = (val as any)[k];
+        if (v === null || v === undefined) {
+          return;
+        }
+        next[k] = cleanNull(v);
+      });
+      return next;
+    }
+    return val;
+  };
+
+  // 对比用：先 cleanNull 再按键名排序后序列化，避免「有 having: null」与「无 having 键」或键序不同导致误判
+  const stringifyForCompare = (val: any): string => {
+    // 深度提取原始值，确保Proxy对象被正确转换
+    const deepToRaw = (obj: any): any => {
+      if (obj && typeof obj === 'object') {
+        const raw = toRaw(obj);
+        if (Array.isArray(raw)) {
+          return raw.map(item => deepToRaw(item));
+        }
+        if (raw && typeof raw === 'object') {
+          const result: Record<string, any> = {};
+          Object.keys(raw).forEach((key) => {
+            result[key] = deepToRaw(raw[key]);
+          });
+          return result;
+        }
+        return raw;
+      }
+      return obj;
+    };
+
+    const raw = deepToRaw(val);
+    if (_.isNil(raw)) return '';
+    const cleaned = cleanNull(raw);
+    if (typeof cleaned === 'string' || typeof cleaned === 'number' || typeof cleaned === 'boolean') {
+      return String(cleaned);
+    }
+
+    const stableStringify = (v: any): string => {
+      if (_.isNil(v)) return '';
+
+      if (Array.isArray(v)) {
+        // 改进的数组处理逻辑：深度比较数组元素
+        if (v.length === 0) return '[]';
+
+        // 判断数组元素类型
+        const isPrimitiveArray = v.every(item => item === null
+          || typeof item === 'string'
+          || typeof item === 'number'
+          || typeof item === 'boolean');
+
+        const isObjectArray = v.every(item => item !== null && typeof item === 'object' && !Array.isArray(item));
+
+        if (isPrimitiveArray) {
+          // 基础类型数组：直接排序后序列化
+          const sorted = [...v].sort();
+          return `[${sorted.map(item => JSON.stringify(item)).join(',')}]`;
+        } if (isObjectArray) {
+          // 对象数组：深度排序每个对象的键，然后按对象内容排序
+          const sortedObjects = v.map((obj) => {
+            if (typeof obj !== 'object' || obj === null) return obj;
+            const sortedKeys = Object.keys(obj).sort();
+            const sortedObj: Record<string, any> = {};
+            sortedKeys.forEach((key) => {
+              sortedObj[key] = obj[key];
+            });
+            return sortedObj;
+          });
+
+          // 按对象的JSON字符串排序整个数组
+          const stringifiedObjects = sortedObjects.map(obj => JSON.stringify(obj));
+          stringifiedObjects.sort();
+
+          return `[${stringifiedObjects.join(',')}]`;
+        }
+        // 混合类型或嵌套数组：递归处理每个元素
+        const parts = v.map(item => stableStringify(item));
+        parts.sort();
+        return `[${parts.join(',')}]`;
+      }
+
+      if (typeof v === 'object') {
+        const keys = Object.keys(v).sort();
+        const parts = keys.map(k => `${JSON.stringify(k)}:${stableStringify(v[k])}`);
+        return `{${parts.join(',')}}`;
+      }
+
+      return JSON.stringify(v);
+    };
+
     try {
-      return JSON.stringify(raw);
+      return stableStringify(cleaned);
     } catch (e) {
-      return String(raw);
+      // 如果序列化失败，使用更简单的比较方法
+      try {
+        return JSON.stringify(cleaned, (key, value) => {
+          if (Array.isArray(value)) {
+            return [...value].sort();
+          }
+          return value;
+        });
+      } catch (fallbackError) {
+        return String(cleaned);
+      }
     }
   };
 
-  const handleNextStep = (step: number, params: any) => {
-    // 和进入编辑时的快照对比本次步骤返回的数据是否有变化
-    // 只对比 params 中「有值」的字段（排除 undefined / null / 空字符串）
-    let hasChanged = false;
-    const changedFields: Record<string, { snapshot: any, current: any }> = {};
-
-    if (initialFormData.value && params) {
-      Object.keys(params).forEach((key) => {
-        const currentVal = (params as any)[key];
-        // 没有值的字段不参与对比
-        if (_.isNil(currentVal) || currentVal === '') {
-          return;
-        }
-        // 对象类型（如 configs 等复杂配置）不参与本次“是否有变更”的判断，避免深层次细节差异导致一直为 true
-        if (typeof currentVal === 'object') {
-          return;
-        }
-        const snapshotVal = (initialFormData.value as any)[key];
-        const snapshotStr = stringifyForCompare(snapshotVal);
-        const currentStr = stringifyForCompare(currentVal);
-        if (snapshotStr !== currentStr) {
-          hasChanged = true;
-          changedFields[key] = {
-            snapshot: snapshotVal,
-            current: currentVal,
-          };
+  // 仅保留 a/b 同时存在的“公共字段”用于对比（对象递归取交集；数组按索引递归取交集）
+  // - 若数组长度不同：超出对方长度的元素保留在结果里，用于检测增删
+  // - 基础类型：直接返回 a
+  const pickCommonFields = (a: any, b: any): any => {
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b)) return a;
+      return a.map((item, idx) => (idx < b.length ? pickCommonFields(item, b[idx]) : item));
+    }
+    if (a && typeof a === 'object' && !Array.isArray(a)) {
+      if (!(b && typeof b === 'object') || Array.isArray(b)) return a;
+      const next: Record<string, any> = {};
+      Object.keys(a).forEach((k) => {
+        if (Object.prototype.hasOwnProperty.call(b, k)) {
+          next[k] = pickCommonFields(a[k], b[k]);
         }
       });
+      return next;
     }
+    return a;
+  };
+
+  const isSameByCommonFields = (currentVal: any, snapshotVal: any): boolean => {
+    const currentPicked = pickCommonFields(currentVal, snapshotVal);
+    const snapshotPicked = pickCommonFields(snapshotVal, currentVal);
+    return stringifyForCompare(currentPicked) === stringifyForCompare(snapshotPicked);
+  };
+
+  const hasStepChanged = (fullParams: any, params: any): boolean => {
+    const paramsKeys = Object.keys(params ?? {});
+    if (!(isEditMode && initialFormData.value && paramsKeys.length > 0)) return false;
+
+    return paramsKeys.some((key) => {
+      const currentVal = fullParams?.[key];
+      const snapshotVal = (initialFormData.value as any)?.[key];
+
+      // 两侧任一侧不存在则不对比（只对比公共字段）
+      if (_.isNil(currentVal) || _.isNil(snapshotVal)) return false;
+
+      // 空值不触发"未提交修改"弹窗
+      if (_.isNil(currentVal) || currentVal === '') return false;
+
+      return !isSameByCommonFields(currentVal, snapshotVal);
+    });
+  };
+  const handlePreviousStep = async (step: number, params: any) => {
+    // 与下一步逻辑一致：对比“完整数据结构”中当前步骤回传字段的变化
+    await ensureTagMapLoaded();
+    const fullParams = normalizeSubmitParams(buildMergedFormData(params));
+    const hasChanged = hasStepChanged(fullParams, params);
 
     if (hasChanged) {
       InfoBox({
-        title: t('存在未保存的修改'),
-        subTitle: t('是否保存当前修改'),
-        confirmText: t('保存'),
-        cancelText: t('不保存'),
+        title: t('此步骤存在未提交的修改'),
+        subTitle: t('本次将提交所有已修改的内容'),
+        confirmText: t('提交'),
+        cancelText: t('不提交'),
         closeIcon: false,
         headerAlign: 'center',
         contentAlign: 'center',
         footerAlign: 'center',
         onConfirm() {
-          // 保存：编辑态直接调用保存接口；保存成功后再前往下一步
           Object.assign(formData.value, params);
           if (isEditMode) {
             stayOnPageAfterSave.value = true;
             pendingStepAfterSave.value = normalizeStep(step);
             doSave();
+          } else {
+            currentStep.value = normalizeStep(step);
           }
         },
         onClose() {
-          // 关闭时继续后续流程
           Object.assign(formData.value, params);
           currentStep.value = normalizeStep(step);
         },
@@ -525,7 +656,43 @@
       return;
     }
 
-    // 未变化时直接进入下一步
+    Object.assign(formData.value, params);
+    currentStep.value = normalizeStep(step);
+  };
+  const handleNextStep = async (step: number, params: any) => {
+    await ensureTagMapLoaded();
+    const fullParams = normalizeSubmitParams(buildMergedFormData(params));
+    const hasChanged = hasStepChanged(fullParams, params);
+
+
+    if (hasChanged) {
+      InfoBox({
+        title: t('此步骤存在未提交的修改'),
+        subTitle: t('本次将提交所有已修改的内容'),
+        confirmText: t('提交'),
+        cancelText: t('不提交'),
+        closeIcon: false,
+        headerAlign: 'center',
+        contentAlign: 'center',
+        footerAlign: 'center',
+        onConfirm() {
+          Object.assign(formData.value, params);
+          if (isEditMode) {
+            stayOnPageAfterSave.value = true;
+            pendingStepAfterSave.value = normalizeStep(step);
+            doSave();
+          } else {
+            currentStep.value = normalizeStep(step);
+          }
+        },
+        onClose() {
+          Object.assign(formData.value, params);
+          currentStep.value = normalizeStep(step);
+        },
+      });
+      return;
+    }
+
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
