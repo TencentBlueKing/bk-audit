@@ -47,12 +47,12 @@
       </div>
       <slot name="sideAppendBefore" />
       <div
-        v-if="route.meta?.nodeSideContent"
+        v-if="route.meta?.nodeSideContent && !route.meta?.hideSidebar"
         class="none-side">
         <slot name="nodeSideContent" />
       </div>
       <div
-        v-if="!route.meta?.nodeSideContent"
+        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar"
         class="audit-side-menu"
         :class="{
           'show-notice-side-menu': showNotice.enabled && showAlert
@@ -64,7 +64,7 @@
         </scroll-faker>
       </div>
       <div
-        v-if="!route.meta?.nodeSideContent"
+        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar"
         class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
@@ -144,10 +144,14 @@
   const pageWidth = ref(PAGE_MIN_WIDTH);
   const sideLeftExpandWidth = ref();
 
-  const realSideWidth = computed(() => (
-    isSideMenuFixed.value
+  const realSideWidth = computed(() => {
+    if (route.meta?.hideSidebar) {
+      return 0;
+    }
+    return isSideMenuFixed.value
       ? sideLeftExpandWidth.value
-      : SIDE_LEFT_INEXPAND_WIDTH));
+      : SIDE_LEFT_INEXPAND_WIDTH;
+  });
   const zIndex = ref(1999);
   const sideStyles = computed(() => {
     if (isSideMenuHover.value) {

@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'NL2RiskFilter AI 能力评估（多模型对比 + 稳定性）'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'dsv32'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'dsv32'
+      non_thinking_llm: 'dsv32'
+
+  - id: 'python:providers/provider.py'
+    label: 'qwen3-235B'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'qwen3-235B'
+      non_thinking_llm: 'qwen3-235B'
+
+  - id: 'python:providers/provider.py'
+    label: 'kimi-chat'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'kimi-chat'
+      non_thinking_llm: 'kimi-chat'
+
+defaultTest:
+  options:
+    provider:
+      id: 'python:../providers/bk_llm_provider.py'
+      config:
+        model: 'dsv32'
+  vars:
+    username: '{{env.BKAPP_EVAL_USERNAME}}'
+  assert:
+    - type: python
+      value: 'file://assertions/check_filters.py:passes_serializer_validation'
+    - type: latency
+      threshold: 30000
+
+evaluateOptions:
+  maxConcurrency: 3
+  repeat: 2
+  delay: 500
+
+tests:
+  - file://tests/normal.yaml
+  - file://tests/complex.yaml
+  - file://tests/boundary.yaml
+  - file://tests/challenge.yaml

@@ -60,18 +60,13 @@ class EventsViewSet(ResourceViewSet):
     ]
 
 
-class RisksAPIGWViewSet(APIGWViewSet):
+class RiskAPIGWViewSet(APIGWViewSet):
     """
-    Risks APIGW
+    Risk APIGW - 托管风险相关的 APIGW 接口，校验 app 信息
     """
-
-    def get_authenticators(self):
-        return []
-
-    def get_permissions(self):
-        return []
 
     resource_routes = [
+        ResourceRoute("POST", resource.risk.list_risk_apigw),
         ResourceRoute("GET", resource.risk.retrieve_risk_apigw, pk_field="risk_id"),
         ResourceRoute(
             "GET", resource.risk.retrieve_risk_strategy_info_apigw, pk_field="risk_id", endpoint="strategy_info"
@@ -88,16 +83,6 @@ class EventAPIGWViewSet(APIGWViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.list_event_apigw),
-    ]
-
-
-class RiskListAPIGWViewSet(APIGWViewSet):
-    """
-    Risk List APIGW - 托管风险列表相关的 APIGW 接口，校验 app 信息
-    """
-
-    resource_routes = [
-        ResourceRoute("POST", resource.risk.list_risk_apigw),
     ]
 
 

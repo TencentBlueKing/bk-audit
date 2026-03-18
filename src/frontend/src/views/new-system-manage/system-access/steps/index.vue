@@ -343,7 +343,7 @@
     InfoBox({
       title: t('确认取消当前操作?'),
       content: t('已填写的内容将会丢失，请谨慎操作！'),
-      cancelText: t('留着当前页'),
+      cancelText: t('留在当前页'),
       confirmText: t('确认取消'),
       onConfirm() {
         router.push({

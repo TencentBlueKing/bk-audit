@@ -8,7 +8,7 @@
 *.gv
 *.sql
 *.env
-*.sh
+#*.sh
 static/assets*
 venv
 .venv

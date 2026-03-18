@@ -1,0 +1,186 @@
+# D. 挑战场景（14 个）— 当前模型不一定能通过，用于多模型对比评估
+#
+# 设计目的：暴露模型能力边界，为多模型对比提供区分度
+
+# D1: 复合时间表达（相对时间 + 条件组合）
+- description: "D1-挑战：上周三到本周一之间张三负责的高危风险"
+  vars:
+    query: "上周三到本周一之间张三负责的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["start_time", "end_time", "operator", "risk_level"]'
+    expected_values: '{"operator": "张三", "risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D2: 否定语义（排除条件）
+- description: "D2-挑战：不是张三负责的高危风险"
+  vars:
+    query: "不是张三负责的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D3: 隐含条件推理（"紧急"暗示高优先级）
+- description: "D3-挑战：需要紧急处理的风险"
+  vars:
+    query: "需要紧急处理的风险"
+    tags: '[{"id": 1, "name": "重要"}, {"id": 2, "name": "紧急"}]'
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+
+# D4: 多维度全条件组合（时间+人员+等级+策略+事件字段+排序）
+- description: "D4-挑战：最近一周张三负责的离线策略审计高危风险中来源IP包含10.0的按时间降序"
+  vars:
+    query: "最近一周张三负责的离线策略审计高危风险中来源IP包含10.0的，按时间降序排列"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["operator", "risk_level", "strategy_id", "start_time", "sort"]'
+    expected_values: '{"operator": "张三", "risk_level": "HIGH", "strategy_id": "110"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D5: 口语化/不规范表达
+- description: "D5-挑战：口语化查询"
+  vars:
+    query: "帮我找找那个啥，就是最近几天出的比较严重的那些风险，好像是李四在管的"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator", "risk_level", "start_time"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D6: 同义词/近义词理解
+- description: "D6-挑战：同义词理解"
+  vars:
+    query: "尚未解决的严重安全隐患"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status", "risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D7: 策略名称模糊匹配（用户不记得完整名称）
+- description: "D7-挑战：策略名称模糊匹配"
+  vars:
+    query: "WeTERM相关的风险"
+    tags: "[]"
+    strategies: '[{"id": 1, "name": "外包操作审计-WeTERM登录容器"}, {"id": 15, "name": "命令安全分析-WeTERM"}, {"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["strategy_id"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+
+# D8: 事件字段否定操作符（!= 操作）
+- description: "D8-挑战：事件字段否定操作（策略110）"
+  vars:
+    query: "操作人不是admin的风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["event_filters"]'
+    expected_event_fields: '["操作人"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_event_filter_field"
+
+# D9: 中英文混合查询
+- description: "D9-挑战：中英文混合查询"
+  vars:
+    query: "status是new的HIGH level风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status", "risk_level"]'
+    expected_values: '{"status": "new", "risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D10: 条件优先级冲突（"我负责的"vs 事件字段中的"操作人"）
+- description: "D10-挑战：operator字段与事件字段操作人区分"
+  vars:
+    query: "我负责的风险中操作人包含admin的"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["operator", "event_filters"]'
+    expected_values: '{"operator": "{{username}}"}'
+    expected_event_fields: '["操作人"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D11: 数量/统计类查询（模型可能返回时间+风险等级作为筛选范围）
+- description: "D11-挑战：统计类查询应返回空或合理条件"
+  vars:
+    query: "最近一个月高危风险有多少个"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D12: 多轮对话模拟（单轮中包含追问语义）
+# 无 thread_id 时无上下文，返回空或仅 risk_level 均为合理行为
+- description: "D12-挑战：单轮中包含追问语义（无上下文）"
+  vars:
+    query: "之前查的那些风险，只看高危的"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象（可以为空 {}）。验证以下条件之一：
+        1. 输出为空 {}（因为没有上下文，无法确定"之前查的"是什么，返回空合理）
+        2. 输出包含 risk_level 字段且值为 "HIGH"（模型尝试提取了可识别的部分）
+        满足任一条件则 pass。
+
+# D13: 通知人查询（notice_users）— LLM 评判
+- description: "D13-挑战：通知给王五的风险（LLM 评判）"
+  vars:
+    query: "通知给王五的风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象。验证以下条件：
+        1. 包含 notice_users 字段，值为 "王五"
+        2. 不包含无关的筛选字段
+        如果满足则 pass，否则 fail。
+
+# D14: 复合业务场景 — LLM 评判
+- description: "D14-挑战：我负责的已关闭的误报风险（多字段组合 LLM 评判）"
+  vars:
+    query: "我负责的已关闭的误报风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象，代表风险筛选条件。验证以下条件：
+        1. 包含 operator 字段（值应为当前请求人的用户名）
+        2. 包含 status 字段，值为 "closed"
+        3. 包含 risk_label 字段，值为 "misreport"
+        4. 不包含无关的筛选字段
+        满足 3 个及以上条件则 pass。
+      threshold: 0.75

@@ -668,7 +668,6 @@ class ListRiskAPIGW(ListRisk):
 
     def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
         """APIGW 不走 IAM 鉴权，仅校验 App 身份后直接查询全部风险"""
-        get_app_info()
         q = self._build_filter_query(validated_request_data)
         return Risk.objects.filter(q).distinct()
 
