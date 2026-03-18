@@ -590,12 +590,9 @@
         'now',
       ],
     };
-    selectedItemList.value = selectedItemList.value.map(item => ({
-      ...item,
-      value: '',
-      operator: '=',
-    }));
-    selectedVal.value = selectedItemList.value.map(item => item.id);
+    selectedItemList.value = [];
+    selectedItemListOperator.value = [];
+    selectedVal.value = [];
     showParseWarning.value = false;
     clearParseResult();
     nlInputRef.value?.clear();
