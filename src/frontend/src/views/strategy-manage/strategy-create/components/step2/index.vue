@@ -167,7 +167,7 @@
   }
 
   interface Emits {
-    (e: 'previousStep', step: number): void;
+    (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: IFormData): void;
     (e: 'showPreview'): void;
@@ -256,7 +256,7 @@
   };
 
   const handlePrevious = () => {
-    emits('previousStep', 1);
+    emits('previousStep', 1,  buildStepParams());
   };
 
   const handleCancel = () => {
