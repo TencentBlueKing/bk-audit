@@ -849,7 +849,7 @@
 
               .title-text {
                 display: inline-block;
-                max-width: 200px;
+                max-width: 300px;
                 margin-right: 10px;
                 overflow: hidden;
                 font-size: 16px;
