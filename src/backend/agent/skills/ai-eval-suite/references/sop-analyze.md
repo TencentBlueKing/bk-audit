@@ -18,36 +18,46 @@ npx promptfoo view
 
 **JSON 结构中的关键字段：**
 
+promptfoo 输出有两种格式，分析脚本已兼容两者。
+
+**格式 1: results 列表（常见于 `promptfoo eval -o`）**
+
 ```json
 {
   "results": {
     "stats": {
-      "successes": 30,
-      "failures": 5,
-      "errors": 0,
+      "successes": 30, "failures": 5, "errors": 0,
       "tokenUsage": { "total": 12345 }
     },
+    "results": [
+      {
+        "success": false,
+        "testCase": { "description": "用例描述", "vars": { "query": "..." } },
+        "response": { "output": "模型输出", "error": null },
+        "gradingResult": {
+          "componentResults": [
+            { "pass": false, "reason": "失败原因", "assertion": { "type": "python" } }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+**格式 2: table body（部分版本）**
+
+```json
+{
+  "results": {
+    "stats": { "successes": 30, "failures": 5 },
     "table": {
       "body": [
         {
           "description": "用例描述",
-          "vars": { "query": "用户输入" },
+          "vars": { "query": "..." },
           "outputs": [
-            {
-              "pass": false,
-              "score": 0.5,
-              "text": "模型输出",
-              "gradingResult": {
-                "componentResults": [
-                  {
-                    "pass": false,
-                    "score": 0,
-                    "reason": "失败原因",
-                    "assertion": { "type": "python", "value": "..." }
-                  }
-                ]
-              }
-            }
+            { "pass": false, "text": "模型输出", "gradingResult": { "componentResults": [...] } }
           ]
         }
       ]
@@ -55,6 +65,9 @@ npx promptfoo view
   }
 }
 ```
+
+**注意**：格式 1 中用例描述在 `row.testCase.description`（不是 `row.description`），
+输出在 `row.response.output`，通过状态在 `row.success`。
 
 ## 失败分类框架
 
@@ -104,7 +117,18 @@ npx promptfoo view
 
 **分析方法：** 检查 metadata 中的 message 和 raw_result
 
-### 类型 5: 超时/错误
+### 类型 5: 语义不符
+
+**特征：** `llm-rubric`、`factuality`、`answer-relevance` 等模型辅助断言失败
+
+**典型原因：**
+- 模型输出在语义上不符合期望（但格式和字段可能正确）
+- 模型对特定场景的理解与期望不一致
+- llm-rubric 的评判标准过于严格或模糊
+
+**分析方法：** 查看 grader 的评判理由，判断是模型输出问题还是评判标准问题
+
+### 类型 6: 超时/错误
 
 **特征：** provider error，非断言失败
 

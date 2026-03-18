@@ -80,8 +80,7 @@ providers:
 
 defaultTest:
   assert:
-    - type: python
-      value: 'file://assertions/check_output.py:basic_validation'
+    - type: is-json
 
 tests:
   - file://tests/normal.yaml
@@ -146,7 +145,7 @@ evaluateOptions:
 defaultTest:
   options:
     provider:
-      id: 'python:../providers/bk_llm_provider.py'
+      id: 'python:../providers/<grader-provider>.py'  # 蓝鲸项目用 bk_llm_provider.py
       config:
         model: '<grader-model>'
   assert:

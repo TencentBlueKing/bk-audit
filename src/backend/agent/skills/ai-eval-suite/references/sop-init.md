@@ -1,10 +1,23 @@
 # SOP 1: 初始化评估套件
 
+## 目录
+
+- [流程概览](#流程概览)
+- [Step 1: 询问评估目标](#step-1-询问评估目标)
+- [Step 2: 创建目录结构](#step-2-创建目录结构)
+- [Step 3: 引入公共 Provider](#step-3-引入公共-provider)
+- [Step 4: 编写业务 Provider](#step-4-编写业务-provider)
+- [Step 5: 编写测试用例](#step-5-编写测试用例)
+- [Step 6: 编写自定义断言（可选）](#step-6-编写自定义断言可选)
+- [Step 7: 编写配置](#step-7-编写配置)
+- [Step 8: 验证](#step-8-验证)
+- [Step 9: 编写 Suite README](#step-9-编写-suite-readme)
+
 ## 流程概览
 
 ```
 询问评估目标 → 创建目录结构 → 引入公共 provider → 编写业务 provider
-→ 编写测试用例 → 编写配置 → validate → 初始化进展追踪
+→ 编写测试用例 → 编写断言（可选）→ 编写配置 → validate → 编写 Suite README
 ```
 
 ## Step 1: 询问评估目标
@@ -53,8 +66,8 @@ evals/
     ├── README.md                 # suite 说明文档
     ├── providers/
     │   └── provider.py           # 业务专用 provider
-    ├── assertions/               # 自定义断言（如需要）
-    │   └── check_output.py
+    ├── assertions/               # 自定义断言（可选，按需创建）
+    │   └── check_output.py      # 仅在内置断言不够用时编写
     ├── tests/
     │   ├── normal.yaml           # 常规场景
     │   ├── complex.yaml          # 复杂场景
@@ -75,6 +88,7 @@ evals/
 ```bash
 # 首次创建公共 provider 目录
 mkdir -p evals/providers/
+# <skill-path> 即本 skill 所在目录，例如 agent/skills/ai-eval-suite
 cp <skill-path>/scripts/bk_llm_provider.py evals/providers/
 ```
 
@@ -144,13 +158,26 @@ def call_api(prompt, options, context):
 | `boundary.yaml` | 边界和异常输入 | 空输入、注入攻击、歧义 |
 | `challenge.yaml` | 挑战模型能力极限 | 否定语义、口语化、复合条件 |
 
-**单个测试用例结构：**
+**单个测试用例结构（使用内置断言，推荐快速上手）：**
 
 ```yaml
 - description: '简短描述这个用例测什么'
   vars:
     query: '用户输入'
-    # 其他变量...
+  assert:
+    - type: is-json
+    - type: javascript
+      value: 'JSON.parse(output).field_name !== undefined'
+    - type: contains
+      value: '"expected_value"'
+```
+
+**使用自定义断言（复杂校验场景）：**
+
+```yaml
+- description: '需要复杂校验的用例'
+  vars:
+    query: '用户输入'
     expected_keys: '["field1", "field2"]'
     expected_values: '{"field1": "value1"}'
   assert:
@@ -166,9 +193,57 @@ def call_api(prompt, options, context):
 - 断言从确定性开始，不够用时才加模型辅助
 - 覆盖 happy path / edge case / regression / security
 
-## Step 6: 编写配置
+## Step 6: 编写自定义断言（可选）
 
-**promptfooconfig.yaml 模板：**
+如果内置断言（`is-json`、`contains`、`javascript`、`regex` 等）不够用，
+可以编写 Python 自定义断言函数。
+
+**assertions/check_output.py 基本结构：**
+
+```python
+import json
+
+def get_assert(output, context):
+    """基础校验：输出是合法 JSON 且非空"""
+    try:
+        data = json.loads(output)
+    except (json.JSONDecodeError, TypeError):
+        return {"pass": False, "score": 0, "reason": "输出不是合法 JSON"}
+    if not data:
+        return {"pass": False, "score": 0, "reason": "输出为空"}
+    return {"pass": True, "score": 1, "reason": "基础校验通过"}
+
+def has_expected_keys(output, context):
+    """检查输出 JSON 是否包含期望的字段"""
+    expected = json.loads(context["vars"].get("expected_keys", "[]"))
+    try:
+        data = json.loads(output)
+    except (json.JSONDecodeError, TypeError):
+        return {"pass": False, "score": 0, "reason": "输出不是合法 JSON"}
+    missing = [k for k in expected if k not in data]
+    if missing:
+        return {"pass": False, "score": 0, "reason": f"缺少字段: {missing}"}
+    return {"pass": True, "score": 1, "reason": "所有期望字段都存在"}
+```
+
+**自定义断言函数规范：**
+- 函数签名：`def func_name(output, context)` — output 是字符串，context 包含 vars
+- 返回格式：`{"pass": bool, "score": float, "reason": str}`
+- 在 yaml 中引用：`file://assertions/check_output.py:func_name`
+
+如果不需要自定义断言，可以跳过此步骤，`assertions/` 目录也无需创建。
+
+## Step 7: 编写配置
+
+配置模板见 `references/project-structure.md` 中的"模板 A / B / C"，根据场景选择：
+
+| 模板 | 适用场景 |
+|------|---------|
+| 模板 A | 基础评估（单模型 + 确定性断言） |
+| 模板 B | 多模型对比 |
+| 模板 C | 带稳定性测试 + LLM-as-Judge |
+
+**最小可用配置（模板 A 简化版）：**
 
 ```yaml
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
@@ -183,16 +258,9 @@ providers:
     config:
       model: '<model-name>'
 
-# 使用模型辅助断言时，指定 grader provider（不指定则 llm-rubric 等断言会报错）
 defaultTest:
-  options:
-    provider:
-      id: 'python:../providers/bk_llm_provider.py'
-      config:
-        model: '<grader-model-name>'
   assert:
-    - type: python
-      value: 'file://assertions/check_output.py:basic_validation'
+    - type: is-json
 
 tests:
   - file://tests/normal.yaml
@@ -200,38 +268,41 @@ tests:
   - file://tests/boundary.yaml
 ```
 
+如果需要 `llm-rubric` 等模型辅助断言，在 `defaultTest` 中增加 `options.provider`：
+
+```yaml
+defaultTest:
+  options:
+    provider:
+      id: 'python:../providers/bk_llm_provider.py'
+      config:
+        model: '<grader-model-name>'
+```
+
 **字段顺序规范：** description → prompts → providers → defaultTest → evaluateOptions → tests
 
-**注意**：`defaultTest.options.provider` 是 grader provider，用于 `llm-rubric` 等模型辅助断言。
-如果不使用模型辅助断言，可以省略 `options` 部分。
-
-## Step 7: 验证
+## Step 8: 验证
 
 ```bash
 cd <project-root>
 
+# 确保 promptfoo 使用项目 Python 环境
+export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
+
 # 验证配置语法
-npx promptfoo validate -c evals/<suite>/promptfooconfig.yaml
+npx promptfoo validate config -c evals/<suite>/promptfooconfig.yaml
 
 # 快速测试一个用例
 npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache --filter-first-n 1
 ```
 
-## Step 8: 编写 Suite README
+## Step 9: 编写 Suite README
 
-每个 suite 维护独立的 README.md，包含：
-- 评估目标
-- 测试用例概览（场景、数量）
-- Provider 说明（业务 provider + grader provider）
-- 自定义断言说明
-- 运行命令
-- 环境依赖
-- 通过率阈值
+每个 suite 维护独立的 README.md，模板见 `references/project-structure.md` 的"Suite README 模板"。
 
-## Step 9: 初始化进展追踪
-
-在 suite 的 README.md 底部或独立文档中，初始化评估迭代进展表：
+README 应包含：评估目标、测试用例概览、Provider 说明、运行命令、环境依赖、通过率阈值，
+以及评估迭代进展表：
 
 ```markdown
 ## 评估迭代进展

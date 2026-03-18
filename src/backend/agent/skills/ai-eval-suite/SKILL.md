@@ -43,38 +43,49 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 
 每个 SOP 的详细操作指南在 `references/` 目录下，按需读取：
 
-| SOP | 文件 | 何时读取 |
-|-----|------|---------|
-| 1. 初始化 Suite | `references/sop-init.md` | 用户要创建新的评估套件时 |
-| 2. 运行评估 | `references/sop-run.md` | 需要执行评估时 |
-| 3. 分析评估 | `references/sop-analyze.md` | 评估完成后需要分析结果时 |
-| 4. 调优 | `references/sop-tune.md` | 分析发现问题需要修复时 |
-| 5. 重评估 | `references/sop-reeval.md` | 调优后需要验证效果时 |
+
+| SOP          | 文件                          | 何时读取         |
+| ------------ | --------------------------- | ------------ |
+| 1. 初始化 Suite | `references/sop-init.md`    | 用户要创建新的评估套件时 |
+| 2. 运行评估      | `references/sop-run.md`     | 需要执行评估时      |
+| 3. 分析评估      | `references/sop-analyze.md` | 评估完成后需要分析结果时 |
+| 4. 调优        | `references/sop-tune.md`    | 分析发现问题需要修复时  |
+| 5. 重评估       | `references/sop-reeval.md`  | 调优后需要验证效果时   |
+
 
 辅助参考：
 
-| 文件 | 内容 |
-|------|------|
+
+| 文件                                | 内容                           |
+| --------------------------------- | ---------------------------- |
 | `references/project-structure.md` | 目录约定、promptfooconfig 模板、命名规范 |
-| `references/checklist.md` | 发布前自检清单 |
+| `references/checklist.md`         | 发布前自检清单                      |
+
 
 内置脚本：
 
-| 文件 | 用途 |
-|------|------|
+
+| 文件                           | 用途                                                                   |
+| ---------------------------- | -------------------------------------------------------------------- |
 | `scripts/bk_llm_provider.py` | 蓝鲸 LLM 网关 provider（OpenAI 标准协议），可作为 LLM-as-Judge grader 或独立 provider |
-| `scripts/analyze_results.py` | 评估结果分析脚本，解析 promptfoo 输出 JSON 并生成失败分类报告 |
+| `scripts/analyze_results.py` | 评估结果分析脚本，解析 promptfoo 输出 JSON 并生成失败分类报告                              |
+
 
 ## 快速判断：用户处于哪个阶段？
 
-| 用户说的话 | 对应 SOP | 动作 |
-|-----------|---------|------|
-| "给 XX 能力搭建评估" / "创建评测套件" | SOP 1 | 读 `sop-init.md` |
-| "跑一下评估" / "运行 benchmark" | SOP 2 | 读 `sop-run.md` |
-| "评估结果怎么样" / "哪些用例失败了" | SOP 3 | 读 `sop-analyze.md` |
-| "怎么修" / "调一下 prompt" / "换个模型试试" | SOP 4 | 读 `sop-tune.md` |
-| "改完了再跑一次" / "对比一下前后" | SOP 5 | 读 `sop-reeval.md` |
-| "从头到尾跑一遍" | SOP 1-5 | 按顺序执行 |
+
+| 用户说的话                           | 对应 SOP  | 动作                 |
+| ------------------------------- | ------- | ------------------ |
+| "给 XX 能力搭建评估" / "创建评测套件"        | SOP 1   | 读 `sop-init.md`    |
+| "跑一下评估" / "运行 benchmark"        | SOP 2   | 读 `sop-run.md`     |
+| "评估结果怎么样" / "哪些用例失败了"           | SOP 3   | 读 `sop-analyze.md` |
+| "怎么修" / "调一下 prompt" / "换个模型试试" | SOP 4   | 读 `sop-tune.md`    |
+| "加个模型对比一下" / "用 XX 模型也跑一下"     | SOP 4   | 读 `sop-tune.md`（优先级 3） |
+| "改完了再跑一次" / "对比一下前后"            | SOP 5   | 读 `sop-reeval.md`  |
+| "评估不通过" / "通过率太低"               | SOP 3   | 读 `sop-analyze.md` |
+| "还是不行" / "通过率没变"                | SOP 3→4 | 重新分析 + 调优          |
+| "从头到尾跑一遍"                       | SOP 1-5 | 按顺序执行              |
+
 
 ## 公共 Provider 体系
 
@@ -91,7 +102,7 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
 - **业务 provider** 每个 suite 自己编写，直接调用业务 API，走完整链路
 - **公共 provider** 放在 `evals/providers/`，各 suite 通过 `python:../providers/xxx.py` 引用
 - 使用 `llm-rubric` 等模型辅助断言时，必须通过 `defaultTest.options.provider` 指定 grader，
-  避免依赖 promptfoo 默认的 OpenAI key
+避免依赖 promptfoo 默认的 OpenAI key
 
 蓝鲸项目初始化时，可将本 skill 内置的 `scripts/bk_llm_provider.py` 复制到 `evals/providers/`
 作为 LLM-as-Judge 的 grader provider。详见 `references/sop-init.md` Step 3。
@@ -101,9 +112,9 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
 这些规则贯穿所有 SOP，不可违反：
 
 1. **环境变量无敏感默认值** — 用户名、密钥等必须从环境变量获取，不允许硬编码
-2. **不创建 mock provider** — 评估必须调用真实 AI 服务
-3. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI
-4. **配置文件顶部必须有 JSON Schema 声明** — `# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json`
+2. **不创建 mock provider** — 评估必须反映真实 AI 服务的表现，mock 会掩盖真实问题
+3. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI，避免额外抽象层增加调试复杂度
+4. **配置文件顶部必须有 JSON Schema 声明** — 启用 IDE 自动补全和配置校验：`# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json`
 5. **output 目录 git 忽略** — 评估结果仅本地存储
 6. **运行命令统一格式** — `--env-file .env --no-cache`
 7. **断言优先级** — 确定性断言 > 相似度断言 > 模型辅助断言
@@ -121,3 +132,4 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
   llm-rubric / factuality / context-faithfulness
   ⚠️ 必须通过 defaultTest.options.provider 指定 grader provider
 ```
+

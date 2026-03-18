@@ -3,12 +3,27 @@
 ## 流程概览
 
 ```
-运行评估 → 对比前后结果 → 判定是否达标 → 达标则归档 / 未达标则回到 SOP 3
+运行评估 → 对比前后结果 → 判定是否达标
+  → 达标则归档
+  → 未达标则回到 SOP 3（重新分析）→ SOP 4（调优）→ SOP 5（再次重评估）
 ```
 
 ## Step 1: 重新运行评估
 
-调优完成后，确认所有修改已生效（包括用户手动更新的部分），然后运行：
+调优完成后，确认所有修改已生效：
+- 如果 prompt 由生成脚本产出，是否重新运行了生成脚本？
+- 如果 prompt 在第三方平台，用户是否确认已更新？
+- 如果修改了 provider 代码，是否需要重启服务？
+
+**快速验证**（只跑相关用例，确认修改生效）：
+
+```bash
+npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+  --env-file .env --no-cache \
+  --filter-pattern '<相关用例描述的正则>'
+```
+
+**全量重评估**（确认无回归后再跑全量）：
 
 ```bash
 npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
@@ -26,7 +41,15 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 ## Step 2: 对比前后结果
 
-读取本轮和上一轮的 output JSON，生成对比报告：
+可以使用内置分析脚本自动生成对比报告：
+
+```bash
+python <skill-path>/scripts/analyze_results.py \
+  evals/<suite>/output/上轮结果.json \
+  evals/<suite>/output/本轮结果.json
+```
+
+或手动读取本轮和上一轮的 output JSON，按以下维度对比：
 
 ### 对比维度
 
@@ -72,6 +95,19 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 2. 如果是 prompt 修改导致，考虑更精确的措辞避免副作用
 3. 如果是模型切换导致，评估新模型在其他维度的表现是否值得这个回归
 
+### 横向对比（多模型同轮评估）
+
+当同一轮评估包含多个 provider 时，关注的维度与纵向对比（调优前后）不同：
+
+| 维度 | 说明 |
+|------|------|
+| 各模型通过率 | 哪个模型整体表现最好 |
+| 各模型独有失败 | 只有某个模型失败的用例，反映模型短板 |
+| 各模型延迟分布 | 平均延迟、P95 延迟对比 |
+| 稳定性（`repeat > 1` 时） | 同一用例多次运行的一致性 |
+
+**查看方式**：`npx promptfoo view` 的交互式报告天然支持多列对比，是横向对比最直观的工具。
+
 ## Step 3: 判定是否达标
 
 **达标条件：** 通过率 >= 用户设定的阈值
@@ -80,7 +116,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 |------|------|
 | 通过率 >= 阈值，无回归 | ✅ 达标，进入归档 |
 | 通过率 >= 阈值，有回归 | ⚠️ 与用户确认是否接受回归 |
-| 通过率 < 阈值，有改善 | 继续调优（回到 SOP 3） |
+| 通过率 < 阈值，有改善 | 回到 SOP 3 重新分析本轮失败，再进入 SOP 4 调优 |
 | 通过率 < 阈值，无改善 | 与用户讨论是否调整阈值或策略 |
 
 ## Step 4: 更新进展追踪
@@ -92,10 +128,10 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 | 版本 | 日期 | 用例数 | 通过率 | 关键变化 |
 |------|------|--------|--------|---------|
-| V1   | 2026-03-10 | 35 | 91.4% | 初始版本（基线） |
-| V2   | 2026-03-12 | 45 | 87.8% | 扩展用例 + 新增断言，暴露隐藏问题 |
-| V3   | 2026-03-14 | 45 | 95.6% | LLM-as-Judge 接入 + provider 公共化 |
-| V4   | 2026-03-16 | 45 | 96.1% | prompt 调优：新增规则 + 示例 |
+| V1   | YYYY-MM-DD | XX | XX% | 初始版本（基线） |
+| V2   | YYYY-MM-DD | XX | XX% | 扩展用例，暴露隐藏问题 |
+| V3   | YYYY-MM-DD | XX | XX% | 断言增强 / provider 调整 |
+| V4   | YYYY-MM-DD | XX | XX% | prompt 调优 |
 ```
 
 **记录要点**：
@@ -126,7 +162,9 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 ## 循环控制
 
-如果经过多轮调优仍未达标，与用户讨论：
+**建议**：经过 3-5 轮调优仍未达标时，主动与用户讨论是否需要调整策略，避免无限循环。
+
+退出策略（从轻到重）：
 
 1. **降低阈值** — 某些挑战场景可能超出当前模型能力
 2. **拆分场景** — 将持续失败的用例标记为"已知限制"，单独跟踪

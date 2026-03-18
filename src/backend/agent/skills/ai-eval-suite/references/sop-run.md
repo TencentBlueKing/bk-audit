@@ -25,6 +25,9 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 | `-o <path>` | 导出结果到文件 | 需要归档或分析时 |
 | `--filter-first-n N` | 只运行前 N 个用例 | 调试时用 |
 | `--filter-pattern <regex>` | 按描述过滤用例 | 只跑特定用例时 |
+| `--filter-failing <path>` | 只重跑上次失败的用例 | 调优后快速验证 |
+| `--repeat N` | 每个用例重复运行 N 次 | 评估输出稳定性 |
+| `--max-concurrency N` | 最大并发数（默认 4） | 大量用例时调整 |
 
 ## 输出格式选择
 
