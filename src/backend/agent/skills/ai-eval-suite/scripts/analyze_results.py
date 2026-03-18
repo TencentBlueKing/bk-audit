@@ -163,7 +163,7 @@ def analyze_single(data: dict) -> str:
 
     lines = [
         "## 评估结果摘要\n",
-        f"- 总断言数: {total}",
+        f"- 总评估数: {total}（断言级别）",
         f"- 通过: {successes} ({pass_rate:.1f}%)",
         f"- 失败: {failures}",
         f"- 错误: {errors}",

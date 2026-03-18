@@ -203,3 +203,7 @@ python <skill-path>/scripts/analyze_results.py results.json -o report.md
 2. **找系统性问题** — 如果多个用例因相同原因失败，说明是系统性问题（如枚举缺失）
 3. **区分模型问题和测试问题** — 有时是期望值不合理，而非模型输出错误
 4. **关注 error vs failure** — error 是基础设施问题，failure 是能力问题，处理方式不同
+
+---
+
+→ 分析完成后，进入 **SOP 4（调优）**：读 `sop-tune.md`

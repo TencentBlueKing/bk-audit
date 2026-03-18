@@ -5,7 +5,8 @@ description: >
   的完整闭环，直到达到用户设定的通过率阈值。当用户提到以下场景时使用此 skill：
   搭建 AI 评估、创建评测套件、运行 promptfoo 评估、分析评估结果、调优 prompt/模型、
   评估不通过需要排查、AI 能力回归测试、对比不同模型表现、评测闭环、benchmark。
-  即使用户只是说"跑一下评估"或"看看哪个模型好"，也应该触发此 skill。
+  即使用户只是说"跑一下评估""看看哪个模型好""评估挂了""通过率不够""加个模型跑跑"，
+  也应该触发此 skill。
 ---
 
 # AI 评估闭环套件
@@ -15,7 +16,7 @@ description: >
 **核心价值**：不是"写一个 eval 配置"，而是驱动完整的闭环——从构建评测集到最终达标，
 包括失败分析、调优建议、用户确认后执行修改、重评估对比。
 
-## 与官方 promptfoo-evals 的关系
+## 与官方 promptfoo-evals skill 的关系
 
 ```
 promptfoo-evals（官方）        ai-eval-suite（本 skill）
@@ -26,9 +27,16 @@ scaffold config/tests         初始化 → 评估 → 分析 → 调优 → 重
 promptfoo 语法知识库            引用官方能力，专注流程编排
 ```
 
-初始化 suite 时，参考官方 `promptfoo-evals` skill 的 cheatsheet 来编写 config/tests/assertions。
-如果用户环境中有该 skill，优先使用其能力来生成配置。本 skill 专注于闭环流程中官方不覆盖的部分：
-**分析失败原因、提出调优建议、驱动重评估直到达标**。
+**推荐搭配使用**：初始化 suite（SOP 1）时，优先使用官方
+[promptfoo-evals](https://github.com/promptfoo/promptfoo/tree/main/.claude/skills/promptfoo-evals)
+skill 来搭建 config / tests / assertions 框架——它是 promptfoo 团队维护的语法知识库，
+对配置编写、断言选择、provider 模式等覆盖最全面。
+
+本 skill 在官方能力的基础上补全**评估优化闭环**：分析失败原因、提出调优建议、
+驱动重评估直到达标。两者分工互补，官方负责"写得对"，本 skill 负责"跑到过"。
+
+如果用户环境中没有官方 skill，本 skill 的 SOP 1 和 `references/project-structure.md`
+中也包含了足够的模板和指引来独立完成初始化。
 
 ## SOP 五步闭环
 
@@ -82,7 +90,7 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | "怎么修" / "调一下 prompt" / "换个模型试试" | SOP 4   | 读 `sop-tune.md`    |
 | "加个模型对比一下" / "用 XX 模型也跑一下"     | SOP 4   | 读 `sop-tune.md`（优先级 3） |
 | "改完了再跑一次" / "对比一下前后"            | SOP 5   | 读 `sop-reeval.md`  |
-| "评估不通过" / "通过率太低"               | SOP 3   | 读 `sop-analyze.md` |
+| "评估不通过" / "通过率太低" / "评估挂了"      | SOP 3   | 读 `sop-analyze.md` |
 | "还是不行" / "通过率没变"                | SOP 3→4 | 重新分析 + 调优          |
 | "从头到尾跑一遍"                       | SOP 1-5 | 按顺序执行              |
 
@@ -112,7 +120,7 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
 这些规则贯穿所有 SOP，不可违反：
 
 1. **环境变量无敏感默认值** — 用户名、密钥等必须从环境变量获取，不允许硬编码
-2. **不创建 mock provider** — 评估必须反映真实 AI 服务的表现，mock 会掩盖真实问题
+2. **不创建 mock provider** — 评估必须反映真实 AI 服务的表现，mock 会掩盖真实问题。初始化阶段尚未接入真实服务时，可以编写 stub 骨架（`raise NotImplementedError`），但运行评估前必须替换为真实调用
 3. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI，避免额外抽象层增加调试复杂度
 4. **配置文件顶部必须有 JSON Schema 声明** — 启用 IDE 自动补全和配置校验：`# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json`
 5. **output 目录 git 忽略** — 评估结果仅本地存储

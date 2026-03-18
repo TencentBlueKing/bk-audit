@@ -148,6 +148,7 @@ python <skill-path>/scripts/analyze_results.py \
 1. **导出最终结果**
 
 ```bash
+# promptfoo 支持多个 -o 参数同时导出不同格式
 npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-final.json \
@@ -170,3 +171,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 2. **拆分场景** — 将持续失败的用例标记为"已知限制"，单独跟踪
 3. **更换策略** — 考虑换模型、改架构、增加工具等更大的调整
 4. **暂停评估** — 等待模型升级或业务需求变更后再继续
+
+---
+
+→ 达标：归档结束。未达标：回到 **SOP 3（分析评估）** 重新分析，再进入 SOP 4 调优

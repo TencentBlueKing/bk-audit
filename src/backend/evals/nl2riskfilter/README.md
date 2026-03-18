@@ -30,12 +30,13 @@ Provider 支持通过 `config.model` / `config.non_thinking_llm` / `config.syste
 在 provider 层 `patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion", wrapped_fn)` 实现，
 不修改任何业务代码。
 
-当前配置了两个 provider 并排对比：
+当前配置了三个 provider 并排对比：
 
 | label | model | 说明 |
 |-------|-------|------|
 | dsv32 | dsv32 | 当前生产模型（显式指定 model + non_thinking_llm） |
 | qwen3-235B | qwen3-235B | 候选模型 |
+| kimi-chat | kimi-chat | 候选模型 |
 
 ## 自定义断言
 
@@ -80,7 +81,7 @@ npx promptfoo view
 ## 稳定性设计
 
 配置了 `evaluateOptions.repeat: 2`，每个用例运行 2 次。
-双模型对比模式下总调用量为 45×2×2=180 次 AI 调用，
+三模型对比模式下总调用量为 45×3×2=270 次 AI 调用，
 用于统计 LLM 输出的一致性。配合 `maxConcurrency: 3` 和 `delay: 500` 控制并发和限流。
 稳定性衡量：2 次运行中任意一次失败即视为不稳定。
 
@@ -127,3 +128,4 @@ vars:
 | V15 | 45×2 | 91.1%（164/180） | 模型参数一致（model+non_thinking_llm）、system_prompt 动态读取 |
 | V16 | 45×2 | 95.6%（172/180） | LLM-as-Judge 直调 LLM 网关（OpenAI 标准协议）、provider 公共化重构 |
 | V17 | 45×2 | 96.1%（173/180） | prompt 调优：title 字段 + 统计类查询规则 + 示例补充；D12 用例放宽期望 |
+| V18 | 45×3×2 | 96.7%（261/270） | 新增 kimi-chat 模型对比；dsv32 93.3% / qwen3-235B 98.9% / kimi-chat 97.8% |

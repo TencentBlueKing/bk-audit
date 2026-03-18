@@ -37,6 +37,36 @@
 - `evals/providers/` — 公共 provider，各 suite 通过 `python:../providers/xxx.py` 引用
 - `evals/<suite>/providers/` — 业务专用 provider，走完整业务链路
 
+### 公共资源扩展（多 suite 共享）
+
+当公共资源不止 provider 时（如共享 defaultTest、assertions、tests），可以参考
+[promptfoo 官方推荐](https://www.promptfoo.dev/docs/configuration/modular-configs/)
+升级为统一的公共目录：
+
+```
+evals/
+├── shared/                        # 公共资源（目录名自定义，官方常用 configs/ 或 shared/）
+│   ├── providers/                 # 公共 provider
+│   │   └── bk_llm_provider.py
+│   ├── defaultTest.yaml           # 共享的默认断言（cost / latency / 安全检查等）
+│   └── assertions/                # 共享的自定义断言
+│       └── common.py
+├── <suite-a>/
+│   └── promptfooconfig.yaml       # 引用：providers: file://../shared/providers.yaml
+└── <suite-b>/
+    └── promptfooconfig.yaml
+```
+
+各 suite 通过 `file://` 相对路径引用公共资源：
+
+```yaml
+providers: file://../shared/providers.yaml
+defaultTest: file://../shared/defaultTest.yaml
+```
+
+当前只有公共 provider 时，`evals/providers/` 已经够用，无需提前改造。
+当共享资源增多到 2-3 类时再考虑升级。
+
 ### 命名规范
 
 | 元素 | 规范 | 示例 |
@@ -255,6 +285,30 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 ## 通过率阈值
 
 目标：>= XX%
+
+## 调优上下文（可选，建议持久化）
+
+后续迭代调优时会反复用到的背景信息，记录一次避免每轮重新收集。
+
+### Prompt 管理
+
+- **Prompt 位置**：<文件路径 或 第三方平台>
+- **修改方式**：<直接编辑 / 修改生成脚本后重新生成 / 在平台上更新>
+- **生成脚本**（如有）：<路径，如 `services/web/ai/prompts/xxx/generate.py`>
+
+### MCP / 工具链
+
+- **MCP 工具列表**：<工具名称和用途>
+- **数据源**：<工具返回的数据从哪来、覆盖哪些字段>
+- **已知限制**：<工具返回数据的已知缺陷或不完整之处>
+
+### 调优经验沉淀
+
+记录历次调优中发现的有效手段和踩坑经验，供后续迭代参考：
+
+| 手段 | 效果 | 备注 |
+|------|------|------|
+| <如：增加枚举映射表> | <如：枚举类失败全部修复> | <适用场景> |
 
 ## 评估迭代进展
 

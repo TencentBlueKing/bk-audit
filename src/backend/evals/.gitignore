@@ -1,2 +1,6 @@
 */output/*.json
+*/output/*.html
+*/output/*.csv
 */output/*.md
+__pycache__/
+*.pyc

@@ -137,3 +137,7 @@ export PATH="$(pwd)/.venv/bin:$PATH"
 1. `DJANGO_SETTINGS_MODULE` 环境变量已设置
 2. provider 文件中正确设置了 `sys.path` 和 `django.setup()`
 3. 运行目录（cwd）是项目根目录，否则 Django 可能找不到配置文件
+
+---
+
+→ 评估运行完成后，进入 **SOP 3（分析评估）**：读 `sop-analyze.md`

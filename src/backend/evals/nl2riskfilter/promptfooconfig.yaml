@@ -19,6 +19,13 @@ providers:
       model: 'qwen3-235B'
       non_thinking_llm: 'qwen3-235B'
 
+  - id: 'python:providers/provider.py'
+    label: 'kimi-chat'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'kimi-chat'
+      non_thinking_llm: 'kimi-chat'
+
 defaultTest:
   options:
     provider:
