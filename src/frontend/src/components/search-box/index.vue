@@ -377,6 +377,7 @@
     appendSearchParams({
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
+    emit('changeTableHeight');
   };
   const allText = t('全部');
   const normalizeSearchArray = (value: Array<string | number>) => (
