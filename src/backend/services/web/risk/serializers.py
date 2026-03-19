@@ -519,7 +519,14 @@ class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
     分页由 DRF 分页器统一处理（通过 URL 参数 page/page_size）
     """
 
-    pass
+    with_detail = serializers.BooleanField(label=gettext_lazy("是否返回风险单详情"), required=False, default=False)
+
+    def validate(self, attrs):
+        # 先取出 with_detail，避免父类 validate 循环中对布尔值调用 split() 报错
+        with_detail = attrs.pop("with_detail", False)
+        data = super().validate(attrs)
+        data["with_detail"] = with_detail
+        return data
 
 
 class ListRiskMetaRequestSerializer(serializers.Serializer):

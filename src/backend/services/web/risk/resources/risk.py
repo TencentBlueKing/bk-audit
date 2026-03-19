@@ -658,6 +658,25 @@ class ListRiskAPIGW(ListRisk):
     bind_request = True
     audit_action = None
 
+    def perform_request(self, validated_request_data):
+        with_detail = validated_request_data.pop("with_detail", False)
+        response = super().perform_request(validated_request_data)
+        if with_detail and response.get("results"):
+            # 获取当前页所有风险单的 risk_id
+            risk_ids = [item["risk_id"] for item in response["results"]]
+            # 批量查询风险单对象
+            risk_objs = {
+                risk.risk_id: risk for risk in Risk.objects.select_related("strategy").filter(risk_id__in=risk_ids)
+            }
+            # 用 RiskInfoSerializer 序列化详情并合并到每条结果中
+            for item in response["results"]:
+                risk_obj = risk_objs.get(item["risk_id"])
+                if risk_obj:
+                    item["detail"] = RiskInfoSerializer(risk_obj).data
+                else:
+                    item["detail"] = None
+        return response
+
     def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
         """APIGW 不走 IAM 鉴权，仅校验 App 身份后直接查询全部风险"""
         q = self._build_filter_query(validated_request_data)
