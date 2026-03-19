@@ -23,6 +23,7 @@
       is-reassignment
       @batch="handleBatch"
       @change="handleSearchChange"
+      @change-table-height="handleChangeTableHeight"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
@@ -641,6 +642,11 @@
       event_filters: exValue };
     listRef.value.initTableHeight();
     fetchList();
+  };
+  const handleChangeTableHeight = () => {
+    nextTick(() => {
+      listRef.value?.initTableHeight?.();
+    });
   };
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();

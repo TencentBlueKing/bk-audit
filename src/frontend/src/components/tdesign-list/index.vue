@@ -642,9 +642,19 @@
   const handleClearSearch = () => {
     emits('clearSearch');
   };
+
+  // 监听窗口尺寸变化：动态重算表格可显示行数/最大高度
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  const handleWindowResize = () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      calcTableHeight();
+    }, 120);
+  };
   onMounted(() => {
     parseURL();
     calcTableHeight();
+    window.addEventListener('resize', handleWindowResize);
     // 初始化时加载数据
     nextTick(() => {
       fetchListData();
@@ -667,6 +677,8 @@
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
     off('show-notice');
+    window.removeEventListener('resize', handleWindowResize);
+    if (resizeTimer) clearTimeout(resizeTimer);
   });
 
   const TABLE_HEADER_HEIGHT = 44;
