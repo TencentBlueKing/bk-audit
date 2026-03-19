@@ -31,25 +31,34 @@
     <div class="content-content">
       <div class="content-card">
         <content-card
+          v-if="!isOpenTool"
           ref="ContentCardRef"
           :my-created="tagId === '-4'"
           :recent-used="tagId === '-5'"
           :tag-id="tagId"
           :tags-enums="tagsEnums"
-          @change="handleChange" />
+          @change="handleChange"
+          @open-tool="handleOpenTool" />
+        <tool-info-panel
+          v-else
+          :tool-info="toolInfo"
+          @close="handleCloseToolPanel" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, ref } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
 
   import ToolManageService from '@service/tool-manage';
+
+  import ToolInfo from '@model/tool/tool-info';
 
   import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
 
   import ContentCard from './square-content/concent-card.vue';
+  import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -62,12 +71,14 @@
   const renderLabelRef = ref();
 
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
+  const isOpenTool = ref(false);
 
 
   const tagsEnums = ref<Array<TagItem>>([]);
   const upgradeTotal = ref(0);
   const total = ref(0);
   const tagId = ref('');
+  const toolInfo = ref<ToolInfo | null>(null);
   const strategyLabelList = ref<Array<TagItem>>([]);
   const renderStyle = ref({
     backgroundColor: '#fff',
@@ -105,7 +116,18 @@
     },
   });
 
+  const handleOpenTool = (ToolInfo: ToolInfo) => {
+    console.log('ToolInfo', ToolInfo);
+    isOpenTool.value = true;
+    toolInfo.value = ToolInfo;
+  };
 
+  const handleCloseToolPanel = async () => {
+    isOpenTool.value = false;
+    toolInfo.value = null;
+    await nextTick();
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
   onMounted(() => {
     fetchToolsTagsList();
   });
@@ -152,4 +174,5 @@
   }
 }
 </style>
+
 
