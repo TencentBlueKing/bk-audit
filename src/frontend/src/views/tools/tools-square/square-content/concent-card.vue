@@ -215,6 +215,7 @@
                   disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
                   content: middleTtooltips(item.description),
                   width: '200px',
+                  placement: 'bottom',
                   allowHTML: true,
                   extCls: 'tooltip-custom'
                 }"
@@ -900,6 +901,7 @@
           word-break: break-word;
           -webkit-box-orient: vertical;
           -webkit-line-clamp: 2;
+          line-clamp: 2;
         }
 
         .item-footer {
