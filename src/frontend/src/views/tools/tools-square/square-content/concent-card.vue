@@ -93,37 +93,16 @@
                   theme="light"
                   trigger="click">
                   <template #content>
-                    <div class="delete-title">
-                      {{ t('确认删除该工具？') }}
-                    </div>
-                    <div class="delete-text">
-                      {{ t('删除操作无法撤回，请谨慎操作！') }}
-                    </div>
-
-                    <div class="delete-btn">
-                      <bk-button
-                        v-bk-tooltips="{
-                          disabled: !(item.strategies.length > 0),
-                          content: t('该工具正在被策略使用，无法删除'),
-                        }"
-                        :disabled="item.strategies.length > 0"
-                        size="small"
-                        theme="primary"
-                        @click="handleDeleteItem(item)">
-                        {{ t('确定') }}
-                      </bk-button>
-                      <bk-button
-                        class="ml8"
-                        size="small"
-                        @click="handleCancel(item.uid)">
-                        {{ t('取消') }}
-                      </bk-button>
+                    <div
+                      class="delete-title"
+                      @click="handleOpenDel(item)">
+                      {{ t('删除') }}
                     </div>
                   </template>
 
                   <auth-button
                     v-if="!item.permission.manage_tool"
-                    v-bk-tooltips="t('暂无删除权限')"
+                    v-bk-tooltips="t('暂无权限')"
                     action-id="manage_tool"
                     :permission="false"
                     :resource="item.uid"
@@ -131,12 +110,12 @@
                     theme="primary">
                     <audit-icon
                       class="delete"
-                      type="delete" />
+                      type="more" />
                   </auth-button>
                   <audit-icon
                     v-else
                     class="delete"
-                    type="delete"
+                    type="more"
                     @click.stop="handleDelete(item)" />
                 </bk-popover>
               </div>
@@ -283,6 +262,11 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
+  <del-dialog
+    v-model:visible="delDialogVisible"
+    :service-name="delDialogServiceName"
+    @cancel="handleCancelDel"
+    @confirm="handleConfirmDel" />
 </template>
 
 <script setup lang='tsx'>
@@ -302,6 +286,8 @@
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
   import DialogVue from '../components/dialog.vue';
+
+  import delDialog from './delete-confirm-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -450,6 +436,10 @@
     },
   });
 
+  const delDialogVisible = ref(false);
+  const delDialogServiceName = ref('');
+  const delDialogItem = ref<Record<string, any> | null>(null);
+
   // 标签名称
   const returnTagsName = (tags: string) => {
     let tagName = '';
@@ -517,7 +507,27 @@
       });
     }
   };
-
+  // 删除 handleOpenDel
+  const handleOpenDel = (item: Record<string, any>) => {
+    // 先收起 popover，避免“菜单固定”状态残留
+    handleCancel(item.uid);
+    delDialogItem.value = item;
+    delDialogServiceName.value = item?.name || '';
+    delDialogVisible.value = true;
+  };
+  const handleCancelDel = () => {
+    delDialogVisible.value = false;
+    delDialogItem.value = null;
+    delDialogServiceName.value = '';
+  };
+  const handleConfirmDel = () => {
+    if (!delDialogItem.value) {
+      handleCancelDel();
+      return;
+    }
+    handleDeleteItem(delDialogItem.value);
+    handleCancelDel();
+  };
   const handleMouseenter = (item: Record<string, any>) => {
     if (isFixedDelete.value) {
       return;
@@ -1021,28 +1031,9 @@
       transform: translate(-50%, -45%);
     }
   }
-
 }
 
 .delete-title {
-  width: 250px;
-  font-size: 16px;
-  line-height: 24px;
-  letter-spacing: 0;
-  color: #313238;
-}
-
-.delete-text {
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 20px;
-  letter-spacing: 0;
-  color: #4d4f56;
-}
-
-.delete-btn {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 5px;
+  cursor: pointer;
 }
 </style>
