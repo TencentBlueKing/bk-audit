@@ -812,6 +812,10 @@ paths:
               has_report:
                 type: boolean
                 description: 是否已生成报告
+              with_detail:
+                type: boolean
+                description: 是否返回风险单详情（默认 false，为 true 时每条结果会额外包含 detail 字段）
+                default: false
       responses:
         '200':
           description: 成功
@@ -900,6 +904,94 @@ paths:
                       items:
                         type: integer
                       description: 标签ID列表
+                    detail:
+                      type: object
+                      description: 风险单详情（仅当请求参数 with_detail=true 时返回）
+                      properties:
+                        risk_id:
+                          type: string
+                          description: 风险ID
+                        event_content:
+                          type: string
+                          description: 风险描述
+                        raw_event_id:
+                          type: string
+                          description: 原始事件ID
+                        strategy_id:
+                          type: integer
+                          description: 策略ID
+                        event_evidence:
+                          type: string
+                          description: 风险证据
+                        event_type:
+                          type: array
+                          items:
+                            type: string
+                          description: 风险类型
+                        event_data:
+                          type: object
+                          description: 事件数据
+                        event_time:
+                          type: string
+                          format: date-time
+                          description: 首次发现时间
+                        event_end_time:
+                          type: string
+                          format: date-time
+                          description: 最后发现时间
+                        event_source:
+                          type: string
+                          description: 事件来源
+                        operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 责任人
+                        status:
+                          type: string
+                          description: 风险状态
+                        current_operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 当前处理人
+                        notice_users:
+                          type: array
+                          items:
+                            type: string
+                          description: 关注人
+                        risk_label:
+                          type: string
+                          description: 风险标记
+                        last_operate_time:
+                          type: string
+                          format: date-time
+                          description: 最后操作时间
+                        title:
+                          type: string
+                          description: 风险标题
+                        tags:
+                          type: array
+                          items:
+                            type: integer
+                          description: 标签ID列表
+                        ticket_history:
+                          type: array
+                          description: 单据流转历史
+                          items:
+                            type: object
+                        has_report:
+                          type: boolean
+                          description: 是否有报告
+                        report_enabled:
+                          type: boolean
+                          description: 是否启用报告
+                        report_auto_render:
+                          type: boolean
+                          description: 是否自动生成报告
+                        report:
+                          type: object
+                          description: 风险报告
         default:
           description: ''
       x-bk-apigateway-resource:
