@@ -21,6 +21,7 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
+      @change-table-height="handleChangeTableHeight"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
 
@@ -44,6 +45,7 @@
 <script setup lang='tsx'>
   import {
     computed,
+    nextTick,
     onMounted,
     onUnmounted,
     ref,
@@ -482,6 +484,11 @@
       event_filters: exValue };
     listRef.value.initTableHeight();
     fetchList();
+  };
+  const handleChangeTableHeight = () => {
+    nextTick(() => {
+      listRef.value?.initTableHeight?.();
+    });
   };
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
