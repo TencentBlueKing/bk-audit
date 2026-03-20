@@ -1,36 +1,15 @@
 # SOP 5: 重评估与达标
 
 ## 子 agent 调用
-
-Step 1（运行）和 Step 2（对比分析）推荐交给子 agent 执行。
-
-**子 agent prompt 模板**：
-
-> 在 `{project_root}` 完成重评估和对比分析：
->
-> 1. 运行全量评估（所有 provider，禁止 `--filter-providers`）：
-> ```
-> cd {project_root} && PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python npx promptfoo eval -c {config_path} --env-file .env --no-cache -o {output_path}
-> ```
->
-> 2. 对比前后结果：
-> ```
-> python {skill_path}/scripts/analyze_results.py {before_json} {after_json}
-> ```
->
-> 3. 如果包含多个 provider，追加横向对比：
-> ```
-> python {skill_path}/scripts/analyze_results.py {output_path} --by-provider
-> ```
->
-> 返回：1) 通过率变化 2) 新增通过/失败列表 3) 多模型横向对比（如有）
+Step 1（运行评估）和 Step 2（对比分析）可交给子 agent 执行——给定 suite 路径、上轮结果路径和本轮输出路径即可独立完成。
+Step 3（达标判定）和 Step 4（更新进展）建议主 agent 与用户交互确认。
 
 ## 流程概览
 
 ```
 运行评估 → 对比前后结果 → 判定是否达标
   → 达标则归档
-  → 未达标则回到 SOP 3 → SOP 4 → SOP 5
+  → 未达标则回到 SOP 3（重新分析）→ SOP 4（调优）→ SOP 5（再次重评估）
 ```
 
 ## Step 1: 重新运行评估

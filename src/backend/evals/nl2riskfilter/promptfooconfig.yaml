@@ -6,13 +6,6 @@ prompts:
 
 providers:
   - id: 'python:providers/provider.py'
-    label: 'dsv32'
-    config:
-      username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'dsv32'
-      non_thinking_llm: 'dsv32'
-
-  - id: 'python:providers/provider.py'
     label: 'qwen3-235B'
     config:
       username: '{{env.BKAPP_EVAL_USERNAME}}'

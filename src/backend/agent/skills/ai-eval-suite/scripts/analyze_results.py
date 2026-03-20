@@ -144,8 +144,6 @@ def classify_failure(row: dict) -> str:
             atype = (comp.get("assertion") or {}).get("type", "")
             reason = (comp.get("reason") or "").lower()
 
-            if atype == "python" and "serializer" in reason:
-                return "格式错误"
             if atype in ("llm-rubric", "factuality", "answer-relevance"):
                 return "语义不符"
             if "expected" in reason and "key" in reason:

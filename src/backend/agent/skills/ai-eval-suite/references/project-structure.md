@@ -290,7 +290,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 - **Prompt 位置**：<文件路径 或 第三方平台>
 - **修改方式**：<直接编辑 / 修改生成脚本后重新生成 / 在平台上更新>
-- **生成脚本**（如有）：<路径，如 `services/web/ai/prompts/xxx/generate.py`>
+- **生成脚本**（如有）
 
 ### MCP / 工具链
 

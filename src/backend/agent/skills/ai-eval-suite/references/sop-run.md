@@ -4,18 +4,6 @@
 
 评估运行耗时长（几十秒到几分钟）、无需交互，**强烈推荐**交给子 agent 执行。
 
-**子 agent prompt 模板**（直接复制使用）：
-
-> 在 `{project_root}` 执行评估命令并报告结果。
->
-> **运行命令**：
-> ```
-> cd {project_root} && PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python npx promptfoo eval -c {config_path} --env-file .env --no-cache -o {output_path}
-> ```
->
-> 运行完成后报告：1) 终端输出的通过率摘要 2) 失败用例数 3) 耗时。
-> 如果命令报错，报告完整错误信息。
-
 ## 两种运行模式
 
 ### 模式 A: 快速验证（调试阶段）

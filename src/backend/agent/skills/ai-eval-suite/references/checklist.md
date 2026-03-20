@@ -9,12 +9,10 @@
 - [ ] 字段顺序：description → prompts → providers → defaultTest → evaluateOptions → tests
 - [ ] 环境变量用 `'{{env.VAR}}'` 语法（不是 `$VAR`）
 - [ ] 无敏感信息硬编码（用户名、密钥、内网域名等）
-- [ ] 没有使用 `outputPath`（改用 CLI `-o` 参数）
 
 ## Provider
 
 - [ ] 业务 provider 调用真实业务接口，走完整链路
-- [ ] 无 mock provider
 - [ ] 环境变量缺失时返回明确错误信息
 - [ ] 返回格式正确：`{"output": "...", "metadata": {...}}`
 - [ ] 公共 provider 放在 `evals/providers/`，业务 provider 放在 `evals/<suite>/providers/`
@@ -58,6 +56,5 @@
 
 ## 文档
 
-- [ ] Suite README 包含：评估目标、用例概览、Provider 说明、运行命令、环境依赖、通过率阈值
-- [ ] Suite README 包含评估迭代进展表
+- [ ] Suite README 包含：评估目标、用例概览、Provider 说明、运行命令、环境依赖、通过率阈值、评估迭代进展表
 - [ ] evals/README.md 已更新 suite 列表和目录约定

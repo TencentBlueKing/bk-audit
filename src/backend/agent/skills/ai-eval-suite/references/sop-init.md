@@ -22,7 +22,7 @@
 
 ## Step 1: 询问评估目标
 
-向用户收集以下信息（保持简单，不问多余的）：
+向用户收集以下信息：
 
 1. **评估什么 AI 能力？**
    - 名称会作为目录名（如 `text2sql`、`intent-classify`）
@@ -30,8 +30,7 @@
 
 2. **输入是什么？**
    - 自然语言查询
-   - 结构化数据（JSON / 表单）
-   - 多轮对话
+   - 结构化数据（JSON / 表单）等
 
 3. **输出是什么？**
    - JSON 结构（最常见，需要字段级验证）
@@ -39,18 +38,18 @@
    - 分类标签（需要精确匹配）
 
 4. **"好"的标准是什么？**
+   - 符合业务逻辑
    - 精确匹配特定字段值
    - 包含关键信息
-   - 通过业务 Serializer 校验
    - 语义正确（需要模型辅助断言）
 
 5. **通过率阈值？**
    - 建议默认 90%，用户可调整
-   - 记录到 suite 的 README 中
 
-6. **是否需要模型辅助断言（llm-rubric 等）？**
-   - 如果需要，确认 LLM 网关地址和鉴权方式
-   - 蓝鲸项目可直接使用内置的 `bk_llm_provider.py`
+注意：需根据用户业务场景来动态决定是否需要更多信息。
+
+上述结论记录到 suite 的 README 中。
+
 
 ## Step 2: 创建目录结构
 
@@ -101,7 +100,7 @@ BKAPP_LLM_APP_SECRET=<应用 secret>
 ```
 
 **非蓝鲸项目**：根据实际 LLM 接口编写自己的 grader provider，或直接使用 promptfoo 内置的
-`openai:chat:xxx`（需配置 `OPENAI_API_KEY`）。
+`openai:chat:xxx`（需配置 `OPENAI_API_KEY`）等。
 
 ## Step 4: 编写业务 Provider
 
@@ -233,7 +232,8 @@ assert:
 ```
 
 **用例设计原则：**
-- 每个用例有明确的 `description`
+
+- 每个用例需贴合业务场景且有明确的 `description`
 - `vars` 中包含输入和期望值
 - 断言从确定性开始，不够用时才加模型辅助
 - 覆盖 happy path / edge case / regression / security

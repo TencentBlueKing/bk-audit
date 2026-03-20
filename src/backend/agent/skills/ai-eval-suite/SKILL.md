@@ -1,12 +1,9 @@
 ---
 name: ai-eval-suite
 description: >
-  AI 能力评估闭环流程编排工具。基于 promptfoo 驱动"初始化 → 评估 → 分析 → 调优 → 重评估"
-  的完整闭环，直到达到用户设定的通过率阈值。当用户提到以下场景时使用此 skill：
+  AI 能力评估闭环流程编排工具。当用户提到以下场景时使用此 skill：
   搭建 AI 评估、创建评测套件、运行 promptfoo 评估、分析评估结果、调优 prompt/模型、
   评估不通过需要排查、AI 能力回归测试、对比不同模型表现、评测闭环、benchmark。
-  即使用户只是说"跑一下评估""看看哪个模型好""评估挂了""通过率不够""加个模型跑跑"，
-  也应该触发此 skill。
 ---
 
 # AI 评估闭环套件
@@ -70,8 +67,6 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | SOP 4 | 调优 | ❌ 主 agent | 需要与用户交互 |
 | SOP 5 | 运行+对比 | ✅ 推荐 | 同 SOP 2+3 |
 
-各 SOP 文件顶部有可直接复制的子 agent prompt 模板。
-
 辅助参考：
 
 
@@ -132,19 +127,18 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
 
 1. **环境变量无敏感默认值** — 用户名、密钥等必须从环境变量获取，不允许硬编码
 2. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI，避免额外抽象层增加调试复杂度
-3**每个环节产出必须持久化** — 评估结果（JSON/HTML）、分析结论（conclusion.md）、调优决策（README 调优记录）、迭代进展（README 进展表）都要落地到文件，不能只停留在对话中
+3. **每个环节产出必须持久化** — 评估结果（JSON/HTML）、分析结论（conclusion.md）、调优决策（README 调优记录）、迭代进展（README 进展表）都要落地到文件，不能只停留在对话中
 
 ## 断言选择速查
 
 ```
-确定性断言（快、免费、稳定）  →  优先使用
+确定性断言
   contains / icontains / regex / is-json / python / javascript
-    ↓ 不够用时
-相似度断言（较快、便宜）
+    ↓ 
+语义相似度断言
   similar / rouge-n / bleu
-    ↓ 仍不够用时
-模型辅助断言（慢、花钱、有波动）  →  慎用
+    ↓ 
+模型辅助断言
   llm-rubric / factuality / context-faithfulness
   ⚠️ 必须通过 defaultTest.options.provider 指定 grader provider
 ```
-
