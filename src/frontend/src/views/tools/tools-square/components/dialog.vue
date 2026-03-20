@@ -782,6 +782,10 @@
     if (apiSearchResultRef.value) {
       apiSearchResultRef.value.resetGroupData();
     }
+    // 关闭BKVision实例
+    if (bkVisionResultRef.value) {
+      bkVisionResultRef.value.closeBK();
+    }
     dialogWidth.value = '50%';
     isFullScreen.value = false;
     isShow.value = false;
