@@ -294,7 +294,7 @@
     - type: python
       value: "file://assertions/check_filters.py:field_value_match"
 
-# A18: 标题搜索（title）
+# A18: 标题搜索（title）— "标题含xxx" 明确模式
 - description: "A18-常规：标题包含登录异常的风险"
   vars:
     query: "标题包含登录异常的风险"
@@ -306,3 +306,125 @@
       value: "file://assertions/check_filters.py:is_non_empty_filter"
     - type: python
       value: "file://assertions/check_filters.py:has_expected_keys"
+
+# A19: 标题搜索 —"关于xxx"模式（回归测试发现不稳定）
+- description: "A19-常规：关于权限变更的风险（标题映射）"
+  vars:
+    query: "关于权限变更的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["title"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# A20: 标题搜索 — "xxx相关风险"模式
+- description: "A20-常规：数据泄露相关的风险（标题映射）"
+  vars:
+    query: "数据泄露相关的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["title"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# A21: 事件内容搜索 — "事件内容含xxx"（回归测试 0% 通过率）
+- description: "A21-常规：事件内容含sudo的风险"
+  vars:
+    query: "事件内容含sudo的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content"]'
+    expected_event_content: "sudo"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_event_content"
+
+# A22: 事件内容搜索 — "事件详情包含xxx"
+- description: "A22-常规：事件详情包含删除操作的风险"
+  vars:
+    query: "事件详情包含删除操作的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content"]'
+    expected_event_content: "删除"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_event_content"
+
+# A23: 事件内容搜索 — "事件中有xxx"
+- description: "A23-常规：事件中有异常登录的风险"
+  vars:
+    query: "事件中有异常登录的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# A24: has_report — 已生成报告
+- description: "A24-常规：已生成报告的风险"
+  vars:
+    query: "已生成报告的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["has_report"]'
+    expected_has_report: "true"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_has_report"
+
+# A25: has_report — 没有报告的
+- description: "A25-常规：没有报告的风险"
+  vars:
+    query: "没有报告的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["has_report"]'
+    expected_has_report: "false"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_has_report"
+
+# A26: has_report + 条件组合
+- description: "A26-常规：有报告的高危风险"
+  vars:
+    query: "有报告的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["has_report", "risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+    expected_has_report: "true"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:check_has_report"

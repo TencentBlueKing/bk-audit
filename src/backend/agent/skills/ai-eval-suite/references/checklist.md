@@ -9,12 +9,10 @@
 - [ ] 字段顺序：description → prompts → providers → defaultTest → evaluateOptions → tests
 - [ ] 环境变量用 `'{{env.VAR}}'` 语法（不是 `$VAR`）
 - [ ] 无敏感信息硬编码（用户名、密钥、内网域名等）
-- [ ] 没有使用 `outputPath`（改用 CLI `-o` 参数）
 
 ## Provider
 
 - [ ] 业务 provider 调用真实业务接口，走完整链路
-- [ ] 无 mock provider
 - [ ] 环境变量缺失时返回明确错误信息
 - [ ] 返回格式正确：`{"output": "...", "metadata": {...}}`
 - [ ] 公共 provider 放在 `evals/providers/`，业务 provider 放在 `evals/<suite>/providers/`
@@ -29,7 +27,7 @@
 ## 测试用例
 
 - [ ] 每个用例有明确的 `description`
-- [ ] 覆盖维度：常规 / 复杂 / 边界 / 挑战
+- [ ] 覆盖维度合理（如核心场景 / 组合场景 / 边界异常等，具体按业务确定）
 - [ ] 覆盖类型：happy path / edge case / regression / security
 - [ ] 期望值合理，与业务逻辑一致
 
@@ -38,7 +36,7 @@
 - [ ] 遵循 `evals/<suite>/` 目录约定
 - [ ] 公共 provider 在 `evals/providers/`（如有）
 - [ ] 有 `output/` 目录和 `.gitkeep`
-- [ ] `evals/.gitignore` 包含 `*/output/*.json` 等规则
+- [ ] `evals/.gitignore` 包含输出文件忽略规则：`*/output/*.json`、`*/output/*.html`、`*/output/*.csv`、`*/output/*.md`
 - [ ] 有 suite 级 README.md
 
 ## 运行环境
@@ -58,6 +56,5 @@
 
 ## 文档
 
-- [ ] Suite README 包含：评估目标、用例概览、Provider 说明、运行命令、环境依赖、通过率阈值
-- [ ] Suite README 包含评估迭代进展表
+- [ ] Suite README 包含：评估目标、用例概览、Provider 说明、运行命令、环境依赖、通过率阈值、评估迭代进展表
 - [ ] evals/README.md 已更新 suite 列表和目录约定

@@ -184,3 +184,139 @@
         4. 不包含无关的筛选字段
         满足 3 个及以上条件则 pass。
       threshold: 0.75
+
+# ──────────────────────────────────────────────────────────────
+# 以下为回归用例（针对 E2E 回归测试发现的失败模式）
+# ──────────────────────────────────────────────────────────────
+
+# D15: event_content 回归 — "事件内容包含xxx"（E2E 0% 通过率）
+- description: "D15-回归：事件内容包含敏感操作的风险"
+  vars:
+    query: "事件内容包含敏感操作的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content"]'
+    expected_event_content: "敏感操作"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_event_content"
+
+# D16: event_content + 时间组合
+- description: "D16-回归：最近三天事件内容含权限提升的风险"
+  vars:
+    query: "最近三天事件内容含权限提升的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content", "start_time", "end_time"]'
+    expected_event_content: "权限提升"
+    expected_time_delta_days: "3"
+    time_tolerance_hours: "2"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_event_content"
+    - type: python
+      value: "file://assertions/check_filters.py:check_time_range"
+
+# D17: title "关于xxx" 回归 — E2E 发现不稳定
+- description: "D17-回归：关于账号异常的风险（标题）"
+  vars:
+    query: "关于账号异常的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["title"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# D18: title "xxx的风险" — 隐式标题查询
+- description: "D18-回归：越权操作的风险（隐式标题）"
+  vars:
+    query: "越权操作的风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+    - type: llm-rubric
+      value: |
+        输出是一个 JSON 对象（风险筛选条件）。"越权操作的风险"中"越权操作"应被理解为标题关键词。
+        验证以下条件之一：
+        1. 输出包含 title 字段，值含"越权操作" → pass
+        2. 输出包含 event_content 字段，值含"越权操作" → pass（可接受的替代理解）
+        3. 输出为空 {} → fail（应能提取有效信息）
+        满足条件 1 或 2 则 pass。
+
+# D19: 否定语义回归 — status 不支持否定，应忽略
+- description: "D19-回归：不是已关闭的高危风险（否定 status）"
+  vars:
+    query: "不是已关闭的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# D20: event_content 口语化 — "含有xxx内容的事件"
+- description: "D20-回归：含有数据库操作内容的事件风险"
+  vars:
+    query: "含有数据库操作内容的事件风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# D21: event_content + risk_level 组合
+- description: "D21-回归：事件内容含SSH的高危风险"
+  vars:
+    query: "事件内容含SSH的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["event_content", "risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+    expected_event_content: "SSH"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:check_event_content"
+
+# D22: has_report + 排序 组合
+- description: "D22-回归：有报告的风险按时间降序"
+  vars:
+    query: "有报告的风险按时间降序排列"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["has_report", "sort"]'
+    expected_has_report: "true"
+    expected_sort: '["-event_time"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:check_has_report"
+    - type: python
+      value: "file://assertions/check_filters.py:check_sort"

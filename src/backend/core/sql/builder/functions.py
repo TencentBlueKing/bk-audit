@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Any, Optional, Self, Union
+from __future__ import annotations
+
+from typing import Any, Optional, Union
 
 from pypika.functions import Cast, Count, DistinctOptionFunction
 from pypika.terms import Function, Term
@@ -56,7 +58,7 @@ class JsonExtractFunction(Function):
         super().__init__(func_name, json_column, path_term, alias=alias)
         self._returning_type_str = returning_type.lower() if returning_type else None
 
-    def cast_to(self, sql_type: Optional[str] = None, alias: str = None) -> Union[Cast, Self]:
+    def cast_to(self, sql_type: Optional[str] = None, alias: str = None) -> Union[Cast, JsonExtractFunction]:
         """统一类型转换逻辑，支持自动映射"""
         if self.ENABLE_RETURN_TYPE_DECLARATION and self._returning_type_str:
             type_str = sql_type or self._returning_type_str
