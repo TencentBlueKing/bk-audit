@@ -488,6 +488,64 @@ def sync_auto_result(node_id: str = None):
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
 
+@celery_app.task(
+    bind=True,
+    queue="risk_report",
+    time_limit=900,
+    max_retries=2,
+    acks_late=True,
+)
+def generate_analyse_report(self, report_id: int):
+    """
+    异步生成AI分析报告
+
+    直接将分析要求作为 prompt 传递给 Analyse Agent，
+    sub_agent 配置已在 agent 服务中预配置，无需从调用端传入。
+    """
+    from services.web.risk.constants import AnalyseReportStatus
+    from services.web.risk.models import AnalyseReport
+
+    report = AnalyseReport.objects.get(report_id=report_id)
+
+    try:
+        # 1. 构造分析要求 prompt
+        scenario = report.scenario
+        if scenario:
+            # 内置场景：使用场景配置的 system_prompt 作为分析要求前缀
+            analysis_request = scenario.system_prompt
+        else:
+            # 自定义分析：使用用户自定义描述
+            analysis_request = report.custom_prompt or "请使用风险查询条件查询风险详细数据生成分析报告。"
+
+        # 将 prompt_params 拼接到分析要求中，构造完整的文本字符串
+        prompt_params = report.prompt_params or {}
+        prompt_params_text = json.dumps(prompt_params, ensure_ascii=False) if prompt_params else ""
+        prompt = f"{analysis_request}\n{prompt_params_text}" if prompt_params_text else analysis_request
+
+        # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
+        result = api.bk_plugins_ai_audit_analyse.chat_completion(
+            user=report.created_by or "admin",
+            input=prompt,
+            execute_kwargs={"stream": True},
+        )
+
+        # 3. 更新报告
+        report.content = result
+        report.status = AnalyseReportStatus.SUCCESS
+        report.save(update_fields=["content", "status", "updated_at"])
+
+        return {"report_id": report.report_id}
+
+    except Exception as exc:
+        logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
+        report.status = AnalyseReportStatus.FAILED
+        report.save(update_fields=["status", "updated_at"])
+        try:
+            self.retry(exc=exc, countdown=60)
+        except MaxRetriesExceededError:
+            logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+
+
 @celery_app.task(queue="risk_render")
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
