@@ -1383,7 +1383,7 @@ class ExportAnalyseReportRequestSerializer(serializers.Serializer):
     """导出报告请求"""
 
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
-    format = serializers.ChoiceField(
+    export_format = serializers.ChoiceField(
         label=gettext_lazy("导出格式"),
         choices=[("pdf", "PDF"), ("markdown", "Markdown")],
     )

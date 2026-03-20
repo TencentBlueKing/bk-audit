@@ -251,7 +251,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        export_format = validated_request_data["format"]
+        export_format = validated_request_data["export_format"]
         report = get_object_or_404(AnalyseReport, report_id=report_id)
 
         if export_format == "markdown":

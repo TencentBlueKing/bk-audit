@@ -480,7 +480,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         result = self.resource.risk.export_analyse_report(
             {
                 "report_id": self.report.report_id,
-                "format": "markdown",
+                "export_format": "markdown",
             }
         )
         self.assertEqual(result["Content-Type"], "text/markdown; charset=utf-8")
@@ -492,7 +492,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         result = self.resource.risk.export_analyse_report(
             {
                 "report_id": self.report.report_id,
-                "format": "pdf",
+                "export_format": "pdf",
             }
         )
         # 可能回退为HTML（如果weasyprint不可用）
@@ -509,7 +509,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
             self.resource.risk.export_analyse_report(
                 {
                     "report_id": 99999,
-                    "format": "markdown",
+                    "export_format": "markdown",
                 }
             )
 
