@@ -258,6 +258,10 @@ REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 
+DEFAULT_REDIS_TAGS = [
+    tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",") if tag
+]
+
 CACHES["db"] = {
     "BACKEND": "django.core.cache.backends.db.DatabaseCache",
     "LOCATION": "django_cache",
@@ -315,6 +319,9 @@ FEATURE_TOGGLE = {
 
 # BkLog
 BKLOG_PERMISSION_VERSION = os.getenv("BKAPP_BKLOG_PERMISSION_VERSION", "2")
+
+# 日志采集数据链路ID，仅SG环境需要配置
+BKLOG_DATA_LINK_ID = os.getenv("BKAPP_BKLOG_DATA_LINK_ID", None)
 
 # Index
 INDEX_VERSION_NUMBER = os.getenv("BKAPP_INDEX_VERSION_NUMBER", "v1")
@@ -556,6 +563,9 @@ BKAPP_PYTHON_SDK_CONFIG = os.getenv("BKAPP_PYTHON_SDK_CONFIG", "")
 # 审计文档配置
 BKAPP_AUDIT_ACCESS_GUIDE = os.getenv("BKAPP_AUDIT_ACCESS_GUIDE", "")
 BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS = os.getenv("BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS", "")
+
+BKBASE_GEOG_AREA_CODE = os.getenv("BKAPP_BKBASE_GEOG_AREA_CODE", "inland")
+BKBASE_DATA_REGION = os.getenv("BKAPP_BKBASE_DATA_REGION", "inland")
 
 """
 以下为框架代码 请勿修改

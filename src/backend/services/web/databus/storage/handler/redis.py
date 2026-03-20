@@ -20,7 +20,6 @@ from bk_resource import api
 from django.conf import settings
 
 from core.models import get_request_username
-from services.web.databus.constants import DEFAULT_REDIS_TAGS
 from services.web.databus.models import RedisConfig
 
 
@@ -39,13 +38,13 @@ class RedisHandler:
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "resource_set_id": data["redis_name_en"],
             "resource_set_name": data["redis_name"],
-            "geog_area_code": "inland",
+            "geog_area_code": settings.BKBASE_GEOG_AREA_CODE,
             "category": "redis",
             "provider": "user",
             "purpose": "Redis",
             "share": False,
             "admin": [username],
-            "tag": DEFAULT_REDIS_TAGS,
+            "tag": settings.DEFAULT_REDIS_TAGS,
             "connection_info": data["connection_info"],
             "version": data["version"],
         }
