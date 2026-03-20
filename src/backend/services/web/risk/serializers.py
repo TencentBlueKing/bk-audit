@@ -33,6 +33,7 @@ from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    AnalyseReportType,
     EventFilterOperator,
     EventMappingFields,
     RiskLabel,
@@ -40,6 +41,8 @@ from services.web.risk.constants import (
     RiskViewType,
 )
 from services.web.risk.models import (
+    AnalyseReport,
+    AnalyseReportScenario,
     ManualEvent,
     ProcessApplication,
     Risk,
@@ -1214,3 +1217,185 @@ class GenerateRiskReportResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+# ============ Agent Report 相关序列化器 ============
+
+
+class ListAnalyseReportScenarioResponseSerializer(serializers.ModelSerializer):
+    """场景列表响应"""
+
+    class Meta:
+        model = AnalyseReportScenario
+        fields = [
+            "scenario_id",
+            "scenario_key",
+            "name",
+            "description",
+            "report_type",
+            "is_builtin",
+            "priority",
+        ]
+
+
+class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
+    """生成AI分析报告请求
+
+    通过 target_risks_filter 接收和 list_risk 接口一样的所有过滤参数，
+    前端页面上提交的过滤条件会直接放入该字段中传入。
+    这些过滤参数会作为 prompt_params 存入报告，并拼接到 AI 分析要求中。
+    """
+
+    scenario_key = serializers.CharField(
+        label=gettext_lazy("场景标识"),
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    report_type = serializers.ChoiceField(
+        label=gettext_lazy("报告类型"),
+        choices=AnalyseReportType.choices,
+    )
+    title = serializers.CharField(label=gettext_lazy("报告标题"), max_length=255)
+    analysis_scope = serializers.CharField(
+        label=gettext_lazy("分析范围描述"),
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    custom_prompt = serializers.CharField(
+        label=gettext_lazy("自定义分析描述"),
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    target_risks_filter = serializers.JSONField(
+        label=gettext_lazy("风险过滤条件"),
+        required=False,
+        default=dict,
+        help_text=gettext_lazy(
+            "与 list_risk 接口一致的过滤参数，如 "
+            '{"start_time": "2025-09-16 20:04:51", "end_time": "2026-03-16 20:04:51", '
+            '"operator": "zhangsan", "use_bkbase": true, "datetime_origin": "now-6M,now"}'
+        ),
+    )
+
+
+class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
+    """生成AI分析报告响应"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
+    status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+class ListAnalyseReportRequestSerializer(serializers.Serializer):
+    """历史报告列表请求"""
+
+    keyword = serializers.CharField(
+        label=gettext_lazy("搜索关键词"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("模糊搜索报告标题、分析范围、生成人"),
+    )
+    report_type = serializers.ChoiceField(
+        label=gettext_lazy("报告类型筛选"),
+        choices=AnalyseReportType.choices,
+        required=False,
+        allow_blank=True,
+    )
+    sort = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=["-created_at"],
+        help_text=gettext_lazy('排序字段，如 ["-risk_count", "-created_at"]'),
+    )
+
+
+class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
+    """历史报告列表响应"""
+
+    class Meta:
+        model = AnalyseReport
+        fields = [
+            "report_id",
+            "title",
+            "report_type",
+            "analysis_scope",
+            "risk_count",
+            "status",
+            "created_by",
+            "created_at",
+        ]
+
+
+class RetrieveAnalyseReportRequestSerializer(serializers.Serializer):
+    """报告详情请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+
+
+class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
+    """报告详情响应"""
+
+    risk_ids = serializers.SerializerMethodField()
+    scenario_name = serializers.CharField(source="scenario.name", default="", read_only=True)
+
+    def get_risk_ids(self, obj) -> List[str]:
+        return list(obj.report_risks.values_list("risk_id", flat=True))
+
+    class Meta:
+        model = AnalyseReport
+        fields = [
+            "report_id",
+            "title",
+            "report_type",
+            "content",
+            "analysis_scope",
+            "risk_count",
+            "risk_ids",
+            "scenario_name",
+            "status",
+            "prompt_params",
+            "custom_prompt",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class UpdateAnalyseReportRequestSerializer(serializers.Serializer):
+    """编辑报告请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    title = serializers.CharField(label=gettext_lazy("报告标题"), max_length=255, required=False)
+    content = serializers.CharField(label=gettext_lazy("报告内容(Markdown)"), required=False)
+
+
+class DeleteAnalyseReportRequestSerializer(serializers.Serializer):
+    """删除报告请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+
+
+class ExportAnalyseReportRequestSerializer(serializers.Serializer):
+    """导出报告请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    format = serializers.ChoiceField(
+        label=gettext_lazy("导出格式"),
+        choices=[("pdf", "PDF"), ("markdown", "Markdown")],
+    )
+
+
+class ListAnalyseReportRiskRequestSerializer(serializers.Serializer):
+    """报告关联风险列表请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+
+
+class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
+    """风险反查报告请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))

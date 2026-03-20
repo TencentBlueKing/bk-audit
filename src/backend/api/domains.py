@@ -78,3 +78,8 @@ BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, s
 AI_AUDIT_REPORT_API_URL = settings.AI_AUDIT_REPORT_API_URL or get_endpoint(
     settings.AI_AUDIT_REPORT_APIGW_NAME, APIProvider.APIGW, stage="prod"
 )
+
+# AI Audit Analyse (分析智能体)
+AI_AUDIT_ANALYSE_API_URL = settings.AI_AUDIT_ANALYSE_API_URL or get_endpoint(
+    settings.AI_AUDIT_ANALYSE_APIGW_NAME, APIProvider.APIGW, stage="prod"
+)

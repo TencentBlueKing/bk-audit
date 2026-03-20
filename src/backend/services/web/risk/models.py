@@ -28,6 +28,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from django.db.models import Exists, Field, Max, OuterRef, Q, QuerySet
 from django.db.models.functions import Substr
+from django.db.models.signals import post_save  # noqa: E402
+from django.dispatch import receiver  # noqa: E402
 from django.utils.translation import gettext_lazy
 from pydantic import ValidationError as PydanticValidationError
 
@@ -39,6 +41,8 @@ from core.sql.constants import FieldType
 from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
+    AnalyseReportStatus,
+    AnalyseReportType,
     EventMappingFields,
     RiskDisplayStatus,
     RiskLabel,
@@ -712,8 +716,135 @@ class RiskReport(OperateRecordModel):
         return f"RiskReport({self.risk_id})"
 
 
-from django.db.models.signals import post_save  # noqa: E402
-from django.dispatch import receiver  # noqa: E402
+class AnalyseReportScenario(SoftDeleteModel):
+    """
+    AI分析报告场景配置
+
+    存储不同报告类型对应的 Agent Prompt 模板。
+    内置场景（is_builtin=True）不可删除，用户可新增自定义场景。
+    """
+
+    scenario_id = models.BigAutoField(gettext_lazy("场景ID"), primary_key=True)
+    scenario_key = models.CharField(
+        gettext_lazy("场景标识"),
+        max_length=64,
+        unique=True,
+        db_index=True,
+    )
+    name = models.CharField(gettext_lazy("场景名称"), max_length=128)
+    description = models.TextField(
+        gettext_lazy("场景描述"),
+        blank=True,
+        default="",
+        help_text=gettext_lazy("前端展示的描述文字"),
+    )
+    report_type = models.CharField(
+        gettext_lazy("报告类型"),
+        max_length=32,
+        choices=AnalyseReportType.choices,
+        db_index=True,
+    )
+    is_builtin = models.BooleanField(gettext_lazy("是否内置"), default=False)
+    system_prompt = models.TextField(
+        gettext_lazy("Agent System Prompt"),
+        help_text=gettext_lazy("发送给Agent的系统提示词模板"),
+    )
+    priority = models.IntegerField(gettext_lazy("排序权重"), default=0)
+    is_enabled = models.BooleanField(gettext_lazy("是否启用"), default=True)
+
+    class Meta:
+        db_table = "risk_analysereportscenario"
+        verbose_name = gettext_lazy("AI报告场景配置")
+        verbose_name_plural = verbose_name
+        ordering = ["-is_builtin", "-priority", "-created_at"]
+
+
+class AnalyseReport(OperateRecordModel):
+    """
+    风险AI分析报告
+
+    由 Analyse Agent 基于风险搜索结果异步生成的分析报告。
+    """
+
+    report_id = models.BigAutoField(gettext_lazy("报告ID"), primary_key=True)
+    title = models.CharField(gettext_lazy("报告标题"), max_length=255)
+    report_type = models.CharField(
+        gettext_lazy("报告类型"),
+        max_length=32,
+        choices=AnalyseReportType.choices,
+        db_index=True,
+    )
+    content = models.TextField(gettext_lazy("报告内容(Markdown)"), blank=True, default="")
+    scenario = models.ForeignKey(
+        AnalyseReportScenario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=gettext_lazy("关联场景"),
+        related_name="reports",
+        db_constraint=False,
+    )
+    analysis_scope = models.TextField(gettext_lazy("分析范围"), blank=True, default="")
+    risk_count = models.IntegerField(gettext_lazy("关联风险条数"), default=0)
+    status = models.CharField(
+        gettext_lazy("报告状态"),
+        max_length=20,
+        choices=AnalyseReportStatus.choices,
+        default=AnalyseReportStatus.GENERATING,
+        db_index=True,
+    )
+    task_id = models.CharField(gettext_lazy("Celery任务ID"), max_length=255, blank=True, default="")
+    prompt_params = models.JSONField(
+        gettext_lazy("Prompt参数"),
+        default=dict,
+        blank=True,
+        help_text=gettext_lazy("传给Analyse Agent的完整参数"),
+    )
+    custom_prompt = models.TextField(gettext_lazy("自定义分析描述"), blank=True, default="")
+
+    class Meta:
+        db_table = "risk_analysereport"
+        verbose_name = gettext_lazy("AI分析报告")
+        verbose_name_plural = verbose_name
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["report_type", "-created_at"], name="risk_analysereport_rt_ca"),
+            models.Index(fields=["status", "-created_at"], name="risk_analysereport_st_ca"),
+        ]
+
+
+class AnalyseReportRisk(models.Model):
+    """
+    AI分析报告与风险单的关联关系
+
+    独立多对多关联表：
+    - 正向：报告 → 关联的风险列表
+    - 反向：风险 → 关联的所有AI报告（反查）
+    """
+
+    id = models.BigAutoField(gettext_lazy("ID"), primary_key=True)
+    report = models.ForeignKey(
+        AnalyseReport,
+        on_delete=models.CASCADE,
+        related_name="report_risks",
+        verbose_name=gettext_lazy("关联报告"),
+        db_constraint=False,
+    )
+    risk_id = models.CharField(
+        gettext_lazy("风险ID"),
+        max_length=255,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(gettext_lazy("创建时间"), auto_now_add=True)
+
+    class Meta:
+        db_table = "risk_analysereportrisk"
+        verbose_name = gettext_lazy("AI报告-风险关联")
+        verbose_name_plural = verbose_name
+        unique_together = [["report", "risk_id"]]
+        indexes = [
+            models.Index(fields=["risk_id"], name="risk_analysereportrisk_rid"),
+        ]
 
 
 @receiver(post_save, sender=RiskReport)
