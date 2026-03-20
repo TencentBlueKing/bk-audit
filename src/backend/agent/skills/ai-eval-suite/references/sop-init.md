@@ -337,7 +337,7 @@ export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
 npx promptfoo validate config -c evals/<suite>/promptfooconfig.yaml
 
 # 快速测试一个用例
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache --filter-first-n 1
 ```
 

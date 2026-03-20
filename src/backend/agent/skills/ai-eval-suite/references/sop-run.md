@@ -13,7 +13,7 @@
 ```bash
 cd <project-root>
 PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python \
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   --filter-providers <单模型label> --filter-first-n 10
 ```
@@ -29,7 +29,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 ```bash
 cd <project-root>
 PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python \
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-vN-results.json
 ```

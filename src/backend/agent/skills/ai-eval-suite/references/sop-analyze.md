@@ -128,7 +128,7 @@ promptfoo 输出有两种格式，分析脚本已兼容两者。
 ```bash
 # 重跑特定用例 3 次，观察一致性
 PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python \
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   --filter-pattern '<用例描述正则>' --repeat 3
 ```

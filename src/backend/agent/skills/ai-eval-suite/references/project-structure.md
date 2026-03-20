@@ -233,7 +233,7 @@ export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
 
 \`\`\`bash
 cd <project-root>
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache
 \`\`\`
 
@@ -269,7 +269,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 \`\`\`bash
 cd <project-root>
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-results.json
 \`\`\`

@@ -43,7 +43,6 @@ defaultTest:
 evaluateOptions:
   maxConcurrency: 3
   repeat: 2
-  delay: 500
 
 tests:
   - file://tests/normal.yaml

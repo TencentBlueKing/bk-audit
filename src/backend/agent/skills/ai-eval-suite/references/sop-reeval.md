@@ -22,7 +22,7 @@ Step 3（达标判定）和 Step 4（更新进展）建议主 agent 与用户交
 **快速验证**（SOP 2 模式 A）：只跑相关用例确认修改生效。
 
 ```bash
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   --filter-pattern '<相关用例描述的正则>'
 ```
@@ -151,7 +151,7 @@ python <skill-path>/scripts/analyze_results.py \
 
 ```bash
 # promptfoo 支持多个 -o 参数同时导出不同格式
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-final.json \
   -o evals/<suite>/output/$(date +%Y%m%d)-final.html
