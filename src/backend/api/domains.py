@@ -76,3 +76,8 @@ BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, s
 
 # AI 智能体（审计报告 — 保留 domains 入口供 bk_plugins_ai_audit_report 使用）
 AI_AUDIT_REPORT_API_URL = get_agent_base_url(AIAgentCode.AUDIT_REPORT)
+
+# AI Audit Analyse (分析智能体)
+AI_AUDIT_ANALYSE_API_URL = settings.AI_AUDIT_ANALYSE_API_URL or get_endpoint(
+    settings.AI_AUDIT_ANALYSE_APIGW_NAME, APIProvider.APIGW, stage="prod"
+)

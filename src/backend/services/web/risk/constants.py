@@ -792,6 +792,23 @@ class RiskReportStatus(TextChoices):
     MANUAL = "manual", gettext_lazy("人工编辑")
 
 
+@register_choices("analyse_report_type")
+class AnalyseReportType(TextChoices):
+    """AI分析报告类型"""
+
+    SYSTEM = "system", gettext_lazy("系统分析")
+    CUSTOM = "custom", gettext_lazy("自定义分析")
+
+
+@register_choices("analyse_report_status")
+class AnalyseReportStatus(TextChoices):
+    """AI分析报告状态"""
+
+    GENERATING = "generating", gettext_lazy("生成中")
+    SUCCESS = "success", gettext_lazy("已完成")
+    FAILED = "failed", gettext_lazy("生成失败")
+
+
 @register_choices("aggregation_function")
 class AggregationFunction(TextChoices):
     """

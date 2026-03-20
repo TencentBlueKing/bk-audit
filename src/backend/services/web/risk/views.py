@@ -19,6 +19,7 @@ from typing import List
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
@@ -284,6 +285,57 @@ class RiskRulesViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_risk_rule_operator, endpoint="operators"),
         ResourceRoute("PUT", resource.risk.batch_update_risk_rule_priority_index, endpoint="set_priority_index"),
         ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
+    ]
+
+
+@extend_schema_view(
+    retrieve=extend_schema(description="获取AI报告详情"),
+    update=extend_schema(description="编辑AI报告"),
+    destroy=extend_schema(description="删除AI报告"),
+)
+class AnalyseReportViewSet(ResourceViewSet):
+    """
+    风险AI分析报告管理
+
+    路由前缀：/api/v1/analyse_report/
+    """
+
+    serializer_class = None  # 由各 ResourceRoute 提供
+    lookup_field = "report_id"
+
+    def get_queryset(self):
+        from services.web.risk.models import AnalyseReport
+
+        return AnalyseReport.objects.all()
+
+    def get_permissions(self):
+        if self.action in ["update", "destroy"]:
+            return [IAMPermission(actions=[ActionEnum.EDIT_RISK])]
+        return [IAMPermission(actions=[ActionEnum.LIST_RISK])]
+
+    resource_routes = [
+        # 场景列表
+        ResourceRoute("GET", resource.risk.list_analyse_report_scenario, endpoint="scenarios"),
+        # 生成报告（异步）
+        ResourceRoute("POST", resource.risk.generate_analyse_report, endpoint="generate"),
+        # 查询任务状态
+        ResourceRoute("GET", resource.risk.get_analyse_report_task_result, endpoint="task"),
+        # 历史报告列表（POST支持复杂搜索）
+        ResourceRoute("POST", resource.risk.list_analyse_report, enable_paginate=True),
+        # 报告详情
+        ResourceRoute("GET", resource.risk.retrieve_analyse_report, pk_field="report_id"),
+        # 编辑报告
+        ResourceRoute("PUT", resource.risk.update_analyse_report, pk_field="report_id"),
+        # 删除报告
+        ResourceRoute("DELETE", resource.risk.delete_analyse_report, pk_field="report_id"),
+        # 导出报告
+        ResourceRoute("GET", resource.risk.export_analyse_report, pk_field="report_id", endpoint="export"),
+        # 报告关联风险列表
+        ResourceRoute(
+            "GET", resource.risk.list_analyse_report_risk, pk_field="report_id", endpoint="risks", enable_paginate=True
+        ),
+        # 风险反查报告
+        ResourceRoute("GET", resource.risk.list_analyse_report_by_risk, endpoint="by_risk"),
     ]
 
 
