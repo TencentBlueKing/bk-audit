@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { onUnmounted, ref } from 'vue';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -116,10 +116,13 @@
     });
   };
 
-  defineExpose({
-    executeTool,
-    panelRef,
-  });
+  // 关闭弹窗时清理实例
+  const closeBK = () => {
+    if (app) {
+      app.unmount();
+      app = null;
+    }
+  };
 
   // 加载脚本
   const loadScript = (src: string) => new Promise((resolve, reject) => {
@@ -143,9 +146,6 @@
 
   // 初始化 BKVision
   const initBK = async (id: string) => {
-    if (app) {
-      app.unmount();
-    }
     const filters: Record<string, any> = {};
     const drillDownFilters: Record<string, any> = {};
     const constants: Record<string, any> = {};
@@ -236,6 +236,19 @@
       console.error(error);
     }
   };
+  defineExpose({
+    executeTool,
+    panelRef,
+    closeBK,
+  });
+
+  // 组件销毁时清理实例（作为后备机制）
+  onUnmounted(() => {
+    if (app) {
+      app.unmount();
+      app = null;
+    }
+  });
 </script>
 
 <style scoped lang="postcss">
