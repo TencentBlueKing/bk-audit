@@ -25,11 +25,11 @@ import uuid
 from collections import OrderedDict
 from functools import wraps
 from json import JSONDecodeError
-from typing import Any, Callable, Iterator, List, Union
+from typing import Any, Callable, Iterator, List, Tuple, Union
 
 from bk_resource.base import Empty
 from blueapps.utils.logger import logger
-from django.db.models import QuerySet
+from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.db.models.enums import ChoicesMeta
 
 from core.choices import Unset
@@ -270,6 +270,27 @@ def data2string(data: Any, char: str = ",") -> str:
     return char.join([str(d) for d in data])
 
 
+def build_preserved_order_queryset(
+    qs: QuerySet,
+    ordering_field: str,
+    value_list: list,
+    *,
+    annotate_name: str = "_preserved_order",
+) -> Tuple[QuerySet, str]:
+    """
+    为 queryset 添加 CASE/WHEN 注解，将指定字段值映射为整数序号，返回 (annotated_qs, sort_key)。
+
+    sort_key 是可直接放入 order_by() 的字段名（已处理正/倒序前缀），调用方自行决定何时排序。
+    """
+
+    desc = ordering_field.startswith("-")
+    bare = ordering_field.lstrip("-")
+    whens = [When(**{bare: val}, then=Value(pos)) for pos, val in enumerate(value_list)]
+    annotation = Case(*whens, default=Value(-1), output_field=IntegerField())
+    sort_key = f"-{annotate_name}" if desc else annotate_name
+    return qs.annotate(**{annotate_name: annotation}), sort_key
+
+
 def preserved_order_sort(
     queryset: QuerySet,
     ordering_field: str,
@@ -279,7 +300,7 @@ def preserved_order_sort(
     extra_order_by: List[str] | None = None,
 ):
     """
-    使用 ORM 的 Case/When 注解实现安全的“按给定值顺序”排序，兼容跨表字段。
+    使用 ORM 的 Case/When 注解实现安全的"按给定值顺序"排序，兼容跨表字段。
 
     Args:
         queryset: 原始查询集
@@ -292,19 +313,11 @@ def preserved_order_sort(
         QuerySet: 已按指定顺序排序的查询集
     """
 
-    from django.db.models import Case, IntegerField, Value, When
-
     if not ordering_field:
         return queryset
 
-    desc = ordering_field.startswith("-")
-    field = ordering_field.lstrip("-")
-
-    whens = [When(**{field: val}, then=Value(pos)) for pos, val in enumerate(value_list)]
-    preserved = Case(*whens, default=Value(-1), output_field=IntegerField())
-    qs = queryset.annotate(**{annotate_name: preserved})
-
-    orders = [f"-{annotate_name}" if desc else annotate_name]
+    qs, sort_key = build_preserved_order_queryset(queryset, ordering_field, value_list, annotate_name=annotate_name)
+    orders = [sort_key]
     if extra_order_by:
         orders.extend(extra_order_by)
     return qs.order_by(*orders)

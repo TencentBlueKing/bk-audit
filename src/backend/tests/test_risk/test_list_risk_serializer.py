@@ -192,7 +192,7 @@ class TestListRiskRequestSerializer(SimpleTestCase):
     def test_event_data_order_requires_matching_filter(self):
         serializer = ListRiskRequestSerializer(
             data={
-                "order_field": "event_data.ip",
+                "sort": ["event_data.ip"],
                 "event_filters": [
                     {
                         "field": "other",
@@ -211,7 +211,7 @@ class TestListRiskRequestSerializer(SimpleTestCase):
     def test_event_data_order_passes_with_matching_filter(self):
         serializer = ListRiskRequestSerializer(
             data={
-                "order_field": "-event_data.ip",
+                "sort": ["-event_data.ip"],
                 "event_filters": [
                     {
                         "field": "ip",
@@ -224,7 +224,7 @@ class TestListRiskRequestSerializer(SimpleTestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["order_field"], "-event_data.ip")
+        self.assertEqual(serializer.validated_data["order_fields"], ["-event_data.ip"])
 
     # ---- status → display_status 映射测试 ----
 
@@ -262,8 +262,9 @@ class TestListRiskRequestSerializer(SimpleTestCase):
 
 class TestBkBaseEventOrdering(SimpleTestCase):
     def _build_final_query(self, order_field: str, operator: str, value: str):
+        order_fields = [order_field] if order_field else []
         resolver = BkBaseFieldResolver(
-            order_field=order_field,
+            order_fields=order_fields,
             event_filters=[
                 {
                     "field": "latency",
@@ -291,13 +292,10 @@ class TestBkBaseEventOrdering(SimpleTestCase):
         )
         components = components_builder.build(base_expression)
         assembler = FinalSelectAssembler(resolver)
-        order_direction = "DESC" if order_field.startswith("-") else "ASC"
-        order_field_name = order_field.lstrip("-")
         data_query = assembler.assemble_data_query(
             components.base_query,
             components.matched_event,
-            order_field=order_field_name,
-            order_direction=order_direction,
+            order_fields=order_fields,
             limit=0,
             offset=0,
         )
@@ -346,7 +344,7 @@ class TestBkBaseEventOrdering(SimpleTestCase):
 
     def test_matched_event_subquery_uses_row_number_for_latest_event(self):
         resolver = BkBaseFieldResolver(
-            order_field="",
+            order_fields=[],
             event_filters=[
                 {
                     "field": "latency",
@@ -380,7 +378,7 @@ class TestBkBaseEventOrdering(SimpleTestCase):
 
     def test_without_event_filters_skips_event_join(self):
         resolver = BkBaseFieldResolver(
-            order_field="",
+            order_fields=[],
             event_filters=[],
             duplicate_field_map={},
         )

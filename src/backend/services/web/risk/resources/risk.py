@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 import logging
+import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
@@ -37,6 +38,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
+from api.constants import AIAgentCode
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
 from apps.meta.constants import ConfigLevelChoices
@@ -48,10 +50,9 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import choices_to_dict, data2string, preserved_order_sort
+from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
-from core.utils.tools import get_app_info
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
@@ -89,8 +90,15 @@ from services.web.risk.converter.bkbase import (
     FinalSelectAssembler,
     ManualUnsyncedRiskPrepender,
 )
-from services.web.risk.exceptions import ExportRiskNoPermission
+from services.web.risk.exceptions import (
+    ExportRiskNoPermission,
+    NL2RiskFilterServiceError,
+)
 from services.web.risk.handlers import EventHandler
+from services.web.risk.handlers.nl2riskfilter import (
+    build_nl2risk_user_message,
+    extract_json_from_text,
+)
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -117,12 +125,15 @@ from services.web.risk.serializers import (
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
+    EventFieldsBriefResponseSerializer,
+    EventFieldsForAIRequestSerializer,
     ForceRevokeApproveTicketReqSerializer,
     ForceRevokeAutoProcessReqSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
     GetRiskFieldsByStrategyResponseSerializer,
     ListEventFieldsByStrategyRequestSerializer,
     ListEventFieldsByStrategyResponseSerializer,
+    ListRiskAPIGWRequestSerializer,
     ListRiskBriefRequestSerializer,
     ListRiskBriefResponseSerializer,
     ListRiskMetaRequestSerializer,
@@ -131,6 +142,8 @@ from services.web.risk.serializers import (
     ListRiskStrategyRespSerializer,
     ListRiskTagsRespSerializer,
     ManualEventSerializer,
+    NL2RiskFilterRequestSerializer,
+    NL2RiskFilterResponseSerializer,
     ReopenRiskReqSerializer,
     RetrieveRiskStrategyInfoAPIGWRequestSerializer,
     RetrieveRiskStrategyInfoAPIGWResponseSerializer,
@@ -270,9 +283,6 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
     audit_action = None
 
     def perform_request(self, validated_request_data):
-        from core.utils import tools as core_tools
-
-        core_tools.get_app_info()
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
         if not strategy:
@@ -287,7 +297,6 @@ class RetrieveRiskAPIGW(RetrieveRisk):
     audit_action = None
 
     def perform_request(self, validated_request_data):
-        get_app_info()
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         return RiskInfoSerializer(risk).data
 
@@ -301,7 +310,7 @@ class ListRisk(RiskMeta):
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
-        order_field = validated_request_data.pop("order_field", "-event_time")
+        order_fields = validated_request_data.pop("order_fields", [])
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
@@ -313,7 +322,7 @@ class ListRisk(RiskMeta):
             paged_risks, page, sql_statements = self.retrieve_via_bkbase(
                 base_queryset=base_queryset,
                 request=request,
-                order_field=order_field,
+                order_fields=order_fields,
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
@@ -322,7 +331,7 @@ class ListRisk(RiskMeta):
             )
 
         paged_risks, page, risk_ids = self.retrieve_via_db(
-            base_queryset=base_queryset, request=request, order_field=order_field
+            base_queryset=base_queryset, request=request, order_fields=order_fields
         )
 
         experiences = self._fetch_experiences(risk_ids)
@@ -350,16 +359,16 @@ class ListRisk(RiskMeta):
         end_date = end_dt.date().strftime("%Y%m%d")
         return start_date, end_date
 
-    def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
+    def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str]):
         # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
-        risks = self._apply_ordering(base_queryset, order_field).only("pk")
+        risks = self._apply_ordering(base_queryset, order_fields).only("pk")
         paged_queryset, page = paginate_queryset(
             queryset=risks,
             request=request,
             # 数据加载阶段套上展示注解（event_content_short / _has_report）
             base_queryset=Risk.annotated_queryset(),
         )
-        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
+        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_fields)
         paged_risks = list(paged_queryset)
         risk_ids = [risk.risk_id for risk in paged_risks]
         return paged_risks, page, risk_ids
@@ -444,16 +453,13 @@ class ListRisk(RiskMeta):
         self,
         base_queryset: QuerySet,
         request,
-        order_field: str,
+        order_fields: List[str],
         event_filters: List[Dict[str, Any]],
         thedate_range: Optional[Tuple[str, str]] = None,
     ):
-        order_field_name = order_field.lstrip("-")
-        order_direction = "DESC" if order_field.startswith("-") else "ASC"
-
-        manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_field, self._apply_ordering)
+        manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_fields, self._apply_ordering)
         manual_unsynced_count = manual_helper.count()
-        resolver = BkBaseFieldResolver(order_field, event_filters, self._duplicate_event_field_map)
+        resolver = BkBaseFieldResolver(order_fields, event_filters, self._duplicate_event_field_map)
         value_fields = resolver.resolve_value_fields(
             ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
         )
@@ -516,8 +522,7 @@ class ListRisk(RiskMeta):
         if bkbase_limit and bkbase_total:
             risk_rows = data_executor.execute(
                 base_expression,
-                order_field=order_field_name,
-                order_direction=order_direction,
+                order_fields=order_fields,
                 limit=bkbase_limit,
                 offset=bkbase_offset,
                 components=components,
@@ -535,23 +540,24 @@ class ListRisk(RiskMeta):
 
         return paged_risks, page, sql_runner.sql_statements
 
-    def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
-        """Apply ordering, including custom order for strategy risk level.
-
-        - Use ORM order_by for general fields
-        - For strategy__risk_level, use custom numeric order: asc => LOW<MIDDLE<HIGH, desc => HIGH>MIDDLE>LOW
-        """
-        if not order_field:
+    def _apply_ordering(self, queryset: QuerySet["Risk"], order_fields: List[str]) -> QuerySet["Risk"]:
+        if not order_fields:
             return queryset
-        field = order_field.lstrip("-")
-        if field == RISK_LEVEL_ORDER_FIELD:
-            return preserved_order_sort(
-                queryset,
-                ordering_field=order_field,
-                value_list=[RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
-                extra_order_by=["-event_time"],
-            )
-        return queryset.order_by(order_field)
+
+        orm_order_args = []
+        for field in order_fields:
+            if field.lstrip("-") == RISK_LEVEL_ORDER_FIELD:
+                queryset, sort_key = build_preserved_order_queryset(
+                    queryset,
+                    field,
+                    [RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
+                    annotate_name="_risk_level_order",
+                )
+                orm_order_args.append(sort_key)
+            else:
+                orm_order_args.append(field)
+
+        return queryset.order_by(*orm_order_args)
 
     def _build_filter_query(self, validated_request_data: dict) -> Q:
         """通用筛选条件构造：从请求参数中提取风险等级、标签等筛选条件并构造 Q 表达式，供所有 ListRisk 子类共享。"""
@@ -650,6 +656,20 @@ class ListRisk(RiskMeta):
         table_name = resolved_table_map.get("risk_event", "risk_event")
         formatted = builder.format_table_identifier(table_name)
         return formatted or "risk_event"
+
+
+class ListRiskAPIGW(ListRisk):
+    """APIGW 获取风险列表接口 - 继承 ListRisk，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权），其他逻辑完全一致"""
+
+    name = gettext_lazy("获取风险列表(APIGW)")
+    RequestSerializer = ListRiskAPIGWRequestSerializer
+    bind_request = True
+    audit_action = None
+
+    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+        """APIGW 不走 IAM 鉴权，仅校验 App 身份后直接查询全部风险"""
+        q = self._build_filter_query(validated_request_data)
+        return Risk.objects.filter(q).distinct()
 
 
 class ListMineRisk(ListRisk):
@@ -1026,7 +1046,6 @@ class GetRiskFieldsByStrategy(RiskMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        get_app_info()
         # 获取基础字段
         fields = [
             {
@@ -1238,6 +1257,82 @@ class ListRiskBrief(RiskMeta):
         # 只返回精简字段，不限制数量
         # 优化：使用 values 减少数据传输量
         return queryset.values("risk_id", "title", "strategy_id", "created_at").order_by("-created_at")
+
+
+class NL2RiskFilter(RiskMeta):
+    name = gettext_lazy("自然语言转风险筛选条件")
+    RequestSerializer = NL2RiskFilterRequestSerializer
+    ResponseSerializer = NL2RiskFilterResponseSerializer
+    audit_action = ActionEnum.LIST_RISK
+
+    def perform_request(self, validated_request_data):
+        query = validated_request_data["query"]
+        tags = validated_request_data.get("tags", [])
+        strategies = validated_request_data.get("strategies", [])
+        thread_id = validated_request_data.get("thread_id") or str(uuid.uuid4())
+        username = get_request_username()
+
+        user_message = build_nl2risk_user_message(query=query, tags=tags, strategies=strategies, username=username)
+
+        try:
+            result = api.bk_plugins_ai_agent.chat_completion(
+                agent_code=AIAgentCode.RISK_SEARCH,
+                user=username,
+                input=user_message,
+                chat_history=[],
+                execute_kwargs={"stream": False, "thread_id": thread_id},
+            )
+        except Exception as e:
+            logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
+            raise NL2RiskFilterServiceError()
+
+        raw_text = str(result)
+        filter_conditions = extract_json_from_text(raw_text)
+        message = "" if filter_conditions else raw_text.strip()
+        return {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
+
+
+class ListEventFieldsByStrategyBrief(ListEventFieldsByStrategy):
+    """简化版事件字段接口（供 APIGW/MCP 使用）
+
+    复用 ListEventFieldsByStrategy 的查询逻辑，对结果做简化：
+    1. 按 field_name 去重合并（优先保留有意义的 display_name）
+    2. field_name == display_name 时只返回 field_name
+    """
+
+    name = gettext_lazy("获取事件字段（简化版）")
+    RequestSerializer = EventFieldsForAIRequestSerializer
+    ResponseSerializer = EventFieldsBriefResponseSerializer
+    many_response_data = False
+
+    def perform_request(self, validated_request_data):
+        strategy_ids = validated_request_data.get("strategy_ids", [])
+        raw_results = super().perform_request({"strategy_ids": strategy_ids})
+
+        field_map = {}
+        for item in raw_results:
+            fn = item["field_name"]
+            dn = item["display_name"]
+            if fn not in field_map:
+                field_map[fn] = dn
+            elif field_map[fn] == fn and dn != fn:
+                field_map[fn] = dn
+
+        keywords = [k.strip().lower() for k in validated_request_data.get("keyword", "").split(",") if k.strip()]
+
+        results = []
+        for fn, dn in sorted(field_map.items()):
+            if keywords:
+                fn_lower, dn_lower = fn.lower(), dn.lower()
+                if not any(kw in fn_lower or kw in dn_lower for kw in keywords):
+                    continue
+            entry = {"field_name": fn}
+            if dn != fn:
+                entry["display_name"] = dn
+            results.append(entry)
+            if len(results) >= settings.AI_EVENT_FIELDS_BRIEF_MAX:
+                break
+        return {"results": results}
 
 
 class UpdateRisk(RiskMeta):
