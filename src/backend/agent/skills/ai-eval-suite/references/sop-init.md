@@ -69,15 +69,14 @@ evals/
     ├── assertions/               # 自定义断言（可选，按需创建）
     │   └── check_output.py      # 仅在内置断言不够用时编写
     ├── tests/
-    │   ├── normal.yaml           # 常规场景
-    │   ├── complex.yaml          # 复杂场景
-    │   ├── boundary.yaml         # 边界场景
-    │   └── challenge.yaml        # 挑战场景（可选）
+    │   ├── <场景a>.yaml          # 按业务场景拆分
+    │   ├── <场景b>.yaml
+    │   └── ...                   # 场景划分由 Step 5 与用户讨论确定
     └── output/                   # 评估结果（git 忽略）
         └── .gitkeep
 ```
 
-确保 `evals/.gitignore` 包含 `*/output/*.json` 和 `*/output/*.md`。
+确保 `evals/.gitignore` 包含所有输出文件类型：`*/output/*.json`、`*/output/*.html`、`*/output/*.csv`、`*/output/*.md`（完整模板见 `project-structure.md`）。
 
 ## Step 3: 引入公共 Provider（可选）
 
@@ -152,14 +151,17 @@ def call_api(prompt, options, context):
 
 ## Step 5: 编写测试用例
 
-按场景维度组织，每个文件覆盖一类场景：
+按场景维度组织，每个文件覆盖一类场景。
 
-| 文件 | 覆盖范围 | 示例 |
-|------|---------|------|
-| `normal.yaml` | 用户最常见的查询 | 单条件筛选、简单组合 |
-| `complex.yaml` | 多条件组合、跨模块 | 多字段联合、嵌套条件 |
-| `boundary.yaml` | 边界和异常输入 | 空输入、注入攻击、歧义 |
-| `challenge.yaml` | 挑战模型能力极限 | 否定语义、口语化、复合条件 |
+**场景划分需要与用户讨论确定**，不同业务差异很大。和用户沟通时可以参考以下维度：
+
+1. **用户最常见的输入是什么？** → 这些是核心场景，优先覆盖
+2. **哪些输入组合比较复杂？** → 多条件、跨模块、嵌套等
+3. **哪些输入容易出错？** → 边界值、异常输入、歧义表达
+4. **有没有已知的难点？** → 模型容易犯错的 case
+
+根据讨论结果，将用例拆分到不同的 yaml 文件中，每个文件对应一类场景。
+文件名用业务语义命名（如 `single-filter.yaml`、`multi-condition.yaml`、`edge-case.yaml`）。
 
 **单个测试用例结构（使用内置断言，推荐快速上手）：**
 
@@ -189,6 +191,29 @@ def call_api(prompt, options, context):
     - type: python
       value: 'file://assertions/check_output.py:field_value_match'
 ```
+
+**⚠️ `{{var}}` 在 JSON 字符串值中不会被展开**：promptfoo 的模板语法 `{{var}}`
+在 YAML vars 的 JSON 字符串值内不会被替换。例如：
+
+```yaml
+# ❌ 错误：{{username}} 不会被替换，会作为字面量传入
+vars:
+  query: '查询用户 {{username}} 的审计日志'
+  payload: '{"username": "{{username}}"}'
+
+# ✅ 正确方案 1：在 vars 中直接写最终值
+vars:
+  query: '查询用户 admin 的审计日志'
+  username: 'admin'
+
+# ✅ 正确方案 2：在断言中从 context.vars 获取
+assert:
+  - type: javascript
+    value: 'const d = JSON.parse(output); d.username === context.vars.username'
+```
+
+如果需要在多个字段中复用同一个变量，在 vars 中定义变量，在断言中通过
+`context.vars` 读取，而不是在 vars 的值中嵌套 `{{}}` 引用。
 
 **⚠️ javascript 断言必须写成单行**：promptfoo 的 `javascript` 断言需要表达式的最终值作为返回值。
 不要使用 YAML 多行格式（`|` 或 `>`），否则 promptfoo 无法获取返回值，会报
@@ -283,9 +308,8 @@ defaultTest:
     - type: is-json
 
 tests:
-  - file://tests/normal.yaml
-  - file://tests/complex.yaml
-  - file://tests/boundary.yaml
+  - file://tests/<场景a>.yaml
+  - file://tests/<场景b>.yaml
 ```
 
 如果需要 `llm-rubric` 等模型辅助断言，在 `defaultTest` 中增加 `options.provider`：

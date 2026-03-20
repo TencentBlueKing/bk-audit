@@ -29,7 +29,7 @@
 ## 测试用例
 
 - [ ] 每个用例有明确的 `description`
-- [ ] 覆盖维度：常规 / 复杂 / 边界 / 挑战
+- [ ] 覆盖维度合理（如核心场景 / 组合场景 / 边界异常等，具体按业务确定）
 - [ ] 覆盖类型：happy path / edge case / regression / security
 - [ ] 期望值合理，与业务逻辑一致
 
@@ -38,7 +38,7 @@
 - [ ] 遵循 `evals/<suite>/` 目录约定
 - [ ] 公共 provider 在 `evals/providers/`（如有）
 - [ ] 有 `output/` 目录和 `.gitkeep`
-- [ ] `evals/.gitignore` 包含 `*/output/*.json` 等规则
+- [ ] `evals/.gitignore` 包含输出文件忽略规则：`*/output/*.json`、`*/output/*.html`、`*/output/*.csv`、`*/output/*.md`
 - [ ] 有 suite 级 README.md
 
 ## 运行环境

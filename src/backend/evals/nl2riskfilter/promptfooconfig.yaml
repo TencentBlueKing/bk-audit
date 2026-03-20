@@ -26,12 +26,19 @@ providers:
       model: 'kimi-chat'
       non_thinking_llm: 'kimi-chat'
 
+  - id: 'python:providers/provider.py'
+    label: 'hunyuan2'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'hunyuan2'
+      non_thinking_llm: 'hunyuan2'
+
 defaultTest:
   options:
     provider:
       id: 'python:../providers/bk_llm_provider.py'
       config:
-        model: 'dsv32'
+        model: 'claude-sonnet-4-5-20250929-v1'
   vars:
     username: '{{env.BKAPP_EVAL_USERNAME}}'
   assert:

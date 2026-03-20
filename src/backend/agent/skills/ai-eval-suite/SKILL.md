@@ -60,6 +60,17 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | 4. 调优        | `references/sop-tune.md`    | 分析发现问题需要修复时  |
 | 5. 重评估       | `references/sop-reeval.md`  | 调优后需要验证效果时   |
 
+**子 agent 使用建议**：
+
+| SOP | 步骤 | 子 agent | 原因 |
+|-----|------|----------|------|
+| SOP 2 | 运行评估 | ✅ 强烈推荐 | 耗时长，无需交互 |
+| SOP 3 | 跑分析脚本 | ✅ 推荐 | 机械执行 |
+| SOP 3 | 根因分析 | ❌ 主 agent | 需要理解业务上下文 |
+| SOP 4 | 调优 | ❌ 主 agent | 需要与用户交互 |
+| SOP 5 | 运行+对比 | ✅ 推荐 | 同 SOP 2+3 |
+
+各 SOP 文件顶部有可直接复制的子 agent prompt 模板。
 
 辅助参考：
 
@@ -76,7 +87,7 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | 文件                           | 用途                                                                   |
 | ---------------------------- | -------------------------------------------------------------------- |
 | `scripts/bk_llm_provider.py` | 蓝鲸 LLM 网关 provider（OpenAI 标准协议），可作为 LLM-as-Judge grader 或独立 provider |
-| `scripts/analyze_results.py` | 评估结果分析脚本，解析 promptfoo 输出 JSON 并生成失败分类报告                              |
+| `scripts/analyze_results.py` | 评估结果分析：失败分类、两轮纵向对比、多模型横向对比 |
 
 
 ## 快速判断：用户处于哪个阶段？
@@ -120,12 +131,8 @@ evals/<suite>/providers/    ← 业务 provider（走完整业务链路）
 这些规则贯穿所有 SOP，不可违反：
 
 1. **环境变量无敏感默认值** — 用户名、密钥等必须从环境变量获取，不允许硬编码
-2. **不创建 mock provider** — 评估必须反映真实 AI 服务的表现，mock 会掩盖真实问题。初始化阶段尚未接入真实服务时，可以编写 stub 骨架（`raise NotImplementedError`），但运行评估前必须替换为真实调用
-3. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI，避免额外抽象层增加调试复杂度
-4. **配置文件顶部必须有 JSON Schema 声明** — 启用 IDE 自动补全和配置校验：`# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json`
-5. **output 目录 git 忽略** — 评估结果仅本地存储
-6. **运行命令统一格式** — `--env-file .env --no-cache`
-7. **断言优先级** — 确定性断言 > 相似度断言 > 模型辅助断言
+2. **不自建 wrapper 脚本** — 直接使用 `npx promptfoo` CLI，避免额外抽象层增加调试复杂度
+3**每个环节产出必须持久化** — 评估结果（JSON/HTML）、分析结论（conclusion.md）、调优决策（README 调优记录）、迭代进展（README 进展表）都要落地到文件，不能只停留在对话中
 
 ## 断言选择速查
 
