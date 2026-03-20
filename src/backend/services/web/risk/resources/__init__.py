@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from services.web.risk.resources.analyse_report import *  # noqa
 from services.web.risk.resources.event import *  # noqa
 from services.web.risk.resources.experience import *  # noqa
 from services.web.risk.resources.process_application import *  # noqa
