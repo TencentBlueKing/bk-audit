@@ -82,6 +82,8 @@
     riskToolParams: () => ({}),
   });
 
+  let app: any;
+
   const panelRef = ref<HTMLElement | null>(null);
   const panelId = ref('');
   const { messageError } = useMessage();
@@ -141,6 +143,9 @@
 
   // 初始化 BKVision
   const initBK = async (id: string) => {
+    if (app) {
+      app.unmount();
+    }
     const filters: Record<string, any> = {};
     const drillDownFilters: Record<string, any> = {};
     const constants: Record<string, any> = {};
@@ -212,7 +217,7 @@
 
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
-      window.BkVisionSDK.init(
+      app = await window.BkVisionSDK.init(
         `#panel-${props.uid}`,
         id,
         {
