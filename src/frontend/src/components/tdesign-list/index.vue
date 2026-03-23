@@ -21,7 +21,7 @@
     :class="[{ 'is-loading': isLoading }]">
     <bk-loading
       :loading="isLoading"
-      style="z-index: 9999;">
+      style="z-index: 1999;">
       <div
         v-if="settings.length > 0"
         class="setings">
