@@ -30,7 +30,7 @@
       :loading="isParsing"
       @submit="handleNLSubmit" />
 
-    <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示，放在输入框下方） -->
+    <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示） -->
     <div
       v-if="showParseWarning"
       class="nl-search-warning-tips">
@@ -46,17 +46,19 @@
         @click="handleCloseWarning" />
     </div>
 
-    <!-- 条件标签区域 + 添加条件 + 操作按钮 -->
+    <!-- 条件标签区域 -->
     <div class="nl-search-condition-area">
-      <!-- 解析后的条件标签 + 添加条件 -->
+      <!-- 解析后的条件标签  -->
       <condition-tags
         :condition-list="conditionList"
         :event-field-items="selectedItemList"
         :field-config="fieldConfig"
         :search-model="searchModel"
         @clear-all="handleClear"
+        @finish-edit="handleConditionFinishEdit"
         @remove="handleRemoveCondition"
         @remove-event-field="handleRemoveEventField"
+        @start-edit="handleConditionStartEdit"
         @update="handleUpdateCondition"
         @update-event-operator="handleUpdateEventOperator"
         @update-event-value="handleUpdateEventValue">
@@ -99,6 +101,11 @@
   import useNLParse from './hooks/use-nl-parse';
   import type { INLSearchBoxExposes } from './types';
 
+  const props = defineProps<Props>();
+
+  const emit = defineEmits<Emits>();
+
+
   interface Emits {
     (e: 'change', value: Record<string, any>, otherValue?: any, isClear?: boolean): void;
     (e: 'export'): void;
@@ -110,25 +117,16 @@
     fieldConfig: Record<string, IFieldConfig>;
   }
 
-  const props = defineProps<Props>();
-  const emit = defineEmits<Emits>();
-
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const nlInputRef = ref();
-
-  // ========================
   // URL 参数同步（与 search-box 保持一致）
-  // ========================
   const {
     getSearchParamsPost,
     replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
-
-  // ========================
   // 搜索模型（与 search-box 完全一致的数据结构）
-  // ========================
   const searchModel = ref<Record<string, any>>({
     datetime: [
       dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
@@ -171,9 +169,7 @@
     searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
   }
 
-  // ========================
   // 事件字段相关（与 search-box 完全一致）
-  // ========================
   const selectedVal = ref<string[]>([]);
   const selectedItems = ref<Array<Record<string, any>>>([]);
   const selectedItemList = ref<Array<Record<string, any>>>([]);
@@ -198,10 +194,19 @@
   // 当前已选择的风险字段名列表（用于 add-condition 组件判断哪些已选中）
   const selectedFieldNames = computed(() => Object.keys(searchModel.value).filter(key => key !== 'datetime_origin' && props.fieldConfig[key]));
 
+  // 生成当前搜索条件的快照字符串
+  const takeSearchSnapshot = () => JSON.stringify({
+    model: searchModel.value,
+    eventFilters: selectedItemList.value.map(item => ({
+      id: item.id,
+      operator: item.operator,
+      value: item.value,
+    })),
+  });
+  // 编辑开始前的快照
+  let editSnapshot = '';
 
-  // ========================
   // 获取风险标签和策略列表（用于传给 nl2risk_filter 接口）
-  // ========================
   const {
     data: riskTagsList,
   } = useRequest(RiskManageService.fetchRiskTags, {
@@ -220,9 +225,7 @@
     defaultValue: [],
   });
 
-  // ========================
   // NLP 自然语言解析
-  // ========================
   const {
     isParsing,
     parse,
@@ -428,6 +431,10 @@
     searchModel.value = newModel;
     handleSubmit();
   };
+  // 标签开始编辑时记录快照
+  const handleConditionStartEdit = () => {
+    editSnapshot = takeSearchSnapshot();
+  };
 
   // 更新单个条件值（条件标签编辑态提交）
   // 注意：使用直接属性赋值而非展开运算符，避免 searchModel 引用变化导致 popover 重渲染关闭
@@ -450,14 +457,26 @@
     } else {
       searchModel.value[fieldName] = value;
     }
+    // 仅更新数据，不触发搜索，等待编辑面板关闭时统一触发
   };
 
-  // ========================
+  // 编辑面板关闭时统一触发搜索（仅在值实际变化时才触发）
+  const handleConditionFinishEdit = () => {
+    const currentSnapshot = takeSearchSnapshot();
+    if (currentSnapshot === editSnapshot) {
+      // 条件值未发生变化，跳过搜索
+      return;
+    }
+    // 通知父组件字段变化（用于获取事件字段）
+    emit('modelValueWatch', searchModel.value);
+    handleSubmit();
+  };
+
   // 事件字段操作（与 search-box 一致）
-  // ========================
   // 事件字段标签 —— 更新操作符
   const handleUpdateEventOperator = (id: string, operator: string) => {
     handleOperatorChange({ id, operator });
+    // 仅更新数据，不触发搜索，等待编辑面板关闭时统一触发
   };
 
   // 事件字段标签 —— 更新值
@@ -468,6 +487,7 @@
       }
       return item;
     });
+    // 仅更新数据，不触发搜索，等待编辑面板关闭时统一触发
   };
 
   const handleOperatorChange = (val: Record<string, any>) => {
@@ -517,9 +537,7 @@
     replaceSearchParams(EventFiltersParams);
   };
 
-  // ========================
   // 搜索参数序列化（与 search-box 完全一致）
-  // ========================
   const allText = t('全部');
   const normalizeSearchArray = (value: Array<string | number>) => (
     value
@@ -616,9 +634,7 @@
     batchExport({ risk_ids: val, risk_view_type: type });
   };
 
-  // ========================
   // URL 事件字段初始化（与 search-box 一致）
-  // ========================
   const findIdByDisplayAndField = (display: string, field: string, ary: Array<Record<string, any>>) => {
     const foundItem = ary.find(item => item
       && item.display_name === display
@@ -650,9 +666,7 @@
     handleSubmit();
   });
 
-  // ========================
   // Expose（与 search-box 完全一致的对外接口）
-  // ========================
   defineExpose<INLSearchBoxExposes>({
     clearValue() {
       handleClear();

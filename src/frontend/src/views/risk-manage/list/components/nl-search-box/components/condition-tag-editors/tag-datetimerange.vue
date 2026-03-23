@@ -74,6 +74,8 @@
   interface Emits {
     (e: 'update', fieldName: string, value: any): void;
     (e: 'remove', fieldName: string): void;
+    (e: 'startEdit'): void;
+    (e: 'finishEdit'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -89,7 +91,16 @@
   const measureText = ref('');
 
   const handleTogglePanel = () => {
+    const wasOpen = isPanelOpen.value;
     isPanelOpen.value = !isPanelOpen.value;
+    // 面板从关闭变为打开时，通知上层记录快照
+    if (!wasOpen && isPanelOpen.value) {
+      emit('startEdit');
+    }
+    // 面板从打开变为关闭时，通知上层触发搜索
+    if (wasOpen && !isPanelOpen.value) {
+      emit('finishEdit');
+    }
   };
 
   // 点击外部区域关闭面板
@@ -103,8 +114,9 @@
     for (const dropdown of Array.from(pickerDropdowns)) {
       if (dropdown.contains(target)) return;
     }
-    // 其他区域 → 关闭面板
+    // 其他区域 → 关闭面板，并通知上层触发搜索
     isPanelOpen.value = false;
+    emit('finishEdit');
   };
 
 
