@@ -27,12 +27,10 @@ import type { INL2RiskFilterResponse } from '../types';
 /**
  * 自然语言搜索解析 Hook
  * 负责调用 nl2risk_filter 接口，将用户自然语言转为结构化筛选条件
- * 支持 thread_id 多轮对话
  */
 export default function useNLParse() {
   const parseResult = ref<INL2RiskFilterResponse | null>(null);
   const parseMessage = ref('');
-  const threadId = ref('');
 
   // 调用 nl2risk_filter 接口
   const {
@@ -69,21 +67,11 @@ export default function useNLParse() {
       if (strategies && strategies.length > 0) {
         params.strategies = strategies;
       }
-      // 多轮对话：传入上次的 thread_id
-      if (threadId.value) {
-        params.thread_id = threadId.value;
-      }
-
       const result = await runNl2RiskFilter(params);
 
       if (!result) return null;
 
       parseResult.value = result;
-
-      // 保存 thread_id，用于后续多轮对话
-      if (result.thread_id) {
-        threadId.value = result.thread_id;
-      }
 
       const filterConditions = result.filter_conditions || {};
       const message = result.message || '';
@@ -111,11 +99,10 @@ export default function useNLParse() {
     }
   };
 
-  // 清除解析结果和 thread_id
+  // 清除解析结果
   const clearParseResult = () => {
     parseResult.value = null;
     parseMessage.value = '';
-    threadId.value = '';
   };
 
   return {
