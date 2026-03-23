@@ -306,7 +306,6 @@ export default {
     query: string,
     tags?: Array<{ id: number; name: string }>,
     strategies?: Array<{ id: number; name: string }>,
-    thread_id?: string,
   }) {
     return RiskManageSource.nl2RiskFilter(params)
       .then(({ data }) => data);
