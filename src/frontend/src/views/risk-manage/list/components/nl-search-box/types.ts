@@ -20,7 +20,6 @@ import type { IFieldConfig } from '@components/search-box/components/render-fiel
 // nl2risk_filter 接口响应结果
 export interface INL2RiskFilterResponse {
   filter_conditions: Record<string, any>;
-  thread_id: string;
   message: string;
 }
 
