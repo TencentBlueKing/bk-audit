@@ -32,13 +32,8 @@ from rest_framework import serializers  # noqa: E402
 from services.web.risk.constants import (  # noqa: E402
     EventFilterOperator,
     RiskDisplayStatus,
-    RiskLabel,
 )
-from services.web.risk.serializers import (  # noqa: E402
-    EventFieldFilterItemSerializer,
-    ListRiskRequestSerializer,
-)
-from services.web.strategy_v2.constants import RiskLevel  # noqa: E402
+from services.web.risk.serializers import ListRiskRequestSerializer  # noqa: E402
 
 # 内部使用字段，不需要 AI 生成
 EXCLUDE_FIELDS = ["use_bkbase"]
@@ -146,30 +141,36 @@ def generate_field_table(
     return "\n".join(lines)
 
 
-def _format_choices(choices_cls) -> str:
-    return "\n".join([f"- `{k}`: {v}" for k, v in choices_cls.choices])
+def _format_inline_choices(choices_cls) -> str:
+    """格式化枚举为内联字符串，如 `HIGH`(高)/`MIDDLE`(中)/`LOW`(低)"""
+    return " / ".join([f"`{k}`({v})" for k, v in choices_cls.choices])
+
+
+def _format_operator_choices(choices_cls) -> str:
+    """格式化操作符枚举为紧凑格式"""
+    return ", ".join([f"`{k}`" for k, _ in choices_cls.choices])
 
 
 def generate_system_prompt() -> str:
-    """生成精简版系统提示词（V20）"""
+    """生成精简版系统提示词（V28）"""
 
     schema = get_serializer_schema(ListRiskRequestSerializer())
-    event_filter_schema = get_serializer_schema(EventFieldFilterItemSerializer())
+
+    # 将枚举内联到字段说明中
+    status_inline = _format_inline_choices(RiskDisplayStatus)
+    FIELD_LABEL_OVERRIDES["status"] = (
+        "风险状态：" + status_inline + "。\u201c待处理\u201d\u201c未处理\u201d\u2192 `await_deal`（非 `new`）"
+    )
 
     field_table = generate_field_table(schema, EXCLUDE_FIELDS, FIELD_LABEL_OVERRIDES, FIELD_TYPE_OVERRIDES)
-    event_filter_table = generate_field_table(event_filter_schema)
-
-    status_choices = _format_choices(RiskDisplayStatus)
-    risk_level_choices = _format_choices(RiskLevel)
-    risk_label_choices = _format_choices(RiskLabel)
-    event_filter_operator_choices = _format_choices(EventFilterOperator)
+    event_filter_operator_choices = _format_operator_choices(EventFilterOperator)
 
     prompt = f'''你是蓝鲸审计中心的风险检索助手。将用户的自然语言查询转换为结构化的风险筛选条件 JSON。
 
 ## 核心规则
 
 1. **action_input 必须是纯 JSON 对象**，只含用户明确提及的筛选字段，不需要的字段不传
-2. 无法转换为有效筛选条件时返回空对象 `{{}}`
+2. 无法转换为有效筛选条件时返回空对象 `{{}}`，不要返回空字符串。字段值必须符合定义的类型
 3. **"我的风险""我负责的"** → 将"当前请求人"映射到 `operator` 字段，不能返回空
 4. **统计类查询**（"有多少个"）→ 仍提取筛选条件，系统基于筛选结果计算数量
 5. **标签和策略** → 从用户消息中的可用列表匹配 id
@@ -182,30 +183,13 @@ def generate_system_prompt() -> str:
 
 {field_table}
 
-### 风险状态枚举 (status)
+### event_filters
 
-{status_choices}
+数组，每个元素**必须**包含 4 个字段（全部必填）：`{{"field": "字段名", "display_name": "显示名", "operator": "操作符", "value": "值"}}`
 
-> "待处理""未处理" → `await_deal`（不是 `new`）
+> `display_name` 是必填字段，不能省略。使用工具返回的 display_name 值。
 
-### 风险等级 (risk_level)
-
-{risk_level_choices}
-
-### 风险标签 (risk_label)
-
-{risk_label_choices}
-
-### event_filters 结构
-
-每个元素**必须**包含 4 个字段（全部必填）：`{{"field": "字段名", "display_name": "显示名", "operator": "操作符", "value": "值"}}`
-
-> ⚠️ `display_name` 是必填字段，不能省略。使用工具返回的 display_name 值。
-
-{event_filter_table}
-
-**操作符枚举**:
-{event_filter_operator_choices}
+操作符：{event_filter_operator_choices}
 
 ## 转换规则
 
@@ -213,7 +197,7 @@ def generate_system_prompt() -> str:
 
 **人员**：xxx 的风险/xxx 负责的 → `operator`；xxx 处理的/xxx 正在处理 → `current_operator`；通知给 xxx → `notice_users`；"我""我的" → 用"当前请求人"值设 `operator`
 
-> ⚠️ **"操作人"歧义消解**：当查询中出现"操作人"且关联了策略时，优先理解为**事件字段**（需调 MCP 工具获取字段名后放入 `event_filters`），而非顶层 `operator`（责任人）。只有明确说"负责人""责任人"或"xxx 的风险/xxx 负责的"时才映射到 `operator`。
+> **"操作人"歧义消解**：当查询中出现"操作人"且关联了策略时，优先理解为**事件字段**（需调 MCP 工具获取字段名后放入 `event_filters`），而非顶层 `operator`（责任人）。只有明确说"负责人""责任人"或"xxx 的风险/xxx 负责的"时才映射到 `operator`。
 
 **策略**：从"可用策略"列表匹配名称 → `strategy_id`（id 值）。多个逗号拼接如 `"137,169"`
 
@@ -221,15 +205,13 @@ def generate_system_prompt() -> str:
 
 **事件字段**：先调用 `list_event_fields_by_strategy_brief` 获取可用字段（传 `strategy_ids` 和 `keyword` 缩小范围），再构造 event_filters。不要猜测字段名。工具返回空时，仍输出其他可识别的筛选条件
 
-**否定条件**：顶层字段（如 `operator`、`status`）不支持否定操作符。遇到"不是 xxx 负责的"时，只提取其他可识别的条件，忽略无法表达的否定部分。事件字段（`event_filters`）支持 `!=` 和 `NOT IN` 操作符，可正常使用
-
-**无法转换时**：必须返回空 JSON 对象 `{{}}`，不要返回空字符串。每个字段值必须是定义中规定的类型（string/array），不要输出嵌套对象或数组替代 string 类型的字段
+**否定条件**：顶层字段不支持否定操作符。遇到"不是 xxx 负责的"时，只提取其他可识别的条件，忽略无法表达的否定部分。event_filters 支持 `!=`/`NOT IN`/`NOT CONTAINS` 操作符，可正常使用
 
 **标题**：`title` 是顶层字段，直接 `{{"title": "xxx"}}`，不放入 event_filters。当用户用描述性短语指代风险主题（如"关于xxx""涉及xxx""xxx相关""xxx方面"等），且该短语不是人名、状态、等级等已知字段时 → 映射到 `title`
 
-**事件内容**：`event_content` 是顶层字段，用于搜索事件详情文本。当用户意图是按事件的文本内容/详情/描述进行搜索时 → 映射到 `event_content`，不放入 event_filters。常见表述包括但不限于"事件内容/详情/描述 + 含/包含/有/提到 + 关键词"
+**事件内容**：`event_content` 是顶层字段，用于搜索事件详情文本。当用户意图是按事件的文本内容/详情/描述进行搜索时 → 映射到 `event_content`，不放入 event_filters。常见表述："事件内容/详情/描述 + 含/包含/有/提到 + 关键词"
 
-**报告状态**：`has_report` 是布尔字段。当用户表达风险是否已有分析报告/报告时 → 有报告 `{{"has_report": true}}`，无报告 `{{"has_report": false}}`
+**报告状态**：`has_report` 是布尔字段。有报告 → `{{"has_report": true}}`，无报告 → `{{"has_report": false}}`
 
 **排序**：降序加 `-` 前缀如 `["-risk_level"]`，升序无前缀
 
