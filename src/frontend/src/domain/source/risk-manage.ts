@@ -282,11 +282,9 @@ class RiskManage extends ModuleBase {
     query: string,
     tags?: Array<{ id: number; name: string }>,
     strategies?: Array<{ id: number; name: string }>,
-    thread_id?: string,
   }) {
     return Request.post<{
       filter_conditions: Record<string, any>,
-      thread_id: string,
       message: string,
     }>(`${this.module}/nl2risk_filter/`, {
       params,
