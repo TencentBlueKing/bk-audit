@@ -81,3 +81,8 @@ AI_AUDIT_REPORT_API_URL = get_agent_base_url(AIAgentCode.AUDIT_REPORT)
 AI_AUDIT_ANALYSE_API_URL = settings.AI_AUDIT_ANALYSE_API_URL or get_endpoint(
     settings.AI_AUDIT_ANALYSE_APIGW_NAME, APIProvider.APIGW, stage="prod"
 )
+
+# AI Audit Analyse (分析智能体)
+AI_AUDIT_ANALYSE_API_URL = settings.AI_AUDIT_ANALYSE_API_URL or get_endpoint(
+    settings.AI_AUDIT_ANALYSE_APIGW_NAME, APIProvider.APIGW, stage="prod"
+)

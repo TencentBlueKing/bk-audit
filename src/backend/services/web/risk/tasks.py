@@ -538,12 +538,15 @@ def generate_analyse_report(self, report_id: int):
 
     except Exception as exc:
         logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
+        error_msg = f"[错误] {type(exc).__name__}: {exc}"
         report.status = AnalyseReportStatus.FAILED
-        report.save(update_fields=["status", "updated_at"])
+        report.content = error_msg
+        report.save(update_fields=["status", "content", "updated_at"])
         try:
             self.retry(exc=exc, countdown=60)
         except MaxRetriesExceededError:
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            raise exc
 
 
 @celery_app.task(queue="risk_render")
