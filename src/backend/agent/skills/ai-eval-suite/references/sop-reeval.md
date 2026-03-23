@@ -1,5 +1,9 @@
 # SOP 5: 重评估与达标
 
+## 子 agent 调用
+Step 1（运行评估）和 Step 2（对比分析）可交给子 agent 执行——给定 suite 路径、上轮结果路径和本轮输出路径即可独立完成。
+Step 3（达标判定）和 Step 4（更新进展）建议主 agent 与用户交互确认。
+
 ## 流程概览
 
 ```
@@ -11,33 +15,20 @@
 ## Step 1: 重新运行评估
 
 调优完成后，确认所有修改已生效：
-- 如果 prompt 由生成脚本产出，是否重新运行了生成脚本？
-- 如果 prompt 在第三方平台，用户是否确认已更新？
-- 如果修改了 provider 代码，是否需要重启服务？
+- prompt 由生成脚本产出 → 是否重新运行了生成脚本？
+- prompt 在第三方平台 → 用户是否确认已更新？
+- 修改了 provider 代码 → 是否需要重启服务？
 
-**快速验证**（只跑相关用例，确认修改生效）：
+**快速验证**（SOP 2 模式 A）：只跑相关用例确认修改生效。
 
 ```bash
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   --filter-pattern '<相关用例描述的正则>'
 ```
 
-**全量重评估**（确认无回归后再跑全量）：
-
-```bash
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
-  --env-file .env --no-cache \
-  -o evals/<suite>/output/$(date +%Y%m%d)-after-tune.json
-```
-
-建议输出文件名带有调优描述，便于后续对比：
-
-```bash
-# 示例命名
--o evals/<suite>/output/20260316-fix-status-enum.json
--o evals/<suite>/output/20260317-add-few-shot.json
-```
+**全量重评估**（SOP 2 模式 B）：确认无回归后跑全量。
+⚠️ 全量重评估必须覆盖所有 provider，不得使用 `--filter-providers`。
 
 ## Step 2: 对比前后结果
 
@@ -136,8 +127,19 @@ python <skill-path>/scripts/analyze_results.py \
 
 **记录要点**：
 - 版本号递增，便于引用
-- 关键变化用简短描述概括本轮做了什么
+- **关键变化要具体到修改内容**，而非笼统分类——回头看时能直接定位"改了什么导致通过率变化"
 - 通过率下降时要特别标注原因（如"扩展用例暴露新问题"而非"退步"）
+
+**好的示例 vs 坏的示例**：
+
+```
+# ❌ 太粗糙，回头看无法定位
+| V4 | 2026-03-17 | 45 | 96.1% | prompt 调优 |
+
+# ✅ 具体到修改内容，可追溯
+| V4 | 2026-03-17 | 45 | 96.1% | prompt: 新增枚举映射表 + few-shot 示例；放宽 D12 期望 |
+| V5 | 2026-03-18 | 45 | 96.7% | 新增候选模型对比（model-A 93% / model-B 99% / model-C 98%） |
+```
 
 如果项目有独立的进度文档（如迭代计划文档），也同步更新。
 
@@ -149,7 +151,7 @@ python <skill-path>/scripts/analyze_results.py \
 
 ```bash
 # promptfoo 支持多个 -o 参数同时导出不同格式
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-final.json \
   -o evals/<suite>/output/$(date +%Y%m%d)-final.html

@@ -6,13 +6,6 @@ prompts:
 
 providers:
   - id: 'python:providers/provider.py'
-    label: 'dsv32'
-    config:
-      username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'dsv32'
-      non_thinking_llm: 'dsv32'
-
-  - id: 'python:providers/provider.py'
     label: 'qwen3-235B'
     config:
       username: '{{env.BKAPP_EVAL_USERNAME}}'
@@ -26,12 +19,19 @@ providers:
       model: 'kimi-chat'
       non_thinking_llm: 'kimi-chat'
 
+  - id: 'python:providers/provider.py'
+    label: 'hunyuan2'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'hunyuan2'
+      non_thinking_llm: 'hunyuan2'
+
 defaultTest:
   options:
     provider:
       id: 'python:../providers/bk_llm_provider.py'
       config:
-        model: 'dsv32'
+        model: 'claude-sonnet-4-5-20250929-v1'
   vars:
     username: '{{env.BKAPP_EVAL_USERNAME}}'
   assert:
@@ -43,7 +43,6 @@ defaultTest:
 evaluateOptions:
   maxConcurrency: 3
   repeat: 2
-  delay: 500
 
 tests:
   - file://tests/normal.yaml

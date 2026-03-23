@@ -21,9 +21,9 @@
 │   │   ├── assertions/            # 自定义断言（如需要）
 │   │   │   └── check_output.py
 │   │   ├── tests/
-│   │   │   ├── normal.yaml
-│   │   │   ├── complex.yaml
-│   │   │   └── boundary.yaml
+│   │   │   ├── <场景a>.yaml
+│   │   │   ├── <场景b>.yaml
+│   │   │   └── ...              # 按业务场景拆分
 │   │   └── output/                # 评估结果（git 忽略）
 │   │       └── .gitkeep
 │   │
@@ -75,7 +75,7 @@ defaultTest: file://../shared/defaultTest.yaml
 | 配置文件 | 固定 `promptfooconfig.yaml` | - |
 | Provider 文件 | `provider.py`（单 provider 时） | 多 provider 时用描述性名称 |
 | 断言文件 | 按功能命名 | `check_filters.py`、`check_format.py` |
-| 测试文件 | 按场景命名 | `normal.yaml`、`complex.yaml` |
+| 测试文件 | 按业务场景命名 | `single-filter.yaml`、`edge-case.yaml` |
 | 输出文件 | 日期前缀 + 描述 | `20260316-results.json`、`20260317-fix-enum.json` |
 
 ### .gitignore 模板
@@ -112,10 +112,9 @@ defaultTest:
   assert:
     - type: is-json
 
-tests:
-  - file://tests/normal.yaml
-  - file://tests/complex.yaml
-  - file://tests/boundary.yaml
+tests:  # 文件名按 SOP 1 Step 5 与用户讨论确定
+  - file://tests/<场景a>.yaml
+  - file://tests/<场景b>.yaml
 ```
 
 ### 模板 B: 多模型对比
@@ -184,11 +183,9 @@ defaultTest:
     - type: latency
       threshold: 30000
 
-tests:
-  - file://tests/normal.yaml
-  - file://tests/complex.yaml
-  - file://tests/boundary.yaml
-  - file://tests/challenge.yaml
+tests:  # 文件名按 SOP 1 Step 5 与用户讨论确定
+  - file://tests/<场景a>.yaml
+  - file://tests/<场景b>.yaml
 ```
 
 ## evals/README.md 模板
@@ -236,7 +233,7 @@ export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
 
 \`\`\`bash
 cd <project-root>
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache
 \`\`\`
 
@@ -260,9 +257,8 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 | 场景 | 文件 | 数量 | 说明 |
 |------|------|------|------|
-| 常规 | `tests/normal.yaml` | X | ... |
-| 复杂 | `tests/complex.yaml` | X | ... |
-| 边界 | `tests/boundary.yaml` | X | ... |
+| <场景a> | `tests/<场景a>.yaml` | X | ... |
+| <场景b> | `tests/<场景b>.yaml` | X | ... |
 
 ## Provider 说明
 
@@ -273,7 +269,7 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 \`\`\`bash
 cd <project-root>
-npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/<suite>/output/$(date +%Y%m%d)-results.json
 \`\`\`
@@ -286,15 +282,15 @@ npx promptfoo eval -c evals/<suite>/promptfooconfig.yaml \
 
 目标：>= XX%
 
-## 调优上下文（可选，建议持久化）
+## 调优上下文（推荐，首次调优时填写）
 
-后续迭代调优时会反复用到的背景信息，记录一次避免每轮重新收集。
+后续迭代调优时会反复用到的背景信息，首次调优时记录一次，避免每轮重新收集。
 
 ### Prompt 管理
 
 - **Prompt 位置**：<文件路径 或 第三方平台>
 - **修改方式**：<直接编辑 / 修改生成脚本后重新生成 / 在平台上更新>
-- **生成脚本**（如有）：<路径，如 `services/web/ai/prompts/xxx/generate.py`>
+- **生成脚本**（如有）
 
 ### MCP / 工具链
 

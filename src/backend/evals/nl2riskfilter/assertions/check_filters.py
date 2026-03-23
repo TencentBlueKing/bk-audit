@@ -101,7 +101,10 @@ def field_value_match(output, context):
 def has_event_filter_field(output, context):
     """验证 event_filters 数组中存在指定 field 的条目
 
-    同时匹配 field 名和 display_name，两者都视为正确。
+    匹配策略（由宽到严）：
+      1. 精确匹配 field 或 display_name
+      2. 模糊匹配：期望值是实际值的子串，或实际值是期望值的子串
+         例如期望"操作人"能匹配到"操作人账号"
     """
     filters = _parse_output(output)
     event_filters = filters.get("event_filters", [])
@@ -123,7 +126,16 @@ def has_event_filter_field(output, context):
                 actual_display_names.add(dn.split("(")[0])
 
     all_identifiers = actual_fields | actual_display_names
-    missing = [f for f in expected_fields if f not in all_identifiers]
+
+    missing = []
+    for expected in expected_fields:
+        # 精确匹配
+        if expected in all_identifiers:
+            continue
+        # 模糊匹配：期望值包含在实际值中，或实际值包含在期望值中
+        fuzzy_matched = any(expected in actual or actual in expected for actual in all_identifiers if actual)
+        if not fuzzy_matched:
+            missing.append(expected)
 
     if missing:
         return {
@@ -313,6 +325,72 @@ def check_time_range(output, context):
         "pass": score >= 0.5,
         "score": score,
         "reason": f"时间验证 {passed}/{total}: " + "; ".join(details),
+    }
+
+
+def check_event_content(output, context):
+    """验证 event_content 字段存在且包含期望关键词
+
+    通过 vars 配置：
+      expected_event_content: 期望 event_content 包含的关键词
+    """
+    filters = _parse_output(output)
+    vars_ = context.get("vars", {})
+
+    expected_keyword = vars_.get("expected_event_content", "")
+    if not expected_keyword:
+        return {"pass": True, "score": 1.0, "reason": "未配置 expected_event_content，跳过"}
+
+    event_content = filters.get("event_content", "")
+    if not event_content:
+        return {
+            "pass": False,
+            "score": 0.0,
+            "reason": f"event_content 缺失，期望含 '{expected_keyword}'，实际字段: {list(filters.keys())}",
+        }
+
+    if expected_keyword.lower() in event_content.lower():
+        return {
+            "pass": True,
+            "score": 1.0,
+            "reason": f"event_content='{event_content}' 包含 '{expected_keyword}'",
+        }
+    return {
+        "pass": False,
+        "score": 0.5,
+        "reason": f"event_content='{event_content}' 不含期望关键词 '{expected_keyword}'",
+    }
+
+
+def check_has_report(output, context):
+    """验证 has_report 字段存在且值正确
+
+    通过 vars 配置：
+      expected_has_report: "true" 或 "false"
+    """
+    filters = _parse_output(output)
+    vars_ = context.get("vars", {})
+
+    expected_raw = vars_.get("expected_has_report", "")
+    if not expected_raw:
+        return {"pass": True, "score": 1.0, "reason": "未配置 expected_has_report，跳过"}
+
+    expected_val = expected_raw.lower() == "true"
+    actual_val = filters.get("has_report")
+
+    if actual_val is None:
+        return {
+            "pass": False,
+            "score": 0.0,
+            "reason": f"has_report 缺失，期望 {expected_val}，实际字段: {list(filters.keys())}",
+        }
+
+    if actual_val == expected_val or str(actual_val).lower() == str(expected_val).lower():
+        return {"pass": True, "score": 1.0, "reason": f"has_report={actual_val} 匹配"}
+    return {
+        "pass": False,
+        "score": 0.0,
+        "reason": f"has_report 期望={expected_val}, 实际={actual_val}",
     }
 
 

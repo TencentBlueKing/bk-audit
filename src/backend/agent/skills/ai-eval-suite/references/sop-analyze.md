@@ -1,18 +1,37 @@
 # SOP 3: 分析评估结果
 
+## 子 agent 调用
+
+分析脚本执行是机械操作，推荐交给子 agent。根因分析建议主 agent 审阅。
+
 ## 分析入口
 
-评估完成后，有两种分析方式：
+优先使用内置分析脚本，辅以交互式报告做深度检查。
 
-### 方式 1: 交互式报告（快速浏览）
+### 内置分析脚本（默认方式）
 
 ```bash
-npx promptfoo view
+# 单次分析
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json
+
+# 多 provider 横向对比（按模型维度拆分通过率、独有失败、延迟）
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json --by-provider
+
+# 两轮纵向对比（调优前 vs 调优后）
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/before.json evals/<suite>/output/after.json
+
+# 输出到文件
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json -o evals/<suite>/output/report.md
 ```
 
-适合快速定位哪些用例失败、查看具体的输入输出和断言失败原因。
+> `<skill-path>` 即本 skill 加载时输出的 base 目录路径。
 
-### 方式 2: 解析 output JSON（深度分析）
+脚本能力：
+- 兼容 promptfoo 两种 JSON 格式（`results.results` / `results.table.body`）
+- 按失败类型分类 + 对比报告（新增通过/失败/回归/持续失败）
+- `--by-provider` 模式输出多模型横向对比表
+
+### 解析 output JSON（深度分析）
 
 读取 `-o` 导出的 JSON 文件，提取结构化的失败信息。
 
@@ -69,55 +88,11 @@ promptfoo 输出有两种格式，分析脚本已兼容两者。
 **注意**：格式 1 中用例描述在 `row.testCase.description`（不是 `row.description`），
 输出在 `row.response.output`，通过状态在 `row.success`。
 
-## 失败分类框架
+## 常见失败类型
 
-将失败用例按以下类型分类，有助于定位根因：
+以下是几类常见的失败类型，用于协助分析失败原因。
 
-### 类型 1: 字段缺失
-
-**特征：** `has_expected_keys` 或 `is-json` schema 断言失败
-
-**典型原因：**
-- Prompt 未明确要求输出该字段
-- 模型认为该字段不适用于当前查询
-- 字段名拼写不一致
-
-**分析方法：** 对比期望字段和实际输出字段，看缺少了哪些
-
-### 类型 2: 值错误
-
-**特征：** `field_value_match` 或 `equals` 断言失败
-
-**典型原因：**
-- 枚举映射不正确（如状态码、级别名称）
-- Prompt 中的枚举说明不完整或有歧义
-- 模型使用了同义词而非精确值
-
-**分析方法：** 对比期望值和实际值，看是否存在系统性偏差
-
-### 类型 3: 格式错误
-
-**特征：** `is-json` / serializer 校验失败
-
-**典型原因：**
-- 模型输出被 markdown 代码块包裹
-- JSON 中包含注释或尾逗号
-- 字段类型不匹配（字符串 vs 数字）
-
-**分析方法：** 查看原始输出文本，确认格式问题的具体表现
-
-### 类型 4: 空输出
-
-**特征：** `is_non_empty` 断言失败，output 为空
-
-**典型原因：**
-- 模型未理解查询意图
-- Provider 调用出错但未正确传递错误
-- 查询超出模型能力范围
-
-**分析方法：** 检查 metadata 中的 message 和 raw_result
-
-### 类型 5: 语义不符
+### 类型 1: 语义不符
 
 **特征：** `llm-rubric`、`factuality`、`answer-relevance` 等模型辅助断言失败
 
@@ -128,7 +103,7 @@ promptfoo 输出有两种格式，分析脚本已兼容两者。
 
 **分析方法：** 查看 grader 的评判理由，判断是模型输出问题还是评判标准问题
 
-### 类型 6: 超时/错误
+### 类型 2: 超时/错误
 
 **特征：** provider error，非断言失败
 
@@ -139,63 +114,86 @@ promptfoo 输出有两种格式，分析脚本已兼容两者。
 
 **分析方法：** 检查错误信息，确认是基础设施问题还是业务问题
 
+### 类型 3: 波动/不稳定
+
+**特征：** 同一用例多次运行时，时而通过时而失败，无确定性规律
+
+**典型原因：**
+- AI 服务本身的输出不稳定（temperature > 0、模型随机性）
+- 网络抖动导致偶发超时
+- AI 平台负载波动
+
+**判定方法：** 对可疑用例使用 `--repeat` 和 `--filter-pattern` 重跑：
+
+```bash
+# 重跑特定用例 3 次，观察一致性
+PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
+  --env-file .env --no-cache \
+  --filter-pattern '<用例描述正则>' --repeat 3
+```
+
+**处理策略：**
+- 3 次中 2 次以上通过 → 标记为"波动"，不需要调优，是 AI 服务固有特性
+- 3 次中 2 次以上失败 → 标记为"稳定失败"，需要调优
+- 在分析报告中明确区分波动失败和稳定失败，避免浪费时间修复非问题
+
 ## 分析报告模板
 
-分析完成后，向用户呈现结构化的报告：
+分析完成后，向用户呈现结构化的报告，并持久化到
+`evals/<suite>/output/YYYYMMDD-vN-conclusion.md`（与同轮 JSON/HTML 放在一起）。
 
-```
-## 评估结果摘要
+```markdown
+# <suite> 评估结论 — VN (YYYY-MM-DD)
 
-- 总用例数: XX
-- 通过: XX (XX%)
-- 失败: XX
-- 错误: XX
-- 目标阈值: XX%
+## 总体结果
+
+| 指标 | 值 |
+|------|------|
+| 用例数 | XX |
+| 通过率 | XX% (XX/XX) |
+| 目标阈值 | XX% |
+| 是否达标 | ✅ / ❌ |
+
+## 失败分类汇总
+
+按失败类型分类（参考上方"失败分类框架"），列出数量和占比。
 
 ## 失败用例分析
 
-### 字段缺失 (N 个)
-| 用例 | 缺少字段 | 可能原因 |
-|------|---------|---------|
-| ... | ... | ... |
+按类型逐个列出失败用例、具体表现和可能原因。
 
-### 值错误 (N 个)
-| 用例 | 字段 | 期望值 | 实际值 | 可能原因 |
-|------|------|-------|-------|---------|
-| ... | ... | ... | ... | ... |
+## 与上轮对比（V2+ 时填写）
+
+| 维度 | 上轮 | 本轮 | 变化 |
+|------|------|------|------|
+| 通过率 | XX% | XX% | +X% |
+| 新增通过 | — | X 个 | 列出关键用例 |
+| 新增失败 | — | X 个 | 列出回归用例 |
 
 ## 根因总结
 
-1. [最主要的问题]
+1. [最主要的问题及影响范围]
 2. [次要问题]
 
-## 建议调优方向
+## 调优建议
 
-→ 进入 SOP 4（调优）
+- [ ] [建议 1：具体修改方向]
+- [ ] [建议 2：具体修改方向]
+
+## 下一步
+
+→ SOP 4 调优 / 已达标，归档
 ```
 
-## 使用分析脚本
+**命名约定**：文件名与同轮结果文件对应，如：
 
-本 skill 内置了 `scripts/analyze_results.py`，可以自动解析 promptfoo 输出 JSON 并生成
-结构化的失败分析报告。
-
-```bash
-# 单次分析
-python <skill-path>/scripts/analyze_results.py evals/<suite>/output/results.json
-
-# 两轮对比（调优前 vs 调优后）
-python <skill-path>/scripts/analyze_results.py before.json after.json
-
-# 输出到文件
-python <skill-path>/scripts/analyze_results.py results.json -o report.md
 ```
-
-脚本会自动：
-- 兼容 promptfoo 不同版本的 JSON 输出格式（`results.results` 和 `results.table.body`）
-- 按失败类型分类（空输出、格式错误、字段缺失、值错误、语义不符、超时、网络错误等）
-- 生成对比报告（新增通过、新增失败/回归、持续失败）
-
-如果脚本的分类不够精确，可以在脚本输出的基础上进一步人工分析。
+output/
+├── 20260317-v4-results.json
+├── 20260317-v4-results.html
+└── 20260317-v4-conclusion.md    ← 本轮评估结论
+```
 
 ## 分析原则
 
@@ -203,7 +201,8 @@ python <skill-path>/scripts/analyze_results.py results.json -o report.md
 2. **找系统性问题** — 如果多个用例因相同原因失败，说明是系统性问题（如枚举缺失）
 3. **区分模型问题和测试问题** — 有时是期望值不合理，而非模型输出错误
 4. **关注 error vs failure** — error 是基础设施问题，failure 是能力问题，处理方式不同
+5. **区分波动和稳定失败** — 60%+ 的失败可能是 AI 服务波动，先用 `--repeat` 确认复现性再投入调优
 
 ---
 
-→ 分析完成后，进入 **SOP 4（调优）**：读 `sop-tune.md`
+→ 分析完成。下一步调优：读 `sop-tune.md`，聚焦根因总结中的 **优先级最高** 问题类型

@@ -10,10 +10,10 @@
 
 | 场景 | 文件 | 数量 | 说明 |
 |------|------|------|------|
-| A 常规 | `tests/normal.yaml` | 18 | 时间、人员、状态、标签、策略、组合、排序、current_operator、risk_label、title |
+| A 常规 | `tests/normal.yaml` | 26 | 时间、人员、状态、标签、策略、组合、排序、current_operator、risk_label、title、event_content、has_report |
 | B 复杂 | `tests/complex.yaml` | 7 | MCP 事件字段、多条件组合、跨策略 |
 | C 边界 | `tests/boundary.yaml` | 6 | 无效输入、注入攻击、歧义查询 |
-| D 挑战 | `tests/challenge.yaml` | 14 | 复合时间、否定语义、口语化、LLM-as-Judge、多模型对比 |
+| D 挑战 | `tests/challenge.yaml` | 22 | 复合时间、否定语义、口语化、LLM-as-Judge、回归用例 |
 
 ## Provider
 
@@ -34,9 +34,9 @@ Provider 支持通过 `config.model` / `config.non_thinking_llm` / `config.syste
 
 | label | model | 说明 |
 |-------|-------|------|
-| dsv32 | dsv32 | 当前生产模型（显式指定 model + non_thinking_llm） |
+| kimi-chat | kimi-chat | 当前生产模型 |
+| hunyuan2 | hunyuan2 | 候选模型 |
 | qwen3-235B | qwen3-235B | 候选模型 |
-| kimi-chat | kimi-chat | 候选模型 |
 
 ## 自定义断言
 
@@ -45,13 +45,15 @@ Provider 支持通过 `config.model` / `config.non_thinking_llm` / `config.syste
 | `is_non_empty_filter` | 验证返回非空 filter_conditions |
 | `has_expected_keys` | 验证包含指定字段 |
 | `field_value_match` | 验证字段值精确匹配 |
-| `has_event_filter_field` | 验证 event_filters 包含指定事件字段 |
+| `has_event_filter_field` | 验证 event_filters 包含指定事件字段（支持模糊匹配） |
 | `passes_serializer_validation` | 通过 ListRiskRequestSerializer 校验（defaultTest） |
 | `expect_empty_or_message` | 无效输入应返回空条件 |
 | `check_message_on_empty` | 空条件时 message 应非空 |
 | `partial_match` | 部分匹配评分（>=50% 通过） |
 | `check_time_range` | 验证 start_time/end_time 在合理范围内 |
 | `check_sort` | 验证 sort 数组包含期望的排序字段 |
+| `check_event_content` | 验证 event_content 字段存在且包含期望关键词 |
+| `check_has_report` | 验证 has_report 字段存在且值正确 |
 
 ## 运行
 
@@ -129,3 +131,61 @@ vars:
 | V16 | 45×2 | 95.6%（172/180） | LLM-as-Judge 直调 LLM 网关（OpenAI 标准协议）、provider 公共化重构 |
 | V17 | 45×2 | 96.1%（173/180） | prompt 调优：title 字段 + 统计类查询规则 + 示例补充；D12 用例放宽期望 |
 | V18 | 45×3×2 | 96.7%（261/270） | 新增 kimi-chat 模型对比；dsv32 93.3% / qwen3-235B 98.9% / kimi-chat 97.8% |
+| V21 | 45×4×2 | 90.56%（326/360） | 新增 hunyuan2；kimi-chat 97.8% / qwen3-235B 96.7% / hunyuan2 84.4% / dsv32 83.3% |
+| V23 | 61×4×2 | 93.65% 加权（kimi 99.2% / hunyuan2 95.1% / qwen3 92.6% / dsv32 87.7%） | 回归驱动扩展：+16 用例覆盖 event_content/has_report/title 变体；断言模糊匹配；prompt 调优；latency 阈值 30s→60s。hunyuan2 +10.7%，dsv32 +4.4% |
+| V24 | 61×4×2 | 待评估 | 过拟合修复：示例去重（6/9 示例与测试用例重复→0/9）；转换规则抽象化（枚举具体模式→概括性描述）；示例值差异化（不同措辞/值/等级） |
+| V26 | 61×3×2 | 93.72%（343/366） | 去掉 dsv32；kimi-chat 99.2% / hunyuan2 94.3% / qwen3-235B 91.0%。过拟合修复后整体稳定，kimi-chat 保持最优 |
+| V27 | 61×3×2 | 75.96%（278/366） | **激进精简失败**：示例 9→6、转换规则改列表格式、示例改单行。qwen3-235B 延迟飙升 10x（5s→52s），kimi 96.7% / hunyuan2 86.9% / qwen3 44.3% |
+| V28 | 61×3×2 | kimi 98.4% / hunyuan2 92.6% / qwen3 3.3%* | **温和精简**：枚举内联字段表、操作符紧凑化、event_filters 子表格压缩。行数 -27%（159→116）、字节 -11%（7378→6588）。kimi-chat -0.8%，hunyuan2 -1.7%。*qwen3 全因 API 延迟，输出内容正确 |
+
+## 评估反馈与经验
+
+评估过程中沉淀的可持久化经验，供后续迭代参考。
+
+### Prompt 修改必须同步 generate.py
+
+⚠️ `services/web/ai/prompts/nl2riskfilter/system_prompt.md` 是由 `generate.py` 动态生成的产物。
+
+**正确流程**：修改 prompt → 先改 `generate.py` → 运行生成脚本 → 验证产物一致
+
+```bash
+# 重新生成 system_prompt.md
+python -m services.web.ai.prompts.nl2riskfilter.generate
+
+# 确认生成结果与预期一致
+git diff services/web/ai/prompts/nl2riskfilter/system_prompt.md
+```
+
+**反面案例**（V23 教训）：直接修改 `system_prompt.md` 但未同步 `generate.py`，导致下次生成会覆盖手动改动。后续补救同步了 `generate.py`，新增了标题("关于xxx")、`event_content`、`has_report` 三条转换规则和示例 7-9。
+
+### 过拟合检测与修复（V24）
+
+⚠️ V23 存在中等偏严重的过拟合风险，按 `ai-eval-suite` 的 SOP 4 检查清单发现：
+
+**问题**：
+- 9 个 prompt 示例中有 5 个与测试用例完全一致（示例 4/5/7/8/9），1 个高度相似（示例 1）
+- 转换规则枚举了测试用例中的具体表述模式，而非概括性描述
+- 部分通过率提升来自"记忆"而非"理解"
+
+**修复措施**：
+1. **示例去重**：所有示例的具体措辞/值/等级与测试用例差异化（如"我的风险"→"我负责处理的风险"，"标签为重要"→"紧急标签"，"sudo"→"root操作"）
+2. **规则抽象化**：title/event_content/has_report 三条规则从枚举具体模式改为概括性描述（如"当用户意图是按事件文本内容搜索时→event_content"）
+3. **示例值差异化**：示例 1 从"最近一周高风险"改为"最近一个月中等风险"，示例 9 从"高危"改为"中等"
+
+**验证标准**：V24 评估中，如果通过率**小幅下降（≤3%）**是预期内的健康信号——说明之前的部分通过率确实靠"记忆"支撑；如果**大幅下降（>5%）**则需进一步分析规则是否过度抽象。
+
+### Prompt 精简的安全边界（V27/V28）
+
+⚠️ V27 尝试激进精简（示例 9→6、转换规则改列表格式、示例改单行），通过率从 93.72% 暴跌到 75.96%。
+
+**可安全精简的部分**：
+- 枚举独立段落（status/risk_level/risk_label）→ 内联到字段表说明列
+- event_filters 子表格 → 紧凑行内描述
+- 操作符枚举的中文释义 → 逗号分隔纯代码格式
+
+**不能精简的核心部分**（精简即回归）：
+- **转换规则**：必须保持多段落格式，列表格式导致 thinking 模型延迟飙升 10x
+- **示例数量**：9 个示例缺一不可，减少后 event_content/报告状态等边界字段误判
+- **示例格式**：必须保持多行输入/输出格式，单行格式模型难以解析
+
+**经验**：prompt 精简的上限约 11%（字节维度），进一步精简需要改变架构（如改用 schema 格式），而非文字层面压缩。
