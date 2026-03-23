@@ -145,6 +145,8 @@
     (e: 'remove', id: string): void;
     (e: 'updateOperator', id: string, operator: string): void;
     (e: 'updateValue', id: string, value: any): void;
+    (e: 'startEdit'): void;
+    (e: 'finishEdit'): void;
   }
 
   const props = defineProps<Props>();
@@ -228,6 +230,9 @@
   // 操作符下拉切换
   const handleToggleOperator = () => {
     isOperatorShow.value = !isOperatorShow.value;
+    if (isOperatorShow.value) {
+      emit('startEdit');
+    }
   };
 
   // 选择操作符
@@ -238,6 +243,7 @@
 
   // 开始编辑值
   const handleStartEditValue = () => {
+    emit('startEdit');
     if (isMultiValueMode.value) {
       localMultiValue.value = Array.isArray(props.item.value) ? [...props.item.value] : [];
       multiInputText.value = '';
@@ -260,6 +266,7 @@
   const handleConfirmValue = () => {
     emit('updateValue', props.item.id, localSingleValue.value);
     isEditingValue.value = false;
+    emit('finishEdit');
   };
 
   // 多值模式添加
@@ -301,8 +308,10 @@
         }
       } else {
         handleConfirmValue();
+        return; // handleConfirmValue 内部已触发 finishEdit
       }
       isEditingValue.value = false;
+      emit('finishEdit');
     }
   };
 

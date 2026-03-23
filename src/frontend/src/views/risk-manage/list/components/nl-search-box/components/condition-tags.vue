@@ -32,9 +32,9 @@
             :removable="tag.removable"
             :search-model="searchModel"
             :tag="tag"
-            @finish-edit="handleFinishEdit"
+            @finish-edit="handleDateFinishEdit"
             @remove="handleRemove"
-            @start-edit="handleStartEdit"
+            @start-edit="handleDateStartEdit"
             @update="handleUpdate" />
 
           <!-- 下拉选择类型 -->
@@ -79,7 +79,9 @@
           :key="item.id"
           :condition-list="conditionList || []"
           :item="item"
+          @finish-edit="handleEventFieldFinishEdit"
           @remove="handleRemoveEventField"
+          @start-edit="handleEventFieldStartEdit"
           @update-operator="handleUpdateEventOperator"
           @update-value="handleUpdateEventValue" />
 
@@ -130,6 +132,8 @@
     (e: 'remove', fieldName: string): void;
     (e: 'clearAll'): void;
     (e: 'update', fieldName: string, value: any): void;
+    (e: 'startEdit'): void;
+    (e: 'finishEdit'): void;
     (e: 'removeEventField', id: string): void;
     (e: 'updateEventOperator', id: string, operator: string): void;
     (e: 'updateEventValue', id: string, value: any): void;
@@ -198,10 +202,34 @@
   // ========================
   const handleStartEdit = (fieldName: string) => {
     editingField.value = fieldName;
+    // 通知父组件编辑开始，用于记录快照
+    emit('startEdit');
   };
 
   const handleFinishEdit = () => {
     editingField.value = null;
+    // 编辑面板关闭时，通知父组件触发搜索
+    emit('finishEdit');
+  };
+
+  // 日期选择器面板关闭时的回调（日期选择器自行管理开关状态，不走 editingField）
+  const handleDateFinishEdit = () => {
+    emit('finishEdit');
+  };
+
+  // 日期选择器面板打开时的回调
+  const handleDateStartEdit = () => {
+    emit('startEdit');
+  };
+
+  // 事件字段编辑完成时的回调
+  const handleEventFieldFinishEdit = () => {
+    emit('finishEdit');
+  };
+
+  // 事件字段开始编辑时的回调
+  const handleEventFieldStartEdit = () => {
+    emit('startEdit');
   };
 
   const handleUpdate = (fieldName: string, value: any) => {
