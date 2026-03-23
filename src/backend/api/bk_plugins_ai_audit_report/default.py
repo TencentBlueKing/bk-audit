@@ -162,7 +162,17 @@ class ChatCompletion(AIAuditReport):
             event_type = event.get("event")
             content = event.get("content", "")
             cover = event.get("cover", False)
-            if event_type == "done":
+            if event_type == "error":
+                error_code = event.get("code", 500)
+                error_message = event.get("message", content or "智能体流式响应异常")
+                logger.error("AI stream error event: code=%s, message=%s", error_code, error_message)
+                raise APIRequestError(
+                    module_name=self.module_name,
+                    url=self.action,
+                    status_code=error_code,
+                    result=error_message,
+                )
+            elif event_type == "done":
                 done_content = content
             elif event_type == "text":
                 text_content = content if cover else text_content + content
