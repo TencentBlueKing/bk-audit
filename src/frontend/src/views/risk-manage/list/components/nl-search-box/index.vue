@@ -250,14 +250,12 @@
 
   // 字段映射表：字段名 → 转换类型
   const fieldTransformMap: Record<string, FieldTransform> = {
-    // 单值包装为数组的字段
-    risk_level: 'wrap-array',
-    status: 'wrap-array',
-    operator: 'wrap-array',
-    current_operator: 'wrap-array',
-    notice_users: 'wrap-array',
-    risk_label: 'wrap-array',
-    // 逗号分隔字符串转数组的字段
+    risk_level: 'split-array',
+    status: 'split-array',
+    operator: 'split-array',
+    current_operator: 'split-array',
+    notice_users: 'split-array',
+    risk_label: 'split-array',
     strategy_id: 'split-array',
     tags: 'split-array',
     // 直接赋值的字段
