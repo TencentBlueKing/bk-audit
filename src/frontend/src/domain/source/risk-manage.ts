@@ -345,5 +345,15 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 导出AI报告
+  exportAiAnalyseReport(params: {
+    report_id: string | number,
+    export_format: string,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/export/`, {
+      params,
+      responseType: 'blob',
+    });
+  }
 }
 export default new RiskManage();

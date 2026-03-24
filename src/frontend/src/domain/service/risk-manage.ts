@@ -373,4 +373,14 @@ export default {
     return RiskManageSource.updateAiAnalyseReport(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 导出AI报告
+   */
+  exportAiAnalyseReport(params: {
+    report_id: string | number,
+    export_format: string,
+  }) {
+    return RiskManageSource.exportAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
 };
