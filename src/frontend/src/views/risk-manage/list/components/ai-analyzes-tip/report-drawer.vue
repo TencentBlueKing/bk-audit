@@ -2,6 +2,7 @@
   <div>
     <audit-sideslider
       v-model:isShow="show"
+      :before-close="handleBeforeClose"
       :quick-close="false"
       :show-footer="isEditing"
       show-footer-slot
@@ -11,17 +12,19 @@
       <template #header>
         <div class="ai-report-header">
           <div class="ai-report-title-wrapper">
-            <span class="ai-report-title-text">{{ headerTitle }}</span>
+            <span class="ai-report-title-text">{{ title }}</span>
           </div>
           <div
-            v-if="!isEditing"
             class="ai-report-header-actions">
             <bk-button
+              v-if="!isEditing"
               class="mr8"
               @click="handleEdit">
               {{ t('编辑') }}
             </bk-button>
-            <bk-dropdown trigger="click">
+            <bk-dropdown
+              v-if="!isEditing"
+              trigger="click">
               <bk-button theme="primary">
                 <audit-icon
                   class="mr4"
@@ -61,7 +64,16 @@
                   {{ item.label }}
                 </div>
                 <div class="value">
-                  {{ item.value }}
+                  <div v-if="item.key === 'analysis_scope'">
+                    <div
+                      v-for="(scope, index) in item.value"
+                      :key="index">
+                      {{ scope.label }} = {{ scope.value }}
+                    </div>
+                  </div>
+                  <div v-else>
+                    {{ item.value }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -76,9 +88,10 @@
             </div>
 
             <div class="ai-report-section-body">
-              <p>
-                {{ t('这里展示 AI 分析生成的报告内容，后续可对接后端接口替换为真实数据。') }}
-              </p>
+              <!-- eslint-disable vue/no-v-html -->
+              <div
+                class="markdowm-container"
+                v-html="htmlText" />
             </div>
           </div>
         </template>
@@ -111,51 +124,112 @@
 </template>
 
 <script setup lang="ts">
+  import { Message } from 'bkui-vue';
+  import DOMPurify from 'dompurify';
+  import MarkdownIt from 'markdown-it';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useRequest from '@hooks/use-request';
+
   import ReportEditor from './report-editor.vue';
 
-  interface MetaItem {
-    key: string,
-    label: string,
-    value: string,
-  }
+  import RiskManageService from '@/domain/service/risk-manage';
 
   interface Props {
     isShow: boolean;
-    title: string;
-    metaList?: MetaItem[];
+    itemInfo: string;
   }
-
   const props = withDefaults(defineProps<Props>(), {
     isShow: false,
-    title: '',
-    metaList: () => [],
+    itemInfo: '',
   });
 
-  const emit = defineEmits(['update:isShow']);
+  const emit = defineEmits(['update:isShow', 'refresh', 'update:item-info']);
 
+  // 初始化markdown渲染器
+  const md = new MarkdownIt({
+    html: true,
+    linkify: true,
+    typographer: true,
+  });
+
+  const { t } = useI18n();
+  const isFullscreen = ref(false);
+  const isEditing = ref(false);
+  const editContent = ref('');
+
+  const metaList = computed(() => {
+    if (!props.itemInfo) {
+      return [];
+    }
+    try {
+      const info = JSON.parse(props.itemInfo);
+      return [
+        {
+          key: 'report_type',
+          label: t('报告类型'),
+          value: info.report_type === 'system' ? t('系统分析') : t('自定义分析'),
+        },
+        {
+          key: 'analysis_scope',
+          label: t('分析范围'),
+          value: JSON.parse(info.analysis_scope)?.map((item: any) => {
+            if (item.label === '首次发现时间') {
+              return  {
+                label: item.label,
+                value: Array.isArray(item.value) ? item.value.join('-') : item.value,
+              };
+            }
+            return {
+              label: item.label,
+              value: Array.isArray(item.value) ? item.value.join(',') : item.value,
+            };
+          }),
+        },
+        {
+          key: 'risk_count',
+          label: t('风险条数'),
+          value: info.risk_count,
+        },
+        {
+          key: 'created_by',
+          label: t('生成人'),
+          value: info.created_by,
+        },
+        {
+          key: 'created_at',
+          label: t('生成时间'),
+          value: info.created_at,
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
+  const title = computed(() => JSON.parse(props.itemInfo).title || '');
+  const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 960));
+  const editTitle = computed(() => JSON.parse(props.itemInfo).title || '');
   const show = computed({
     get: () => props.isShow,
     set: (val: boolean) => emit('update:isShow', val),
   });
-
-  const { t } = useI18n();
-  const metaList = computed(() => props.metaList || []);
-
-  const isFullscreen = ref(false);
-  const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 960));
-
-  const isEditing = ref(false);
-  const editTitle = ref('');
-  const editContent = ref('');
-  const headerTitle = computed(() => (isEditing.value ? t('编辑报告') : props.title));
-
+  // 使用markdown-it渲染markdown内容
+  const htmlText = computed(() => {
+    if (!props.itemInfo) return '';
+    try {
+      return md.render(DOMPurify.sanitize(JSON.parse(props.itemInfo).content)) || '';
+    } catch {
+      return '';
+    }
+  });
   const handleEdit = () => {
     isEditing.value = true;
-    editTitle.value = props.title;
-    editContent.value = '';
+    try {
+      editContent.value = JSON.parse(props.itemInfo).content || '';
+    } catch {
+      editContent.value = '';
+    }
   };
 
   const handleExport = (type: 'pdf' | 'markdown') => {
@@ -166,14 +240,43 @@
   const handleToggleFullscreen = () => {
     isFullscreen.value = !isFullscreen.value;
   };
+  // 保存AI报告
+  const {
+    run: updateAiAnalyseReport,
+  } = useRequest(RiskManageService.updateAiAnalyseReport, {
+    defaultValue: [],
+    onSuccess(data) {
+      console.log('保存AI报告>>>>', data);
+      // 通知父组件更新itemInfo为最新的数据
+      emit('update:item-info', JSON.stringify(data));
 
-  const handleSave = () => {
-    // 这里仅切回预览态，占位后续保存逻辑
-    isEditing.value = false;
+      // 保存成功后提示并切换回预览状态
+      Message({ theme: 'success', message: t('保存成功') });
+      isEditing.value = false;
+      // 通知父组件刷新列表
+      emit('refresh');
+    },
+  });
+  const handleSave = async () => {
+    const reportInfo = JSON.parse(props.itemInfo);
+    updateAiAnalyseReport({
+      report_id: reportInfo.report_id,
+      title: editTitle.value,
+      content: editContent.value,
+    });
   };
 
   const handleCancelEdit = () => {
     isEditing.value = false;
+  };
+
+  // 编辑状态下阻止侧边栏收起
+  const handleBeforeClose = () => {
+    if (isEditing.value) {
+      isEditing.value = false;
+      return false;
+    }
+    return true;
   };
 </script>
 
@@ -227,6 +330,8 @@
 .ai-report-meta-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  text-align: center;
 }
 
 .ai-report-meta-item {
@@ -277,7 +382,9 @@
 }
 
 .ai-report-edit-form {
-  padding: 24px 32px 32px;
+  width: 96%;
+  margin-top: 16px;
+  margin-left: 2%;
   background: #fff;
 }
 
@@ -290,4 +397,3 @@
 }
 
 </style>
-

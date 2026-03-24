@@ -310,4 +310,67 @@ export default {
     return RiskManageSource.nl2RiskFilter(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 获取智能分析列表
+   */
+  getAiAnalyseList() {
+    return RiskManageSource.getAiAnalyseList()
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 生成AI分析报告
+   */
+  getAiAnalyseReport(params: {
+    scenario_key: string,
+    report_type: string,
+    title: string,
+    analysis_scope: string,
+    custom_prompt: string,
+    target_risks_filter: any,
+    }) {
+    return RiskManageSource.getAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 查询AI报告任务结果
+   */
+  getAiAnalyseTaskReport(params: {
+    task_id: string,
+  }) {
+    return RiskManageSource.getAiAnalyseTaskReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取AI报告详情
+   */
+  getAiAnalyseReportDetail(params: {
+    report_id : string | number,
+  }) {
+    return RiskManageSource.getAiAnalyseReportDetail(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取历史报告列表
+   */
+  getHistoryReportList(params: {
+    page: number,
+    page_size: number,
+    keyword?: string,
+    report_type?: string,
+    sort?: any,
+  }) {
+    return RiskManageSource.getHistoryReportList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 编辑AI报告
+   */
+  updateAiAnalyseReport(params: {
+    report_id: string | number,
+    title: string,
+    content: string,
+  }) {
+    return RiskManageSource.updateAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
 };
