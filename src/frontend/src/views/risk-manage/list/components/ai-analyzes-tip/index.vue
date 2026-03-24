@@ -171,7 +171,7 @@
     showReportDrawer.value = true;
   };
   // 监听conditionTags变化，更新isSearch状态
-  watch(() => props.conditionTags, (newTags) => {
+  watch(() => props.conditionTags, (newTags: any) => {
     isSearch.value = newTags.length > 0;
   }, { immediate: true });
 
