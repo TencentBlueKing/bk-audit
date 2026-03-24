@@ -100,8 +100,8 @@
           <report-editor
             :content="editContent"
             :title="editTitle"
-            @update:content="val => editContent = val"
-            @update:title="val => editTitle = val" />
+            @update:content="(val:string) => editContent = val"
+            @update:title="(val:string) => editTitle = val" />
         </template>
       </div>
       <template
@@ -232,9 +232,25 @@
     }
   };
 
+  // 导出AI报告
+  const {
+    run: exportAiAnalyseReport,
+  } = useRequest(RiskManageService.exportAiAnalyseReport, {
+    defaultValue: null,
+    onSuccess(data) {
+      if (data?.download_url) {
+        window.open(data.download_url);
+      }
+      Message({ theme: 'success', message: t('导出成功') });
+    },
+  });
+
   const handleExport = (type: 'pdf' | 'markdown') => {
-    // TODO: 导出功能占位，根据 type 调用实际导出逻辑
-    console.log('handleExport', type);
+    const reportInfo = JSON.parse(props.itemInfo);
+    exportAiAnalyseReport({
+      report_id: reportInfo.report_id,
+      export_format: type,
+    });
   };
 
   const handleToggleFullscreen = () => {

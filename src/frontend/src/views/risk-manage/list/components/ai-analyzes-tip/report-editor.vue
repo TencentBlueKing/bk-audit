@@ -40,19 +40,19 @@
   const localTitle = ref(props.title);
   const localContent = ref(props.content);
 
-  watch(() => props.title, (val) => {
+  watch(() => props.title, (val:string) => {
     localTitle.value = val;
   });
 
-  watch(() => props.content, (val) => {
+  watch(() => props.content, (val:string) => {
     localContent.value = val;
   });
 
-  watch(localTitle, (val) => {
+  watch(localTitle, (val:string) => {
     emit('update:title', val);
   });
 
-  watch(localContent, (val) => {
+  watch(localContent, (val:string) => {
     emit('update:content', val);
   });
 </script>

@@ -106,7 +106,7 @@
         <span
           class="report-title-link"
           onClick={() => emit('open-report', row)}>
-          {row.title}{ row.report_id}
+          {row.title}
         </span>
       ),
     },
