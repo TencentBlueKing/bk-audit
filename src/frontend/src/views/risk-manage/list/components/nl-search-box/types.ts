@@ -39,4 +39,5 @@ export interface INLSearchBoxExposes {
   exportData: (val: string[], type: string) => void;
   initSelectedItems: (val: Array<Record<string, any>>) => void;
   getSelectedItemList: () => Array<Record<string, any>>;
+  getConditionTags: () => IConditionTag[];
 }

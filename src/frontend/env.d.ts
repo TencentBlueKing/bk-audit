@@ -45,6 +45,8 @@ declare module 'js-cookie';
 
 declare module 'dompurify';
 
+declare module 'markdown-it';
+
 declare module '@blueking/notice-component';
 
 declare module '@blueking/login-modal';

@@ -16,7 +16,6 @@
 -->
 <template>
   <div
-    v-if="total > 0"
     class="ai-analyzes">
     <div class="tip-content">
       <audit-icon
@@ -24,16 +23,23 @@
         type="info-fill" />
       <span class="text">{{ t('共搜索出') }}</span>
       <span class="highlight">{{ total }}</span>
-      <span class="text">{{ t('条风险单，可对所有风险单进行') }}</span>
+      <span class="text">{{ tipText }}</span>
       <span
-        class="action-btn"
-        @click="handleAnalyze">
+        class="action-btn">
         <img
           class="ai-agent-ai"
           height="14"
           src="@images/ai.svg"
           width="24">
-        {{ t('智能分析') }}
+        <span
+          v-bk-tooltips="{
+            disabled: !(total === 0 || total >= 100),
+            content: total === 0 ? t('至少包含 1 条风险数据才能使用') : t('最多支持 100 条，请添加筛选条件后使用')
+          }"
+          :class="(total > 0 && total < 100 && isSearch) ? '' : 'disabled'"
+          @click="handleAnalyze">
+          {{ t('智能分析') }}
+        </span>
       </span>
       <span class="text">{{ t('或查看') }}</span>
       <span
@@ -46,27 +52,36 @@
           width="24">
         {{ t('历史分析报告') }}
       </span>
+      <!-- 条件标签信息 -->
     </div>
   </div>
   <analyze-dialog
     ref="analyzeDialogRef"
+    :condition-tags="conditionTags"
+    :search-params="searchParams"
     :total="total"
     @analyze-finished="handleAnalyzeFinished" />
 
   <report-drawer
     v-model:isShow="showReportDrawer"
-    :meta-list="currentReportMeta"
-    :title="currentReportTitle" />
+    :item-info="itemInfo"
+    @refresh="handleRefreshList"
+    @update:item-info="(val:string) => handleUpdate(val)" />
 
   <history-report-drawer
+    ref="historyDrawerRef"
     v-model:isShow="showHistoryDrawer"
     @open-report="handleOpenReport"
     @view-risks="handleViewRisks" />
 </template>
 
 <script setup lang="tsx">
-  import { ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import RiskManageService from '@service/risk-manage';
+
+  import useRequest from '@hooks/use-request';
 
   import AnalyzeDialog from './dialog.vue';
   import type { HistoryReportItem } from './history-report-drawer.vue';
@@ -75,60 +90,99 @@
 
   interface Props {
     total?: number;
+    conditionTags?: any[];
+    searchParams?: Record<string, any>;
   }
 
-  withDefaults(defineProps<Props>(), {
-    total: 0,
-  });
+  interface Exposes {
+    changeIsSearch: () => void;
+  }
+
+  const props = withDefaults(
+    defineProps<Props>(),
+    {
+      total: 0,
+      conditionTags: () => [],
+      searchParams: () => ({}),
+    },
+  );
 
   const { t } = useI18n();
 
   const analyzeDialogRef = ref<InstanceType<typeof AnalyzeDialog>>();
+  const historyDrawerRef = ref<InstanceType<typeof HistoryReportDrawer>>();
   const showReportDrawer = ref(false);
   const showHistoryDrawer = ref(false);
-  const currentReportTitle = ref('');
-  const currentReportMeta = ref<Array<{ key: string, label: string, value: string }>>([]);
+  const itemInfo = ref<string>('');
+  const isSearch = ref(false);
+  const tipText = computed(() => {
+    if (isSearch.value) {
+      if (props.total > 0 && props.total < 100) {
+        return t('可对所有风险单进行');
+      }
+      return t('可修改筛选条件后进行');
+    }
+    return t('可添加筛选条件后进行');
+  });
 
   const handleAnalyze = () => {
-    analyzeDialogRef.value?.show();
+    if ((props.total > 0 && props.total < 100 && isSearch)) {
+      analyzeDialogRef.value?.show();
+    }
   };
 
-  const handleHistory = () => {
-    showHistoryDrawer.value = true;
-  };
 
-  const handleOpenReport = (row: HistoryReportItem) => {
-    currentReportTitle.value = row.title;
-    currentReportMeta.value = [
-      { key: 'type', label: t('报告类型'), value: row.reportTypeLabel },
-      { key: 'scope', label: t('分析范围'), value: row.analysisScope },
-      { key: 'count', label: t('风险条数'), value: `${row.riskCount} ${t('条')}` },
-      { key: 'creator', label: t('生成人'), value: row.creator },
-      { key: 'time', label: t('生成时间'), value: row.createTime },
-    ];
-    showHistoryDrawer.value = false;
-    showReportDrawer.value = true;
+  // 获取ai报告详情
+  const {
+    run: getAiAnalyseReportDetail,
+  } = useRequest(RiskManageService.getAiAnalyseReportDetail, {
+    defaultValue: [],
+    onSuccess(data) {
+      console.log('获取ai报告详情>>>>', data);
+      showReportDrawer.value = true;
+      itemInfo.value = JSON.stringify(data);
+    },
+  });
+  const handleOpenReport = (item: HistoryReportItem) => {
+    console.log('handleOpenReport', item);
+    getAiAnalyseReportDetail({
+      report_id: item.report_id,
+    });
   };
 
   const handleViewRisks = () => {
     // TODO: 跳转到关联风险列表或弹窗
   };
 
-  const handleAnalyzeFinished = (payload: { type: 'recommend' | 'custom', title?: string, requirement?: string }) => {
-    if (payload.type === 'recommend') {
-      currentReportTitle.value = payload.title || t('智能分析报告');
-    } else {
-      currentReportTitle.value = t('自定义分析报告');
+  const handleRefreshList = () => {
+    // 如果历史报告抽屉是打开的，刷新列表
+    if (showHistoryDrawer.value && historyDrawerRef.value) {
+      // 通过ref直接调用history-report-drawer组件的刷新方法
+      historyDrawerRef.value?.listRef?.fetchData({ report_keyword: '' });
     }
-    currentReportMeta.value = [
-      { key: 'type', label: t('报告类型'), value: t('人员调查') },
-      { key: 'scope', label: t('分析范围'), value: t('责任人-张三') },
-      { key: 'count', label: t('风险条数'), value: `11 ${t('条')}` },
-      { key: 'creator', label: t('生成人'), value: 'admin' },
-      { key: 'time', label: t('生成时间'), value: '2026-02-03 14:50' },
-    ];
+  };
+
+  const handleUpdate = (val: string) => {
+    itemInfo.value = val;
+  };
+
+  const handleAnalyzeFinished = (data: string) => {
+    itemInfo.value = data;
     showReportDrawer.value = true;
   };
+  // 监听conditionTags变化，更新isSearch状态
+  watch(() => props.conditionTags, (newTags) => {
+    isSearch.value = newTags.length > 0;
+  }, { immediate: true });
+
+  const handleHistory = () => {
+    showHistoryDrawer.value = true;
+  };
+  defineExpose<Exposes>({
+    changeIsSearch() {
+      isSearch.value = true;
+    },
+  });
 </script>
 
 <style lang='postcss' scoped>
@@ -173,6 +227,38 @@
       .action-icon {
         margin-right: 4px;
         font-size: 14px;
+      }
+
+      .disabled {
+        color: #979ba5;
+        cursor: not-allowed;
+      }
+    }
+
+    .condition-tags-info {
+      display: flex;
+      margin-left: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+
+      .condition-tag-item {
+        display: inline-flex;
+        padding: 2px 6px;
+        margin: 0 4px;
+        font-size: 12px;
+        color: #63656e;
+        background: #f0f1f5;
+        border-radius: 2px;
+        align-items: center;
+
+        .tag-label {
+          color: #4d4f56;
+        }
+
+        .tag-value {
+          font-weight: 700;
+          color: #4d4f56;
+        }
       }
     }
   }

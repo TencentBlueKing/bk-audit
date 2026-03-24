@@ -290,5 +290,60 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 获取AI分析列表
+  getAiAnalyseList() {
+    return Request.get(`${this.api}/analyse_report/scenarios/`);
+  }
+  // 生成AI分析报告
+  getAiAnalyseReport(params: {
+    scenario_key: string,
+    report_type: string,
+    title: string,
+    analysis_scope: string,
+    custom_prompt: string,
+    target_risks_filter: any,
+    }) {
+    return Request.post(`${this.api}/analyse_report/generate/`, {
+      params,
+    });
+  }
+  // 查询AI报告任务结果
+  getAiAnalyseTaskReport(params: {
+    task_id: string,
+  }) {
+    return Request.get(`${this.api}/analyse_report/task/`, {
+      params,
+    });
+  }
+  // 获取AI报告详情
+  getAiAnalyseReportDetail(params: {
+    report_id: string | number,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/`, {
+      params,
+    });
+  }
+  // 获取历史报告列表
+  getHistoryReportList(params: {
+    page: number,
+    page_size: number,
+    keyword?: string,
+    report_type?: string,
+    sort?: any,
+  }) {
+    return Request.post(`${this.api}/analyse_report/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+    });
+  }
+  // 编辑AI报告
+  updateAiAnalyseReport(params: {
+    report_id: string | number,
+    title: string,
+    content: string,
+  }) {
+    return Request.put(`${this.api}/analyse_report/${params.report_id}/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();

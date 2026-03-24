@@ -59,7 +59,9 @@
 
 <style scoped lang="postcss">
 .ai-report-edit-form {
-  padding: 24px 32px 32px;
+  width: 96%;
+  margin-top: 16px;
+  margin-left: 2%;
   background: #fff;
 }
 </style>
