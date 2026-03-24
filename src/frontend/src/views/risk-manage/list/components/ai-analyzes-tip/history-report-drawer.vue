@@ -52,6 +52,7 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
 
@@ -60,14 +61,14 @@
   import RiskTablePopover from './risk-table-popover.vue';
 
   export interface HistoryReportItem {
-    id: string;
+    analysis_scope: string;
     title: string;
-    reportType: string;
-    reportTypeLabel: string;
-    analysisScope: string;
-    riskCount: number;
-    creator: string;
-    createTime: string;
+    created_at: string;
+    created_by: string;
+    report_id: string;
+    report_type: string;
+    risk_count: number;
+    status: string;
   }
 
   interface Props {
@@ -84,6 +85,7 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const router = useRouter();
 
   const show = computed({
     get: () => props.isShow,
@@ -92,6 +94,7 @@
 
   const searchKeyword = ref('');
   const listRef = ref<InstanceType<typeof TdesignList>>();
+  const originalQuery = ref<Record<string, any>>({});
 
   const tableColumns = [
     {
@@ -103,7 +106,7 @@
         <span
           class="report-title-link"
           onClick={() => emit('open-report', row)}>
-          {row.title}
+          {row.title}{ row.report_id}
         </span>
       ),
     },
@@ -112,22 +115,28 @@
       colKey: 'reportTypeLabel',
       width: 120,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
-        <span
-          class="report-title-link"
-          onClick={() => emit('open-report', row)}>
-         <bk-tag>人员调查</bk-tag>
-        </span>
+         <bk-tag>{row.report_type ===  'system' ? t('系统分析') : t('自定义分析')}</bk-tag>
     )    },
     {
       title: t('分析范围'),
       colKey: 'analysisScope',
       minWidth: 200,
       ellipsis: true,
-      cell: (h: any, { row }: { row: HistoryReportItem }) => (
-        <span>
-          {row.title}
-        </span>
-      ),
+      cell: (h: any, { row }: { row: HistoryReportItem }) => {
+        try {
+          const scopeArray = JSON.parse(row.analysis_scope);
+          const formattedText = scopeArray.map((item: any) => {
+            if (item.label === '首次发现时间') {
+              return `${item.label}=${Array.isArray(item.value) ? item.value.join('-') : item.value}`;
+            }
+            return `${item.label}=${Array.isArray(item.value) ? item.value.join(',') : item.value
+            }`;
+          }).join('，');
+          return <span>{formattedText}</span>;
+        } catch {
+          return <span>{row.analysis_scope}</span>;
+        }
+      },
     },
     {
       title: t('关联风险数量'),
@@ -136,37 +145,48 @@
       align: 'center',
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <RiskTablePopover
-          count={111}
-          report-id={row.id} />
+          count={row.risk_count}
+          report-id={row.report_id} />
       ),
     },
     {
       title: t('生成人'),
-      colKey: 'current_operator',
+      colKey: 'created_by',
       width: 120,
     },
     {
       title: t('生成时间'),
-      colKey: 'event_time',
+      colKey: 'created_at',
       width: 180,
     },
   ];
 
   // 获取历史报告列表占位
-  const dataSource = RiskManageService.fetchRiskList;
+  const dataSource = RiskManageService.getHistoryReportList;
 
 
   const handleSearch = () => {
-    listRef.value?.fetchData({ report_keyword: searchKeyword.value });
+    listRef.value?.fetchData({ keyword: searchKeyword.value });
   };
 
   watch(show, (val) => {
     if (val) {
+      // 记录当前URL参数
+      originalQuery.value = { ...router.currentRoute.value.query };
       searchKeyword.value = '';
       nextTick(() => {
-        listRef.value?.fetchData({ report_keyword: '' });
+        listRef.value?.fetchData({ keyword: '' });
+      });
+    } else {
+      // 恢复原始URL参数
+      router.replace({
+        query: originalQuery.value,
       });
     }
+  });
+
+  defineExpose({
+    listRef,
   });
 </script>
 
