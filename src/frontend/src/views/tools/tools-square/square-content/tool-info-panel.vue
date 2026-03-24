@@ -44,6 +44,11 @@
         <audit-icon
           class="add-icon"
           type="add" />
+        <span
+          v-if="toolList.length > 0"
+          class="add-badge">
+          +{{ toolList.length }}
+        </span>
       </div>
     </div>
     <div class="panel-content">
@@ -79,17 +84,47 @@
           </div>
         </div>
       </div>
+      <!-- 工具内容区域 -->
+      <tool-content
+        v-if="activeToolDetail"
+        ref="toolContentRef"
+        :content-style="{ height: 'calc(100% - 160px)' }"
+        :get-tool-name-and-type="getToolNameAndType"
+        :search-list="searchList"
+        :tool-details="activeToolDetail"
+        :uid="activeToolDetail.uid"
+        @update:search-list="(val) => searchList = val" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useRoute } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
 
+  import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
+
+  import ToolContent from '../components/tool-content.vue';
+
+  import useRequest from '@/hooks/use-request';
+
+  interface SearchItem {
+    value: any;
+    raw_name: string;
+    required: boolean;
+    description: string;
+    display_name: string;
+    field_category: string;
+    choices: Array<{
+      key: string;
+      name: string;
+    }>;
+    disabled: boolean;
+    is_show?: boolean;
+  }
 
   interface Props {
     toolInfo: ToolInfo | null;
@@ -178,6 +213,62 @@
 
   const activeTool = computed(() => toolList.value[activeIndex.value] || null);
 
+  const toolContentRef = ref();
+  const searchList = ref<SearchItem[]>([]);
+  const activeToolDetail = ref<ToolDetailModel | null>(null);
+
+  // 获取工具详情
+  const {
+    run: fetchToolDetail,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: (data) => {
+      activeToolDetail.value = data;
+      // 构建搜索列表
+      if (data.tool_type !== 'bk_vision') {
+        searchList.value = (data.config?.input_variable || []).map((item: any) => ({
+          ...item,
+          value: item.default_value || (item.field_category === 'person_select' || item.field_category === 'time_range_select' ? [] : null),
+          required: item.required,
+          disabled: false,
+        }));
+        nextTick(() => {
+          if (toolContentRef.value) {
+            toolContentRef.value.setFormItemData(searchList.value);
+          }
+        });
+      } else {
+        nextTick(() => {
+          if (toolContentRef.value) {
+            toolContentRef.value.executeBkVision();
+          }
+        });
+      }
+    },
+  });
+
+  const getToolNameAndType = (uid: string): { name: string; type: string } => {
+    const tool = toolList.value.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type || '',
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
+  // 监听激活工具变化，获取详情
+  watch(
+    () => activeTool.value?.uid,
+    (newUid) => {
+      if (newUid) {
+        activeToolDetail.value = null;
+        fetchToolDetail({ uid: newUid });
+      }
+    },
+  );
+
   watch(
     () => [route.query.tool_id, props.toolInfo?.uid],
     () => {
@@ -199,47 +290,51 @@
   align-items: center;
   justify-content: space-between;
   height: 44px;
-  padding: 0 12px 0 8px;
+  padding: 0 16px;
   background: #fff;
   border-bottom: 1px solid #dcdee5;
 }
 
-
 .title-text {
   font-size: 14px;
+  font-weight: 700;
   line-height: 22px;
   color: #313238;
 }
 
 .header-close {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  font-size: 14px;
-  line-height: 20px;
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  line-height: 24px;
   color: #979ba5;
   text-align: center;
   cursor: pointer;
+  border-radius: 50%;
+  transition: all .15s;
   user-select: none;
+  flex: 0 0 auto;
 }
 
 .header-close:hover {
   color: #63656e;
+  background: #f0f1f5;
 }
 
 .panel-tab {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   height: 42px;
-  padding: 0 8px 0 4px;
+  padding: 0 12px 0 8px;
   overflow: hidden;
-  background: #fafbfd;
+  background: #fff;
   border-bottom: 1px solid #dcdee5;
 }
 
 .tab-box {
   display: flex;
+  gap: 4px;
   height: 100%;
   min-width: 0;
   padding-right: 4px;
@@ -248,15 +343,15 @@
   align-items: center;
   scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: #c4c6cc #f0f1f5;
+  scrollbar-color: #c4c6cc transparent;
 }
 
 .tab-box::-webkit-scrollbar {
-  height: 6px;
+  height: 4px;
 }
 
 .tab-box::-webkit-scrollbar-track {
-  background: #f0f1f5;
+  background: transparent;
 }
 
 .tab-box::-webkit-scrollbar-thumb {
@@ -272,59 +367,97 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   color: #979ba5;
   cursor: pointer;
+  border-radius: 4px;
+  transition: all .15s;
+}
+
+.tab-icon:hover {
+  color: #3a84ff;
+  background: #f0f5ff;
 }
 
 .tab-icon-add {
   position: relative;
   z-index: 2;
-  background: #fafbfd;
-  border-left: 1px solid #e6e8ee;
+  width: auto;
+  min-width: 32px;
+  padding: 0 4px;
+  background: transparent;
+  border-left: none;
 }
 
 .add-icon {
   display: block;
   width: 14px;
   height: 14px;
+  color: #3a84ff;
   cursor: pointer;
+}
+
+.add-badge {
+  display: inline-flex;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 4px;
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  color: #fff;
+  background: #3a84ff;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
 }
 
 .home-icon {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
 }
 
 .panel-tab-item {
+  position: relative;
   display: flex;
   height: 32px;
   max-width: 280px;
-  min-width: 140px;
-  padding-right: 5px;
-  padding-left: 5px;
+  min-width: 120px;
+  padding: 0 8px;
   cursor: pointer;
-  background: #fafbfd;
-  border: 1px solid #e2e6ed;
-  border-radius: 2px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: all .15s;
   align-items: center;
   flex: 0 0 auto;
+  gap: 4px;
+}
+
+.panel-tab-item:hover {
+  color: #3a84ff;
+}
+
+.panel-tab-item:hover .tab-text {
+  color: #3a84ff;
 }
 
 .tab-tool-icon {
   flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  padding-right: 5px;
+  width: 16px;
+  height: 16px;
 }
 
-.panel-tab-item.active {
-  background: #fff;
-  border-color: #c4c6cc;
+.panel-tab-item.active .tab-text {
+  font-weight: 500;
+  color: #3a84ff;
 }
+
 
 .tab-dot {
   flex: 0 0 auto;
@@ -333,20 +466,26 @@
   border-radius: 2px;
 }
 
-
 .tab-text {
   flex: 1;
   overflow: hidden;
   font-size: 12px;
-  color: #4d4f56;
+  color: #63656e;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color .15s;
 }
 
 .delete-fill {
-  margin-left: 5px;
-  color: #979ba5;
+  margin-left: 4px;
+  font-size: 14px;
+  color: #c4c6cc;
+  transition: color .15s;
   flex: 0 0 auto;
+}
+
+.delete-fill:hover {
+  color: #979ba5;
 }
 
 .tab-close {
@@ -359,27 +498,27 @@
   text-align: center;
 }
 
-
 .panel-content {
-  height: calc(100% - 78px);
-  padding: 12px;
+  height: calc(100% - 86px);
+  padding: 16px;
   overflow: auto;
   background: #f5f7fa;
 }
 
 .content-header {
   padding: 8px 0 16px;
-  border-bottom: 1px solid #dcdee5;
+  border-radius: 8px;
 }
 
 .top-right {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: flex-start;
 
   .top-left-icon {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
   }
 
   .top-right-box {
@@ -388,9 +527,10 @@
 
     .top-right-title {
       display: flex;
-      gap: 4px;
+      gap: 6px;
       align-items: center;
       margin-bottom: 8px;
+      flex-wrap: wrap;
 
       .top-right-name {
         max-width: 220px;
@@ -408,17 +548,19 @@
         font-weight: 500;
         line-height: 22px;
         color: #4d4f56;
+        border-radius: 2px;
       }
 
       .desc-tag-info {
-        color: #1768ef;
+        color: #3a84ff;
+        background: #f0f5ff;
       }
     }
 
     .top-right-desc {
       font-size: 14px;
       line-height: 22px;
-      color: #313238;
+      color: #63656e;
       word-break: break-word;
     }
   }
