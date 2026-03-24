@@ -678,6 +678,48 @@
     getSelectedItemList() {
       return selectedItemList.value;
     },
+    getConditionTags() {
+      // 计算当前的条件标签列表，与condition-tags组件中的逻辑保持一致
+      const datetimeTags: any[] = [];
+      const otherTags: any[] = [];
+
+      // 先处理 datetime 类型（始终展示且排第一）
+      Object.entries(props.fieldConfig).forEach(([fieldName, config]) => {
+        if (config.type === 'datetimerange') {
+          const value = searchModel.value[fieldName] || searchModel.value.datetime || [];
+          datetimeTags.push({
+            fieldName,
+            label: config.label,
+            value,
+            type: config.type,
+            config,
+            removable: false, // 日期类型标签不可删除
+          });
+        }
+      });
+
+      // 其他字段：按 searchModel 中 key 的顺序遍历，确保新添加的字段排在最后
+      Object.keys(searchModel.value).forEach((fieldName) => {
+        // 跳过辅助字段和 datetime 类型
+        if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
+        const config = props.fieldConfig[fieldName];
+        if (!config) return;
+        if (config.type === 'datetimerange') return;
+
+        const value = searchModel.value[fieldName];
+        otherTags.push({
+          fieldName,
+          label: config.label,
+          value: (value !== undefined && value !== null) ? value : '',
+          type: config.type,
+          config,
+          removable: true, // 可删除
+        });
+      });
+
+      // 日期标签排第一，其余按 searchModel 中的添加顺序
+      return [...datetimeTags, ...otherTags];
+    },
   });
 </script>
 <style lang="postcss">

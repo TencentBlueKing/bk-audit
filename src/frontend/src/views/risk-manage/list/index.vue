@@ -24,7 +24,11 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch"
       @parsing="handleParsing" />
-    <ai-analyzes :total="totalCount" />
+    <ai-analyzes
+      ref="aiAnalyzesRef"
+      :condition-tags="conditionTags"
+      :search-params="searchModel"
+      :total="totalCount" />
     <div class="risk-manage-list">
       <div class="add-button">
         <bk-button
@@ -108,6 +112,7 @@
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const route = useRoute();
+  const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
   let timeout: number | undefined = undefined;
   const statusToMap: Record<string, {
     tag: string,
@@ -462,6 +467,7 @@
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const totalCount = ref(0);
+  const conditionTags = ref<any[]>([]);
 
   // 导出数据
   const handleExport = () => {
@@ -538,6 +544,7 @@
   });
 
   const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
+    aiAnalyzesRef.value?.changeIsSearch();
     window.changeConfirm = false;
     totalCount.value = total || 0;
 
@@ -626,8 +633,17 @@
       ...value,
       event_filters: exValue,
     };
-    listRef.value.initTableHeight();
+    listRef.value?.initTableHeight();
     fetchList();
+    // 更新conditionTags
+    updateConditionTags();
+  };
+
+  // 更新conditionTags
+  const updateConditionTags = () => {
+    if (searchBoxRef.value?.getConditionTags) {
+      conditionTags.value = searchBoxRef.value.getConditionTags();
+    }
   };
 
   // NL 解析状态变化时，给列表设置 loading
@@ -683,6 +699,8 @@
     nextTick(() => {
       getEventFields();
       sessionStorage.removeItem('addEventRiskIds');
+      // 初始获取conditionTags
+      updateConditionTags();
     });
   });
 
