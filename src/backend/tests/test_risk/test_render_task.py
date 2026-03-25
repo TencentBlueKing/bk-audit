@@ -411,10 +411,13 @@ class TestRiskReportHandlerUnit(TestCase):
     @mock.patch.object(RiskReportHandler, "_ensure_lock_ownership", return_value=True)
     @mock.patch.object(RiskReportHandler, "_get_risk")
     @mock.patch.object(RiskReportHandler, "_render_report")
+    @mock.patch.object(RiskReportHandler, "_check_content_quality")
     @mock.patch.object(RiskReportHandler, "_update_report")
     @mock.patch.object(RiskReportHandler, "_release_lock")
     @mock.patch.object(RiskReportHandler, "_handle_tail_trigger")
-    def test_run_success_flow(self, mock_tail, mock_release, mock_update, mock_render, mock_get_risk, mock_lock):
+    def test_run_success_flow(
+        self, mock_tail, mock_release, mock_update, mock_quality, mock_render, mock_get_risk, mock_lock
+    ):
         """测试正常执行流程"""
         mock_risk = mock.MagicMock()
         mock_risk.can_auto_generate_report.return_value = True
@@ -426,6 +429,7 @@ class TestRiskReportHandlerUnit(TestCase):
         mock_lock.assert_called_once()
         mock_get_risk.assert_called_once()
         mock_render.assert_called_once_with(mock_risk)
+        mock_quality.assert_called_once_with("渲染内容")
         mock_update.assert_called_once()
         mock_release.assert_called_once()
         mock_tail.assert_called_once()
@@ -484,3 +488,44 @@ class TestRiskReportHandlerUnit(TestCase):
         self.assertIn("渲染失败", str(context.exception))
         mock_release.assert_called_once()  # finally 确保释放锁
         mock_tail.assert_not_called()  # 异常时不触发尾部
+
+    # ========== _check_content_quality 方法测试 ==========
+
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    def test_check_content_quality_no_issues(self, mock_report_event):
+        """测试正常内容不上报事件"""
+        self.handler._check_content_quality("这是一段正常的报告内容，包含详细的分析说明，足够长度。")
+        mock_report_event.assert_not_called()
+
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    def test_check_content_quality_empty_content(self, mock_report_event):
+        """测试空内容上报 empty 事件"""
+        self.handler._check_content_quality("")
+        mock_report_event.assert_called_once()
+        call_args = mock_report_event.call_args[0][0]
+        event_data = call_args["data"][0]
+        self.assertEqual(event_data["dimension"]["issue_type"], "empty")
+        self.assertEqual(event_data["dimension"]["risk_id"], self.risk.risk_id)
+        self.assertEqual(event_data["dimension"]["task_id"], self.task_id)
+
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    def test_check_content_quality_multiple_issues(self, mock_report_event):
+        """测试多种质量问题分别上报"""
+        content = "[AI生成失败: x] 正在思考..."
+        self.handler._check_content_quality(content)
+        # ai_error + ai_thinking = 2 次上报（内容长度 > REPORT_CONTENT_MIN_LENGTH 不触发 too_short）
+        self.assertEqual(mock_report_event.call_count, 2)
+        # 验证上报的 issue_type 维度
+        reported_issue_types = {
+            call[0][0]["data"][0]["dimension"]["issue_type"] for call in mock_report_event.call_args_list
+        }
+        self.assertEqual(reported_issue_types, {"ai_error", "ai_thinking"})
+
+    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    def test_check_content_quality_report_event_failure(self, mock_report_event):
+        """测试上报失败不抛异常（不阻断写入）"""
+        from core.exceptions import ApiRequestError
+
+        mock_report_event.side_effect = ApiRequestError("上报失败")
+        # 不应该抛出异常
+        self.handler._check_content_quality("")
