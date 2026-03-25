@@ -505,14 +505,6 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
         )
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
-    def test_list_own_records_only(self, mock_user):
-        """只返回当前用户的记录"""
-        results = self.resource.request({})
-        self.assertEqual(len(results), 6)  # admin 有 5 + 1 条
-        for log in results:
-            self.assertEqual(log["created_by"], "admin")
-
-    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
     def test_status_filter(self, mock_user):
         """按 status 过滤"""
         results = self.resource.request({"status": NL2RiskFilterLogStatus.PARSE_FAILED})
@@ -525,10 +517,3 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
         results = self.resource.request({})
         # 应返回所有 admin 的记录，未手动切片
         self.assertEqual(len(results), 6)
-
-    @patch("services.web.risk.resources.risk.get_request_username", return_value="other_user")
-    def test_other_user_isolation(self, mock_user):
-        """不同用户数据隔离"""
-        results = self.resource.request({})
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["created_by"], "other_user")

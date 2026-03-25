@@ -1303,10 +1303,6 @@ class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "query",
-            "request_params",
             "response_data",
             "status",
-            "error_message",
-            "created_at",
-            "created_by",
         ]
