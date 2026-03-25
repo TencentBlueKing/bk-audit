@@ -33,6 +33,7 @@ from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
     AnalyseReportScenario,
+    Risk,
 )
 from services.web.risk.serializers import (
     DeleteAnalyseReportRequestSerializer,
@@ -43,6 +44,7 @@ from services.web.risk.serializers import (
     ListAnalyseReportRequestSerializer,
     ListAnalyseReportResponseSerializer,
     ListAnalyseReportRiskRequestSerializer,
+    ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportRequestSerializer,
     RetrieveAnalyseReportResponseSerializer,
@@ -352,11 +354,13 @@ class ListAnalyseReportRisk(AnalyseReportMeta):
 
     name = gettext_lazy("报告关联风险列表")
     RequestSerializer = ListAnalyseReportRiskRequestSerializer
+    ResponseSerializer = ListAnalyseReportRiskResponseSerializer
+    many_response_data = True
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
         risk_ids = list(AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True))
-        return risk_ids
+        return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
 
 
 class ListAnalyseReportByRisk(AnalyseReportMeta):

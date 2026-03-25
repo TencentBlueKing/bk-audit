@@ -1395,6 +1395,37 @@ class ListAnalyseReportRiskRequestSerializer(serializers.Serializer):
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
 
 
+class ListAnalyseReportRiskResponseSerializer(serializers.ModelSerializer):
+    """报告关联风险列表响应 - 包含风险基础信息"""
+
+    risk_level = serializers.CharField(
+        label=gettext_lazy("风险等级"),
+        source="strategy.risk_level",
+        default="",
+        read_only=True,
+    )
+    strategy_id = serializers.IntegerField(
+        label=gettext_lazy("命中策略ID"),
+        source="strategy.strategy_id",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Risk
+        fields = [
+            "risk_id",
+            "title",
+            "risk_level",
+            "status",
+            "event_time",
+            "event_end_time",
+            "operator",
+            "current_operator",
+            "strategy_id",
+            "risk_label",
+        ]
+
+
 class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
     """风险反查报告请求"""
 
