@@ -65,7 +65,7 @@
     title: string;
     created_at: string;
     created_by: string;
-    report_id: string;
+    report_id: string | number;
     report_type: string;
     risk_count: number;
     status: string;
@@ -112,8 +112,23 @@
     },
     {
       title: t('报告类型'),
-      colKey: 'reportTypeLabel',
+      colKey: 'report_type',
       width: 120,
+      filter: {
+        type: 'single',
+        showConfirmAndReset: true,
+        resetValue: undefined,
+        list: [
+          {
+            label: t('系统分析'),
+            value: 'system',
+          },
+          {
+            label: t('自定义分析'),
+            value: 'custom',
+          },
+        ],
+      },
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
          <bk-tag>{row.report_type ===  'system' ? t('系统分析') : t('自定义分析')}</bk-tag>
     )    },
@@ -146,7 +161,7 @@
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <RiskTablePopover
           count={row.risk_count}
-          report-id={row.report_id} />
+          reportId={row.report_id} />
       ),
     },
     {
@@ -158,6 +173,8 @@
       title: t('生成时间'),
       colKey: 'created_at',
       width: 180,
+      sortType: 'all',
+      sorter: true,
     },
   ];
 
