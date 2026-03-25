@@ -249,7 +249,18 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         self.report1 = AnalyseReport.objects.create(
             title="张三行为调查分析报告",
             report_type=AnalyseReportType.SYSTEM,
-            content="# 分析报告\n内容...",
+            content=(
+                "# 一、行为链分析\n\n"
+                "通过对张三相关的5条风险单进行时序分析，发现以下行为模式：\n\n"
+                "| 时间 | 操作 | 目标资源 | 风险等级 |\n"
+                "|---|---|---|---|\n"
+                "| 2026-01-15 09:30 | 数据导出 | 用户表 | 高 |\n"
+                "| 2026-01-15 10:15 | 权限变更 | 管理后台 | 中 |\n\n"
+                "## 二、风险关联分析\n\n"
+                "张三在近30天内的操作行为呈现明显的异常模式，主要集中在敏感数据访问和权限提升两个维度。\n\n"
+                "## 三、意图判断\n\n"
+                "综合以上分析，张三的行为可能存在数据泄露风险，建议进一步调查。\n"
+            ),
             analysis_scope="责任人=张三，时间范围=近30天",
             risk_count=5,
             status=AnalyseReportStatus.SUCCESS,
@@ -259,7 +270,19 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         self.report2 = AnalyseReport.objects.create(
             title="风险综合分析报告",
             report_type=AnalyseReportType.CUSTOM,
-            content="# 综合分析\n内容...",
+            content=(
+                "# 一、风险总览\n\n"
+                "本报告对数据泄露类高/中风险进行综合分析，共涉及10条风险单。\n\n"
+                "## 二、根因归纳\n\n"
+                "经过聚类分析，10条风险可归纳为以下3类根因：\n\n"
+                "1. **权限配置不当**（4条）：部分用户被授予了超出职责范围的数据访问权限\n"
+                "2. **敏感数据外传**（3条）：通过API接口或文件导出方式将敏感数据传输至外部\n"
+                "3. **异常登录行为**（3条）：非工作时间段或异常地理位置的登录操作\n\n"
+                "## 三、处置建议\n\n"
+                "- 立即收回超权限账号的敏感数据访问权限\n"
+                "- 对外传数据进行内容审查，评估泄露影响范围\n"
+                "- 加强登录行为监控，启用多因素认证\n"
+            ),
             analysis_scope="风险类型=数据泄露，风险等级=高/中",
             risk_count=10,
             status=AnalyseReportStatus.SUCCESS,
@@ -277,7 +300,7 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         self.report_other_user = AnalyseReport.objects.create(
             title="其他用户的报告",
             report_type=AnalyseReportType.SYSTEM,
-            content="# 其他用户报告",
+            content=("# 一、概述\n\n" "本报告由其他用户发起，对近期安全事件进行初步分析。\n\n" "## 二、发现\n\n" "共检测到3条中等风险，涉及文件权限变更和异常API调用。\n"),
             risk_count=3,
             status=AnalyseReportStatus.SUCCESS,
             prompt_params={},
@@ -339,7 +362,21 @@ class TestRetrieveAnalyseReport(AnalyseReportTestBase):
         self.report = AnalyseReport.objects.create(
             title="测试报告详情",
             report_type=AnalyseReportType.SYSTEM,
-            content="# 一、行为链分析\n通过对张三相关的11条风险单进行时序分析...",
+            content=(
+                "# 一、行为链分析\n\n"
+                "通过对张三相关的11条风险单进行时序分析，发现存在明显的数据窃取行为链：\n\n"
+                "1. 2026-01-10：张三首次访问敏感数据库，执行大批量查询操作\n"
+                "2. 2026-01-12：通过API接口将查询结果导出至个人存储空间\n"
+                "3. 2026-01-15：尝试修改审计日志以掩盖操作痕迹\n\n"
+                "## 二、风险评估\n\n"
+                "| 维度 | 评分 | 说明 |\n"
+                "|---|---|---|\n"
+                "| 数据敏感度 | 高 | 涉及用户PII数据 |\n"
+                "| 行为意图性 | 高 | 存在刻意规避审计的行为 |\n"
+                "| 影响范围 | 中 | 涉及约5000条用户记录 |\n\n"
+                "## 三、处置建议\n\n"
+                "建议立即冻结张三的系统访问权限，并启动数据泄露应急响应流程。\n"
+            ),
             scenario=self.scenario_person,
             analysis_scope="责任人=张三",
             risk_count=2,
@@ -378,7 +415,14 @@ class TestUpdateAnalyseReport(AnalyseReportTestBase):
         self.report = AnalyseReport.objects.create(
             title="原始标题",
             report_type=AnalyseReportType.SYSTEM,
-            content="# 原始内容",
+            content=(
+                "# 一、原始分析报告\n\n"
+                "本报告对近期高风险事件进行了初步分析。\n\n"
+                "## 二、风险概览\n\n"
+                "共检测到12条风险单，其中高风险5条、中风险7条。\n\n"
+                "## 三、后续计划\n\n"
+                "建议对高风险事件优先进行人工审核确认。\n"
+            ),
             status=AnalyseReportStatus.SUCCESS,
             prompt_params={},
         )
@@ -397,7 +441,15 @@ class TestUpdateAnalyseReport(AnalyseReportTestBase):
 
     def test_update_report_content(self):
         """测试更新报告内容"""
-        new_content = "# 修改后的内容\n新增加的分析..."
+        new_content = (
+            "# 一、修改后的分析报告\n\n"
+            "经过人工审核和补充分析，更新以下内容：\n\n"
+            "## 二、新增发现\n\n"
+            "在原有12条风险单基础上，新发现3条关联风险，均与权限提升相关。\n\n"
+            "## 三、更新后的处置建议\n\n"
+            "- 扩大审查范围至关联账号\n"
+            "- 对涉及的15条风险单逐一确认处置状态"
+        )
         result = self.resource.risk.update_analyse_report(
             {
                 "report_id": self.report.report_id,
@@ -414,11 +466,14 @@ class TestUpdateAnalyseReport(AnalyseReportTestBase):
             {
                 "report_id": self.report.report_id,
                 "title": "新标题",
-                "content": "新内容",
+                "content": (
+                    "# 一、更新后的报告\n\n" "报告内容已全面更新，新增了根因分析和处置建议两个章节。\n\n" "## 二、根因分析\n\n" "经排查，本次风险事件的根因为权限管理流程存在漏洞。"
+                ),
             }
         )
+        new_content = "# 一、更新后的报告\n\n" "报告内容已全面更新，新增了根因分析和处置建议两个章节。\n\n" "## 二、根因分析\n\n" "经排查，本次风险事件的根因为权限管理流程存在漏洞。"
         self.assertEqual(result["title"], "新标题")
-        self.assertEqual(result["content"], "新内容")
+        self.assertEqual(result["content"], new_content)
 
     def test_update_report_not_found(self):
         """测试更新不存在的报告"""
@@ -468,7 +523,23 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.report = AnalyseReport.objects.create(
             title="导出测试报告",
             report_type=AnalyseReportType.SYSTEM,
-            content="# 一、总览\n\n风险数据分析结果...\n\n## 二、详情\n\n| 指标 | 值 |\n|---|---|\n| 总数 | 100 |",
+            content=(
+                "# 一、总览\n\n"
+                "本报告对综合类风险数据进行全面分析，涵盖事件检测、趋势分析和处置建议。\n\n"
+                "## 二、详情\n\n"
+                "| 指标 | 值 | 同比变化 |\n"
+                "|---|---|---|\n"
+                "| 风险总数 | 100 | +15% |\n"
+                "| 高风险 | 25 | +20% |\n"
+                "| 中风险 | 45 | +10% |\n"
+                "| 低风险 | 30 | +5% |\n\n"
+                "## 三、趋势分析\n\n"
+                "近30天风险数量呈上升趋势，主要增长来自数据访问类和权限变更类事件。\n\n"
+                "## 四、处置建议\n\n"
+                "1. 加强数据访问权限的定期审查\n"
+                "2. 完善权限变更的审批流程\n"
+                "3. 部署实时异常检测告警\n"
+            ),
             analysis_scope="风险类型=综合",
             risk_count=5,
             status=AnalyseReportStatus.SUCCESS,
@@ -694,7 +765,15 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_success_with_scenario(self, mock_chat):
         """测试使用场景配置成功生成报告"""
-        mock_chat.return_value = "# 一、行为链分析\n分析结果..."
+        mock_chat.return_value = (
+            "# 一、行为链分析\n\n"
+            "通过对张三相关风险单的时序分析，发现以下行为模式：\n\n"
+            "1. 集中在非工作时间段进行敏感数据查询\n"
+            "2. 多次尝试修改自身权限配置\n"
+            "3. 存在向外部IP传输数据的记录\n\n"
+            "## 二、处置建议\n\n"
+            "建议立即冻结相关账号并启动安全调查流程。\n"
+        )
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -702,7 +781,8 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-        self.assertEqual(self.report.content, "# 一、行为链分析\n分析结果...")
+        self.assertIn("行为链分析", self.report.content)
+        self.assertIn("处置建议", self.report.content)
         self.assertEqual(result["report_id"], self.report.report_id)
 
         # 验证调用参数：直接传递 prompt 文本，不再传 chat_history
@@ -722,7 +802,18 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.report.custom_prompt = "分析张三在英雄联盟业务的资产转移行为"
         self.report.save()
 
-        mock_chat.return_value = "# 自定义分析报告\n分析结果..."
+        mock_chat.return_value = (
+            "# 自定义分析报告\n\n"
+            "## 一、资产转移行为概述\n\n"
+            "张三在英雄联盟业务中存在多次异常资产转移操作，涉及虚拟道具和游戏币。\n\n"
+            "## 二、详细分析\n\n"
+            "| 时间 | 操作类型 | 涉及资产 | 金额(元) |\n"
+            "|---|---|---|---|\n"
+            "| 2026-01-10 | 道具转移 | 限定皮肤 | 500 |\n"
+            "| 2026-01-12 | 游戏币转出 | 金币 | 10000 |\n\n"
+            "## 三、风险判定\n\n"
+            "上述行为存在利用职务便利进行虚拟资产侵占的嫌疑，建议深入调查。\n"
+        )
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -1200,7 +1291,16 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_creates_report_risk_records(self, mock_chat):
         """测试任务成功后自动创建 AnalyseReportRisk 关联记录"""
-        mock_chat.return_value = "# 分析结果\n关联风险分析..."
+        mock_chat.return_value = (
+            "# 分析结果\n\n"
+            "## 一、关联风险分析\n\n"
+            "基于风险过滤条件，共发现与张三相关的异常操作风险。\n\n"
+            "## 二、关键发现\n\n"
+            "1. 张三在近30天内的敏感数据访问频次显著高于同岗位平均水平\n"
+            "2. 多次在非授权时间段执行数据导出操作\n\n"
+            "## 三、建议\n\n"
+            "建议加强对张三账号的实时监控，并通知其直属主管进行约谈。\n"
+        )
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -1224,7 +1324,19 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.report.prompt_params = {}
         self.report.save(update_fields=["prompt_params"])
 
-        mock_chat.return_value = "# 分析结果"
+        mock_chat.return_value = (
+            "# 全量风险分析报告\n\n"
+            "## 一、概述\n\n"
+            "本报告对所有风险进行了全面扫描和分类分析。\n\n"
+            "## 二、风险分类统计\n\n"
+            "| 类别 | 数量 | 占比 |\n"
+            "|---|---|---|\n"
+            "| 数据安全 | 15 | 30% |\n"
+            "| 权限管理 | 20 | 40% |\n"
+            "| 异常行为 | 15 | 30% |\n\n"
+            "## 三、建议\n\n"
+            "建议按风险等级优先处理高危事件，加强日常安全巡检。\n"
+        )
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -1239,7 +1351,9 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_succeeds_even_if_link_fails(self, mock_chat, mock_link):
         """测试关联风险失败不影响报告生成成功"""
-        mock_chat.return_value = "# 分析结果"
+        mock_chat.return_value = (
+            "# 分析结果\n\n" "## 一、风险概况\n\n" "经分析，本次筛选范围内共有若干条风险记录需要关注。\n\n" "## 二、处置建议\n\n" "建议对高风险事件优先进行人工审核确认。\n"
+        )
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -1249,4 +1363,4 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.report.refresh_from_db()
         # 报告应仍为成功状态
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-        self.assertEqual(self.report.content, "# 分析结果")
+        self.assertIn("分析结果", self.report.content)
