@@ -31,6 +31,7 @@ from services.web.risk.models import (
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
     ListAnalyseReportRequestSerializer,
+    ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
@@ -675,15 +676,108 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk2.risk_id)
 
     def test_list_report_risks(self):
-        """测试获取报告关联的风险列表"""
+        """测试获取报告关联的风险列表，返回完整风险信息"""
         result = self.resource.risk.list_analyse_report_risk(
             {
                 "report_id": self.report.report_id,
             }
         )
         self.assertEqual(len(result), 2)
-        self.assertIn(self.risk1.risk_id, result)
-        self.assertIn(self.risk2.risk_id, result)
+        risk_ids = [r["risk_id"] for r in result]
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+
+    def test_list_report_risks_contains_title(self):
+        """测试返回结果包含风险标题"""
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": self.report.report_id,
+            }
+        )
+        titles = [r["title"] for r in result]
+        self.assertIn("Test Risk 1", titles)
+        self.assertIn("Test Risk 2", titles)
+
+    def test_list_report_risks_contains_risk_level(self):
+        """测试返回结果包含风险等级（来自关联策略）"""
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": self.report.report_id,
+            }
+        )
+        for risk_data in result:
+            self.assertEqual(risk_data["risk_level"], RiskLevel.HIGH.value)
+
+    def test_list_report_risks_contains_expected_fields(self):
+        """测试返回结果包含所有预期字段"""
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": self.report.report_id,
+            }
+        )
+        expected_fields = {
+            "risk_id",
+            "title",
+            "risk_level",
+            "status",
+            "event_time",
+            "event_end_time",
+            "operator",
+            "current_operator",
+            "strategy_id",
+            "risk_label",
+        }
+        for risk_data in result:
+            self.assertTrue(
+                expected_fields.issubset(set(risk_data.keys())),
+                f"Missing fields: {expected_fields - set(risk_data.keys())}",
+            )
+
+    def test_list_report_risks_contains_status(self):
+        """测试返回结果包含风险状态"""
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": self.report.report_id,
+            }
+        )
+        for risk_data in result:
+            self.assertEqual(risk_data["status"], "new")
+
+    def test_list_report_risks_contains_strategy_id(self):
+        """测试返回结果包含策略ID"""
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": self.report.report_id,
+            }
+        )
+        for risk_data in result:
+            self.assertEqual(risk_data["strategy_id"], self.strategy.strategy_id)
+
+    def test_list_report_risks_empty_report(self):
+        """测试没有关联风险的报告返回空列表"""
+        empty_report = AnalyseReport.objects.create(
+            title="无关联风险",
+            report_type=AnalyseReportType.SYSTEM,
+            risk_count=0,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+        )
+        result = self.resource.risk.list_analyse_report_risk(
+            {
+                "report_id": empty_report.report_id,
+            }
+        )
+        self.assertEqual(len(result), 0)
+
+    def test_list_report_risks_response_serializer(self):
+        """测试响应序列化器字段定义正确"""
+        risk = Risk.objects.select_related("strategy").get(risk_id=self.risk1.risk_id)
+        serializer = ListAnalyseReportRiskResponseSerializer(risk)
+        data = serializer.data
+        self.assertEqual(data["risk_id"], self.risk1.risk_id)
+        self.assertEqual(data["title"], "Test Risk 1")
+        self.assertEqual(data["risk_level"], RiskLevel.HIGH.value)
+        self.assertEqual(data["strategy_id"], self.strategy.strategy_id)
 
 
 class TestListAnalyseReportByRisk(AnalyseReportTestBase):
