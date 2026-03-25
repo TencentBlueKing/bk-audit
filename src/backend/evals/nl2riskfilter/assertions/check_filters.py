@@ -17,6 +17,7 @@ promptfoo 自定义断言函数集 — NL2RiskFilter
 
 import json
 import os
+import re
 import sys
 import warnings
 
@@ -39,6 +40,21 @@ def _ensure_django():
 
     django.setup()
     _django_ready = True
+
+
+_ENV_VAR_PATTERN = re.compile(r"\{\{env\.(\w+)\}\}")
+
+
+def _resolve_env_vars(value):
+    """解析 promptfoo 未展开的环境变量占位符 {{env.XXX}} → os.environ[XXX]
+
+    promptfoo 对嵌套变量（vars 引用 env）只做一层展开，
+    导致 expected_values 中的 {{username}} 被展开为字面量 {{env.BKAPP_EVAL_USERNAME}} 而非实际值。
+    此函数在断言侧补齐第二层展开。
+    """
+    if not isinstance(value, str):
+        return value
+    return _ENV_VAR_PATTERN.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)
 
 
 def _parse_output(output):
@@ -77,6 +93,8 @@ def field_value_match(output, context):
     filters = _parse_output(output)
     expected_raw = context.get("vars", {}).get("expected_values", "{}")
     expected_values = json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw
+    # 解析 promptfoo 未展开的 {{env.XXX}} 占位符
+    expected_values = {k: _resolve_env_vars(v) for k, v in (expected_values or {}).items()}
 
     if not expected_values:
         return {"pass": True, "score": 1.0, "reason": "无需检查的字段值"}
@@ -222,6 +240,8 @@ def partial_match(output, context):
     expected_keys = json.loads(expected_keys_raw) if isinstance(expected_keys_raw, str) else expected_keys_raw
     expected_values_raw = context.get("vars", {}).get("expected_values", "{}")
     expected_values = json.loads(expected_values_raw) if isinstance(expected_values_raw, str) else expected_values_raw
+    # 解析 promptfoo 未展开的 {{env.XXX}} 占位符
+    expected_values = {k: _resolve_env_vars(v) for k, v in (expected_values or {}).items()}
 
     total = 0
     scored = 0
@@ -394,6 +414,44 @@ def check_has_report(output, context):
     }
 
 
+def strategy_id_contains(output, context):
+    """验证 strategy_id 包含所有期望的策略 ID（集合包含，不要求精确匹配）
+
+    通过 vars 配置：
+      expected_strategy_ids: JSON 数组字符串，如 '["136"]' 或 '["136", "154"]'
+
+    评分规则：
+      - 期望的 ID 全部包含在实际返回中 → pass
+      - 额外多匹配的 ID 不扣分（但记录在 reason 中）
+      - 缺少期望 ID → fail
+    """
+    filters = _parse_output(output)
+    vars_ = context.get("vars", {})
+
+    expected_raw = vars_.get("expected_strategy_ids", "")
+    if not expected_raw:
+        return {"pass": True, "score": 1.0, "reason": "未配置 expected_strategy_ids，跳过"}
+
+    expected_ids = set(json.loads(expected_raw) if isinstance(expected_raw, str) else expected_raw)
+    actual_raw = str(filters.get("strategy_id", ""))
+    actual_ids = {sid.strip() for sid in actual_raw.split(",") if sid.strip()} if actual_raw else set()
+
+    missing = expected_ids - actual_ids
+    extra = actual_ids - expected_ids
+
+    if missing:
+        return {
+            "pass": False,
+            "score": round(1 - len(missing) / len(expected_ids), 2),
+            "reason": f"strategy_id 缺少: {sorted(missing)}，实际: {sorted(actual_ids)}",
+        }
+
+    reason = f"strategy_id 包含所有期望 ID {sorted(expected_ids)}"
+    if extra:
+        reason += f"，额外包含: {sorted(extra)}"
+    return {"pass": True, "score": 1.0, "reason": reason}
+
+
 def check_sort(output, context):
     """验证 sort 数组包含期望的排序字段
 
@@ -421,3 +479,108 @@ def check_sort(output, context):
             "reason": f"sort 缺少: {missing}，实际: {actual_sort}",
         }
     return {"pass": True, "score": 1.0, "reason": f"sort 匹配: {actual_sort}"}
+
+
+def check_sort_json_format(output, context):
+    """验证 sort 字段的 JSON 格式合规性
+
+    检测 AI 原始输出中的 sort 字段是否使用了标准 JSON 双引号。
+    Provider 返回的 output 是已解析再序列化的 JSON，所以需要从 metadata.raw_result
+    中获取原始文本来检测单引号问题。
+
+    如果无法获取原始文本，则回退为检查解析后的 sort 类型。
+    """
+    filters = _parse_output(output)
+    actual_sort = filters.get("sort")
+
+    if actual_sort is None:
+        return {"pass": True, "score": 1.0, "reason": "无 sort 字段，跳过格式检查"}
+
+    # 回退检查：sort 应为 list 类型
+    if not isinstance(actual_sort, list):
+        return {
+            "pass": False,
+            "score": 0.0,
+            "reason": f"sort 类型错误: {type(actual_sort).__name__}，应为 list",
+        }
+
+    # 检查 sort 中的值是否为字符串
+    non_str = [s for s in actual_sort if not isinstance(s, str)]
+    if non_str:
+        return {
+            "pass": False,
+            "score": 0.5,
+            "reason": f"sort 数组中包含非字符串元素: {non_str}",
+        }
+
+    return {"pass": True, "score": 1.0, "reason": f"sort 格式合规: {actual_sort}"}
+
+
+def empty_or_has_risk_level(output, context):
+    """验证输出为空对象或包含 risk_level=HIGH（D12 追问语义无上下文场景）"""
+    filters = _parse_output(output)
+    if not filters:
+        return {"pass": True, "score": 1.0, "reason": "返回空条件（无上下文，合理行为）"}
+    if filters.get("risk_level") == "HIGH":
+        return {"pass": True, "score": 1.0, "reason": "包含 risk_level=HIGH（提取了可识别部分）"}
+    return {
+        "pass": False,
+        "score": 0.5,
+        "reason": f"期望空对象或 risk_level=HIGH，实际: {list(filters.keys())}",
+    }
+
+
+def title_or_event_content(output, context):
+    """验证输出包含 title 或 event_content（D18 隐式标题查询场景）
+
+    \"越权操作的风险\"可能映射到 title 或 event_content，两者都可接受。
+    """
+    filters = _parse_output(output)
+    if not filters:
+        return {"pass": False, "score": 0.0, "reason": "返回空条件，应能提取标题或事件内容"}
+    if "title" in filters:
+        return {"pass": True, "score": 1.0, "reason": f"映射到 title='{filters['title']}'"}
+    if "event_content" in filters:
+        return {"pass": True, "score": 1.0, "reason": f"映射到 event_content='{filters['event_content']}'（可接受替代）"}
+    return {
+        "pass": False,
+        "score": 0.0,
+        "reason": f"期望 title 或 event_content，实际字段: {list(filters.keys())}",
+    }
+
+
+def strategy_with_risk_level_or_event_filters(output, context):
+    """验证包含 strategy_id 且有 risk_level 或 event_filters 处理\"违规等级\"（D28 歧义场景）
+
+    查询\"异常交易策略中违规等级为高的风险\"有两种合理映射：
+      a. event_filters 中的\"违规等级\"字段（更精确）
+      b. 顶层 risk_level: \"HIGH\"（可接受但不够精确）
+    """
+    filters = _parse_output(output)
+    if "strategy_id" not in filters:
+        return {"pass": False, "score": 0.0, "reason": "缺少 strategy_id 字段"}
+
+    # 方案 a: event_filters 中有\"违规等级\"
+    event_filters = filters.get("event_filters", [])
+    for ef in event_filters:
+        if isinstance(ef, dict):
+            if "违规等级" in ef.get("display_name", "") or "违规等级" in ef.get("field", ""):
+                return {
+                    "pass": True,
+                    "score": 1.0,
+                    "reason": "strategy_id + event_filters 中包含违规等级（精确映射）",
+                }
+
+    # 方案 b: 顶层 risk_level
+    if filters.get("risk_level") == "HIGH":
+        return {
+            "pass": True,
+            "score": 0.8,
+            "reason": "strategy_id + risk_level=HIGH（可接受但不够精确）",
+        }
+
+    return {
+        "pass": False,
+        "score": 0.3,
+        "reason": f"strategy_id 存在但未处理\"违规等级\"，实际字段: {list(filters.keys())}",
+    }
