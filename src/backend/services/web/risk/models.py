@@ -22,6 +22,7 @@ from typing import List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -44,6 +45,7 @@ from services.web.risk.constants import (
     AnalyseReportStatus,
     AnalyseReportType,
     EventMappingFields,
+    NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskLabel,
     RiskReportStatus,
@@ -854,3 +856,67 @@ def sync_risk_has_report(sender, instance: RiskReport, created: bool, **kwargs):
     无论通过哪个入口（手动创建/编辑、Celery 自动生成）生成报告，均会触发。
     """
     Risk.objects.filter(risk_id=instance.risk_id).update(has_report=True)
+
+
+class NL2RiskFilterLog(OperateRecordModel):
+    """
+    NL2RiskFilter 查询历史日志
+
+    记录每次自然语言生成风险筛选条件的请求参数、响应结果和状态，
+    用于前端展示最近查询和后续调优排查。
+    """
+
+    query = models.CharField(gettext_lazy("查询文本"), max_length=2048)
+    request_params = models.JSONField(gettext_lazy("请求参数"), default=dict)
+    response_data = models.JSONField(gettext_lazy("响应数据"), default=dict)
+    status = models.CharField(
+        gettext_lazy("状态"),
+        max_length=32,
+        choices=NL2RiskFilterLogStatus.choices,
+        default=NL2RiskFilterLogStatus.SUCCESS,
+        db_index=True,
+    )
+    error_message = models.TextField(gettext_lazy("错误信息"), blank=True, default="")
+
+    @classmethod
+    def save_nl2risk_filter_log(
+        cls,
+        username: str,
+        query: str,
+        request_params: dict,
+        response_data: Optional[dict] = None,
+        status: str = NL2RiskFilterLogStatus.SUCCESS,
+        error_message: str = "",
+        result: Optional[str] = None,
+        message: str = "",
+    ) -> None:
+        """
+        持久化一条 NL2RiskFilter 查询日志。
+
+        采用 fail-silent 策略：记录失败不影响主流程返回。
+        """
+        payload = dict(response_data or {})
+        if result is not None:
+            payload["result"] = result
+        if message:
+            payload["message"] = message
+
+        try:
+            cls.objects.create(
+                query=(query or "")[:2048],
+                request_params=request_params or {},
+                response_data=payload,
+                status=status,
+                error_message=(error_message or "")[:65535],
+                created_by=username,
+                updated_by=username,
+            )
+        except Exception:  # pylint: disable=broad-except
+            logger.exception("[NL2RiskFilter] Failed to save query log")
+
+    class Meta:
+        db_table = "risk_nl2riskfilterlog"
+        verbose_name = gettext_lazy("NL2RiskFilter查询日志")
+        verbose_name_plural = verbose_name
+        ordering = ["-created_at"]
+        index_together = [["status", "created_at"]]

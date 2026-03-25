@@ -67,6 +67,7 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
+    NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskExportField,
     RiskFields,
@@ -113,6 +114,7 @@ from services.web.risk.handlers.ticket import (
 )
 from services.web.risk.models import (
     ManualEvent,
+    NL2RiskFilterLog,
     ProcessApplication,
     Risk,
     RiskAuditInstance,
@@ -133,6 +135,7 @@ from services.web.risk.serializers import (
     GetRiskFieldsByStrategyResponseSerializer,
     ListEventFieldsByStrategyRequestSerializer,
     ListEventFieldsByStrategyResponseSerializer,
+    ListNL2RiskFilterLogRequestSerializer,
     ListRiskAPIGWRequestSerializer,
     ListRiskBriefRequestSerializer,
     ListRiskBriefResponseSerializer,
@@ -142,6 +145,7 @@ from services.web.risk.serializers import (
     ListRiskStrategyRespSerializer,
     ListRiskTagsRespSerializer,
     ManualEventSerializer,
+    NL2RiskFilterLogResponseSerializer,
     NL2RiskFilterRequestSerializer,
     NL2RiskFilterResponseSerializer,
     ReopenRiskReqSerializer,
@@ -1291,6 +1295,7 @@ class NL2RiskFilter(RiskMeta):
         thread_id = validated_request_data.get("thread_id") or str(uuid.uuid4())
         username = get_request_username()
 
+        request_params = {"query": query, "tags": tags, "strategies": strategies, "thread_id": thread_id}
         user_message = build_nl2risk_user_message(query=query, tags=tags, strategies=strategies, username=username)
 
         try:
@@ -1303,12 +1308,33 @@ class NL2RiskFilter(RiskMeta):
             )
         except Exception as e:
             logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
+            NL2RiskFilterLog.save_nl2risk_filter_log(
+                username=username,
+                query=query,
+                request_params=request_params,
+                response_data={},
+                status=NL2RiskFilterLogStatus.API_ERROR,
+                error_message=str(e),
+            )
             raise NL2RiskFilterServiceError()
 
         raw_text = str(result)
         filter_conditions = extract_json_from_text(raw_text)
         message = "" if filter_conditions else raw_text.strip()
-        return {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
+        response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
+
+        status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username=username,
+            query=query,
+            request_params=request_params,
+            response_data=response_data,
+            status=status,
+            result=raw_text,
+            message=message,
+        )
+
+        return response_data
 
 
 class ListEventFieldsByStrategyBrief(ListEventFieldsByStrategy):
@@ -1391,3 +1417,33 @@ class UpdateRisk(RiskMeta):
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
         return RiskInfoSerializer(risk).data
+
+
+class ListNL2RiskFilterLog(RiskMeta):
+    """查询当前用户的 NL2RiskFilter 历史记录"""
+
+    name = gettext_lazy("NL2RiskFilter查询历史")
+    RequestSerializer = ListNL2RiskFilterLogRequestSerializer
+    ResponseSerializer = NL2RiskFilterLogResponseSerializer
+    many_response_data = True
+    audit_action = ActionEnum.LIST_RISK
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        queryset = NL2RiskFilterLog.objects.filter(created_by=username)
+
+        # 状态过滤
+        status = validated_request_data.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # 时间范围过滤
+        start_time = validated_request_data.get("start_time")
+        end_time = validated_request_data.get("end_time")
+        if start_time:
+            queryset = queryset.filter(created_at__gte=start_time)
+        if end_time:
+            queryset = queryset.filter(created_at__lte=end_time)
+
+        # 分页由框架 enable_paginate 自动处理
+        return queryset
