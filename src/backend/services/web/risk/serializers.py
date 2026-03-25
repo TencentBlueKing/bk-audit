@@ -35,12 +35,14 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     EventFilterOperator,
     EventMappingFields,
+    NL2RiskFilterLogStatus,
     RiskLabel,
     RiskRuleOperator,
     RiskViewType,
 )
 from services.web.risk.models import (
     ManualEvent,
+    NL2RiskFilterLog,
     ProcessApplication,
     Risk,
     RiskExperience,
@@ -1281,3 +1283,30 @@ class NL2RiskFilterResponseSerializer(serializers.Serializer):
     filter_conditions = serializers.DictField(label=gettext_lazy("Filter Conditions"), default=dict)
     thread_id = serializers.CharField(label=gettext_lazy("Thread ID"))
     message = serializers.CharField(label=gettext_lazy("AI Message"), default="", allow_blank=True)
+
+
+class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        label=gettext_lazy("Status"),
+        choices=NL2RiskFilterLogStatus.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
+    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
+
+
+class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NL2RiskFilterLog
+        fields = [
+            "id",
+            "query",
+            "request_params",
+            "response_data",
+            "status",
+            "error_message",
+            "created_at",
+            "created_by",
+        ]

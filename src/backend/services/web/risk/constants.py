@@ -876,3 +876,12 @@ DEFAULT_FIELD_TYPE_BY_AGGREGATE = {
     AggregationFunction.SUM: FieldType.LONG,
     AggregationFunction.AVG: FieldType.LONG,
 }
+
+
+@register_choices("nl2_risk_filter_log_status")
+class NL2RiskFilterLogStatus(TextChoices):
+    """NL2RiskFilter 查询日志状态"""
+
+    SUCCESS = "success", gettext_lazy("成功")
+    PARSE_FAILED = "parse_failed", gettext_lazy("解析失败")
+    API_ERROR = "api_error", gettext_lazy("接口异常")

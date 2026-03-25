@@ -189,6 +189,9 @@ class RisksViewSet(ResourceViewSet):
         # 风险简要列表（用于策略配置时选择风险单进行预览）
         ResourceRoute("GET", resource.risk.list_risk_brief, endpoint="brief", enable_paginate=True),
         ResourceRoute("POST", resource.risk.nl2_risk_filter, endpoint="nl2risk_filter"),
+        ResourceRoute(
+            "GET", resource.risk.list_nl2_risk_filter_log, endpoint="nl2risk_filter_log", enable_paginate=True
+        ),
     ]
 
 
