@@ -5,16 +5,22 @@ NL2Risk 序列化器及工具函数单测
 
 from unittest.mock import patch
 
+from services.web.risk.constants import NL2RiskFilterLogStatus
 from services.web.risk.exceptions import NL2RiskFilterServiceError
 from services.web.risk.handlers.nl2riskfilter import (
     build_nl2risk_user_message,
     extract_json_from_text,
 )
+from services.web.risk.models import NL2RiskFilterLog
 from services.web.risk.resources.risk import (
     ListEventFieldsByStrategyBrief,
+    ListNL2RiskFilterLog,
     NL2RiskFilter,
 )
-from services.web.risk.serializers import NL2RiskFilterRequestSerializer
+from services.web.risk.serializers import (
+    ListNL2RiskFilterLogRequestSerializer,
+    NL2RiskFilterRequestSerializer,
+)
 from tests.base import TestCase
 
 
@@ -218,7 +224,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_dedup_and_simplify(self, mock_parent):
         """去重 + field_name==display_name 时不返回 display_name"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": []})
+        data = self.resource.request({"strategy_ids": ""})
         results = data["results"]
 
         field_names = [r["field_name"] for r in results]
@@ -234,7 +240,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_single(self, mock_parent):
         """单个 keyword 过滤"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": "用户名"})
+        data = self.resource.request({"strategy_ids": "", "keyword": "用户名"})
 
         self.assertEqual(len(data["results"]), 1)
         self.assertEqual(data["results"][0]["field_name"], "username")
@@ -243,7 +249,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_multiple_or(self, mock_parent):
         """多个 keyword 逗号分隔，OR 匹配"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": "源IP,来源IP"})
+        data = self.resource.request({"strategy_ids": "", "keyword": "源IP,来源IP"})
 
         field_names = {r["field_name"] for r in data["results"]}
         self.assertIn("access_source_ip", field_names)
@@ -252,7 +258,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_case_insensitive(self, mock_parent):
         """keyword 大小写不敏感"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": "HOST_NAME"})
+        data = self.resource.request({"strategy_ids": "", "keyword": "HOST_NAME"})
 
         self.assertEqual(len(data["results"]), 1)
         self.assertEqual(data["results"][0]["field_name"], "host_name")
@@ -261,7 +267,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_no_match(self, mock_parent):
         """keyword 无匹配返回空"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": "不存在的字段"})
+        data = self.resource.request({"strategy_ids": "", "keyword": "不存在的字段"})
 
         self.assertEqual(data["results"], [])
 
@@ -269,7 +275,7 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_empty_returns_all(self, mock_parent):
         """keyword 为空时返回全部"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": ""})
+        data = self.resource.request({"strategy_ids": "", "keyword": ""})
 
         self.assertEqual(len(data["results"]), 5)
 
@@ -277,7 +283,252 @@ class ListEventFieldsByStrategyBriefTest(TestCase):
     def test_keyword_matches_field_name(self, mock_parent):
         """keyword 匹配 field_name"""
         mock_parent.return_value = self.MOCK_RAW_RESULTS
-        data = self.resource.perform_request({"strategy_ids": [], "keyword": "dst_ip"})
+        data = self.resource.request({"strategy_ids": "", "keyword": "dst_ip"})
 
         self.assertEqual(len(data["results"]), 1)
         self.assertEqual(data["results"][0]["field_name"], "dst_ip")
+
+
+class NL2RiskFilterLogModelTest(TestCase):
+    """NL2RiskFilterLog Model 测试"""
+
+    def test_create_log_success(self):
+        """成功创建日志记录"""
+        log = NL2RiskFilterLog.objects.create(
+            query="最近一周的高危风险",
+            request_params={"query": "最近一周的高危风险", "tags": [], "strategies": []},
+            response_data={"filter_conditions": {"level": "high"}, "thread_id": "t1", "message": ""},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            created_by="admin",
+            updated_by="admin",
+        )
+        self.assertIsNotNone(log.id)
+        self.assertEqual(log.query, "最近一周的高危风险")
+        self.assertEqual(log.status, NL2RiskFilterLogStatus.SUCCESS)
+        self.assertEqual(log.created_by, "admin")
+
+    def test_create_log_api_error(self):
+        """创建 api_error 状态的日志"""
+        log = NL2RiskFilterLog.objects.create(
+            query="测试查询",
+            request_params={"query": "测试查询"},
+            response_data={},
+            status=NL2RiskFilterLogStatus.API_ERROR,
+            error_message="Connection timeout",
+            created_by="user1",
+            updated_by="user1",
+        )
+        self.assertEqual(log.status, NL2RiskFilterLogStatus.API_ERROR)
+        self.assertEqual(log.error_message, "Connection timeout")
+
+    def test_ordering_by_created_at_desc(self):
+        """日志按 created_at 倒序排列"""
+        for i in range(3):
+            NL2RiskFilterLog.objects.create(
+                query=f"query_{i}",
+                request_params={},
+                response_data={},
+                status=NL2RiskFilterLogStatus.SUCCESS,
+                created_by="admin",
+                updated_by="admin",
+            )
+        logs = list(NL2RiskFilterLog.objects.all())
+        self.assertEqual(len(logs), 3)
+        for i in range(len(logs) - 1):
+            self.assertGreaterEqual(logs[i].created_at, logs[i + 1].created_at)
+
+
+class SaveNL2RiskFilterLogModelTest(TestCase):
+    """NL2RiskFilterLog.save_nl2risk_filter_log 模型方法测试"""
+
+    def test_save_success_log(self):
+        """正常保存成功日志"""
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query="高危风险",
+            request_params={"query": "高危风险"},
+            response_data={"filter_conditions": {"level": "high"}},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+        )
+        self.assertEqual(NL2RiskFilterLog.objects.count(), 1)
+        log = NL2RiskFilterLog.objects.first()
+        self.assertEqual(log.query, "高危风险")
+        self.assertEqual(log.status, NL2RiskFilterLogStatus.SUCCESS)
+        self.assertEqual(log.created_by, "admin")
+
+    def test_save_error_log(self):
+        """保存失败日志"""
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="user1",
+            query="测试",
+            request_params={},
+            response_data={},
+            status=NL2RiskFilterLogStatus.API_ERROR,
+            error_message="timeout",
+        )
+        log = NL2RiskFilterLog.objects.first()
+        self.assertEqual(log.status, NL2RiskFilterLogStatus.API_ERROR)
+        self.assertEqual(log.error_message, "timeout")
+
+    @patch("services.web.risk.models.NL2RiskFilterLog.objects.create")
+    def test_save_fail_silent(self, mock_create):
+        """保存异常时不抛出，fail-silent"""
+        mock_create.side_effect = Exception("DB error")
+        # 不应抛出异常
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query="test",
+            request_params={},
+            response_data={},
+        )
+
+    def test_query_truncation(self):
+        """超长 query 被截断到 2048 字符"""
+        long_query = "x" * 3000
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query=long_query,
+            request_params={},
+            response_data={},
+        )
+        log = NL2RiskFilterLog.objects.first()
+        self.assertEqual(len(log.query), 2048)
+
+
+class NL2RiskFilterWithLoggingTest(TestCase):
+    """NL2RiskFilter Resource 日志记录集成测试"""
+
+    def setUp(self):
+        self.resource = NL2RiskFilter()
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_success_logs_saved(self, mock_chat, mock_user, mock_save_log):
+        """AI 返回有效 JSON 时记录 success 日志"""
+        mock_chat.return_value = '{"filter_conditions": {"level": "high"}}'
+
+        result = self.resource.request({"query": "高危风险", "tags": [], "strategies": []})
+
+        self.assertTrue(result["filter_conditions"])
+        mock_save_log.assert_called_once()
+        call_kwargs = mock_save_log.call_args[1]
+        self.assertEqual(call_kwargs["status"], NL2RiskFilterLogStatus.SUCCESS)
+        self.assertEqual(call_kwargs["username"], "admin")
+        self.assertIn("result", call_kwargs)
+        self.assertIn("message", call_kwargs)
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_parse_failed_logs_saved(self, mock_chat, mock_user, mock_save_log):
+        """AI 返回非 JSON 文本时记录 parse_failed 日志"""
+        mock_chat.return_value = "抱歉，我无法理解您的查询"
+
+        result = self.resource.request({"query": "无效查询", "tags": [], "strategies": []})
+
+        self.assertFalse(result["filter_conditions"])
+        mock_save_log.assert_called_once()
+        call_kwargs = mock_save_log.call_args[1]
+        self.assertEqual(call_kwargs["status"], NL2RiskFilterLogStatus.PARSE_FAILED)
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_api_error_logs_saved(self, mock_chat, mock_user, mock_save_log):
+        """AI 平台异常时记录 api_error 日志"""
+        mock_chat.side_effect = Exception("Connection refused")
+
+        with self.assertRaises(NL2RiskFilterServiceError):
+            self.resource.request({"query": "测试", "tags": [], "strategies": []})
+
+        mock_save_log.assert_called_once()
+        call_kwargs = mock_save_log.call_args[1]
+        self.assertEqual(call_kwargs["status"], NL2RiskFilterLogStatus.API_ERROR)
+        self.assertIn("Connection refused", call_kwargs["error_message"])
+
+
+class ListNL2RiskFilterLogRequestSerializerTest(TestCase):
+    """ListNL2RiskFilterLogRequestSerializer 测试"""
+
+    def test_defaults(self):
+        """默认参数验证"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={})
+        self.assertTrue(ser.is_valid(), ser.errors)
+        self.assertEqual(ser.validated_data["status"], "")
+
+    def test_status_filter(self):
+        """有效 status 值通过验证"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={"status": "success"})
+        self.assertTrue(ser.is_valid(), ser.errors)
+
+    def test_invalid_status(self):
+        """无效 status 值被拒绝"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={"status": "invalid_status"})
+        self.assertFalse(ser.is_valid())
+
+
+class ListNL2RiskFilterLogResourceTest(TestCase):
+    """ListNL2RiskFilterLog Resource 测试
+
+    注意：分页由框架 enable_paginate=True 在 ViewSet 层处理，
+    perform_request 只负责返回过滤后的 queryset。
+    """
+
+    def setUp(self):
+        self.resource = ListNL2RiskFilterLog()
+        # 预置测试数据
+        for i in range(5):
+            NL2RiskFilterLog.objects.create(
+                query=f"query_{i}",
+                request_params={"query": f"query_{i}"},
+                response_data={"filter_conditions": {"level": "high"}},
+                status=NL2RiskFilterLogStatus.SUCCESS,
+                created_by="admin",
+                updated_by="admin",
+            )
+        NL2RiskFilterLog.objects.create(
+            query="failed_query",
+            request_params={"query": "failed_query"},
+            response_data={},
+            status=NL2RiskFilterLogStatus.PARSE_FAILED,
+            created_by="admin",
+            updated_by="admin",
+        )
+        NL2RiskFilterLog.objects.create(
+            query="other_user_query",
+            request_params={"query": "other"},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            created_by="other_user",
+            updated_by="other_user",
+        )
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_list_own_records_only(self, mock_user):
+        """只返回当前用户的记录"""
+        results = self.resource.request({})
+        self.assertEqual(len(results), 6)  # admin 有 5 + 1 条
+        for log in results:
+            self.assertEqual(log["created_by"], "admin")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_status_filter(self, mock_user):
+        """按 status 过滤"""
+        results = self.resource.request({"status": NL2RiskFilterLogStatus.PARSE_FAILED})
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], NL2RiskFilterLogStatus.PARSE_FAILED)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_returns_full_queryset(self, mock_user):
+        """返回完整结果（分页由框架 enable_paginate 处理）"""
+        results = self.resource.request({})
+        # 应返回所有 admin 的记录，未手动切片
+        self.assertEqual(len(results), 6)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="other_user")
+    def test_other_user_isolation(self, mock_user):
+        """不同用户数据隔离"""
+        results = self.resource.request({})
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["created_by"], "other_user")
