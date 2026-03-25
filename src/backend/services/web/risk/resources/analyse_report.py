@@ -243,7 +243,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
 
     支持 Markdown 和 PDF 两种格式。
     - Markdown: 直接输出 content 文本
-    - PDF: Markdown → HTML → PDF (使用 mistune 库)
+    - PDF: Markdown → HTML → PDF (使用 mistune + xhtml2pdf)
     """
 
     name = gettext_lazy("导出AI报告")
@@ -270,9 +270,12 @@ class ExportAnalyseReport(AnalyseReportMeta):
         """导出为 PDF 文件
 
         Markdown → HTML → PDF 转换链
-        使用 mistune 库将 Markdown 转为 HTML，然后使用 weasyprint 生成 PDF。
-        如果 weasyprint 不可用，回退为纯 HTML 导出。
+        使用 mistune 库将 Markdown 转为 HTML，然后使用 xhtml2pdf 生成 PDF。
+        xhtml2pdf 是纯 Python 库，无需额外系统依赖。
+        如果 xhtml2pdf 不可用，回退为纯 HTML 导出。
         """
+        import io
+
         import mistune
 
         html_content = mistune.html(report.content)
@@ -304,15 +307,24 @@ class ExportAnalyseReport(AnalyseReportMeta):
         )
 
         try:
-            from weasyprint import HTML as WeasyprintHTML
+            from xhtml2pdf import pisa
 
-            pdf_bytes = WeasyprintHTML(string=full_html).write_pdf()
-            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            pdf_buffer = io.BytesIO()
+            pisa_status = pisa.CreatePDF(full_html, dest=pdf_buffer, encoding="utf-8")
+            if pisa_status.err:
+                # PDF 生成失败时回退为 HTML 导出
+                response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
+                ext = ".html"
+            else:
+                pdf_buffer.seek(0)
+                response = HttpResponse(pdf_buffer.read(), content_type="application/pdf")
+                ext = ".pdf"
         except ImportError:
-            # weasyprint 不可用时回退为 HTML 导出
+            # xhtml2pdf 不可用时回退为 HTML 导出
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
+            ext = ".html"
 
-        filename = f"{report.title}.pdf"
+        filename = f"{report.title}{ext}"
         response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
         return response
 

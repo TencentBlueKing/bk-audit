@@ -495,13 +495,87 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
                 "export_format": "pdf",
             }
         )
-        # 可能回退为HTML（如果weasyprint不可用）
+        # 可能回退为HTML（如果xhtml2pdf不可用）
         content_type = result["Content-Type"]
         self.assertTrue(
             content_type.startswith("application/pdf") or content_type.startswith("text/html"),
             f"Unexpected content type: {content_type}",
         )
         self.assertIn("attachment", result["Content-Disposition"])
+
+    def test_export_markdown_filename_has_md_extension(self):
+        """测试 Markdown 导出的文件名以 .md 结尾"""
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "markdown",
+            }
+        )
+        disposition = result["Content-Disposition"]
+        # 文件名应包含 .md 扩展名
+        self.assertIn(".md", disposition)
+        self.assertNotIn(".pdf", disposition)
+        self.assertNotIn(".html", disposition)
+
+    def test_export_pdf_filename_matches_content_type(self):
+        """测试 PDF 导出的文件名扩展名与实际内容类型匹配"""
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "pdf",
+            }
+        )
+        content_type = result["Content-Type"]
+        disposition = result["Content-Disposition"]
+        if content_type.startswith("application/pdf"):
+            # PDF 生成成功，文件名应以 .pdf 结尾
+            self.assertIn(".pdf", disposition)
+        else:
+            # 回退为 HTML，文件名应以 .html 结尾
+            self.assertIn(".html", disposition)
+            self.assertNotIn(".pdf", disposition)
+
+    @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
+    def test_export_pdf_success_filename_is_pdf(self, mock_export_pdf):
+        """测试 PDF 生成成功时文件名为 .pdf"""
+        from urllib.parse import quote
+
+        from django.http import HttpResponse
+
+        mock_response = HttpResponse(b"%PDF-1.4 fake content", content_type="application/pdf")
+        filename = f"{self.report.title}.pdf"
+        mock_response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
+        mock_export_pdf.return_value = mock_response
+
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "pdf",
+            }
+        )
+        self.assertIn(".pdf", result["Content-Disposition"])
+        self.assertEqual(result["Content-Type"], "application/pdf")
+
+    @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
+    def test_export_pdf_fallback_filename_is_html(self, mock_export_pdf):
+        """测试 PDF 生成失败回退为 HTML 时文件名为 .html"""
+        from urllib.parse import quote
+
+        from django.http import HttpResponse
+
+        mock_response = HttpResponse("<html>fallback</html>", content_type="text/html; charset=utf-8")
+        filename = f"{self.report.title}.html"
+        mock_response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
+        mock_export_pdf.return_value = mock_response
+
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "pdf",
+            }
+        )
+        self.assertIn(".html", result["Content-Disposition"])
+        self.assertNotIn(".pdf", result["Content-Disposition"])
 
     def test_export_not_found(self):
         """测试导出不存在的报告"""
@@ -862,3 +936,317 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
 
         result = self.resource.risk.get_analyse_report_task_result({"task_id": "test-task-004"})
         self.assertEqual(result["status"], "RUNNING")
+
+
+class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
+    """测试 _build_risk_query_from_prompt_params 辅助函数"""
+
+    def _call(self, prompt_params):
+        from services.web.risk.tasks import _build_risk_query_from_prompt_params
+
+        return _build_risk_query_from_prompt_params(prompt_params)
+
+    def test_empty_params_returns_all(self):
+        """空参数应返回空 Q（匹配所有记录）"""
+        q = self._call({})
+        self.assertEqual(Risk.objects.filter(q).count(), Risk.objects.count())
+
+    def test_none_params_returns_all(self):
+        """None 参数应返回空 Q"""
+        q = self._call(None)
+        self.assertEqual(Risk.objects.filter(q).count(), Risk.objects.count())
+
+    def test_filter_by_start_time(self):
+        """测试按 start_time 过滤"""
+        # risk1: 2026-01-01, risk2: 2026-01-02
+        q = self._call({"start_time": "2026-01-02"})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertNotIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_end_time(self):
+        """测试按 end_time 过滤（不包含 end_time）"""
+        q = self._call({"end_time": "2026-01-02"})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertNotIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_time_range(self):
+        """测试按时间范围过滤"""
+        q = self._call(
+            {
+                "start_time": "2026-01-01",
+                "end_time": "2026-01-03",
+            }
+        )
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_operator(self):
+        """测试按 operator 模糊匹配过滤"""
+        self.risk1.operator = ["zhangsan", "lisi"]
+        self.risk1.save(update_fields=["operator"])
+        self.risk2.operator = ["wangwu"]
+        self.risk2.save(update_fields=["operator"])
+
+        q = self._call({"operator": "zhangsan"})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertNotIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_risk_id(self):
+        """测试按 risk_id 精确匹配过滤"""
+        q = self._call({"risk_id": self.risk1.risk_id})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [self.risk1.risk_id])
+
+    def test_filter_by_multiple_risk_ids(self):
+        """测试按多个 risk_id 过滤（逗号分隔）"""
+        q = self._call({"risk_id": f"{self.risk1.risk_id},{self.risk2.risk_id}"})
+        risk_ids = set(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, {self.risk1.risk_id, self.risk2.risk_id})
+
+    def test_filter_by_strategy_id(self):
+        """测试按 strategy_id 过滤"""
+        q = self._call({"strategy_id": str(self.strategy.strategy_id)})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_risk_level(self):
+        """测试按 risk_level 过滤"""
+        q = self._call({"risk_level": RiskLevel.HIGH.value})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        # strategy 的 risk_level 是 HIGH，应匹配到所有风险
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+
+    def test_filter_by_nonexistent_risk_level(self):
+        """测试按不存在的 risk_level 过滤，应无结果"""
+        q = self._call({"risk_level": RiskLevel.LOW.value})
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [])
+
+    def test_combined_filters(self):
+        """测试组合多个过滤条件"""
+        self.risk1.operator = ["zhangsan"]
+        self.risk1.save(update_fields=["operator"])
+
+        q = self._call(
+            {
+                "start_time": "2026-01-01",
+                "end_time": "2026-01-03",
+                "operator": "zhangsan",
+            }
+        )
+        risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        # risk2 没有 zhangsan 作为 operator
+        self.assertNotIn(self.risk2.risk_id, risk_ids)
+
+    def test_ignores_non_filter_params(self):
+        """测试非过滤参数（如 use_bkbase、datetime_origin）不影响查询"""
+        q = self._call(
+            {
+                "use_bkbase": True,
+                "datetime_origin": "now-6M,now",
+            }
+        )
+        # 不应报错，且应返回所有记录
+        self.assertEqual(Risk.objects.filter(q).count(), Risk.objects.count())
+
+
+class TestLinkRisksToReport(AnalyseReportTestBase):
+    """测试 _link_risks_to_report 辅助函数"""
+
+    def _call(self, report):
+        from services.web.risk.tasks import _link_risks_to_report
+
+        return _link_risks_to_report(report)
+
+    def test_link_risks_with_matching_params(self):
+        """测试根据 prompt_params 关联风险"""
+        self.risk1.operator = ["zhangsan"]
+        self.risk1.save(update_fields=["operator"])
+        self.risk2.operator = ["lisi"]
+        self.risk2.save(update_fields=["operator"])
+
+        report = AnalyseReport.objects.create(
+            title="关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "operator": "zhangsan",
+                "start_time": "2025-01-01",
+                "end_time": "2027-01-01",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertNotIn(self.risk2.risk_id, risk_ids)
+
+        # 验证 risk_count 已更新
+        report.refresh_from_db()
+        self.assertEqual(report.risk_count, 1)
+
+    def test_link_risks_with_empty_params(self):
+        """测试空 prompt_params 关联所有风险"""
+        report = AnalyseReport.objects.create(
+            title="空参数关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, Risk.objects.count())
+        report.refresh_from_db()
+        self.assertEqual(report.risk_count, Risk.objects.count())
+
+    def test_link_risks_no_match(self):
+        """测试无匹配风险时返回 0"""
+        report = AnalyseReport.objects.create(
+            title="无匹配关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "risk_id": "nonexistent-risk-id",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 0)
+        self.assertFalse(AnalyseReportRisk.objects.filter(report=report).exists())
+
+    def test_link_risks_ignore_conflicts(self):
+        """测试重复调用不会报错（ignore_conflicts）"""
+        report = AnalyseReport.objects.create(
+            title="重复关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "risk_id": self.risk1.risk_id,
+            },
+            created_by="admin",
+        )
+
+        # 第一次关联
+        count1 = self._call(report)
+        self.assertEqual(count1, 1)
+
+        # 第二次关联，不应报错
+        count2 = self._call(report)
+        self.assertEqual(count2, 1)
+
+        # 关联记录不应重复
+        self.assertEqual(AnalyseReportRisk.objects.filter(report=report).count(), 1)
+
+    def test_link_risks_updates_risk_count(self):
+        """测试关联后更新 risk_count 字段"""
+        report = AnalyseReport.objects.create(
+            title="更新计数测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            risk_count=0,
+            prompt_params={
+                "start_time": "2025-01-01",
+                "end_time": "2027-01-01",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        report.refresh_from_db()
+        self.assertEqual(report.risk_count, count)
+        self.assertGreater(count, 0)
+
+
+class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
+    """测试 generate_analyse_report 任务中关联风险的集成行为"""
+
+    def setUp(self):
+        super().setUp()
+        # 设置风险的 operator
+        self.risk1.operator = ["zhangsan"]
+        self.risk1.save(update_fields=["operator"])
+        self.risk2.operator = ["lisi"]
+        self.risk2.save(update_fields=["operator"])
+
+        self.report = AnalyseReport.objects.create(
+            title="集成测试-关联风险",
+            report_type=AnalyseReportType.SYSTEM,
+            scenario=self.scenario_person,
+            risk_count=0,
+            status=AnalyseReportStatus.GENERATING,
+            prompt_params={
+                "start_time": "2025-01-01",
+                "end_time": "2027-01-01",
+                "operator": "zhangsan",
+            },
+            created_by="admin",
+        )
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_creates_report_risk_records(self, mock_chat):
+        """测试任务成功后自动创建 AnalyseReportRisk 关联记录"""
+        mock_chat.return_value = "# 分析结果\n关联风险分析..."
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        result = generate_analyse_report(report_id=self.report.report_id)
+
+        self.assertEqual(result["report_id"], self.report.report_id)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
+        # 验证 AnalyseReportRisk 关联记录已创建
+        linked_risk_ids = list(AnalyseReportRisk.objects.filter(report=self.report).values_list("risk_id", flat=True))
+        self.assertIn(self.risk1.risk_id, linked_risk_ids)
+        self.assertNotIn(self.risk2.risk_id, linked_risk_ids)
+
+        # 验证 risk_count 已更新
+        self.assertEqual(self.report.risk_count, 1)
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_links_all_risks_with_empty_params(self, mock_chat):
+        """测试 prompt_params 为空时关联所有风险"""
+        self.report.prompt_params = {}
+        self.report.save(update_fields=["prompt_params"])
+
+        mock_chat.return_value = "# 分析结果"
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        linked_count = AnalyseReportRisk.objects.filter(report=self.report).count()
+        self.assertEqual(linked_count, Risk.objects.count())
+        self.assertEqual(self.report.risk_count, Risk.objects.count())
+
+    @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_succeeds_even_if_link_fails(self, mock_chat, mock_link):
+        """测试关联风险失败不影响报告生成成功"""
+        mock_chat.return_value = "# 分析结果"
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        result = generate_analyse_report(report_id=self.report.report_id)
+
+        self.assertEqual(result["report_id"], self.report.report_id)
+        self.report.refresh_from_db()
+        # 报告应仍为成功状态
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+        self.assertEqual(self.report.content, "# 分析结果")
