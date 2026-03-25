@@ -488,6 +488,98 @@ def sync_auto_result(node_id: str = None):
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
 
+def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
+    """
+    根据报告的 prompt_params（前端传入的风险过滤条件）构建 Risk ORM 查询条件。
+
+    prompt_params 的键与 ListRiskRequestSerializer 的字段一致，
+    此处仅处理常用的过滤字段，不涉及分页、排序等非查询参数。
+    """
+    q = Q()
+    if not prompt_params:
+        return q
+
+    # risk_id 精确匹配
+    if prompt_params.get("risk_id"):
+        risk_ids = [i.strip() for i in str(prompt_params["risk_id"]).split(",") if i.strip()]
+        if risk_ids:
+            q &= Q(risk_id__in=risk_ids)
+
+    # 时间范围
+    if prompt_params.get("start_time"):
+        q &= Q(event_time__gte=prompt_params["start_time"])
+    if prompt_params.get("end_time"):
+        q &= Q(event_time__lt=prompt_params["end_time"])
+
+    # operator 模糊匹配
+    if prompt_params.get("operator"):
+        q &= Q(operator__contains=prompt_params["operator"])
+
+    # strategy_id
+    if prompt_params.get("strategy_id"):
+        strategy_ids = [i.strip() for i in str(prompt_params["strategy_id"]).split(",") if i.strip()]
+        if strategy_ids:
+            q &= Q(strategy_id__in=strategy_ids)
+
+    # status -> display_status
+    if prompt_params.get("status"):
+        statuses = [i.strip() for i in str(prompt_params["status"]).split(",") if i.strip()]
+        if statuses:
+            q &= Q(display_status__in=statuses)
+
+    # current_operator 模糊匹配
+    if prompt_params.get("current_operator"):
+        q &= Q(current_operator__contains=prompt_params["current_operator"])
+
+    # event_type 模糊匹配
+    if prompt_params.get("event_type"):
+        q &= Q(event_type__contains=prompt_params["event_type"])
+
+    # risk_level
+    if prompt_params.get("risk_level"):
+        levels = [i.strip() for i in str(prompt_params["risk_level"]).split(",") if i.strip()]
+        if levels:
+            q &= Q(strategy__risk_level__in=levels)
+
+    return q
+
+
+def _link_risks_to_report(report) -> int:
+    """
+    根据报告的 prompt_params 查询关联风险，批量创建 AnalyseReportRisk 关联记录。
+
+    Returns:
+        关联的风险数量
+    """
+    from services.web.risk.models import AnalyseReportRisk
+
+    prompt_params = report.prompt_params or {}
+    q = _build_risk_query_from_prompt_params(prompt_params)
+
+    # 查询符合条件的风险 ID 列表
+    risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+    if not risk_ids:
+        logger_celery.info(
+            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s", report.report_id, prompt_params
+        )
+        return 0
+
+    # 批量创建关联记录（忽略已存在的重复记录）
+    report_risks = [AnalyseReportRisk(report=report, risk_id=rid) for rid in risk_ids]
+    AnalyseReportRisk.objects.bulk_create(report_risks, ignore_conflicts=True)
+
+    # 更新报告的 risk_count
+    report.risk_count = len(risk_ids)
+    report.save(update_fields=["risk_count"])
+
+    logger_celery.info(
+        "[LinkRisksToReport] Linked %d risks to report_id=%s",
+        len(risk_ids),
+        report.report_id,
+    )
+    return len(risk_ids)
+
+
 @celery_app.task(
     bind=True,
     queue="risk_report",
@@ -533,6 +625,16 @@ def generate_analyse_report(self, report_id: int):
         report.content = result
         report.status = AnalyseReportStatus.SUCCESS
         report.save(update_fields=["content", "status", "updated_at"])
+
+        # 4. 根据 prompt_params 关联风险记录
+        try:
+            _link_risks_to_report(report)
+        except Exception as link_exc:
+            logger_celery.warning(
+                "[GenerateAnalyseReport] Failed to link risks for report_id=%s: %s",
+                report_id,
+                link_exc,
+            )
 
         return {"report_id": report.report_id}
 
