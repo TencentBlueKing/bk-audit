@@ -495,7 +495,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
                 "export_format": "pdf",
             }
         )
-        # 可能回退为HTML（如果xhtml2pdf不可用）
+        # 可能回退为HTML（如果fpdf2不可用）
         content_type = result["Content-Type"]
         self.assertTrue(
             content_type.startswith("application/pdf") or content_type.startswith("text/html"),
