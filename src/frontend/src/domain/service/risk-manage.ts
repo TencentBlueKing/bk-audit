@@ -383,4 +383,15 @@ export default {
     return RiskManageSource.exportAiAnalyseReport(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 报告关联风险列表
+   */
+  getReportRiskList(params: {
+    report_id: string | number,
+    page: number,
+    page_size: number,
+  }) {
+    return RiskManageSource.getReportRiskList(params)
+      .then(({ data }) => data);
+  },
 };
