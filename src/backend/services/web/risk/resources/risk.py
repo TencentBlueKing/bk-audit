@@ -50,6 +50,7 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.exporter.constants import ExportField
 from core.models import get_request_username
+from core.utils.cached_pagination import CachedCountPageNumberPagination
 from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
@@ -366,11 +367,13 @@ class ListRisk(RiskMeta):
     def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str]):
         # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
         risks = self._apply_ordering(base_queryset, order_fields).only("pk")
+        # 使用 CachedCountPageNumberPagination 缓存 COUNT 结果，避免每次分页都执行昂贵的 COUNT SQL
         paged_queryset, page = paginate_queryset(
             queryset=risks,
             request=request,
             # 数据加载阶段套上展示注解（event_content_short / _has_report）
             base_queryset=Risk.annotated_queryset(),
+            paginator=CachedCountPageNumberPagination(),
         )
         paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_fields)
         paged_risks = list(paged_queryset)
