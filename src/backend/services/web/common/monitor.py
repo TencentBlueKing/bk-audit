@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from core.monitor import Event
 
-__all__ = ["LostSceneDetectedEvent", "RiskReportRenderFailedEvent"]
+__all__ = ["LostSceneDetectedEvent", "RiskReportRenderFailedEvent", "RiskReportContentQualityEvent"]
 
 
 class LostSceneDetectedEvent(Event):
@@ -33,3 +33,17 @@ class RiskReportRenderFailedEvent(Event):
     name = "risk_report_render_failed"
     documentation = "风险报告渲染失败"
     labelnames = ["risk_id", "task_id"]
+
+
+class RiskReportContentQualityEvent(Event):
+    """风险报告内容质量异常事件
+
+    维度字段:
+    - risk_id: 风险ID
+    - task_id: Celery 任务ID
+    - issue_type: 质量问题类型 (empty/too_short/ai_error/ai_thinking/provider_error/render_error/event_query_failed)
+    """
+
+    name = "risk_report_content_quality"
+    documentation = "风险报告内容质量异常"
+    labelnames = ["risk_id", "task_id", "issue_type"]

@@ -809,6 +809,22 @@ class AnalyseReportStatus(TextChoices):
     FAILED = "failed", gettext_lazy("生成失败")
 
 
+class ContentQualityIssueType(TextChoices):
+    """
+    报告内容质量问题类型
+
+    用于 RiskReportContentQualityEvent 的 issue_type 维度。
+    """
+
+    EMPTY = "empty", gettext_lazy("内容为空")
+    TOO_SHORT = "too_short", gettext_lazy("内容过短")
+    AI_ERROR = "ai_error", gettext_lazy("AI调用异常")
+    AI_THINKING = "ai_thinking", gettext_lazy("AI思考中间态泄漏")
+    PROVIDER_ERROR = "provider_error", gettext_lazy("Provider调用异常")
+    RENDER_ERROR = "render_error", gettext_lazy("渲染失败")
+    EVENT_QUERY_FAILED = "event_query_failed", gettext_lazy("事件查询失败")
+
+
 @register_choices("aggregation_function")
 class AggregationFunction(TextChoices):
     """
@@ -873,6 +889,9 @@ EVENT_QUERY_FAILED = gettext_lazy("查询失败")
 # AI 生成失败消息格式
 AI_ERROR_PREFIX = "[AI生成失败: "
 AI_ERROR_SUFFIX = "]"
+
+# AI 正在思考占位标记（流式输出中间态泄漏到最终内容）
+AI_THINKING_PATTERN = "正在思考..."
 
 # AggregationFunction → AggregateType 映射
 # first/latest 不走聚合 SQL，不在此映射
