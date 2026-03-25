@@ -355,5 +355,15 @@ class RiskManage extends ModuleBase {
       responseType: 'blob',
     });
   }
+  // 报告关联风险列表
+  getReportRiskList(params: {
+    report_id: string | number,
+    page: number,
+    page_size: number,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/risks/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();

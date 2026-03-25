@@ -21,21 +21,25 @@
       ext-cls="risk-table-popover"
       placement="bottom-start"
       theme="light"
-      trigger="click">
+      trigger="click"
+      @after-hidden="handleAfterHidden"
+      @after-show="handleAfterShow">
       <audit-icon
         class="link-icon"
         type="jump-link"
         @click.stop />
       <template #content>
-        <div class="risk-table-popover-content">
-          <bk-table
-            :border="['outer', 'row']"
-            :columns="riskTableColumns"
-            :data="riskList"
-            :max-height="320"
-            size="small"
-            width="300" />
-        </div>
+        <bk-loading :loading="loading">
+          <div class="risk-table-popover-content">
+            <bk-table
+              :border="['outer', 'row']"
+              :columns="riskTableColumns"
+              :data="riskList"
+              :max-height="320"
+              size="small"
+              width="300" />
+          </div>
+        </bk-loading>
       </template>
     </bk-popover>
   </div>
@@ -44,6 +48,10 @@
 <script setup lang="tsx">
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import RiskManageService from '@service/risk-manage';
+
+  import useRequest from '@hooks/use-request';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -56,17 +64,14 @@
 
   interface Props {
     count: number;
+    reportId: string | number;
   }
 
-  defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {});
+  const loading = ref(true);
   const { t } = useI18n();
 
-  const riskList = ref<RiskItem[]>([
-    { risk_id: '20260109172021996089', title: t('raja 测试 doris 事件合流-实时策略'), risk_level: t('低') },
-    { risk_id: '20260109172021996090', title: t('raja 测试 doris 事件合流-实时策略'), risk_level: t('低') },
-    { risk_id: '20260109172021996091', title: t('raja 测试 doris 事件合流-实时策略'), risk_level: t('低') },
-
-  ]);
+  const riskList = ref<RiskItem[]>([]);
 
   const riskTableColumns = [
     {
@@ -99,7 +104,33 @@
 
     },
   ];
+  // 报告关联风险列表
+  const {
+    run: getReportRiskList,
+  } = useRequest(RiskManageService.getReportRiskList, {
+    defaultValue: [],
+    onSuccess(data) {
+      loading.value = false;
+      riskList.value = data.results;
+    },
+  });
+  const handleAfterShow = () => {
+    console.log({
+      report_id: props.reportId,
+      page: 1,
+      page_size: props.count === 0 ? 10 : props.count,
+    });
 
+    getReportRiskList({
+      report_id: props.reportId,
+      page: 1,
+      page_size: props.count === 0 ? 10 : props.count,
+    });
+  };
+  const handleAfterHidden = () => {
+    riskList.value = [];
+    loading.value = true;
+  };
 </script>
 
 <style lang="postcss" scoped>
