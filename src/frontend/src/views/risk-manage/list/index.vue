@@ -548,6 +548,9 @@
     window.changeConfirm = false;
     totalCount.value = total || 0;
 
+    // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
+    searchBoxRef.value?.notifySearchComplete();
+
     if (!results.length) {
       return;
     }
