@@ -262,7 +262,6 @@
   } = useRequest(RiskManageService.updateAiAnalyseReport, {
     defaultValue: [],
     onSuccess(data) {
-      console.log('保存AI报告>>>>', data);
       // 通知父组件更新itemInfo为最新的数据
       emit('update:item-info', JSON.stringify(data));
 
