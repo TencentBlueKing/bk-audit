@@ -268,12 +268,54 @@ class ExportAnalyseReport(AnalyseReportMeta):
         response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
         return response
 
+    @staticmethod
+    def _find_cjk_font():
+        """搜索系统中可用的 CJK（中日韩）字体文件
+
+        按优先级搜索 macOS / Linux 常见中文字体路径，
+        返回第一个存在的字体文件路径，找不到则返回 None。
+        """
+        import glob
+        import os
+
+        candidates = [
+            # macOS
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/PingFang.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
+            # Linux - Noto CJK
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+            # Linux - 文泉驿
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
+            # Linux - Droid
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        # glob 兜底搜索
+        for pattern in [
+            "/usr/share/fonts/**/NotoSansCJK*.ttc",
+            "/usr/share/fonts/**/NotoSansSC*.ttf",
+            "/usr/share/fonts/**/wqy*.ttc",
+        ]:
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                return matches[0]
+        return None
+
     def _export_pdf(self, report):
         """导出为 PDF 文件
 
         使用 fpdf2 直接将 Markdown 内容渲染为 PDF。
         fpdf2 是纯 Python 库，零系统依赖，pip 安装即用。
-        如果 fpdf2 不可用，回退为纯 HTML 导出。
+        自动搜索系统 CJK 字体以支持中文渲染；
+        如果 fpdf2 不可用或字体缺失，回退为纯 HTML 导出。
         """
         try:
             from fpdf import FPDF
@@ -282,12 +324,21 @@ class ExportAnalyseReport(AnalyseReportMeta):
             pdf.add_page()
             pdf.set_auto_page_break(auto=True, margin=15)
 
-            pdf.set_font("Helvetica", size=16)
+            # 搜索并注册 CJK 字体以支持中文
+            cjk_font_path = self._find_cjk_font()
+            if cjk_font_path:
+                font_family = "CJK"
+                for style in ("", "B", "I", "BI"):
+                    pdf.add_font(font_family, style=style, fname=cjk_font_path)
+            else:
+                font_family = "Helvetica"
+
+            pdf.set_font(font_family, size=16)
             pdf.cell(text=report.title, new_x="LEFT", new_y="NEXT")
             pdf.ln(4)
 
             # 元信息
-            pdf.set_font("Helvetica", size=9)
+            pdf.set_font(font_family, size=9)
             meta_text = (
                 f"报告类型: {report.get_report_type_display()} | "
                 f"分析范围: {report.analysis_scope} | "
@@ -299,7 +350,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
             pdf.ln(6)
 
             # 使用 fpdf2 内置的 markdown 支持渲染正文
-            pdf.set_font("Helvetica", size=11)
+            pdf.set_font(font_family, size=11)
             pdf.multi_cell(w=0, text=report.content, markdown=True)
 
             pdf_bytes = pdf.output()
