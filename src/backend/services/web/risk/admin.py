@@ -30,6 +30,9 @@ from django.utils.translation import gettext_lazy as _
 from core.sql.constants import FieldType, Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
+    AnalyseReport,
+    AnalyseReportRisk,
+    AnalyseReportScenario,
     ManualEvent,
     NL2RiskFilterLog,
     ProcessApplication,
@@ -351,3 +354,55 @@ class NL2RiskFilterLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(AnalyseReportScenario)
+class AnalyseReportScenarioAdmin(admin.ModelAdmin):
+    list_display = [
+        "scenario_id",
+        "scenario_key",
+        "name",
+        "report_type",
+        "is_builtin",
+        "is_enabled",
+        "priority",
+        "created_at",
+    ]
+    search_fields = ["scenario_key", "name"]
+    list_filter = ["report_type", "is_builtin", "is_enabled"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+
+
+@admin.register(AnalyseReport)
+class AnalyseReportAdmin(admin.ModelAdmin):
+    list_display = [
+        "report_id",
+        "title",
+        "report_type",
+        "scenario",
+        "analysis_scope_short",
+        "risk_count",
+        "status",
+        "created_by",
+        "created_at",
+    ]
+    search_fields = ["report_id", "title", "analysis_scope", "created_by"]
+    list_filter = ["report_type", "status"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    raw_id_fields = ["scenario"]
+
+    def analysis_scope_short(self, obj: AnalyseReport):
+        """显示分析范围的前100个字符"""
+        if obj.analysis_scope:
+            return obj.analysis_scope[:100] + "..." if len(obj.analysis_scope) > 100 else obj.analysis_scope
+        return ""
+
+    analysis_scope_short.short_description = _("分析范围")
+
+
+@admin.register(AnalyseReportRisk)
+class AnalyseReportRiskAdmin(admin.ModelAdmin):
+    list_display = ["id", "report", "risk_id", "created_at"]
+    search_fields = ["risk_id", "report__report_id"]
+    list_filter = ["created_at"]
+    raw_id_fields = ["report"]
