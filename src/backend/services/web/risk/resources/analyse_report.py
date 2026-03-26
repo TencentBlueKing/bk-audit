@@ -246,7 +246,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
 
     支持 Markdown 和 PDF 两种格式。
     - Markdown: 直接输出 content 文本
-    - PDF: 使用 fpdf2 直接将 Markdown 渲染为 PDF（纯 Python，零系统依赖）
+    - PDF: 使用 xhtml2pdf 将 Markdown → HTML → PDF，支持表格、样式等复杂格式
     """
 
     name = gettext_lazy("导出AI报告")
@@ -269,90 +269,167 @@ class ExportAnalyseReport(AnalyseReportMeta):
         response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
         return response
 
-    # 项目内置中文字体路径（Noto Sans CJK SC，SIL Open Font License）
+    # 项目内置中文字体路径（Noto Sans SC，SIL Open Font License）
     _CJK_FONT_PATH = os.path.join(os.path.dirname(__file__), os.pardir, "fonts", "NotoSansSC-Regular.ttf")
+
+    # PDF 报告的 HTML 模板，使用 @font-face 注册项目内置中文字体
+    _PDF_HTML_TEMPLATE = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @font-face {{
+        font-family: 'NotoSansSC';
+        src: url('file://{font_path}');
+    }}
+    body {{
+        font-family: 'NotoSansSC', sans-serif;
+        font-size: 12px;
+        line-height: 1.8;
+        color: #333;
+        margin: 0;
+        padding: 0;
+    }}
+    h1 {{
+        font-size: 20px;
+        text-align: center;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+        margin-bottom: 6px;
+    }}
+    .meta {{
+        font-size: 10px;
+        color: #666;
+        text-align: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+    }}
+    h2 {{
+        font-size: 16px;
+        margin-top: 18px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 4px;
+    }}
+    h3 {{
+        font-size: 14px;
+        margin-top: 14px;
+        margin-bottom: 6px;
+    }}
+    p {{
+        margin: 6px 0;
+        text-align: justify;
+    }}
+    table {{
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0;
+        font-size: 11px;
+    }}
+    th, td {{
+        border: 1px solid #ccc;
+        padding: 6px 8px;
+        text-align: left;
+    }}
+    th {{
+        background-color: #f0f0f0;
+        font-weight: bold;
+    }}
+    tr:nth-child(even) td {{
+        background-color: #fafafa;
+    }}
+    ul, ol {{
+        margin: 6px 0;
+        padding-left: 24px;
+    }}
+    li {{
+        margin: 3px 0;
+    }}
+    code {{
+        background-color: #f5f5f5;
+        padding: 1px 4px;
+        font-size: 11px;
+    }}
+    pre {{
+        background-color: #f5f5f5;
+        padding: 10px;
+        font-size: 10px;
+        overflow-x: auto;
+    }}
+    blockquote {{
+        border-left: 3px solid #ccc;
+        margin: 10px 0;
+        padding: 6px 12px;
+        color: #666;
+    }}
+</style>
+</head>
+<body>
+    <h1>{title}</h1>
+    <div class="meta">{meta}</div>
+    {content}
+</body>
+</html>"""
 
     def _export_pdf(self, report):
         """导出为 PDF 文件
 
-        使用 fpdf2 直接将 Markdown 内容渲染为 PDF。
-        fpdf2 是纯 Python 库，零系统依赖，pip 安装即用。
-        使用项目内置的 Noto Sans CJK SC 字体以支持中文渲染；
-        如果 fpdf2 不可用，回退为纯 HTML 导出。
+        使用 xhtml2pdf 将 Markdown 内容渲染为 PDF：
+        1. 先用 mistune 将 Markdown 转为 HTML
+        2. 再用 xhtml2pdf 将 HTML 渲染为 PDF
+        xhtml2pdf 基于 reportlab，支持表格、CSS 样式等复杂格式。
+        使用项目内置的 Noto Sans SC 字体以支持中文渲染；
+        如果 xhtml2pdf 不可用，回退为纯 HTML 导出。
         """
+        import io
+
+        import mistune
+
+        # 将 Markdown 转为 HTML
+        html_content = mistune.html(report.content)
+
+        # 构建元信息
+        meta_text = (
+            f"报告类型: {report.get_report_type_display()} &nbsp;|&nbsp; "
+            f"分析范围: {report.analysis_scope} &nbsp;|&nbsp; "
+            f"关联风险: {report.risk_count} 条 &nbsp;|&nbsp; "
+            f"生成人: {report.created_by} &nbsp;|&nbsp; "
+            f"生成时间: {report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else ''}"
+        )
+
+        # 渲染完整 HTML
+        full_html = self._PDF_HTML_TEMPLATE.format(
+            font_path=self._CJK_FONT_PATH,
+            title=report.title,
+            meta=meta_text,
+            content=html_content,
+        )
+
         try:
-            from fpdf import FPDF
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            from xhtml2pdf import pisa
 
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_auto_page_break(auto=True, margin=15)
+            # 通过 reportlab 注册中文字体，xhtml2pdf 底层依赖 reportlab 渲染
+            if "NotoSansSC" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont("NotoSansSC", self._CJK_FONT_PATH))
 
-            # 注册项目内置的 CJK 字体以支持中文
-            font_family = "NotoSansSC"
-            for style in ("", "B", "I", "BI"):
-                pdf.add_font(font_family, style=style, fname=self._CJK_FONT_PATH)
+            pdf_buffer = io.BytesIO()
+            pisa_status = pisa.CreatePDF(full_html, dest=pdf_buffer, encoding="utf-8")
 
-            pdf.set_font(font_family, size=16)
-            pdf.cell(text=report.title, new_x="LEFT", new_y="NEXT")
-            pdf.ln(4)
+            if pisa_status.err:
+                raise RuntimeError(f"xhtml2pdf 渲染失败，错误数: {pisa_status.err}")
 
-            # 元信息
-            pdf.set_font(font_family, size=9)
-            meta_text = (
-                f"报告类型: {report.get_report_type_display()} | "
-                f"分析范围: {report.analysis_scope} | "
-                f"关联风险: {report.risk_count} 条 | "
-                f"生成人: {report.created_by} | "
-                f"生成时间: {report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else ''}"
-            )
-            pdf.multi_cell(w=0, text=meta_text)
-            pdf.ln(6)
-
-            # 使用 fpdf2 内置的 markdown 支持渲染正文
-            pdf.set_font(font_family, size=11)
-            pdf.multi_cell(w=0, text=report.content, markdown=True)
-
-            # fpdf2 output() 返回 bytearray，必须转为 bytes
-            # 否则 Django HttpResponse 会迭代 bytearray，将每个字节(int)转为十进制字符串
-            pdf_bytes = bytes(pdf.output())
+            pdf_bytes = pdf_buffer.getvalue()
             response = HttpResponse(pdf_bytes, content_type="application/pdf")
             ext = ".pdf"
         except ImportError:
-            # fpdf2 不可用时回退为 HTML 导出
-            import mistune
-
-            html_content = mistune.html(report.content)
-            full_html = (
-                "<!DOCTYPE html>"
-                "<html><head><meta charset='utf-8'>"
-                f"<title>{report.title}</title>"
-                "<style>"
-                "body{font-family:sans-serif;margin:40px;line-height:1.6;}"
-                "h1{border-bottom:2px solid #333;padding-bottom:10px;}"
-                "</style></head><body>"
-                f"<h1>{report.title}</h1>"
-                f"{html_content}"
-                "</body></html>"
-            )
+            # xhtml2pdf 不可用时回退为 HTML 导出
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
         except Exception:
             # PDF 生成失败时回退为 HTML 导出
-            import mistune
-
-            html_content = mistune.html(report.content)
-            full_html = (
-                "<!DOCTYPE html>"
-                "<html><head><meta charset='utf-8'>"
-                f"<title>{report.title}</title>"
-                "<style>"
-                "body{font-family:sans-serif;margin:40px;line-height:1.6;}"
-                "h1{border-bottom:2px solid #333;padding-bottom:10px;}"
-                "</style></head><body>"
-                f"<h1>{report.title}</h1>"
-                f"{html_content}"
-                "</body></html>"
-            )
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
 
