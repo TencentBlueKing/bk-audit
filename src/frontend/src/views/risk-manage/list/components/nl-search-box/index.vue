@@ -27,7 +27,7 @@
     <!-- 自然语言搜索输入框 -->
     <nl-input
       ref="nlInputRef"
-      :loading="isParsing"
+      :loading="isNLSearching"
       @submit="handleNLSubmit" />
 
     <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示） -->
@@ -227,13 +227,15 @@
 
   // NLP 自然语言解析
   const {
-    isParsing,
     parse,
     clearParseResult,
   } = useNLParse();
 
   // 是否显示未识别警告提示
   const showParseWarning = ref(false);
+
+  // 是否处于智能搜索整体流程中（NLP 解析 + 表格数据加载）
+  const isNLSearching = ref(false);
 
   // 关闭警告提示
   const handleCloseWarning = () => {
@@ -361,6 +363,8 @@
 
   // 自然语言搜索提交
   const handleNLSubmit = async (query: string) => {
+    // 进入智能搜索整体流程（input 按钮开始转动）
+    isNLSearching.value = true;
     // 通知父组件：NL 解析开始，列表进入 loading 状态
     emit('parsing', true);
 
@@ -379,7 +383,8 @@
 
     const result = await parse(query, tags, strategies);
     if (!result) {
-      // 解析失败，取消列表 loading
+      // 解析失败，取消列表 loading 和 input 转动
+      isNLSearching.value = false;
       emit('parsing', false);
       return;
     }
@@ -390,17 +395,14 @@
     if (_.isEmpty(filterConditions) && message) {
       // 显示警告提示（红色警告提示框）
       showParseWarning.value = true;
-      // 解析结果为空，取消列表 loading
+      isNLSearching.value = false;
       emit('parsing', false);
       return;
     }
 
     // AI 正常解析：filter_conditions 有值
     if (!_.isEmpty(filterConditions)) {
-      // 隐藏之前的警告提示
       showParseWarning.value = false;
-
-      // 将 filter_conditions 填充到筛选表单
       applyFilterConditions(filterConditions);
 
       // 通知父组件字段变化（用于获取事件字段）
@@ -408,11 +410,8 @@
 
       // 触发搜索（列表 loading 会由 fetchData 接管，无需手动取消）
       handleSubmit();
-
-      // 弹出搜索成功 Message 提示
-      messageSuccess(t('智能搜索成功'));
     } else {
-      // 兜底：条件为空且无 message，取消列表 loading
+      isNLSearching.value = false;
       emit('parsing', false);
     }
   };
@@ -634,6 +633,7 @@
     selectedItemListOperator.value = [];
     selectedVal.value = [];
     showParseWarning.value = false;
+    isNLSearching.value = false;
     clearParseResult();
     nlInputRef.value?.clear();
     // 清空 URL 上的搜索参数
@@ -690,6 +690,12 @@
 
   // Expose（与 search-box 完全一致的对外接口）
   defineExpose<INLSearchBoxExposes>({
+    notifySearchComplete() {
+      if (isNLSearching.value) {
+        isNLSearching.value = false;
+        messageSuccess(t('智能搜索成功'));
+      }
+    },
     clearValue() {
       handleClear();
     },
