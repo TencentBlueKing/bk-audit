@@ -35,13 +35,13 @@ def paginate_data(queryset: QuerySet, request: Request) -> Tuple[List, PageNumbe
 
 
 def paginate_queryset(
-    queryset: QuerySet, request: Request, base_queryset: QuerySet = None, paginator: PageNumberPagination = None
-) -> Tuple[QuerySet, PageNumberPagination]:
+    queryset: QuerySet, request: Request, base_queryset: QuerySet = None
+) -> (QuerySet, PageNumberPagination):
     """
     分页 QuerySet
     """
 
-    page: PageNumberPagination = paginator if paginator is not None else api_settings.DEFAULT_PAGINATION_CLASS()
+    page: PageNumberPagination = api_settings.DEFAULT_PAGINATION_CLASS()
     paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
     if base_queryset is None:
         base_queryset = queryset.model.objects
