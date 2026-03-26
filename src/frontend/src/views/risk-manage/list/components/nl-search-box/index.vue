@@ -333,6 +333,11 @@
         id: item.id,
         operator: item.operator,
       }));
+    } else {
+      // API 未返回 event_filters 时，清空上次的事件字段条件
+      selectedItemList.value = [];
+      selectedVal.value = [];
+      selectedItemListOperator.value = [];
     }
 
     // 处理排序 sort
