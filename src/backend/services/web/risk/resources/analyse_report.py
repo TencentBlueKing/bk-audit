@@ -312,7 +312,9 @@ class ExportAnalyseReport(AnalyseReportMeta):
             pdf.set_font(font_family, size=11)
             pdf.multi_cell(w=0, text=report.content, markdown=True)
 
-            pdf_bytes = pdf.output()
+            # fpdf2 output() 返回 bytearray，必须转为 bytes
+            # 否则 Django HttpResponse 会迭代 bytearray，将每个字节(int)转为十进制字符串
+            pdf_bytes = bytes(pdf.output())
             response = HttpResponse(pdf_bytes, content_type="application/pdf")
             ext = ".pdf"
         except ImportError:
