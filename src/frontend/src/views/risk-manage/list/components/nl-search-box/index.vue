@@ -283,20 +283,26 @@
   };
 
   const applyFilterConditions = (filterConditions: Record<string, any>) => {
-    // 先重置 searchModel，保留默认日期
+    // 默认时间范围（近6个月）
+    const defaultDatetime = [
+      dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    ];
+    const defaultDatetimeOrigin = ['now-6M', 'now'];
+
     const newModel: Record<string, any> = {
-      datetime: searchModel.value.datetime,
-      datetime_origin: searchModel.value.datetime_origin,
+      datetime: defaultDatetime,
+      datetime_origin: defaultDatetimeOrigin,
     };
 
-    // 处理时间范围
+    // 处理时间范围：仅当 AI 明确返回了时间字段时才覆盖默认值
     if (filterConditions.start_time || filterConditions.end_time) {
       const startTime = filterConditions.start_time
         ? dayjs(filterConditions.start_time).format('YYYY-MM-DD')
-        : newModel.datetime[0];
+        : defaultDatetime[0];
       const endTime = filterConditions.end_time
         ? dayjs(filterConditions.end_time).format('YYYY-MM-DD')
-        : newModel.datetime[1];
+        : defaultDatetime[1];
       newModel.datetime = [startTime, endTime];
       newModel.datetime_origin = [startTime, endTime];
     }
@@ -339,10 +345,17 @@
       selectedVal.value = [];
       selectedItemListOperator.value = [];
     }
-
-    // 处理排序 sort
-    if (Array.isArray(filterConditions.sort)) {
-      newModel.sort = filterConditions.sort;
+    if (Array.isArray(filterConditions.sort) && filterConditions.sort.length > 0) {
+      const needSecondarySortFields = ['risk_level', 'last_operate_time', 'display_status'];
+      const sortArray: string[] = [...filterConditions.sort];
+      const primaryField = sortArray[0].replace(/^-/, '');
+      const isEventDataSort = primaryField.startsWith('event_data.');
+      if (!isEventDataSort
+        && needSecondarySortFields.includes(primaryField)
+        && !sortArray.includes('-event_time')) {
+        sortArray.push('-event_time');
+      }
+      newModel.sort = sortArray;
     }
   };
 
@@ -557,6 +570,12 @@
           start_time: value[0],
           end_time: value[1],
         };
+      }
+      if (key === 'sort') {
+        if (_.isArray(value) && value.length > 0) {
+          return { ...res, sort: value };
+        }
+        return res;
       }
       if (value === allText) return res;
       if (!_.isEmpty(value)) {
