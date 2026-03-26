@@ -69,16 +69,16 @@ cd src/backend
 export BKAPP_EVAL_USERNAME=your_rtx
 
 # 运行评估 — 双模型对比（结果输出到 output/ 目录）
-npx promptfoo eval -c evals/nl2riskfilter/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/nl2riskfilter/promptfooconfig.yaml \
   --env-file .env --no-cache \
   -o evals/nl2riskfilter/output/$(date +%Y%m%d)-multimodel.json
 
 # 只跑单个模型（如仅 dsv32）
-npx promptfoo eval -c evals/nl2riskfilter/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/nl2riskfilter/promptfooconfig.yaml \
   --env-file .env --no-cache --filter-providers dsv32
 
 # 快速验证（只跑第 1 个用例）
-npx promptfoo eval -c evals/nl2riskfilter/promptfooconfig.yaml \
+npx promptfoo eval --no-table -c evals/nl2riskfilter/promptfooconfig.yaml \
   --env-file .env --no-cache --filter-first-n 1
 
 # 查看交互式报告
