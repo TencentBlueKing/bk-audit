@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import logging
 import os
 from urllib.parse import quote
 
@@ -270,7 +271,9 @@ class ExportAnalyseReport(AnalyseReportMeta):
         return response
 
     # 项目内置中文字体路径（Noto Sans SC，SIL Open Font License）
-    _CJK_FONT_PATH = os.path.join(os.path.dirname(__file__), os.pardir, "fonts", "NotoSansSC-Regular.ttf")
+    _CJK_FONT_PATH = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), os.pardir, "fonts", "NotoSansSC-Regular.ttf")
+    )
 
     # PDF 报告的 HTML 模板，使用 @font-face 注册项目内置中文字体
     _PDF_HTML_TEMPLATE = """<!DOCTYPE html>
@@ -280,10 +283,10 @@ class ExportAnalyseReport(AnalyseReportMeta):
 <style>
     @font-face {{
         font-family: 'NotoSansSC';
-        src: url('file://{font_path}');
+        src: url('{font_path}');
     }}
     body {{
-        font-family: 'NotoSansSC', sans-serif;
+        font-family: 'NotoSansSC';
         font-size: 12px;
         line-height: 1.8;
         color: #333;
@@ -406,30 +409,32 @@ class ExportAnalyseReport(AnalyseReportMeta):
             content=html_content,
         )
 
+        logger = logging.getLogger(__name__)
+
         try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
             from xhtml2pdf import pisa
 
-            # 通过 reportlab 注册中文字体，xhtml2pdf 底层依赖 reportlab 渲染
-            if "NotoSansSC" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont("NotoSansSC", self._CJK_FONT_PATH))
+            # 检查字体文件是否存在
+            if not os.path.exists(self._CJK_FONT_PATH):
+                logger.error("[ExportPDF] 中文字体文件不存在: %s", self._CJK_FONT_PATH)
 
+            # xhtml2pdf 通过 @font-face CSS 自动加载字体并注册到 reportlab
             pdf_buffer = io.BytesIO()
             pisa_status = pisa.CreatePDF(full_html, dest=pdf_buffer, encoding="utf-8")
 
             if pisa_status.err:
+                logger.error("[ExportPDF] xhtml2pdf 渲染失败，错误数: %d", pisa_status.err)
                 raise RuntimeError(f"xhtml2pdf 渲染失败，错误数: {pisa_status.err}")
 
             pdf_bytes = pdf_buffer.getvalue()
             response = HttpResponse(pdf_bytes, content_type="application/pdf")
             ext = ".pdf"
         except ImportError:
-            # xhtml2pdf 不可用时回退为 HTML 导出
+            logger.exception("[ExportPDF] xhtml2pdf 或 reportlab 未安装，回退为 HTML 导出")
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
         except Exception:
-            # PDF 生成失败时回退为 HTML 导出
+            logger.exception("[ExportPDF] PDF 生成失败，回退为 HTML 导出")
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
 
