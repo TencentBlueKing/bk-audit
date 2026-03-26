@@ -16,7 +16,6 @@
 -->
 <template>
   <div class="risk-count-cell">
-    <span>{{ count }}</span>
     <bk-popover
       ext-cls="risk-table-popover"
       placement="bottom-start"
@@ -24,10 +23,7 @@
       trigger="click"
       @after-hidden="handleAfterHidden"
       @after-show="handleAfterShow">
-      <audit-icon
-        class="link-icon"
-        type="jump-link"
-        @click.stop />
+      <span class="risk-count">{{ count }}</span>
       <template #content>
         <bk-loading :loading="loading">
           <div class="risk-table-popover-content">
@@ -42,12 +38,17 @@
         </bk-loading>
       </template>
     </bk-popover>
+    <audit-icon
+      class="link-icon"
+      type="jump-link"
+      @click.stop="handleClick" />
   </div>
 </template>
 
 <script setup lang="tsx">
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
   import StrategyManageService from '@service/strategy-manage';
@@ -78,6 +79,7 @@
   }
 
   const props = withDefaults(defineProps<Props>(), {});
+  const router = useRouter();
   const loading = ref(true);
   const { t } = useI18n();
 
@@ -160,6 +162,26 @@
     riskList.value = [];
     loading.value = true;
   };
+
+  // 点击跳转图标，获取报告关联风险列表，提取所有 risk_id，新开标签页跳转到「所有风险」页面搜索
+  const handleClick = () => {
+    RiskManageService.getReportRiskList({
+      report_id: props.reportId,
+      page: 1,
+      page_size: props.count === 0 ? 10 : props.count,
+    }).then((data) => {
+      const riskIds = (data?.results ?? []).map((item: RiskItem) => item.risk_id).join(',');
+      if (riskIds) {
+        const route = router.resolve({
+          name: 'riskManageList',
+          query: {
+            risk_id: riskIds,
+          },
+        });
+        window.open(route.href, '_blank');
+      }
+    });
+  };
 </script>
 
 <style lang="postcss" scoped>
@@ -167,6 +189,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.risk-count {
+  color: #63656e;
+  text-decoration: underline;
+  cursor: pointer;
+  text-underline-offset: 2px;
 }
 
 .link-icon {
