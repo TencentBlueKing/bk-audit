@@ -28,10 +28,6 @@ RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
 # AI Provider 缓存超时时间（秒），默认 2 小时
 AI_PROVIDER_CACHE_TIMEOUT = int(os.getenv("BKAPP_AI_PROVIDER_CACHE_TIMEOUT", 7200))
 
-# ============== 风险列表分页缓存配置 ==============
-# 风险列表 COUNT 缓存超时时间（秒），默认 60 秒
-RISK_LIST_COUNT_CACHE_TIMEOUT = int(os.getenv("BKAPP_RISK_LIST_COUNT_CACHE_TIMEOUT", 60))
-
 # ============== AI 风险检索相关配置 ==============
 # MCP 事件字段简化接口返回上限
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
