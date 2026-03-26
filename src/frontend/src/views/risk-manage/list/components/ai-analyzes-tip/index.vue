@@ -138,13 +138,11 @@
   } = useRequest(RiskManageService.getAiAnalyseReportDetail, {
     defaultValue: [],
     onSuccess(data) {
-      console.log('获取ai报告详情>>>>', data);
       showReportDrawer.value = true;
       itemInfo.value = JSON.stringify(data);
     },
   });
   const handleOpenReport = (item: HistoryReportItem) => {
-    console.log('handleOpenReport', item);
     getAiAnalyseReportDetail({
       report_id: item.report_id,
     });

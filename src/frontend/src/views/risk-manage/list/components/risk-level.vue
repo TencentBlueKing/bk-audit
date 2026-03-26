@@ -36,13 +36,26 @@
 
   import type RiskManageModel from '@model/risk/risk';
 
+  interface RiskItem {
+    current_operator: Array<string>;
+    event_end_time: string;
+    event_time: string;
+    operator: Array<string>;
+    risk_id: string;
+    risk_label: string;
+    risk_level: string
+    status: string;
+    strategy_id: number;
+    title: string;
+  }
+
   interface Props{
     levelData: {
       [key: string]: {
         risk_level: string
       }
     },
-    data: RiskManageModel,
+    data: RiskManageModel | RiskItem,
   }
 
   defineProps<Props>();
