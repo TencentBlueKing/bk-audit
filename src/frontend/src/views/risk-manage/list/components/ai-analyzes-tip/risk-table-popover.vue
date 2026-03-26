@@ -50,16 +50,26 @@
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
+
 
   interface RiskItem {
+    current_operator: Array<string>;
+    event_end_time: string;
+    event_time: string;
+    operator: Array<string>;
     risk_id: string;
+    risk_label: string;
+    risk_level: string
+    status: string;
+    strategy_id: number;
     title: string;
-    risk_level: string;
   }
 
   interface Props {
@@ -78,6 +88,7 @@
       label: t('风险ID'),
       field: 'risk_id',
       minWidth: 180,
+      showOverflowTooltip: true,
       render: (args: { data?: RiskItem }) => {
         const { data } = args;
         if (!data) return '--';
@@ -96,14 +107,25 @@
       label: t('风险标题'),
       field: 'title',
       minWidth: 160,
+      showOverflowTooltip: true,
+
     },
     {
       label: t('风险等级'),
       field: 'risk_level',
       width: 100,
-
+      render: ({ data }: { data?: RiskItem }) => {
+        if (!data) return '--';
+        return <RiskLevel levelData={levelData.value} data={data}></RiskLevel>;
+      },
     },
   ];
+  const {
+    data: levelData,
+    run: fetchRiskLevel,
+  } = useRequest(StrategyManageService.fetchRiskLevel, {
+    defaultValue: {},
+  });
   // 报告关联风险列表
   const {
     run: getReportRiskList,
@@ -111,7 +133,14 @@
     defaultValue: [],
     onSuccess(data) {
       loading.value = false;
-      riskList.value = data.results;
+      // 空值保护，确保 riskList 始终为数组
+      riskList.value = data?.results ?? [];
+      // 获取对应风险等级（仅在有数据时请求）
+      if (riskList.value.length > 0) {
+        fetchRiskLevel({
+          strategy_ids: riskList.value.map((item: RiskItem) => item.strategy_id).join(','),
+        });
+      }
     },
   });
   const handleAfterShow = () => {

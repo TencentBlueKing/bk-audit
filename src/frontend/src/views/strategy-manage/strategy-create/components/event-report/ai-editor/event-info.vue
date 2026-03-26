@@ -225,7 +225,6 @@
   });
   // 复制
   const handleCopy = (item: any) => {
-    console.log('item', item);
     execCopy(item, t('复制成功'));
   };
   // 插入

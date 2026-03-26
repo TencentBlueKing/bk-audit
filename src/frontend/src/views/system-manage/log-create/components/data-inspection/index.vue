@@ -491,7 +491,6 @@
   } = useRequest(DataIdManageService.fecthDetail, {
     defaultValue: new DataIdDetailModel(),
     onSuccess(data) {
-      console.log('data', data);
       detailDataForData.value = data;
       // 接口完成后打开侧边栏
       isShowDetail.value = true;
