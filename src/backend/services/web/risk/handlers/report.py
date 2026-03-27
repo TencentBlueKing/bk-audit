@@ -10,17 +10,15 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
 from core.exceptions import ApiRequestError
-from services.web.common.monitor import (
-    RiskReportContentQualityEvent,
-    RiskReportRenderFailedEvent,
-)
+from services.web.common.monitor import RiskReportRenderFailedEvent
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
+    ContentQualityError,
     RiskReportStatus,
 )
 from services.web.risk.models import Risk, RiskReport
-from services.web.risk.report.quality import ContentQualityChecker
+from services.web.risk.report.quality import check_and_report_quality
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 
@@ -92,7 +90,7 @@ class RiskReportHandler:
                 )
                 return
 
-            # 5.5 内容质量检测（不阻断写入）
+            # 5.5 内容质量检测（有问题则抛异常触发重试）
             self._check_content_quality(report_content)
 
             # 6. 更新报告
@@ -220,49 +218,19 @@ class RiskReportHandler:
             logger.info("[RiskReportHandler] Report updated. risk_id=%s", self.risk_id)
 
     def _check_content_quality(self, content: str):
-        """检测报告内容质量，异常时上报监控事件（不阻断写入）"""
+        """检测报告内容质量，异常时上报监控事件并抛出异常触发重试
 
-        issues = ContentQualityChecker.check(content)
-        if not issues:
-            logger.info(
-                "[RiskReportHandler] Content quality check passed. risk_id=%s, task_id=%s",
-                self.risk_id,
-                self.task_id,
-            )
-            return
-
-        # 汇总日志
-        issue_summary = "; ".join(f"{issue.issue_type}(x{issue.count}): {issue.detail}" for issue in issues)
-        logger.warning(
-            "[RiskReportHandler] Content quality issues detected. risk_id=%s, task_id=%s, issues=%s",
-            self.risk_id,
-            self.task_id,
-            issue_summary,
+        调用公共函数 check_and_report_quality() 执行检测和上报，
+        如果发现质量问题则抛出 ContentQualityError，
+        由 render_risk_report 任务的 except 块捕获并触发 self.retry()。
+        """
+        issues = check_and_report_quality(
+            content=content,
+            risk_id=self.risk_id,
+            task_id=self.task_id,
         )
-
-        # 每种问题类型单独上报（便于监控平台按 issue_type 维度配置告警策略）
-        for issue in issues:
-            event = RiskReportContentQualityEvent(
-                target=f"risk_{self.risk_id}",
-                context={
-                    "risk_id": self.risk_id,
-                    "task_id": self.task_id,
-                    "issue_type": issue.issue_type,
-                },
-                extra={
-                    "detail": issue.detail,
-                    "count": str(issue.count),
-                },
-            )
-            try:
-                api.bk_monitor.report_event(event.to_json())
-            except ApiRequestError as e:
-                logger.error(
-                    "[RiskReportHandler] Report quality event failed. risk_id=%s, issue_type=%s, error=%s",
-                    self.risk_id,
-                    issue.issue_type,
-                    e,
-                )
+        if issues:
+            raise ContentQualityError(issues)
 
     def _handle_tail_trigger(self):
         """

@@ -18,8 +18,12 @@
 from dataclasses import dataclass
 from typing import List
 
+from bk_resource import api
+from blueapps.utils.logger import logger
 from django.conf import settings
 
+from core.exceptions import ApiRequestError
+from services.web.common.monitor import RiskReportContentQualityEvent
 from services.web.risk.constants import (
     AI_ERROR_PREFIX,
     AI_THINKING_PATTERN,
@@ -91,3 +95,61 @@ class ContentQualityChecker:
                 issues.append(ContentQualityIssue(issue_type=issue_type, detail=pattern, count=count))
 
         return issues
+
+
+def check_and_report_quality(content: str, risk_id: str, task_id: str) -> List[ContentQualityIssue]:
+    """检测报告内容质量，有问题则上报监控事件
+
+    公共函数，供各报告生成入口调用。调用方根据返回值自行决定后续行为（重试/忽略等）。
+
+    Args:
+        content: 渲染后的报告内容
+        risk_id: 风险ID
+        task_id: Celery 任务ID
+
+    Returns:
+        问题列表，空列表表示质量正常
+    """
+    issues = ContentQualityChecker.check(content)
+    if not issues:
+        logger.info(
+            "[ContentQualityCheck] Passed. risk_id=%s, task_id=%s",
+            risk_id,
+            task_id,
+        )
+        return issues
+
+    # 汇总日志
+    issue_summary = "; ".join(f"{issue.issue_type}(x{issue.count}): {issue.detail}" for issue in issues)
+    logger.warning(
+        "[ContentQualityCheck] Issues detected. risk_id=%s, task_id=%s, issues=%s",
+        risk_id,
+        task_id,
+        issue_summary,
+    )
+
+    # 每种问题类型单独上报（便于监控平台按 issue_type 维度配置告警策略）
+    for issue in issues:
+        event = RiskReportContentQualityEvent(
+            target=f"risk_{risk_id}",
+            context={
+                "risk_id": risk_id,
+                "task_id": task_id,
+                "issue_type": issue.issue_type,
+            },
+            extra={
+                "detail": issue.detail,
+                "count": str(issue.count),
+            },
+        )
+        try:
+            api.bk_monitor.report_event(event.to_json())
+        except ApiRequestError as e:
+            logger.error(
+                "[ContentQualityCheck] Report event failed. risk_id=%s, issue_type=%s, error=%s",
+                risk_id,
+                issue.issue_type,
+                e,
+            )
+
+    return issues

@@ -825,6 +825,18 @@ class ContentQualityIssueType(TextChoices):
     EVENT_QUERY_FAILED = "event_query_failed", gettext_lazy("事件查询失败")
 
 
+class ContentQualityError(Exception):
+    """报告内容质量异常
+
+    当质量检测发现问题时抛出，用于触发 Celery 任务重试。
+    """
+
+    def __init__(self, issues: list):
+        self.issues = issues
+        summary = "; ".join(f"{i.issue_type}(x{i.count}): {i.detail}" for i in issues)
+        super().__init__(f"报告内容质量异常: {summary}")
+
+
 @register_choices("aggregation_function")
 class AggregationFunction(TextChoices):
     """
