@@ -411,4 +411,43 @@
   padding: 0 24px;
 }
 
+/* Markdown 表格样式 - 使用 :deep() 穿透 scoped 样式 */
+.markdowm-container {
+  :deep(table) {
+    width: 100%;
+    margin: 16px 0;
+    font-size: 13px;
+    border-collapse: collapse;
+  }
+
+  :deep(th),
+  :deep(td) {
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid #dcdee5;
+  }
+
+  :deep(th) {
+    font-weight: 600;
+    color: #313238;
+    background-color: #f5f7fa;
+  }
+
+  :deep(td) {
+    color: #63656e;
+  }
+
+  :deep(tr:hover td) {
+    background-color: #f5f7fa;
+  }
+
+  :deep(thead tr) {
+    background-color: #f5f7fa;
+  }
+
+  :deep(tbody tr:nth-child(even)) {
+    background-color: #fafbfd;
+  }
+}
+
 </style>
