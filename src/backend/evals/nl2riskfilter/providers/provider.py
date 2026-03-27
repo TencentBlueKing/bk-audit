@@ -95,7 +95,10 @@ def call_api(prompt, options, context):
     if thread_id:
         request_data["thread_id"] = thread_id
 
-    username = config.get("username") or os.environ.get("BKAPP_EVAL_USERNAME")
+    username = config.get("username") or ""
+    # promptfoo 模板未解析时会传入字面量 '{{env.BKAPP_EVAL_USERNAME}}'，需回退到环境变量
+    if not username or username.startswith("{{"):
+        username = os.environ.get("BKAPP_EVAL_USERNAME", "")
     if not username:
         return {"error": "BKAPP_EVAL_USERNAME 环境变量未设置，请 export BKAPP_EVAL_USERNAME=your_rtx"}
 
