@@ -40,10 +40,9 @@ class RiskReportContentQualityEvent(Event):
 
     维度字段:
     - risk_id: 风险ID
-    - task_id: Celery 任务ID
     - issue_type: 质量问题类型 (empty/too_short/ai_error/ai_thinking/provider_error/render_error/event_query_failed)
     """
 
     name = "risk_report_content_quality"
     documentation = "风险报告内容质量异常"
-    labelnames = ["risk_id", "task_id", "issue_type"]
+    labelnames = ["risk_id", "issue_type"]
