@@ -25,47 +25,6 @@ evals/
 - `evals/providers/` — 公共 provider，各评测套件通过 `python:../providers/xxx.py` 引用
 - `evals/<能力>/providers/` — 业务专用 provider，走完整业务链路
 
-## 快速开始
-
-### 环境准备
-
-```bash
-# 设置评估用户（必须，无默认值）
-export BKAPP_EVAL_USERNAME=your_rtx
-
-# 确保 .env 中配置了以下环境变量：
-# BKAPP_AI_RISK_SEARCH_API_URL — AI 风险检索服务地址
-# BKAPP_LLM_GW_ENDPOINT       — LLM 网关地址（LLM-as-Judge 用）
-
-# Python provider 依赖项目的 Django 环境（.venv），无需单独的 requirements.txt
-# 确保已激活项目虚拟环境，或设置 PROMPTFOO_PYTHON 指向项目 Python
-export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
-```
-
-### 运行评估
-
-```bash
-cd src/backend
-
-# 运行评估（--env-file 加载 .env 中的 AI 服务地址等配置）
-npx promptfoo eval -c evals/nl2riskfilter/promptfooconfig.yaml \
-  --env-file .env --no-cache
-
-# 导出结果到 JSON（带日期，便于对比回归）
-npx promptfoo eval -c evals/nl2riskfilter/promptfooconfig.yaml \
-  --env-file .env --no-cache \
-  -o evals/nl2riskfilter/output/$(date +%Y%m%d)-results.json
-
-# 查看交互式报告
-npx promptfoo view
-```
-
-### 验证配置
-
-```bash
-npx promptfoo validate -c evals/nl2riskfilter/promptfooconfig.yaml
-```
-
 ## 新建评估项目
 
 1. 创建 `evals/<能力名>/` 目录，包含 `providers/`、`assertions/`、`tests/`、`output/`
@@ -84,7 +43,7 @@ npx promptfoo validate -c evals/nl2riskfilter/promptfooconfig.yaml
 ```
 
 1. **构建评测集**：从业务场景出发，按维度组织测试用例
-2. **运行评估**：`npx promptfoo eval -c <config> --no-cache`
+2. **运行评估**：`npx promptfoo eval --no-table -c <config> --no-cache`
 3. **分析报告**：`npx promptfoo view` 查看交互式报告，聚焦失败用例
 4. **调优**：根据失败分析调整 prompt / 模型配置 / MCP 工具
 5. **重评估**：回到步骤 2，直到达标

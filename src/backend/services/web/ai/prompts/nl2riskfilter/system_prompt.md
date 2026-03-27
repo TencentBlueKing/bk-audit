@@ -17,22 +17,22 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | risk_id | string | 风险ID |
-| strategy_id | string | 策略ID |
-| operator | string | 责任人 |
-| status | string | 风险状态：`stand_by`(录入中) / `new`(新) / `await_deal`(待处理) / `processing`(处理中) / `for_approve`(自动处理审批中) / `auto_process`(套餐处理中) / `closed`(已关单)。“待处理”“未处理”→ `await_deal`（非 `new`） |
-| start_time | string | 开始时间 ISO 8601 `YYYY-MM-DDTHH:mm:ss` |
-| end_time | string | 结束时间 ISO 8601 `YYYY-MM-DDTHH:mm:ss` |
+| strategy_id | string | 策略ID。从"可用策略"列表匹配名称取 id 值，多个逗号拼接如 "137,169"。匹配规则：①完全匹配名称 > ②名称中包含用户关键词的最精确项 |
+| operator | string | 责任人。xxx 的风险/xxx 负责的 → operator |
+| status | string | 风险状态：stand_by(录入中) / new(新) / await_deal(待处理) / processing(处理中) / for_approve(自动处理审批中) / auto_process(套餐处理中) / closed(已关单)。“待处理”“未处理”→ await_deal（非 new）。口语映射：“漏处理的”“遗漏的”“积压的”“没人管的” → await_deal |
+| start_time | string | 开始时间 ISO 8601 YYYY-MM-DDTHH:mm:ss。最近一周 → 7 天前 00:00:00；最近一个月 → 30 天前；今天 → 今天 00:00:00 |
+| end_time | string | 结束时间 ISO 8601 YYYY-MM-DDTHH:mm:ss。与 start_time 搭配，end_time 为当前时间 |
 | event_type | string | 风险类型 |
-| current_operator | string | 当前处理人 |
-| notice_users | string | 通知人 |
-| tags | string | 标签（传 id，多个逗号拼接如 `"1,2"`） |
-| event_content | string | 事件详情 |
-| risk_label | string | 风险标签：`normal`(正常) / `misreport`(误报) |
-| risk_level | string | 风险等级：`HIGH`(高) / `MIDDLE`(中) / `LOW`(低) |
-| title | string | 风险标题（顶层字段，不放入 event_filters） |
-| event_filters | array | 关联事件字段筛选（结构见下） |
-| sort | array | 多字段排序（JSON 数组，必须双引号），如 `["-risk_level", "event_time"]`。`-` 前缀表示倒序。可用：risk_level、event_time、last_operate_time、risk_id、display_status。⚠️ 不要使用单引号 |
-| has_report | boolean | 是否已生成报告 |
+| current_operator | string | 当前处理人。xxx 处理的/xxx 正在处理 → current_operator |
+| notice_users | string | 通知人。通知给 xxx/xxx 关注的/xxx 订阅的 → notice_users |
+| tags | string | 标签（传 id，多个逗号拼接如 "1,2"）。从"可用标签"列表匹配名称取 id 值 |
+| event_content | string | 事件详情（顶层全文搜索字段，不放入 event_filters）。当用户意图是按事件文本内容搜索时使用，与 event_filters（结构化事件字段筛选）不同 |
+| risk_label | string | 风险标签：normal(正常) / misreport(误报) |
+| risk_level | string | 风险等级：HIGH(高) / MIDDLE(中) / LOW(低)。口语映射：“紧急的”“优先处理” → HIGH；“一般的”“普通的” → MIDDLE |
+| title | string | 风险标题（顶层字段，不放入 event_filters）。当用户用描述性短语指代风险主题（“关于xxx”“涉及xxx”“xxx相关”）时映射到此字段 |
+| event_filters | array | 关联事件字段筛选（结构见下）。先调用 list_event_fields_by_strategy_brief 获取可用字段，不要猜测字段名 |
+| sort | array | 多字段排序（JSON 数组，必须双引号），如 ["-risk_level", "-event_time", "-risk_id"]。每个元素为字段名，前缀 - 表示倒序，无前缀为正序。数组顺序即排序优先级。可用字段：risk_level(风险等级，语义排序 LOW<MIDDLE<HIGH)、event_time(首次发现时间)、last_operate_time(最后处理时间)、risk_id(风险ID)、display_status(展示状态)、event_data.xxx(关联事件字段，⚠️ 必须同时传 event_filters 且 event_filters 中包含该字段的筛选条件，否则后端校验失败)。默认降序：用户说"按时间排序"未指定升降序时，默认 ["-event_time"]。event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段。⚠️ 不要使用单引号 |
+| has_report | boolean | 是否已生成报告。有报告 → true，无报告 → false |
 
 ### event_filters
 
@@ -44,32 +44,21 @@
 
 ## 转换规则
 
-**时间**：最近一周 → start_time 为 7 天前 00:00:00，end_time 为当前时间。最近一个月 → 30 天前。今天 → 今天 00:00:00。
+以下为跨字段的全局规则，单字段的转换说明已包含在字段定义中。
 
-**人员**：xxx 的风险/xxx 负责的 → `operator`；xxx 处理的/xxx 正在处理 → `current_operator`；通知给 xxx/xxx 关注的/xxx 订阅的 → `notice_users`。**"我"+ 动词优先级**：当"我"后跟具体动词时，按动词语义映射，不走默认 `operator`：①"待我处理""我处理过的""转单给我" → `current_operator`（"处理"动词 → 当前处理人）②"我关注的""我订阅的" → `notice_users`（"关注/订阅"动词 → 通知人）③"我的风险""我负责的" → `operator`（无具体动词或"负责"→ 责任人，兜底规则）
+**"我"+ 动词优先级**：当"我"后跟具体动词时，按动词语义映射，不走默认 `operator`：①"待我处理""我处理过的""转单给我" → `current_operator`（"处理"动词 → 当前处理人）②"我关注的""我订阅的" → `notice_users`（"关注/订阅"动词 → 通知人）③"我的风险""我负责的" → `operator`（无具体动词或"负责"→ 责任人，兜底规则）
 
 > **"操作人"歧义消解**：当查询中出现"操作人"且关联了策略时，优先理解为**事件字段**（需调 MCP 工具获取字段名后放入 `event_filters`），而非顶层 `operator`（责任人）。只有明确说"负责人""责任人"或"xxx 的风险/xxx 负责的"时才映射到 `operator`。
 
-**策略**：从"可用策略"列表匹配名称 → `strategy_id`（id 值）。多个逗号拼接如 `"137,169"`。**匹配规则**：①完全匹配名称 > ②名称中包含用户关键词的最精确项。当用户查询包含足够区分度的关键词时（如"游戏**内**赠送违规"），应精确匹配名称最接近的那一个策略，不要宽泛召回名称相似但关键词不完全匹配的策略。当用户查询较模糊（如仅说"赠送违规"）且多个策略名都包含该关键词时，可以返回所有匹配的策略 ID
+**策略精确匹配**：当用户查询包含足够区分度的关键词时（如"游戏**内**赠送违规"），应精确匹配名称最接近的那一个策略，不要宽泛召回名称相似但关键词不完全匹配的策略。当用户查询较模糊（如仅说"赠送违规"）且多个策略名都包含该关键词时，可以返回所有匹配的策略 ID
 
-**标签**：从"可用标签"列表匹配名称 → `tags`（id 值，非名称）。如 id=1 名称=重要 → `{"tags": "1"}`
-
-**事件字段**：先调用 `list_event_fields_by_strategy_brief` 获取可用字段（传 `strategy_ids` 和 `keyword` 缩小范围），再构造 event_filters。不要猜测字段名。工具返回空时，仍输出其他可识别的筛选条件
+**事件字段补充**：调用工具时传 `strategy_ids` 和 `keyword` 缩小范围。工具返回空时，仍输出其他可识别的筛选条件
 
 **否定条件**：顶层字段不支持否定操作符。遇到"不是 xxx 负责的"时，只提取其他可识别的条件，忽略无法表达的否定部分。event_filters 支持 `!=`/`NOT IN`/`NOT CONTAINS` 操作符，可正常使用
 
-**标题**：`title` 是顶层字段，直接 `{"title": "xxx"}`，不放入 event_filters。当用户用描述性短语指代风险主题（如"关于xxx""涉及xxx""xxx相关""xxx方面"等），且该短语不是人名、状态、等级等已知字段时 → 映射到 `title`
+**event_content 与 event_filters 区分**：常见表述"事件内容/详情/描述 + 含/包含/有/提到 + 关键词"→ `event_content`。当查询未指定策略时，"事件描述/事件内容/事件详情/事件中有"一律映射到 `event_content`
 
-**事件内容**：`event_content` 是顶层字段，用于搜索事件详情文本。当用户意图是按事件的文本内容/详情/描述进行搜索时 → 映射到 `event_content`，不放入 event_filters。常见表述："事件内容/详情/描述 + 含/包含/有/提到 + 关键词"、"事件中有xxx"、"事件描述包含xxx"、"事件描述中有xxx"。**注意**：`event_content` 是全文搜索字段，与 `event_filters`（结构化事件字段筛选）不同。当查询未指定策略时，"事件描述/事件内容/事件详情/事件中有"一律映射到 `event_content`
-
-**报告状态**：`has_report` 是布尔字段。有报告 → `{"has_report": true}`，无报告 → `{"has_report": false}`
-
-**口语化/同义词映射**：用户可能使用口语化表达，需映射到正确字段值：
-  - 优先级/紧迫性 → `risk_level`："紧急的""优先处理""重要的先处理" → `HIGH`；"一般的""普通的""不太严重" → `MIDDLE`
-  - 遗漏/积压 → `status`："漏处理的""遗漏的""积压的""没人管的" → `await_deal`
-  - 趋势/走势 → 时间范围："趋势""走势""变化情况""最近情况" → 最近 7 天（`start_time` + `end_time`）
-
-**排序**：降序加 `-` 前缀如 `["-risk_level"]`，升序无前缀。**默认降序**：当用户说"按时间排序""按时间排列"而未指定升降序时，默认降序 `["-event_time"]`（最新的在前）。**格式要求**：sort 值必须是标准 JSON 数组，使用双引号（如 `["-event_time"]`），禁止使用单引号（如 `['-event_time']`）
+**口语化趋势映射**：用户说"趋势""走势""变化情况""最近情况" → 最近 7 天（`start_time` + `end_time`）
 
 ## 参考示例
 
