@@ -45,6 +45,7 @@ from services.web.risk.handlers.event_provider_sql import (
     RiskEventAggregateSqlBuilder,
 )
 from services.web.risk.models import Risk
+from services.web.risk.report.quality import ContentQualityChecker
 from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.tool.models import Tool
 
@@ -253,15 +254,14 @@ class AIProvider(Provider):
         return cache_key
 
     def _cache_write_trigger(self, result: Any) -> bool:
-        """仅成功结果写入缓存"""
+        """仅成功结果写入缓存，复用 ContentQualityChecker 检测质量异常的结果不缓存"""
         risk_id = self.context["risk_id"]
-        if not result:
-            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=empty_result", risk_id)
+        issues = ContentQualityChecker.check(str(result) if result else "")
+        if issues:
+            issue_summary = "; ".join(f"{i.issue_type}(x{i.count}): {i.detail}" for i in issues)
+            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=quality_issues, issues=%s", risk_id, issue_summary)
             return False
-        if isinstance(result, str) and result.startswith(AI_ERROR_PREFIX):
-            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=error_result", risk_id)
-            return False
-        logger.info("[AIProvider] Cache write; risk_id=%s, result_len=%d", risk_id, len(result) if result else 0)
+        logger.info("[AIProvider] Cache write; risk_id=%s, result_len=%d", risk_id, len(str(result)))
         return True
 
     @cached_property
