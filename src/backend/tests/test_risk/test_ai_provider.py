@@ -299,9 +299,10 @@ class TestAIProviderCache(TestCase):
         result = provider._get_strategy_updated_at(mock_risk)
         self.assertEqual(result, "")
 
+    @mock.patch("services.web.risk.report.providers.check_and_report_quality", return_value=[])
     @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
     @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
-    def test_cache_hit_skips_api_call(self, mock_bkbase_query, mock_chat_completion):
+    def test_cache_hit_skips_api_call(self, mock_bkbase_query, mock_chat_completion, _mock_quality):
         """测试缓存命中时不重复调用 AI API"""
         from django.core.cache import cache
 
@@ -341,9 +342,10 @@ class TestAIProviderCache(TestCase):
         # 清理缓存
         cache.clear()
 
+    @mock.patch("services.web.risk.report.providers.check_and_report_quality", return_value=[])
     @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
     @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
-    def test_cache_invalidation_on_event_count_change(self, mock_bkbase_query, mock_chat_completion):
+    def test_cache_invalidation_on_event_count_change(self, mock_bkbase_query, mock_chat_completion, _mock_quality):
         """测试事件数量变化时缓存失效"""
         from django.core.cache import cache
 
@@ -380,3 +382,117 @@ class TestAIProviderCache(TestCase):
 
         # 清理缓存
         cache.clear()
+
+
+class TestAIProviderQualityCheck(TestCase):
+    """测试 AIProvider 内部质量检测功能"""
+
+    def test_get_calls_quality_check(self):
+        """测试 get() 方法调用质量检测"""
+        provider = AIProvider(
+            context={"risk_id": "quality_test_001"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=lambda prompt: "正常的 AI 生成内容，足够长度的报告。",
+        )
+
+        with mock.patch.object(provider, "_check_and_report_result_quality") as mock_quality:
+            result = provider.get(name="summary")
+
+        self.assertEqual(result, "正常的 AI 生成内容，足够长度的报告。")
+        mock_quality.assert_called_once_with("正常的 AI 生成内容，足够长度的报告。")
+
+    def test_get_quality_check_on_error_result(self):
+        """测试 AI 返回错误结果时 get() 也会调用质量检测"""
+        error_content = f"{AI_ERROR_PREFIX}连接超时{AI_ERROR_SUFFIX}"
+        provider = AIProvider(
+            context={"risk_id": "quality_test_002"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=lambda prompt: error_content,
+        )
+
+        with mock.patch.object(provider, "_check_and_report_result_quality") as mock_quality:
+            result = provider.get(name="summary")
+
+        self.assertIn(AI_ERROR_PREFIX, result)
+        mock_quality.assert_called_once()
+
+    def test_execute_ai_agent_does_not_call_quality_check(self):
+        """测试 _execute_ai_agent 不再直接调用质量检测（由 get() 负责）"""
+        provider = AIProvider(
+            context={"risk_id": "quality_test_001b"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=lambda prompt: "正常的 AI 生成内容。",
+        )
+
+        with mock.patch.object(provider, "_check_and_report_result_quality") as mock_quality:
+            result = provider._execute_ai_agent("测试 prompt")
+
+        self.assertEqual(result, "正常的 AI 生成内容。")
+        mock_quality.assert_not_called()
+
+    @mock.patch("services.web.risk.report.providers.check_and_report_quality")
+    def test_check_and_report_result_quality_calls_public_function(self, mock_check):
+        """测试 _check_and_report_result_quality 调用公共函数"""
+        mock_check.return_value = []
+
+        provider = AIProvider(
+            context={"risk_id": "quality_test_003"},
+            ai_variables_config=[],
+        )
+
+        provider._check_and_report_result_quality("测试内容")
+
+        mock_check.assert_called_once_with(
+            content="测试内容",
+            risk_id="quality_test_003",
+        )
+
+    @mock.patch("services.web.risk.report.providers.check_and_report_quality")
+    def test_check_and_report_result_quality_does_not_raise(self, mock_check):
+        """测试质量检测发现问题时不抛异常（不阻断返回）"""
+        from services.web.risk.report.quality import ContentQualityIssue
+
+        mock_check.return_value = [
+            ContentQualityIssue(issue_type="ai_error", detail="AI 错误", count=1),
+        ]
+
+        provider = AIProvider(
+            context={"risk_id": "quality_test_004"},
+            ai_variables_config=[],
+        )
+
+        # 不应抛出异常
+        provider._check_and_report_result_quality(f"{AI_ERROR_PREFIX}错误{AI_ERROR_SUFFIX}")
+
+    def test_get_returns_result_even_with_quality_issues(self):
+        """测试即使有质量问题，get() 仍然返回结果（不阻断）"""
+        error_content = f"{AI_ERROR_PREFIX}服务不可用{AI_ERROR_SUFFIX}"
+        provider = AIProvider(
+            context={"risk_id": "quality_test_005"},
+            ai_variables_config=MOCK_AI_VARIABLES_CONFIG,
+            ai_executor=lambda prompt: error_content,
+        )
+
+        with mock.patch("services.web.risk.report.providers.check_and_report_quality") as mock_check:
+            mock_check.return_value = []
+            result = provider.get(name="summary")
+
+        # 即使有质量问题，结果仍然返回
+        self.assertEqual(result, error_content)
+
+    @mock.patch("services.web.risk.report.providers.check_and_report_quality")
+    def test_check_and_report_result_quality_handles_none_result(self, mock_check):
+        """测试 None 结果时的质量检测"""
+        mock_check.return_value = []
+
+        provider = AIProvider(
+            context={"risk_id": "quality_test_006"},
+            ai_variables_config=[],
+        )
+
+        provider._check_and_report_result_quality(None)
+
+        mock_check.assert_called_once_with(
+            content="",
+            risk_id="quality_test_006",
+        )

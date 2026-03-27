@@ -45,6 +45,10 @@ from services.web.risk.handlers.event_provider_sql import (
     RiskEventAggregateSqlBuilder,
 )
 from services.web.risk.models import Risk
+from services.web.risk.report.quality import (
+    ContentQualityChecker,
+    check_and_report_quality,
+)
 from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.tool.models import Tool
 
@@ -185,15 +189,19 @@ class AIProvider(Provider):
 
         # 根据 enable_cache 动态包装 _execute_ai_agent
         if self.enable_cache:
-            return using_cache(
+            result = using_cache(
                 cache_type=self._cache_type,
                 compress=True,
                 is_cache_func=self._cache_write_trigger,
                 func_key_generator=lambda _: self._cache_key_prefix,
             )(self._execute_ai_agent)(prompt)
+        else:
+            # 调用AI Agent生成内容
+            result = self._execute_ai_agent(prompt)
 
-        # 调用AI Agent生成内容
-        return self._execute_ai_agent(prompt)
+        # 质量检测 + 上报（不阻断返回，由外层任务决定是否重试）
+        self._check_and_report_result_quality(result)
+        return result
 
     def _execute_ai_agent(self, prompt: str) -> str:
         """执行AI Agent生成内容
@@ -218,6 +226,18 @@ class AIProvider(Provider):
             return result or ""
         except Exception as e:
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"
+
+    def _check_and_report_result_quality(self, result: str) -> None:
+        """检测 AI 生成结果质量并上报监控事件（不阻断返回）
+
+        在 get() 方法中调用，覆盖缓存命中和未命中两种场景。
+        检测到问题时仅上报监控事件，不抛异常，由外层任务决定是否重试。
+        """
+        risk_id = self.context.get("risk_id", "unknown")
+        check_and_report_quality(
+            content=str(result) if result else "",
+            risk_id=risk_id,
+        )
 
     @cached_property
     def _cache_key_prefix(self) -> str:
@@ -251,15 +271,14 @@ class AIProvider(Provider):
         return cache_key
 
     def _cache_write_trigger(self, result: Any) -> bool:
-        """仅成功结果写入缓存"""
+        """仅成功结果写入缓存，复用 ContentQualityChecker 检测质量异常的结果不缓存"""
         risk_id = self.context["risk_id"]
-        if not result:
-            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=empty_result", risk_id)
+        issues = ContentQualityChecker.check(str(result) if result else "")
+        if issues:
+            issue_summary = "; ".join(f"{i.issue_type}(x{i.count}): {i.detail}" for i in issues)
+            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=quality_issues, issues=%s", risk_id, issue_summary)
             return False
-        if isinstance(result, str) and result.startswith(AI_ERROR_PREFIX):
-            logger.info("[AIProvider] Cache skip; risk_id=%s, reason=error_result", risk_id)
-            return False
-        logger.info("[AIProvider] Cache write; risk_id=%s, result_len=%d", risk_id, len(result) if result else 0)
+        logger.info("[AIProvider] Cache write; risk_id=%s, result_len=%d", risk_id, len(str(result)))
         return True
 
     @cached_property
