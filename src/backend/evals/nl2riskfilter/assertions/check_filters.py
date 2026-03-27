@@ -584,3 +584,37 @@ def strategy_with_risk_level_or_event_filters(output, context):
         "score": 0.3,
         "reason": f"strategy_id 存在但未处理\"违规等级\"，实际字段: {list(filters.keys())}",
     }
+
+
+def check_sort_event_data(output, context):
+    """验证 sort 数组中包含 event_data.xxx 前缀的事件字段排序
+
+    用于验证模型能否正确生成事件字段排序（如 event_data.违规金额、event_data.操作时间）。
+    同时检查 event_data 排序限制：最多只支持单个事件字段。
+    """
+    filters = _parse_output(output)
+    actual_sort = filters.get("sort", [])
+
+    if not isinstance(actual_sort, list):
+        return {"pass": False, "score": 0.0, "reason": f"sort 不是数组: {actual_sort!r}"}
+
+    event_data_fields = [s for s in actual_sort if "event_data." in s or "event_data." in s.lstrip("-")]
+    if not event_data_fields:
+        return {
+            "pass": False,
+            "score": 0.0,
+            "reason": f"sort 中未包含 event_data.xxx 事件字段排序，实际: {actual_sort}",
+        }
+
+    if len(event_data_fields) > 1:
+        return {
+            "pass": False,
+            "score": 0.5,
+            "reason": f"event_data 排序最多只支持单个字段，实际有 {len(event_data_fields)} 个: {event_data_fields}",
+        }
+
+    return {
+        "pass": True,
+        "score": 1.0,
+        "reason": f"sort 包含事件字段排序: {event_data_fields[0]}，完整 sort: {actual_sort}",
+    }

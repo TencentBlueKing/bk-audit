@@ -581,3 +581,60 @@
   assert:
     - type: python
       value: "file://assertions/check_filters.py:partial_match"
+
+# ──────────────────────────────────────────────────────────────
+# 事件字段排序（event_data.xxx sort）— 覆盖 sort help_text 新增的排序限制规则
+# ──────────────────────────────────────────────────────────────
+
+# D40: 按事件字段排序 — 单事件字段降序（策略136，违规金额）
+- description: "D40-挑战：游戏内赠送违规策略的风险按违规金额降序排列"
+  vars:
+    query: "游戏内赠送违规策略的风险，按违规金额从高到低排列"
+    tags: "[]"
+    strategies: '[{"id": 136, "name": "【梯阵】游戏内赠送违规"}, {"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["strategy_id", "sort"]'
+    expected_values: '{"strategy_id": "136"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:check_sort_event_data"
+
+# D41: 按事件字段排序 + 等级筛选 — 高危风险按操作时间排序（策略110）
+- description: "D41-挑战：离线策略审计的高危风险按操作时间排序"
+  vars:
+    query: "离线策略审计的高危风险，按操作时间排序"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}, {"id": 144, "name": "ITSM工单工时审计"}]'
+    expected_keys: '["strategy_id", "risk_level", "sort"]'
+    expected_values: '{"strategy_id": "110", "risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# D42: 事件字段排序覆盖限制 — 用户要求按事件字段+时间排序，event_data 应优先
+# 回归来源：sort help_text "event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段"
+- description: "D42-挑战：按违规金额和时间排序（event_data覆盖限制）"
+  vars:
+    query: "游戏内赠送违规的风险按违规金额排序，时间最新的优先"
+    tags: "[]"
+    strategies: '[{"id": 136, "name": "【梯阵】游戏内赠送违规"}, {"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["strategy_id", "sort"]'
+    expected_values: '{"strategy_id": "136"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:check_sort_event_data"
