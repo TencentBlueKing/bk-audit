@@ -97,9 +97,9 @@
       value: "file://assertions/check_filters.py:partial_match"
 
 # B7: 跨策略事件字段（策略144）
-- description: "B7-复杂：ITSM工单中处理人员包含zhangsan的风险（策略144）"
+- description: "B7-复杂：ITSM工单中处理人员包含testuser的风险（策略144）"
   vars:
-    query: "ITSM工单中处理人员包含zhangsan的风险"
+    query: "ITSM工单中处理人员包含testuser的风险"
     tags: "[]"
     strategies: '[{"id": 144, "name": "ITSM工单工时审计"}]'
     expected_keys: '["event_filters"]'

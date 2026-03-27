@@ -520,24 +520,55 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         help_text=gettext_lazy("风险标签：normal(正常) / misreport(误报)"),
     )
     risk_level = serializers.CharField(
-        label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
+        label=gettext_lazy("Risk Level"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy(
+            "风险等级：HIGH(高) / MIDDLE(中) / LOW(低)。"
+            '口语映射：\u201c紧急的\u201d\u201c优先处理\u201d → HIGH；\u201c一般的\u201d\u201c普通的\u201d → MIDDLE'
+        ),
     )
-    title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
-    event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
+    title = serializers.CharField(
+        label=gettext_lazy("Risk Title"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy(
+            "风险标题（顶层字段，不放入 event_filters）。"
+            '当用户用描述性短语指代风险主题（\u201c关于xxx\u201d\u201c涉及xxx\u201d\u201cxxx相关\u201d）时映射到此字段'
+        ),
+    )
+    event_filters = EventFieldFilterItemSerializer(
+        label=gettext_lazy("关联事件字段筛选"),
+        many=True,
+        required=False,
+        help_text=gettext_lazy("关联事件字段筛选（结构见下）。" "先调用 list_event_fields_by_strategy_brief 获取可用字段，不要猜测字段名"),
+    )
     sort = serializers.ListField(
         child=serializers.CharField(),
         required=False,
         allow_empty=True,
         default=list,
         help_text=gettext_lazy(
-            '多字段排序，如 ["-risk_level", "-event_time", "-risk_id"]。'
-            "每个元素为字段名，前缀 - 表示倒序。"
-            "可用字段：risk_level(风险等级)、event_time(首次发现时间)、"
-            "last_operate_time(最后处理时间)、risk_id、display_status、event_data.xxx 等。"
-            "替代已废弃的 order_field + order_type 参数。"
+            "多字段排序（JSON 数组，必须双引号），如 "
+            '["-risk_level", "-event_time", "-risk_id"]。'
+            "每个元素为字段名，前缀 - 表示倒序，无前缀为正序。"
+            "数组顺序即排序优先级。"
+            "可用字段：risk_level(风险等级，语义排序 LOW<MIDDLE<HIGH)、"
+            "event_time(首次发现时间)、last_operate_time(最后处理时间)、"
+            "risk_id(风险ID)、display_status(展示状态)、"
+            "event_data.xxx(关联事件字段，⚠️ 必须同时传 event_filters 且 event_filters 中包含该字段的筛选条件，否则后端校验失败)。"
+            '默认降序：用户说"按时间排序"未指定升降序时，默认 ["-event_time"]。'
+            "event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段。"
+            "⚠️ 不要使用单引号"
         ),
     )
-    has_report = serializers.BooleanField(label=gettext_lazy("是否已生成报告"), required=False, allow_null=True)
+    has_report = serializers.BooleanField(
+        label=gettext_lazy("是否已生成报告"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("是否已生成报告。有报告 → true，无报告 → false"),
+    )
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:

@@ -1,9 +1,6 @@
 ---
 name: ai-eval-suite
-description: >
-  AI 能力评估闭环流程编排工具。当用户提到以下场景时使用此 skill：
-  搭建 AI 评估、创建评测套件、运行 promptfoo 评估、分析评估结果、调优 prompt/模型、
-  评估不通过需要排查、AI 能力回归测试、对比不同模型表现、评测闭环、benchmark。
+description: 当用户需要搭建 AI 评估、运行 benchmark、对比模型表现、或排查评估失败时使用。
 ---
 
 # AI 评估闭环套件
@@ -12,17 +9,6 @@ description: >
 
 **核心价值**：不是"写一个 eval 配置"，而是驱动完整的闭环——从构建评测集到最终达标，
 包括失败分析、调优建议、用户确认后执行修改、重评估对比。
-
-## 与官方 promptfoo-evals skill 的关系
-
-```
-promptfoo-evals（官方）        ai-eval-suite（本 skill）
-────────────────────          ──────────────────────────
-"写 eval"                     "跑闭环"
-scaffold config/tests         初始化 → 评估 → 分析 → 调优 → 重评估 → 达标
-单次任务                       循环流程
-promptfoo 语法知识库            引用官方能力，专注流程编排
-```
 
 **推荐搭配使用**：初始化 suite（SOP 1）时，优先使用官方
 [promptfoo-evals](https://github.com/promptfoo/promptfoo/tree/main/.claude/skills/promptfoo-evals)
@@ -62,7 +48,7 @@ SOP 1        SOP 2        SOP 3        SOP 4        SOP 5
 | SOP | 步骤 | 子 agent | 原因 |
 |-----|------|----------|------|
 | SOP 2 | 运行评估 | ✅ 强烈推荐 | 耗时长，无需交互 |
-| SOP 3 | 跑分析脚本 | ✅ 推荐 | 机械执行 |
+| SOP 3 | 跑分析脚本 | ❌ 主 agent | 任务耗时较长建议后台执行并检查进展 |
 | SOP 3 | 根因分析 | ❌ 主 agent | 需要理解业务上下文 |
 | SOP 4 | 调优 | ❌ 主 agent | 需要与用户交互 |
 | SOP 5 | 运行+对比 | ✅ 推荐 | 同 SOP 2+3 |
