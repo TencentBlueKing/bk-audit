@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
+from unittest.mock import patch
+
 from django.test import override_settings
 
+from core.exceptions import ApiRequestError
 from services.web.risk.constants import ContentQualityIssueType
-from services.web.risk.report.quality import ContentQualityChecker
+from services.web.risk.report.quality import (
+    ContentQualityChecker,
+    check_and_report_quality,
+)
 
 
 class TestContentQualityChecker:
@@ -130,3 +136,93 @@ class TestContentQualityChecker:
         assert ContentQualityIssueType.AI_ERROR in types
         assert ContentQualityIssueType.AI_THINKING in types
         assert ContentQualityIssueType.PROVIDER_ERROR in types
+
+
+class TestCheckAndReportQuality:
+    """check_and_report_quality 公共函数单元测试"""
+
+    MOCK_REPORT_EVENT = "services.web.risk.report.quality.api.bk_monitor.report_event"
+    MOCK_LOGGER = "services.web.risk.report.quality.logger"
+
+    # ========== 质量正常：不上报 ==========
+
+    @override_settings(REPORT_CONTENT_MIN_LENGTH=10)
+    def test_no_issues_no_report(self):
+        """质量正常时不上报监控事件，仅输出 info 日志"""
+        with patch(self.MOCK_REPORT_EVENT) as mock_report, patch(self.MOCK_LOGGER) as mock_logger:
+            content = "这是一段足够长的正常报告内容，没有任何错误标记。"
+            issues = check_and_report_quality(content=content, risk_id="R001")
+
+            assert issues == []
+            mock_logger.info.assert_called_once()
+            mock_report.assert_not_called()
+
+    # ========== 有问题：逐条上报 ==========
+
+    @override_settings(REPORT_CONTENT_MIN_LENGTH=10)
+    def test_issues_reported_per_type(self):
+        """检出多种问题时，每种 issue_type 单独上报一次"""
+        with patch(self.MOCK_REPORT_EVENT) as mock_report, patch(self.MOCK_LOGGER) as mock_logger:
+            content = "[AI生成失败: timeout] 正在思考..."
+            issues = check_and_report_quality(content=content, risk_id="R002")
+
+            # 应检出 ai_error 和 ai_thinking 两种问题
+            types = {i.issue_type for i in issues}
+            assert ContentQualityIssueType.AI_ERROR in types
+            assert ContentQualityIssueType.AI_THINKING in types
+
+            # 每种问题上报一次
+            assert mock_report.call_count == len(issues)
+
+            # 验证 warning 日志
+            mock_logger.warning.assert_called_once()
+
+    @override_settings(REPORT_CONTENT_MIN_LENGTH=10)
+    def test_empty_content_reports_single_event(self):
+        """空内容只检出 empty，上报一次"""
+        with patch(self.MOCK_REPORT_EVENT) as mock_report:
+            issues = check_and_report_quality(content="", risk_id="R003")
+
+            assert len(issues) == 1
+            assert issues[0].issue_type == ContentQualityIssueType.EMPTY
+            mock_report.assert_called_once()
+
+    # ========== 上报失败：不影响返回值 ==========
+
+    @override_settings(REPORT_CONTENT_MIN_LENGTH=10)
+    def test_report_failure_does_not_affect_result(self):
+        """上报监控事件失败时，函数仍正常返回问题列表"""
+        with patch(self.MOCK_REPORT_EVENT) as mock_report, patch(self.MOCK_LOGGER) as mock_logger:
+            mock_report.side_effect = ApiRequestError("mock error")
+
+            issues = check_and_report_quality(content="", risk_id="R004")
+
+            assert len(issues) == 1
+            assert issues[0].issue_type == ContentQualityIssueType.EMPTY
+
+            # 上报失败应记录 error 日志
+            mock_logger.error.assert_called_once()
+
+    # ========== 上报事件参数验证 ==========
+
+    @override_settings(REPORT_CONTENT_MIN_LENGTH=10)
+    def test_report_event_payload(self):
+        """验证上报事件的 target 和 context 参数正确"""
+        with patch(self.MOCK_REPORT_EVENT) as mock_report:
+            content = "[Render Error: undefined var]" + "x" * 50
+            issues = check_and_report_quality(content=content, risk_id="R005")
+
+            assert len(issues) == 1
+            assert issues[0].issue_type == ContentQualityIssueType.RENDER_ERROR
+
+            # 获取 report_event 的调用参数
+            call_args = mock_report.call_args
+            event_json = call_args[0][0]  # 第一个位置参数
+
+            # 验证事件结构
+            assert "data_id" in event_json
+            assert "data" in event_json
+            data = event_json["data"][0]
+            assert data["target"] == "risk_R005"
+            assert data["dimension"]["risk_id"] == "R005"
+            assert data["dimension"]["issue_type"] == ContentQualityIssueType.RENDER_ERROR

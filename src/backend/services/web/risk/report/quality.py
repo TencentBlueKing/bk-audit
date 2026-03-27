@@ -2,8 +2,12 @@
 """
 风险报告内容质量检测器
 
-在渲染完成、写入 DB 之前检测报告内容质量。
-检测到问题后按 issue_type 维度上报监控事件，不阻断写入。
+在渲染完成后检测报告内容质量。
+
+- ContentQualityChecker：纯检测器，返回问题列表，不产生副作用。
+- check_and_report_quality()：公共函数，封装检测 + 监控事件上报，
+  按 issue_type 维度逐条上报。调用方根据返回值自行决定后续行为
+  （如 RiskReportHandler 会抛出 ContentQualityError 触发 Celery 重试）。
 
 检测规则（共 7 种）：
 1. empty            — 内容为空
@@ -18,8 +22,12 @@
 from dataclasses import dataclass
 from typing import List
 
+from bk_resource import api
+from blueapps.utils.logger import logger
 from django.conf import settings
 
+from core.exceptions import ApiRequestError
+from services.web.common.monitor import RiskReportContentQualityEvent
 from services.web.risk.constants import (
     AI_ERROR_PREFIX,
     AI_THINKING_PATTERN,
@@ -91,3 +99,57 @@ class ContentQualityChecker:
                 issues.append(ContentQualityIssue(issue_type=issue_type, detail=pattern, count=count))
 
         return issues
+
+
+def check_and_report_quality(content: str, risk_id: str) -> List[ContentQualityIssue]:
+    """检测报告内容质量，有问题则上报监控事件
+
+    公共函数，供各报告生成入口调用。调用方根据返回值自行决定后续行为（重试/忽略等）。
+
+    Args:
+        content: 渲染后的报告内容
+        risk_id: 风险ID
+
+    Returns:
+        问题列表，空列表表示质量正常
+    """
+    issues = ContentQualityChecker.check(content)
+    if not issues:
+        logger.info(
+            "[ContentQualityCheck] Passed. risk_id=%s",
+            risk_id,
+        )
+        return issues
+
+    # 汇总日志
+    issue_summary = "; ".join(f"{issue.issue_type}(x{issue.count}): {issue.detail}" for issue in issues)
+    logger.warning(
+        "[ContentQualityCheck] Issues detected. risk_id=%s, issues=%s",
+        risk_id,
+        issue_summary,
+    )
+
+    # 每种问题类型单独上报（便于监控平台按 issue_type 维度配置告警策略）
+    for issue in issues:
+        event = RiskReportContentQualityEvent(
+            target=f"risk_{risk_id}",
+            context={
+                "risk_id": risk_id,
+                "issue_type": issue.issue_type,
+            },
+            extra={
+                "detail": issue.detail,
+                "count": str(issue.count),
+            },
+        )
+        try:
+            api.bk_monitor.report_event(event.to_json())
+        except ApiRequestError as e:
+            logger.error(
+                "[ContentQualityCheck] Report event failed. risk_id=%s, issue_type=%s, error=%s",
+                risk_id,
+                issue.issue_type,
+                e,
+            )
+
+    return issues
