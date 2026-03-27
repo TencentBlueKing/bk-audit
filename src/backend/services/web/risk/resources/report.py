@@ -27,6 +27,7 @@ from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from services.web.risk.constants import RiskReportStatus
 from services.web.risk.models import Risk, RiskAuditInstance, RiskReport
+from services.web.risk.report.quality import check_and_report_quality
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 from services.web.risk.serializers import (
@@ -107,6 +108,13 @@ class GetTaskResult(RiskReportMeta):
 
         if status == "SUCCESS":
             response["result"] = async_result.result
+            # 对 AI 预览结果进行质量检测（仅告警，不阻断返回）
+            if isinstance(async_result.result, str):
+                check_and_report_quality(
+                    content=async_result.result,
+                    risk_id="preview",
+                    task_id=task_id,
+                )
         elif status == "FAILURE":
             # 获取异常信息
             error_msg = str(async_result.result) if async_result.result else "Unknown error"

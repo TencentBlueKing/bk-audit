@@ -491,16 +491,23 @@ class TestRiskReportHandlerUnit(TestCase):
 
     # ========== _check_content_quality 方法测试 ==========
 
-    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
     def test_check_content_quality_no_issues(self, mock_report_event):
         """测试正常内容不上报事件"""
         self.handler._check_content_quality("这是一段正常的报告内容，包含详细的分析说明，足够长度。")
         mock_report_event.assert_not_called()
 
-    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
     def test_check_content_quality_empty_content(self, mock_report_event):
-        """测试空内容上报 empty 事件"""
-        self.handler._check_content_quality("")
+        """测试空内容上报 empty 事件并抛出 ContentQualityError"""
+        from services.web.risk.constants import ContentQualityError
+
+        with self.assertRaises(ContentQualityError) as ctx:
+            self.handler._check_content_quality("")
+        # 验证异常中包含 issues
+        self.assertEqual(len(ctx.exception.issues), 1)
+        self.assertEqual(ctx.exception.issues[0].issue_type, "empty")
+        # 验证上报事件
         mock_report_event.assert_called_once()
         call_args = mock_report_event.call_args[0][0]
         event_data = call_args["data"][0]
@@ -508,11 +515,16 @@ class TestRiskReportHandlerUnit(TestCase):
         self.assertEqual(event_data["dimension"]["risk_id"], self.risk.risk_id)
         self.assertEqual(event_data["dimension"]["task_id"], self.task_id)
 
-    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
     def test_check_content_quality_multiple_issues(self, mock_report_event):
-        """测试多种质量问题分别上报"""
+        """测试多种质量问题分别上报并抛出 ContentQualityError"""
+        from services.web.risk.constants import ContentQualityError
+
         content = "[AI生成失败: x] 正在思考..."
-        self.handler._check_content_quality(content)
+        with self.assertRaises(ContentQualityError) as ctx:
+            self.handler._check_content_quality(content)
+        # 验证异常中包含 2 个 issues
+        self.assertEqual(len(ctx.exception.issues), 2)
         # ai_error + ai_thinking = 2 次上报（内容长度 > REPORT_CONTENT_MIN_LENGTH 不触发 too_short）
         self.assertEqual(mock_report_event.call_count, 2)
         # 验证上报的 issue_type 维度
@@ -521,11 +533,13 @@ class TestRiskReportHandlerUnit(TestCase):
         }
         self.assertEqual(reported_issue_types, {"ai_error", "ai_thinking"})
 
-    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
     def test_check_content_quality_report_event_failure(self, mock_report_event):
-        """测试上报失败不抛异常（不阻断写入）"""
+        """测试上报失败时仍然抛出 ContentQualityError（上报失败不影响质量判定）"""
         from core.exceptions import ApiRequestError
+        from services.web.risk.constants import ContentQualityError
 
         mock_report_event.side_effect = ApiRequestError("上报失败")
-        # 不应该抛出异常
-        self.handler._check_content_quality("")
+        # 上报虽然失败，但质量问题仍然存在，应抛出 ContentQualityError
+        with self.assertRaises(ContentQualityError):
+            self.handler._check_content_quality("")
