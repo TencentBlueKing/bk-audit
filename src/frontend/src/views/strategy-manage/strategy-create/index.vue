@@ -120,7 +120,17 @@
     { title: t('事件调查报告') },
     { title: t('其他配置') },
   ];
-  const currentStep = ref(1);
+  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 => {
+    const n = Number(step);
+    if ([1, 2, 3, 4].includes(n)) {
+      return n as 1 | 2 | 3 | 4;
+    }
+    return 1;
+  };
+
+  const initialStep = normalizeStep(route.query.step || 1);
+  const targetStep = ref<1 | 2 | 3 | 4>(initialStep);
+  const currentStep = ref<1 | 2 | 3 | 4>(1);
   const comRef = ref();
 
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
@@ -216,6 +226,8 @@
         }
         return item;
       });
+      // 确保先在第 1 步挂载并完成表单初始化，再跳转到目标步骤
+      currentStep.value = targetStep.value;
     },
   });
 
@@ -315,7 +327,7 @@
   const handleNextStep = (step: number, params: any) => {
     // 更新formData
     Object.assign(formData.value, params);
-    currentStep.value = step;
+    currentStep.value = normalizeStep(step);
   };
 
   const handleCancel = () => {

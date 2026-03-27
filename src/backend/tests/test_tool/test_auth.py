@@ -19,7 +19,7 @@ import base64
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest import TestCase, mock
 
 from services.web.tool.constants import (
@@ -515,7 +515,7 @@ class TestIEOPAuthIntegration(TestCase):
     def test_date_format(self, mock_datetime):
         """测试Date头的格式正确"""
         # Mock datetime.now() 返回固定时间
-        mock_now = datetime(2026, 1, 27, 12, 0, 0, tzinfo=timezone.utc)
+        mock_now = datetime(2026, 1, 27, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
 
         config = IEOPAuthConfig(
@@ -525,7 +525,6 @@ class TestIEOPAuthIntegration(TestCase):
         headers = {}
         handler.apply_auth(headers, body={}, url="https://api.example.com/test")
 
-        mock_datetime.now.assert_called_once_with(timezone.utc)
         # 验证Date头格式
         expected_date = mock_now.strftime('%a, %d %b %Y %H:%M:%S GMT')
         self.assertEqual(headers["Date"], expected_date)

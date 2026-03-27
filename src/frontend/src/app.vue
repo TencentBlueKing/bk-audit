@@ -106,7 +106,7 @@
         #nodeSideContent>
         <router-view />
       </template>
-      <router-view />
+      <router-view v-if="!route.meta?.nodeSideContent" />
       <version-log v-model:is-show="isShowVersionLog" />
     </layout>
   </bk-config-provider>
