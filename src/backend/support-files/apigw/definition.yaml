@@ -49,6 +49,7 @@ stages:
           - retrieve_risk_strategy_info
           - list_risk_event_apigw
           - get_tool_detail_by_name
+          - list_risk_apigw
         is_public: false
         status: 1
         protocol_type: "streamable_http"
