@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
 import logging
 import os
 from urllib.parse import quote
@@ -375,6 +376,43 @@ class ExportAnalyseReport(AnalyseReportMeta):
 </body>
 </html>"""
 
+    @staticmethod
+    def _format_analysis_scope(scope_raw: str) -> str:
+        """将 analysis_scope 的 JSON 格式转为可读文本。
+
+        输入示例:
+            [{"label":"首次发现时间","value":["2025-09-26","2026-03-27"]},{"label":"责任人","value":["ziminggao"]}]
+        输出示例:
+            首次发现时间: 2025-09-26 ~ 2026-03-27, 责任人: ziminggao
+        如果解析失败则原样返回。
+        """
+        if not scope_raw:
+            return ""
+        try:
+            items = json.loads(scope_raw)
+            if not isinstance(items, list):
+                return scope_raw
+        except (json.JSONDecodeError, TypeError):
+            return scope_raw
+
+        parts = []
+        for item in items:
+            label = item.get("label", "")
+            value = item.get("value", "")
+            if isinstance(value, list):
+                # 两个元素的列表视为范围（如时间范围），用 ~ 连接；否则用逗号
+                if len(value) == 2:
+                    display_value = f"{value[0]} ~ {value[1]}"
+                else:
+                    display_value = ", ".join(str(v) for v in value)
+            else:
+                display_value = str(value)
+            if label:
+                parts.append(f"{label}: {display_value}")
+            else:
+                parts.append(display_value)
+        return ", ".join(parts) if parts else scope_raw
+
     def _export_pdf(self, report):
         """导出为 PDF 文件
 
@@ -393,9 +431,10 @@ class ExportAnalyseReport(AnalyseReportMeta):
         html_content = mistune.html(report.content)
 
         # 构建元信息
+        scope_display = self._format_analysis_scope(report.analysis_scope)
         meta_text = (
             f"报告类型: {report.get_report_type_display()} &nbsp;|&nbsp; "
-            f"分析范围: {report.analysis_scope} &nbsp;|&nbsp; "
+            f"分析范围: {scope_display} &nbsp;|&nbsp; "
             f"关联风险: {report.risk_count} 条 &nbsp;|&nbsp; "
             f"生成人: {report.created_by} &nbsp;|&nbsp; "
             f"生成时间: {report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else ''}"
