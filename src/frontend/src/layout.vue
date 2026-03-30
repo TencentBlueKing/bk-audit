@@ -78,6 +78,14 @@
           } }">
           {{ t('系统管理') }}
         </router-link>
+        <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'platformManage'
+          }"
+          :to="{ name:'platformManage', params: {} }">
+          {{ t('平台管理') }}
+        </router-link>
       </div>
     </template>
     <template #headerRight>
@@ -374,6 +382,14 @@
           <template v-else>
             //
           </template>
+        </template>
+        <template v-else-if="curNavName === 'platformManage'">
+          <audit-menu-item index="reportConfig">
+            <audit-icon
+              class="menu-item-icon"
+              type="daiwochuli" />
+            {{ t('报表配置') }}
+          </audit-menu-item>
         </template>
       </audit-menu>
     </template>
