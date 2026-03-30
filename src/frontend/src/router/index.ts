@@ -32,6 +32,7 @@ import HandleManage from '@views/handle-manage/routes';
 import LinkDataManage from '@views/link-data-manage/routes';
 import NewSystemManage from '@views/new-system-manage/routes';
 import NoticeGroup from '@views/notice-group/routes';
+import PlatformManage from '@views/platform-manage/routes';
 import ApplicationManage from '@views/process-application-manage/routes';
 import ProcessedManage from '@views/processed-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
@@ -70,6 +71,7 @@ export default (config: ConfigModel) => {
         StatementManage,
         Tools,
         NewSystemManage,
+        PlatformManage,
       ],
     },
     {

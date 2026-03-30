@@ -25,6 +25,8 @@ import linkEn from '@views/link-data-manage/language/en.js';
 import linkZh from '@views/link-data-manage/language/zh.js';
 import noticeEn from '@views/notice-group/language/en.js';
 import noticeZh from '@views/notice-group/language/zh.js';
+import platformEn from '@views/platform-manage/language/en.js';
+import platformZh from '@views/platform-manage/language/zh.js';
 import applicationEn from '@views/process-application-manage/language/en.js';
 import applicationZh from '@views/process-application-manage/language/zh.js';
 import riskEn from '@views/risk-manage/language/en.js';
@@ -66,6 +68,7 @@ const i18n = createI18n({
       ...applicationZh.applicationManage,
       ...linkZh.linkDataManage,
       ...toolsZh.toolsManage,
+      ...platformZh.platformManage,
       ...allZh,
     },
     'en-US': {
@@ -73,6 +76,7 @@ const i18n = createI18n({
       ...eventEn.eventManage,
       ...noticeEn.noticeManage,
       ...storageEn.storageManage,
+      ...platformEn.platformManage,
       ...strategyEn.strategyManage,
       ...systemEn.systemManage,
       ...riskEn.riskManage,
