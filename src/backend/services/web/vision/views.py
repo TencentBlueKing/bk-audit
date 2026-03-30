@@ -217,3 +217,10 @@ class ShareViewSet(BKVisionViewSet):
         if self.action in ["share_detail"]:
             return [ShareDetailPermission()]
         return super().get_permissions()
+
+
+class PanelPreferenceViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute("GET", resource.vision.get_panel_preference),
+        ResourceRoute("POST", resource.vision.update_panel_preference),
+    ]

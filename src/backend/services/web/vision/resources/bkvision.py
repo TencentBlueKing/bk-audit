@@ -47,7 +47,10 @@ class ListPanels(BKVision):
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        return VisionPanel.objects.filter(scenario=validated_request_data['scenario']).all()
+        panels = VisionPanel.objects.filter(scenario=validated_request_data["scenario"]).select_related("group")
+        if validated_request_data.get("enabled_only"):
+            panels = panels.filter(is_enabled=True, group__isnull=False)
+        return panels.order_by("-group__priority_index", "group__name", "-priority_index", "name")
 
 
 class QueryMixIn(AuditMixinResource, abc.ABC):
