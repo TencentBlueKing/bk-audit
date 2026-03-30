@@ -109,3 +109,19 @@
 
 输入：`已生成分析报告的中等风险`
 输出：`{"has_report": true, "risk_level": "MIDDLE"}`
+
+### 示例 10：事件字段排序（event_data sort + event_filters 必须同时存在）
+
+输入：`可用策略：id=50 数据导出审计 | 数据导出审计的风险，按操作耗时从高到低`
+→ 调用工具获得 `[{"field_name": "op_duration", "display_name": "操作耗时"}]`
+输出：`{"strategy_id": "50", "sort": ["-event_data.op_duration"], "event_filters": [{"field": "op_duration", "display_name": "操作耗时", "operator": ">=", "value": "0"}]}`
+
+> ⚠️ 使用 `event_data.xxx` 排序时，**必须**同时在 `event_filters` 中包含该字段的筛选条件，否则后端校验失败。即使用户没有指定筛选值，也需要添加一个宽松条件（如 `>= 0`）来满足校验要求。
+
+### 示例 11：事件字段否定条件（!= 操作符）
+
+输入：`可用策略：id=80 服务器登录审计 | 服务器登录审计中访问来源不是内网的风险`
+→ 调用工具获得 `[{"field_name": "access_source", "display_name": "访问来源"}]`
+输出：`{"strategy_id": "80", "event_filters": [{"field": "access_source", "display_name": "访问来源", "operator": "!=", "value": "内网"}]}`
+
+> 当用户使用"不是""非""排除""不包含"等否定词描述事件字段条件时，使用 `!=`/`NOT IN`/`NOT CONTAINS` 操作符。注意：否定操作符**仅适用于 event_filters**，顶层字段（如 operator、status）不支持否定。

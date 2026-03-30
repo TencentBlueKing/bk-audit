@@ -1,10 +1,45 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: 'NL2RiskFilter AI 能力评估（kimi-chat 单模型调优）'
+description: 'NL2RiskFilter AI 能力评估（6模型全量评测）'
 
 prompts:
   - '{{query}}'
 
 providers:
+  - id: 'python:providers/provider.py'
+    label: 'qwen3-nothinking'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'qwen3-nothinking'
+      non_thinking_llm: 'qwen3-nothinking'
+
+  - id: 'python:providers/provider.py'
+    label: 'qwen3-8b'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'qwen3-8b'
+      non_thinking_llm: 'qwen3-8b'
+
+  - id: 'python:providers/provider.py'
+    label: 'qwen3-235B'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'qwen3-235B'
+      non_thinking_llm: 'qwen3-235B'
+
+  - id: 'python:providers/provider.py'
+    label: 'hunyuan2'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'hunyuan2'
+      non_thinking_llm: 'hunyuan2'
+
+  - id: 'python:providers/provider.py'
+    label: 'dsv32'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+      model: 'dsv32'
+      non_thinking_llm: 'dsv32'
+
   - id: 'python:providers/provider.py'
     label: 'kimi-chat'
     config:
@@ -27,7 +62,7 @@ defaultTest:
       threshold: 15000
 
 evaluateOptions:
-  maxConcurrency: 3
+  maxConcurrency: 6
   repeat: 2
 
 tests:
