@@ -15,26 +15,5 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from django.contrib import admin
-
-from services.web.vision.models import ReportGroup, ReportUserPreference, VisionPanel
-
-
-@admin.register(VisionPanel)
-class VisionPanelAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index", "vision_id", "group", "is_enabled", "scenario"]
-    list_filter = ["is_enabled", "scenario", "group"]
-    search_fields = ["id", "name", "vision_id"]
-
-
-@admin.register(ReportGroup)
-class ReportGroupAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index"]
-    search_fields = ["name"]
-
-
-@admin.register(ReportUserPreference)
-class ReportUserPreferenceAdmin(admin.ModelAdmin):
-    list_display = ["id", "username"]
-    search_fields = ["username"]
+from .bkvision import *  # noqa
+from .panel import *  # noqa

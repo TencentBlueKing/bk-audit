@@ -16,25 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.contrib import admin
+import os
 
-from services.web.vision.models import ReportGroup, ReportUserPreference, VisionPanel
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
-
-@admin.register(VisionPanel)
-class VisionPanelAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index", "vision_id", "group", "is_enabled", "scenario"]
-    list_filter = ["is_enabled", "scenario", "group"]
-    search_fields = ["id", "name", "vision_id"]
+from core.utils.distutils import strtobool
 
 
-@admin.register(ReportGroup)
-class ReportGroupAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index"]
-    search_fields = ["name"]
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
 
 
-@admin.register(ReportUserPreference)
-class ReportUserPreferenceAdmin(admin.ModelAdmin):
-    list_display = ["id", "username"]
-    search_fields = ["username"]
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0017_add_resource_type_ticket_node"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]

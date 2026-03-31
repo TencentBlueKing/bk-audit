@@ -17,10 +17,16 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource.routers import ResourceRouter
+from django.urls import include, path
 
-from services.web.vision import views
+from services.web.vision import manage_views, views
 
 router = ResourceRouter()
 router.register_module(views)
 
-urlpatterns = router.urls
+manage_router = ResourceRouter()
+manage_router.register_module(manage_views)
+
+urlpatterns = router.urls + [
+    path("manage/", include(manage_router.urls)),
+]

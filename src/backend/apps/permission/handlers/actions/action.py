@@ -528,6 +528,16 @@ class ActionEnum:
         version=1,
         system_id=IAMSystems.BK_VISION.value,
     )
+    # 平台管理
+    MANAGE_PLATFORM = ActionMeta(
+        id="manage_platform",
+        name=gettext("平台管理"),
+        name_en="Manage Platform",
+        type="manage",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
 
     @classmethod
     def choices(cls):
