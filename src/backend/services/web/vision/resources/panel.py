@@ -42,6 +42,7 @@ from services.web.vision.serializers import (
     ToggleFavoriteRequestSerializer,
     ToggleFavoriteResponseSerializer,
     UpdateGroupOrderRequestSerializer,
+    UpdateGroupRequestSerializer,
     UpdatePanelOrderRequestSerializer,
     UpdatePanelPreferenceRequestSerializer,
     UpdatePanelRequestSerializer,
@@ -106,7 +107,7 @@ class UpdatePanel(PanelManage):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data.pop("id"))
+        panel = get_object_or_404(VisionPanel, id=validated_request_data.pop("id"), scenario=Scenario.DEFAULT)
         old_group_id = panel.group_id
 
         if "group_name" in validated_request_data:
@@ -127,7 +128,7 @@ class DeletePanel(PanelManage):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data["id"])
+        panel = get_object_or_404(VisionPanel, id=validated_request_data["id"], scenario=Scenario.DEFAULT)
         panel.delete()
         ReportGroup.cleanup_empty()
         return {}
@@ -149,11 +150,17 @@ class UpdatePanelOrder(PanelManage):
     def perform_request(self, validated_request_data):
         order_list = validated_request_data["panels"]
         panel_ids = [item["id"] for item in order_list]
-        panels = {p.id: p for p in VisionPanel.objects.filter(id__in=panel_ids)}
+        panels = {p.id: p for p in VisionPanel.objects.filter(id__in=panel_ids, scenario=Scenario.DEFAULT)}
 
-        missing = set(panel_ids) - set(panels.keys())
-        if missing:
-            raise ValidationError(message=f"Panel not found: {', '.join(missing)}")
+        missing_panels = set(panel_ids) - set(panels.keys())
+        if missing_panels:
+            raise ValidationError(message=f"Panel not found: {', '.join(missing_panels)}")
+
+        group_ids = {item["group_id"] for item in order_list}
+        existing_group_ids = set(ReportGroup.objects.filter(id__in=group_ids).values_list("id", flat=True))
+        missing_groups = group_ids - existing_group_ids
+        if missing_groups:
+            raise ValidationError(message=f"Group not found: {', '.join(str(i) for i in missing_groups)}")
 
         to_update = []
         for item in order_list:
@@ -174,6 +181,18 @@ class ListGroups(PanelManage):
 
     def perform_request(self, validated_request_data):
         return ReportGroup.objects.all()
+
+
+class UpdateGroup(PanelManage):
+    name = gettext_lazy("更新分组")
+    RequestSerializer = UpdateGroupRequestSerializer
+    ResponseSerializer = ReportGroupSerializer
+
+    def perform_request(self, validated_request_data):
+        group = get_object_or_404(ReportGroup, id=validated_request_data["id"])
+        group.name = validated_request_data["name"]
+        group.save(update_fields=["name"])
+        return group
 
 
 class UpdateGroupOrder(PanelManage):

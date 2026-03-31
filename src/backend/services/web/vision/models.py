@@ -19,7 +19,7 @@ import importlib
 
 from bk_audit.log.models import AuditInstance
 from django.db import models
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.db.models.enums import TextChoices
 from django.utils.translation import gettext_lazy
 
@@ -49,9 +49,10 @@ class ReportGroup(OperateRecordModel):
 
     @classmethod
     def get_or_create_by_name(cls, group_name: str) -> "ReportGroup":
+        max_priority = cls.objects.aggregate(max_p=Max("priority_index"))["max_p"]
         group, _ = cls.objects.get_or_create(
             name=group_name,
-            defaults={"priority_index": cls.objects.count()},
+            defaults={"priority_index": (max_priority or 0) + 1},
         )
         return group
 

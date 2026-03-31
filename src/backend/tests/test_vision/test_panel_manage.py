@@ -18,6 +18,7 @@ from services.web.vision.resources.panel import (
     ListGroups,
     ListManagePanels,
     TogglePanelFavorite,
+    UpdateGroup,
     UpdateGroupOrder,
     UpdatePanel,
     UpdatePanelOrder,
@@ -381,6 +382,30 @@ class TestListGroups(TestCase):
         self.assertIn("id", group)
 
 
+class TestUpdateGroup(TestCase):
+    def setUp(self):
+        self.group = ReportGroup.objects.create(name="原名称", priority_index=5)
+
+    def test_update_name(self):
+        resp = UpdateGroup().request({"id": self.group.id, "name": "新名称"})
+        self.assertEqual(resp["name"], "新名称")
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.name, "新名称")
+
+    def test_update_name_preserves_priority(self):
+        resp = UpdateGroup().request({"id": self.group.id, "name": "改名"})
+        self.assertEqual(resp["priority_index"], 5)
+
+    def test_update_nonexistent_group_404(self):
+        with self.assertRaises(Exception):
+            UpdateGroup().request({"id": 99999, "name": "不存在"})
+
+    def test_update_duplicate_name_fails(self):
+        ReportGroup.objects.create(name="已有名称", priority_index=0)
+        with self.assertRaises(Exception):
+            UpdateGroup().request({"id": self.group.id, "name": "已有名称"})
+
+
 class TestTogglePanelFavorite(TestCase):
     def setUp(self):
         self.group = ReportGroup.objects.create(name="收藏测试分组", priority_index=0)
@@ -474,49 +499,184 @@ class TestListPanelsWithFavorite(TestCase):
 
 
 class TestFullCRUDFlow(TestCase):
-    """端到端链路：创建 → 列表 → 更新 → 排序 → 删除"""
+    """端到端链路：完整字段校验"""
+
+    MANAGE_PANEL_FIELDS = {
+        "id",
+        "name",
+        "description",
+        "vision_id",
+        "is_enabled",
+        "priority_index",
+        "group_id",
+        "group_name",
+        "group_priority_index",
+        "updated_by",
+        "updated_at",
+    }
+    GROUP_FIELDS = {"id", "name", "priority_index"}
+
+    def _assert_dict_contains(self, data, expected):
+        for key, val in expected.items():
+            self.assertEqual(data[key], val, f"field '{key}': expected {val!r}, got {data[key]!r}")
 
     def test_full_lifecycle(self):
-        # 创建两个 Panel
-        p1 = CreatePanel().request({"vision_id": "v1", "name": "报表1", "group_name": "分组A"})
-        p2 = CreatePanel().request({"vision_id": "v2", "name": "报表2", "group_name": "分组A"})
-        self.assertEqual(p1["group_name"], "分组A")
-        self.assertEqual(p2["group_name"], "分组A")
-        group_id = p1["group_id"]
+        # === 创建 ===
+        p1 = CreatePanel().request({"vision_id": "v1", "name": "报表1", "group_name": "分组A", "description": "描述1"})
+        self.assertEqual(set(p1.keys()), self.MANAGE_PANEL_FIELDS)
+        self._assert_dict_contains(
+            p1,
+            {
+                "name": "报表1",
+                "vision_id": "v1",
+                "description": "描述1",
+                "is_enabled": True,
+                "group_name": "分组A",
+            },
+        )
+        self.assertIsNotNone(p1["id"])
+        self.assertIsNotNone(p1["group_id"])
 
-        # 列表能看到
+        p2 = CreatePanel().request(
+            {
+                "vision_id": "v2",
+                "name": "报表2",
+                "group_name": "分组A",
+                "is_enabled": False,
+            }
+        )
+        self._assert_dict_contains(
+            p2,
+            {
+                "name": "报表2",
+                "vision_id": "v2",
+                "is_enabled": False,
+                "group_name": "分组A",
+                "group_id": p1["group_id"],
+            },
+        )
+
+        group_a_id = p1["group_id"]
+
+        # === 管理端列表 — 扁平、字段完整 ===
         panels = ListManagePanels().request({})
-        our = [p for p in panels if p["group_id"] == group_id]
+        our = [p for p in panels if p["group_id"] == group_a_id]
         self.assertEqual(len(our), 2)
+        for p in our:
+            self.assertEqual(set(p.keys()), self.MANAGE_PANEL_FIELDS)
 
-        # 更新名称 + 启停
+        # 筛选 is_enabled=True
+        enabled_only = ListManagePanels().request({"is_enabled": True})
+        our_enabled = [p for p in enabled_only if p["group_id"] == group_a_id]
+        self.assertEqual(len(our_enabled), 1)
+        self.assertEqual(our_enabled[0]["id"], p1["id"])
+
+        # 搜索
+        search = ListManagePanels().request({"keyword": "报表2"})
+        our_search = [p for p in search if p["group_id"] == group_a_id]
+        self.assertEqual(len(our_search), 1)
+        self.assertEqual(our_search[0]["id"], p2["id"])
+
+        # === 分组列表 ===
+        groups = ListGroups().request({})
+        group_a = next(g for g in groups if g["id"] == group_a_id)
+        self.assertEqual(set(group_a.keys()), self.GROUP_FIELDS)
+        self.assertEqual(group_a["name"], "分组A")
+
+        # === 分组改名 ===
+        renamed = UpdateGroup().request({"id": group_a_id, "name": "分组A改名"})
+        self._assert_dict_contains(renamed, {"id": group_a_id, "name": "分组A改名"})
+
+        # === 更新 Panel — 名称 + 启停 ===
         updated = UpdatePanel().request({"id": p1["id"], "name": "新报表1", "is_enabled": False})
-        self.assertEqual(updated["name"], "新报表1")
-        self.assertFalse(updated["is_enabled"])
+        self.assertEqual(set(updated.keys()), self.MANAGE_PANEL_FIELDS)
+        self._assert_dict_contains(
+            updated,
+            {
+                "id": p1["id"],
+                "name": "新报表1",
+                "is_enabled": False,
+                "group_id": group_a_id,
+                "group_name": "分组A改名",
+            },
+        )
 
-        # 更新分组（触发自动创建新分组）
+        # === 更新 Panel — 换组（触发自动创建新分组） ===
         updated2 = UpdatePanel().request({"id": p2["id"], "group_name": "分组B"})
-        self.assertEqual(updated2["group_name"], "分组B")
-        self.assertTrue(ReportGroup.objects.filter(name="分组A").exists())
+        self._assert_dict_contains(updated2, {"name": "报表2", "group_name": "分组B"})
+        group_b_id = updated2["group_id"]
+        self.assertNotEqual(group_b_id, group_a_id)
+        self.assertTrue(ReportGroup.objects.filter(name="分组A改名").exists())
 
-        # 排序
-        new_group_id = updated2["group_id"]
+        # === 排序 — 跨组移动 + 空组清理 ===
         UpdatePanelOrder().request(
             {
                 "panels": [
-                    {"id": p1["id"], "group_id": new_group_id, "priority_index": 1},
-                    {"id": p2["id"], "group_id": new_group_id, "priority_index": 0},
+                    {"id": p1["id"], "group_id": group_b_id, "priority_index": 10},
+                    {"id": p2["id"], "group_id": group_b_id, "priority_index": 5},
                 ]
             }
         )
-        self.assertFalse(ReportGroup.objects.filter(id=group_id).exists())
+        self.assertFalse(ReportGroup.objects.filter(id=group_a_id).exists())
+        p1_db = VisionPanel.objects.get(id=p1["id"])
+        self.assertEqual(p1_db.group_id, group_b_id)
+        self.assertEqual(p1_db.priority_index, 10)
+        p2_db = VisionPanel.objects.get(id=p2["id"])
+        self.assertEqual(p2_db.priority_index, 5)
 
-        # 删除
+        # === 分组排序 ===
+        group_c = ReportGroup.objects.create(name="分组C", priority_index=0)
+        VisionPanel.objects.create(id="tmp_c", name="tmp", group=group_c, scenario=Scenario.DEFAULT)
+        UpdateGroupOrder().request(
+            {
+                "groups": [
+                    {"id": group_b_id, "priority_index": 0},
+                    {"id": group_c.id, "priority_index": 100},
+                ]
+            }
+        )
+        group_c.refresh_from_db()
+        self.assertEqual(group_c.priority_index, 100)
+        group_b = ReportGroup.objects.get(id=group_b_id)
+        self.assertEqual(group_b.priority_index, 0)
+
+        # === 删除 ===
         DeletePanel().request({"id": p1["id"]})
         panels_after = ListManagePanels().request({})
-        remaining = [p for p in panels_after if p["id"] == p1["id"]]
-        self.assertEqual(len(remaining), 0)
+        self.assertFalse(any(p["id"] == p1["id"] for p in panels_after))
+        self.assertTrue(ReportGroup.objects.filter(id=group_b_id).exists())
 
-        # 再删 p2，分组自动清理
         DeletePanel().request({"id": p2["id"]})
-        self.assertFalse(ReportGroup.objects.filter(name="分组B").exists())
+        self.assertFalse(ReportGroup.objects.filter(id=group_b_id).exists())
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="e2e_user")
+    def test_preference_and_favorite_flow(self, _):
+        # === 偏好 ===
+        pref = GetPanelPreference().request({})
+        self.assertEqual(pref, {"config": {}})
+
+        UpdatePanelPreference().request({"config": {"collapsed": [1], "view": "grid"}})
+        pref2 = GetPanelPreference().request({})
+        self.assertEqual(pref2["config"], {"collapsed": [1], "view": "grid"})
+
+        # === 收藏 ===
+        group = ReportGroup.objects.create(name="收藏E2E分组", priority_index=0)
+        panel = VisionPanel.objects.create(
+            id="e2e_fav_p",
+            name="E2E",
+            group=group,
+            scenario=Scenario.DEFAULT,
+            is_enabled=True,
+        )
+
+        fav_resp = TogglePanelFavorite().request({"panel_id": panel.id, "is_favorite": True})
+        self._assert_dict_contains(fav_resp, {"is_favorite": True})
+        self.assertIsNotNone(fav_resp["favorite_at"])
+
+        fav_resp2 = TogglePanelFavorite().request({"panel_id": panel.id, "is_favorite": True})
+        self.assertTrue(fav_resp2["is_favorite"])
+        self.assertEqual(UserPanelFavorite.objects.filter(username="e2e_user", panel=panel).count(), 1)
+
+        unfav = TogglePanelFavorite().request({"panel_id": panel.id, "is_favorite": False})
+        self._assert_dict_contains(unfav, {"is_favorite": False, "favorite_at": None})
+        self.assertFalse(UserPanelFavorite.objects.filter(username="e2e_user", panel=panel).exists())

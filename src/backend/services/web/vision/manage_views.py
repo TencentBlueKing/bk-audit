@@ -46,5 +46,6 @@ class GroupManageViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_groups),
+        ResourceRoute("PUT", resource.vision.update_group, pk_field="id"),
         ResourceRoute("POST", resource.vision.update_group_order, endpoint="order"),
     ]
