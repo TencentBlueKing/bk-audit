@@ -100,19 +100,19 @@ class ListManagePanelsRequestSerializer(serializers.Serializer):
 
 
 class CreatePanelRequestSerializer(serializers.Serializer):
-    vision_id = serializers.CharField(label="BKVision 分享 UID")
-    name = serializers.CharField(label="报表名称")
-    group_name = serializers.CharField(label="分组名称")
+    vision_id = serializers.CharField(max_length=255, label="BKVision 分享 UID")
+    name = serializers.CharField(max_length=255, label="报表名称")
+    group_name = serializers.CharField(max_length=255, label="分组名称")
     description = serializers.CharField(required=False, allow_blank=True, default="", label="描述")
     is_enabled = serializers.BooleanField(required=False, default=True, label="是否启用")
 
 
 class UpdatePanelRequestSerializer(serializers.Serializer):
-    id = serializers.CharField(label="Panel ID")
-    name = serializers.CharField(required=False, label="报表名称")
+    id = serializers.CharField(max_length=255, label="Panel ID")
+    name = serializers.CharField(max_length=255, required=False, label="报表名称")
     description = serializers.CharField(required=False, allow_blank=True, label="描述")
-    group_name = serializers.CharField(required=False, label="分组名称")
-    vision_id = serializers.CharField(required=False, label="BKVision 分享 UID")
+    group_name = serializers.CharField(max_length=255, required=False, label="分组名称")
+    vision_id = serializers.CharField(max_length=255, required=False, label="BKVision 分享 UID")
     is_enabled = serializers.BooleanField(required=False, label="是否启用")
 
 
@@ -138,6 +138,11 @@ class UpdateGroupOrderRequestSerializer(serializers.Serializer):
     groups = GroupOrderItemSerializer(many=True)
 
 
+class UpdateGroupRequestSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label="分组 ID")
+    name = serializers.CharField(max_length=255, label="分组名称")
+
+
 class UpdatePanelPreferenceRequestSerializer(serializers.Serializer):
     config = serializers.JSONField(label="偏好配置")
 
@@ -147,7 +152,7 @@ class PanelPreferenceResponseSerializer(serializers.Serializer):
 
 
 class ToggleFavoriteRequestSerializer(serializers.Serializer):
-    panel_id = serializers.CharField(label="Panel ID")
+    panel_id = serializers.CharField(max_length=255, label="Panel ID")
     is_favorite = serializers.BooleanField(label="收藏状态", help_text="True=收藏, False=取消收藏")
 
 
