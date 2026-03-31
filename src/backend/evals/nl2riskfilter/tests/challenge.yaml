@@ -512,7 +512,7 @@
 # D34: 英文缩写 — operator + status 混合
 - description: "D34-挑战：英文缩写（zhangsan的pending风险）"
   vars:
-    query: "zhang'wan的pending风险"
+    query: "zhangsan的pending风险"
     tags: "[]"
     strategies: "[]"
     expected_keys: '["operator", "status"]'
@@ -638,3 +638,285 @@
       value: "file://assertions/check_filters.py:field_value_match"
     - type: python
       value: "file://assertions/check_filters.py:check_sort_event_data"
+
+# ──────────────────────────────────────────────────────────────
+# V5 E2E 回归分析新增用例
+# ──────────────────────────────────────────────────────────────
+
+# --- 多人查询（E2E CN-001/CN-005/RU-006/MP-003 — 接口支持多人 operator）---
+
+# D43: 多人 operator — 双人查询应返回逗号拼接值
+# 回归来源：E2E CN-001（operator 返回多人逗号拼接是正确行为）
+- description: "D43-回归：双人 operator 查询（接口支持多人）"
+  vars:
+    query: "user_alpha和user_beta负责的待处理风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator", "status"]'
+    expected_operators: '["user_alpha", "user_beta"]'
+    expected_values: '{"status": "await_deal"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:operator_accepts_multi"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# D44: 多人 current_operator — 双人处理人查询
+# 回归来源：E2E CN-005（current_operator 返回多人逗号拼接是正确行为）
+- description: "D44-回归：双人 current_operator 查询（接口支持多人）"
+  vars:
+    query: "user_gamma和user_delta正在处理的高风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["current_operator", "risk_level"]'
+    expected_operators: '["user_gamma", "user_delta"]'
+    operator_field: "current_operator"
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:operator_accepts_multi"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# D45: 口语化多人查询 — "xxx手上的高风险case"
+# 回归来源：E2E MP-003（"手上的"→ current_operator 或 operator 均合理）
+- description: "D45-回归：口语化单人查询（手上的case → operator 或 current_operator）"
+  vars:
+    query: "user_echo手上的高风险case"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# --- 带下划线用户名识别（E2E RF-036/MP-006 — v_xxx 格式的用户名）---
+
+# D46: 下划线用户名 — v_xxx 格式应识别为人名
+# 回归来源：E2E RF-036（"v_xxx 的风险"返回空）
+- description: "D46-回归：下划线用户名识别（v_testuser01 负责的风险）"
+  vars:
+    query: "v_testuser01负责的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["operator"]'
+    expected_values: '{"operator": "v_testuser01"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# D47: 下划线用户名 + 多条件组合
+# 回归来源：E2E MP-006（v_xxx 的处理记录）
+- description: "D47-回归：下划线用户名 + current_operator 映射"
+  vars:
+    query: "v_testuser02正在处理的梯阵灰度标签风险"
+    tags: '[{"id": 851, "name": "梯阵灰度"}, {"id": 88, "name": "系统"}]'
+    strategies: "[]"
+    expected_keys: '["current_operator", "tags"]'
+    expected_values: '{"current_operator": "v_testuser02", "tags": "851"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# --- 无策略上下文的事件字段查询（E2E EF-002/EF-003/EF-007 等 — prompt 已新增规则）---
+
+# D48: 无策略 + 事件字段关键词 — "操作结果为失败"
+# 回归来源：E2E EF-002（无策略时 "操作结果为失败" AI 返回空）
+# 注意：无策略时 AI 可能映射到 event_filters 或 event_content，两者均可接受
+- description: "D48-回归：无策略时事件字段查询（操作结果为失败）"
+  vars:
+    query: "操作结果为失败的风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+
+# D49: 无策略 + 事件字段关键词 — "操作途径为API"
+# 回归来源：E2E EF-007（无策略时 "操作途径为API" AI 返回空）
+- description: "D49-回归：无策略时事件字段查询（操作途径为API）"
+  vars:
+    query: "操作途径为API的风险"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+
+# --- 追问/口语修饰词/隐含意图 — 已知限制（产品无多轮对话）---
+
+# D50: 追问模式（无上下文）— 已知限制
+# 回归来源：E2E CQ-010（"之前查到的那批误报，这周有新的吗"→ 无 thread_id 无上下文）
+- description: "D50-已知限制：追问模式（之前查到的那批误报）"
+  vars:
+    query: "之前查到的那批误报，这周有新的吗"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "产品当前不支持多轮对话，无 thread_id 时追问语义无法解析"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# D51: 追问 — "上面的结果里有没有已关单的"
+# 回归来源：E2E DS-005
+- description: "D51-已知限制：追问过滤（上面的结果里有没有已关单的）"
+  vars:
+    query: "上面的结果里有没有已关单的"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "产品当前不支持多轮对话，「上面的结果」无上下文引用"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# D52: 口语化追问 — "之前标记成误报的要不要重新看看"
+# 回归来源：E2E PW-006
+- description: "D52-已知限制：口语化追问（之前标记成误报的要不要重新看看）"
+  vars:
+    query: "之前标记成误报的要不要重新看看"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "「之前标记」暗示多轮上下文，产品当前不支持"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# D53: 隐含意图 — "有什么需要我关注的吗"
+# 回归来源：E2E II-001（需要推理"关注"→ 待处理+当前用户，超出单轮语义理解）
+- description: "D53-已知限制：隐含意图（有什么需要我关注的吗）"
+  vars:
+    query: "有什么需要我关注的吗"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "隐含意图推理需要用户画像和上下文，超出当前 NL2Filter 能力范围"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# D54: 隐含意图 — "今天的重点工作"
+# 回归来源：E2E II-003
+- description: "D54-已知限制：隐含意图（今天的重点工作）"
+  vars:
+    query: "今天的重点工作"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "「重点工作」是抽象概念，需要用户画像推理，非结构化筛选条件"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# D55: 隐含意图 — "快到SLA的case"
+# 回归来源：E2E II-006
+- description: "D55-已知限制：隐含意图（快到SLA的case）"
+  vars:
+    query: "快到SLA的case有哪些"
+    tags: "[]"
+    strategies: "[]"
+    limitation_reason: "SLA 截止时间非可筛选字段，需要业务逻辑推算"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:passes_or_known_limitation"
+
+# --- title / event_content 歧义放宽（E2E TX-002/TX-006/RD-006/RF-043）---
+
+# D56: title/策略歧义 — "名称包含异常交易"可映射 title 或 strategy_id
+# 回归来源：E2E TX-002（AI 返回 strategy_id 而非 title，两者均可接受）
+- description: "D56-回归：名称包含异常交易（title 或 strategy_id 均可）"
+  vars:
+    query: "名称包含异常交易的风险"
+    tags: "[]"
+    strategies: '[{"id": 149, "name": "【梯阵】游戏内异常交易"}, {"id": 110, "name": "【回归】离线策略审计"}]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+
+# D57: title/策略歧义 — "xxx方面的风险"可映射 title 或 strategy_id
+# 回归来源：E2E RF-043（"业受发放方面的风险" AI 返回 strategy_id 而非 title）
+- description: "D57-回归：业受发放方面的风险（title 或 strategy_id 均可）"
+  vars:
+    query: "业受发放方面的风险"
+    tags: "[]"
+    strategies: '[{"id": 154, "name": "【梯阵】发放对象不匹配"}, {"id": 40, "name": "【MOCK】业受发放不匹配"}]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:passes_serializer_validation"
+
+# D58: title/event_content 歧义 — "风险描述跟xxx有关的"
+# 回归来源：E2E RD-006（AI 返回 event_content 而非 title，两者均可接受）
+- description: "D58-回归：风险描述跟权限不兼容有关的（title 或 event_content 均可）"
+  vars:
+    query: "风险描述跟权限不兼容有关的"
+    tags: "[]"
+    strategies: "[]"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:title_or_event_content"
+
+# --- 口语化状态 — "挂起的"/"搁置的"（prompt 已新增规则）---
+
+# D59: 口语化状态 — "挂起的风险"
+# 回归来源：E2E CQ-007（"挂起的风险" AI 返回空）
+- description: "D59-回归：口语化状态（挂起的风险 → stand_by 或 await_deal）"
+  vars:
+    query: "搁置了的风险"
+    tags: "[]"
+    strategies: "[]"
+    expected_keys: '["status"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+
+# --- 策略 mismatch（E2E SD-001/SD-002/SD-007 — strategy_id "2,1" 多匹配问题）---
+
+# D60: 策略 "demo测试规则" 精确匹配（应返回 id=2，不应包含 id=1）
+# 回归来源：E2E SD-001/SD-002/SD-007（strategy_id 返回 "2,1" 而预期 "2"）
+- description: "D60-回归：demo测试规则策略精确匹配（不应包含 id=1）"
+  vars:
+    query: "demo测试规则策略的高风险"
+    tags: "[]"
+    strategies: '[{"id": 1, "name": "外包操作审计-WeTERM登录容器"}, {"id": 2, "name": "demo测试规则审计实时"}, {"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["strategy_id", "risk_level"]'
+    expected_strategy_ids: '["2"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:strategy_id_contains"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"

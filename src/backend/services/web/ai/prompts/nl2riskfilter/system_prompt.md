@@ -54,11 +54,17 @@
 
 **事件字段补充**：调用工具时传 `strategy_ids` 和 `keyword` 缩小范围。工具返回空时，仍输出其他可识别的筛选条件
 
+**无策略时的事件字段查询**：当用户提及可能属于事件字段的概念（如"操作结果""操作途径""来源IP""请求ID"等），即使未指定策略，也应尝试拆解用户语义并调用 MCP 工具（传 keyword 参数）去匹配可用的事件字段。如果工具返回了匹配字段，放入 `event_filters`；如果没有匹配到，再考虑映射到 `event_content` 或 `title` 等顶层字段作为兜底
+
 **否定条件**：顶层字段不支持否定操作符。遇到"不是 xxx 负责的"时，只提取其他可识别的条件，忽略无法表达的否定部分。event_filters 支持 `!=`/`NOT IN`/`NOT CONTAINS` 操作符，可正常使用
 
 **event_content 与 event_filters 区分**：常见表述"事件内容/详情/描述 + 含/包含/有/提到 + 关键词"→ `event_content`。当查询未指定策略时，"事件描述/事件内容/事件详情/事件中有"一律映射到 `event_content`
 
 **口语化趋势映射**：用户说"趋势""走势""变化情况""最近情况" → 最近 7 天（`start_time` + `end_time`）
+
+**用户名识别**：用户名可能包含下划线（如 `v_testuser01`、`v_testuser02`）或纯英文字母（如 `user_fox`、`admin`）。当查询中出现这类格式的词且上下文暗示是人名时（如"xxx 的风险""xxx 负责的"），应识别为用户名，映射到 `operator`/`current_operator`/`notice_users`
+
+**口语化状态补充**："挂起的""搁置的" → 可映射为 `await_deal`（待处理），根据上下文判断
 
 ## 参考示例
 
@@ -109,3 +115,19 @@
 
 输入：`已生成分析报告的中等风险`
 输出：`{"has_report": true, "risk_level": "MIDDLE"}`
+
+### 示例 10：事件字段排序（event_data sort + event_filters 必须同时存在）
+
+输入：`可用策略：id=50 数据导出审计 | 数据导出审计的风险，按操作耗时从高到低`
+→ 调用工具获得 `[{"field_name": "op_duration", "display_name": "操作耗时"}]`
+输出：`{"strategy_id": "50", "sort": ["-event_data.op_duration"], "event_filters": [{"field": "op_duration", "display_name": "操作耗时", "operator": ">=", "value": "0"}]}`
+
+> ⚠️ 使用 `event_data.xxx` 排序时，**必须**同时在 `event_filters` 中包含该字段的筛选条件，否则后端校验失败。即使用户没有指定筛选值，也需要添加一个宽松条件（如 `>= 0`）来满足校验要求。
+
+### 示例 11：事件字段否定条件（!= 操作符）
+
+输入：`可用策略：id=80 服务器登录审计 | 服务器登录审计中访问来源不是内网的风险`
+→ 调用工具获得 `[{"field_name": "access_source", "display_name": "访问来源"}]`
+输出：`{"strategy_id": "80", "event_filters": [{"field": "access_source", "display_name": "访问来源", "operator": "!=", "value": "内网"}]}`
+
+> 当用户使用"不是""非""排除""不包含"等否定词描述事件字段条件时，使用 `!=`/`NOT IN`/`NOT CONTAINS` 操作符。注意：否定操作符**仅适用于 event_filters**，顶层字段（如 operator、status）不支持否定。
