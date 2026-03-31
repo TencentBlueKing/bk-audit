@@ -52,9 +52,23 @@
                     @click="handleAddReport(group.id)">
                     <audit-icon
                       class="mr4"
-                      type="add" />
+                      type="plus-circle" />
                     {{ t('新建报表') }}
                   </bk-button>
+                  <bk-dropdown>
+                    <bk-button
+                      class="group-more-btn"
+                      text>
+                      <audit-icon type="more" />
+                    </bk-button>
+                    <template #content>
+                      <bk-dropdown-menu>
+                        <bk-dropdown-item @click="handleShowRenameDialog(group)">
+                          {{ t('重命名') }}
+                        </bk-dropdown-item>
+                      </bk-dropdown-menu>
+                    </template>
+                  </bk-dropdown>
                 </div>
               </div>
             </template>
@@ -116,6 +130,67 @@
         </bk-button>
       </template>
     </bk-dialog>
+
+    <!-- 重命名弹窗 -->
+    <bk-dialog
+      v-model:is-show="renameDialogVisible"
+      :title="t('重命名')"
+      width="480">
+      <bk-form
+        ref="renameFormRef"
+        form-type="vertical"
+        :model="renameFormData"
+        :rules="renameFormRules">
+        <bk-form-item
+          :label="t('分组名称')"
+          property="name"
+          required>
+          <bk-input
+            v-model="renameFormData.name"
+            :placeholder="t('请输入')" />
+        </bk-form-item>
+      </bk-form>
+      <template #footer>
+        <bk-button
+          class="mr8"
+          :loading="renameLoading"
+          theme="primary"
+          @click="handleConfirmRename">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button @click="handleCancelRename">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </bk-dialog>
+
+    <!-- 启用/停用确认弹窗 -->
+    <bk-dialog
+      v-model:is-show="toggleStatusDialogVisible"
+      footer-align="center"
+      :show-head="false"
+      width="400">
+      <div class="toggle-status-dialog-content">
+        <div class="toggle-status-title">
+          {{ toggleStatusTarget?.status === 'enabled' ? t('确认停用该报表？') : t('确认启用该报表？') }}
+        </div>
+        <div class="toggle-status-tip">
+          {{ toggleStatusTarget?.status === 'enabled' ? t('停用后，该报表将从审计报表菜单中隐藏') : t('启用后，该报表将在审计报表菜单中展示') }}
+        </div>
+      </div>
+      <template #footer>
+        <bk-button
+          class="mr8"
+          :loading="toggleStatusLoading"
+          :theme="toggleStatusTarget?.status === 'enabled' ? 'danger' : 'primary'"
+          @click="handleConfirmToggleStatus">
+          {{ toggleStatusTarget?.status === 'enabled' ? t('停用') : t('启用') }}
+        </bk-button>
+        <bk-button @click="handleCancelToggleStatus">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </bk-dialog>
   </div>
 </template>
 
@@ -170,6 +245,7 @@
     (e: 'delete', report: Report): void;
     (e: 'drag-sort', result: DragSortResult): void;
     (e: 'group-drag-sort', result: GroupDragSortResult): void;
+    (e: 'rename-group', groupId: string, newName: string): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -192,6 +268,29 @@
   const deleteDialogVisible = ref(false);
   const deleteTarget = ref<Report | null>(null);
   const deleteConfirmInput = ref('');
+
+  // 重命名相关状态
+  const renameDialogVisible = ref(false);
+  const renameFormRef = ref();
+  const renameLoading = ref(false);
+  const renameTarget = ref<ReportGroup | null>(null);
+  const renameFormData = ref({
+    name: '',
+  });
+  const renameFormRules = {
+    name: [
+      {
+        required: true,
+        message: t('分组名称不能为空'),
+        trigger: 'blur',
+      },
+    ],
+  };
+
+  // 启用/停用确认相关状态
+  const toggleStatusDialogVisible = ref(false);
+  const toggleStatusTarget = ref<Report | null>(null);
+  const toggleStatusLoading = ref(false);
 
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
@@ -285,7 +384,7 @@
                         text
                         theme="primary"
                         class="mr8"
-                        onClick={() => handleToggleStatus(row)}>
+                        onClick={() => handleShowToggleStatusConfirm(row)}>
                         {t('停用')}
                     </bk-button>
                 ) : (
@@ -293,7 +392,7 @@
                         text
                         theme="primary"
                         class="mr8"
-                        onClick={() => handleToggleStatus(row)}>
+                        onClick={() => handleShowToggleStatusConfirm(row)}>
                         {t('启用')}
                     </bk-button>
                 )}
@@ -342,9 +441,27 @@
     emit('edit', report);
   };
 
-  // 启用/停用报表
-  const handleToggleStatus = (report: Report) => {
-    emit('toggle-status', report);
+  // 显示启用/停用确认弹窗
+  const handleShowToggleStatusConfirm = (report: Report) => {
+    toggleStatusTarget.value = report;
+    toggleStatusDialogVisible.value = true;
+  };
+
+  // 确认启用/停用
+  const handleConfirmToggleStatus = () => {
+    if (toggleStatusTarget.value) {
+      toggleStatusLoading.value = true;
+      emit('toggle-status', toggleStatusTarget.value);
+      toggleStatusDialogVisible.value = false;
+      toggleStatusTarget.value = null;
+      toggleStatusLoading.value = false;
+    }
+  };
+
+  // 取消启用/停用
+  const handleCancelToggleStatus = () => {
+    toggleStatusDialogVisible.value = false;
+    toggleStatusTarget.value = null;
   };
 
   // 显示删除确认弹窗
@@ -383,6 +500,37 @@
           console.error('复制失败:', err);
         });
     }
+  };
+
+  // 显示重命名弹窗
+  const handleShowRenameDialog = (group: ReportGroup) => {
+    renameTarget.value = group;
+    renameFormData.value.name = group.name;
+    renameDialogVisible.value = true;
+  };
+
+  // 确认重命名
+  const handleConfirmRename = async () => {
+    try {
+      await renameFormRef.value?.validate();
+      if (renameTarget.value) {
+        renameLoading.value = true;
+        emit('rename-group', renameTarget.value.id, renameFormData.value.name);
+        renameDialogVisible.value = false;
+        renameTarget.value = null;
+        renameFormData.value.name = '';
+        renameLoading.value = false;
+      }
+    } catch {
+      // 表单验证失败
+    }
+  };
+
+  // 取消重命名
+  const handleCancelRename = () => {
+    renameDialogVisible.value = false;
+    renameTarget.value = null;
+    renameFormData.value.name = '';
   };
 
   // 处理表格拖拽排序
@@ -511,6 +659,15 @@
 .collapse-header-right {
   display: flex;
   align-items: center;
+
+  .group-more-btn {
+    margin-left: 8px;
+    color: #979ba5;
+
+    &:hover {
+      color: #3a84ff;
+    }
+  }
 }
 
 :deep(.table-drag-icon) {
@@ -642,6 +799,26 @@
 
   .bk-input {
     width: 100%;
+  }
+}
+
+/* 启用/停用确认弹窗样式 */
+.toggle-status-dialog-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  text-align: center;
+
+  .toggle-status-title {
+    margin-bottom: 16px;
+    font-size: 20px;
+    color: #313238;
+  }
+
+  .toggle-status-tip {
+    font-size: 14px;
+    color: #63656e;
   }
 }
 </style>
