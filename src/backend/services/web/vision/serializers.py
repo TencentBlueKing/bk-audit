@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from rest_framework import serializers
 
 from core.serializers import ExtraDataSerializerMixin
-from services.web.vision.models import Scenario, VisionPanel
+from services.web.vision.models import ReportGroup, Scenario, VisionPanel
 
 
 class VisionPanelInfoSerializer(serializers.ModelSerializer):
@@ -61,6 +61,12 @@ class QueryDataReqSerializer(serializers.Serializer):
 
 class QueryShareDetailSerializer(ExtraDataSerializerMixin):
     share_uid = serializers.CharField()
+
+
+class ReportGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportGroup
+        fields = ["id", "name", "priority_index"]
 
 
 class ManagePanelSerializer(serializers.ModelSerializer):

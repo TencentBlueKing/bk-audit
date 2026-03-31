@@ -14,6 +14,7 @@ from services.web.vision.resources.panel import (
     CreatePanel,
     DeletePanel,
     GetPanelPreference,
+    ListGroups,
     ListManagePanels,
     UpdateGroupOrder,
     UpdatePanel,
@@ -351,6 +352,31 @@ class TestPanelPreference(TestCase):
         UpdatePanelPreference().request({"config": {"key": "val"}})
         resp = GetPanelPreference().request({})
         self.assertEqual(resp["config"], {"key": "val"})
+
+
+class TestListGroups(TestCase):
+    def setUp(self):
+        self.g1 = ReportGroup.objects.create(name="分组A", priority_index=10)
+        self.g2 = ReportGroup.objects.create(name="分组B", priority_index=5)
+
+    def test_list_returns_all_groups(self):
+        result = ListGroups().request({})
+        names = {g["name"] for g in result}
+        self.assertIn("分组A", names)
+        self.assertIn("分组B", names)
+
+    def test_list_ordered_by_priority_desc(self):
+        result = ListGroups().request({})
+        our = [g for g in result if g["name"] in ("分组A", "分组B")]
+        self.assertEqual(our[0]["name"], "分组A")
+        self.assertEqual(our[1]["name"], "分组B")
+
+    def test_list_response_fields(self):
+        result = ListGroups().request({})
+        group = next(g for g in result if g["id"] == self.g1.id)
+        self.assertEqual(group["name"], "分组A")
+        self.assertEqual(group["priority_index"], 10)
+        self.assertIn("id", group)
 
 
 class TestFullCRUDFlow(TestCase):
