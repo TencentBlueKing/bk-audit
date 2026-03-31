@@ -37,6 +37,7 @@ from services.web.vision.serializers import (
     ListManagePanelsRequestSerializer,
     ManagePanelSerializer,
     PanelPreferenceResponseSerializer,
+    ReportGroupSerializer,
     UpdateGroupOrderRequestSerializer,
     UpdatePanelOrderRequestSerializer,
     UpdatePanelPreferenceRequestSerializer,
@@ -161,6 +162,15 @@ class UpdatePanelOrder(PanelManage):
         VisionPanel.objects.bulk_update(to_update, update_record=False, fields=["group_id", "priority_index"])
         ReportGroup.cleanup_empty()
         return {}
+
+
+class ListGroups(PanelManage):
+    name = gettext_lazy("分组列表")
+    ResponseSerializer = ReportGroupSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        return ReportGroup.objects.all()
 
 
 class UpdateGroupOrder(PanelManage):

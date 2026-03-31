@@ -41,5 +41,6 @@ class GroupManageViewSet(ResourceViewSet):
         return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
 
     resource_routes = [
+        ResourceRoute("GET", resource.vision.list_groups),
         ResourceRoute("POST", resource.vision.update_group_order, endpoint="order"),
     ]
