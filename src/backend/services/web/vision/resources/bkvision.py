@@ -19,14 +19,20 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
+from django.db import models as db_models
 from django.utils.translation import gettext_lazy
 from rest_framework.generics import get_object_or_404
 
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
+from core.models import get_request_username
 from services.web.vision.constants import PANEL
 from services.web.vision.handlers.query import VisionHandler
-from services.web.vision.models import VisionPanel, VisionPanelInstance
+from services.web.vision.models import (
+    UserPanelFavorite,
+    VisionPanel,
+    VisionPanelInstance,
+)
 from services.web.vision.serializers import (
     QueryMetaReqSerializer,
     QueryShareDetailSerializer,
@@ -47,7 +53,19 @@ class ListPanels(BKVision):
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        return VisionPanel.objects.filter(scenario=validated_request_data['scenario']).all()
+        panels = (
+            VisionPanel.objects.filter(scenario=validated_request_data["scenario"])
+            .filter(is_enabled=True)
+            .select_related("group")
+        )
+        username = get_request_username()
+        fav_qs = UserPanelFavorite.objects.filter(username=username, panel_id=db_models.OuterRef("id"))
+        panels = panels.annotate(
+            is_favorite=db_models.Exists(fav_qs),
+            favorite_at=db_models.Subquery(fav_qs.values("created_at")[:1]),
+        )
+
+        return panels.order_by("-group__priority_index", "group__name", "-priority_index", "name")
 
 
 class QueryMixIn(AuditMixinResource, abc.ABC):
