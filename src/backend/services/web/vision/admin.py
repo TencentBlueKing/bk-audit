@@ -18,7 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 from django.contrib import admin
 
-from services.web.vision.models import ReportGroup, ReportUserPreference, VisionPanel
+from services.web.vision.models import (
+    ReportGroup,
+    ReportUserPreference,
+    UserPanelFavorite,
+    VisionPanel,
+)
 
 
 @admin.register(VisionPanel)
@@ -38,3 +43,10 @@ class ReportGroupAdmin(admin.ModelAdmin):
 class ReportUserPreferenceAdmin(admin.ModelAdmin):
     list_display = ["id", "username"]
     search_fields = ["username"]
+
+
+@admin.register(UserPanelFavorite)
+class UserPanelFavoriteAdmin(admin.ModelAdmin):
+    list_display = ["id", "username", "panel", "created_at"]
+    list_filter = ["username"]
+    search_fields = ["username", "panel__id", "panel__name"]

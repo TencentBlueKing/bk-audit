@@ -8,6 +8,7 @@ from services.web.vision.models import (
     ReportGroup,
     ReportUserPreference,
     Scenario,
+    UserPanelFavorite,
     VisionPanel,
 )
 from services.web.vision.resources.panel import (
@@ -16,6 +17,7 @@ from services.web.vision.resources.panel import (
     GetPanelPreference,
     ListGroups,
     ListManagePanels,
+    TogglePanelFavorite,
     UpdateGroupOrder,
     UpdatePanel,
     UpdatePanelOrder,
@@ -377,6 +379,98 @@ class TestListGroups(TestCase):
         self.assertEqual(group["name"], "分组A")
         self.assertEqual(group["priority_index"], 10)
         self.assertIn("id", group)
+
+
+class TestTogglePanelFavorite(TestCase):
+    def setUp(self):
+        self.group = ReportGroup.objects.create(name="收藏测试分组", priority_index=0)
+        self.panel = VisionPanel.objects.create(
+            id="fav_panel_1",
+            name="收藏测试报表",
+            group=self.group,
+            scenario=Scenario.DEFAULT,
+        )
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="testuser")
+    def test_add_favorite(self, _):
+        resp = TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": True})
+        self.assertTrue(resp["is_favorite"])
+        self.assertIsNotNone(resp["favorite_at"])
+        self.assertTrue(UserPanelFavorite.objects.filter(username="testuser", panel_id="fav_panel_1").exists())
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="testuser")
+    def test_remove_favorite(self, _):
+        UserPanelFavorite.objects.create(username="testuser", panel=self.panel)
+        resp = TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": False})
+        self.assertFalse(resp["is_favorite"])
+        self.assertIsNone(resp["favorite_at"])
+        self.assertFalse(UserPanelFavorite.objects.filter(username="testuser", panel_id="fav_panel_1").exists())
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="testuser")
+    def test_add_favorite_idempotent(self, _):
+        TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": True})
+        resp = TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": True})
+        self.assertTrue(resp["is_favorite"])
+        self.assertEqual(UserPanelFavorite.objects.filter(username="testuser", panel_id="fav_panel_1").count(), 1)
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="testuser")
+    def test_remove_favorite_idempotent(self, _):
+        resp = TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": False})
+        self.assertFalse(resp["is_favorite"])
+        self.assertFalse(UserPanelFavorite.objects.filter(username="testuser", panel_id="fav_panel_1").exists())
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="testuser")
+    def test_nonexistent_panel_404(self, _):
+        with self.assertRaises(Exception):
+            TogglePanelFavorite().request({"panel_id": "nonexistent", "is_favorite": True})
+
+    @patch("services.web.vision.resources.panel.get_request_username", return_value="user_a")
+    def test_different_users_independent(self, mock_user):
+        TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": True})
+        mock_user.return_value = "user_b"
+        TogglePanelFavorite().request({"panel_id": "fav_panel_1", "is_favorite": True})
+        self.assertEqual(UserPanelFavorite.objects.filter(panel_id="fav_panel_1").count(), 2)
+
+
+class TestListPanelsWithFavorite(TestCase):
+    def setUp(self):
+        self.group = ReportGroup.objects.create(name="收藏列表分组", priority_index=0)
+        self.panel_a = VisionPanel.objects.create(
+            id="fav_list_p1",
+            name="报表A",
+            group=self.group,
+            scenario=Scenario.DEFAULT,
+            is_enabled=True,
+        )
+        self.panel_b = VisionPanel.objects.create(
+            id="fav_list_p2",
+            name="报表B",
+            group=self.group,
+            scenario=Scenario.DEFAULT,
+            is_enabled=True,
+        )
+
+    @patch("services.web.vision.resources.bkvision.get_request_username", return_value="testuser")
+    def test_list_panels_includes_favorite_fields(self, _):
+        from services.web.vision.resources.bkvision import ListPanels
+
+        UserPanelFavorite.objects.create(username="testuser", panel=self.panel_a)
+        resp = ListPanels().request({"scenario": Scenario.DEFAULT})
+        panel_a_data = next(p for p in resp if p["id"] == "fav_list_p1")
+        panel_b_data = next(p for p in resp if p["id"] == "fav_list_p2")
+        self.assertTrue(panel_a_data["is_favorite"])
+        self.assertIsNotNone(panel_a_data["favorite_at"])
+        self.assertFalse(panel_b_data["is_favorite"])
+        self.assertIsNone(panel_b_data["favorite_at"])
+
+    @patch("services.web.vision.resources.bkvision.get_request_username", return_value="other_user")
+    def test_list_panels_no_favorites_all_unfavorite(self, _):
+        from services.web.vision.resources.bkvision import ListPanels
+
+        resp = ListPanels().request({"scenario": Scenario.DEFAULT})
+        for p in resp:
+            if p["id"] in ("fav_list_p1", "fav_list_p2"):
+                self.assertFalse(p["is_favorite"])
 
 
 class TestFullCRUDFlow(TestCase):
