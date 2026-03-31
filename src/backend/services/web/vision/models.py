@@ -115,3 +115,21 @@ class ReportUserPreference(models.Model):
     class Meta:
         verbose_name = gettext_lazy("用户报表偏好")
         verbose_name_plural = verbose_name
+
+
+class UserPanelFavorite(OperateRecordModel):
+    """用户 Panel 收藏"""
+
+    username = models.CharField(gettext_lazy("用户名"), max_length=255, db_index=True)
+    panel = models.ForeignKey(
+        VisionPanel,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+        verbose_name=gettext_lazy("收藏的 Panel"),
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("用户 Panel 收藏")
+        verbose_name_plural = verbose_name
+        unique_together = ("username", "panel")
+        ordering = ["-created_at"]

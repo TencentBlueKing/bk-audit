@@ -128,6 +128,8 @@ class BKVisionViewSet(ResourceViewSet, abc.ABC):
 
 
 class PanelsViewSet(BKVisionViewSet):
+    pagination_class = None
+
     def get_permissions(self):
         if self.action in ["list"]:
             scenario = self.request.query_params.get("scenario")
@@ -220,7 +222,10 @@ class ShareViewSet(BKVisionViewSet):
 
 
 class PanelPreferenceViewSet(ResourceViewSet):
+    pagination_class = None
+
     resource_routes = [
         ResourceRoute("GET", resource.vision.get_panel_preference),
         ResourceRoute("POST", resource.vision.update_panel_preference),
+        ResourceRoute("POST", resource.vision.toggle_panel_favorite, endpoint="favorites"),
     ]

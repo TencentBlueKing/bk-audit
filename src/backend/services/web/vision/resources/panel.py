@@ -30,6 +30,7 @@ from services.web.vision.models import (
     ReportGroup,
     ReportUserPreference,
     Scenario,
+    UserPanelFavorite,
     VisionPanel,
 )
 from services.web.vision.serializers import (
@@ -38,6 +39,8 @@ from services.web.vision.serializers import (
     ManagePanelSerializer,
     PanelPreferenceResponseSerializer,
     ReportGroupSerializer,
+    ToggleFavoriteRequestSerializer,
+    ToggleFavoriteResponseSerializer,
     UpdateGroupOrderRequestSerializer,
     UpdatePanelOrderRequestSerializer,
     UpdatePanelPreferenceRequestSerializer,
@@ -219,3 +222,18 @@ class UpdatePanelPreference(PanelManage):
             defaults={"config": validated_request_data["config"]},
         )
         return pref
+
+
+class TogglePanelFavorite(PanelManage):
+    name = gettext_lazy("收藏/取消收藏 Panel")
+    RequestSerializer = ToggleFavoriteRequestSerializer
+    ResponseSerializer = ToggleFavoriteResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        panel = get_object_or_404(VisionPanel, id=validated_request_data["panel_id"])
+        if validated_request_data["is_favorite"]:
+            favorite, _ = UserPanelFavorite.objects.get_or_create(username=username, panel=panel)
+            return {"is_favorite": True, "favorite_at": favorite.created_at}
+        UserPanelFavorite.objects.filter(username=username, panel=panel).delete()
+        return {"is_favorite": False, "favorite_at": None}

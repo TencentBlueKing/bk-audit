@@ -24,6 +24,8 @@ from apps.permission.handlers.drf import IAMPermission
 
 
 class PanelManageViewSet(ResourceViewSet):
+    pagination_class = None
+
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
 
@@ -37,6 +39,8 @@ class PanelManageViewSet(ResourceViewSet):
 
 
 class GroupManageViewSet(ResourceViewSet):
+    pagination_class = None
+
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
 

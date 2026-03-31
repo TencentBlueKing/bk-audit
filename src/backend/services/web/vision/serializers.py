@@ -26,6 +26,8 @@ class VisionPanelInfoSerializer(serializers.ModelSerializer):
     group_id = serializers.IntegerField(source="group.id", read_only=True, default=None)
     group_name = serializers.CharField(source="group.name", read_only=True, default="")
     group_priority_index = serializers.IntegerField(source="group.priority_index", read_only=True, default=0)
+    is_favorite = serializers.BooleanField(read_only=True, default=False)
+    favorite_at = serializers.DateTimeField(read_only=True, default=None, allow_null=True)
 
     class Meta:
         model = VisionPanel
@@ -39,12 +41,13 @@ class VisionPanelInfoSerializer(serializers.ModelSerializer):
             "group_id",
             "group_name",
             "group_priority_index",
+            "is_favorite",
+            "favorite_at",
         ]
 
 
 class VisionPanelInfoQuerySerializer(serializers.Serializer):
     scenario = serializers.ChoiceField(choices=Scenario.choices, default=Scenario.DEFAULT)
-    enabled_only = serializers.BooleanField(required=False, default=True)
 
 
 class QueryMetaReqSerializer(ExtraDataSerializerMixin):
@@ -141,3 +144,13 @@ class UpdatePanelPreferenceRequestSerializer(serializers.Serializer):
 
 class PanelPreferenceResponseSerializer(serializers.Serializer):
     config = serializers.JSONField()
+
+
+class ToggleFavoriteRequestSerializer(serializers.Serializer):
+    panel_id = serializers.CharField(label="Panel ID")
+    is_favorite = serializers.BooleanField(label="收藏状态", help_text="True=收藏, False=取消收藏")
+
+
+class ToggleFavoriteResponseSerializer(serializers.Serializer):
+    is_favorite = serializers.BooleanField()
+    favorite_at = serializers.DateTimeField(allow_null=True)
