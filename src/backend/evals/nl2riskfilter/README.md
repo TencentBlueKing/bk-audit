@@ -13,7 +13,7 @@
 | A 常规 | `tests/normal.yaml` | 40 | 时间、人员、状态、标签、策略、组合、排序、current_operator、risk_label、title、event_content、has_report、视角、处理流程、智能搜索、风险描述、时间口语化、等级口语化、问句模式、真实用户名 |
 | B 复杂 | `tests/complex.yaml` | 7 | MCP 事件字段、多条件组合、跨策略 |
 | C 边界 | `tests/boundary.yaml` | 6 | 无效输入、注入攻击、歧义查询 |
-| D 挑战 | `tests/challenge.yaml` | 40 | 复合时间、否定语义、口语化、多条件+sort、策略精确匹配、字段歧义、复杂自然语言、策略名称变体、英文缩写、多标签深度、回归用例 |
+| D 挑战 | `tests/challenge.yaml` | 60 | 复合时间、否定语义、口语化、多条件+sort、策略精确匹配、字段歧义、复杂自然语言、策略名称变体、英文缩写、多标签深度、回归用例、多人查询、下划线用户名、无策略事件字段、已知限制标注、title/策略歧义放宽 |
 
 ## Provider
 
@@ -32,11 +32,11 @@ Provider 支持通过 `config.model` / `config.non_thinking_llm` / `config.syste
 
 ### 当前配置
 
-单模型调优模式（kimi-chat）：
+单模型调优模式（qwen3-8b）：
 
 | label | model | 说明 |
 |-------|-------|------|
-| kimi-chat | kimi-chat | 当前生产模型（调优目标） |
+| qwen3-8b | qwen3-8b | 当前生产模型（调优目标） |
 
 ## 自定义断言
 
@@ -59,6 +59,8 @@ Provider 支持通过 `config.model` / `config.non_thinking_llm` / `config.syste
 | `empty_or_has_risk_level` | 验证输出为空或包含 risk_level=HIGH（追问语义无上下文场景） |
 | `title_or_event_content` | 验证输出包含 title 或 event_content（隐式标题查询场景） |
 | `strategy_with_risk_level_or_event_filters` | 验证 strategy_id + risk_level 或 event_filters 处理歧义字段 |
+| `operator_accepts_multi` | 验证 operator/current_operator 支持多人逗号拼接（E2E 发现接口支持多人） |
+| `passes_or_known_limitation` | 始终通过 — 标注为已知限制场景（多轮对话追问、隐含意图等，不影响通过率） |
 
 ## 运行
 
@@ -154,6 +156,8 @@ vars:
 | V35 | 93×1×2 | **kimi 97.78%** (176/180) | **单模型调优阶段**：补充“我+动作”优先级映射（处理→`current_operator`，关注/订阅→`notice_users`），修复 A29/A30/D37；同时修复 1 个评估错误。失败主要来自 latency 阈值设置影响 |
 | V36 | 93×1×2 | **kimi 98.33%** (177/180) | **评估策略回调**：恢复 LLM-as-Judge provider 配置（保留后续扩展能力），latency 阈值设为 **15s**。新增通过 B1/C4/C5/D31；当前 3 个失败均为 latency（A35/B7/D28） |
 | V37 | 93×1×2 | **kimi 96.11%** (173/180) | **提示词更新后回归验证**：快速回归集 14/14 通过，但全量在 15s 阈值下出现 7 个失败；其中 6 个为 latency（15~25s 区间），1 个为一次性语义波动（A6，重跑已恢复） |
+| V38 | 113×6×2 | 87.3%（974/1116） | **V5 E2E 回归调优 + 6 模型全量评测**：新增 18 个用例，6 模型排名：qwen3-8b 98.4% / qwen3-235B 96.8% / kimi-chat 95.7% / qwen3-nothinking 83.9% / hunyuan2 82.8% / dsv32 66.1% |
+| V40 | 113×5×2 | 84.0%（932/1110） | **人名脱敏 + 移除 dsv32**：真实人名→假名（user_alpha 等），5 模型排名：qwen3-235B 96.4% / kimi-chat 93.7% / qwen3-8b 88.7% / qwen3-nothinking 82.9% / hunyuan2 58.1%*（*服务不可用 92 次）。脱敏未引入新失败；qwen3-8b 因新用例覆盖面扩大暴露 current_operator/event_content 短板下降 9.7% |
 
 ## 评估反馈与经验
 

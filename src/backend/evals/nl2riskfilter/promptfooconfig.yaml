@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: 'NL2RiskFilter AI 能力评估（6模型全量评测）'
+description: 'NL2RiskFilter AI 能力评估（5模型全量评测）'
 
 prompts:
   - '{{query}}'
@@ -27,18 +27,11 @@ providers:
       non_thinking_llm: 'qwen3-235B'
 
   - id: 'python:providers/provider.py'
-    label: 'hunyuan2'
+    label: 'gptoss-120b'
     config:
       username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'hunyuan2'
-      non_thinking_llm: 'hunyuan2'
-
-  - id: 'python:providers/provider.py'
-    label: 'dsv32'
-    config:
-      username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'dsv32'
-      non_thinking_llm: 'dsv32'
+      model: 'gptoss-120b'
+      non_thinking_llm: 'gptoss-120b'
 
   - id: 'python:providers/provider.py'
     label: 'kimi-chat'
