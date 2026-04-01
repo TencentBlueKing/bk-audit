@@ -131,11 +131,10 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, onMounted, ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ReportConfigService from '@service/report-config';
-  import ToolManageService from '@service/tool-manage';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -169,6 +168,7 @@
     groupList?: ReportGroup[];
     defaultGroupId?: number | null;
     editData?: ReportFormData | null;
+    chartLists?: ChartListModel[];
   }
 
   interface Emits {
@@ -183,6 +183,7 @@
     groupList: () => [],
     defaultGroupId: null,
     editData: null,
+    chartLists: () => [],
   });
 
   const emit = defineEmits<Emits>();
@@ -192,8 +193,8 @@
   // 是否编辑模式
   const isEditMode = computed(() => !!props.editData);
 
-  // 图表列表数据
-  const chartLists = ref<ChartListModel[]>([]);
+  // 图表列表数据（从 props 获取）
+  const chartLists = computed(() => props.chartLists || []);
   const { messageSuccess } = useMessage();
 
   // 表单引用
@@ -373,25 +374,6 @@
     emit('update:isShow', false);
     emit('cancel');
   };
-
-  // 获取图表列表
-  const {
-    run: fetchChartLists,
-  } = useRequest(ToolManageService.fetchChartLists, {
-    defaultValue: [],
-    manual: true,
-    onSuccess: (data) => {
-      console.log('获取图表列表', data);
-      // 接口在 catch 时可能返回 'error' 字符串，需要判断
-      if (Array.isArray(data)) {
-        chartLists.value = data;
-      }
-    },
-  });
-
-  onMounted(() => {
-    fetchChartLists();
-  });
 </script>
 
 <style lang="postcss" scoped>
