@@ -109,7 +109,7 @@
             v-bk-tooltips="{ content: '点击复制' }"
             class="report-name"
             @click="handleCopyReportName">
-            {{ deleteTarget?.bkvisionReport }}
+            {{ deleteTarget?.name }}
           </span>
           {{ t('以确认删除') }}
         </div>
@@ -120,7 +120,8 @@
       <template #footer>
         <bk-button
           class="mr8"
-          :disabled="deleteConfirmInput !== deleteTarget?.bkvisionReport"
+          :disabled="deleteConfirmInput !== deleteTarget?.name"
+          :loading="deleteLoading"
           theme="danger"
           @click="handleConfirmDelete">
           {{ t('删除') }}
@@ -199,7 +200,10 @@
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
+  import ReportConfigService from '@service/report-config';
+
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
 
@@ -208,6 +212,7 @@
     name: string;
     description: string;
     bkvisionReport: string;
+    bkvisionReportName?: string;
     bkvisionUrl?: string;
     status: 'enabled' | 'disabled';
     updatedBy: string;
@@ -215,9 +220,10 @@
   }
 
   export interface ReportGroup {
-    id: string;
+    id: number;
     name: string;
     reports: Report[];
+    priority_index: number;
   }
 
   interface Props {
@@ -227,7 +233,7 @@
 
   // 拖拽排序结果
   export interface DragSortResult {
-    groupId: string;
+    groupId: number;
     currentIndex: number;
     targetIndex: number;
     newOrder: Report[];
@@ -239,13 +245,15 @@
   }
 
   interface Emits {
-    (e: 'add-report', groupId: string): void;
+    (e: 'add-report', groupId: number): void;
     (e: 'edit', report: Report): void;
     (e: 'toggle-status', report: Report): void;
+    (e: 'status-updated'): void;
     (e: 'delete', report: Report): void;
+    (e: 'deleted'): void;
     (e: 'drag-sort', result: DragSortResult): void;
     (e: 'group-drag-sort', result: GroupDragSortResult): void;
-    (e: 'rename-group', groupId: string, newName: string): void;
+    (e: 'rename-group', groupId: number, newName: string): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -259,7 +267,7 @@
   const { messageSuccess } = useMessage();
 
   // 展开的分组
-  const activeGroups = ref<string[]>([]);
+  const activeGroups = ref<number[]>([]);
 
   // 本地分组数据（用于拖拽排序）
   const localGroups = ref<ReportGroup[]>([]);
@@ -290,7 +298,6 @@
   // 启用/停用确认相关状态
   const toggleStatusDialogVisible = ref(false);
   const toggleStatusTarget = ref<Report | null>(null);
-  const toggleStatusLoading = ref(false);
 
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
@@ -319,9 +326,10 @@
     {
       title: t('报表ID'),
       colKey: 'id',
-      width: 120,
+      minWidth: 120,
+      ellipsis: true,
       cell: (_h: any, { row }: { row: Report }) => (
-            <bk-button text theme="primary">{row.id}</bk-button>
+            <span>{row.id}</span>
         ),
     },
     {
@@ -332,7 +340,7 @@
     {
       title: t('描述'),
       colKey: 'description',
-      width: 150,
+      minWidth: 150,
     },
     {
       title: t('BKVision 报表'),
@@ -340,7 +348,7 @@
       minWidth: 200,
       cell: (_h: any, { row }: { row: Report }) => (
             <span class="bkvision-report-cell">
-                {row.bkvisionReport}
+                {row.bkvisionReportName || row.bkvisionReport}
                         <audit-icon type="jump-link" class="jump-link" />
             </span>
         ),
@@ -432,7 +440,7 @@
   });
 
   // 在分组中添加报表
-  const handleAddReport = (groupId: string) => {
+  const handleAddReport = (groupId: number) => {
     emit('add-report', groupId);
   };
 
@@ -447,14 +455,29 @@
     toggleStatusDialogVisible.value = true;
   };
 
+  // 更新 Panel 状态
+  const {
+    run: updatePanelStatus,
+    loading: toggleStatusLoading,
+  } = useRequest(ReportConfigService.updatePanel, {
+    defaultValue: null,
+    onSuccess: () => {
+      const isEnabling = toggleStatusTarget.value?.status === 'disabled';
+      messageSuccess(isEnabling ? t('启用成功') : t('停用成功'));
+      toggleStatusDialogVisible.value = false;
+      toggleStatusTarget.value = null;
+      emit('status-updated'); // 通知父组件刷新列表
+    },
+  });
+
   // 确认启用/停用
   const handleConfirmToggleStatus = () => {
     if (toggleStatusTarget.value) {
-      toggleStatusLoading.value = true;
-      emit('toggle-status', toggleStatusTarget.value);
-      toggleStatusDialogVisible.value = false;
-      toggleStatusTarget.value = null;
-      toggleStatusLoading.value = false;
+      const newStatus = toggleStatusTarget.value.status !== 'enabled';
+      updatePanelStatus({
+        id: toggleStatusTarget.value.id,
+        is_enabled: newStatus,
+      });
     }
   };
 
@@ -471,14 +494,25 @@
     deleteDialogVisible.value = true;
   };
 
-  // 确认删除
-  const handleConfirmDelete = () => {
-    if (deleteTarget.value && deleteConfirmInput.value === deleteTarget.value.bkvisionReport) {
-      console.log('删除报表:', deleteTarget.value);
-      emit('delete', deleteTarget.value);
+  // 删除 Panel
+  const {
+    run: deletePanel,
+    loading: deleteLoading,
+  } = useRequest(ReportConfigService.deletePanel, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('删除成功'));
       deleteDialogVisible.value = false;
       deleteTarget.value = null;
       deleteConfirmInput.value = '';
+      emit('deleted'); // 通知父组件刷新列表
+    },
+  });
+
+  // 确认删除
+  const handleConfirmDelete = () => {
+    if (deleteTarget.value && deleteConfirmInput.value === deleteTarget.value.name) {
+      deletePanel({ id: deleteTarget.value.id });
     }
   };
 
@@ -491,8 +525,8 @@
 
   // 复制报表名称到剪贴板
   const handleCopyReportName = () => {
-    if (deleteTarget.value?.bkvisionReport) {
-      navigator.clipboard.writeText(deleteTarget.value.bkvisionReport)
+    if (deleteTarget.value?.name) {
+      navigator.clipboard.writeText(deleteTarget.value.name)
         .then(() => {
           messageSuccess(t('复制成功'));
         })
@@ -534,7 +568,7 @@
   };
 
   // 处理表格拖拽排序
-  const handleDragSort = (groupId: string, params: any) => {
+  const handleDragSort = (groupId: number, params: any) => {
     const { currentIndex, targetIndex, newData } = params;
     // 返回拖拽结果给父组件
     emit('drag-sort', {
