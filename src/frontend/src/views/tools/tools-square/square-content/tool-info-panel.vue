@@ -90,7 +90,7 @@
         <tool-content
           v-if="toolDetailMap[tool.uid]"
           v-show="activeUid === tool.uid"
-          :ref="(el) => setToolContentRef(tool.uid, el)"
+          :ref="(el: any) => setToolContentRef(tool.uid, el)"
           :content-style="{ height: 'calc(100% - 160px)' }"
           :get-tool-name-and-type="getToolNameAndType"
           :search-list="getSearchList(tool.uid)"
