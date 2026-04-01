@@ -84,12 +84,13 @@
         :expand-all="isAllExpanded"
         :groups="reportGroups"
         @add-report="handleAddReport"
+        @cross-group-drag="handleCrossGroupDrag"
         @delete="handleDelete"
         @deleted="handleDeleted"
         @drag-sort="handleDragSort"
         @edit="handleEdit"
         @group-drag-sort="handleGroupDragSort"
-        @rename-group="handleRenameGroup"
+        @order-updated="handleOrderUpdated"
         @status-updated="handleStatusUpdated"
         @toggle-status="handleToggleStatus" />
     </div>
@@ -130,6 +131,7 @@
     <!-- 新建/编辑报表侧边弹窗 -->
     <report-create-sideslider
       v-model:is-show="reportSidesliderVisible"
+      :chart-lists="chartLists"
       :default-group-id="currentGroupId"
       :edit-data="editReportData"
       :group-list="groupListForSelect"
@@ -154,6 +156,7 @@
     type ReportFormData,
   } from './components/report-create-sideslider.vue';
   import ReportGroupList, {
+    type CrossGroupDragResult,
     type DragSortResult,
     type GroupDragSortResult,
     type Report,
@@ -263,7 +266,7 @@
           name: group.name,
           priority_index: group.priority_index,
           reports: panelsData
-            .filter((panel: PanelModel) => panel.group_priority_index === group.priority_index)
+            .filter((panel: PanelModel) => panel.group_id === group.id)
             .map((panel: PanelModel) => ({
               id: panel.id,
               name: panel.name,
@@ -417,6 +420,13 @@
     handleSearch();
   };
 
+  // 排序成功后刷新列表
+  const handleOrderUpdated = () => {
+    // 排序成功后重新获取分组和Panel数据，确保数据与后端同步
+    // 需要先获取分组（因为分组排序可能变化），fetchGroups 成功后会自动调用 fetchPanels
+    fetchGroups();
+  };
+
   // 处理表格拖拽排序
   const handleDragSort = (result: DragSortResult) => {
     const { groupId, currentIndex, targetIndex, newOrder } = result;
@@ -440,20 +450,31 @@
     reportGroups.value = result.newOrder;
   };
 
+  // 处理跨分组拖拽
+  const handleCrossGroupDrag = (result: CrossGroupDragResult) => {
+    const { reportId, fromGroupId, toGroupId, newIndex } = result;
+    console.log('跨分组拖拽结果:', {
+      reportId,
+      fromGroupId,
+      toGroupId,
+      newIndex,
+    });
+
+    // 找到源分组和目标分组
+    const fromGroup = reportGroups.value.find(g => g.id === fromGroupId);
+    const toGroup = reportGroups.value.find(g => g.id === toGroupId);
+
+    if (fromGroup && toGroup) {
+      // 报表已经被 vuedraggable 自动移动了，这里只需要调用 API 更新
+      // TODO: 调用后端接口更新报表所属分组
+      console.log(`报表 ${reportId} 从分组 ${fromGroup.name} 移动到 ${toGroup.name}`);
+    }
+  };
+
   // 删除报表
   const handleDelete = (report: Report) => {
     console.log('删除报表:', report);
     // TODO: 调用删除接口
-  };
-
-  // 重命名分组
-  const handleRenameGroup = (groupId: number, newName: string) => {
-    const group = reportGroups.value.find(g => g.id === groupId);
-    if (group) {
-      group.name = newName;
-      console.log('重命名分组成功:', groupId, newName);
-      // TODO: 调用后端接口更新分组名称
-    }
   };
 
   // 报表提交（新建/编辑）
