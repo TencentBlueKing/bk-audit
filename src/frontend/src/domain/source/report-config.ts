@@ -76,6 +76,29 @@ class PanelManage extends ModuleBase {
   deletePanel(params: { id: string }) {
     return Request.delete(`bkvision${this.module}/manage/panel_manage/${params.id}/`);
   }
+  // 更新Panel排序
+  orderPanels(params: {
+    panels: Array<{
+      id: string,
+      group_id: number,
+      priority_index: number,
+    }>,
+  }) {
+    return Request.post(`bkvision${this.module}/manage/panel_manage/order/`, {
+      params,
+    });
+  }
+  // 更新分组排序
+  orderGroups(params: {
+    groups: Array<{
+      id: number,
+      priority_index: number,
+    }>,
+  }) {
+    return Request.post(`bkvision${this.module}/manage/group_manage/order/`, {
+      params,
+    });
+  }
 }
 export default new PanelManage();
 

@@ -74,5 +74,30 @@ export default  {
   deletePanel(params: { id: string }) {
     return PanelModelSource.deletePanel(params);
   },
+  /**
+   * @desc 更新Panel排序
+   */
+  orderPanels(params: {
+    panels: Array<{
+      id: string,
+      group_id: number,
+      priority_index: number,
+    }>,
+  }) {
+    return PanelModelSource.orderPanels(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新分组排序
+   */
+  orderGroups(params: {
+    groups: Array<{
+      id: number,
+      priority_index: number,
+    }>,
+  }) {
+    return PanelModelSource.orderGroups(params)
+      .then(({ data }) => data);
+  },
 
 };

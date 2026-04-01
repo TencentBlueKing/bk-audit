@@ -55,30 +55,137 @@
                       type="plus-circle" />
                     {{ t('新建报表') }}
                   </bk-button>
-                  <bk-dropdown>
-                    <bk-button
-                      class="group-more-btn"
-                      text>
-                      <audit-icon type="more" />
-                    </bk-button>
-                    <template #content>
-                      <bk-dropdown-menu>
-                        <bk-dropdown-item @click="handleShowRenameDialog(group)">
-                          {{ t('重命名') }}
-                        </bk-dropdown-item>
-                      </bk-dropdown-menu>
-                    </template>
-                  </bk-dropdown>
                 </div>
               </div>
             </template>
             <template #content>
-              <primary-table
-                :columns="tableColumns as any"
-                :data="group.reports"
-                drag-sort="row-handler"
-                row-key="id"
-                @drag-sort="(params: any) => handleDragSort(group.id, params)" />
+              <div class="custom-table">
+                <!-- 表头 -->
+                <div class="custom-table-header">
+                  <div class="custom-table-cell drag-cell" />
+                  <div class="custom-table-cell id-cell">
+                    {{ t('报表ID') }}
+                  </div>
+                  <div class="custom-table-cell name-cell">
+                    {{ t('报表名称') }}
+                  </div>
+                  <div class="custom-table-cell desc-cell">
+                    {{ t('描述') }}
+                  </div>
+                  <div class="custom-table-cell bkvision-cell">
+                    {{ t('BKVision 报表') }}
+                  </div>
+                  <div class="custom-table-cell status-cell">
+                    {{ t('启用状态') }}
+                  </div>
+                  <div class="custom-table-cell updater-cell">
+                    {{ t('更新人') }}
+                  </div>
+                  <div class="custom-table-cell time-cell">
+                    {{ t('更新时间') }}
+                  </div>
+                  <div class="custom-table-cell action-cell">
+                    {{ t('操作') }}
+                  </div>
+                </div>
+                <!-- 表体 - 使用 vuedraggable 支持跨分组拖拽 -->
+                <vuedraggable
+                  v-model="group.reports"
+                  class="custom-table-body"
+                  :group="{ name: 'reports' }"
+                  handle=".row-drag-handle"
+                  item-key="id"
+                  @change="(evt: any) => handleReportDragChange(group.id, evt)">
+                  <template #item="{ element: report }">
+                    <div class="custom-table-row">
+                      <div class="custom-table-cell drag-cell">
+                        <audit-icon
+                          class="row-drag-handle table-drag-icon"
+                          type="move" />
+                      </div>
+                      <div class="custom-table-cell id-cell">
+                        <span class="cell-text">{{ report.id }}</span>
+                      </div>
+                      <div class="custom-table-cell name-cell">
+                        <span class="cell-text">{{ report.name }}</span>
+                      </div>
+                      <div class="custom-table-cell desc-cell">
+                        <span class="cell-text">{{ report.description || '-' }}</span>
+                      </div>
+                      <div class="custom-table-cell bkvision-cell">
+                        <span class="bkvision-report-cell">
+                          {{ report.bkvisionReportName || report.bkvisionReport }}
+                          <audit-icon
+                            class="jump-link"
+                            type="jump-link" />
+                        </span>
+                      </div>
+                      <div class="custom-table-cell status-cell">
+                        <bk-tag :theme="report.status === 'enabled' ? 'success' : ''">
+                          {{ report.status === 'enabled' ? t('启用') : t('停用') }}
+                        </bk-tag>
+                      </div>
+                      <div class="custom-table-cell updater-cell">
+                        <span class="cell-text">{{ report.updatedBy }}</span>
+                      </div>
+                      <div class="custom-table-cell time-cell">
+                        <span class="cell-text">{{ report.updatedAt }}</span>
+                      </div>
+                      <div class="custom-table-cell action-cell">
+                        <div class="action-column">
+                          <bk-button
+                            class="mr8"
+                            text
+                            theme="primary"
+                            @click="handleEdit(report)">
+                            {{ t('编辑') }}
+                          </bk-button>
+                          <bk-button
+                            v-if="report.status === 'enabled'"
+                            class="mr8"
+                            text
+                            theme="primary"
+                            @click="handleShowToggleStatusConfirm(report)">
+                            {{ t('停用') }}
+                          </bk-button>
+                          <bk-button
+                            v-else
+                            class="mr8"
+                            text
+                            theme="primary"
+                            @click="handleShowToggleStatusConfirm(report)">
+                            {{ t('启用') }}
+                          </bk-button>
+                          <bk-dropdown>
+                            <bk-button
+                              text
+                              theme="primary">
+                              <audit-icon type="more" />
+                            </bk-button>
+                            <template #content>
+                              <bk-dropdown-menu>
+                                <bk-dropdown-item>
+                                  <div
+                                    class="action-item danger"
+                                    @click="handleShowDeleteConfirm(report)">
+                                    {{ t('删除') }}
+                                  </div>
+                                </bk-dropdown-item>
+                              </bk-dropdown-menu>
+                            </template>
+                          </bk-dropdown>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </vuedraggable>
+                <!-- 空状态 -->
+                <div
+                  v-if="group.reports.length === 0"
+                  class="custom-table-empty">
+                  {{ t('暂无数据') }}
+                </div>
+              </div>
             </template>
           </bk-collapse-panel>
         </bk-collapse>
@@ -132,39 +239,6 @@
       </template>
     </bk-dialog>
 
-    <!-- 重命名弹窗 -->
-    <bk-dialog
-      v-model:is-show="renameDialogVisible"
-      :title="t('重命名')"
-      width="480">
-      <bk-form
-        ref="renameFormRef"
-        form-type="vertical"
-        :model="renameFormData"
-        :rules="renameFormRules">
-        <bk-form-item
-          :label="t('分组名称')"
-          property="name"
-          required>
-          <bk-input
-            v-model="renameFormData.name"
-            :placeholder="t('请输入')" />
-        </bk-form-item>
-      </bk-form>
-      <template #footer>
-        <bk-button
-          class="mr8"
-          :loading="renameLoading"
-          theme="primary"
-          @click="handleConfirmRename">
-          {{ t('确定') }}
-        </bk-button>
-        <bk-button @click="handleCancelRename">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
-
     <!-- 启用/停用确认弹窗 -->
     <bk-dialog
       v-model:is-show="toggleStatusDialogVisible"
@@ -205,8 +279,6 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import { PrimaryTable } from '@blueking/tdesign-ui';
-
   export interface Report {
     id: string;
     name: string;
@@ -244,6 +316,14 @@
     newOrder: ReportGroup[];
   }
 
+  // 跨分组拖拽结果
+  export interface CrossGroupDragResult {
+    reportId: string;
+    fromGroupId: number;
+    toGroupId: number;
+    newIndex: number;
+  }
+
   interface Emits {
     (e: 'add-report', groupId: number): void;
     (e: 'edit', report: Report): void;
@@ -253,7 +333,8 @@
     (e: 'deleted'): void;
     (e: 'drag-sort', result: DragSortResult): void;
     (e: 'group-drag-sort', result: GroupDragSortResult): void;
-    (e: 'rename-group', groupId: number, newName: string): void;
+    (e: 'cross-group-drag', result: CrossGroupDragResult): void;
+    (e: 'order-updated'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -277,24 +358,6 @@
   const deleteTarget = ref<Report | null>(null);
   const deleteConfirmInput = ref('');
 
-  // 重命名相关状态
-  const renameDialogVisible = ref(false);
-  const renameFormRef = ref();
-  const renameLoading = ref(false);
-  const renameTarget = ref<ReportGroup | null>(null);
-  const renameFormData = ref({
-    name: '',
-  });
-  const renameFormRules = {
-    name: [
-      {
-        required: true,
-        message: t('分组名称不能为空'),
-        trigger: 'blur',
-      },
-    ],
-  };
-
   // 启用/停用确认相关状态
   const toggleStatusDialogVisible = ref(false);
   const toggleStatusTarget = ref<Report | null>(null);
@@ -302,133 +365,11 @@
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
     localGroups.value = [...groups];
-    if (groups.length > 0 && activeGroups.value.length === 0) {
-      activeGroups.value = [groups[0].id];
+    // 默认全部展开
+    if (groups.length > 0) {
+      activeGroups.value = groups.map(group => group.id);
     }
   }, { immediate: true, deep: true });
-
-  // 表格列定义 (tdesign PrimaryTable 格式)
-  const tableColumns = [
-
-    {
-      colKey: 'drag', // 列拖拽排序必要参数
-      title: '',
-      cell: () => (
-            <span>
-                <audit-icon
-                    class="table-drag-icon"
-                    type="move" />
-            </span>
-        ),
-      width: 50,
-    },
-
-    {
-      title: t('报表ID'),
-      colKey: 'id',
-      minWidth: 120,
-      ellipsis: true,
-      cell: (_h: any, { row }: { row: Report }) => (
-            <span>{row.id}</span>
-        ),
-    },
-    {
-      title: t('报表名称'),
-      colKey: 'name',
-      minWidth: 200,
-    },
-    {
-      title: t('描述'),
-      colKey: 'description',
-      minWidth: 150,
-    },
-    {
-      title: t('BKVision 报表'),
-      colKey: 'bkvisionReport',
-      minWidth: 200,
-      cell: (_h: any, { row }: { row: Report }) => (
-            <span class="bkvision-report-cell">
-                {row.bkvisionReportName || row.bkvisionReport}
-                        <audit-icon type="jump-link" class="jump-link" />
-            </span>
-        ),
-    },
-    {
-      title: t('启用状态'),
-      colKey: 'status',
-      width: 100,
-      cell: (_h: any, { row }: { row: Report }) => (
-            <bk-tag theme={row.status === 'enabled' ? 'success' : ''}>
-                {row.status === 'enabled' ? t('启用') : t('停用')}
-            </bk-tag>
-        ),
-    },
-    {
-      title: t('更新人'),
-      colKey: 'updatedBy',
-      width: 150,
-    },
-    {
-      title: t('更新时间'),
-      colKey: 'updatedAt',
-      width: 180,
-      sorter: true,
-    },
-    {
-      title: t('操作'),
-      colKey: 'action',
-      width: 150,
-      cell: (_h: any, { row }: { row: Report }) => (
-            <div class="action-column">
-                <bk-button
-                    text
-                    theme="primary"
-                    class="mr8"
-                    onClick={() => handleEdit(row)}>
-                    {t('编辑')}
-                </bk-button>
-                {row.status === 'enabled' ? (
-                    <bk-button
-                        text
-                        theme="primary"
-                        class="mr8"
-                        onClick={() => handleShowToggleStatusConfirm(row)}>
-                        {t('停用')}
-                    </bk-button>
-                ) : (
-                    <bk-button
-                        text
-                        theme="primary"
-                        class="mr8"
-                        onClick={() => handleShowToggleStatusConfirm(row)}>
-                        {t('启用')}
-                    </bk-button>
-                )}
-                <bk-dropdown
-                    >
-                    {{
-                        default: () => (
-                            <bk-button text theme="primary">
-                                <audit-icon type="more" />
-                            </bk-button>
-                        ),
-                        content: () => (
-                            <bk-dropdown-menu>
-                                <bk-dropdown-item>
-                                    <div
-                                        class="action-item danger"
-                                        onClick={() => handleShowDeleteConfirm(row)}>
-                                        {t('删除')}
-                                    </div>
-                                </bk-dropdown-item>
-                            </bk-dropdown-menu>
-                        ),
-                    }}
-                </bk-dropdown>
-            </div>
-        ),
-    },
-  ];
 
   // 监听全部展开/收起
   watch(() => props.expandAll, (val) => {
@@ -438,6 +379,111 @@
       activeGroups.value = [];
     }
   });
+
+  // 用于跟踪报表原始所属分组
+  const reportGroupMap = ref<Map<string, number>>(new Map());
+
+  // 更新报表-分组映射
+  const updateReportGroupMap = () => {
+    reportGroupMap.value.clear();
+    localGroups.value.forEach((group) => {
+      group.reports.forEach((report) => {
+        reportGroupMap.value.set(report.id, group.id);
+      });
+    });
+  };
+
+  // 监听 props.groups 变化时更新映射
+  watch(() => props.groups, () => {
+    updateReportGroupMap();
+  }, { immediate: true, deep: true });
+
+  // 调用排序接口
+  const {
+    run: orderPanels,
+  } = useRequest(ReportConfigService.orderPanels, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('排序成功'));
+      emit('order-updated'); // 通知父组件刷新列表
+    },
+  });
+
+  // 构建排序参数 - 收集指定分组的所有 Panel
+  const buildOrderParams = (groupId: number) => {
+    const panels: Array<{ id: string; group_id: number; priority_index: number }> = [];
+    const group = localGroups.value.find(g => g.id === groupId);
+
+    if (group) {
+      // priority_index 按显示顺序从大到小赋值
+      const totalReports = group.reports.length;
+      group.reports.forEach((report, index) => {
+        panels.push({
+          id: report.id,
+          group_id: groupId, // 所有报表的 group_id 都设为目标分组 ID
+          priority_index: totalReports - 1 - index, // 第一个显示的 priority_index 最大
+        });
+      });
+    }
+
+    return { panels };
+  };
+
+  // 处理报表拖拽变化（包括跨分组拖拽）
+  const handleReportDragChange = (targetGroupId: number, evt: any) => {
+    const eventType = evt.added ? 'added' : evt.moved ? 'moved' : evt.removed ? 'removed' : 'unknown';
+    console.log(`拖拽事件[${eventType}]:`, { targetGroupId, evt });
+
+    // 添加事件 - 从其他分组拖入（跨分组拖拽）
+    if (evt.added) {
+      const { element: report, newIndex } = evt.added;
+      const fromGroupId = reportGroupMap.value.get(report.id);
+      console.log('=== 跨分组拖拽 added ===', { reportId: report.id, fromGroupId, targetGroupId });
+
+      // 跨分组拖拽 - 只传目标分组（B分组）的所有数据
+      const params = buildOrderParams(targetGroupId);
+      console.log('调用排序接口，参数:', JSON.stringify(params, null, 2));
+      orderPanels(params);
+
+      // 通知父组件跨分组拖拽事件（用于 UI 更新）
+      emit('cross-group-drag', {
+        reportId: report.id,
+        fromGroupId: fromGroupId || 0,
+        toGroupId: targetGroupId,
+        newIndex,
+      });
+
+      // 更新映射
+      reportGroupMap.value.set(report.id, targetGroupId);
+    }
+
+    // 移动事件 - 同分组内排序
+    if (evt.moved) {
+      const { oldIndex, newIndex } = evt.moved;
+      const group = localGroups.value.find(g => g.id === targetGroupId);
+      console.log('=== 同分组排序 moved ===', { targetGroupId, oldIndex, newIndex });
+
+      if (group) {
+        // 调用排序接口 - 只传当前分组的数据
+        const params = buildOrderParams(targetGroupId);
+        console.log('调用排序接口，参数:', JSON.stringify(params, null, 2));
+        orderPanels(params);
+
+        // 通知父组件（用于 UI 更新）
+        emit('drag-sort', {
+          groupId: targetGroupId,
+          currentIndex: oldIndex,
+          targetIndex: newIndex,
+          newOrder: group.reports,
+        });
+      }
+    }
+
+    // removed 事件不需要处理，因为我们在 added 时处理目标分组
+    if (evt.removed) {
+      console.log('=== removed 事件（不处理）===', { targetGroupId, reportId: evt.removed.element?.id });
+    }
+  };
 
   // 在分组中添加报表
   const handleAddReport = (groupId: number) => {
@@ -536,51 +582,36 @@
     }
   };
 
-  // 显示重命名弹窗
-  const handleShowRenameDialog = (group: ReportGroup) => {
-    renameTarget.value = group;
-    renameFormData.value.name = group.name;
-    renameDialogVisible.value = true;
-  };
+  // 调用分组排序接口
+  const {
+    run: orderGroups,
+  } = useRequest(ReportConfigService.orderGroups, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('排序成功'));
+      emit('order-updated'); // 通知父组件刷新列表
+    },
+  });
 
-  // 确认重命名
-  const handleConfirmRename = async () => {
-    try {
-      await renameFormRef.value?.validate();
-      if (renameTarget.value) {
-        renameLoading.value = true;
-        emit('rename-group', renameTarget.value.id, renameFormData.value.name);
-        renameDialogVisible.value = false;
-        renameTarget.value = null;
-        renameFormData.value.name = '';
-        renameLoading.value = false;
-      }
-    } catch {
-      // 表单验证失败
-    }
-  };
-
-  // 取消重命名
-  const handleCancelRename = () => {
-    renameDialogVisible.value = false;
-    renameTarget.value = null;
-    renameFormData.value.name = '';
-  };
-
-  // 处理表格拖拽排序
-  const handleDragSort = (groupId: number, params: any) => {
-    const { currentIndex, targetIndex, newData } = params;
-    // 返回拖拽结果给父组件
-    emit('drag-sort', {
-      groupId,
-      currentIndex,
-      targetIndex,
-      newOrder: newData as Report[],
-    });
+  // 构建分组排序参数
+  const buildGroupOrderParams = () => {
+    const totalGroups = localGroups.value.length;
+    const groups = localGroups.value.map((group, index) => ({
+      id: group.id,
+      // priority_index 由大到小，最后一个是 0
+      priority_index: totalGroups - 1 - index,
+    }));
+    return { groups };
   };
 
   // 处理分组拖拽结束
   const handleGroupDragEnd = () => {
+    // 调用分组排序接口
+    const params = buildGroupOrderParams();
+    console.log('分组拖拽 - 调用排序接口:', params);
+    orderGroups(params);
+
+    // 通知父组件（用于 UI 更新）
     emit('group-drag-sort', {
       newOrder: localGroups.value,
     });
@@ -704,7 +735,128 @@
   }
 }
 
-:deep(.table-drag-icon) {
+/* 自定义表格样式 */
+.custom-table {
+  width: 100%;
+  border: 1px solid #dcdee5;
+  border-top: none;
+}
+
+.custom-table-header {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #313238;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #dcdee5;
+}
+
+.custom-table-body {
+  min-height: 42px;
+}
+
+.custom-table-row {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  font-size: 12px;
+  color: #63656e;
+  background-color: #fff;
+  border-bottom: 1px solid #dcdee5;
+  transition: background-color .2s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background-color: #f5f7fa;
+
+    .jump-link {
+      opacity: 100%;
+    }
+  }
+}
+
+.custom-table-cell {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  overflow: hidden;
+}
+
+.cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 各列宽度定义 */
+.drag-cell {
+  width: 50px;
+  justify-content: center;
+  padding: 0;
+}
+
+.id-cell {
+  width: 180px;
+}
+
+.name-cell {
+  flex: 1;
+  min-width: 150px;
+}
+
+.desc-cell {
+  flex: 1;
+  min-width: 120px;
+}
+
+.bkvision-cell {
+  width: 200px;
+}
+
+.status-cell {
+  width: 100px;
+}
+
+.updater-cell {
+  width: 120px;
+}
+
+.time-cell {
+  width: 180px;
+}
+
+.action-cell {
+  width: 150px;
+}
+
+/* 空状态 */
+.custom-table-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  font-size: 14px;
+  color: #c4c6cc;
+  background-color: #fff;
+}
+
+/* 拖拽手柄 */
+.row-drag-handle {
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.table-drag-icon {
   font-size: 18px;
   color: #c4c6cc;
   cursor: grab;
@@ -714,43 +866,36 @@
   }
 }
 
-:deep(.t-table) {
-  border: none;
-
-  .t-table__header th {
-    background: #f5f7fa;
-  }
-
-  /* 拖拽行样式 */
-  .t-table__row--dragging {
-    background: #e1ecff;
-    opacity: 80%;
-  }
-}
-
 /* vuedraggable 拖拽中的样式 */
 .sortable-ghost {
-  background: #e1ecff;
+  background: #e1ecff !important;
   opacity: 50%;
 }
 
 .sortable-chosen {
-  background: #fff;
+  background: #fff !important;
   box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
 }
 
+.sortable-drag {
+  background: #fff !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
 /* 操作列样式 */
-:deep(.action-column) {
+.action-column {
   display: flex;
   align-items: center;
 }
 
 /* BKVision 报表单元格 */
-:deep(.bkvision-report-cell) {
+.bkvision-report-cell {
   display: inline-flex;
   align-items: center;
+  overflow: hidden;
 
   .jump-link {
+    flex-shrink: 0;
     margin-left: 4px;
     font-size: 14px;
     color: #3a84ff;
@@ -762,11 +907,6 @@
       color: #699df4;
     }
   }
-}
-
-/* 表格行 hover 时显示跳转图标 */
-:deep(.t-table__body tr:hover .jump-link) {
-  opacity: 100%;
 }
 
 /* 更多操作下拉菜单 */
