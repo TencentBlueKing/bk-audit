@@ -71,5 +71,11 @@ export default {
     提交: 'Submit',
     '请选择关联 BKVision 报表': 'Please select a BKVision report',
     请选择所属分组: 'Please select a group',
+    // Success Messages
+    创建成功: 'Created successfully',
+    更新成功: 'Updated successfully',
+    启用成功: 'Enabled successfully',
+    停用成功: 'Disabled successfully',
+    删除成功: 'Deleted successfully',
   },
 };
