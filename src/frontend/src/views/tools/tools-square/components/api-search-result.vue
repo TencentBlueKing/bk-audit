@@ -125,6 +125,9 @@
           <div
             v-for="(tableField, tableIndex) in group.table_fields"
             :key="tableIndex">
+            <div
+              v-if="group.kv_fields && group.kv_fields.length > 0 || tableIndex > 0"
+              class="table-field-divider" />
             <div class="top-search-table-title">
               <span
                 v-bk-tooltips="{
@@ -721,10 +724,17 @@
     font-size: 12px;
   }
 
+  .table-field-divider {
+    height: 1px;
+    margin: 12px 16px;
+    background-color: #eaebf0;
+  }
+
   .kv-field-item {
     .info-label {
       width: fit-content !important;
-      min-width: revert !important;
+      max-width: 400px !important;
+      min-width: 120px !important;
     }
   }
 }
