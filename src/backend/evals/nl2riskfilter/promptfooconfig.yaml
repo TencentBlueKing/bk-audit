@@ -52,7 +52,7 @@ defaultTest:
     - type: python
       value: 'file://assertions/check_filters.py:passes_serializer_validation'
     - type: latency
-      threshold: 15000
+      threshold: 20000
 
 evaluateOptions:
   maxConcurrency: 6

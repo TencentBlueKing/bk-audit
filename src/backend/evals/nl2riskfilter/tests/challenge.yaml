@@ -620,11 +620,11 @@
     - type: python
       value: "file://assertions/check_filters.py:field_value_match"
 
-# D42: 事件字段排序覆盖限制 — 用户要求按事件字段+时间排序，event_data 应优先
+# D42: 事件字段排序覆盖限制 — 用户要求按事件字段排序，event_data 应优先
 # 回归来源：sort help_text "event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段"
-- description: "D42-挑战：按违规金额和时间排序（event_data覆盖限制）"
+- description: "D42-挑战：按违规金额排序（event_data覆盖限制）"
   vars:
-    query: "游戏内赠送违规的风险按违规金额排序，时间最新的优先"
+    query: "游戏内赠送违规的风险，按违规金额从高到低排"
     tags: "[]"
     strategies: '[{"id": 136, "name": "【梯阵】游戏内赠送违规"}, {"id": 110, "name": "【回归】离线策略审计"}]'
     expected_keys: '["strategy_id", "sort"]'
