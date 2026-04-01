@@ -16,22 +16,58 @@
 -->
 <template>
   <div class="tools-square">
-    <!-- 左侧标签-->
-    <render-label
-      ref="renderLabelRef"
-      active="-3"
-      :final="3"
-      :labels="strategyLabelList"
-      :render-style="renderStyle"
-      :total="total"
-      :upgrade-total="upgradeTotal"
-      @checked="handleChecked" />
+    <!-- 左侧标签 -->
+    <div
+      class="sidebar-wrapper"
+      :class="{ 'is-collapsed': isSidebarCollapsed }">
+      <!-- 收缩状态 -->
+      <div
+        v-show="isSidebarCollapsed"
+        class="sidebar-collapsed"
+        @click="isSidebarCollapsed = false">
+        <div class="collapsed-inner">
+          <span class="collapsed-text">快捷筛选</span>
+          <img
+            class="collapsed-toggle-icon"
+            :src="foldRightIcon">
+        </div>
+      </div>
+      <!-- 展开状态 -->
+      <div
+        v-show="!isSidebarCollapsed"
+        class="sidebar-expanded">
+        <div class="sidebar-header">
+          <span class="sidebar-title">快捷筛选</span>
+          <img
+            class="sidebar-toggle-icon"
+            :src="foldLeftIcon"
+            @click="isSidebarCollapsed = true">
+        </div>
+        <render-label
+          ref="renderLabelRef"
+          active="-3"
+          :final="3"
+          :labels="strategyLabelList"
+          :render-style="renderStyle"
+          @checked="handleChecked" />
+        <!-- 内侧折叠图标，垂直居中靠右 -->
+        <div
+          class="sidebar-collapse-trigger"
+          @click="isSidebarCollapsed = true">
+          <img
+            class="ellipsis-icon"
+            :src="ellipsisIcon">
+        </div>
+      </div>
+    </div>
 
     <!-- 右侧内容-->
-    <div class="content-content">
+    <div
+      class="content-content"
+      :class="{ 'has-shadow': hasOpenedTools }">
       <div class="content-card">
         <content-card
-          v-if="!isOpenTool"
+          v-if="!hasOpenedTools"
           ref="ContentCardRef"
           :my-created="tagId === '-4'"
           :recent-used="tagId === '-5'"
@@ -41,15 +77,21 @@
           @open-tool="handleOpenTool" />
         <tool-info-panel
           v-else
-          :tool-info="toolInfo"
-          @close="handleCloseToolPanel" />
+          :active-uid="activeToolUid"
+          :tags-enums="tagsEnums"
+          :tool-list="openedTools"
+          @add-tool="handleAddToolFromPopover"
+          @close="handleCloseToolPanel"
+          @close-tab="handleCloseTab"
+          @go-home="handleGoHomePage"
+          @switch-tab="switchTab" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { nextTick, onMounted, ref } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -61,6 +103,10 @@
   import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
   import useRequest from '@/hooks/use-request';
+  import useToolTabs from '@/hooks/use-tool-tabs';
+  import ellipsisIcon from '@/images/ellipsis.svg';
+  import foldLeftIcon from '@/images/fold-left.svg';
+  import foldRightIcon from '@/images/fold-right.svg';
 
   interface TagItem {
     tag_id: string;
@@ -71,21 +117,39 @@
   const renderLabelRef = ref();
 
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
-  const isOpenTool = ref(false);
-
 
   const tagsEnums = ref<Array<TagItem>>([]);
-  const upgradeTotal = ref(0);
-  const total = ref(0);
   const tagId = ref('');
-  const toolInfo = ref<ToolInfo | null>(null);
   const strategyLabelList = ref<Array<TagItem>>([]);
   const renderStyle = ref({
     backgroundColor: '#fff',
   });
+
+  // 左侧导航栏收缩状态
+  const isSidebarCollapsed = ref(false);
+  // 标记是否正在从 home/关闭 回到工具列表，避免 watch 中的逻辑干扰
+  const isReturningHome = ref(false);
+
+  // 使用全局 composable 管理 tab 状态（路由切换时状态不丢失）
+  const {
+    openedTools,
+    activeToolUid,
+    hasOpenedTools,
+    openTool,
+    closeTab,
+    switchTab,
+    goHome,
+    clearAll,
+  } = useToolTabs();
+
   // 选中左侧label
-  const handleChecked = (name: string) => {
+  const handleChecked = async (name: string) => {
     tagId.value = name;
+    // 如果当前有打开的工具详情，先回到工具列表再切换标签
+    if (hasOpenedTools.value) {
+      goHome();
+      await nextTick();
+    }
     ContentCardRef.value?.getToolsList(name);
   };
   // 右边数据刷新
@@ -98,8 +162,9 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      const strategyList = data.map(item => ({ strategy_count: item.tool_count, ...item, icon: '' }));
-      // 自定义strategyLabelList.value 的前三个icon
+      const strategyList = data
+        .filter(item => item.tag_name && item.tag_name.trim() !== '')
+        .map(item => ({ ...item, icon: '' }));
       const iconMap: Record<number, string> = {
         0: 'quanbu-xuanzhong',
         1: 'morentouxiang',
@@ -116,18 +181,83 @@
     },
   });
 
-  const handleOpenTool = (ToolInfo: ToolInfo) => {
-    console.log('ToolInfo', ToolInfo);
-    isOpenTool.value = true;
-    toolInfo.value = ToolInfo;
+  // 打开工具 - 堆叠到 tab 列表
+  const handleOpenTool = (tool: ToolInfo) => {
+    openTool(tool);
+    // 打开工具详情时默认收缩左侧导航栏
+    isSidebarCollapsed.value = true;
   };
 
+  // 从 popover 添加工具（多选模式，不切换 tab）
+  const handleAddToolFromPopover = (tool: ToolInfo) => {
+    openTool(tool, false);
+  };
+
+  // 点击 home 图标，回到工具列表（保留已打开的 tab），默认回到全部工具
+  const handleGoHomePage = async () => {
+    // 标记正在返回首页，阻止 watch(isSidebarCollapsed) 中的 resetAll 干扰
+    isReturningHome.value = true;
+    tagId.value = '-3';
+    goHome();
+    // goHome 后 hasOpenedTools 变为 false，watch(hasOpenedTools) 会自动展开 sidebar
+    await nextTick();
+    await nextTick();
+    // 显式设置左侧标签栏选中"全部工具"（tag_id 为 '-3'）
+    renderLabelRef.value?.setLabel('-3');
+    ContentCardRef.value?.getToolsList(tagId.value);
+    isReturningHome.value = false;
+  };
+
+  // 关闭整个工具详情面板（点击 ×）
   const handleCloseToolPanel = async () => {
-    isOpenTool.value = false;
-    toolInfo.value = null;
+    clearAll();
+    // 关闭工具详情时展开左侧导航栏
+    isSidebarCollapsed.value = false;
     await nextTick();
     ContentCardRef.value?.getToolsList(tagId.value);
   };
+
+  // 关闭单个 tab
+  const handleCloseTab = async (uid: string) => {
+    closeTab(uid);
+    // 如果所有 tab 都关闭了，回到工具广场
+    if (!hasOpenedTools.value) {
+      await nextTick();
+      ContentCardRef.value?.getToolsList(tagId.value);
+    }
+  };
+
+  // 当有已打开的工具时，默认收缩左侧导航栏
+  watch(hasOpenedTools, (val) => {
+    if (val) {
+      isSidebarCollapsed.value = true;
+    } else {
+      isSidebarCollapsed.value = false;
+    }
+  }, { immediate: true });
+
+  // 折叠再展开时，重新清除 all 默认项，避免出现空白行
+  // 如果当前有打开的工具详情，展开时默认不选中任何菜单
+  // 如果是工具列表页面，展开时恢复之前选中的标签
+  watch(isSidebarCollapsed, (val) => {
+    if (!val) {
+      // 如果是从 home/关闭 返回，由 handleGoHomePage/handleCloseToolPanel 自行处理标签状态
+      if (isReturningHome.value) return;
+      nextTick(() => {
+        renderLabelRef.value?.resetAll([]);
+        if (hasOpenedTools.value) {
+          // 工具详情页展开sidebar时，清除左侧菜单选中状态
+          renderLabelRef.value?.setLabel('');
+        } else {
+          // 工具列表页面展开sidebar时，恢复之前选中的标签
+          // tagId 为空或 '-3' 表示"全部"，对应接口返回的 tag_id '-3'
+          const restoreLabel = (!tagId.value || tagId.value === '-3') ? '-3' : tagId.value;
+          renderLabelRef.value?.setLabel(restoreLabel);
+        }
+      });
+    }
+  });
+
   onMounted(() => {
     fetchToolsTagsList();
   });
@@ -139,40 +269,178 @@
   display: flex;
   width: 100vw;
   height: 100%;
-  background-color: #fff;
+  background-color: #f5f7fa;
   inset: 0;
 
-  .content-header {
-    top: 0;
-    width: 100%;
-    background-color: #fff;
+  .sidebar-wrapper {
+    height: 100%;
+    padding: 20px;
+    overflow: hidden;
+    background-color: #f5f7fa;
+    transition: width .3s ease;
 
-    /deep/ .bk-tab--unborder-card .bk-tab-header {
-      border-bottom: none;
-      box-shadow: 0 3px 4px 0 #0000000a;
+    /* position: relative; */
+    flex-shrink: 0;
+
+    &.is-collapsed {
+      width: 100px;
+    }
+
+    &:not(.is-collapsed) {
+      width: 282px;
+    }
+  }
+
+  .sidebar-collapsed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding-top: 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    opacity: 100%;
+    transition: opacity .2s ease .1s;
+
+    .collapsed-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 52px;
+      padding: 20px 0;
+      background-color: #fff;
+      border-radius: 4px;
+      gap: 2px;
+      box-shadow: 0 0 10px 0 rgb(0 0 0 / 10%);
+    }
+
+    .collapsed-text {
+      font-size: 14px;
+      line-height: 1.8;
+      letter-spacing: 10px;
+      color: #313238;
+      writing-mode: vertical-rl;
+    }
+
+    .collapsed-toggle-icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .sidebar-expanded {
+    position: relative;
+    width: 240px;
+    height: 100%;
+    background-color: #fff;
+    border-radius: 4px;
+    opacity: 100%;
+    box-shadow: 0  2px 4px  0 rgb(25 25 41 / 5%);
+    transition: opacity .2s ease .1s;
+
+    .sidebar-header {
+      position: relative;
+      display: flex;
+      height: 52px;
+      padding: 0 16px 0 26px;
+      align-items: center;
+      justify-content: space-between;
+
+      &::after {
+        position: absolute;
+        right: 16px;
+        bottom: 0;
+        left: 16px;
+        border-bottom: 1px solid #eaebf0;
+        content: '';
+      }
+
+      .sidebar-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #313238;
+      }
+
+      .sidebar-toggle-icon {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+    }
+
+    :deep(.render-label-box) {
+      height: calc(100% - 52px);
+
+      .render-label {
+        padding: 0;
+
+        .label-item {
+          padding: 0 26px;
+
+          &.final {
+            position: relative;
+            border-bottom: none;
+
+            &::after {
+              position: absolute;
+              right: 16px;
+              bottom: 0;
+              left: 16px;
+              border-bottom: 1px solid #eaebf0;
+              content: '';
+            }
+          }
+        }
+
+      }
+
+      .operation-box {
+        display: none;
+      }
+    }
+
+    .sidebar-collapse-trigger {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 100%;
+      cursor: pointer;
+      transform: translateY(-50%);
+
+      &:hover {
+        color: #3a84ff;
+      }
+
+      .ellipsis-icon {
+        width: 14px;
+        height: 18px;
+      }
     }
   }
 
   .content-content {
     width: 100%;
     height: 100%;
+    min-width: 0;
     margin-top: 0;
-    background-color: #f5f7fa;
+    overflow: auto;
+    transition: margin-left .3s ease;
 
-    .content-tag {
-      margin-left: 20px;
-      font-size: 12px;
-      letter-spacing: 0;
-      color: #979ba5;
-
-      .clear-tag {
-        margin-left: 20px;
-        color: #3a84ff;
-        cursor: pointer;
-      }
+    &.has-shadow {
+      box-shadow: -3px 0 6px 0 rgb(0 0 0 / 10%);
     }
+
+    .content-card {
+      width: 100%;
+      height: 100%;
+    }
+
   }
 }
 </style>
-
-
