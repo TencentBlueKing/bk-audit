@@ -77,5 +77,7 @@ export default {
     启用成功: 'Enabled successfully',
     停用成功: 'Disabled successfully',
     删除成功: 'Deleted successfully',
+    排序成功: 'Sorted successfully',
+    暂无数据: 'No data',
   },
 };
