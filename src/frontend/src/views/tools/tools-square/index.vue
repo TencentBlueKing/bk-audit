@@ -95,9 +95,12 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import ToolInfo from '@model/tool/tool-info';
+
   import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
 
   import ContentCard from './square-content/concent-card.vue';
+  import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
