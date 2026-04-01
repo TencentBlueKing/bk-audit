@@ -33,18 +33,16 @@
             property="bkvisionReport"
             required>
             <div class="bkvision-select-wrapper">
-              <bk-select
-                v-model="formData.bkvisionReport"
-                class="bkvision-select"
-                filterable
-                :placeholder="t('请选择')"
-                @change="handleBkvisionReportChange">
-                <bk-option
-                  v-for="item in bkvisionReportList"
-                  :key="item.id"
-                  :label="item.name"
-                  :value="item.id" />
-              </bk-select>
+              <bk-cascader
+                v-model="formData.vision_id"
+                children-key="share"
+                id-key="uid"
+                :list="Array.isArray(chartLists) ? chartLists : []"
+                :multiple="false"
+                :show-complete-name="false"
+                style="width: 500px;"
+                trigger="click"
+                @change="handleSpaceChange" />
               <bk-button
                 class="preview-btn"
                 :disabled="!formData.bkvisionReport"
@@ -133,33 +131,43 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, ref, watch } from 'vue';
+  import { computed, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  export interface ReportGroup {
-    id: string;
-    name: string;
-  }
+  import ReportConfigService from '@service/report-config';
+  import ToolManageService from '@service/tool-manage';
 
-  export interface BkvisionReport {
-    id: string;
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+
+  export interface ReportGroup {
+    id: number;
     name: string;
-    url?: string;
   }
 
   export interface ReportFormData {
+    id?: string;
     bkvisionReport: string;
     name: string;
-    groupId: string;
+    groupId: number | null;
     description: string;
     enabled: boolean;
+    vision_id: string[];
+  }
+
+  interface ChartListModel {
+    uid: string;
+    name: string;
+    share: Array<{
+      uid: string;
+      name: string;
+    }>;
   }
 
   interface Props {
     isShow: boolean;
     groupList?: ReportGroup[];
-    bkvisionReportList?: BkvisionReport[];
-    defaultGroupId?: string;
+    defaultGroupId?: number | null;
     editData?: ReportFormData | null;
   }
 
@@ -167,13 +175,13 @@
     (e: 'update:isShow', value: boolean): void;
     (e: 'submit', data: ReportFormData): void;
     (e: 'cancel'): void;
+    (e: 'success'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     isShow: false,
     groupList: () => [],
-    bkvisionReportList: () => [],
-    defaultGroupId: '',
+    defaultGroupId: null,
     editData: null,
   });
 
@@ -184,15 +192,19 @@
   // 是否编辑模式
   const isEditMode = computed(() => !!props.editData);
 
+  // 图表列表数据
+  const chartLists = ref<ChartListModel[]>([]);
+  const { messageSuccess } = useMessage();
+
   // 表单引用
   const formRef = ref();
-  const submitLoading = ref(false);
 
   // 表单数据
   const formData = ref<ReportFormData>({
     bkvisionReport: '',
+    vision_id: [],
     name: '',
-    groupId: '',
+    groupId: null,
     description: '',
     enabled: false,
   });
@@ -222,18 +234,36 @@
     ],
   };
 
+  // 根据子级 uid 查找完整的级联路径
+  const findCascaderPath = (targetUid: string): string[] => {
+    for (const parent of chartLists.value) {
+      if (parent.share) {
+        const child = parent.share.find(item => item.uid === targetUid);
+        if (child) {
+          return [parent.uid, child.uid];
+        }
+      }
+    }
+    return [];
+  };
+
   // 监听显示状态，重置表单
   watch(() => props.isShow, (val) => {
     if (val) {
       if (props.editData) {
         // 编辑模式，填充数据
         formData.value = { ...props.editData };
+        // 如果有 bkvisionReport，需要等待 chartLists 加载后设置完整路径
+        if (props.editData.bkvisionReport && chartLists.value.length > 0) {
+          formData.value.vision_id = findCascaderPath(props.editData.bkvisionReport);
+        }
       } else {
         // 新建模式，重置表单
         formData.value = {
           bkvisionReport: '',
+          vision_id: [],
           name: '',
-          groupId: props.defaultGroupId || '',
+          groupId: props.defaultGroupId ?? null,
           description: '',
           enabled: false,
         };
@@ -241,32 +271,101 @@
     }
   });
 
-  // 选择 BKVision 报表后自动填充名称
-  const handleBkvisionReportChange = (value: string) => {
-    const selectedReport = props.bkvisionReportList.find(item => item.id === value);
-    if (selectedReport && !formData.value.name) {
-      formData.value.name = selectedReport.name;
+  // 监听 chartLists 加载完成，编辑模式下设置级联选择器的值
+  watch(() => chartLists.value, (newChartLists) => {
+    if (newChartLists.length > 0 && props.isShow && props.editData?.bkvisionReport) {
+      formData.value.vision_id = findCascaderPath(props.editData.bkvisionReport);
+    }
+  });
+
+  // 级联选择器变化处理
+  const handleSpaceChange = (value: string[], _: unknown, selectedOptions: Record<string, string>[]) => {
+    if (value && value.length > 0) {
+      // 获取最后一级选中的值作为 bkvisionReport
+      formData.value.bkvisionReport = value[value.length - 1];
+      // 如果报表名称为空，自动填充选中的报表名称
+      if (!formData.value.name && selectedOptions && selectedOptions.length > 0) {
+        const lastOption = selectedOptions[selectedOptions.length - 1];
+        if (lastOption?.name) {
+          formData.value.name = lastOption.name;
+        }
+      }
+    } else {
+      formData.value.bkvisionReport = '';
     }
   };
 
   // 预览报表
   const handlePreview = () => {
-    const selectedReport = props.bkvisionReportList.find(item => item.id === formData.value.bkvisionReport);
-    if (selectedReport?.url) {
-      window.open(selectedReport.url, '_blank');
+    if (formData.value.bkvisionReport) {
+      // 根据选中的报表ID跳转到预览页面
+      // TODO: 根据实际的预览URL格式调整
+      const previewUrl = `/bkvision/preview/${formData.value.bkvisionReport}`;
+      window.open(previewUrl, '_blank');
     }
   };
 
+  // 创建 Panel
+  const {
+    run: createPanel,
+    loading: createLoading,
+  } = useRequest(ReportConfigService.createPanel, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('创建成功'));
+      emit('success'); // 通知父组件刷新列表
+      handleClose();
+    },
+  });
+
+  // 更新 Panel
+  const {
+    run: updatePanel,
+    loading: updateLoading,
+  } = useRequest(ReportConfigService.updatePanel, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('更新成功'));
+      emit('success'); // 通知父组件刷新列表
+      handleClose();
+    },
+  });
+
+  // 提交 loading
+  const submitLoading = computed(() => createLoading.value || updateLoading.value);
+
   // 提交
   const handleSubmit = async () => {
-    try {
-      await formRef.value?.validate();
-      submitLoading.value = true;
-      emit('submit', { ...formData.value });
-      submitLoading.value = false;
-    } catch {
-      // 表单验证失败
-    }
+    formRef.value?.validate().then(() => {
+      // 找到选中分组的名称
+      const selectedGroup = props.groupList.find(g => g.id === formData.value.groupId);
+      const groupName = selectedGroup?.name || '';
+      // 获取级联选择器选中的最后一级值（报表ID）
+      const visionId = formData.value.vision_id.length > 0
+        ? formData.value.vision_id[formData.value.vision_id.length - 1]
+        : '';
+
+      if (isEditMode.value && formData.value.id) {
+        // 编辑模式，调用 updatePanel API
+        updatePanel({
+          id: formData.value.id,
+          vision_id: visionId,
+          name: formData.value.name,
+          group_name: groupName,
+          description: formData.value.description || undefined,
+          is_enabled: formData.value.enabled,
+        });
+      } else {
+        // 创建模式，调用 createPanel API
+        createPanel({
+          vision_id: visionId,
+          name: formData.value.name,
+          group_name: groupName,
+          description: formData.value.description,
+          is_enabled: formData.value.enabled,
+        });
+      }
+    });
   };
 
   // 关闭
@@ -274,6 +373,25 @@
     emit('update:isShow', false);
     emit('cancel');
   };
+
+  // 获取图表列表
+  const {
+    run: fetchChartLists,
+  } = useRequest(ToolManageService.fetchChartLists, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      console.log('获取图表列表', data);
+      // 接口在 catch 时可能返回 'error' 字符串，需要判断
+      if (Array.isArray(data)) {
+        chartLists.value = data;
+      }
+    },
+  });
+
+  onMounted(() => {
+    fetchChartLists();
+  });
 </script>
 
 <style lang="postcss" scoped>
@@ -298,7 +416,7 @@
   align-items: center;
   gap: 8px;
 
-  .bkvision-select {
+  :deep(.bk-cascader) {
     flex: 1;
   }
 

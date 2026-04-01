@@ -47,7 +47,8 @@
         <bk-radio-group
           v-model="statusFilter"
           class="status-filter mr16"
-          type="capsule">
+          type="capsule"
+          @change="handleStatusFilterChange">
           <bk-radio-button label="all">
             {{ t('全部') }}
           </bk-radio-button>
@@ -84,10 +85,12 @@
         :groups="reportGroups"
         @add-report="handleAddReport"
         @delete="handleDelete"
+        @deleted="handleDeleted"
         @drag-sort="handleDragSort"
         @edit="handleEdit"
         @group-drag-sort="handleGroupDragSort"
         @rename-group="handleRenameGroup"
+        @status-updated="handleStatusUpdated"
         @toggle-status="handleToggleStatus" />
     </div>
 
@@ -127,21 +130,27 @@
     <!-- 新建/编辑报表侧边弹窗 -->
     <report-create-sideslider
       v-model:is-show="reportSidesliderVisible"
-      :bkvision-report-list="bkvisionReportList"
       :default-group-id="currentGroupId"
       :edit-data="editReportData"
       :group-list="groupListForSelect"
       @cancel="handleReportSidesliderCancel"
-      @submit="handleReportSubmit" />
+      @submit="handleReportSubmit"
+      @success="handleCreateSuccess" />
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { computed, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import PanelModelService from '@service/report-config';
+  import ToolManageService from '@service/tool-manage';
+
+  import PanelModel from '@model/report-config/panel';
+
+  import useRequest from '@hooks/use-request';
+
   import ReportCreateSideslider, {
-    type BkvisionReport,
     type ReportFormData,
   } from './components/report-create-sideslider.vue';
   import ReportGroupList, {
@@ -179,158 +188,121 @@
 
   // 新建/编辑报表侧边弹窗相关状态
   const reportSidesliderVisible = ref(false);
-  const currentGroupId = ref('');
+  const currentGroupId = ref<number | null>(null);
   const editReportData = ref<ReportFormData | null>(null);
 
-  // 模拟 BKVision 报表列表数据
-  const bkvisionReportList = ref<BkvisionReport[]>([
-    {
-      id: 'bkv-001',
-      name: '【审计中心-BKVision工具验证】BKVision工具验证-frodomei',
-      url: 'https://example.com/report/1',
-    },
-    {
-      id: 'bkv-002',
-      name: '【蓝鲸审计中心】审计中心报表',
-      url: 'https://example.com/report/2',
-    },
-    {
-      id: 'bkv-003',
-      name: '【蓝鲸审计中心】风险分析报表',
-      url: 'https://example.com/report/3',
-    },
-  ]);
+  // 分组列表（用于选择器），包含临时新建的分组
+  const tempNewGroup = ref<{ id: number; name: string; priority_index: number } | null>(null);
+  const groupListForSelect = computed(() => {
+    const list = reportGroups.value.map(g => ({
+      id: g.id,
+      name: g.name,
+    }));
+    // 如果有临时新建的分组，添加到列表开头
+    if (tempNewGroup.value) {
+      list.unshift({
+        id: tempNewGroup.value.id,
+        name: tempNewGroup.value.name,
+      });
+    }
+    return list;
+  });
 
-  // 分组列表（用于选择器）
-  const groupListForSelect = computed(() => reportGroups.value.map(g => ({
-    id: g.id,
-    name: g.name,
-  })));
+  const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
+  const reportGroups = ref<ReportGroup[]>([]);
 
-  // 模拟数据
-  const reportGroups = ref<ReportGroup[]>([
-    {
-      id: '1',
-      name: '专项分析',
-      reports: [
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Ralph Edwards',
-          updatedAt: '2026-03-23 22:38:52',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Jacob Jones',
-          updatedAt: '2026-03-23 21:12:38',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Darrell Steward',
-          updatedAt: '2026-03-23 20:14:57',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Brooklyn Simmons',
-          updatedAt: '2026-03-20 23:21:12',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Cameron Williamson',
-          updatedAt: '2026-03-20 18:22:56',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          bkvisionUrl: 'https://example.com',
-          status: 'disabled',
-          updatedBy: 'Dianne Russell',
-          updatedAt: '2026-03-20 07:20:08',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Albert Flores',
-          updatedAt: '2026-03-19 22:18:40',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'disabled',
-          updatedBy: 'Jerome Bell',
-          updatedAt: '2026-03-19 00:11:38',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Floyd Miles',
-          updatedAt: '2026-03-18 18:10:37',
-        },
-        {
-          id: 'RPT-0014',
-          name: 'raja 测试 doris 事件合流-实时策略',
-          description: '-',
-          bkvisionReport: '【蓝鲸审计中心】审计中心报表',
-          status: 'enabled',
-          updatedBy: 'Kristin Watson',
-          updatedAt: '2026-03-17 16:26:08',
-        },
-      ],
-    },
-    {
-      id: '2',
-      name: '系统运维',
-      reports: [],
-    },
-    {
-      id: '3',
-      name: '大屏看版',
-      reports: [],
-    },
-    {
-      id: '4',
-      name: '测试分组',
-      reports: [],
-    },
-    {
-      id: '5',
-      name: '分组名称',
-      reports: [],
-    },
-  ]);
+  // 图表列表数据
+  interface ChartListModel {
+    uid: string;
+    name: string;
+    share: Array<{
+      uid: string;
+      name: string;
+    }>;
+  }
+  const chartLists = ref<ChartListModel[]>([]);
 
+  // 根据 vision_id 查找 BKVision 报表名称
+  const findVisionName = (visionId: string): string => {
+    for (const parent of chartLists.value) {
+      if (parent.share) {
+        const child = parent.share.find(item => item.uid === visionId);
+        if (child) {
+          return child.name;
+        }
+      }
+    }
+    return '';
+  };
+
+  // 获取图表列表
+  const {
+    run: fetchChartLists,
+  } = useRequest(ToolManageService.fetchChartLists, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      if (Array.isArray(data)) {
+        chartLists.value = data;
+      }
+    },
+  });
+
+  // 获取分组Panel
+  const {
+    run: fetchPanels,
+  } = useRequest(PanelModelService.fetchPanels, {
+    defaultValue: [],
+    onSuccess: (panelsData) => {
+      console.log('获取分组Panel成功:', panelsData);
+      // 处理分组Panel数据，将panelsData中group_priority_index与groups中的priority_index相等的项合到groups.reports 中
+      // 过滤掉 reports 为空的分组，按 priority_index 从大到小排列
+      reportGroups.value = groups.value
+        .map(group => ({
+          id: group.id,
+          name: group.name,
+          priority_index: group.priority_index,
+          reports: panelsData
+            .filter((panel: PanelModel) => panel.group_priority_index === group.priority_index)
+            .map((panel: PanelModel) => ({
+              id: panel.id,
+              name: panel.name,
+              description: panel.description || '-',
+              bkvisionReport: panel.vision_id,
+              bkvisionReportName: findVisionName(panel.vision_id),
+              status: panel.is_enabled ? 'enabled' : 'disabled',
+              updatedBy: panel.updated_by,
+              updatedAt: panel.updated_at,
+            })) as Report[],
+        }))
+        .filter(group => group.reports.length > 0)
+        .sort((a, b) => b.priority_index - a.priority_index);
+      console.log('合并后的分组数据:', reportGroups.value);
+    },
+  });
+  // 获取分组
+  const {
+    run: fetchGroups,
+  } = useRequest(PanelModelService.fetchGroups, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      console.log('获取分组列表成功:', data);
+      groups.value = data;
+      // 根据状态筛选确定 is_enabled 参数
+      const isEnabled = statusFilter.value === 'all'
+        ? undefined
+        : statusFilter.value === 'enabled';
+      fetchPanels({
+        page: 1,
+        page_size: 10000,
+        is_enabled: isEnabled,
+        keyword: searchKeyword.value || undefined,
+      });
+    },
+  });
   // 新建报表 - 显示侧边弹窗
   const handleCreateReport = () => {
-    currentGroupId.value = '';
+    currentGroupId.value = null;
     editReportData.value = null;
     reportSidesliderVisible.value = true;
   };
@@ -347,23 +319,30 @@
       await createGroupFormRef.value?.validate();
       createGroupLoading.value = true;
 
-      // 生成新分组 ID
-      const newId = String(Date.now());
-      const newGroup: ReportGroup = {
+      // 生成新分组 ID 和 priority_index（取当前最大值 + 1）
+      const newId = Date.now();
+      const maxPriorityIndex = reportGroups.value.length > 0
+        ? Math.max(...reportGroups.value.map(g => g.priority_index))
+        : -1;
+
+      // 设置为临时分组（只在下拉选择器中显示，不加入主列表）
+      tempNewGroup.value = {
         id: newId,
         name: createGroupFormData.value.name,
-        reports: [],
+        priority_index: maxPriorityIndex + 1,
       };
-
-      // 添加到分组列表
-      reportGroups.value.push(newGroup);
 
       createGroupDialogVisible.value = false;
       createGroupFormData.value.name = '';
       createGroupLoading.value = false;
 
-      // TODO: 调用后端接口创建分组，成功后可自动弹出新建报表抽屉
-      console.log('新建分组成功:', newGroup);
+      // TODO: 调用后端接口创建分组
+      console.log('新建分组成功（临时）:', tempNewGroup.value);
+
+      // 自动弹出新建报表侧边抽屉，并默认选中新创建的分组
+      currentGroupId.value = newId;
+      editReportData.value = null;
+      reportSidesliderVisible.value = true;
     } catch {
       // 表单验证失败
     }
@@ -382,11 +361,25 @@
 
   // 搜索
   const handleSearch = () => {
-    console.log('搜索:', searchKeyword.value);
+    // 根据状态筛选确定 is_enabled 参数
+    const isEnabled = statusFilter.value === 'all'
+      ? undefined
+      : statusFilter.value === 'enabled';
+    fetchPanels({
+      page: 1,
+      page_size: 10000,
+      is_enabled: isEnabled,
+      keyword: searchKeyword.value || undefined,
+    });
+  };
+
+  // 状态筛选变化
+  const handleStatusFilterChange = () => {
+    handleSearch();
   };
 
   // 在分组中添加报表
-  const handleAddReport = (groupId: string) => {
+  const handleAddReport = (groupId: number) => {
     currentGroupId.value = groupId;
     editReportData.value = null;
     reportSidesliderVisible.value = true;
@@ -396,11 +389,13 @@
   const handleEdit = (report: Report) => {
     // 查找报表所属的分组
     const group = reportGroups.value.find(g => g.reports.some(r => r.id === report.id));
-    currentGroupId.value = group?.id || '';
+    currentGroupId.value = group?.id ?? null;
     editReportData.value = {
+      id: report.id,
       bkvisionReport: report.bkvisionReport,
+      vision_id: report.bkvisionReport ? [report.bkvisionReport] : [],
       name: report.name,
-      groupId: group?.id || '',
+      groupId: group?.id ?? null,
       description: report.description,
       enabled: report.status === 'enabled',
     };
@@ -410,6 +405,16 @@
   // 启用/停用报表
   const handleToggleStatus = (report: Report) => {
     console.log('切换状态:', report);
+  };
+
+  // 启用/停用成功后刷新列表
+  const handleStatusUpdated = () => {
+    handleSearch();
+  };
+
+  // 删除成功后刷新列表
+  const handleDeleted = () => {
+    handleSearch();
   };
 
   // 处理表格拖拽排序
@@ -442,7 +447,7 @@
   };
 
   // 重命名分组
-  const handleRenameGroup = (groupId: string, newName: string) => {
+  const handleRenameGroup = (groupId: number, newName: string) => {
     const group = reportGroups.value.find(g => g.id === groupId);
     if (group) {
       group.name = newName;
@@ -471,10 +476,26 @@
         updatedAt: new Date().toLocaleString(),
       };
 
-      // 添加到对应分组
-      const group = reportGroups.value.find(g => g.id === data.groupId);
-      if (group) {
-        group.reports.push(newReport);
+      // 检查是否选择了临时新建的分组
+      if (tempNewGroup.value && data.groupId === tempNewGroup.value.id) {
+        // 将临时分组正式加入主列表
+        const newGroup: ReportGroup = {
+          id: tempNewGroup.value.id,
+          name: tempNewGroup.value.name,
+          priority_index: tempNewGroup.value.priority_index,
+          reports: [newReport],
+        };
+        reportGroups.value.unshift(newGroup);
+        tempNewGroup.value = null;
+        console.log('新建分组并添加报表成功:', newGroup);
+      } else {
+        // 添加到已有分组
+        const group = reportGroups.value.find(g => g.id === data.groupId);
+        if (group) {
+          group.reports.push(newReport);
+        }
+        // 清除临时分组（如果有）
+        tempNewGroup.value = null;
       }
 
       console.log('新建报表成功:', newReport);
@@ -485,15 +506,40 @@
     editReportData.value = null;
   };
 
+  // 创建成功后刷新列表
+  const handleCreateSuccess = () => {
+    // 清除临时分组
+    tempNewGroup.value = null;
+    // 重新获取分组和Panel列表
+    console.log('创建成功后刷新列表');
+    fetchGroups({
+      page: 1,
+      page_size: 10000,
+    });
+  };
+
   // 报表侧边弹窗取消
   const handleReportSidesliderCancel = () => {
     editReportData.value = null;
+    // 取消时清除临时分组
+    tempNewGroup.value = null;
   };
+
+  onMounted(() => {
+    // 先获取图表列表，再获取分组数据
+    fetchChartLists().then(() => {
+      fetchGroups({
+        page: 1,
+        page_size: 10000,
+      });
+    });
+  });
 </script>
 
 <style lang="postcss" scoped>
   .report-config {
     position: relative;
+    min-height: 85vh;
     padding: 24px;
     background-color: #fff;
     border-radius: 2px;
