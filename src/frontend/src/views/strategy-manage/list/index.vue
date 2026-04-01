@@ -196,7 +196,8 @@
       <strategy-detail
         :data="strategyItem"
         :strategy-map="strategyTagMap"
-        :user-group-list="userGroupList" />
+        :user-group-list="userGroupList"
+        @tab-change="handleDetailTabChange" />
     </div>
   </audit-sideslider>
 
@@ -364,6 +365,7 @@
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
   const showRecords = ref(false);
+  const currentDetailTab = ref<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther'>('riskDetection');
   const styles = shallowRef({ left: '216px' });
   const strategyLabelList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
   const searchKey = ref<Array<SearchKey>>([]);
@@ -1230,6 +1232,19 @@
     });
   };
 
+  const tabToStepMap: Record<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther', number> = {
+    riskDetection: 1,
+    riskDisplay: 2,
+    eventReport: 3,
+    riskOther: 4,
+  };
+
+  const handleDetailTabChange = (tab: string) => {
+    if (tabToStepMap[tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther']) {
+      currentDetailTab.value = tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther';
+    }
+  };
+
   // 编辑
   const handleEdit = (data: StrategyModel) => {
     if (data.isPending) return;
@@ -1238,6 +1253,9 @@
       name: 'strategyEdit',
       params: {
         id: data.strategy_id,
+      },
+      query: {
+        step: tabToStepMap[currentDetailTab.value] || 1,
       },
     });
   };

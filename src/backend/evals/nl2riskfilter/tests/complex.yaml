@@ -1,0 +1,113 @@
+# B. 复杂场景（7 个）— 涉及 MCP/事件字段、多条件组合
+#
+# 使用真实策略数据：
+#   - strategy_id=110, 名称=【回归】离线策略审计（65个事件字段）
+#   - strategy_id=144, 名称=ITSM工单工时审计（74个事件字段）
+
+# B1: 单事件字段 — 来源IP（策略110）
+- description: "B1-复杂：来源IP包含10.0的风险（策略110）"
+  vars:
+    query: "来源IP包含10.0的风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["event_filters"]'
+    expected_event_fields: '["来源IP"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:has_event_filter_field"
+
+# B2: 多事件字段 — 操作人+来源IP（策略110）
+- description: "B2-复杂：操作人是admin且来源IP包含192.168的风险（策略110）"
+  vars:
+    query: "操作人是admin且来源IP包含192.168的风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["event_filters"]'
+    expected_event_fields: '["操作人", "来源IP"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:has_event_filter_field"
+
+# B3: 事件字段 + 常规字段组合
+- description: "B3-复杂：高危风险中来源IP包含192.168的（策略110）"
+  vars:
+    query: "高危风险中来源IP包含192.168的"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["risk_level", "event_filters"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# B4: IN 操作符（多值事件字段）
+- description: "B4-复杂：操作人是admin或root的风险（策略110）"
+  vars:
+    query: "操作人是admin或root的风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["event_filters"]'
+    expected_event_fields: '["操作人"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:has_event_filter_field"
+
+# B5: 多策略筛选（真实策略 110 + 144）
+- description: "B5-复杂：离线策略审计和ITSM工单工时审计的高危风险"
+  vars:
+    query: "离线策略审计和ITSM工单工时审计的高危风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}, {"id": 144, "name": "ITSM工单工时审计"}]'
+    expected_keys: '["strategy_id", "risk_level"]'
+    expected_values: '{"risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+
+# B6: 常规字段与事件字段重叠
+- description: "B6-复杂：张三负责的且来源IP包含10.0的高危风险（策略110）"
+  vars:
+    query: "张三负责的且来源IP包含10.0的高危风险"
+    tags: "[]"
+    strategies: '[{"id": 110, "name": "【回归】离线策略审计"}]'
+    expected_keys: '["operator", "risk_level"]'
+    expected_values: '{"operator": "张三", "risk_level": "HIGH"}'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:partial_match"
+
+# B7: 跨策略事件字段（策略144）
+- description: "B7-复杂：ITSM工单中处理人员包含testuser的风险（策略144）"
+  vars:
+    query: "ITSM工单中处理人员包含testuser的风险"
+    tags: "[]"
+    strategies: '[{"id": 144, "name": "ITSM工单工时审计"}]'
+    expected_keys: '["event_filters"]'
+    expected_event_fields: '["proceed_user"]'
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:has_event_filter_field"

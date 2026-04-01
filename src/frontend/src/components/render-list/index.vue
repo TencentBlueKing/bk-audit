@@ -215,12 +215,18 @@
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
         if (result) {
+          // 如果存在 sort，则删除 order_field 和 order_type 字段
+          const cleanedParams = { ...paramsMemo };
+          if (cleanedParams.sort) {
+            delete cleanedParams.order_field;
+            delete cleanedParams.order_type;
+          }
           const params = {
-            ...paramsMemo,
+            ...cleanedParams,
             page: isUnload.value ? 1 :  pagination.current,
             page_size: Math.max(pagination.limit, 1) < 10 ? 10 :  Math.max(pagination.limit, 1),
           };
-          isSearching.value = Object.keys(paramsMemo).length > 0;
+          isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
           run(params).finally(() => {
             isLoading.value = false;
@@ -236,6 +242,7 @@
       page_size: pageSize,
       order_field: orderField,
       order_type: orderType,
+      sort,
     } = getSearchParams();
     const pageValue = isUnload.value ? 1 : page;
     if (pageValue && pageSize) {
@@ -243,13 +250,28 @@
       pagination.limit = (~~pageSize) < 10 ? 10 :  (~~pageSize);
       pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
     }
-    if (orderField && orderType) {
+    // 优先使用新的 sort 数组格式，向后兼容旧的 order_field + order_type
+    if (sort) {
+      try {
+        const sortArray = Array.isArray(sort) ? sort : JSON.parse(sort);
+        if (Array.isArray(sortArray) && sortArray.length > 0) {
+          paramsMemo = {
+            ...paramsMemo,
+            sort: sortArray,
+          };
+        }
+      } catch {
+        // 如果解析失败，忽略
+      }
+    } else if (orderField && orderType) {
+      // 向后兼容：将旧的 order_field + order_type 转换为 sort 数组
+      const sortField = orderType === 'desc' ? `-${orderField}` : orderField;
       paramsMemo = {
         ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
+        sort: [sortField],
       };
     }
+    // 注意：默认排序应该在具体页面组件中设置，而不是在通用组件中
     // 从URL参数初始化时重置用户选择标志
     isUserSelectedPageSize.value = false;
     isReady = false;
@@ -272,12 +294,41 @@
       &&  props.reverseSortFields.includes(sortPayload.column.field)) {
       type = type === 'asc' ? 'desc' : 'asc';
     }
-    paramsMemo = {
-      ...paramsMemo,
-      // eslint-disable-next-line no-nested-ternary
-      order_field: type === 'null' ? undefined : (_.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field()),
-      order_type: type === 'null' ? undefined : type,
-    };
+    const field = _.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field();
+    // 使用新的 sort 数组格式：字段名前缀 - 表示倒序，无前缀为正序
+    if (type === 'null') {
+      // 清除排序
+      paramsMemo = {
+        ...paramsMemo,
+        sort: undefined,
+        order_field: undefined,
+        order_type: undefined,
+      };
+    } else {
+      const sortField = type === 'desc' ? `-${field}` : field;
+      // 根据常规字段排序规则拼装 sort 数组
+      const sortArray: string[] = [sortField];
+      // 风险等级：需要附带 -event_time 作为次级排序字段
+      if (field === 'risk_level') {
+        sortArray.push('-event_time');
+      }
+      // 首次发现时间：只按 event_time 排序（不附加次级字段）
+      // 最后处理时间：需要附带 -event_time 作为次级排序字段
+      if (field === 'last_operate_time') {
+        sortArray.push('-event_time');
+      }
+      // 展示状态：需要附带 -event_time 作为次级排序字段
+      if (field === 'display_status') {
+        sortArray.push('-event_time');
+      }
+      paramsMemo = {
+        ...paramsMemo,
+        sort: sortArray,
+        // 如果存在 sort，则删除 order_field 和 order_type 字段
+        order_field: undefined,
+        order_type: undefined,
+      };
+    }
     isLoading.value = true;
     fetchListData();
   };
@@ -408,6 +459,7 @@
       const {
         order_field: orderField,
         order_type: orderType,
+        sort,
       } = getSearchParams();
       const normalizedParams = Object.keys(params).reduce((result, key) => {
         const value = params[key];
@@ -422,10 +474,32 @@
           [key]: value,
         };
       }, {} as Record<string, any>);
+      // 优先使用新的 sort 数组格式
+      // 如果存在 sort，则删除 order_field 和 order_type 字段
+      let sortParam: Record<string, any> = {};
+      // 优先使用传入的 sort 参数
+      if (normalizedParams.sort) {
+        sortParam = {
+          sort: normalizedParams.sort,
+        };
+      } else if (sort) {
+        sortParam = {
+          sort: Array.isArray(sort) ? sort : JSON.parse(sort),
+        };
+      } else if (orderField && orderType) {
+        sortParam = {
+          sort: [orderType === 'desc' ? `-${orderField}` : orderField],
+        };
+      }
       paramsMemo = {
-        ...(orderField && orderType ? { order_field: orderField, order_type: orderType } : {}),
+        ...sortParam,
         ...normalizedParams,
       };
+      // 如果存在 sort，确保删除 order_field 和 order_type
+      if (paramsMemo.sort) {
+        delete paramsMemo.order_field;
+        delete paramsMemo.order_type;
+      }
       if (isReady) {
         pagination.current = 1;
       }

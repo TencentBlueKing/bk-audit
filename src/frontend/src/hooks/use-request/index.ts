@@ -69,9 +69,11 @@ export default function <T> (
 
   let paramsMemo = {};
   let cancelTokenSource: CancelTokenSource;
+  let isCancelled = false;
 
   const run = (params = {} as Record<string, any>) => {
     paramsMemo = params || {};
+    isCancelled = false;
     const requestHandler = options.holdLoading ? execRequest(service(params), () => {
       loading.value = true;
     }) : (() => {
@@ -90,7 +92,10 @@ export default function <T> (
         throw errorMsg;
       })
       .finally(() => {
-        loading.value = false;
+        // 被取消的请求不重置 loading，避免覆盖新请求的 loading 状态
+        if (!isCancelled) {
+          loading.value = false;
+        }
         options.onFinally?.();
       }) as Promise<T>;
     cancelTokenSource = getCancelTokenSource();
@@ -103,6 +108,7 @@ export default function <T> (
 
   const cancel = () => {
     if (cancelTokenSource) {
+      isCancelled = true;
       cancelTokenSource.cancel();
     }
   };
