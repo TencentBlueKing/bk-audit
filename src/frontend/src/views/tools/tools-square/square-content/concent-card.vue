@@ -300,6 +300,7 @@
   }
   interface Emits {
     (e: 'change'): void;
+    (e: 'openTool', toolInfo: ToolInfo): void;
   }
 
   const props = defineProps<Props>();
@@ -332,7 +333,7 @@
     allOpenToolsData,
     dialogRefs,
     openFieldDown,
-    handleOpenTool,
+    // handleOpenTool,
   } = useToolDialog();
 
   const searchValue = ref<string>('');
@@ -355,7 +356,7 @@
 
   const urlToolsIds = ref<Set<string>>(new Set());
   // 防止复制链接打开时重复打开弹窗（fetchToolsList 的 onSuccess 可能被多次触发）
-  const processedUrlToolId = ref<string | null>(null);
+  // const processedUrlToolId = ref<string | null>(null);
   const {
     removeSearchParam,
     appendSearchParams,
@@ -376,36 +377,36 @@
     defaultValue: {},
   });
 
-  const openUrlTools = () => {
-    const toolIdParam = route.query.tool_id;
-    if (!toolIdParam) return;
+  // const openUrlTools = () => {
+  //   const toolIdParam = route.query.tool_id;
+  //   if (!toolIdParam) return;
 
-    const toolIdKey = typeof toolIdParam === 'string' ? toolIdParam : '';
-    if (processedUrlToolId.value === toolIdKey) {
-      return; // 已处理过该 tool_id，防止重复打开弹窗
-    }
-    processedUrlToolId.value = toolIdKey;
+  //   const toolIdKey = typeof toolIdParam === 'string' ? toolIdParam : '';
+  //   if (processedUrlToolId.value === toolIdKey) {
+  //     return; // 已处理过该 tool_id，防止重复打开弹窗
+  //   }
+  //   processedUrlToolId.value = toolIdKey;
 
-    const toolIds = toolIdKey.split(',');
-    urlToolsIds.value = new Set(toolIds);
-    allOpenToolsData.value = toolIds;
-    if (urlToolsIds.value.size > 0) {
-      urlToolsIds.value.forEach((item: string) => {
-        // 使用hooks中的handleOpenTool
-        handleOpenTool(item);
-        setTimeout(() => {
-          const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
-          Array.from(modals).reverse()
-            .forEach((modal, index) => {
-              const htmlModal = modal as HTMLElement;
-              if (index > 0 && !htmlModal.style.transform) {
-                htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-              }
-            });
-        }, 0);
-      });
-    }
-  };
+  //   const toolIds = toolIdKey.split(',');
+  //   urlToolsIds.value = new Set(toolIds);
+  //   allOpenToolsData.value = toolIds;
+  //   if (urlToolsIds.value.size > 0) {
+  //     urlToolsIds.value.forEach((item: string) => {
+  //       // 使用hooks中的handleOpenTool
+  //       handleOpenTool(item);
+  //       setTimeout(() => {
+  //         const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
+  //         Array.from(modals).reverse()
+  //           .forEach((modal, index) => {
+  //             const htmlModal = modal as HTMLElement;
+  //             if (index > 0 && !htmlModal.style.transform) {
+  //               htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+  //             }
+  //           });
+  //       }, 0);
+  //     });
+  //   }
+  // };
 
   // 工具列表
   const {
@@ -419,7 +420,7 @@
 
       // 自动打开弹窗
       if (route.query.tool_id) {
-        openUrlTools();
+        // openUrlTools();
       }
     },
   });
@@ -675,7 +676,8 @@
     handleCancel(toolInfo.uid);
 
     // 使用hooks中的handleOpenTool
-    handleOpenTool(toolInfo.uid);
+    // handleOpenTool(toolInfo.uid);
+    emits('openTool', toolInfo);
   };
 
   // 关闭弹窗
