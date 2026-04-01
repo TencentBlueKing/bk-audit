@@ -18,130 +18,128 @@
   <div
     id="scroll-dialog-content"
     :style="contentStyle">
-    <scroll-faker>
-      <template
-        v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
-        <!-- 有权限时 -->
-        <div v-if="toolDetails?.permission.use_tool">
-          <div class="top-search">
-            <div class="top-search-title">
-              {{ t('查询输入') }}
-            </div>
-            <bk-form
-              ref="formRef"
-              class="example"
-              form-type="vertical"
-              :model="searchFormData"
-              :rules="rules">
-              <div class="formref-item">
-                <bk-form-item
-                  v-for="(item, index) in localSearchList"
-                  v-show="item?.is_show !== false"
-                  :key="index"
-                  class="formref-item-item"
-                  :property="item?.raw_name"
-                  :required="item?.required">
-                  <template #label>
-                    <span
-                      v-bk-tooltips="{
-                        disabled: !item?.description && !item?.raw_name.replace(/(body|path|query)$/, ''),
-                        content: item?.description || item?.raw_name.replace(/(body|path|query)$/, ''),
-                      }">
-                      {{ item?.display_name || item?.raw_name.replace(/(body|path|query)$/, '') }}
-                    </span>
-                  </template>
-                  <tool-form-item
-                    ref="formItemRef"
-                    :data-config="item"
-                    @change="(val:any) => handleFormItemChange(val, item)" />
-                </bk-form-item>
-              </div>
-            </bk-form>
-            <div v-if="source === ''">
-              <bk-button
-                class="mr8"
-                theme="primary"
-                @click.stop="submit">
-                查询
-              </bk-button>
-              <bk-button
-                class="mr8"
-                @click.stop="handleReset">
-                重置
-              </bk-button>
-            </div>
+    <template
+      v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
+      <!-- 有权限时 -->
+      <div v-if="toolDetails?.permission.use_tool">
+        <div class="top-search">
+          <div class="top-search-title">
+            {{ t('查询输入') }}
           </div>
-          <div class="top-search">
-            <div class="top-search-title">
-              {{ t('查询结果') }}
+          <bk-form
+            ref="formRef"
+            class="example"
+            form-type="vertical"
+            :model="searchFormData"
+            :rules="rules">
+            <div class="formref-item">
+              <bk-form-item
+                v-for="(item, index) in localSearchList"
+                v-show="item?.is_show !== false"
+                :key="index"
+                class="formref-item-item"
+                :property="item?.raw_name"
+                :required="item?.required">
+                <template #label>
+                  <span
+                    v-bk-tooltips="{
+                      disabled: !item?.description && !item?.raw_name.replace(/(body|path|query)$/, ''),
+                      content: item?.description || item?.raw_name.replace(/(body|path|query)$/, ''),
+                    }">
+                    {{ item?.display_name || item?.raw_name.replace(/(body|path|query)$/, '') }}
+                  </span>
+                </template>
+                <tool-form-item
+                  ref="formItemRef"
+                  :data-config="item"
+                  @change="(val:any) => handleFormItemChange(val, item)" />
+              </bk-form-item>
             </div>
-            <div class="top-search-result">
-              <bk-loading :loading="isLoading">
-                <!-- sql工具 -->
-                <data-search-result
-                  v-if="toolDetails?.tool_type === 'data_search'"
-                  ref="dataSearchResultRef"
-                  :get-tool-name-and-type="getToolNameAndType"
-                  :max-height="maxHeight"
-                  remote-pagination
-                  :risk-tool-params="riskToolParams"
-                  :search-list="localSearchList"
-                  :tool-details="toolDetails"
-                  :uid="uid"
-                  @handle-field-down-click="handleFieldDownClick" />
-
-                <!-- api工具 -->
-                <api-search-result
-                  v-show="toolDetails?.tool_type === 'api'"
-                  ref="apiSearchResultRef"
-                  :get-tool-name-and-type="getToolNameAndType"
-                  :max-height="maxHeight"
-                  :risk-tool-params="riskToolParams"
-                  :search-list="localSearchList"
-                  :tool-details="toolDetails"
-                  :uid="uid"
-                  @handle-field-down-click="handleFieldDownClick" />
-              </bk-loading>
-            </div>
+          </bk-form>
+          <div v-if="source === ''">
+            <bk-button
+              class="mr8"
+              theme="primary"
+              @click.stop="submit">
+              查询
+            </bk-button>
+            <bk-button
+              class="mr8"
+              @click.stop="handleReset">
+              重置
+            </bk-button>
           </div>
         </div>
-        <!-- 无权限时 -->
-        <div
-          v-else
-          class="default-permission">
-          <div class="no-permission">
-            <img
-              class="no-permission-img"
-              src="@images/no-permission.svg">
-            <div class="no-permission-desc">
-              <p class="no-permission-title">
-                {{ t('无使用权限') }}
-              </p>
-              <p class="no-permission-text">
-                {{ t('你没有该工具的使用权限，请前往申请权限') }}
-              </p>
-              <p
-                class="no-permission-btn"
-                @click.stop="handleIamApply">
-                {{ t('申请权限') }}
-              </p>
-            </div>
+        <div class="top-search">
+          <div class="top-search-title">
+            {{ t('查询结果') }}
+          </div>
+          <div class="top-search-result">
+            <bk-loading :loading="isLoading">
+              <!-- sql工具 -->
+              <data-search-result
+                v-if="toolDetails?.tool_type === 'data_search'"
+                ref="dataSearchResultRef"
+                :get-tool-name-and-type="getToolNameAndType"
+                :max-height="maxHeight"
+                remote-pagination
+                :risk-tool-params="riskToolParams"
+                :search-list="localSearchList"
+                :tool-details="toolDetails"
+                :uid="uid"
+                @handle-field-down-click="handleFieldDownClick" />
+
+              <!-- api工具 -->
+              <api-search-result
+                v-show="toolDetails?.tool_type === 'api'"
+                ref="apiSearchResultRef"
+                :get-tool-name-and-type="getToolNameAndType"
+                :max-height="maxHeight"
+                :risk-tool-params="riskToolParams"
+                :search-list="localSearchList"
+                :tool-details="toolDetails"
+                :uid="uid"
+                @handle-field-down-click="handleFieldDownClick" />
+            </bk-loading>
           </div>
         </div>
-      </template>
+      </div>
+      <!-- 无权限时 -->
+      <div
+        v-else
+        class="default-permission">
+        <div class="no-permission">
+          <img
+            class="no-permission-img"
+            src="@images/no-permission.svg">
+          <div class="no-permission-desc">
+            <p class="no-permission-title">
+              {{ t('无使用权限') }}
+            </p>
+            <p class="no-permission-text">
+              {{ t('你没有该工具的使用权限，请前往申请权限') }}
+            </p>
+            <p
+              class="no-permission-btn"
+              @click.stop="handleIamApply">
+              {{ t('申请权限') }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </template>
 
-      <!-- bkVision工具 -->
-      <bk-vision-result
-        v-if="toolDetails?.tool_type === 'bk_vision'"
-        ref="bkVisionResultRef"
-        :drill-down-item-config="drillDownItemConfig"
-        :drill-down-item-row-data="drillDownItemRowData"
-        :is-drill-down-open="isDrillDownOpen"
-        :risk-tool-params="riskToolParams"
-        :search-list="localSearchList"
-        :tool-details="toolDetails"
-        :uid="uid" />
-    </scroll-faker>
+    <!-- bkVision工具 -->
+    <bk-vision-result
+      v-if="toolDetails?.tool_type === 'bk_vision'"
+      ref="bkVisionResultRef"
+      :drill-down-item-config="drillDownItemConfig"
+      :drill-down-item-row-data="drillDownItemRowData"
+      :is-drill-down-open="isDrillDownOpen"
+      :risk-tool-params="riskToolParams"
+      :search-list="localSearchList"
+      :tool-details="toolDetails"
+      :uid="uid" />
   </div>
 </template>
 
@@ -218,7 +216,7 @@
     isDrillDownOpen: false,
     drillDownItemConfig: () => [],
     drillDownItemRowData: () => ({}),
-    maxHeight: '300px',
+    maxHeight: '600px',
     contentStyle: () => ({}),
     riskToolParams: undefined,
   });
@@ -467,6 +465,32 @@
         cursor: pointer;
       }
     }
+  }
+}
+
+/* api-search-result 样式覆盖 - 仅在工具广场生效 */
+:deep(.card-content) {
+  border: .5px solid #dcdee5;
+  border-bottom-right-radius: 2px;
+  border-bottom-left-radius: 2px;
+}
+
+:deep(.bk-table.bordered-outer) {
+  border-top: none;
+  border-right: none;
+  border-left: none;
+
+  .bk-table-footer {
+    background-color: #fff;
+    border-bottom: none;
+  }
+}
+
+:deep(.bk-table) {
+  .bk-table-head table thead th,
+  .bk-table-body table thead th,
+  table thead th {
+    background-color: #f0f1f5 !important;
   }
 }
 </style>
