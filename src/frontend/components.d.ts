@@ -67,6 +67,7 @@ declare module 'vue' {
     ShowTooltipsText: typeof import('./src/components/show-tooltips-text/index.vue')['default']
     SkeletonLoading: typeof import('./src/components/skeleton-loading/index.vue')['default']
     SmartAction: typeof import('./src/components/smart-action/index.vue')['default']
+    StatementSidebar: typeof import('./src/components/statement-sidebar/index.vue')['default']
     StorageList: typeof import('./src/components/skeleton-loading/components/storage-list.vue')['default']
     StrategyList: typeof import('./src/components/skeleton-loading/components/strategy-list.vue')['default']
     Switch: typeof import('./src/components/auth/switch.vue')['default']
