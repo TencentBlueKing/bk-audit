@@ -431,7 +431,14 @@
 
   // 处理报表拖拽变化（包括跨分组拖拽）
   const handleReportDragChange = (targetGroupId: number, evt: any) => {
-    const eventType = evt.added ? 'added' : evt.moved ? 'moved' : evt.removed ? 'removed' : 'unknown';
+    let eventType = 'unknown';
+    if (evt.added) {
+      eventType = 'added';
+    } else if (evt.moved) {
+      eventType = 'moved';
+    } else if (evt.removed) {
+      eventType = 'removed';
+    }
     console.log(`拖拽事件[${eventType}]:`, { targetGroupId, evt });
 
     // 添加事件 - 从其他分组拖入（跨分组拖拽）

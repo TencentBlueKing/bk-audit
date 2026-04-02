@@ -99,5 +99,15 @@ export default  {
     return PanelModelSource.orderGroups(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 收藏/取消收藏Panel
+   */
+  updateFavorite(params: {
+    panel_id: string,
+    is_favorite: boolean,
+  }) {
+    return PanelModelSource.updateFavorite(params)
+      .then(({ data }) => data);
+  },
 
 };
