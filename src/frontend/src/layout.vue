@@ -240,16 +240,7 @@
           </audit-menu-item>
         </template>
         <template v-else-if="menuData.length && curNavName === 'auditStatement'">
-          <audit-menu-item
-            v-for="item in menuData"
-            :key="item.id"
-            :class="[item.id === route.params.id ? 'active' : '']"
-            :index="item.id">
-            <audit-icon
-              class="menu-item-icon"
-              type="baobiao" />
-            {{ item.name }}
-          </audit-menu-item>
+          <statement-sidebar :menu-data="menuData" />
         </template>
         <template v-else-if="curNavName === 'nweSystemManage'">
           <div class="system-select">
@@ -435,6 +426,7 @@
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
+  import StatementSidebar from '@components/statement-sidebar/index.vue';
 
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 

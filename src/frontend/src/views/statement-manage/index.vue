@@ -67,6 +67,7 @@
 
   // 获取审计报表左侧菜单
   const {
+    run: fetchMenuListRun,
     loading: isLoading,
   } = useRequest(StatementManageService.fetchMenuList, {
     manual: true,
@@ -75,6 +76,7 @@
     },
     defaultValue: [],
     onSuccess: (menuData) => {
+      console.log('menuData 获取成功:', menuData);
       emit('statement-menuData', menuData);
       // 仅当没有id且menuData有数据时才进行路由跳转
       if (!(route.params?.id) && menuData.length > 0 && menuData[0]?.id) {
@@ -85,6 +87,12 @@
           } });
       }
     },
+  });
+
+  // 监听子组件的刷新菜单事件
+  on('refresh-menu', () => {
+    console.log('收到 refresh-menu 事件，重新获取 menuData');
+    fetchMenuListRun();
   });
 </script>
 <style lang="postcss">

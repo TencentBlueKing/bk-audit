@@ -99,6 +99,15 @@ class PanelManage extends ModuleBase {
       params,
     });
   }
+  // 收藏/取消收藏Panel
+  updateFavorite(params: {
+    panel_id: string,
+    is_favorite: boolean,
+  }) {
+    return Request.post(`bkvision${this.module}/panel_preference/favorites/`, {
+      params,
+    });
+  }
 }
 export default new PanelManage();
 
