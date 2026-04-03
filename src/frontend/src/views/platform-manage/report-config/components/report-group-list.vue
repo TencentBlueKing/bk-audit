@@ -431,25 +431,13 @@
 
   // 处理报表拖拽变化（包括跨分组拖拽）
   const handleReportDragChange = (targetGroupId: number, evt: any) => {
-    let eventType = 'unknown';
-    if (evt.added) {
-      eventType = 'added';
-    } else if (evt.moved) {
-      eventType = 'moved';
-    } else if (evt.removed) {
-      eventType = 'removed';
-    }
-    console.log(`拖拽事件[${eventType}]:`, { targetGroupId, evt });
-
     // 添加事件 - 从其他分组拖入（跨分组拖拽）
     if (evt.added) {
       const { element: report, newIndex } = evt.added;
       const fromGroupId = reportGroupMap.value.get(report.id);
-      console.log('=== 跨分组拖拽 added ===', { reportId: report.id, fromGroupId, targetGroupId });
 
       // 跨分组拖拽 - 只传目标分组（B分组）的所有数据
       const params = buildOrderParams(targetGroupId);
-      console.log('调用排序接口，参数:', JSON.stringify(params, null, 2));
       orderPanels(params);
 
       // 通知父组件跨分组拖拽事件（用于 UI 更新）
@@ -468,12 +456,10 @@
     if (evt.moved) {
       const { oldIndex, newIndex } = evt.moved;
       const group = localGroups.value.find(g => g.id === targetGroupId);
-      console.log('=== 同分组排序 moved ===', { targetGroupId, oldIndex, newIndex });
 
       if (group) {
         // 调用排序接口 - 只传当前分组的数据
         const params = buildOrderParams(targetGroupId);
-        console.log('调用排序接口，参数:', JSON.stringify(params, null, 2));
         orderPanels(params);
 
         // 通知父组件（用于 UI 更新）
@@ -484,11 +470,6 @@
           newOrder: group.reports,
         });
       }
-    }
-
-    // removed 事件不需要处理，因为我们在 added 时处理目标分组
-    if (evt.removed) {
-      console.log('=== removed 事件（不处理）===', { targetGroupId, reportId: evt.removed.element?.id });
     }
   };
 
@@ -615,7 +596,6 @@
   const handleGroupDragEnd = () => {
     // 调用分组排序接口
     const params = buildGroupOrderParams();
-    console.log('分组拖拽 - 调用排序接口:', params);
     orderGroups(params);
 
     // 通知父组件（用于 UI 更新）
