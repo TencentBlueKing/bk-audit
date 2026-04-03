@@ -57,12 +57,12 @@
             theme="light" />
 
           <audit-icon
-            v-if="hoveredFavoriteItemId === child.id"
+            v-if="!collapsed && hoveredFavoriteItemId === child.id"
             class="side-pentagram-close"
             type="close"
             @click.stop="handleToggleFavorite(child, false)" />
           <img
-            v-if="hoveredFavoriteItemId !== child.id"
+            v-if="!collapsed && hoveredFavoriteItemId !== child.id"
             class="side-pentagram-fill"
             src="@images/pentagram-fill.svg"
             @click.stop="handleToggleFavorite(child, false)">
@@ -109,13 +109,13 @@
             style="display: inline-block;max-width: 130px; vertical-align: middle;"
             theme="light" />
           <img
-            v-if="child.is_favorite"
+            v-if="!collapsed && child.is_favorite"
             v-show="hoveredItemId === child.id || child.id === route.params.id"
             class="side-pentagram-fill"
             src="@images/pentagram-fill.svg"
             @click.stop="handleToggleFavorite(child, false)">
           <img
-            v-else
+            v-else-if="!collapsed"
             v-show="hoveredItemId === child.id || child.id === route.params.id"
             class="side-pentagram"
             src="@images/pentagram.svg"
@@ -127,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue';
+  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -169,6 +169,31 @@
   const { emit } = useEventBus();
   const { t } = useI18n();
   const route = useRoute();
+
+  // 侧边栏宽度阈值，小于此值认为是收起状态
+  const COLLAPSED_WIDTH_THRESHOLD = 100;
+  // 侧边栏宽度
+  const sidebarWidth = ref(0);
+  // 侧边栏是否收起（根据宽度判断）
+  const collapsed = computed(() => sidebarWidth.value < COLLAPSED_WIDTH_THRESHOLD);
+
+  // ResizeObserver 实例
+  let resizeObserver: ResizeObserver | null = null;
+
+  // 监听侧边栏宽度变化
+  const initResizeObserver = () => {
+    const sideElement = document.querySelector('.audit-navigation-side');
+    if (sideElement) {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          sidebarWidth.value = entry.contentRect.width;
+        }
+      });
+      resizeObserver.observe(sideElement);
+      // 初始化宽度
+      sidebarWidth.value = sideElement.clientWidth;
+    }
+  };
 
   const clickFavorite = ref(false);
   // 鼠标悬停的菜单项ID
@@ -292,11 +317,13 @@
           .sort((a, b) => (b.priority_index ?? 0) - (a.priority_index ?? 0)),
       }))
         .sort((a, b) => b.priority_index - a.priority_index);
-      // 根据用户偏好设置展开的分组，如果偏好为空则默认展开所有分组
-      if (userPreference.value.expandedGroupIds && userPreference.value.expandedGroupIds.length > 0) {
+      // 根据用户偏好设置展开的分组
+      // 注意：expandedGroupIds 为空数组表示用户主动全部收起，应保持收起状态
+      // expandedGroupIds 为 undefined 表示没有用户偏好，应默认展开所有分组
+      if (userPreference.value.expandedGroupIds !== undefined) {
         expandedGroups.value = userPreference.value.expandedGroupIds;
       } else {
-        // 默认展开所有分组
+        // 没有用户偏好，默认展开所有分组
         expandedGroups.value = sideRoutes.value.map(g => g.id);
       }
       // 恢复我的收藏展开状态
@@ -307,8 +334,18 @@
   });
 
   onMounted(() => {
+    // 初始化侧边栏宽度监听
+    initResizeObserver();
     // 组件挂载时先获取用户偏好，再获取分组数据
     fetchPanelPreference();
+  });
+
+  onBeforeUnmount(() => {
+    // 清理 ResizeObserver
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
   });
 
   // 监听menuData变化，重新处理分组
