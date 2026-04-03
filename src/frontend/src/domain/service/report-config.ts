@@ -109,5 +109,21 @@ export default  {
     return PanelModelSource.updateFavorite(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 获取Panel用户偏好
+   */
+  fetchPanelPreference() {
+    return PanelModelSource.fetchPanelPreference()
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新Panel用户偏好
+   */
+  updatePanelPreference(params: {
+    config: string,
+  }) {
+    return PanelModelSource.updatePanelPreference(params)
+      .then(({ data }) => data);
+  },
 
 };

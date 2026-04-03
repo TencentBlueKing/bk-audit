@@ -85,14 +85,12 @@
         :groups="reportGroups"
         @add-report="handleAddReport"
         @cross-group-drag="handleCrossGroupDrag"
-        @delete="handleDelete"
         @deleted="handleDeleted"
         @drag-sort="handleDragSort"
         @edit="handleEdit"
         @group-drag-sort="handleGroupDragSort"
         @order-updated="handleOrderUpdated"
-        @status-updated="handleStatusUpdated"
-        @toggle-status="handleToggleStatus" />
+        @status-updated="handleStatusUpdated" />
     </div>
 
     <!-- 新建分组弹窗 -->
@@ -257,7 +255,6 @@
   } = useRequest(PanelModelService.fetchPanels, {
     defaultValue: [],
     onSuccess: (panelsData) => {
-      console.log('获取分组Panel成功:', panelsData);
       // 处理分组Panel数据，将panelsData中group_priority_index与groups中的priority_index相等的项合到groups.reports 中
       // 过滤掉 reports 为空的分组，按 priority_index 从大到小排列
       reportGroups.value = groups.value
@@ -280,7 +277,6 @@
         }))
         .filter(group => group.reports.length > 0)
         .sort((a, b) => b.priority_index - a.priority_index);
-      console.log('合并后的分组数据:', reportGroups.value);
     },
   });
   // 获取分组
@@ -289,7 +285,6 @@
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: {},
     onSuccess: (data) => {
-      console.log('获取分组列表成功:', data);
       groups.value = data;
       // 根据状态筛选确定 is_enabled 参数
       const isEnabled = statusFilter.value === 'all'
@@ -338,10 +333,6 @@
       createGroupDialogVisible.value = false;
       createGroupFormData.value.name = '';
       createGroupLoading.value = false;
-
-      // TODO: 调用后端接口创建分组
-      console.log('新建分组成功（临时）:', tempNewGroup.value);
-
       // 自动弹出新建报表侧边抽屉，并默认选中新创建的分组
       currentGroupId.value = newId;
       editReportData.value = null;
@@ -405,10 +396,6 @@
     reportSidesliderVisible.value = true;
   };
 
-  // 启用/停用报表
-  const handleToggleStatus = (report: Report) => {
-    console.log('切换状态:', report);
-  };
 
   // 启用/停用成功后刷新列表
   const handleStatusUpdated = () => {
@@ -429,13 +416,7 @@
 
   // 处理表格拖拽排序
   const handleDragSort = (result: DragSortResult) => {
-    const { groupId, currentIndex, targetIndex, newOrder } = result;
-    console.log('拖拽排序结果:', {
-      groupId,
-      currentIndex,
-      targetIndex,
-      newOrder: newOrder.map(item => item.id),
-    });
+    const { groupId, newOrder } = result;
     // 更新对应分组的报表顺序
     const group = reportGroups.value.find(g => g.id === groupId);
     if (group) {
@@ -445,20 +426,13 @@
 
   // 处理分组拖拽排序
   const handleGroupDragSort = (result: GroupDragSortResult) => {
-    console.log('分组拖拽排序结果:', result.newOrder.map(g => g.name));
     // 更新分组顺序
     reportGroups.value = result.newOrder;
   };
 
   // 处理跨分组拖拽
   const handleCrossGroupDrag = (result: CrossGroupDragResult) => {
-    const { reportId, fromGroupId, toGroupId, newIndex } = result;
-    console.log('跨分组拖拽结果:', {
-      reportId,
-      fromGroupId,
-      toGroupId,
-      newIndex,
-    });
+    const { fromGroupId, toGroupId } = result;
 
     // 找到源分组和目标分组
     const fromGroup = reportGroups.value.find(g => g.id === fromGroupId);
@@ -467,24 +441,15 @@
     if (fromGroup && toGroup) {
       // 报表已经被 vuedraggable 自动移动了，这里只需要调用 API 更新
       // TODO: 调用后端接口更新报表所属分组
-      console.log(`报表 ${reportId} 从分组 ${fromGroup.name} 移动到 ${toGroup.name}`);
     }
   };
 
-  // 删除报表
-  const handleDelete = (report: Report) => {
-    console.log('删除报表:', report);
-    // TODO: 调用删除接口
-  };
 
   // 报表提交（新建/编辑）
   const handleReportSubmit = (data: ReportFormData) => {
-    console.log('报表提交:', data);
-
     if (editReportData.value) {
       // 编辑模式 - 更新报表
       // TODO: 调用后端接口更新报表
-      console.log('编辑报表成功');
     } else {
       // 新建模式 - 创建报表
       const newReport: Report = {
@@ -508,7 +473,6 @@
         };
         reportGroups.value.unshift(newGroup);
         tempNewGroup.value = null;
-        console.log('新建分组并添加报表成功:', newGroup);
       } else {
         // 添加到已有分组
         const group = reportGroups.value.find(g => g.id === data.groupId);
@@ -518,9 +482,6 @@
         // 清除临时分组（如果有）
         tempNewGroup.value = null;
       }
-
-      console.log('新建报表成功:', newReport);
-      // TODO: 调用后端接口创建报表
     }
 
     reportSidesliderVisible.value = false;
@@ -532,7 +493,6 @@
     // 清除临时分组
     tempNewGroup.value = null;
     // 重新获取分组和Panel列表
-    console.log('创建成功后刷新列表');
     fetchGroups({
       page: 1,
       page_size: 10000,

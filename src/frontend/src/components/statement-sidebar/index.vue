@@ -28,8 +28,9 @@
           src="@images/pentagram.svg">
         <span class="side-group-name">
           {{ t('我的收藏') }}
+          <span class="favorite-count">{{ favoriteItems.length }}</span>
+
         </span>
-        <span class="favorite-count">{{ favoriteItems.length }}</span>
         <audit-icon
           class="side-group-arrow"
           :class="{ expanded: isFavoritesExpanded }"
@@ -77,9 +78,9 @@
       <div
         class="side-group-header"
         @click="toggleGroup(group.id)">
-        <audit-icon
-          class="side-group-folder-icon"
-          type="baobiao" />
+        <img
+          class="side-pentagram-title"
+          src="@images/folder.svg">
         <span class="side-group-name">{{ group.name }}</span>
         <audit-icon
           class="side-group-arrow"
@@ -187,9 +188,7 @@
   // 获取收藏的菜单项
   const favoriteItems = computed(() => props.menuData.filter(item => item.is_favorite));
   const handleMenuClick = (type: 'favorite' | 'group') => {
-    console.log('Menu clicked:', type);
     clickFavorite.value = type === 'favorite';
-    console.log(' clickFavorite',  clickFavorite.value);
   };
   // 切换分组展开/收起
   const toggleGroup = (groupId: number) => {
@@ -199,11 +198,15 @@
     } else {
       expandedGroups.value.push(groupId);
     }
+    // 保存用户偏好
+    savePanelPreference();
   };
 
   // 切换我的收藏展开/收起
   const toggleFavoritesGroup = () => {
     isFavoritesExpanded.value = !isFavoritesExpanded.value;
+    // 保存用户偏好
+    savePanelPreference();
   };
 
   // 收藏/取消收藏处理
@@ -212,7 +215,6 @@
   } = useRequest(PanelModelService.updateFavorite, {
     defaultValue: {},
     onSuccess: () => {
-      console.log('收藏/取消收藏成功，触发刷新菜单');
       emit('refresh-menu');
     },
   });
@@ -224,6 +226,55 @@
     });
   };
 
+  // 用户偏好配置
+  interface PanelPreference {
+    expandedGroupIds?: number[];
+    isFavoritesExpanded?: boolean;
+  }
+  const userPreference = ref<PanelPreference>({});
+
+  // 获取用户偏好
+  const {
+    run: fetchPanelPreference,
+  } = useRequest(PanelModelService.fetchPanelPreference, {
+    defaultValue: null,
+    onSuccess: (data: { config: string } | null) => {
+      if (data && data.config) {
+        try {
+          userPreference.value = JSON.parse(data.config);
+        } catch (e) {
+          userPreference.value = {};
+        }
+      } else {
+        // 返回空对象，默认展开全部
+        userPreference.value = {};
+      }
+      // 获取用户偏好后，再获取分组数据
+      fetchGroups({
+        page: 1,
+        page_size: 10000,
+      });
+    },
+  });
+
+  // 更新用户偏好
+  const {
+    run: updatePanelPreference,
+  } = useRequest(PanelModelService.updatePanelPreference, {
+    defaultValue: {},
+  });
+
+  // 保存用户偏好到服务器
+  const savePanelPreference = () => {
+    const preference: PanelPreference = {
+      expandedGroupIds: expandedGroups.value,
+      isFavoritesExpanded: isFavoritesExpanded.value,
+    };
+    updatePanelPreference({
+      config: JSON.stringify(preference),
+    });
+  };
+
   // 获取分组
   const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
   const {
@@ -231,9 +282,7 @@
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
     onSuccess: (data: Array<{ id: number; name: string; priority_index: number }>) => {
-      console.log('获取分组列表成功:', data);
       groups.value = data;
-      console.log('menuData.>>', props.menuData);
       sideRoutes.value =  data.map(item => ({
         id: item.id,
         name: item.name,
@@ -243,23 +292,27 @@
           .sort((a, b) => (b.priority_index ?? 0) - (a.priority_index ?? 0)),
       }))
         .sort((a, b) => b.priority_index - a.priority_index);
-      // 默认展开所有分组
-      expandedGroups.value = sideRoutes.value.map(g => g.id);
-      console.log('sideRoutes.>>', sideRoutes.value);
+      // 根据用户偏好设置展开的分组，如果偏好为空则默认展开所有分组
+      if (userPreference.value.expandedGroupIds && userPreference.value.expandedGroupIds.length > 0) {
+        expandedGroups.value = userPreference.value.expandedGroupIds;
+      } else {
+        // 默认展开所有分组
+        expandedGroups.value = sideRoutes.value.map(g => g.id);
+      }
+      // 恢复我的收藏展开状态
+      if (userPreference.value.isFavoritesExpanded !== undefined) {
+        isFavoritesExpanded.value = userPreference.value.isFavoritesExpanded;
+      }
     },
   });
 
   onMounted(() => {
-    // 组件挂载时获取分组数据
-    fetchGroups({
-      page: 1,
-      page_size: 10000,
-    });
+    // 组件挂载时先获取用户偏好，再获取分组数据
+    fetchPanelPreference();
   });
 
   // 监听menuData变化，重新处理分组
   watch(() => props.menuData, (newMenuData) => {
-    console.log('menuData 变化，重新处理分组:', newMenuData);
     if (newMenuData && newMenuData.length > 0) {
       fetchGroups({
         page: 1,
@@ -330,9 +383,14 @@
   }
 
   .favorite-count {
-    margin-right: 8px;
+    position: relative;
+    display: inline-block;
+    padding: 0 8px;
+    margin-left: 8px;
     font-size: 12px;
-    color: #b0bdd5;
+    color: #c4c6cc;
+    background-color: #474c5a;
+    border-radius: 50%;
   }
 
   .side-group-folder-icon {
