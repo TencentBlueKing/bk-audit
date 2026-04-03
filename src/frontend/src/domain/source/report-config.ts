@@ -108,6 +108,18 @@ class PanelManage extends ModuleBase {
       params,
     });
   }
+  // 获取Panel用户偏好
+  fetchPanelPreference() {
+    return Request.get<{ config: string }>(`bkvision${this.module}/panel_preference/`);
+  }
+  // 更新Panel用户偏好
+  updatePanelPreference(params: {
+    config: string,
+  }) {
+    return Request.post(`bkvision${this.module}/panel_preference/`, {
+      params,
+    });
+  }
 }
 export default new PanelManage();
 
