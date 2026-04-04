@@ -403,18 +403,94 @@ class ListRiskRequestSerializer(serializers.Serializer):
     List Risk
     """
 
-    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), allow_blank=True, required=False)
-    strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), allow_blank=True, required=False)
-    operator = serializers.CharField(label=gettext_lazy("Operator"), allow_blank=True, required=False)
-    status = serializers.CharField(label=gettext_lazy("Risk Status"), allow_blank=True, required=False)
-    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
-    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
-    event_type = serializers.CharField(label=gettext_lazy("Risk Type"), allow_blank=True, required=False)
-    current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), allow_blank=True, required=False)
-    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), allow_blank=True, required=False)
-    tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
-    event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
-    risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"),
+        required=False,
+        help_text=gettext_lazy("按场景过滤风险"),
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        help_text=gettext_lazy("按接入系统过滤风险，与 scene_id 互斥"),
+    )
+    risk_id = serializers.CharField(
+        label=gettext_lazy("Risk ID"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("风险ID"),
+    )
+    strategy_id = serializers.CharField(
+        label=gettext_lazy("Strategy ID"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy('策略ID。从"可用策略"列表匹配名称取 id 值，多个逗号拼接如 "137,169"。' "匹配规则：①完全匹配名称 > ②名称中包含用户关键词的最精确项"),
+    )
+    operator = serializers.CharField(
+        label=gettext_lazy("Operator"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("责任人。xxx 的风险/xxx 负责的 → operator"),
+    )
+    status = serializers.CharField(
+        label=gettext_lazy("Risk Status"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy(
+            "风险状态：stand_by(录入中) / new(新) / await_deal(待处理) / "
+            "processing(处理中) / for_approve(自动处理审批中) / "
+            "auto_process(套餐处理中) / closed(已关单)。"
+            '\u201c待处理\u201d\u201c未处理\u201d→ await_deal（非 new）。'
+            '\u53e3\u8bed映射：\u201c漏处理的\u201d\u201c遗漏的\u201d\u201c积压的\u201d\u201c没人管的\u201d → await_deal'
+        ),
+    )
+    start_time = serializers.DateTimeField(
+        label=gettext_lazy("Start Time"),
+        required=False,
+        help_text=gettext_lazy(
+            "开始时间 ISO 8601 YYYY-MM-DDTHH:mm:ss。" "最近一周 → 7 天前 00:00:00；最近一个月 → 30 天前；今天 → 今天 00:00:00"
+        ),
+    )
+    end_time = serializers.DateTimeField(
+        label=gettext_lazy("End Time"),
+        required=False,
+        help_text=gettext_lazy("结束时间 ISO 8601 YYYY-MM-DDTHH:mm:ss。与 start_time 搭配，end_time 为当前时间"),
+    )
+    event_type = serializers.CharField(
+        label=gettext_lazy("Risk Type"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("风险类型"),
+    )
+    current_operator = serializers.CharField(
+        label=gettext_lazy("Current Operator"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("当前处理人。xxx 处理的/xxx 正在处理 → current_operator"),
+    )
+    notice_users = serializers.CharField(
+        label=gettext_lazy("Notice Users"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("通知人。通知给 xxx/xxx 关注的/xxx 订阅的 → notice_users"),
+    )
+    tags = serializers.CharField(
+        label=gettext_lazy("Tags"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy('标签（传 id，多个逗号拼接如 "1,2"）。从"可用标签"列表匹配名称取 id 值'),
+    )
+    event_content = serializers.CharField(
+        label=gettext_lazy("Event Content"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("事件详情（顶层全文搜索字段，不放入 event_filters）。" "当用户意图是按事件文本内容搜索时使用，与 event_filters（结构化事件字段筛选）不同"),
+    )
+    risk_label = serializers.CharField(
+        label=gettext_lazy("Risk Label"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("风险标签：normal(正常) / misreport(误报)"),
+    )
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
@@ -504,6 +580,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
                 "event_filters",
                 "order_fields",
                 "has_report",
+                "scene_id",
+                "system_id",
             ]:
                 continue
             if key in ["tag_objs__in"]:
@@ -674,6 +752,16 @@ class ApproveConfigSerializer(serializers.Serializer):
 
 
 class CreateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializers.ModelSerializer):
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+    )
+
     class Meta:
         model = ProcessApplication
         fields = [
@@ -683,12 +771,23 @@ class CreateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializer
             "approve_service_id",
             "approve_config",
             "description",
+            "scene_id",
+            "system_id",
         ]
 
     def validate_name(self, name: str) -> str:
         if ProcessApplication.objects.filter(name=name).exists():
             raise serializers.ValidationError(gettext("处理套餐名称重复"))
         return name
+
+    def validate(self, attrs: dict) -> dict:
+        data = super().validate(attrs)
+        # 校验 scene_id 和 system_id 至少传一个
+        scene_id = data.get("scene_id")
+        system_id = data.get("system_id")
+        if scene_id is None and not system_id:
+            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
+        return data
 
 
 class UpdateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializers.ModelSerializer):
@@ -730,14 +829,33 @@ class RuleScopeValidator(serializers.Serializer):
 
 
 class CreateRiskRuleReqSerializer(RuleScopeValidator, serializers.ModelSerializer):
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+    )
+
     class Meta:
         model = RiskRule
-        fields = ["name", "scope", "pa_id", "pa_params", "auto_close_risk"]
+        fields = ["name", "scope", "pa_id", "pa_params", "auto_close_risk", "scene_id", "system_id"]
 
     def validate_name(self, name: str) -> str:
         if RiskRule.objects.filter(name=name).exists():
             raise serializers.ValidationError(gettext("规则名称重复"))
         return name
+
+    def validate(self, attrs: dict) -> dict:
+        data = super().validate(attrs)
+        # 校验 scene_id 和 system_id 至少传一个
+        scene_id = data.get("scene_id")
+        system_id = data.get("system_id")
+        if scene_id is None and not system_id:
+            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
+        return data
 
 
 class UpdateRiskRuleReqSerializer(RuleScopeValidator, serializers.ModelSerializer):
@@ -787,6 +905,8 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
 
 class ListRiskRuleReqSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理规则")
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤处理规则，与 scene_id 互斥")
     rule_id = serializers.CharField(label=gettext_lazy("Rule ID"), required=False)
     name = serializers.CharField(label=gettext_lazy("Rule Name"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Update User"), required=False)
@@ -805,7 +925,9 @@ class ListRiskRuleReqSerializer(serializers.Serializer):
         result = {}
         for key, val in data.items():
             # 特殊字段直接透传
-            if key in ["order_field", "order_type"]:
+            if key in ["order_field", "order_type", "scene_id", "system_id"]:
+                if key in ("scene_id", "system_id"):
+                    result[key] = val
                 continue
             # is_enabled 字段需要拆分为数组，并且转为 bool 值
             if key == "is_enabled":
@@ -884,6 +1006,8 @@ class ToggleProcessApplicationReqSerializer(serializers.Serializer):
 
 
 class ListProcessApplicationsReqSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理套餐")
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤处理套餐，与 scene_id 互斥")
     id = serializers.CharField(required=False)
     name = serializers.CharField(required=False)
     updated_by = serializers.CharField(required=False)
@@ -908,6 +1032,10 @@ class ListProcessApplicationsReqSerializer(serializers.Serializer):
             )
         # 处理字段
         for key, val in attrs.items():
+            # scene_id / system_id 是特殊字段，直接透传
+            if key in ("scene_id", "system_id"):
+                data[key] = val
+                continue
             if key == "is_enabled":
                 data[key] = [strtobool(val) for val in val.split(",") if val]
                 continue

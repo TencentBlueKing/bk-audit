@@ -45,6 +45,7 @@ from services.web.risk.serializers import (
     ToggleProcessApplicationReqSerializer,
     UpdateProcessApplicationsReqSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
 
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
@@ -59,7 +60,9 @@ class ListProcessApplications(ProcessApplicationMeta):
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
-        # 构造排序条件
+        # 场景/系统过滤
+        scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
         order_field = validated_request_data.pop("order_field", "-created_at")
         # 构造筛选条件
         q = Q()
@@ -68,8 +71,21 @@ class ListProcessApplications(ProcessApplicationMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
-        # 筛选数据
-        process_applications = ProcessApplication.objects.filter(q).order_by("-is_enabled", order_field)
+        # 按场景/系统过滤（通过 ResourceBinding）
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="user")
+        from services.web.scene.filters import SceneScopeFilter
+
+        # 筛选数据（SceneScopeFilter 会处理 scene_id/system_id 过滤，未指定时返回空）
+        process_applications = SceneScopeFilter.filter_queryset(
+            queryset=ProcessApplication.objects.filter(q),
+            scene_id=scene_id,
+            system_id=system_id,
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            pk_field="id",
+        ).order_by("-is_enabled", order_field)
         # 获取关联的规则
         rule_map = {
             item["pa_id"]: item["count"]
@@ -116,7 +132,26 @@ class CreateProcessApplication(ProcessApplicationMeta):
     audit_action = ActionEnum.CREATE_PA
 
     def perform_request(self, validated_request_data):
-        return ProcessApplication.objects.create(**validated_request_data)
+        # 场景权限校验
+        scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
+        pa = ProcessApplication.objects.create(**validated_request_data)
+        # 创建 ResourceBinding 关联（scene_id 和 system_id 至少传一个，序列化器已校验）
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(pa.id),
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            scene_id=scene_id,
+            system_id=system_id,
+        )
+        return pa
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):

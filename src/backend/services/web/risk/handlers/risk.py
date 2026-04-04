@@ -259,7 +259,54 @@ class RiskHandler:
             create_params["display_status"] = RiskDisplayStatus.STAND_BY
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
+        # 继承策略的 ResourceBinding 关联（场景/系统）
+        self._inherit_strategy_binding(risk)
         return True, risk
+
+    @staticmethod
+    def _inherit_strategy_binding(risk: Risk):
+        """风险创建后，继承策略的 ResourceBinding 关联"""
+        try:
+            from services.web.scene.constants import BindingType, ResourceVisibilityType
+            from services.web.scene.models import (
+                ResourceBinding,
+                ResourceBindingScene,
+                ResourceBindingSystem,
+            )
+
+            # 查找策略的 ResourceBinding
+            try:
+                strategy_binding = ResourceBinding.objects.get(
+                    resource_type=ResourceVisibilityType.STRATEGY,
+                    resource_id=str(risk.strategy_id),
+                )
+            except ResourceBinding.DoesNotExist:
+                logger.info("[InheritBinding] Strategy %s has no ResourceBinding, skip", risk.strategy_id)
+                return
+
+            # 为风险创建 ResourceBinding
+            risk_binding, created = ResourceBinding.objects.get_or_create(
+                resource_type=ResourceVisibilityType.RISK,
+                resource_id=str(risk.risk_id),
+                defaults={"binding_type": BindingType.SCENE_BINDING},
+            )
+            if not created:
+                return
+
+            # 继承策略的场景关联
+            for scene_binding in strategy_binding.binding_scenes.all():
+                ResourceBindingScene.objects.get_or_create(
+                    binding=risk_binding,
+                    scene_id=scene_binding.scene_id,
+                )
+            # 继承策略的系统关联
+            for system_binding in strategy_binding.binding_systems.all():
+                ResourceBindingSystem.objects.get_or_create(
+                    binding=risk_binding,
+                    system_id=system_binding.system_id,
+                )
+        except Exception as err:  # NOCC:broad-except(不影响风险创建主流程)
+            logger.exception("[InheritBindingFailed] risk_id=%s; Error: %s", risk.risk_id, err)
 
     def trigger_render_task(self, risk: Risk):
         """

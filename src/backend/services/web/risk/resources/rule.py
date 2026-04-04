@@ -39,6 +39,7 @@ from services.web.risk.serializers import (
     ToggleRiskRuleRequestSerializer,
     UpdateRiskRuleReqSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
 
 
 class RiskRuleMeta(AuditMixinResource, abc.ABC):
@@ -53,6 +54,9 @@ class ListRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.LIST_RULE
 
     def perform_request(self, validated_request_data):
+        # 场景/系统过滤
+        scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
         # 排序
         order_field = validated_request_data.pop("order_field", "-priority_index")
         # 构造筛选条件
@@ -62,8 +66,23 @@ class ListRiskRule(RiskRuleMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
-        # 筛选
-        rules = RiskRule.load_latest_rules().filter(q).order_by(order_field)
+        # 按场景/系统过滤（通过 ResourceBinding）
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="user")
+        from services.web.scene.filters import SceneScopeFilter
+
+        # 筛选（SceneScopeFilter 会处理 scene_id/system_id 过滤，未指定时返回空）
+        rules = SceneScopeFilter.filter_queryset(
+            queryset=RiskRule.load_latest_rules().filter(q),
+            scene_id=scene_id,
+            system_id=system_id,
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            pk_field="rule_id",
+        ).order_by(order_field)
         return rules
 
 
@@ -88,10 +107,28 @@ class CreateRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.CREATE_RULE
 
     def perform_request(self, validated_request_data):
+        # 场景权限校验
+        scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
         instance.save(update_fields=["rule_id", "priority_index"])
+        # 创建 ResourceBinding 关联（scene_id 和 system_id 至少传一个，序列化器已校验）
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(instance.rule_id),
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            scene_id=scene_id,
+            system_id=system_id,
+        )
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instance))
         return instance
 

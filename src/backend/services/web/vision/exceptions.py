@@ -45,3 +45,13 @@ class SingleSystemDiagnosisSystemParamsError(VisionException):
     ERROR_CODE = "003"
     STATUS_CODE = 500
     MESSAGE = gettext_lazy("单系统诊断系统参数错误")
+
+
+class ScenePanelNotExist(VisionException):
+    ERROR_CODE = "004"
+    MESSAGE = gettext_lazy("报表不存在")
+
+
+class ScenePanelCannotDelete(VisionException):
+    ERROR_CODE = "005"
+    MESSAGE = gettext_lazy("已上架的报表不可删除")

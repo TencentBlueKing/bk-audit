@@ -261,6 +261,15 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     Create Strategy
     """
 
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+    )
     sql = serializers.CharField(
         label=gettext_lazy("Rule Audit SQL"),
         required=False,
@@ -323,10 +332,17 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "report_enabled",
             "report_auto_render",
             "report_config",
+            "scene_id",
+            "system_id",
         ]
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # 校验 scene_id 和 system_id 至少传一个
+        scene_id = data.get("scene_id")
+        system_id = data.get("system_id")
+        if scene_id is None and not system_id:
+            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
         # check type
         self._validate_strategy_type(data)
         # check name
@@ -459,6 +475,8 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     """
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤策略")
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤策略，与 scene_id 互斥")
     strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"), required=False)
     tag = serializers.CharField(label=gettext_lazy("Tag"), required=False)
@@ -492,7 +510,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         # split into array
         for key, val in data.items():
-            if key in ["namespace", "order_field", "order_type"]:
+            if key in ["namespace", "order_field", "order_type", "scene_id", "system_id"]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
         # order
@@ -1094,6 +1112,15 @@ class LinkTableConfigSerializer(serializers.Serializer):
 
 
 class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+    )
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
@@ -1101,10 +1128,15 @@ class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LinkTable
-        fields = ["namespace", "name", "config", "description", "tags"]
+        fields = ["namespace", "name", "config", "description", "tags", "scene_id", "system_id"]
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        # 校验 scene_id 和 system_id 至少传一个
+        scene_id = attrs.get("scene_id")
+        system_id = attrs.get("system_id")
+        if scene_id is None and not system_id:
+            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
         namespace = attrs.get('namespace')
         name = attrs.get('name')
 
@@ -1178,6 +1210,8 @@ class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
     )
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤联表")
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤联表，与 scene_id 互斥")
     name__contains = serializers.CharField(label=gettext_lazy("Link Table Name"), required=False)
     created_by = serializers.CharField(label=gettext_lazy("Created By"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Updated By"), required=False)

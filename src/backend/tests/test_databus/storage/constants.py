@@ -32,7 +32,7 @@ from services.web.databus.constants import (
 CLUSTER_ID = 1
 REPLICA_WRITE_CLUSTER_ID = 2
 CLUSTER_NAME = "test_storage"
-USERNAME = get_request_username()
+USERNAME = get_request_username() or "admin"
 PORT = 9200
 SCHEMA = "http"
 SOURCE_TYPE = "custom"

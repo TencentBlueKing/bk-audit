@@ -33,6 +33,7 @@ class StrategySerializersTest(TestCase):
         return {
             "namespace": self.namespace,
             "strategy_name": "model_strategy",
+            "system_id": "bk_audit",
             "control_id": self.control.control_id,
             "control_version": 1,
             "strategy_type": StrategyType.MODEL.value,
@@ -149,6 +150,7 @@ class TestReportConfigValidation(TestCase):
         return {
             "namespace": self.namespace,
             "strategy_name": "test-strategy",
+            "system_id": "bk_audit",
             "control_id": self.control.control_id,
             "control_version": 1,
             "strategy_type": StrategyType.MODEL.value,
