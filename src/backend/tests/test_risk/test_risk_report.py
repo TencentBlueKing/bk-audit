@@ -23,6 +23,9 @@ from django.utils import timezone
 
 from services.web.risk.constants import RiskReportStatus, RiskStatus
 from services.web.risk.models import Risk, RiskReport
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -284,10 +287,17 @@ class TestListRiskBrief(TestCase):
 
     def setUp(self):
         super().setUp()
+        self.scene = Scene.objects.create(name="risk-brief-scene")
+        self.other_scene = Scene.objects.create(name="risk-brief-other-scene")
         self.strategy = Strategy.objects.create(
             namespace="default",
             strategy_name="test-strategy",
             risk_level=RiskLevel.HIGH.value,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene.scene_id,
         )
         self.now = timezone.now()
         # 注意：ListRiskBrief 使用 created_at 进行时间过滤
@@ -312,6 +322,7 @@ class TestListRiskBrief(TestCase):
         """测试获取风险简要列表"""
         result = self.resource.risk.list_risk_brief(
             {
+                "scene_id": self.scene.scene_id,
                 "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
                 "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
             }
@@ -329,6 +340,11 @@ class TestListRiskBrief(TestCase):
             strategy_name="other-strategy",
             risk_level=RiskLevel.LOW.value,
         )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(other_strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.other_scene.scene_id,
+        )
         Risk.objects.create(
             risk_id="risk-other-strategy",
             raw_event_id="raw-other",
@@ -340,6 +356,7 @@ class TestListRiskBrief(TestCase):
 
         result = self.resource.risk.list_risk_brief(
             {
+                "scene_id": self.scene.scene_id,
                 "strategy_id": self.strategy.strategy_id,
                 "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
                 "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
@@ -355,12 +372,47 @@ class TestListRiskBrief(TestCase):
         # 查询过去很久的时间范围，应该没有结果
         result = self.resource.risk.list_risk_brief(
             {
+                "scene_id": self.scene.scene_id,
                 "start_time": (self.now - datetime.timedelta(days=100)).isoformat(),
                 "end_time": (self.now - datetime.timedelta(days=99)).isoformat(),
             }
         )
 
         self.assertEqual(len(result), 0)
+
+    def test_list_risk_brief_filters_by_scene(self):
+        """测试风险简要列表按场景隔离"""
+        other_strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="other-scene-strategy",
+            risk_level=RiskLevel.LOW.value,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(other_strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.other_scene.scene_id,
+        )
+        Risk.objects.create(
+            risk_id="risk-brief-other-scene",
+            raw_event_id="raw-brief-other-scene",
+            strategy=other_strategy,
+            status=RiskStatus.NEW,
+            title="Other Scene Risk",
+            event_time=self.now,
+        )
+
+        result = self.resource.risk.list_risk_brief(
+            {
+                "scene_id": self.scene.scene_id,
+                "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
+                "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
+            }
+        )
+
+        risk_ids = [r["risk_id"] for r in result]
+        self.assertIn(self.risk1.risk_id, risk_ids)
+        self.assertIn(self.risk2.risk_id, risk_ids)
+        self.assertNotIn("risk-brief-other-scene", risk_ids)
 
 
 class TestReportEnabled(TestCase):

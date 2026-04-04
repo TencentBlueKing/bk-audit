@@ -5,12 +5,17 @@ from django.test import TestCase
 from django.utils import timezone
 
 from services.web.risk.models import Risk
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 
 class MergeSelectFieldTypeExposeTests(TestCase):
     def setUp(self):
+        self.scene = Scene.objects.create(name="merge-select-scene")
+        self.scene_id = self.scene.scene_id
         self.strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="merge-select-type",
@@ -38,6 +43,11 @@ class MergeSelectFieldTypeExposeTests(TestCase):
                 ]
             },
         )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene_id,
+        )
         self.risk = Risk.objects.create(
             risk_id="risk-merge",
             strategy=self.strategy,
@@ -47,7 +57,7 @@ class MergeSelectFieldTypeExposeTests(TestCase):
         )
 
     def test_list_strategy_exposes_field_type(self):
-        resp = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE)
+        resp = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE, scene_id=self.scene_id)
         item = next(s for s in resp if s["strategy_id"] == self.strategy.strategy_id)
         field_dict = {f["field_name"]: f for f in item["event_data_field_configs"]}
         self.assertEqual(field_dict["Foo Field"]["field_type"], "string")

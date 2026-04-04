@@ -43,6 +43,20 @@ class VisionPanel(SoftDeleteModel):
     priority_index = models.IntegerField(gettext_lazy("优先指数"), default=0)
     handler = models.CharField(gettext_lazy("处理器"), max_length=255, default="CommonVisionHandler")
     scenario = models.CharField(gettext_lazy("场景"), max_length=255, default="default", choices=Scenario.choices)
+    status = models.CharField(
+        gettext_lazy("上架状态"),
+        max_length=32,
+        default="",
+        blank=True,
+        help_text="published=已上架, unpublished=未上架, 空=存量数据",
+    )
+    category = models.CharField(
+        gettext_lazy("分类"),
+        max_length=32,
+        blank=True,
+        default="",
+    )
+    description = models.TextField(gettext_lazy("描述"), blank=True, default="")
 
     class Meta:
         verbose_name = gettext_lazy("仪表盘")

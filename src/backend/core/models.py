@@ -49,7 +49,7 @@ def get_request_username(request=None):
         if is_backend():
             operator = get_non_request_username()
 
-    return operator
+    return operator or ""
 
 
 class OperateRecordQuerySet(models.query.QuerySet):
