@@ -65,6 +65,7 @@ class ListNoticeGroupRequestSerializer(serializers.Serializer):
     通知组列表
     """
 
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤通知组")
     keyword = serializers.CharField(label=gettext_lazy("关键字"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False)
     order_type = serializers.CharField(label=gettext_lazy("排序方式"), required=False)
@@ -144,6 +145,13 @@ class CreateNoticeGroupRequestSerializer(EditNoticeGroupSerializer):
     """
     创建通知组
     """
+
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="通知组所属场景"
+    )
+
+    class Meta(EditNoticeGroupSerializer.Meta):
+        fields = EditNoticeGroupSerializer.Meta.fields + ["scene_id"]
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)

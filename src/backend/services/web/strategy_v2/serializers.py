@@ -261,6 +261,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     Create Strategy
     """
 
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="策略所属场景")
     sql = serializers.CharField(
         label=gettext_lazy("Rule Audit SQL"),
         required=False,
@@ -301,6 +302,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         model = Strategy
         fields = [
             "namespace",
+            "scene_id",
             "strategy_name",
             "control_id",
             "control_version",
@@ -459,6 +461,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     """
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤策略")
     strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"), required=False)
     tag = serializers.CharField(label=gettext_lazy("Tag"), required=False)
@@ -492,7 +495,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         # split into array
         for key, val in data.items():
-            if key in ["namespace", "order_field", "order_type"]:
+            if key in ["namespace", "order_field", "order_type", "scene_id"]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
         # order
@@ -1094,6 +1097,7 @@ class LinkTableConfigSerializer(serializers.Serializer):
 
 
 class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="联表所属场景")
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
@@ -1101,7 +1105,7 @@ class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LinkTable
-        fields = ["namespace", "name", "config", "description", "tags"]
+        fields = ["namespace", "scene_id", "name", "config", "description", "tags"]
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -1178,6 +1182,7 @@ class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
     )
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤联表")
     name__contains = serializers.CharField(label=gettext_lazy("Link Table Name"), required=False)
     created_by = serializers.CharField(label=gettext_lazy("Created By"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Updated By"), required=False)

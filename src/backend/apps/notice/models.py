@@ -118,6 +118,13 @@ class NoticeGroup(SoftDeleteModel):
     group_member = models.JSONField(gettext_lazy("通知组成员"), default=list)
     notice_config = models.JSONField(gettext_lazy("通知配置"), default=list)
     description = models.TextField(gettext_lazy("描述"), null=True, blank=True)
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="通知组所属的审计场景，初期允许为空，存量数据迁移后改为必填",
+    )
 
     class Meta:
         verbose_name = gettext_lazy("通知组")

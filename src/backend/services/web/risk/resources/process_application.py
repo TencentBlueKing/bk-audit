@@ -59,6 +59,8 @@ class ListProcessApplications(ProcessApplicationMeta):
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         # 构造排序条件
         order_field = validated_request_data.pop("order_field", "-created_at")
         # 构造筛选条件
@@ -68,6 +70,14 @@ class ListProcessApplications(ProcessApplicationMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
+        # 按场景过滤
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="user")
+            q &= Q(scene_id=scene_id)
         # 筛选数据
         process_applications = ProcessApplication.objects.filter(q).order_by("-is_enabled", order_field)
         # 获取关联的规则
@@ -116,6 +126,14 @@ class CreateProcessApplication(ProcessApplicationMeta):
     audit_action = ActionEnum.CREATE_PA
 
     def perform_request(self, validated_request_data):
+        # 场景权限校验
+        scene_id = validated_request_data.get("scene_id")
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         return ProcessApplication.objects.create(**validated_request_data)
 
 

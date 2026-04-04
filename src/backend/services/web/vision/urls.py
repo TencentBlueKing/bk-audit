@@ -21,6 +21,17 @@ from bk_resource.routers import ResourceRouter
 from services.web.vision import views
 
 router = ResourceRouter()
-router.register_module(views)
+
+# 通用查询类 ViewSet（保持原有 URL 风格）
+router.register("panels", views.PanelsViewSet)
+router.register("meta", views.MetaViewSet)
+router.register("dataset", views.DatasetViewSet)
+router.register("field", views.FieldViewSet)
+router.register("variable", views.VariableViewSet)
+router.register("share", views.ShareViewSet)
+
+# 场景报表管理：/panel/platform/ 和 /panel/scene/ 风格
+router.register("panel/platform", views.PlatformPanelViewSet)
+router.register("panel/scene", views.ScenePanelManageViewSet)
 
 urlpatterns = router.urls

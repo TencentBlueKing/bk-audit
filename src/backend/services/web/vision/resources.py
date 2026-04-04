@@ -47,7 +47,23 @@ class ListPanels(BKVision):
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        return VisionPanel.objects.filter(scenario=validated_request_data['scenario']).all()
+        from django.db.models import Q
+
+        queryset = VisionPanel.objects.filter(scenario=validated_request_data['scenario'])
+
+        # 按归属级别和场景过滤
+        scope_type = validated_request_data.get("scope_type", "")
+        scene_id = validated_request_data.get("scene_id")
+
+        if scope_type == "platform":
+            queryset = queryset.filter(scope_type="platform")
+        elif scope_type == "scene" and scene_id:
+            queryset = queryset.filter(scope_type="scene", scene_id=scene_id)
+        elif scene_id:
+            # 传了 scene_id 但没指定 scope_type，返回该场景的报表 + 平台级报表
+            queryset = queryset.filter(Q(scope_type="scene", scene_id=scene_id) | Q(scope_type="platform"))
+
+        return queryset.all()
 
 
 class QueryMixIn(AuditMixinResource, abc.ABC):
@@ -121,3 +137,215 @@ class QueryTestVariable(QueryMixIn, BKVision):
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
     query_method = 'query_test_variable'
+
+
+# ==================== 场景报表管理（Panel）====================
+
+
+class CreatePlatformPanel(BKVision):
+    """创建平台级报表"""
+
+    name = gettext_lazy("创建平台级报表")
+
+    def perform_request(self, validated_request_data):
+        from django.db import transaction
+
+        from core.utils.data import unique_id
+        from services.web.scene.constants import (
+            PanelStatus,
+            ResourceScopeType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceVisibility
+
+        with transaction.atomic():
+            panel = VisionPanel.objects.create(
+                id=validated_request_data.get("id") or unique_id(),
+                name=validated_request_data["name"],
+                category=validated_request_data.get("category", ""),
+                description=validated_request_data.get("description", ""),
+                status=validated_request_data.get("status", PanelStatus.UNPUBLISHED),
+                scope_type=ResourceScopeType.PLATFORM,
+                scene_id=None,
+            )
+
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                ResourceVisibility.objects.update_or_create(
+                    resource_type=ResourceVisibilityType.PANEL,
+                    resource_id=str(panel.pk),
+                    defaults={
+                        "visibility_type": visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                        "scene_ids": visibility_data.get("scene_ids", []),
+                        "system_ids": visibility_data.get("system_ids", []),
+                    },
+                )
+
+        return {"id": panel.pk, "name": panel.name}
+
+
+class UpdatePlatformPanel(BKVision):
+    """编辑平台级报表"""
+
+    name = gettext_lazy("编辑平台级报表")
+
+    def perform_request(self, validated_request_data):
+        from django.db import transaction
+
+        from services.web.scene.constants import (
+            ResourceScopeType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceVisibility
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        panel_id = validated_request_data.pop("panel_id", None)
+        try:
+            panel = VisionPanel.objects.get(pk=panel_id, scope_type=ResourceScopeType.PLATFORM)
+        except VisionPanel.DoesNotExist:
+            raise ScenePanelNotExist()
+
+        with transaction.atomic():
+            for field in ["name", "category", "description", "status"]:
+                if field in validated_request_data:
+                    setattr(panel, field, validated_request_data[field])
+            panel.save()
+
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                ResourceVisibility.objects.update_or_create(
+                    resource_type=ResourceVisibilityType.PANEL,
+                    resource_id=str(panel.pk),
+                    defaults={
+                        "visibility_type": visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                        "scene_ids": visibility_data.get("scene_ids", []),
+                        "system_ids": visibility_data.get("system_ids", []),
+                    },
+                )
+
+        return {"id": panel.pk, "name": panel.name}
+
+
+class DeletePlatformPanel(BKVision):
+    """删除平台级报表"""
+
+    name = gettext_lazy("删除平台级报表")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            PanelStatus,
+            ResourceScopeType,
+            ResourceVisibilityType,
+        )
+        from services.web.scene.models import ResourceVisibility
+        from services.web.vision.exceptions import (
+            ScenePanelCannotDelete,
+            ScenePanelNotExist,
+        )
+
+        panel_id = validated_request_data.get("panel_id")
+        try:
+            panel = VisionPanel.objects.get(pk=panel_id, scope_type=ResourceScopeType.PLATFORM)
+        except VisionPanel.DoesNotExist:
+            raise ScenePanelNotExist()
+
+        if panel.status == PanelStatus.PUBLISHED:
+            raise ScenePanelCannotDelete()
+
+        ResourceVisibility.objects.filter(
+            resource_type=ResourceVisibilityType.PANEL, resource_id=str(panel.pk)
+        ).delete()
+        panel.delete()
+        return {"message": "success"}
+
+
+class PublishPlatformPanel(BKVision):
+    """上架/下架平台级报表"""
+
+    name = gettext_lazy("上架/下架平台级报表")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import PanelStatus, ResourceScopeType
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        panel_id = validated_request_data.get("panel_id")
+        try:
+            panel = VisionPanel.objects.get(pk=panel_id, scope_type=ResourceScopeType.PLATFORM)
+        except VisionPanel.DoesNotExist:
+            raise ScenePanelNotExist()
+
+        if panel.status == PanelStatus.PUBLISHED:
+            panel.status = PanelStatus.UNPUBLISHED
+        else:
+            panel.status = PanelStatus.PUBLISHED
+        panel.save()
+        return {"id": panel.pk, "name": panel.name, "status": panel.status}
+
+
+class CreateScenePanel(BKVision):
+    """创建场景级报表"""
+
+    name = gettext_lazy("创建场景级报表")
+
+    def perform_request(self, validated_request_data):
+        from core.utils.data import unique_id
+        from services.web.scene.constants import ResourceScopeType
+
+        scene_id = validated_request_data.get("scene_id")
+
+        panel = VisionPanel.objects.create(
+            id=validated_request_data.get("id") or unique_id(),
+            name=validated_request_data["name"],
+            category=validated_request_data.get("category", ""),
+            description=validated_request_data.get("description", ""),
+            scope_type=ResourceScopeType.SCENE,
+            scene_id=int(scene_id),
+        )
+        return {"id": panel.pk, "name": panel.name}
+
+
+class UpdateScenePanel(BKVision):
+    """编辑场景级报表"""
+
+    name = gettext_lazy("编辑场景级报表")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import ResourceScopeType
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        scene_id = validated_request_data.pop("scene_id", None)
+        panel_id = validated_request_data.pop("panel_id", None)
+
+        try:
+            panel = VisionPanel.objects.get(pk=panel_id, scope_type=ResourceScopeType.SCENE, scene_id=int(scene_id))
+        except VisionPanel.DoesNotExist:
+            raise ScenePanelNotExist()
+
+        for field in ["name", "category", "description"]:
+            if field in validated_request_data:
+                setattr(panel, field, validated_request_data[field])
+        panel.save()
+        return {"id": panel.pk, "name": panel.name}
+
+
+class DeleteScenePanel(BKVision):
+    """删除场景级报表"""
+
+    name = gettext_lazy("删除场景级报表")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import ResourceScopeType
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        scene_id = validated_request_data.get("scene_id")
+        panel_id = validated_request_data.get("panel_id")
+
+        try:
+            panel = VisionPanel.objects.get(pk=panel_id, scope_type=ResourceScopeType.SCENE, scene_id=int(scene_id))
+        except VisionPanel.DoesNotExist:
+            raise ScenePanelNotExist()
+
+        panel.delete()
+        return {"message": "success"}
