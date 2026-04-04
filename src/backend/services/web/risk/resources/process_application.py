@@ -45,6 +45,7 @@ from services.web.risk.serializers import (
     ToggleProcessApplicationReqSerializer,
     UpdateProcessApplicationsReqSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
 
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
@@ -59,7 +60,8 @@ class ListProcessApplications(ProcessApplicationMeta):
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
-        # 构造排序条件
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         order_field = validated_request_data.pop("order_field", "-created_at")
         # 构造筛选条件
         q = Q()
@@ -68,8 +70,16 @@ class ListProcessApplications(ProcessApplicationMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
-        # 筛选数据
-        process_applications = ProcessApplication.objects.filter(q).order_by("-is_enabled", order_field)
+        # 场景过滤
+        from services.web.scene.filters import SceneScopeFilter
+
+        # 筛选数据（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回全部）
+        process_applications = SceneScopeFilter.filter_queryset(
+            queryset=ProcessApplication.objects.filter(q),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            pk_field="id",
+        ).order_by("-is_enabled", order_field)
         # 获取关联的规则
         rule_map = {
             item["pa_id"]: item["count"]
@@ -86,9 +96,11 @@ class ListProcessApplications(ProcessApplicationMeta):
 
 class ListAllProcessApplications(ProcessApplicationMeta):
     name = gettext_lazy("获取所有处理套餐列表")
+    RequestSerializer = ListProcessApplicationsReqSerializer
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
+        scene_id = validated_request_data.pop("scene_id", None)
         if (
             not ActionPermission(
                 actions=[
@@ -103,9 +115,17 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             and not TicketPermission.objects.filter(user=get_request_username(), user_type=UserType.OPERATOR).exists()
         ):
             return []
+        from services.web.scene.filters import SceneScopeFilter
+
+        process_applications = SceneScopeFilter.filter_queryset(
+            queryset=ProcessApplication.objects.all(),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            pk_field="id",
+        )
         return [
             {"id": pa.id, "name": pa.name, "sops_template_id": pa.sops_template_id, "is_enabled": pa.is_enabled}
-            for pa in ProcessApplication.objects.all()
+            for pa in process_applications
         ]
 
 
@@ -116,7 +136,17 @@ class CreateProcessApplication(ProcessApplicationMeta):
     audit_action = ActionEnum.CREATE_PA
 
     def perform_request(self, validated_request_data):
-        return ProcessApplication.objects.create(**validated_request_data)
+        scene_id = validated_request_data.pop("scene_id", None)
+        pa = ProcessApplication.objects.create(**validated_request_data)
+        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(pa.id),
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            scene_id=scene_id,
+        )
+        return pa
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):

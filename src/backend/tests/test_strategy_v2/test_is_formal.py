@@ -27,11 +27,27 @@ class TestStrategyIsFormal(TestCase):
         self.control_version = ControlVersion.objects.create(
             **{**BKM_CONTROL_VERSION_DATA, "control_id": self.control.control_id}
         )
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene_formal", description="test")
+        self.scene_id = self.scene.scene_id
+
+    def _bind_strategy_to_scene(self, strategy_id: int):
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene_id,
+        )
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def test_list_strategy_contains_is_formal_default_true(self) -> None:
         # Create a strategy via resource (is_formal should be default True)
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params["scene_id"] = self.scene_id
         params.update(
             {
                 "control_id": self.control_version.control_id,
@@ -46,7 +62,7 @@ class TestStrategyIsFormal(TestCase):
         created = resource.strategy_v2.create_strategy(**params)
 
         # List strategies and ensure is_formal in response and True
-        result = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE)
+        result = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE, scene_id=self.scene_id)
         found = next((s for s in result if s["strategy_id"] == created["strategy_id"]), None)
         assert found is not None
         assert "is_formal" in found
@@ -59,8 +75,9 @@ class TestStrategyIsFormal(TestCase):
             strategy_name="non-formal",
             is_formal=False,
         )
+        self._bind_strategy_to_scene(s.strategy_id)
         # List strategies and ensure is_formal shows False
-        result = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE)
+        result = resource.strategy_v2.list_strategy(namespace=settings.DEFAULT_NAMESPACE, scene_id=self.scene_id)
         found = next((item for item in result if item["strategy_id"] == s.strategy_id), None)
         assert found is not None
         assert found["is_formal"] is False
