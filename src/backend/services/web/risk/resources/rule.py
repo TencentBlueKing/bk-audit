@@ -53,6 +53,8 @@ class ListRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.LIST_RULE
 
     def perform_request(self, validated_request_data):
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         # 排序
         order_field = validated_request_data.pop("order_field", "-priority_index")
         # 构造筛选条件
@@ -62,6 +64,14 @@ class ListRiskRule(RiskRuleMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
+        # 按场景过滤
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="user")
+            q &= Q(scene_id=scene_id)
         # 筛选
         rules = RiskRule.load_latest_rules().filter(q).order_by(order_field)
         return rules
@@ -88,6 +98,14 @@ class CreateRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.CREATE_RULE
 
     def perform_request(self, validated_request_data):
+        # 场景权限校验
+        scene_id = validated_request_data.get("scene_id")
+        if scene_id is not None:
+            from blueapps.utils.request_provider import get_local_request
+
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1

@@ -362,6 +362,12 @@ class CreateStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
+        # 场景权限校验
+        scene_id = validated_request_data.get("scene_id")
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
@@ -577,6 +583,8 @@ class ListStrategy(StrategyV2Base):
     audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         # init queryset
         order_field = validated_request_data.get("order_field") or "-strategy_id"
         # 策略关联风险起始时间
@@ -597,6 +605,12 @@ class ListStrategy(StrategyV2Base):
             .prefetch_related("tools")
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
+        # 按场景过滤
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="user")
+            queryset = queryset.filter(scene_id=scene_id)
         # 排序
         queryset = queryset.order_by(order_field)
 
@@ -1436,6 +1450,12 @@ class CreateLinkTable(LinkTableBase):
         return link_table
 
     def perform_request(self, validated_request_data):
+        # 场景权限校验
+        scene_id = validated_request_data.get("scene_id")
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         link_table = self.create_link_table(validated_request_data)
         # audit
         self.add_audit_instance_to_context(link_table)
@@ -1528,8 +1548,16 @@ class ListLinkTable(LinkTableBase):
         tags = validated_request_data.pop("tags", [])
         sort = validated_request_data.pop("sort", [])
         no_tag = validated_request_data.pop("no_tag", False)
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         # 获取最新版本的联表
         link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
+        # 按场景过滤
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(request, scene_id, require_role="user")
+            link_tables = link_tables.filter(scene_id=scene_id)
         # 过滤标签
         if no_tag or int(NO_TAG_ID) in tags:
             link_table_uids = LinkTableTag.objects.values_list("link_table_uid").distinct()

@@ -114,7 +114,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
-    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+    namespace = serializers.CharField(label=gettext_lazy("命名空间"), required=False, default="default")
     version = serializers.IntegerField(default=1, label=gettext_lazy("版本"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表"), default=[]
@@ -126,6 +126,8 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         help_text=gettext_lazy("仅在 tool_type=data_search 时必须，支持 simple/sql"),
     )
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
+    # 场景隔离相关字段（场景级/平台级工具创建时使用）
+    scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -156,6 +158,8 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
     )
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
+    # 场景隔离相关字段（场景级工具更新时使用）
+    scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -185,6 +189,8 @@ class ToolResponseSerializer(serializers.Serializer):
 
 class ToolRetrieveRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
+    # 场景隔离相关字段（场景级工具删除时使用）
+    scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
 
 
 class ToolListAllResponseSerializer(serializers.ModelSerializer):
@@ -239,6 +245,9 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "strategies",
             "is_bkvision",
             "favorite",
+            "scope_type",
+            "scene_id",
+            "status",
         ]
 
 
@@ -280,6 +289,9 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "permission_owner",
             "is_bkvision",
             "favorite",
+            "scope_type",
+            "scene_id",
+            "status",
         ]
 
 
@@ -290,6 +302,21 @@ class ListRequestSerializer(serializers.Serializer):
     )
     my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
     recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
+    # 场景隔离过滤字段
+    scope_type = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        label=gettext_lazy("归属级别"),
+        help_text="platform=平台级, scene=场景级, 空=全部",
+    )
+    scene_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        label=gettext_lazy("所属场景ID"),
+        help_text="仅 scope_type=scene 时有效",
+    )
 
 
 class SqlAnalyseRequestSerializer(serializers.Serializer):

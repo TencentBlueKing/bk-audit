@@ -25,11 +25,25 @@ from services.web.vision.models import Scenario, VisionPanel
 class VisionPanelInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = VisionPanel
-        fields = ["id", "name", "scenario"]
+        fields = ["id", "name", "scenario", "scope_type", "scene_id", "status", "category", "description"]
 
 
 class VisionPanelInfoQuerySerializer(serializers.Serializer):
     scenario = serializers.ChoiceField(choices=Scenario.choices, default=Scenario.DEFAULT)
+    scope_type = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        label="归属级别",
+        help_text="platform=平台级, scene=场景级, 空=全部",
+    )
+    scene_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        label="所属场景ID",
+        help_text="仅 scope_type=scene 时有效",
+    )
 
 
 class QueryMetaReqSerializer(ExtraDataSerializerMixin):

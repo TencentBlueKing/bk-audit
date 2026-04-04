@@ -186,6 +186,13 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         db_index=True,
         help_text=gettext_lazy("任何流程为该风险生成报告后置为 True"),
     )
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="风险所属的审计场景，通过策略间接关联，初期允许为空",
+    )
 
     def can_auto_generate_report(self) -> bool:
         """
@@ -415,6 +422,13 @@ class ProcessApplication(SoftDeleteModel):
     approve_config = models.JSONField(gettext_lazy("Approve Config"), null=True, blank=True)
     description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="处理套餐所属的审计场景，初期允许为空，存量数据迁移后改为必填",
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Process Application")
@@ -438,6 +452,13 @@ class RiskRule(SoftDeleteModel):
     auto_close_risk = models.BooleanField(gettext_lazy("Auto Close Risk"), default=True)
     priority_index = models.IntegerField(gettext_lazy("Priority Index"), default=0)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="处理规则所属的审计场景，初期允许为空，存量数据迁移后改为必填",
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Risk Rule")

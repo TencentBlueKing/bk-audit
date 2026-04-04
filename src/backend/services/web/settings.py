@@ -12,6 +12,7 @@ INSTALLED_APPS = (
     "services.web.vision",
     "services.web.tool",
     "services.web.blob_storage",
+    "services.web.scene",
 )
 
 # ============== 渲染任务相关配置 ==============

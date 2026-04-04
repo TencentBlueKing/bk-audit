@@ -45,6 +45,13 @@ class Strategy(SoftDeleteModel):
     """
 
     namespace = models.CharField(gettext_lazy("Namespace"), max_length=64)
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("策略所属的审计场景，初期允许为空，存量数据迁移后改为必填"),
+    )
     strategy_id = models.BigAutoField(gettext_lazy("Strategy ID"), primary_key=True)
     strategy_name = models.CharField(gettext_lazy("Strategy Name"), max_length=64)
     control_id = models.CharField(gettext_lazy("Control ID"), max_length=64, null=True, blank=True)
@@ -231,6 +238,13 @@ class LinkTable(OperateRecordModel):
     """
 
     namespace = models.CharField(gettext_lazy("Namespace"), max_length=32, db_index=True)
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("联表所属的审计场景，初期允许为空，存量数据迁移后改为必填"),
+    )
     uid = UUIDField(gettext_lazy("Link Table UID"), db_index=True)
     version = models.IntegerField(gettext_lazy("Link Table Version"), db_index=True)
     name = models.CharField(gettext_lazy("Link Table Name"), max_length=200, db_index=True)

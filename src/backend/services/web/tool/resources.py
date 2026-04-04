@@ -276,6 +276,8 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
+        scope_type = validated_request_data.get("scope_type", "")
+        scene_id = validated_request_data.get("scene_id")
         recent_tool_uids = []
 
         # 判断是否筛选收藏的工具（通过虚拟标签 FAVORITE_TOOLS）
@@ -288,6 +290,15 @@ class ListTool(ToolBase):
         # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         queryset = Tool.all_latest_tools().filter(authed_tool_filter).annotate(favorite=Exists(favorite_subquery))
+
+        # 按归属级别和场景过滤
+        if scope_type == "platform":
+            queryset = queryset.filter(scope_type="platform")
+        elif scope_type == "scene" and scene_id:
+            queryset = queryset.filter(scope_type="scene", scene_id=scene_id)
+        elif scene_id:
+            # 传了 scene_id 但没指定 scope_type，返回该场景的工具 + 平台级工具
+            queryset = queryset.filter(Q(scope_type="scene", scene_id=scene_id) | Q(scope_type="platform"))
 
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
@@ -1195,3 +1206,194 @@ class GetToolDetailByNameAPIGW(ToolBase):
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data
+
+
+# ==================== 场景工具管理 ====================
+
+
+class CreatePlatformSceneTool(CreateTool):
+    """创建平台级场景工具（继承 CreateTool，复用核心创建逻辑）"""
+
+    name = gettext_lazy("创建平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            PanelStatus,
+            ResourceScopeType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceVisibility
+
+        # 注入平台级 scope 信息
+        validated_request_data["scope_type"] = ResourceScopeType.PLATFORM
+        validated_request_data["scene_id"] = None
+        validated_request_data.setdefault("status", PanelStatus.UNPUBLISHED)
+
+        with transaction.atomic():
+            # 复用父类 CreateTool 的核心创建逻辑
+            tool = super().perform_request(validated_request_data)
+
+            # 处理平台级工具的可见范围
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                ResourceVisibility.objects.update_or_create(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    resource_id=tool.uid,
+                    defaults={
+                        "visibility_type": visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                        "scene_ids": visibility_data.get("scene_ids", []),
+                        "system_ids": visibility_data.get("system_ids", []),
+                    },
+                )
+
+        return tool
+
+
+class UpdatePlatformSceneTool(UpdateTool):
+    """编辑平台级场景工具（继承 UpdateTool，复用核心更新逻辑）"""
+
+    name = gettext_lazy("编辑平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            ResourceScopeType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceVisibility
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        uid = validated_request_data.get("uid")
+        tool = Tool.last_version_tool(uid)
+        if not tool or tool.scope_type != ResourceScopeType.PLATFORM:
+            raise SceneToolNotExist()
+
+        with transaction.atomic():
+            # 复用父类 UpdateTool 的核心更新逻辑
+            result = super().perform_request(validated_request_data)
+
+            # 处理平台级工具的可见范围
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                ResourceVisibility.objects.update_or_create(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    resource_id=uid,
+                    defaults={
+                        "visibility_type": visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                        "scene_ids": visibility_data.get("scene_ids", []),
+                        "system_ids": visibility_data.get("system_ids", []),
+                    },
+                )
+
+        return result
+
+
+class DeletePlatformSceneTool(DeleteTool):
+    """删除平台级场景工具（继承 DeleteTool，复用核心删除逻辑）"""
+
+    name = gettext_lazy("删除平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            PanelStatus,
+            ResourceScopeType,
+            ResourceVisibilityType,
+        )
+        from services.web.scene.models import ResourceVisibility
+        from services.web.tool.exceptions import (
+            SceneToolCannotDelete,
+            SceneToolNotExist,
+        )
+
+        uid = validated_request_data.get("uid")
+        tool = Tool.last_version_tool(uid)
+        if not tool or tool.scope_type != ResourceScopeType.PLATFORM:
+            raise SceneToolNotExist()
+
+        if tool.status == PanelStatus.PUBLISHED:
+            raise SceneToolCannotDelete()
+
+        # 清理可见范围配置
+        ResourceVisibility.objects.filter(resource_type=ResourceVisibilityType.TOOL, resource_id=uid).delete()
+
+        # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
+        return super().perform_request(validated_request_data)
+
+
+class PublishPlatformSceneTool(ToolBase):
+    """上架/下架平台级场景工具"""
+
+    name = gettext_lazy("上架/下架平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import PanelStatus, ResourceScopeType
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        uid = validated_request_data.get("uid")
+        tool = Tool.last_version_tool(uid)
+        if not tool or tool.scope_type != ResourceScopeType.PLATFORM:
+            raise SceneToolNotExist()
+
+        if tool.status == PanelStatus.PUBLISHED:
+            tool.status = PanelStatus.UNPUBLISHED
+        else:
+            tool.status = PanelStatus.PUBLISHED
+        tool.save(update_fields=["status"])
+        return tool
+
+
+class CreateSceneScopeTool(CreateTool):
+    """创建场景级工具（继承 CreateTool，复用核心创建逻辑）"""
+
+    name = gettext_lazy("创建场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import ResourceScopeType
+
+        scene_id = validated_request_data.get("scene_id")
+
+        # 注入场景级 scope 信息
+        validated_request_data["scope_type"] = ResourceScopeType.SCENE
+        validated_request_data["scene_id"] = int(scene_id)
+
+        # 复用父类 CreateTool 的核心创建逻辑
+        return super().perform_request(validated_request_data)
+
+
+class UpdateSceneScopeTool(UpdateTool):
+    """编辑场景级工具（继承 UpdateTool，复用核心更新逻辑）"""
+
+    name = gettext_lazy("编辑场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import ResourceScopeType
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        scene_id = validated_request_data.pop("scene_id", None)
+        uid = validated_request_data.get("uid")
+        tool = Tool.last_version_tool(uid)
+        if not tool or tool.scope_type != ResourceScopeType.SCENE or tool.scene_id != int(scene_id):
+            raise SceneToolNotExist()
+
+        # 复用父类 UpdateTool 的核心更新逻辑
+        return super().perform_request(validated_request_data)
+
+
+class DeleteSceneScopeTool(DeleteTool):
+    """删除场景级工具（继承 DeleteTool，复用核心删除逻辑）"""
+
+    name = gettext_lazy("删除场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import ResourceScopeType
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        scene_id = validated_request_data.get("scene_id")
+        uid = validated_request_data.get("uid")
+        tool = Tool.last_version_tool(uid)
+        if not tool or tool.scope_type != ResourceScopeType.SCENE or tool.scene_id != int(scene_id):
+            raise SceneToolNotExist()
+
+        # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
+        return super().perform_request(validated_request_data)

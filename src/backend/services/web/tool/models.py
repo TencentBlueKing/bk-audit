@@ -32,6 +32,30 @@ class Tool(SoftDeleteModel):
     permission_owner = models.CharField(gettext_lazy("权限负责人"), max_length=255, help_text="用于工具的权限认证")
     is_bkvision = models.BooleanField(gettext_lazy("是否更新BkVision工具"), default=False)
 
+    # 场景隔离相关字段
+    scope_type = models.CharField(
+        gettext_lazy("归属级别"),
+        max_length=32,
+        default="",
+        blank=True,
+        db_index=True,
+        help_text="平台级(platform)/场景级(scene)，为空表示存量工具",
+    )
+    scene_id = models.IntegerField(
+        gettext_lazy("所属场景ID"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="仅场景级工具需要，关联 Scene.scene_id",
+    )
+    status = models.CharField(
+        gettext_lazy("上架状态"),
+        max_length=32,
+        default="",
+        blank=True,
+        help_text="仅平台级工具需要，published/unpublished",
+    )
+
     class Meta:
         verbose_name = gettext_lazy("Tool")
         verbose_name_plural = verbose_name
