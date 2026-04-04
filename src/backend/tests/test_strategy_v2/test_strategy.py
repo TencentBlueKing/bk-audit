@@ -96,6 +96,7 @@ class StrategyTest(TestCase):
             "namespace": settings.DEFAULT_NAMESPACE,
             "strategy_name": strategy_name,
             "strategy_type": "rule",
+            "system_id": "bk_audit",
             "configs": {
                 "config_type": RuleAuditConfigType.EVENT_LOG.value,
                 "data_source": {

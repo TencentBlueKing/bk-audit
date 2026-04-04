@@ -15,7 +15,7 @@ class ToolViewSet(ResourceViewSet):
     lookup_field = "uid"
 
     def get_permissions(self):
-        if self.action in ["update", "destroy", "sql_analyse_with_tool"]:
+        if self.action in ["sql_analyse_with_tool"]:
             return [ManageToolPermission()]
         if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [
@@ -38,9 +38,6 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.get_tool_enum_mapping_by_collection, endpoint="enum_mapping_by_collection"),
         ResourceRoute("GET", resource.tool.list_tool_tags, endpoint="tags"),
         ResourceRoute("GET", resource.tool.list_tool, enable_paginate=True),
-        ResourceRoute("DELETE", resource.tool.delete_tool, pk_field="uid"),
-        ResourceRoute("POST", resource.tool.create_tool),
-        ResourceRoute("PUT", resource.tool.update_tool, pk_field="uid"),
         ResourceRoute("POST", resource.tool.execute_tool, endpoint="execute", pk_field="uid"),
         ResourceRoute("GET", resource.tool.list_tool_all, endpoint="all"),
         ResourceRoute("GET", resource.tool.get_tool_detail, pk_field="uid"),
@@ -66,4 +63,41 @@ class ToolAPIGWViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
         ResourceRoute("GET", resource.tool.get_tool_detail_by_name_apigw, endpoint="detail_by_name"),
+    ]
+
+
+# ==================== 场景工具管理 ====================
+
+
+class PlatformSceneToolViewSet(ResourceViewSet):
+    """
+    平台级场景工具增删改 ViewSet（SaaS 管理员）
+
+    POST   /api/v1/tool/platform/                创建平台级工具
+    PUT    /api/v1/tool/platform/{uid}/          编辑平台级工具
+    DELETE /api/v1/tool/platform/{uid}/          删除平台级工具
+    POST   /api/v1/tool/platform/{uid}/publish/  上架/下架
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.tool.create_platform_scene_tool),
+        ResourceRoute("PUT", resource.tool.update_platform_scene_tool, pk_field="uid"),
+        ResourceRoute("DELETE", resource.tool.delete_platform_scene_tool, pk_field="uid"),
+        ResourceRoute("POST", resource.tool.publish_platform_scene_tool, endpoint="publish", pk_field="uid"),
+    ]
+
+
+class SceneScopeToolViewSet(ResourceViewSet):
+    """
+    场景级工具增删改 ViewSet（场景管理员）
+
+    POST   /api/v1/tool/scene/                 创建场景级工具
+    PUT    /api/v1/tool/scene/{uid}/           编辑场景级工具
+    DELETE /api/v1/tool/scene/{uid}/           删除场景级工具
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.tool.create_scene_scope_tool),
+        ResourceRoute("PUT", resource.tool.update_scene_scope_tool, pk_field="uid"),
+        ResourceRoute("DELETE", resource.tool.delete_scene_scope_tool, pk_field="uid"),
     ]

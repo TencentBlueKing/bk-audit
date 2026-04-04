@@ -305,9 +305,27 @@ class ListRisk(RiskMeta):
         order_fields = validated_request_data.pop("order_fields", [])
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
+        # 场景/系统过滤
+        scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
         thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
+        # 按场景过滤（通过 ResourceBinding）
+        if scene_id is not None:
+            from services.web.scene.permissions import check_scene_permission
+
+            check_scene_permission(request, scene_id, require_role="user")
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
+        base_queryset = SceneScopeFilter.filter_queryset(
+            queryset=base_queryset,
+            scene_id=scene_id,
+            system_id=system_id,
+            resource_type=ResourceVisibilityType.RISK,
+            pk_field="risk_id",
+        )
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
         if use_bkbase:

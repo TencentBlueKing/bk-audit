@@ -276,6 +276,9 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
+        binding_type = validated_request_data.get("binding_type", "")
+        scene_id = validated_request_data.get("scene_id")
+        system_id = validated_request_data.get("system_id")
         recent_tool_uids = []
 
         # 判断是否筛选收藏的工具（通过虚拟标签 FAVORITE_TOOLS）
@@ -288,6 +291,19 @@ class ListTool(ToolBase):
         # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         queryset = Tool.all_latest_tools().filter(authed_tool_filter).annotate(favorite=Exists(favorite_subquery))
+
+        # 按绑定类型和场景过滤（通过 ResourceBinding 关联）
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import BindingScopeFilter
+
+        queryset = BindingScopeFilter.filter_queryset(
+            queryset=queryset,
+            binding_type=binding_type,
+            scene_id=scene_id,
+            system_id=system_id,
+            resource_type=ResourceVisibilityType.TOOL,
+            pk_field="uid",
+        )
 
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
@@ -1195,3 +1211,260 @@ class GetToolDetailByNameAPIGW(ToolBase):
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data
+
+
+# ==================== 场景工具管理 ====================
+
+
+class CreatePlatformSceneTool(CreateTool):
+    """创建平台级场景工具（继承 CreateTool，复用核心创建逻辑）"""
+
+    name = gettext_lazy("创建平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            ResourceBindingSystem,
+        )
+
+        validated_request_data.setdefault("status", PanelStatus.UNPUBLISHED)
+
+        with transaction.atomic():
+            # 复用父类 CreateTool 的核心创建逻辑
+            tool = super().perform_request(validated_request_data)
+
+            # 创建平台级绑定关系
+            binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=tool.uid,
+                binding_type=BindingType.PLATFORM_BINDING,
+                visibility_type=VisibilityScope.ALL_VISIBLE,
+            )
+
+            # 处理可见范围配置
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
+                binding.save(update_fields=["visibility_type"])
+                for sid in visibility_data.get("scene_ids", []):
+                    ResourceBindingScene.objects.create(binding=binding, scene_id=sid)
+                for sys_id in visibility_data.get("system_ids", []):
+                    ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+
+        return tool
+
+
+class UpdatePlatformSceneTool(UpdateTool):
+    """编辑平台级场景工具（继承 UpdateTool，复用核心更新逻辑）"""
+
+    name = gettext_lazy("编辑平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            ResourceBindingSystem,
+        )
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        uid = validated_request_data.get("uid")
+        # 通过 ResourceBinding 确认是平台级工具
+        try:
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+                binding_type=BindingType.PLATFORM_BINDING,
+            )
+        except ResourceBinding.DoesNotExist:
+            raise SceneToolNotExist()
+
+        with transaction.atomic():
+            # 复用父类 UpdateTool 的核心更新逻辑
+            result = super().perform_request(validated_request_data)
+
+            # 处理可见范围配置
+            visibility_data = validated_request_data.get("visibility")
+            if visibility_data:
+                binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
+                binding.save(update_fields=["visibility_type"])
+                binding.binding_scenes.all().delete()
+                for sid in visibility_data.get("scene_ids", []):
+                    ResourceBindingScene.objects.create(binding=binding, scene_id=sid)
+                binding.binding_systems.all().delete()
+                for sys_id in visibility_data.get("system_ids", []):
+                    ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+
+        return result
+
+
+class DeletePlatformSceneTool(DeleteTool):
+    """删除平台级场景工具（继承 DeleteTool，复用核心删除逻辑）"""
+
+    name = gettext_lazy("删除平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+        )
+        from services.web.scene.models import ResourceBinding
+        from services.web.tool.exceptions import (
+            SceneToolCannotDelete,
+            SceneToolNotExist,
+        )
+
+        uid = validated_request_data.get("uid")
+        # 通过 ResourceBinding 确认是平台级工具
+        try:
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+                binding_type=BindingType.PLATFORM_BINDING,
+            )
+        except ResourceBinding.DoesNotExist:
+            raise SceneToolNotExist()
+
+        tool = Tool.last_version_tool(uid)
+        if tool and tool.status == PanelStatus.PUBLISHED:
+            raise SceneToolCannotDelete()
+
+        # 删除绑定关系（级联删除关联的场景和系统）
+        binding.delete()
+
+        # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
+        return super().perform_request(validated_request_data)
+
+
+class PublishPlatformSceneTool(ToolBase):
+    """上架/下架平台级场景工具"""
+
+    name = gettext_lazy("上架/下架平台级场景工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+        )
+        from services.web.scene.models import ResourceBinding
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        uid = validated_request_data.get("uid")
+        # 通过 ResourceBinding 确认是平台级工具
+        if not ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+        ).exists():
+            raise SceneToolNotExist()
+
+        tool = Tool.last_version_tool(uid)
+        if not tool:
+            raise SceneToolNotExist()
+
+        if tool.status == PanelStatus.PUBLISHED:
+            tool.status = PanelStatus.UNPUBLISHED
+        else:
+            tool.status = PanelStatus.PUBLISHED
+        tool.save(update_fields=["status"])
+        return tool
+
+
+class CreateSceneScopeTool(CreateTool):
+    """创建场景级工具（继承 CreateTool，复用核心创建逻辑）"""
+
+    name = gettext_lazy("创建场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding, ResourceBindingScene
+
+        scene_id = validated_request_data.pop("scene_id")
+
+        with transaction.atomic():
+            # 复用父类 CreateTool 的核心创建逻辑
+            tool = super().perform_request(validated_request_data)
+
+            # 创建场景级绑定关系（有且仅有一个场景关联）
+            binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=tool.uid,
+                binding_type=BindingType.SCENE_BINDING,
+            )
+            ResourceBindingScene.objects.create(binding=binding, scene_id=int(scene_id))
+
+        return tool
+
+
+class UpdateSceneScopeTool(UpdateTool):
+    """编辑场景级工具（继承 UpdateTool，复用核心更新逻辑）"""
+
+    name = gettext_lazy("编辑场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        scene_id = validated_request_data.pop("scene_id", None)
+        uid = validated_request_data.get("uid")
+        # 通过 ResourceBinding + ResourceBindingScene 确认是该场景的工具
+        try:
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+                binding_type=BindingType.SCENE_BINDING,
+            )
+        except ResourceBinding.DoesNotExist:
+            raise SceneToolNotExist()
+
+        if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
+            raise SceneToolNotExist()
+
+        # 复用父类 UpdateTool 的核心更新逻辑
+        return super().perform_request(validated_request_data)
+
+
+class DeleteSceneScopeTool(DeleteTool):
+    """删除场景级工具（继承 DeleteTool，复用核心删除逻辑）"""
+
+    name = gettext_lazy("删除场景级工具")
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        scene_id = validated_request_data.get("scene_id")
+        uid = validated_request_data.get("uid")
+        # 通过 ResourceBinding + ResourceBindingScene 确认是该场景的工具
+        try:
+            binding = ResourceBinding.objects.get(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+                binding_type=BindingType.SCENE_BINDING,
+            )
+        except ResourceBinding.DoesNotExist:
+            raise SceneToolNotExist()
+
+        if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
+            raise SceneToolNotExist()
+
+        # 删除绑定关系（级联删除关联的场景）
+        binding.delete()
+
+        # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
+        return super().perform_request(validated_request_data)
