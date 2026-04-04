@@ -39,6 +39,7 @@ from services.web.risk.serializers import (
     ToggleRiskRuleRequestSerializer,
     UpdateRiskRuleReqSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
 
 
 class RiskRuleMeta(AuditMixinResource, abc.ABC):
@@ -53,6 +54,8 @@ class ListRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.LIST_RULE
 
     def perform_request(self, validated_request_data):
+        # 场景过滤
+        scene_id = validated_request_data.pop("scene_id", None)
         # 排序
         order_field = validated_request_data.pop("order_field", "-priority_index")
         # 构造筛选条件
@@ -62,23 +65,38 @@ class ListRiskRule(RiskRuleMeta):
             for item in val:
                 _q |= Q(**{key: item})
             q &= _q
-        # 筛选
-        rules = RiskRule.load_latest_rules().filter(q).order_by(order_field)
+        # 按场景过滤（通过 ResourceBinding）
+        from services.web.scene.filters import SceneScopeFilter
+
+        # 筛选（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回空结果）
+        rules = SceneScopeFilter.filter_queryset(
+            queryset=RiskRule.load_latest_rules().filter(q),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            pk_field="rule_id",
+        ).order_by(order_field)
         return rules
 
 
 class ListAllRiskRule(RiskRuleMeta):
     name = gettext_lazy("风险处理规则列表")
+    RequestSerializer = ListRiskRuleReqSerializer
 
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_RULE, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        return [
-            {"id": risk_rule.rule_id, "name": risk_rule.name, "version": risk_rule.version}
-            for risk_rule in RiskRule.objects.all()
-        ]
+        scene_id = validated_request_data.get("scene_id")
+        from services.web.scene.filters import SceneScopeFilter
+
+        rules = SceneScopeFilter.filter_queryset(
+            queryset=RiskRule.objects.all(),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            pk_field="rule_id",
+        )
+        return [{"id": risk_rule.rule_id, "name": risk_rule.name, "version": risk_rule.version} for risk_rule in rules]
 
 
 class CreateRiskRule(RiskRuleMeta):
@@ -88,10 +106,19 @@ class CreateRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.CREATE_RULE
 
     def perform_request(self, validated_request_data):
+        scene_id = validated_request_data.pop("scene_id", None)
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
         instance.save(update_fields=["rule_id", "priority_index"])
+        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(instance.rule_id),
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            scene_id=scene_id,
+        )
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instance))
         return instance
 

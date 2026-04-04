@@ -31,6 +31,13 @@ class Tool(SoftDeleteModel):
     config = models.JSONField(gettext_lazy("工具配置"), default=dict, blank=True)
     permission_owner = models.CharField(gettext_lazy("权限负责人"), max_length=255, help_text="用于工具的权限认证")
     is_bkvision = models.BooleanField(gettext_lazy("是否更新BkVision工具"), default=False)
+    status = models.CharField(
+        gettext_lazy("上架状态"),
+        max_length=32,
+        default="",
+        blank=True,
+        help_text="仅平台级工具需要，published/unpublished",
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Tool")

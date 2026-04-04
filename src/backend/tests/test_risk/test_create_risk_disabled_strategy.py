@@ -22,6 +22,8 @@ from django.test import TestCase
 
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBinding
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
@@ -68,6 +70,12 @@ class TestCreateRiskWithStrategyStatus(TestCase):
         self.assertTrue(created)
         self.assertIsNotNone(risk)
         self.assertEqual(Risk.objects.filter(strategy_id=102, raw_event_id="raw-002").count(), 1)
+        self.assertFalse(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.RISK,
+                resource_id=risk.risk_id,
+            ).exists()
+        )
 
     def test_existing_risk_not_updated_when_disabled(self):
         # Strategy disabled

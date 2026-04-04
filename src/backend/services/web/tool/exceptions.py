@@ -186,3 +186,15 @@ class ApiToolExecuteError(ToolException):
         self.detail = detail
         self.MESSAGE = self.MESSAGE.format(status_code=status_code, detail=detail)
         super().__init__(*args, **kwargs)
+
+
+class SceneToolNotExist(ToolException):
+    MESSAGE = gettext_lazy("场景工具不存在")
+    STATUS_CODE = 404
+    ERROR_CODE = "015"
+
+
+class SceneToolCannotDelete(ToolException):
+    MESSAGE = gettext_lazy("已上架的工具不可删除")
+    STATUS_CODE = 400
+    ERROR_CODE = "016"

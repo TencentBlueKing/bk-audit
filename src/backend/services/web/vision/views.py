@@ -217,3 +217,40 @@ class ShareViewSet(BKVisionViewSet):
         if self.action in ["share_detail"]:
             return [ShareDetailPermission()]
         return super().get_permissions()
+
+
+# ==================== 场景报表管理 ====================
+
+
+class PlatformPanelViewSet(ResourceViewSet):
+    """
+    平台级报表增删改 ViewSet（SaaS 管理员）
+
+    POST   /bkvision/api/v1/panel/platform/                  创建平台级报表
+    PUT    /bkvision/api/v1/panel/platform/{panel_id}/        编辑平台级报表
+    DELETE /bkvision/api/v1/panel/platform/{panel_id}/        删除平台级报表
+    POST   /bkvision/api/v1/panel/platform/{panel_id}/publish/ 上架/下架
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.vision.create_platform_panel),
+        ResourceRoute("PUT", resource.vision.update_platform_panel, pk_field="panel_id"),
+        ResourceRoute("DELETE", resource.vision.delete_platform_panel, pk_field="panel_id"),
+        ResourceRoute("POST", resource.vision.publish_platform_panel, endpoint="publish", pk_field="panel_id"),
+    ]
+
+
+class ScenePanelManageViewSet(ResourceViewSet):
+    """
+    场景级报表增删改 ViewSet（场景管理员）
+
+    POST   /bkvision/api/v1/panel/scene/                创建场景级报表
+    PUT    /bkvision/api/v1/panel/scene/{panel_id}/     编辑场景级报表
+    DELETE /bkvision/api/v1/panel/scene/{panel_id}/     删除场景级报表
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.vision.create_scene_panel),
+        ResourceRoute("PUT", resource.vision.update_scene_panel, pk_field="panel_id"),
+        ResourceRoute("DELETE", resource.vision.delete_scene_panel, pk_field="panel_id"),
+    ]
