@@ -66,17 +66,20 @@
       class="content-content"
       :class="{ 'has-shadow': hasOpenedTools }">
       <div class="content-card">
-        <content-card
-          v-if="!hasOpenedTools"
-          ref="ContentCardRef"
-          :my-created="tagId === '-4'"
-          :recent-used="tagId === '-5'"
-          :tag-id="tagId"
-          :tags-enums="tagsEnums"
-          @change="handleChange"
-          @open-tool="handleOpenTool" />
+        <div
+          v-show="!hasOpenedTools"
+          class="content-card-wrapper">
+          <content-card
+            ref="ContentCardRef"
+            :my-created="tagId === '-4'"
+            :recent-used="tagId === '-5'"
+            :tag-id="tagId"
+            :tags-enums="tagsEnums"
+            @change="fetchToolsTagsList"
+            @open-tool="handleOpenTool" />
+        </div>
         <tool-info-panel
-          v-else
+          v-show="hasOpenedTools"
           :active-uid="activeToolUid"
           :tags-enums="tagsEnums"
           :tool-list="openedTools"
@@ -84,7 +87,7 @@
           @close="handleCloseToolPanel"
           @close-tab="handleCloseTab"
           @go-home="handleGoHomePage"
-          @switch-tab="switchTab" />
+          @switch-tab="handleSwitchTab" />
       </div>
     </div>
   </div>
@@ -92,6 +95,7 @@
 
 <script setup lang='ts'>
   import { nextTick, onMounted, ref, watch } from 'vue';
+  import { useRoute, useRouter } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -103,6 +107,7 @@
   import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
   import useRequest from '@/hooks/use-request';
+  import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import ellipsisIcon from '@/images/ellipsis.svg';
   import foldLeftIcon from '@/images/fold-left.svg';
@@ -115,19 +120,17 @@
     icon?: string;
   }
   const renderLabelRef = ref();
-
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
-
   const tagsEnums = ref<Array<TagItem>>([]);
   const tagId = ref('');
   const strategyLabelList = ref<Array<TagItem>>([]);
   const renderStyle = ref({
     backgroundColor: '#fff',
   });
-
   const isSidebarCollapsed = ref(false);
   const isReturningHome = ref(false);
-
+  const route = useRoute();
+  const router = useRouter();
   const {
     openedTools,
     activeToolUid,
@@ -137,20 +140,76 @@
     switchTab,
     goHome,
     clearAll,
+    setDrillDownParams,
+    resetForDrillDown,
   } = useToolTabs();
 
-  // 选中左侧label
+  const routeUid = route.params.uid as string;
+  const isDrillDownRoute = !!(routeUid && route.query.drillConfig);
+  const isRefreshRestore = !!(routeUid && !route.query.drillConfig);
+  const isProgrammaticReset = ref(false);
+
+  if (isDrillDownRoute) {
+    resetForDrillDown();
+    const drillUid = routeUid;
+    let drillConfig = null;
+    let rowData = null;
+    try {
+      const drillConfigRaw = route.query.drillConfig as string;
+      const rowDataRaw = route.query.rowData as string;
+      if (drillConfigRaw) drillConfig = JSON.parse(decodeURIComponent(drillConfigRaw));
+      if (rowDataRaw) rowData = JSON.parse(decodeURIComponent(rowDataRaw));
+    } catch {
+      // 解析失败时忽略
+    }
+    if (drillConfig && rowData) {
+      const drillParams: DrillDownParams = {
+        drillConfig,
+        rowData,
+      };
+      setDrillDownParams(drillUid, drillParams);
+    }
+    const tempTool = new ToolInfo({
+      uid: drillUid,
+      name: drillUid,
+    } as ToolInfo);
+    openTool(tempTool);
+  } else if (isRefreshRestore) {
+    const alreadyInList = openedTools.value.some(t => t.uid === routeUid);
+    if (!alreadyInList) {
+      const tempTool = new ToolInfo({
+        uid: routeUid,
+        name: routeUid,
+      } as ToolInfo);
+      openTool(tempTool);
+    } else if (activeToolUid.value !== routeUid) {
+      switchTab(routeUid);
+    }
+  }
+
+  // 安全地重置左侧标签栏（防止 resetAll 触发的 checked 事件关闭工具详情）
+  const safeResetLabels = () => {
+    if (hasOpenedTools.value) {
+      isProgrammaticReset.value = true;
+    }
+    renderLabelRef.value?.resetAll([]);
+    nextTick(() => {
+      isProgrammaticReset.value = false;
+    });
+  };
+
   const handleChecked = async (name: string) => {
     tagId.value = name;
+    if (isProgrammaticReset.value) {
+      ContentCardRef.value?.getToolsList(name);
+      return;
+    }
     if (hasOpenedTools.value) {
       goHome();
+      syncRouteToUrl();
       await nextTick();
     }
     ContentCardRef.value?.getToolsList(name);
-  };
-
-  const handleChange = () => {
-    fetchToolsTagsList();
   };
 
   const {
@@ -158,28 +217,35 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      const strategyList = data
-        .filter(item => item.tag_name && item.tag_name.trim() !== '')
-        .map(item => ({ ...item, icon: '' }));
       const iconMap: Record<number, string> = {
         0: 'quanbu-xuanzhong',
         1: 'morentouxiang',
         2: 'shijian',
         3: 'weifenpei',
       };
-      strategyLabelList.value = strategyList.map((item: any, index: number) => ({
-        ...item,
-        icon: iconMap[index] || 'tag',
-      }));
-
+      strategyLabelList.value = data
+        .filter(item => item.tag_name?.trim())
+        .map((item: any, index: number) => ({
+          ...item,
+          icon: iconMap[index] || 'tag',
+        }));
       tagsEnums.value = strategyLabelList.value;
-      renderLabelRef.value?.resetAll([]);
+      safeResetLabels();
     },
   });
+
+  const syncRouteToUrl = (uid?: string) => {
+    if (uid && (route.name !== 'toolDetail' || route.params.uid !== uid)) {
+      router.replace({ name: 'toolDetail', params: { uid } });
+    } else if (!uid && route.name !== 'toolsSquare') {
+      router.replace({ name: 'toolsSquare' });
+    }
+  };
 
   const handleOpenTool = (tool: ToolInfo) => {
     openTool(tool);
     isSidebarCollapsed.value = true;
+    syncRouteToUrl(tool.uid);
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo) => {
@@ -190,55 +256,59 @@
     isReturningHome.value = true;
     tagId.value = '-3';
     goHome();
-    await nextTick();
+    syncRouteToUrl();
     await nextTick();
     renderLabelRef.value?.setLabel('-3');
     ContentCardRef.value?.getToolsList(tagId.value);
     isReturningHome.value = false;
   };
 
-  // 关闭整个工具详情面板（点击 ×）
   const handleCloseToolPanel = async () => {
     clearAll();
     isSidebarCollapsed.value = false;
+    syncRouteToUrl();
     await nextTick();
     ContentCardRef.value?.getToolsList(tagId.value);
   };
 
-  // 关闭单个 tab
   const handleCloseTab = async (uid: string) => {
     closeTab(uid);
     if (!hasOpenedTools.value) {
+      syncRouteToUrl();
       await nextTick();
       ContentCardRef.value?.getToolsList(tagId.value);
+    } else {
+      syncRouteToUrl(activeToolUid.value);
     }
   };
 
   watch(hasOpenedTools, (val) => {
-    if (val) {
-      isSidebarCollapsed.value = true;
-    } else {
-      isSidebarCollapsed.value = false;
-    }
+    isSidebarCollapsed.value = val;
   }, { immediate: true });
 
   watch(isSidebarCollapsed, (val) => {
-    if (!val) {
-      if (isReturningHome.value) return;
-      nextTick(() => {
-        renderLabelRef.value?.resetAll([]);
-        if (hasOpenedTools.value) {
-          renderLabelRef.value?.setLabel('');
-        } else {
-          const restoreLabel = (!tagId.value || tagId.value === '-3') ? '-3' : tagId.value;
-          renderLabelRef.value?.setLabel(restoreLabel);
-        }
-      });
-    }
+    if (val || isReturningHome.value) return;
+    nextTick(() => {
+      safeResetLabels();
+      if (hasOpenedTools.value) {
+        renderLabelRef.value?.setLabel('');
+      } else {
+        renderLabelRef.value?.setLabel((!tagId.value || tagId.value === '-3') ? '-3' : tagId.value);
+      }
+    });
   });
+
+  // 切换 tab 时同步 URL
+  const handleSwitchTab = (uid: string) => {
+    switchTab(uid);
+    syncRouteToUrl(uid);
+  };
 
   onMounted(() => {
     fetchToolsTagsList();
+    if (hasOpenedTools.value && !isDrillDownRoute && !isRefreshRestore) {
+      syncRouteToUrl(activeToolUid.value);
+    }
   });
 </script>
 
@@ -418,6 +488,11 @@
     .content-card {
       width: 100%;
       height: 100%;
+
+      .content-card-wrapper {
+        width: 100%;
+        height: 100%;
+      }
     }
 
   }
