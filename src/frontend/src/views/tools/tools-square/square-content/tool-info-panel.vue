@@ -93,7 +93,8 @@
               </bk-tag>
               <bk-tag
                 class="desc-tag desc-tag-info"
-                theme="info">
+                theme="info"
+                @click.stop="handlesStrategiesClick(activeTool)">
                 运用在 {{ activeTool?.strategies?.length || 0 }} 个策略中
               </bk-tag>
             </div>
@@ -260,6 +261,20 @@
       return null;
     }).filter(e => e !== null);
     return tagNameList.join(',');
+  };
+
+  // 策略跳转
+  const handlesStrategiesClick = (item: ToolInfo | null) => {
+    if (!item?.strategies || item.strategies.length === 0) {
+      return;
+    }
+    const url = router.resolve({
+      name: 'strategyList',
+      query: {
+        strategy_id: item.strategies.join(','),
+      },
+    }).href;
+    window.open(url, '_blank');
   };
 
   const toolContentRefs = ref<Record<string, any>>({});
@@ -712,7 +727,13 @@
 
       .desc-tag-info {
         color: #3a84ff;
+        cursor: pointer;
         background: #f0f5ff;
+
+        &:hover {
+          color: #1768ef;
+          background: #e1ecff;
+        }
       }
     }
 
