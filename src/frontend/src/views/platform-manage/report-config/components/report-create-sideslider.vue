@@ -70,15 +70,24 @@
             :label="t('所属分组')"
             property="groupId"
             required>
-            <bk-select
-              v-model="formData.groupId"
-              :placeholder="t('请选择')">
-              <bk-option
-                v-for="group in groupList"
-                :key="group.id"
-                :label="group.name"
-                :value="group.id" />
-            </bk-select>
+            <div class="group-select-wrapper">
+              <bk-select
+                v-model="formData.groupId"
+                :placeholder="t('请选择')"
+                style="flex: 1;">
+                <bk-option
+                  v-for="group in allGroupList"
+                  :key="group.id"
+                  :label="group.name"
+                  :value="group.id" />
+              </bk-select>
+              <bk-button
+                text
+                theme="primary"
+                @click="handleShowAddGroup">
+                {{ t('新增分组') }}
+              </bk-button>
+            </div>
           </bk-form-item>
 
           <!-- 描述 -->
@@ -128,6 +137,39 @@
       </bk-button>
     </template>
   </bk-sideslider>
+
+  <!-- 新增分组弹窗 -->
+  <bk-dialog
+    v-model:is-show="addGroupDialogVisible"
+    :title="t('新建分组')"
+    width="480">
+    <bk-form
+      ref="addGroupFormRef"
+      form-type="vertical"
+      :model="addGroupFormData"
+      :rules="addGroupFormRules">
+      <bk-form-item
+        :label="t('分组名称')"
+        property="name"
+        required>
+        <bk-input
+          v-model="addGroupFormData.name"
+          :placeholder="t('请输入')" />
+      </bk-form-item>
+    </bk-form>
+    <template #footer>
+      <bk-button
+        class="mr8"
+        :loading="addGroupLoading"
+        theme="primary"
+        @click="handleConfirmAddGroup">
+        {{ t('确定') }}
+      </bk-button>
+      <bk-button @click="handleCancelAddGroup">
+        {{ t('取消') }}
+      </bk-button>
+    </template>
+  </bk-dialog>
 </template>
 
 <script setup lang='ts'>
@@ -214,6 +256,29 @@
     enabled: false,
   });
 
+  // 新增分组相关状态
+  const addGroupDialogVisible = ref(false);
+  const addGroupFormRef = ref();
+  const addGroupLoading = ref(false);
+  const addGroupFormData = ref({
+    name: '',
+  });
+  const addGroupFormRules = {
+    name: [
+      {
+        required: true,
+        message: t('分组名称不能为空'),
+        trigger: 'blur',
+      },
+    ],
+  };
+
+  // 本地新增的分组列表
+  const localGroupList = ref<ReportGroup[]>([]);
+
+  // 合并原有分组和本地新增的分组
+  const allGroupList = computed(() => [...localGroupList.value, ...props.groupList]);
+
   // 表单校验规则
   const formRules = {
     bkvisionReport: [
@@ -227,7 +292,7 @@
       {
         required: true,
         message: t('请输入报表名称'),
-        trigger: 'blur',
+        trigger: 'change',
       },
     ],
     groupId: [
@@ -284,19 +349,24 @@
   });
 
   // 级联选择器变化处理
-  const handleSpaceChange = (value: string[], _: unknown, selectedOptions: Record<string, string>[]) => {
+  const handleSpaceChange = (value: string[]) => {
     if (value && value.length > 0) {
       // 获取最后一级选中的值作为 bkvisionReport
-      formData.value.bkvisionReport = value[value.length - 1];
-      // 如果报表名称为空，自动填充选中的报表名称
-      if (!formData.value.name && selectedOptions && selectedOptions.length > 0) {
-        const lastOption = selectedOptions[selectedOptions.length - 1];
-        if (lastOption?.name) {
-          formData.value.name = lastOption.name;
+      const reportUid = value[value.length - 1];
+      formData.value.bkvisionReport = reportUid;
+
+      // 从 chartLists 中查找报表名称并自动填充
+      const spaceUid = value[0];
+      const space = chartLists.value.find(item => item.uid === spaceUid);
+      if (space?.share) {
+        const report = space.share.find(item => item.uid === reportUid);
+        if (report?.name) {
+          formData.value.name = report.name;
         }
       }
     } else {
       formData.value.bkvisionReport = '';
+      formData.value.name = '';
     }
   };
 
@@ -369,8 +439,8 @@
   // 提交
   const handleSubmit = async () => {
     formRef.value?.validate().then(() => {
-      // 找到选中分组的名称
-      const selectedGroup = props.groupList.find(g => g.id === formData.value.groupId);
+      // 从 allGroupList 中查找选中分组的名称（包括本地新增的分组）
+      const selectedGroup = allGroupList.value.find(g => g.id === formData.value.groupId);
       const groupName = selectedGroup?.name || '';
       // 获取级联选择器选中的最后一级值（报表ID）
       const visionId = formData.value.vision_id.length > 0
@@ -404,6 +474,57 @@
   const handleClose = () => {
     emit('update:isShow', false);
     emit('cancel');
+    // 重置新增分组状态
+    localGroupList.value = [];
+  };
+
+  // 显示新增分组弹窗
+  const handleShowAddGroup = () => {
+    addGroupFormData.value.name = '';
+    addGroupDialogVisible.value = true;
+  };
+
+  // 确认新增分组
+  const handleConfirmAddGroup = async () => {
+    try {
+      await addGroupFormRef.value?.validate();
+      addGroupLoading.value = true;
+
+      // 检查分组名称是否已存在
+      const exists = allGroupList.value.some(g => g.name === addGroupFormData.value.name.trim());
+      if (exists) {
+        messageSuccess(t('分组名称已存在'));
+        addGroupLoading.value = false;
+        return;
+      }
+
+      // 生成临时 ID（负数表示本地新增的分组）
+      const tempId = -(Date.now());
+      const newGroup: ReportGroup = {
+        id: tempId,
+        name: addGroupFormData.value.name.trim(),
+      };
+
+      // 添加到本地分组列表
+      localGroupList.value.push(newGroup);
+
+      // 自动选中新增的分组
+      formData.value.groupId = tempId;
+
+      // 关闭弹窗
+      addGroupDialogVisible.value = false;
+      addGroupFormData.value.name = '';
+      addGroupLoading.value = false;
+    } catch {
+      // 表单验证失败
+      addGroupLoading.value = false;
+    }
+  };
+
+  // 取消新增分组
+  const handleCancelAddGroup = () => {
+    addGroupDialogVisible.value = false;
+    addGroupFormData.value.name = '';
   };
 </script>
 
@@ -461,6 +582,12 @@
     font-size: 12px;
     color: #63656e;
   }
+}
+
+.group-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 </style>
