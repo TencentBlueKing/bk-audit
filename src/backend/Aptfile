@@ -4,3 +4,7 @@ default-libmysqlclient-dev
 pkg-config
 libcairo2-dev
 libffi-dev
+libxau-dev
+libxcb1-dev
+libxdmcp-dev
+libx11-dev
