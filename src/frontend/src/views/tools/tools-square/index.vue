@@ -263,6 +263,27 @@
     isReturningHome.value = false;
   };
 
+  // 从 popover 添加工具（多选模式，不切换 tab）
+  const handleAddToolFromPopover = (tool: ToolInfo) => {
+    openTool(tool, false);
+  };
+
+  // 点击 home 图标，回到工具列表（保留已打开的 tab），默认回到全部工具
+  const handleGoHomePage = async () => {
+    // 标记正在返回首页，阻止 watch(isSidebarCollapsed) 中的 resetAll 干扰
+    isReturningHome.value = true;
+    tagId.value = '-3';
+    goHome();
+    // goHome 后 hasOpenedTools 变为 false，watch(hasOpenedTools) 会自动展开 sidebar
+    await nextTick();
+    await nextTick();
+    // 显式设置左侧标签栏选中"全部工具"（tag_id 为 '-3'）
+    renderLabelRef.value?.setLabel('-3');
+    ContentCardRef.value?.getToolsList(tagId.value);
+    isReturningHome.value = false;
+  };
+
+  // 关闭整个工具详情面板（点击 ×）
   const handleCloseToolPanel = async () => {
     clearAll();
     isSidebarCollapsed.value = false;
