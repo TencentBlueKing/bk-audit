@@ -79,6 +79,7 @@
           {{ t('系统管理') }}
         </router-link>
         <router-link
+          v-if="hasPlatformManagePermission"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'platformManage'
@@ -510,6 +511,19 @@
     manual: true,
     onSuccess: (data) => {
       hasAllRiskPermission.value = data.list_risk_v2 || false;
+    },
+  });
+
+  // 检查平台管理权限
+  const hasPlatformManagePermission = ref(false);
+  useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'manage_platform',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      hasPlatformManagePermission.value = data.manage_platform || false;
     },
   });
 
