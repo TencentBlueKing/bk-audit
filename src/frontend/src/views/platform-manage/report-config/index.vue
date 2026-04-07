@@ -236,6 +236,19 @@
     return '';
   };
 
+  // 根据 vision_id 查找父级空间的 uid
+  const findVisionSpaceUid = (visionId: string): string => {
+    for (const parent of chartLists.value) {
+      if (parent.share) {
+        const child = parent.share.find(item => item.uid === visionId);
+        if (child) {
+          return parent.uid;
+        }
+      }
+    }
+    return '';
+  };
+
   // 获取图表列表
   const {
     run: fetchChartLists,
@@ -270,6 +283,7 @@
               description: panel.description || '-',
               bkvisionReport: panel.vision_id,
               bkvisionReportName: findVisionName(panel.vision_id),
+              bkvisionSpaceUid: findVisionSpaceUid(panel.vision_id),
               status: panel.is_enabled ? 'enabled' : 'disabled',
               updatedBy: panel.updated_by,
               updatedAt: panel.updated_at,
