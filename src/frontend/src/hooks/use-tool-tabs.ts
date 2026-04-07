@@ -18,6 +18,17 @@ import { computed, ref } from 'vue';
 
 import ToolInfo from '@model/tool/tool-info';
 
+// 下钻参数接口
+export interface DrillDownParams {
+  drillConfig: Array<{
+    source_field: string;
+    target_value_type: string;
+    target_value: string;
+    target_field_type?: string;
+  }>;
+  rowData: Record<string, any>;
+}
+
 // sessionStorage 存储键
 const STORAGE_KEY_TOOLS = 'tool_tabs_opened_tools';
 const STORAGE_KEY_ACTIVE = 'tool_tabs_active_uid';
@@ -38,7 +49,7 @@ const loadOpenedTools = (): ToolInfo[] => {
 // 从 sessionStorage 恢复当前激活的工具 uid
 const loadActiveToolUid = (): string => sessionStorage.getItem(STORAGE_KEY_ACTIVE) || '';
 
-// 将状态同步写入 sessionStorage
+// 将状态同步写入 sessionStorage（新标签页有独立的 sessionStorage，正常写入即可）
 const syncToStorage = (tools: ToolInfo[], activeUid: string) => {
   try {
     sessionStorage.setItem(STORAGE_KEY_TOOLS, JSON.stringify(tools));
@@ -51,6 +62,9 @@ const syncToStorage = (tools: ToolInfo[], activeUid: string) => {
 // 模块级别的状态，从 sessionStorage 恢复初始值
 const openedTools = ref<ToolInfo[]>(loadOpenedTools());
 const activeToolUid = ref(loadActiveToolUid());
+
+// 下钻参数存储（按工具 uid 索引，模块级别共享）
+const drillDownParamsMap = ref<Record<string, DrillDownParams>>({});
 
 export default function useToolTabs() {
   // 是否有打开的工具（用于判断是否显示详情面板）
@@ -117,5 +131,24 @@ export default function useToolTabs() {
     switchTab,
     goHome,
     clearAll,
+    setDrillDownParams: (uid: string, params: DrillDownParams) => {
+      drillDownParamsMap.value[uid] = params;
+    },
+    getDrillDownParams: (uid: string): DrillDownParams | undefined => drillDownParamsMap.value[uid],
+    clearDrillDownParams: (uid: string) => {
+      delete drillDownParamsMap.value[uid];
+    },
+    // 为下钻模式重置状态：清空从原标签页继承的 sessionStorage 数据，后续正常写入新标签页自己的数据
+    resetForDrillDown: () => {
+      openedTools.value = [];
+      activeToolUid.value = '';
+      // 清空从原标签页继承的 sessionStorage 数据
+      try {
+        sessionStorage.removeItem(STORAGE_KEY_TOOLS);
+        sessionStorage.removeItem(STORAGE_KEY_ACTIVE);
+      } catch {
+        // 静默处理
+      }
+    },
   };
 }

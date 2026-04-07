@@ -1,3 +1,19 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <div class="tool-info-panel">
     <div class="panel-header">
@@ -83,7 +99,6 @@
           </div>
         </div>
       </div>
-      <!-- 工具内容区域 - 为每个打开的工具渲染独立实例，用 v-show 保留状态 -->
       <template
         v-for="tool in toolList"
         :key="tool.uid">
@@ -96,6 +111,7 @@
           :search-list="getSearchList(tool.uid)"
           :tool-details="toolDetailMap[tool.uid]"
           :uid="toolDetailMap[tool.uid].uid"
+          @open-field-down="handleOpenFieldDown"
           @update:search-list="(val) => setSearchList(tool.uid, val)" />
       </template>
     </div>
@@ -104,9 +120,11 @@
 
 <script setup lang="ts">
   import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+  import { useRouter } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
 
+  import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
 
@@ -115,6 +133,7 @@
   import AddToolPopover from './add-tool-popover.vue';
 
   import useRequest from '@/hooks/use-request';
+  import useToolTabs from '@/hooks/use-tool-tabs';
 
   interface SearchItem {
     value: any;
@@ -153,8 +172,14 @@
     addTool: [tool: ToolInfo];
   }>();
 
+  const router = useRouter();
 
-  // ========== Tab 文本溢出检测 ==========
+  const {
+    getDrillDownParams,
+    clearDrillDownParams,
+  } = useToolTabs();
+
+
   const tabTextRefs = ref<Record<string, HTMLElement | null>>({});
   const isTabTextOverflow = ref<Record<string, boolean>>({});
 
@@ -164,7 +189,6 @@
     }
   };
 
-  // 检测所有 tab 文本是否溢出
   const checkTabTextOverflow = () => {
     const result: Record<string, boolean> = {};
     Object.entries(tabTextRefs.value).forEach(([key, el]) => {
@@ -174,8 +198,6 @@
     });
     isTabTextOverflow.value = result;
   };
-
-  // 监听窗口大小变化，重新检测溢出
   let resizeObserver: ResizeObserver | null = null;
 
   onMounted(() => {
@@ -192,7 +214,6 @@
     resizeObserver?.disconnect();
   });
 
-  // 工具列表变化时重新检测溢出
   watch(
     () => props.toolList,
     () => {
@@ -203,60 +224,32 @@
     { deep: true },
   );
 
-  // 关闭整个面板
-  const handleClose = () => {
-    emit('close');
-  };
+  const handleClose = () => emit('close');
+  const handleGoHome = () => emit('goHome');
+  const handleTabClick = (uid: string) => emit('switchTab', uid);
+  const handleTabClose = (uid: string) => emit('closeTab', uid);
 
-  // 点击首页图标，回到工具列表（不清除已打开的 tab）
-  const handleGoHome = () => {
-    emit('goHome');
+  // 工具类型 → 图标映射
+  const TOOL_ICON_MAP: Record<string, string> = {
+    data_search: 'sqlxiao',
+    bk_vision: 'bkvisonxiao',
+    api: 'apixiao',
   };
+  const itemIcon = (item: { tool_type?: string }) => TOOL_ICON_MAP[item.tool_type || ''] || 'apixiao';
 
-  // 点击 tab 切换工具
-  const handleTabClick = (uid: string) => {
-    emit('switchTab', uid);
-  };
-
-  // 关闭单个 tab
-  const handleTabClose = (uid: string) => {
-    emit('closeTab', uid);
-  };
-
-  const itemIcon = (item: { tool_type?: string }) => {
-    switch (item.tool_type) {
-    case 'data_search':
-      return 'sqlxiao';
-    case 'bk_vision':
-      return 'bkvisonxiao';
-    case 'api':
-      return 'apixiao';
-    default:
-      return 'apixiao';
-    }
-  };
-
-  // 当前激活的工具
   const activeTool = computed(() => props.toolList.find(t => t.uid === props.activeUid) || null);
 
-  // 每个工具独立的 ref 引用和搜索列表
   const toolContentRefs = ref<Record<string, any>>({});
   const searchListMap = ref<Record<string, SearchItem[]>>({});
-
-  // 缓存已加载的工具详情，同时作为渲染数据源
   const toolDetailMap = ref<Record<string, ToolDetailModel>>({});
 
-  // 设置/获取每个工具的 tool-content ref
   const setToolContentRef = (uid: string, el: any) => {
     if (el) {
       toolContentRefs.value[uid] = el;
     }
   };
 
-  // 获取指定工具的搜索列表
   const getSearchList = (uid: string): SearchItem[] => searchListMap.value[uid] || [];
-
-  // 设置指定工具的搜索列表
   const setSearchList = (uid: string, val: SearchItem[]) => {
     searchListMap.value[uid] = val;
   };
@@ -267,30 +260,95 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      // 存入详情 map，触发对应工具的 v-if 渲染
       toolDetailMap.value[data.uid] = data;
-      // 初始化该工具的搜索列表和表单
+      const toolInList = props.toolList.find(t => t.uid === data.uid);
+      if (toolInList && toolInList.name === data.uid && data.name) {
+        toolInList.name = data.name;
+        toolInList.tool_type = data.tool_type;
+        toolInList.description = data.description;
+        toolInList.tags = data.tags || [];
+        toolInList.strategies = data.strategies || [];
+      }
       applyToolDetail(data);
     },
   });
 
-  // 应用工具详情到视图（初始化搜索列表和表单）
+  const extractDataByPath = (data: any, path: string): any => {
+    if (!path || !data) return null;
+    const cleanPath = path.replace(/\[\d+\]/g, '');
+    const pathParts = cleanPath.split('.').filter(part => part.length > 0);
+    let result = data;
+    for (const part of pathParts) {
+      if (result === null || result === undefined) return null;
+      result = result[part];
+    }
+    if (typeof result === 'string') {
+      result = result.replace(/^["']|["']$/g, '');
+    }
+    return result;
+  };
+
   const applyToolDetail = (data: ToolDetailModel) => {
     const { uid } = data;
+    // 检查是否有下钻参数
+    const drillParams = getDrillDownParams(uid);
+
     if (data.tool_type !== 'bk_vision') {
-      // 仅在该工具尚未初始化搜索列表时才设置（避免切换 tab 时覆盖已有数据）
-      if (!searchListMap.value[uid]) {
-        searchListMap.value[uid] = (data.config?.input_variable || []).map((item: any) => ({
-          ...item,
-          value: item.default_value || (item.field_category === 'person_select' || item.field_category === 'time_range_select' ? [] : null),
-          required: item.required,
-          disabled: false,
-        }));
+      const createSearchItem = (item: any) => ({
+        ...item,
+        value: item.default_value || (item.field_category === 'person_select' || item.field_category === 'time_range_select' ? [] : null),
+        required: item.required,
+        disabled: false,
+      });
+
+      if (drillParams) {
+        // 下钻模式：根据 drill_config 自动填充参数
+        const configMap = new Map<string, any>();
+        drillParams.drillConfig.forEach((configItem) => {
+          configMap.set(configItem.source_field, configItem);
+        });
+
+        searchListMap.value[uid] = (data.config?.input_variable || []).map((item: any) => {
+          const searchItem = createSearchItem(item);
+          const configItem = configMap.get(searchItem.raw_name);
+          if (!configItem) return searchItem;
+
+          let dynamicValue: any = '';
+          if (configItem.target_value_type !== 'fixed_value') {
+            if (configItem.target_value.includes('.')) {
+              dynamicValue = extractDataByPath(drillParams.rowData, configItem.target_value);
+            } else if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
+              dynamicValue = drillParams.rowData?.[configItem.target_value] ?? searchItem.value;
+            } else {
+              dynamicValue = drillParams.rowData?.event_data?.[configItem.target_value] ?? searchItem.value;
+            }
+          }
+
+          return {
+            ...searchItem,
+            value: configItem.target_value_type === 'fixed_value'
+              ? configItem.target_value
+              : dynamicValue,
+          };
+        });
+
+        // 清除下钻参数，避免重复使用
+        clearDrillDownParams(uid);
+      } else if (!searchListMap.value[uid]) {
+        // 非下钻：仅在该工具尚未初始化搜索列表时才设置
+        searchListMap.value[uid] = (data.config?.input_variable || []).map(createSearchItem);
       }
+
       nextTick(() => {
         const ref = toolContentRefs.value[uid];
         if (ref) {
           ref.setFormItemData(searchListMap.value[uid]);
+          // 下钻模式下自动执行查询
+          if (drillParams) {
+            nextTick(() => {
+              ref.submit();
+            });
+          }
         }
       });
     } else {
@@ -305,13 +363,35 @@
 
   const getToolNameAndType = (uid: string): { name: string; type: string } => {
     const tool = props.toolList.find(item => item.uid === uid);
-    return tool ? {
-      name: tool.name,
-      type: tool.tool_type || '',
-    } : {
-      name: '',
-      type: '',
+    return {
+      name: tool?.name || '',
+      type: tool?.tool_type || '',
     };
+  };
+
+  // 处理下钻事件：在新浏览器标签页中打开目标工具
+  const handleOpenFieldDown = (
+    drillDownItem: OutputFields,
+    drillDownItemRowData: Record<string, any>,
+    activeUid?: string,
+  ) => {
+    const targetUid = activeUid || drillDownItem.drill_config[0]?.tool.uid;
+    if (!targetUid) return;
+
+    // 获取对应的 drill_config
+    const drillConfig = drillDownItem.drill_config.find(c => c.tool.uid === targetUid)?.config || [];
+
+    // 构建路由
+    const routeData = router.resolve({
+      name: 'toolDetail',
+      params: { uid: targetUid },
+      query: {
+        drillConfig: encodeURIComponent(JSON.stringify(drillConfig)),
+        rowData: encodeURIComponent(JSON.stringify(drillDownItemRowData)),
+      },
+    });
+
+    window.open(routeData.href, '_blank');
   };
 
   // 监听激活工具变化，仅在未加载过时请求详情
@@ -319,8 +399,9 @@
     () => props.activeUid,
     (newUid) => {
       if (!newUid) return;
-      // 如果该工具详情尚未加载，则请求
-      if (!toolDetailMap.value[newUid]) {
+      const drillParams = getDrillDownParams(newUid);
+      // 如果该工具详情尚未加载，或者有下钻参数需要重新填充，则请求
+      if (!toolDetailMap.value[newUid] || drillParams) {
         fetchToolDetail({ uid: newUid });
       }
       // 已加载的工具无需任何操作，v-show 会自动切换显示
