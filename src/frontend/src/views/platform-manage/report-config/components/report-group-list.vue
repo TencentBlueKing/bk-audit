@@ -104,19 +104,41 @@
                           type="move" />
                       </div>
                       <div class="custom-table-cell id-cell">
-                        <span class="cell-text">{{ report.id }}</span>
+                        <tool-tip-text
+                          :data="report.id"
+                          :line="1" />
                       </div>
                       <div class="custom-table-cell name-cell">
-                        <span class="cell-text">{{ report.name }}</span>
+                        <tool-tip-text
+                          :data="report.name"
+                          :line="1" />
                       </div>
                       <div class="custom-table-cell desc-cell">
-                        <span class="cell-text">{{ report.description || '-' }}</span>
+                        <tool-tip-text
+                          :data="report.description || '-'"
+                          :line="1" />
                       </div>
                       <div class="custom-table-cell bkvision-cell">
-                        <span class="bkvision-report-cell">
-                          {{ report.bkvisionReportName || report.bkvisionReport }}
+                        <span
+                          v-if="report.bkvisionReportName"
+                          class="bkvision-report-cell">
+                          <tool-tip-text
+                            :data="report.bkvisionReportName"
+                            :line="1" />
                           <audit-icon
+                            v-if="report.bkvisionReport"
                             class="jump-link"
+                            type="jump-link"
+                            @click="handleGoBkvision(report)" />
+                        </span>
+                        <span
+                          v-else
+                          class="bkvision-report-cell">
+                          <span class="cell-text">{{ report.bkvisionReport || '-' }}</span>
+                          <audit-icon
+                            v-if="report.bkvisionReport"
+                            v-bk-tooltips="t('暂无权限')"
+                            class="jump-link disabled"
                             type="jump-link" />
                         </span>
                       </div>
@@ -275,9 +297,15 @@
   import Vuedraggable from 'vuedraggable';
 
   import ReportConfigService from '@service/report-config';
+  import RootManageService from '@service/root-manage';
+  import ToolManageService from '@service/tool-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   export interface Report {
     id: string;
@@ -285,6 +313,7 @@
     description: string;
     bkvisionReport: string;
     bkvisionReportName?: string;
+    bkvisionSpaceUid?: string;
     bkvisionUrl?: string;
     status: 'enabled' | 'disabled';
     updatedBy: string;
@@ -361,6 +390,18 @@
   // 启用/停用确认相关状态
   const toggleStatusDialogVisible = ref(false);
   const toggleStatusTarget = ref<Report | null>(null);
+  // 用于跟踪报表原始所属分组
+  const reportGroupMap = ref<Map<string, number>>(new Map());
+
+  // 更新报表-分组映射
+  const updateReportGroupMap = () => {
+    reportGroupMap.value.clear();
+    localGroups.value.forEach((group) => {
+      group.reports.forEach((report) => {
+        reportGroupMap.value.set(report.id, group.id);
+      });
+    });
+  };
 
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
@@ -380,24 +421,45 @@
     }
   });
 
-  // 用于跟踪报表原始所属分组
-  const reportGroupMap = ref<Map<string, number>>(new Map());
-
-  // 更新报表-分组映射
-  const updateReportGroupMap = () => {
-    reportGroupMap.value.clear();
-    localGroups.value.forEach((group) => {
-      group.reports.forEach((report) => {
-        reportGroupMap.value.set(report.id, group.id);
-      });
-    });
-  };
-
   // 监听 props.groups 变化时更新映射
   watch(() => props.groups, () => {
     updateReportGroupMap();
   }, { immediate: true, deep: true });
 
+  // 获取配置数据（用于获取 BKVision URL）
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  // 获取报表详情（用于获取 dashboard_uid）
+  const {
+    run: fetchReportDetail,
+  } = useRequest(ToolManageService.fetchReportLists, {
+    defaultValue: null,
+  });
+
+  // 跳转到BKVision
+  const handleGoBkvision = async (report: Report) => {
+    if (!report.bkvisionReport || !report.bkvisionSpaceUid) return;
+    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
+    if (!baseUrl) return;
+
+    try {
+      // 先调用接口获取 dashboard_uid
+      const res = await fetchReportDetail({
+        share_uid: report.bkvisionReport,
+      });
+      if (res && res.data?.dashboard_uid) {
+        // 构建跳转链接：baseUrl#/spaceUid/dashboards/detail/root/dashboardUid
+        window.open(`${baseUrl}#/${report.bkvisionSpaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
+      }
+    } catch (e) {
+      console.error('获取报表详情失败:', e);
+    }
+  };
   // 调用排序接口
   const {
     run: orderPanels,
@@ -790,7 +852,7 @@
 }
 
 .id-cell {
-  width: 180px;
+  width: 300px;
 }
 
 .name-cell {
@@ -804,7 +866,7 @@
 }
 
 .bkvision-cell {
-  width: 200px;
+  width: 280px;
 }
 
 .status-cell {
@@ -881,6 +943,12 @@
   align-items: center;
   overflow: hidden;
 
+  .cell-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .jump-link {
     flex-shrink: 0;
     margin-left: 4px;
@@ -892,6 +960,15 @@
 
     &:hover {
       color: #699df4;
+    }
+
+    &.disabled {
+      color: #c4c6cc;
+      cursor: not-allowed;
+
+      &:hover {
+        color: #c4c6cc;
+      }
     }
   }
 }
