@@ -80,10 +80,14 @@
                 v-for="(tag, tagIndex) in (activeTool?.tags || []).slice(0, 3)"
                 :key="tagIndex"
                 class="desc-tag">
-                {{ tag }}
+                {{ returnTagsName(tag) }}
               </bk-tag>
               <bk-tag
                 v-if="activeTool?.tags && activeTool.tags.length > 3"
+                v-bk-tooltips="{
+                  content: tagContent(activeTool.tags),
+                  placement: 'top',
+                }"
                 class="desc-tag">
                 + {{ activeTool.tags.length - 3 }}
               </bk-tag>
@@ -239,9 +243,34 @@
 
   const activeTool = computed(() => props.toolList.find(t => t.uid === props.activeUid) || null);
 
+  const returnTagsName = (tagId: string) => {
+    let tagName = '';
+    props.tagsEnums.forEach((item: TagItem) => {
+      if (item.tag_id === tagId) {
+        tagName = item.tag_name;
+      }
+    });
+    return tagName;
+  };
+  const tagContent = (tags: Array<string>) => {
+    const tagNameList = props.tagsEnums.map((i: TagItem) => {
+      if (tags.slice(3, tags.length).includes(i.tag_id)) {
+        return i.tag_name;
+      }
+      return null;
+    }).filter(e => e !== null);
+    return tagNameList.join(',');
+  };
+
   const toolContentRefs = ref<Record<string, any>>({});
   const searchListMap = ref<Record<string, SearchItem[]>>({});
   const toolDetailMap = ref<Record<string, ToolDetailModel>>({});
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
 
   const setToolContentRef = (uid: string, el: any) => {
     if (el) {
@@ -286,6 +315,18 @@
       result = result.replace(/^["']|["']$/g, '');
     }
     return result;
+  };
+
+  const checkRequiredFieldsFilled = (searchList: SearchItem[]): boolean => {
+    if (!searchList || searchList.length === 0) return false;
+    const requiredFields = searchList.filter(item => item.required);
+    if (requiredFields.length === 0) return false;
+    return requiredFields.every((item) => {
+      if (Array.isArray(item.value)) {
+        return item.value.length > 0;
+      }
+      return item.value !== null && item.value !== undefined && item.value !== '';
+    });
   };
 
   const applyToolDetail = (data: ToolDetailModel) => {
@@ -343,8 +384,8 @@
         const ref = toolContentRefs.value[uid];
         if (ref) {
           ref.setFormItemData(searchListMap.value[uid]);
-          // 下钻模式下自动执行查询
-          if (drillParams) {
+          const shouldAutoSubmit = drillParams || checkRequiredFieldsFilled(searchListMap.value[uid]);
+          if (shouldAutoSubmit) {
             nextTick(() => {
               ref.submit();
             });
@@ -363,9 +404,16 @@
 
   const getToolNameAndType = (uid: string): { name: string; type: string } => {
     const tool = props.toolList.find(item => item.uid === uid);
+    if (tool) {
+      return {
+        name: tool.name || '',
+        type: tool.tool_type || '',
+      };
+    }
+    const allTool = allToolsData.value?.find((item: ToolDetailModel) => item.uid === uid);
     return {
-      name: tool?.name || '',
-      type: tool?.tool_type || '',
+      name: allTool?.name || '',
+      type: allTool?.tool_type || '',
     };
   };
 
