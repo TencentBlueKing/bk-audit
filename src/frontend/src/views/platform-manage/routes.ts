@@ -24,6 +24,7 @@ export default {
   },
   meta: {
     navName: 'platformManage',
+    permission: 'manage_platform', // 平台管理权限
   },
   children: [
     {
