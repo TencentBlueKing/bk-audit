@@ -35,6 +35,15 @@ export default {
         nodeSideContent: true,
       },
     },
+    {
+      path: 'tools-square/:uid',
+      component: () => import('@views/tools/tools-square/index.vue'),
+      name: 'toolDetail',
+      meta: {
+        title: '工具详情',
+        nodeSideContent: true,
+      },
+    },
   ],
 };
 
