@@ -796,7 +796,6 @@
   align-items: center;
   height: 42px;
   font-size: 12px;
-  font-weight: 600;
   color: #313238;
   background-color: #f5f7fa;
   border-bottom: 1px solid #dcdee5;
