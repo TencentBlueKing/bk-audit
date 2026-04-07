@@ -248,21 +248,6 @@
     syncRouteToUrl(tool.uid);
   };
 
-  const handleAddToolFromPopover = (tool: ToolInfo) => {
-    openTool(tool, false);
-  };
-
-  const handleGoHomePage = async () => {
-    isReturningHome.value = true;
-    tagId.value = '-3';
-    goHome();
-    syncRouteToUrl();
-    await nextTick();
-    renderLabelRef.value?.setLabel('-3');
-    ContentCardRef.value?.getToolsList(tagId.value);
-    isReturningHome.value = false;
-  };
-
   // 从 popover 添加工具（多选模式，不切换 tab）
   const handleAddToolFromPopover = (tool: ToolInfo) => {
     openTool(tool, false);
