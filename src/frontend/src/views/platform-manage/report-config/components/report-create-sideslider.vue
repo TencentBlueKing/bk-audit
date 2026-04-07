@@ -135,6 +135,10 @@
   import { useI18n } from 'vue-i18n';
 
   import ReportConfigService from '@service/report-config';
+  import RootManageService from '@service/root-manage';
+  import ToolManageService from '@service/tool-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -296,13 +300,40 @@
     }
   };
 
+  // 获取配置数据（用于获取 BKVision URL）
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  // 获取报表详情（用于获取 dashboard_uid）
+  const {
+    run: fetchReportDetail,
+  } = useRequest(ToolManageService.fetchReportLists, {
+    defaultValue: null,
+  });
+
   // 预览报表
-  const handlePreview = () => {
-    if (formData.value.bkvisionReport) {
-      // 根据选中的报表ID跳转到预览页面
-      // TODO: 根据实际的预览URL格式调整
-      const previewUrl = `/bkvision/preview/${formData.value.bkvisionReport}`;
-      window.open(previewUrl, '_blank');
+  const handlePreview = async () => {
+    if (!formData.value.bkvisionReport || formData.value.vision_id.length === 0) return;
+    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
+    if (!baseUrl) return;
+
+    try {
+      // 先调用接口获取 dashboard_uid
+      const res = await fetchReportDetail({
+        share_uid: formData.value.bkvisionReport,
+      });
+      if (res && res.data?.dashboard_uid) {
+        // 获取空间 ID（级联选择器的第一个值）
+        const spaceUid = formData.value.vision_id[0];
+        // 构建跳转链接：baseUrl#/spaceUid/dashboards/detail/root/dashboardUid
+        window.open(`${baseUrl}#/${spaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
+      }
+    } catch (e) {
+      console.error('获取报表详情失败:', e);
     }
   };
 
