@@ -20,7 +20,7 @@ export default {
   name: 'platformManage',
   component: () => import('@views/platform-manage/index.vue'),
   redirect: {
-    name: 'reportConfig',
+    name: 'platformSceneConfig',
   },
   meta: {
     navName: 'platformManage',
@@ -28,11 +28,29 @@ export default {
   },
   children: [
     {
-      path: 'report-config',
-      component: () => import('@views/platform-manage/report-config/index.vue'),
-      name: 'reportConfig',
+      path: 'platform-scene-config',
+      component: () => import('@views/platform-manage/scene-manage/index.vue'),
+      name: 'platformSceneConfig',
       meta: {
-        title: '报表配置',
+        title: '场景管理',
+        nodeSideContent: false,
+      },
+    },
+    {
+      path: 'platform-report-config',
+      component: () => import('@views/platform-manage/report-config/index.vue'),
+      name: 'platformReportConfig',
+      meta: {
+        title: '报表管理',
+        nodeSideContent: false,
+      },
+    },
+    {
+      path: 'platform-tool-config',
+      component: () => import('@views/platform-manage/tool-manage/index.vue'),
+      name: 'platformToolConfig',
+      meta: {
+        title: '工具管理',
         nodeSideContent: false,
       },
     },

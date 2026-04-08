@@ -1,4 +1,4 @@
-/*
+<!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,28 +13,9 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
-*/
-export default {
-  path: '/analysis-manage',
-  component: () => import('@/views/analysis-manage/index.vue'),
-  name: 'analysisManage',
-  redirect: {
-    name: 'analysisList',
-  },
-  meta: {
-    title: '检索',
-    navName: 'auditConfigurationManage',
-  },
-  children: [
-    {
-      path: 'list',
-      component: () => import('@views/analysis-manage/list/index.vue'),
-      name: 'analysisList',
-      title: '检索',
-      meta: {
-        skeleton: 'analysisList',
-        nodeSideContent: true,
-      },
-    },
-  ],
-};
+-->
+<template>
+  <div>
+    场景信息
+  </div>
+</template>

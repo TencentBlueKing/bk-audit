@@ -22,7 +22,7 @@ export default {
     name: 'strategyList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {
