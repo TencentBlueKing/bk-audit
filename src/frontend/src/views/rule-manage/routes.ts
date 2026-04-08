@@ -23,7 +23,7 @@ export default {
     name: 'ruleManageList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {

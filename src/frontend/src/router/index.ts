@@ -37,6 +37,7 @@ import ApplicationManage from '@views/process-application-manage/routes';
 import ProcessedManage from '@views/processed-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
 import RuleManage from '@views/rule-manage/routes';
+import SceneResources from '@views/scene-config/routes';
 import StatementManage from '@views/statement-manage/routes';
 import StorageManage from '@views/storage-manage/routes';
 import StrategyManage from '@views/strategy-manage/routes';
@@ -72,6 +73,7 @@ export default (config: ConfigModel) => {
         Tools,
         NewSystemManage,
         PlatformManage,
+        SceneResources,
       ],
     },
     {
