@@ -18,7 +18,6 @@
   <bk-select
     v-if="config.custom_type === 'select'"
     v-model="generalValue"
-    allow-create
     class="bk-select"
     filterable
     :placeholder="t('请选择已有选项')"
