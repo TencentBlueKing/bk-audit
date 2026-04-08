@@ -23,7 +23,7 @@ export default {
     name: 'applicationManageList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {

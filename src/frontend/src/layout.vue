@@ -44,6 +44,14 @@
           {{ t('审计风险') }}
         </router-link>
         <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'auditConfigurationManage'
+          }"
+          :to="{ name:'analysisManage', query: {} }">
+          {{ t('检索') }}
+        </router-link>
+        <router-link
           v-if="hasBkvision.enabled"
           class="main-navigation-nav "
           :class="{
@@ -60,13 +68,21 @@
           :to="{ name:'toolsSquare', query: {} }">
           {{ t('工具广场') }}
         </router-link>
-        <router-link
+        <!-- <router-link
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
           :to="{ name:'analysisManage', query: {} }">
           {{ t('审计配置') }}
+        </router-link> -->
+        <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'sceneConfiguration'
+          }"
+          :to="{ name:'sceneInfo', query: {} }">
+          {{ t('场景配置') }}
         </router-link>
         <router-link
           class="main-navigation-nav "
@@ -99,8 +115,9 @@
       <audit-menu
         :floded="isMenuFlod"
         @change="handleRouterChange">
-        <template v-if="curNavName === 'auditConfigurationManage'">
-          <audit-menu-item-group>
+        <template v-if="curNavName === 'sceneConfiguration'">
+          <scene-config-sidebar />
+          <!-- <audit-menu-item-group>
             <template #title>
               <div> {{ t('分析') }}</div>
             </template>
@@ -127,12 +144,6 @@
                 type="celve" />
               {{ t('审计策略') }}
             </audit-menu-item>
-            <!-- <audit-menu-item index="eventManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="gaojingshijian" />
-              {{ t('审计风险') }}
-            </audit-menu-item> -->
             <audit-menu-item index="linkDataManage">
               <audit-icon
                 class="menu-item-icon"
@@ -194,7 +205,7 @@
                 type="data-storage" />
               {{ t('数据存储') }}
             </audit-menu-item>
-          </audit-menu-item-group>
+          </audit-menu-item-group> -->
         </template>
         <template v-else-if="curNavName === 'toolsSquare'">
           <audit-menu-item-group>
@@ -241,7 +252,7 @@
           </audit-menu-item>
         </template>
         <template v-else-if="menuData.length && curNavName === 'auditStatement'">
-          <statement-sidebar :menu-data="menuData" />
+          <reports-sidebar :menu-data="menuData" />
         </template>
         <template v-else-if="curNavName === 'nweSystemManage'">
           <div class="system-select">
@@ -376,12 +387,7 @@
           </template>
         </template>
         <template v-else-if="curNavName === 'platformManage'">
-          <audit-menu-item index="reportConfig">
-            <audit-icon
-              class="menu-item-icon"
-              type="daiwochuli" />
-            {{ t('报表配置') }}
-          </audit-menu-item>
+          <platform-sidebar />
         </template>
       </audit-menu>
     </template>
@@ -416,8 +422,7 @@
   import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
-  import ConfigModel from '@model/root/config';
-
+  // import ConfigModel from '@model/root/config';
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
   import usePlatformConfig from '@hooks/use-platform-config';
@@ -427,10 +432,12 @@
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
-  import StatementSidebar from '@components/statement-sidebar/index.vue';
 
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
+  import PlatformSidebar from '@/components/statement-sidebar/platfrom.vue';
+  import ReportsSidebar from '@/components/statement-sidebar/reports.vue';
+  import SceneConfigSidebar from '@/components/statement-sidebar/scene-config.vue';
   import useRequest from '@/hooks/use-request';
 
   interface Exposes {
@@ -440,11 +447,11 @@
     id: string;
     name: string;
   }
-  interface Props {
-    configData: ConfigModel,
-  }
+  // interface Props {
+  //   configData: ConfigModel,
+  // }
 
-  defineProps<Props>();
+  // defineProps<Props>();
 
   const router = useRouter();
   const route = useRoute();
