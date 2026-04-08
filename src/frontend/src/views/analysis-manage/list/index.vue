@@ -37,7 +37,9 @@
         :is-doris="isDoris"
         @clear-search="handleClearSearch"
         @update-total="handleUpdateTotal" />
-      <div style="height: 52px; margin-top: 24px;">
+      <div
+        v-if="false"
+        style="height: 52px; margin-top: 24px;">
         <search-page-footer />
       </div>
     </div>

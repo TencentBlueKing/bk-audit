@@ -22,7 +22,7 @@ export default {
     name: 'linkDataList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {
