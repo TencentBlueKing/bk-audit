@@ -28,7 +28,9 @@
     </audit-menu-item>
 
     <!-- 资源管理 -->
-    <div class="side-group">
+    <div
+      v-if="0"
+      class="side-group">
       <div
         class="side-group-header"
         @click="toggleGroup('resourceManage')">
