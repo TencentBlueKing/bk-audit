@@ -60,6 +60,33 @@
         </audit-menu-item>
       </div>
     </div>
+
+    <!-- 数据管理 -->
+    <div class="side-group">
+      <div
+        class="side-group-header"
+        @click="toggleGroup('dataManage')">
+        <audit-icon
+          class="side-group-icon"
+          type="baobiao" />
+        <span class="side-group-name">{{ t('数据管理') }}</span>
+        <audit-icon
+          class="side-group-arrow"
+          :class="{ expanded: expandedGroups.includes('dataManage') }"
+          type="angle-line-down" />
+      </div>
+      <div
+        v-show="expandedGroups.includes('dataManage')"
+        class="side-group-children">
+        <audit-menu-item
+          :class="{ active: currentRoute === 'storageManage' }"
+          index="storageManage"
+          @click="handleMenuClick('storageManage')">
+          <span class="side-child-dot" />
+          {{ t('存储管理') }}
+        </audit-menu-item>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -78,7 +105,7 @@
   const currentRoute = computed(() => route.name as string);
 
   // 展开的分组列表
-  const expandedGroups = ref<string[]>(['resourceManage']);
+  const expandedGroups = ref<string[]>(['resourceManage', 'dataManage']);
 
   // 切换分组展开/收起
   const toggleGroup = (groupId: string) => {
@@ -95,12 +122,19 @@
     router.push({ name: routeName });
   };
 
+  // 路由与分组的映射关系
+  const routeGroupMap: Record<string, string> = {
+    platformReportConfig: 'resourceManage',
+    platformToolConfig: 'resourceManage',
+    storageManage: 'dataManage',
+    storageList: 'dataManage',
+  };
+
   // 监听路由变化，自动展开对应分组
   watch(() => route.name, (newRouteName) => {
-    const resourceManageRoutes = ['platformReportConfig', 'platformToolConfig'];
-
-    if (resourceManageRoutes.includes(newRouteName as string) && !expandedGroups.value.includes('resourceManage')) {
-      expandedGroups.value.push('resourceManage');
+    const groupId = routeGroupMap[newRouteName as string];
+    if (groupId && !expandedGroups.value.includes(groupId)) {
+      expandedGroups.value.push(groupId);
     }
   }, { immediate: true });
 </script>

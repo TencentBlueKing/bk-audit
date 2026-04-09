@@ -23,7 +23,7 @@ export default {
   },
   meta: {
     title: '数据存储',
-    navName: 'sceneConfiguration',
+    navName: 'platformManage',
   },
   children: [
     {
