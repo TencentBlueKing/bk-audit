@@ -80,13 +80,6 @@
           {{ t('通知组') }}
         </audit-menu-item>
         <audit-menu-item
-          :class="{ active: currentRoute === 'storageManage' }"
-          index="storageManage"
-          @click="handleMenuClick('storageManage')">
-          <span class="side-child-dot" />
-          {{ t('数据存储') }}
-        </audit-menu-item>
-        <audit-menu-item
           :class="{ active: currentRoute === 'systemList' }"
           index="systemList"
           @click="handleMenuClick('systemList')">
