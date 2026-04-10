@@ -364,7 +364,6 @@ class CreateStrategy(StrategyV2Base):
         strategy_type = validated_request_data.get("strategy_type")
         # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         if scene_id is not None:
             from services.web.scene.permissions import check_scene_permission
 
@@ -375,7 +374,7 @@ class CreateStrategy(StrategyV2Base):
             tag_names = validated_request_data.pop("tags", [])
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
-            # 创建 ResourceBinding 关联（scene_id 和 system_id 至少传一个，序列化器已校验）
+            # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
             from services.web.scene.constants import ResourceVisibilityType
             from services.web.scene.filters import SceneScopeFilter
 
@@ -383,7 +382,6 @@ class CreateStrategy(StrategyV2Base):
                 resource_id=str(strategy.strategy_id),
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=scene_id,
-                system_id=system_id,
             )
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
@@ -594,9 +592,8 @@ class ListStrategy(StrategyV2Base):
     audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
-        # 场景/系统过滤
+        # 场景过滤
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         # 排序字段
         order_field = validated_request_data.get("order_field") or "-strategy_id"
         # init queryset
@@ -629,7 +626,6 @@ class ListStrategy(StrategyV2Base):
         queryset = SceneScopeFilter.filter_queryset(
             queryset=queryset,
             scene_id=scene_id,
-            system_id=system_id,
             resource_type=ResourceVisibilityType.STRATEGY,
             pk_field="strategy_id",
         )
@@ -1474,13 +1470,12 @@ class CreateLinkTable(LinkTableBase):
     def perform_request(self, validated_request_data):
         # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         if scene_id is not None:
             from services.web.scene.permissions import check_scene_permission
 
             check_scene_permission(get_local_request(), scene_id, require_role="manager")
         link_table = self.create_link_table(validated_request_data)
-        # 创建 ResourceBinding 关联（scene_id 和 system_id 至少传一个，序列化器已校验）
+        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
         from services.web.scene.constants import ResourceVisibilityType
         from services.web.scene.filters import SceneScopeFilter
 
@@ -1488,7 +1483,6 @@ class CreateLinkTable(LinkTableBase):
             resource_id=str(link_table.uid),
             resource_type=ResourceVisibilityType.LINK_TABLE,
             scene_id=scene_id,
-            system_id=system_id,
         )
         # audit
         self.add_audit_instance_to_context(link_table)
@@ -1581,9 +1575,8 @@ class ListLinkTable(LinkTableBase):
         tags = validated_request_data.pop("tags", [])
         sort = validated_request_data.pop("sort", [])
         no_tag = validated_request_data.pop("no_tag", False)
-        # 场景/系统过滤
+        # 场景过滤
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         # 获取最新版本的联表
         link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
         # 按场景过滤（通过 ResourceBinding）
@@ -1597,7 +1590,6 @@ class ListLinkTable(LinkTableBase):
         link_tables = SceneScopeFilter.filter_queryset(
             queryset=link_tables,
             scene_id=scene_id,
-            system_id=system_id,
             resource_type=ResourceVisibilityType.LINK_TABLE,
             pk_field="uid",
         )

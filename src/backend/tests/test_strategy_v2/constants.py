@@ -32,7 +32,6 @@ STRATEGY_DATA = {
     "control_version": 0,
     "configs": {},
     "tags": STRATEGY_TAGS,
-    "system_id": "bk_audit",
 }
 BKM_STRATEGY_DATA = {
     **STRATEGY_DATA,

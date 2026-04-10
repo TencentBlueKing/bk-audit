@@ -66,7 +66,6 @@ class ListNoticeGroupRequestSerializer(serializers.Serializer):
     """
 
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤通知组")
-    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤通知组，与 scene_id 互斥")
     keyword = serializers.CharField(label=gettext_lazy("关键字"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False)
     order_type = serializers.CharField(label=gettext_lazy("排序方式"), required=False)
@@ -148,25 +147,14 @@ class CreateNoticeGroupRequestSerializer(EditNoticeGroupSerializer):
     """
 
     scene_id = serializers.IntegerField(
-        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
-    )
-    system_id = serializers.CharField(
-        label=gettext_lazy("系统ID"),
-        required=False,
-        allow_null=True,
-        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+        label=gettext_lazy("场景ID"), required=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
     )
 
     class Meta(EditNoticeGroupSerializer.Meta):
-        fields = EditNoticeGroupSerializer.Meta.fields + ["scene_id", "system_id"]
+        fields = EditNoticeGroupSerializer.Meta.fields + ["scene_id"]
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # 校验 scene_id 和 system_id 至少传一个
-        scene_id = data.get("scene_id")
-        system_id = data.get("system_id")
-        if scene_id is None and not system_id:
-            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
         if NoticeGroup.objects.filter(group_name=data["group_name"]).exists():
             raise NoticeGroupNameDuplicate()
         return data

@@ -268,11 +268,7 @@ class RiskHandler:
         """风险创建后，继承策略的 ResourceBinding 关联"""
         try:
             from services.web.scene.constants import BindingType, ResourceVisibilityType
-            from services.web.scene.models import (
-                ResourceBinding,
-                ResourceBindingScene,
-                ResourceBindingSystem,
-            )
+            from services.web.scene.models import ResourceBinding, ResourceBindingScene
 
             # 查找策略的 ResourceBinding
             try:
@@ -298,12 +294,6 @@ class RiskHandler:
                 ResourceBindingScene.objects.get_or_create(
                     binding=risk_binding,
                     scene_id=scene_binding.scene_id,
-                )
-            # 继承策略的系统关联
-            for system_binding in strategy_binding.binding_systems.all():
-                ResourceBindingSystem.objects.get_or_create(
-                    binding=risk_binding,
-                    system_id=system_binding.system_id,
                 )
         except Exception as err:  # NOCC:broad-except(不影响风险创建主流程)
             logger.exception("[InheritBindingFailed] risk_id=%s; Error: %s", risk.risk_id, err)

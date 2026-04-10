@@ -53,7 +53,6 @@ PA_INFO = {
     "approve_service_id": 1,
     "approve_config": {"risk_level": {"value": "high"}},
     "description": "",
-    "system_id": "bk_audit",
 }
 
 RULE_INFO = {
@@ -61,7 +60,6 @@ RULE_INFO = {
     "scope": [{"field": "operator", "value": ["admin"], "operator": "="}],
     "pa_params": {"${operator}": {"field": "operator"}},
     "auto_close_risk": False,
-    "system_id": "bk_audit",
 }
 
 APPROVE_SERVICE_INFO = {

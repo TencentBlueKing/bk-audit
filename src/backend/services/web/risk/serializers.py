@@ -408,11 +408,6 @@ class ListRiskRequestSerializer(serializers.Serializer):
         required=False,
         help_text=gettext_lazy("按场景过滤风险"),
     )
-    system_id = serializers.CharField(
-        label=gettext_lazy("系统ID"),
-        required=False,
-        help_text=gettext_lazy("按接入系统过滤风险，与 scene_id 互斥"),
-    )
     risk_id = serializers.CharField(
         label=gettext_lazy("Risk ID"),
         allow_blank=True,
@@ -753,13 +748,7 @@ class ApproveConfigSerializer(serializers.Serializer):
 
 class CreateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializers.ModelSerializer):
     scene_id = serializers.IntegerField(
-        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
-    )
-    system_id = serializers.CharField(
-        label=gettext_lazy("系统ID"),
-        required=False,
-        allow_null=True,
-        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+        label=gettext_lazy("场景ID"), required=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
     )
 
     class Meta:
@@ -772,7 +761,6 @@ class CreateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializer
             "approve_config",
             "description",
             "scene_id",
-            "system_id",
         ]
 
     def validate_name(self, name: str) -> str:
@@ -782,11 +770,6 @@ class CreateProcessApplicationsReqSerializer(ApproveConfigSerializer, serializer
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # 校验 scene_id 和 system_id 至少传一个
-        scene_id = data.get("scene_id")
-        system_id = data.get("system_id")
-        if scene_id is None and not system_id:
-            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
         return data
 
 
@@ -830,18 +813,12 @@ class RuleScopeValidator(serializers.Serializer):
 
 class CreateRiskRuleReqSerializer(RuleScopeValidator, serializers.ModelSerializer):
     scene_id = serializers.IntegerField(
-        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
-    )
-    system_id = serializers.CharField(
-        label=gettext_lazy("系统ID"),
-        required=False,
-        allow_null=True,
-        help_text="系统ID，用于创建 ResourceBinding，不存入模型；与 scene_id 至少传一个",
+        label=gettext_lazy("场景ID"), required=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
     )
 
     class Meta:
         model = RiskRule
-        fields = ["name", "scope", "pa_id", "pa_params", "auto_close_risk", "scene_id", "system_id"]
+        fields = ["name", "scope", "pa_id", "pa_params", "auto_close_risk", "scene_id"]
 
     def validate_name(self, name: str) -> str:
         if RiskRule.objects.filter(name=name).exists():
@@ -850,11 +827,6 @@ class CreateRiskRuleReqSerializer(RuleScopeValidator, serializers.ModelSerialize
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # 校验 scene_id 和 system_id 至少传一个
-        scene_id = data.get("scene_id")
-        system_id = data.get("system_id")
-        if scene_id is None and not system_id:
-            raise serializers.ValidationError(gettext("scene_id 和 system_id 至少传一个"))
         return data
 
 
@@ -906,7 +878,6 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
 class ListRiskRuleReqSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理规则")
-    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤处理规则，与 scene_id 互斥")
     rule_id = serializers.CharField(label=gettext_lazy("Rule ID"), required=False)
     name = serializers.CharField(label=gettext_lazy("Rule Name"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Update User"), required=False)
@@ -1007,7 +978,6 @@ class ToggleProcessApplicationReqSerializer(serializers.Serializer):
 
 class ListProcessApplicationsReqSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理套餐")
-    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=False, help_text="按接入系统过滤处理套餐，与 scene_id 互斥")
     id = serializers.CharField(required=False)
     name = serializers.CharField(required=False)
     updated_by = serializers.CharField(required=False)

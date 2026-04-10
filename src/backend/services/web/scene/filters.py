@@ -5,13 +5,12 @@
 提供统一的资源-场景过滤能力，消除各模块中重复的 scene 过滤样板代码。
 
 支持两种过滤模式：
-1. 简单模式（SceneScopeFilter）：按 scene_id 或 system_id 过滤，适用于策略、联表、处理套餐、通知组、风险等纯场景级资源
+1. 简单模式（SceneScopeFilter）：按 scene_id 过滤，适用于策略、联表、处理套餐、通知组、风险等纯场景级资源
 2. 组合模式（BindingScopeFilter）：支持 binding_type + scene_id/system_id 组合过滤，适用于工具、报表等同时存在平台级和场景级的资源
 
 过滤规则：
-- 传 scene_id：通过 ResourceBindingScene 查找绑定到该场景的资源
-- 传 system_id：通过 ResourceBindingSystem 查找绑定到该系统的资源
-  （注意：SceneSystem 中的 system_id 代表场景下资源可以绑定的系统，并非默认授予权限）
+- 场景级资源仅支持 scene_id 过滤（场景级资源无法绑定到系统）
+- 平台级资源支持 scene_id 和 system_id 过滤（通过可见范围配置）
 - 都不传：返回全部资源（兼容存量，不做过滤）
 
 使用示例：
@@ -22,12 +21,10 @@
     class ListStrategy(StrategyV2Base):
         def perform_request(self, validated_request_data):
             scene_id = validated_request_data.pop("scene_id", None)
-            system_id = validated_request_data.pop("system_id", None)
             queryset = Strategy.objects.all()
             queryset = SceneScopeFilter.filter_queryset(
                 queryset=queryset,
                 scene_id=scene_id,
-                system_id=system_id,
                 resource_type=ResourceVisibilityType.STRATEGY,
                 pk_field="strategy_id",
             )
@@ -56,51 +53,32 @@
 from django.db.models import QuerySet
 
 from services.web.scene.constants import BindingType, VisibilityScope
-from services.web.scene.models import (
-    ResourceBinding,
-    ResourceBindingScene,
-    ResourceBindingSystem,
-    SceneSystem,
-)
-
-
-def _get_resource_ids_by_system(system_id: str, resource_type: str) -> list:
-    """根据 system_id 通过 ResourceBindingSystem 查找绑定到该系统的资源 ID 列表"""
-    return list(
-        ResourceBindingSystem.objects.filter(
-            system_id=system_id,
-            binding__resource_type=resource_type,
-        ).values_list("binding__resource_id", flat=True)
-    )
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, SceneSystem
 
 
 class SceneScopeFilter:
     """简单场景过滤器
 
     适用于纯场景级资源（策略、联表、处理套餐、处理规则、通知组、风险），
-    按 scene_id 或 system_id 过滤。
+    仅按 scene_id 过滤（场景级资源无法绑定到系统，不支持 system_id 过滤）。
 
     过滤逻辑：
     - 传 scene_id：通过 ResourceBindingScene 返回该场景下的资源
-    - 传 system_id：通过 ResourceBindingSystem 返回绑定到该系统的资源
-    - 都不传：返回全部资源（兼容存量，不做过滤）
-    - scene_id 优先级高于 system_id（两者同时传时以 scene_id 为准）
+    - 不传：返回全部资源（兼容存量，不做过滤）
     """
 
     @staticmethod
     def filter_queryset(
         queryset: QuerySet,
         scene_id=None,
-        system_id: str = None,
         resource_type: str = "",
         pk_field: str = "pk",
     ) -> QuerySet:
         """
-        按场景或系统过滤 queryset
+        按场景过滤 queryset（场景级资源不支持 system_id 过滤）
 
         :param queryset: 原始 queryset
-        :param scene_id: 场景 ID，为 None 时不按场景过滤
-        :param system_id: 系统 ID，为 None 时不按系统过滤
+        :param scene_id: 场景 ID，为 None 时不过滤
         :param resource_type: ResourceVisibilityType 枚举值，如 "strategy"、"risk" 等
         :param pk_field: queryset 中用于匹配 resource_id 的主键字段名
         :return: 过滤后的 queryset
@@ -113,14 +91,7 @@ class SceneScopeFilter:
             ).values_list("binding__resource_id", flat=True)
             return queryset.filter(**{f"{pk_field}__in": list(bound_ids)})
 
-        if system_id:
-            # 按系统过滤：通过 ResourceBindingSystem 查找绑定到该系统的资源
-            bound_ids = _get_resource_ids_by_system(system_id, resource_type)
-            if not bound_ids:
-                return queryset.none()
-            return queryset.filter(**{f"{pk_field}__in": bound_ids})
-
-        # 都不传，返回全部资源（兼容存量，不做过滤）
+        # 未传 scene_id，返回全部资源（兼容存量，不做过滤）
         return queryset
 
     @staticmethod
@@ -143,38 +114,31 @@ class SceneScopeFilter:
     def create_resource_binding(
         resource_id: str,
         resource_type: str,
-        scene_id=None,
-        system_id: str = None,
+        scene_id,
     ) -> ResourceBinding:
         """
         创建资源的 ResourceBinding 关联（纯场景级资源专用）
 
-        根据传入的 scene_id 或 system_id 创建对应的绑定关系：
+        场景级资源只能绑定到场景，不支持绑定到系统。
         - 传 scene_id：创建 ResourceBinding + ResourceBindingScene
-        - 传 system_id：创建 ResourceBinding + ResourceBindingSystem
-        - 两者都传：创建 ResourceBinding + ResourceBindingScene + ResourceBindingSystem
-        - 两者都不传：抛出 ValueError
+        - 不传 scene_id：抛出 ValueError
 
         :param resource_id: 资源 ID
         :param resource_type: ResourceVisibilityType 枚举值
-        :param scene_id: 场景 ID
-        :param system_id: 系统 ID
+        :param scene_id: 场景 ID（必传）
         :return: 创建的 ResourceBinding 实例
         """
         from services.web.scene.constants import BindingType as _BindingType
 
-        if scene_id is None and not system_id:
-            raise ValueError("创建资源绑定时，scene_id 和 system_id 至少传一个")
+        if scene_id is None:
+            raise ValueError("创建场景级资源绑定时，scene_id 为必传参数")
 
         binding = ResourceBinding.objects.create(
             resource_type=resource_type,
             resource_id=str(resource_id),
             binding_type=_BindingType.SCENE_BINDING,
         )
-        if scene_id is not None:
-            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
-        if system_id:
-            ResourceBindingSystem.objects.create(binding=binding, system_id=system_id)
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
         return binding
 
 

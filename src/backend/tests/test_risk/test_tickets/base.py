@@ -47,10 +47,18 @@ class RuleContext:
     def __init__(self, pa_info: dict = None, rule_info: dict = None):
         ProcessApplication.objects.all().delete()
         RiskRule.objects.all().delete()
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_risk_scene", description="test")
         pa_info = pa_info or {}
-        self.pa = resource.risk.create_process_application.perform_request({**PA_INFO, **pa_info})
+        self.pa = resource.risk.create_process_application.perform_request(
+            {**PA_INFO, "scene_id": self.scene.scene_id, **pa_info}
+        )
         rule_info = rule_info or {}
-        self.rule = resource.risk.create_risk_rule.perform_request({**RULE_INFO, **rule_info, "pa_id": self.pa.id})
+        self.rule = resource.risk.create_risk_rule.perform_request(
+            {**RULE_INFO, "scene_id": self.scene.scene_id, **rule_info, "pa_id": self.pa.id}
+        )
         self.rule.is_enabled = True
         self.rule.save()
 
