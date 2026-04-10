@@ -23,6 +23,7 @@ export default {
   },
   meta: {
     navName: 'auditRiskManage',
+    isShowSceneSelector: true,
   },
   children: [
     {
