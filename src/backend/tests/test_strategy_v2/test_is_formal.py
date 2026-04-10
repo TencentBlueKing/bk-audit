@@ -27,11 +27,17 @@ class TestStrategyIsFormal(TestCase):
         self.control_version = ControlVersion.objects.create(
             **{**BKM_CONTROL_VERSION_DATA, "control_id": self.control.control_id}
         )
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene_formal", description="test")
+        self.scene_id = self.scene.scene_id
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def test_list_strategy_contains_is_formal_default_true(self) -> None:
         # Create a strategy via resource (is_formal should be default True)
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params["scene_id"] = self.scene_id
         params.update(
             {
                 "control_id": self.control_version.control_id,

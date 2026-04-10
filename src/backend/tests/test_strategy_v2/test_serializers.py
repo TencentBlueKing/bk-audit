@@ -28,12 +28,17 @@ class StrategySerializersTest(TestCase):
             control_type_id=ControlTypeChoices.BKM.value,
         )
         ControlVersion.objects.create(control_id=self.control.control_id, control_version=1)
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene_serializer", description="test")
+        self.scene_id = self.scene.scene_id
 
     def _build_model_strategy_payload(self):
         return {
             "namespace": self.namespace,
             "strategy_name": "model_strategy",
-            "system_id": "bk_audit",
+            "scene_id": self.scene_id,
             "control_id": self.control.control_id,
             "control_version": 1,
             "strategy_type": StrategyType.MODEL.value,
@@ -134,8 +139,6 @@ class StrategySerializersTest(TestCase):
 
 
 class TestReportConfigValidation(TestCase):
-    """测试报告配置校验逻辑"""
-
     def setUp(self):
         super().setUp()
         self.control = Control.objects.create(
@@ -144,13 +147,18 @@ class TestReportConfigValidation(TestCase):
             control_type_id=ControlTypeChoices.BKM.value,
         )
         ControlVersion.objects.create(control_id=self.control.control_id, control_version=1)
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene_report", description="test")
+        self.scene_id = self.scene.scene_id
 
     def _build_base_payload(self):
         """构建基础策略 payload"""
         return {
             "namespace": self.namespace,
             "strategy_name": "test-strategy",
-            "system_id": "bk_audit",
+            "scene_id": self.scene_id,
             "control_id": self.control.control_id,
             "control_version": 1,
             "strategy_type": StrategyType.MODEL.value,

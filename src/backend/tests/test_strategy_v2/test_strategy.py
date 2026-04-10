@@ -69,6 +69,11 @@ class StrategyTest(TestCase):
         )
         self.c = Control.objects.create(**BKM_CONTROL_DATA)
         self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene", description="test")
+        self.scene_id = self.scene.scene_id
 
     def _inject_tool_config(self, data, field_name="field_1", field_source="basic"):
         key_map = {
@@ -96,7 +101,7 @@ class StrategyTest(TestCase):
             "namespace": settings.DEFAULT_NAMESPACE,
             "strategy_name": strategy_name,
             "strategy_type": "rule",
-            "system_id": "bk_audit",
+            "scene_id": self.scene_id,
             "configs": {
                 "config_type": RuleAuditConfigType.EVENT_LOG.value,
                 "data_source": {
@@ -201,6 +206,7 @@ class StrategyTest(TestCase):
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def _create_bkm_strategy(self, name_suffix="") -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params["scene_id"] = self.scene_id
         self._inject_tool_config(params)
         if name_suffix:
             params["strategy_name"] += f"_{name_suffix}"
@@ -540,6 +546,7 @@ class TestRuleAuditSourceTypeCheck(TestCase):
 class StrategyEnumMappingTest(StrategyTest):
     def _create_bkm_strategy_with_enum(self, enum_mappings: dict) -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params["scene_id"] = self.scene_id
         params.update(
             {
                 "control_id": self.c_version.control_id,
@@ -639,9 +646,15 @@ class StrategyEnumMappingResourceTest(TestCase):
         )
         self.c = Control.objects.create(**BKM_CONTROL_DATA)
         self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
+        # 创建场景用于 ResourceBinding
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_scene_enum", description="test")
+        self.scene_id = self.scene.scene_id
 
     def _create_bkm_strategy_with_enum(self, enum_mappings: dict) -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params["scene_id"] = self.scene_id
         params.update(
             {
                 "control_id": self.c_version.control_id,

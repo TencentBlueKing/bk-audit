@@ -450,12 +450,12 @@ class TestCreateNoticeGroupRequestSerializer:
         serializer = CreateNoticeGroupRequestSerializer()
         assert "scene_id" in serializer.fields
 
-    def test_scene_id_allow_null(self):
-        """测试 scene_id 允许为空"""
+    def test_scene_id_required(self):
+        """测试 scene_id 为必传字段"""
         from apps.notice.serializers import CreateNoticeGroupRequestSerializer
 
         serializer = CreateNoticeGroupRequestSerializer()
-        assert serializer.fields["scene_id"].allow_null is True
+        assert serializer.fields["scene_id"].required is True
 
 
 class TestListProcessApplicationsReqSerializer:
@@ -694,27 +694,6 @@ class TestSceneScopeFilter:
         assert qs.count() == 2
 
     @pytest.mark.django_db
-    def test_filter_with_system_id(self, scene):
-        """测试传入 system_id 时通过 ResourceBindingSystem 过滤"""
-        ng1 = NoticeGroup.objects.create(group_name="系统绑定组", group_member=["admin"], notice_config=[])
-        NoticeGroup.objects.create(group_name="未绑定组", group_member=["admin"], notice_config=[])
-        # 创建 ResourceBinding 并通过 ResourceBindingSystem 绑定系统
-        binding = ResourceBinding.objects.create(
-            resource_id=str(ng1.group_id),
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_job")
-        qs = SceneScopeFilter.filter_queryset(
-            queryset=NoticeGroup.objects.all(),
-            system_id="bk_job",
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            pk_field="group_id",
-        )
-        assert qs.count() == 1
-        assert qs.first().group_name == "系统绑定组"
-
-    @pytest.mark.django_db
     def test_get_bound_resource_ids(self, scene):
         """测试 get_bound_resource_ids 方法"""
         pa = ProcessApplication.objects.create(name="测试套餐", sops_template_id=10001)
@@ -852,44 +831,54 @@ class TestBindingScopeFilter:
 
 
 class TestCreateSerializerScopeValidation:
-    """创建序列化器 scene_id/system_id 至少传一个的校验测试"""
+    """创建序列化器 scene_id 必传的校验测试"""
 
-    def test_strategy_serializer_has_system_id(self):
-        """测试策略创建序列化器包含 system_id 字段"""
+    def test_strategy_serializer_scene_id_required(self):
+        """测试策略创建序列化器 scene_id 为必传字段"""
         from services.web.strategy_v2.serializers import CreateStrategyRequestSerializer
 
         serializer = CreateStrategyRequestSerializer()
-        assert "system_id" in serializer.fields
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+        assert "system_id" not in serializer.fields
 
-    def test_link_table_serializer_has_system_id(self):
-        """测试联表创建序列化器包含 system_id 字段"""
+    def test_link_table_serializer_scene_id_required(self):
+        """测试联表创建序列化器 scene_id 为必传字段"""
         from services.web.strategy_v2.serializers import (
             CreateLinkTableRequestSerializer,
         )
 
         serializer = CreateLinkTableRequestSerializer()
-        assert "system_id" in serializer.fields
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+        assert "system_id" not in serializer.fields
 
-    def test_process_application_serializer_has_system_id(self):
-        """测试处理套餐创建序列化器包含 system_id 字段"""
+    def test_process_application_serializer_scene_id_required(self):
+        """测试处理套餐创建序列化器 scene_id 为必传字段"""
         from services.web.risk.serializers import CreateProcessApplicationsReqSerializer
 
         serializer = CreateProcessApplicationsReqSerializer()
-        assert "system_id" in serializer.fields
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+        assert "system_id" not in serializer.fields
 
-    def test_risk_rule_serializer_has_system_id(self):
-        """测试处理规则创建序列化器包含 system_id 字段"""
+    def test_risk_rule_serializer_scene_id_required(self):
+        """测试处理规则创建序列化器 scene_id 为必传字段"""
         from services.web.risk.serializers import CreateRiskRuleReqSerializer
 
         serializer = CreateRiskRuleReqSerializer()
-        assert "system_id" in serializer.fields
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+        assert "system_id" not in serializer.fields
 
-    def test_notice_group_serializer_has_system_id(self):
-        """测试通知组创建序列化器包含 system_id 字段"""
+    def test_notice_group_serializer_scene_id_required(self):
+        """测试通知组创建序列化器 scene_id 为必传字段"""
         from apps.notice.serializers import CreateNoticeGroupRequestSerializer
 
         serializer = CreateNoticeGroupRequestSerializer()
-        assert "system_id" in serializer.fields
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+        assert "system_id" not in serializer.fields
 
 
 class TestCreateResourceBinding:
@@ -908,36 +897,13 @@ class TestCreateResourceBinding:
         assert not binding.binding_systems.exists()
 
     @pytest.mark.django_db
-    def test_create_with_system_id(self):
-        """测试传 system_id 时创建 ResourceBindingSystem"""
-        binding = SceneScopeFilter.create_resource_binding(
-            resource_id="test_002",
-            resource_type=ResourceVisibilityType.STRATEGY,
-            system_id="bk_job",
-        )
-        assert binding.binding_type == BindingType.SCENE_BINDING
-        assert binding.binding_systems.filter(system_id="bk_job").exists()
-        assert not binding.binding_scenes.exists()
-
-    @pytest.mark.django_db
-    def test_create_with_both(self, scene):
-        """测试同时传 scene_id 和 system_id 时都创建"""
-        binding = SceneScopeFilter.create_resource_binding(
-            resource_id="test_003",
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            scene_id=scene.scene_id,
-            system_id="bk_sops",
-        )
-        assert binding.binding_scenes.filter(scene_id=scene.scene_id).exists()
-        assert binding.binding_systems.filter(system_id="bk_sops").exists()
-
-    @pytest.mark.django_db
-    def test_create_without_scope_raises(self):
-        """测试都不传时抛出 ValueError"""
-        with pytest.raises(ValueError, match="scene_id 和 system_id 至少传一个"):
+    def test_create_without_scene_id_raises(self):
+        """测试不传 scene_id 时抛出 ValueError"""
+        with pytest.raises(ValueError, match="scene_id 为必传参数"):
             SceneScopeFilter.create_resource_binding(
                 resource_id="test_004",
                 resource_type=ResourceVisibilityType.STRATEGY,
+                scene_id=None,
             )
 
 

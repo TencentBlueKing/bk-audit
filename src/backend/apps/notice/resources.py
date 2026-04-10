@@ -75,19 +75,17 @@ class ListNoticeGroup(NoticeMeta):
     audit_action = ActionEnum.LIST_NOTICE_GROUP
 
     def perform_request(self, validated_request_data):
-        # 场景/系统过滤
+        # 场景过滤
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         # 获取所有数据
         notice_groups = NoticeGroup.objects.all()
-        # 按场景/系统过滤（通过 ResourceBinding）
+        # 按场景过滤（通过 ResourceBinding）
         from services.web.scene.constants import ResourceVisibilityType
         from services.web.scene.filters import SceneScopeFilter
 
         notice_groups = SceneScopeFilter.filter_queryset(
             queryset=notice_groups,
             scene_id=scene_id,
-            system_id=system_id,
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             pk_field="group_id",
         )
@@ -138,10 +136,9 @@ class CreateNoticeGroup(NoticeMeta):
     def perform_request(self, validated_request_data):
         # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        system_id = validated_request_data.pop("system_id", None)
         # 存入数据库
         notice_group = NoticeGroup.objects.create(**validated_request_data)
-        # 创建 ResourceBinding 关联（scene_id 和 system_id 至少传一个，序列化器已校验）
+        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
         from services.web.scene.constants import ResourceVisibilityType
         from services.web.scene.filters import SceneScopeFilter
 
@@ -149,7 +146,6 @@ class CreateNoticeGroup(NoticeMeta):
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene_id,
-            system_id=system_id,
         )
         # 授权
         username = get_request_username()
