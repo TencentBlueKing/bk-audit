@@ -31,7 +31,9 @@
           <span v-if="titleTip !==''"> | </span>
           <span class="title-tip-text">{{ titleTip }}</span>
         </span>
-        <span class="ml24">
+        <span
+          v-if="route.meta?.isShowSceneSelector"
+          class="ml24">
           <scene-system-selector
             v-model="selectedScene"
             :popover-width="280"
