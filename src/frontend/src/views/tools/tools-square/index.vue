@@ -36,6 +36,14 @@
       <div
         v-show="!isSidebarCollapsed"
         class="sidebar-expanded">
+        <!-- 场景系统选择器 -->
+        <div class="scene-selector-wrapper">
+          <scene-system-selector
+            v-model="selectedScene"
+            :popover-width="250"
+            width="100%"
+            @change="handleSceneChange" />
+        </div>
         <div class="sidebar-header">
           <span class="sidebar-title">快捷筛选</span>
           <img
@@ -97,6 +105,8 @@
 
   import ToolInfo from '@model/tool/tool-info';
 
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+
   import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
 
   import ContentCard from './square-content/concent-card.vue';
@@ -114,6 +124,13 @@
     tool_count: number;
     icon?: string;
   }
+
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
+
   const renderLabelRef = ref();
 
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
@@ -127,6 +144,19 @@
 
   const isSidebarCollapsed = ref(false);
   const isReturningHome = ref(false);
+
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>({
+    id: '100001',
+    name: '主机安全审计',
+    type: 'scene',
+  });
+
+  // 场景切换
+  const handleSceneChange = (value: SceneItem | null) => {
+    console.log('场景切换:', value);
+    // TODO: 根据选择的场景/系统重新加载工具列表
+  };
 
   const {
     openedTools,
@@ -318,6 +348,10 @@
     box-shadow: 0  2px 4px  0 rgb(25 25 41 / 5%);
     transition: opacity .2s ease .1s;
 
+    .scene-selector-wrapper {
+      padding: 16px 16px 0;
+    }
+
     .sidebar-header {
       position: relative;
       display: flex;
@@ -349,7 +383,7 @@
     }
 
     :deep(.render-label-box) {
-      height: calc(100% - 52px);
+      height: calc(100% - 52px - 48px);
 
       .render-label {
         padding: 0;

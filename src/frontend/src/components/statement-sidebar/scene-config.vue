@@ -16,6 +16,27 @@
 -->
 <template>
   <div class="scene-sidebar">
+    <!-- 场景系统选择器 -->
+    <div class="scene-selector-wrapper">
+      <scene-system-selector
+        v-model="selectedScene"
+        dark
+        :popover-width="280"
+        width="100%"
+        @change="handleSceneChange" />
+    </div>
+
+    <!-- 场景概览 -->
+    <!-- <audit-menu-item
+      :class="{ active: currentRoute === 'sceneOverview' }"
+      index="sceneOverview"
+      @click="handleMenuClick('sceneOverview')">
+      <audit-icon
+        class="menu-item-icon"
+        type="home-shape" />
+      {{ t('场景概览') }}
+    </audit-menu-item> -->
+
     <!-- 场景信息 -->
     <audit-menu-item
       :class="{ active: currentRoute === 'sceneInfo' }"
@@ -131,6 +152,13 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import AuditMenuItem from '@components/audit-menu/item.vue';
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
 
   const { t } = useI18n();
   const route = useRoute();
@@ -138,6 +166,19 @@
 
   // 当前激活的路由
   const currentRoute = computed(() => route.name as string);
+
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>({
+    id: '100001',
+    name: '主机安全审计',
+    type: 'scene',
+  });
+
+  // 场景切换
+  const handleSceneChange = (value: SceneItem | null) => {
+    console.log('场景切换:', value);
+    // TODO: 根据选择的场景/系统重新加载数据
+  };
 
   // 展开的分组列表
   const expandedGroups = ref<string[]>(['auditConfig', 'sceneResource']);
@@ -174,6 +215,11 @@
 <style lang="postcss" scoped>
   .scene-sidebar {
     width: 100%;
+  }
+
+  .scene-selector-wrapper {
+    width: 90%;
+    margin: 10px auto 16px;
   }
 
   .menu-item-icon {
