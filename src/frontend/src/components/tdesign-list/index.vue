@@ -94,11 +94,14 @@
       <primary-table
         ref="tableRef"
         v-model:selected-row-keys="selectedRowKeys"
+        :active-row-keys="[]"
+        active-row-type="multiple"
         :bordered="border"
         class="tdesign-list"
         :columns="tableColumns"
         :data="tableData"
         :height="height"
+        hover
         :max-height="effectiveTableMaxHeight"
         :row-key="rowKey as any"
         v-bind="$attrs"
