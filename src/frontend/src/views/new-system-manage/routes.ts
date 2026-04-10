@@ -20,13 +20,16 @@ const sideMenus = [
   {
     pathName: 'systemInfo',
     title: '系统信息',
-    groupName: '接入',
     icon: 'daiwochuli',
   },
   {
     pathName: 'systemDiagnose',
     title: '系统诊断',
-    groupName: '分析',
+    icon: 'daiwochuli',
+  },
+  {
+    pathName: 'systemList',
+    title: '系统列表',
     icon: 'daiwochuli',
   },
 ];

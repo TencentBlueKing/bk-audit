@@ -14,6 +14,23 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+const sideMenus = [
+  {
+    pathName: 'systemInfo',
+    title: '系统信息',
+    icon: 'daiwochuli',
+  },
+  {
+    pathName: 'systemDiagnose',
+    title: '系统诊断',
+    icon: 'daiwochuli',
+  },
+  {
+    pathName: 'systemList',
+    title: '系统列表',
+    icon: 'daiwochuli',
+  },
+];
 export default {
   path: '/system-manage',
   component: () => import('@views/system-manage/index.vue'),
@@ -22,7 +39,9 @@ export default {
     name: 'systemList',
   },
   meta: {
-    navName: 'sceneConfiguration',
+    navName: 'nweSystemManage',
+    isGroup: true,
+    sideMenus,
   },
   children: [
     {
