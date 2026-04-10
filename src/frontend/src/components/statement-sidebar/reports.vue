@@ -16,6 +16,16 @@
 -->
 <template>
   <div class="statement-sidebar">
+    <!-- 场景系统选择器 -->
+    <div class="scene-selector-wrapper">
+      <scene-system-selector
+        v-model="selectedScene"
+        dark
+        :popover-width="280"
+        width="100%"
+        @change="handleSceneChange" />
+    </div>
+
     <!-- 我的收藏分组 -->
     <div
       v-if="favoriteItems.length > 0"
@@ -137,6 +147,7 @@
   import useRequest from '@hooks/use-request';
 
   import AuditMenuItem from '@components/audit-menu/item.vue';
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
@@ -155,6 +166,12 @@
     children: MenuDataType[];
   }
 
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
+
   interface Props {
     menuData: MenuDataType[];
   }
@@ -169,6 +186,19 @@
   const { emit } = useEventBus();
   const { t } = useI18n();
   const route = useRoute();
+
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>({
+    id: '100001',
+    name: '主机安全审计',
+    type: 'scene',
+  });
+
+  // 场景切换
+  const handleSceneChange = (value: SceneItem | null) => {
+    console.log('场景切换:', value);
+    // TODO: 根据选择的场景/系统重新加载报表列表
+  };
 
   // 侧边栏宽度阈值，小于此值认为是收起状态
   const COLLAPSED_WIDTH_THRESHOLD = 100;
@@ -362,6 +392,11 @@
 <style lang="postcss" scoped>
   .statement-sidebar {
     width: 100%;
+  }
+
+  .scene-selector-wrapper {
+    width: 90%;
+    margin: 10px auto 16px;
   }
 
   .side-group {
