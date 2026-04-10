@@ -31,6 +31,13 @@
           <span v-if="titleTip !==''"> | </span>
           <span class="title-tip-text">{{ titleTip }}</span>
         </span>
+        <span class="ml24">
+          <scene-system-selector
+            v-model="selectedScene"
+            :popover-width="280"
+            width="300px"
+            @change="handleSceneChange" />
+        </span>
         <div
           id="teleport-router-link"
           style="margin-left: 14px;" />
@@ -135,9 +142,16 @@
   import useRequest from '@hooks/use-request';
 
   import RouterBack from '@components/router-back/index.vue';
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 
   import Layout from './layout.vue';
+
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
 
   const { locale, t } = useI18n();
   const route = useRoute();
@@ -152,6 +166,12 @@
     manual: true,
   });
 
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>({
+    id: '100001',
+    name: '主机安全审计',
+    type: 'scene',
+  });
   const layoutRef = ref();
   const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
   const titleTip = computed(() => {
@@ -192,6 +212,12 @@
       domain: configData.value.language.domain,
     });
     window.location.reload();
+  };
+
+  // 场景切换
+  const handleSceneChange = (value: SceneItem | null) => {
+    console.log('场景切换:', value);
+    // TODO: 根据选择的场景/系统重新加载数据
   };
 
   watch(() => route, () => {

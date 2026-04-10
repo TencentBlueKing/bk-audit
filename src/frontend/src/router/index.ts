@@ -38,6 +38,7 @@ import ProcessedManage from '@views/processed-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
 import RuleManage from '@views/rule-manage/routes';
 import SceneResources from '@views/scene-config/routes';
+import SceneRiskManage from '@views/scene-risk-manage/routes';
 import StatementManage from '@views/statement-manage/routes';
 import StorageManage from '@views/storage-manage/routes';
 import StrategyManage from '@views/strategy-manage/routes';
@@ -74,6 +75,7 @@ export default (config: ConfigModel) => {
         NewSystemManage,
         PlatformManage,
         SceneResources,
+        SceneRiskManage,
       ],
     },
     {
