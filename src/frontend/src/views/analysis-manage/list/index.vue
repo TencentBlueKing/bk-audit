@@ -15,35 +15,48 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="analysisList">
-    <div class="analysis-manage-page">
-      <search-box
-        ref="searchBoxRef"
-        @change="handleSearchChange" />
-      <div class="search-result-action">
-        <render-type-tab
-          v-if="false"
-          v-model="renderType" />
-      </div>
-      <component
-        :is="searchResultCom"
-        v-if="isInit"
-        ref="resultRef"
-        :data-source="dataSource"
-        :filter="searchModel"
-        :is-doris="isDoris"
-        @clear-search="handleClearSearch"
-        @update-total="handleUpdateTotal" />
-      <div
-        v-if="false"
-        style="height: 52px; margin-top: 24px;">
-        <search-page-footer />
-      </div>
+  <div class="analysis-manage-page">
+    <div class="page-header">
+      <span class="header-title">{{ t('检索') }}</span>
+      <scene-system-selector
+        v-model="selectedScene"
+        :popover-width="320"
+        :width="240"
+        @change="handleSceneChange" />
     </div>
-  </skeleton-loading>
+    <skeleton-loading
+      fullscreen
+      :loading="isLoading"
+      name="analysisList"
+      style="width: 98%; margin-top: 20px;margin-left: 1%;">
+      <div>
+        <div class="search-box">
+          <search-box
+            ref="searchBoxRef"
+            @change="handleSearchChange" />
+          <div class="search-result-action">
+            <render-type-tab
+              v-if="false"
+              v-model="renderType" />
+          </div>
+        </div>
+        <component
+          :is="searchResultCom"
+          v-if="isInit"
+          ref="resultRef"
+          :data-source="dataSource"
+          :filter="searchModel"
+          :is-doris="isDoris"
+          @clear-search="handleClearSearch"
+          @update-total="handleUpdateTotal" />
+        <div
+          v-if="false"
+          style="height: 52px; margin-top: 24px;">
+          <search-page-footer />
+        </div>
+      </div>
+    </skeleton-loading>
+  </div>
 </template>
 <script setup lang="ts">
   import {
@@ -52,8 +65,11 @@
     ref,
     watch,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import EsQueryService from '@service/es-query';
+
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
   import RenderTypeTab from './components/render-type-tab.vue';
   import SearchBox from './components/search-box/index.vue';
@@ -64,6 +80,13 @@
   import useFeature from '@/hooks/use-feature';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
+
+  const { t } = useI18n();
   const { feature: isDoris } = useFeature('enable_doris');
   const comMap = {
     table: SearchResultTable,
@@ -75,6 +98,13 @@
   const dataSource = ref<(params: any)=> Promise<IRequestResponsePaginationData<any>>>(EsQueryService.fetchSearchList);
   const isInit = ref(false);
 
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>({
+    id: '100001',
+    name: '主机安全审计',
+    type: 'scene',
+  });
+
   const searchModel = ref<Record<string, any>>({});
   const searchResultCom = computed(() => comMap[renderType.value]);
   const isLoading = computed(() => (resultRef.value ? resultRef.value.loading : true));
@@ -83,6 +113,12 @@
   const total = ref<number>(0);
   provide('total', total);
   provide('tableSearchModel', tableSearchModel);
+
+  // 场景切换
+  const handleSceneChange = (value: SceneItem | null) => {
+    console.log('场景切换:', value);
+    // TODO: 根据选择的场景/系统重新加载数据
+  };
 
   // 搜索
   const handleSearchChange = (value: Record<string, any>) => {
@@ -107,15 +143,34 @@
   });
 </script>
 <style lang="postcss">
-  .analysis-manage-page {
-    /* 解决表格悬停超出 */
-    .bk-table-fixed .column_fixed {
-      bottom: 80px !important;
-    }
+.analysis-manage-page {
+  min-height: 100vh;
+  background-color: #f5f7fa;
 
-    .search-result-action {
-      display: flex;
-      margin-top: 16px;
+  .page-header {
+    display: flex;
+    align-items: center;
+    height: 52px;
+    padding: 0 24px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 5%);
+
+    .header-title {
+      margin-right: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #313238;
     }
   }
+
+  /* 解决表格悬停超出 */
+  .bk-table-fixed .column_fixed {
+    bottom: 80px !important;
+  }
+
+  .search-result-action {
+    display: flex;
+    margin-top: 16px;
+  }
+}
 </style>
