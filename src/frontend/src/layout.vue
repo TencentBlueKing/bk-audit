@@ -68,14 +68,6 @@
           :to="{ name:'toolsSquare', query: {} }">
           {{ t('工具广场') }}
         </router-link>
-        <!-- <router-link
-          class="main-navigation-nav "
-          :class="{
-            active: curNavName === 'auditConfigurationManage'
-          }"
-          :to="{ name:'analysisManage', query: {} }">
-          {{ t('审计配置') }}
-        </router-link> -->
         <router-link
           class="main-navigation-nav "
           :class="{
@@ -92,7 +84,7 @@
           :to="{ name:'nweSystemManage', params: {
             id: systemId
           } }">
-          {{ t('系统管理') }}
+          {{ t('系统接入') }}
         </router-link>
         <router-link
           v-if="hasPlatformManagePermission"
@@ -362,15 +354,10 @@
             </bk-select>
           </div>
           <template v-if="route.meta.isGroup">
-            <audit-menu-item-group
+            <div
               v-for="item in route.meta.sideMenus as unknown as SideMenuItem[]"
-              :key="item.pathName">
-              <template #title>
-                <div>{{ t(item.groupName) }}</div>
-              </template>
-              <template #flod-title>
-                <div>{{ t(item.groupName) }}</div>
-              </template>
+              :key="item.pathName"
+              class="group">
               <audit-menu-item
                 :index="item.pathName"
                 is-self-router-change
@@ -380,10 +367,7 @@
                   :type="item?.icon" />
                 {{ t(item.title) }}
               </audit-menu-item>
-            </audit-menu-item-group>
-          </template>
-          <template v-else>
-            //
+            </div>
           </template>
         </template>
         <template v-else-if="curNavName === 'platformManage'">
@@ -776,5 +760,9 @@
       }
     }
   }
+}
+
+.group {
+  margin-top: 10px;
 }
 </style>

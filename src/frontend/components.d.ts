@@ -80,6 +80,7 @@ declare module 'vue' {
     SystemDetailLogCollector: typeof import('./src/components/skeleton-loading/components/system-detail-log-collector.vue')['default']
     SystemDetailRecentData: typeof import('./src/components/skeleton-loading/components/system-detail-recent-data.vue')['default']
     SystemList: typeof import('./src/components/skeleton-loading/components/system-list.vue')['default']
+    SystemManage: typeof import('./src/components/statement-sidebar/system-manage.vue')['default']
     Tag: typeof import('./src/components/edit-box/tag.vue')['default']
     TdesignList: typeof import('./src/components/tdesign-list/index.vue')['default']
     TypeTab: typeof import('./src/components/ip-selector/selector-box/components/type-tab.vue')['default']
