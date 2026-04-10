@@ -100,13 +100,13 @@
           <span class="side-child-dot" />
           {{ t('通知组') }}
         </audit-menu-item>
-        <audit-menu-item
+        <!-- <audit-menu-item
           :class="{ active: currentRoute === 'systemList' }"
           index="systemList"
           @click="handleMenuClick('systemList')">
           <span class="side-child-dot" />
           {{ t('系统列表') }}
-        </audit-menu-item>
+        </audit-menu-item> -->
       </div>
     </div>
 
