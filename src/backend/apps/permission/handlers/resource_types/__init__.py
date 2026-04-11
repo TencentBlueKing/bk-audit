@@ -26,12 +26,17 @@ from apps.permission.handlers.resource_types.collection_bk_log import Collection
 from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermgr
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
 from apps.permission.handlers.resource_types.panel import Panel
+from apps.permission.handlers.resource_types.process_application import (
+    ProcessApplication,
+)
 from apps.permission.handlers.resource_types.risk import (
     ManualEvent,
     Risk,
     TicketNode,
     TicketPermission,
 )
+from apps.permission.handlers.resource_types.rule_type import Rule
+from apps.permission.handlers.resource_types.scene import Scene
 from apps.permission.handlers.resource_types.sensitive_object import (
     SensitiveAction,
     SensitiveObject,
@@ -53,6 +58,7 @@ class ResourceEnum:
     """
 
     SYSTEM = System
+    SCENE = Scene
     SENSITIVE_OBJECT = SensitiveObject
     SENSITIVE_ACTION = SensitiveAction
     SENSITIVE_RESOURCE_TYPE = SensitiveResourceType
@@ -67,6 +73,8 @@ class ResourceEnum:
     PANEL = Panel
     TAG = Tag
     TOOL = Tool
+    PROCESS_APPLICATION = ProcessApplication
+    RULE = Rule
     # BK LOG
     SPACE_BK_LOG = SpaceBKLog
     BUSINESS_BK_LOG = BusinessBKLog

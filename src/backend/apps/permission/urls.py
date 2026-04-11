@@ -67,6 +67,23 @@ try:
 except (RuntimeError, ImportError):
     ToolResourceProvider = None
 
+try:
+    from services.web.scene.provider import SceneResourceProvider
+except (RuntimeError, ImportError):
+    SceneResourceProvider = None
+
+try:
+    from services.web.process_application.provider import (
+        ProcessApplicationResourceProvider,
+    )
+except (RuntimeError, ImportError):
+    ProcessApplicationResourceProvider = None
+
+try:
+    from services.web.rule.provider import RuleResourceProvider
+except (RuntimeError, ImportError):
+    RuleResourceProvider = None
+
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register(ResourceEnum.SYSTEM.id, SystemResourceProvider())
 resources_dispatcher.register(ResourceEnum.TAG.id, TagResourceProvider())
@@ -102,6 +119,15 @@ if LinkTableProvider is not None:
 
 if StrategyTagResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.STRATEGY_TAG.id, StrategyTagResourceProvider())
+
+if SceneResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.SCENE.id, SceneResourceProvider())
+
+if ProcessApplicationResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.PROCESS_APPLICATION.id, ProcessApplicationResourceProvider())
+
+if RuleResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.RULE.id, RuleResourceProvider())
 
 router = ResourceRouter()
 router.register_module(views)
