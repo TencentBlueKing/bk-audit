@@ -36,6 +36,8 @@ from services.web.risk.serializers import (
     TicketNodeProviderSerializer,
     TicketPermissionProviderSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 
 
 class RiskResourceProvider(IAMResourceProvider):
@@ -57,13 +59,33 @@ class RiskResourceProvider(IAMResourceProvider):
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
 
+    @staticmethod
+    def _get_strategy_ids_by_scene(scene_id: str) -> List[int]:
+        """通过策略绑定的场景反查 strategy_id 列表（风险不直接绑定场景，而是依赖策略所属的场景）
+
+        注意：binding.resource_id 是 CharField(str)，需转为 int 与 Risk.strategy_id(ForeignKey int) 匹配。
+        """
+        str_ids = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene_id,
+        ).values_list("binding__resource_id", flat=True)
+        int_ids = []
+        for sid in str_ids:
+            try:
+                int_ids.append(int(sid))
+            except (TypeError, ValueError):
+                continue
+        return int_ids
+
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
         """
         根据过滤条件查询资源实例
         """
-        """查询风险类型 ."""
         if parent_id:
-            if resource_type == ResourceEnum.STRATEGY.id:
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_strategy_ids = self._get_strategy_ids_by_scene(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id__in=bound_strategy_ids)
+            elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)
             else:
@@ -82,7 +104,10 @@ class RiskResourceProvider(IAMResourceProvider):
     ) -> Tuple[list, int]:
         """根据风险类型名称查询 ."""
         if parent_id:
-            if resource_type == ResourceEnum.STRATEGY.id:
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_strategy_ids = self._get_strategy_ids_by_scene(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id__in=bound_strategy_ids)
+            elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)
             else:
@@ -172,9 +197,12 @@ class ManualEventResourceProvider(IAMResourceProvider):
         return instance.raw_event_id or str(instance.manual_event_id)
 
     def _filter_queryset(self, parent_id: Optional[str], resource_type: Optional[str]) -> QuerySet[ManualEvent]:
-        if parent_id and resource_type == ResourceEnum.STRATEGY.id:
-            return ManualEvent.objects.filter(strategy_id=int(parent_id))
         if parent_id:
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_strategy_ids = RiskResourceProvider._get_strategy_ids_by_scene(parent_id)
+                return ManualEvent.objects.filter(strategy_id__in=bound_strategy_ids)
+            if resource_type == ResourceEnum.STRATEGY.id:
+                return ManualEvent.objects.filter(strategy_id=int(parent_id))
             return ManualEvent.objects.none()
         return ManualEvent.objects.all()
 

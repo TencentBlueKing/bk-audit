@@ -54,6 +54,15 @@ class TestStrategyResourceProviderAPI:
         assert lr.count == 1
         assert lr.results == [{"id": a.pk, "display_name": a.strategy_name}]
 
+    def test_list_attr_and_attr_value_empty(self):
+        lr = self.provider.list_attr()
+        assert lr.count == 0
+        assert lr.results == []
+
+        lr = self.provider.list_attr_value(FancyDict(attr="strategy_name"), Page(50, 0))
+        assert lr.count == 0
+        assert lr.results == []
+
     def test_fetch_instance_list_and_schema(self):
         s = self._mk("gamma")
         now = timezone.now()

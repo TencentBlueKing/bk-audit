@@ -23,8 +23,8 @@ from iam import Resource
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
-
-from .strategy import Strategy
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 
 
 class Risk(ResourceTypeMeta):
@@ -40,23 +40,35 @@ class Risk(ResourceTypeMeta):
 
     @classmethod
     def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
-        from services.web.risk.models import Risk
+        from services.web.risk.models import Risk as RiskModel
 
-        risks = Risk.objects.filter(risk_id__in=instance_ids).distinct().order_by().only("risk_id", "strategy_id")
+        risks = RiskModel.objects.filter(risk_id__in=instance_ids).distinct().order_by().only("risk_id", "strategy_id")
         risk_map = {risk.risk_id: risk for risk in risks}
+
+        # 收集所有 risk 对应的 strategy_id，通过策略绑定的场景反查 scene_id
+        strategy_ids = {str(risk.strategy_id) for risk in risks if risk.strategy_id}
+        scene_bindings = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id__in=list(strategy_ids),
+        ).values_list("binding__resource_id", "scene_id")
+        # strategy_id → scene_id 映射（业务约束：一个策略只绑定一个场景）
+        strategy_scene_map = {rid: str(sid) for rid, sid in scene_bindings}
+
         resources = []
         for instance_id in instance_ids:
             resource = cls.create_simple_instance(instance_id, attribute)
             instance_name = instance_id
-            strategy_id = 0
             risk = risk_map.get(instance_id)
             if risk:
                 instance_name = risk.risk_id
-                strategy_id = risk.strategy_id
+            # 通过策略找到场景：risk.strategy_id → strategy_scene_map
+            scene_id = ""
+            if risk and risk.strategy_id:
+                scene_id = strategy_scene_map.get(str(risk.strategy_id), "")
             resource.attribute = {
                 "id": str(resource.id),
                 "name": instance_name,
-                KEYWORD_BK_IAM_PATH: f"/{Strategy.id},{strategy_id}/",
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/risk,{instance_id}/",
             }
             resources.append([resource])
         return resources
@@ -100,15 +112,28 @@ class ManualEvent(ResourceTypeMeta):
             .only("manual_event_id", "raw_event_id", "strategy_id")
         )
         event_map = {str(event.manual_event_id): event for event in manual_events}
+
+        # 收集所有 manual_event 对应的 strategy_id，通过策略绑定的场景反查 scene_id
+        strategy_ids = {str(event.strategy_id) for event in manual_events if event.strategy_id}
+        scene_bindings = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id__in=list(strategy_ids),
+        ).values_list("binding__resource_id", "scene_id")
+        # strategy_id → scene_id 映射（业务约束：一个策略只绑定一个场景）
+        strategy_scene_map = {rid: str(sid) for rid, sid in scene_bindings}
+
         resources = []
         for instance_id in instance_ids:
             resource = cls.create_simple_instance(instance_id, attribute)
             manual_event = event_map.get(str(instance_id))
-            strategy_id = manual_event.strategy_id if manual_event else 0
+            # 通过策略找到场景
+            scene_id = ""
+            if manual_event and manual_event.strategy_id:
+                scene_id = strategy_scene_map.get(str(manual_event.strategy_id), "")
             resource.attribute = {
                 "id": str(resource.id),
                 "name": (manual_event.raw_event_id if manual_event and manual_event.raw_event_id else str(resource.id)),
-                KEYWORD_BK_IAM_PATH: f"/{Strategy.id},{strategy_id}/",
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/manual_event,{instance_id}/",
             }
             resources.append([resource])
         return resources

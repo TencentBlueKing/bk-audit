@@ -109,12 +109,78 @@
     {
       "operation": "upsert_resource_type",
       "data": {
+        "id": "scene",
+        "name": "审计场景",
+        "name_en": "Audit Scene",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "process_application",
+        "name": "处理套餐",
+        "name_en": "Process Application",
+        "description": "",
+        "description_en": "",
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "delete_resource_type",
+      "data": {
+        "id": "risk_rule"
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "rule",
+        "name": "处理规则",
+        "name_en": "Rule",
+        "description": "",
+        "description_en": "",
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
         "id": "strategy",
         "name": "审计策略",
         "name_en": "Audit Strategy",
         "description": "",
         "description_en": "",
-        "parents": [],
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
         "provider_config": {
           "path": "/api/v1/iam/resources/"
         },
@@ -144,7 +210,12 @@
         "name_en": "Notice Group",
         "description": "",
         "description_en": "",
-        "parents": [],
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
         "provider_config": {
           "path": "/api/v1/iam/resources/"
         },
@@ -159,7 +230,12 @@
         "name_en": "Risk",
         "description": "",
         "description_en": "",
-        "parents": [],
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
         "provider_config": {
           "path": "/api/v1/iam/resources/"
         },
@@ -219,7 +295,12 @@
         "name_en": "Link Table",
         "description": "",
         "description_en": "",
-        "parents": [],
+        "parents": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ],
         "provider_config": {
           "path": "/api/v1/iam/resources/"
         },
@@ -294,10 +375,28 @@
     {
       "operation": "upsert_instance_selection",
       "data": {
+        "id": "scene_list",
+        "name": "审计场景列表",
+        "name_en": "Audit Scene List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
         "id": "strategy_list",
         "name": "审计策略列表",
         "name_en": "Audit Strategy List",
         "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          },
           {
             "system_id": "bk-audit",
             "id": "strategy"
@@ -314,6 +413,10 @@
         "resource_type_chain": [
           {
             "system_id": "bk-audit",
+            "id": "scene"
+          },
+          {
+            "system_id": "bk-audit",
             "id": "notice_group"
           }
         ]
@@ -328,7 +431,7 @@
         "resource_type_chain": [
           {
             "system_id": "bk-audit",
-            "id": "strategy"
+            "id": "scene"
           },
           {
             "system_id": "bk-audit",
@@ -374,6 +477,10 @@
         "resource_type_chain": [
           {
             "system_id": "bk-audit",
+            "id": "scene"
+          },
+          {
+            "system_id": "bk-audit",
             "id": "link_table"
           }
         ]
@@ -389,6 +496,42 @@
           {
             "system_id": "bk-audit",
             "id": "tool"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "process_application_list",
+        "name": "处理套餐列表",
+        "name_en": "Process Application List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          },
+          {
+            "system_id": "bk-audit",
+            "id": "process_application"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "rule_list",
+        "name": "规则列表",
+        "name_en": "Rule List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene"
+          },
+          {
+            "system_id": "bk-audit",
+            "id": "rule"
           }
         ]
       }
@@ -653,14 +796,66 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_strategy",
-        "name": "策略列表访问",
-        "name_en": "List Strategy",
-        "type": "list",
+        "id": "manage_platform",
+        "name": "平台管理",
+        "name_en": "Manage Platform",
+        "type": "manage",
         "version": 1,
         "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_scene",
+        "name": "查看场景",
+        "name_en": "View Scene",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "manage_scene",
+        "name": "管理场景",
+        "name_en": "Manage Scene",
+        "type": "manage",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
         "related_actions": [
-          "list_notice_group"
+          "view_scene"
         ],
         "description": "",
         "description_en": ""
@@ -669,16 +864,57 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "create_strategy",
-        "name": "创建策略",
-        "name_en": "Create Strategy",
+        "id": "list_strategy_v2",
+        "name": "策略列表访问(V2)",
+        "name_en": "List Strategy(V2)",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_strategy_v2",
+        "name": "创建策略(V2)",
+        "name_en": "Create Strategy(V2)",
         "type": "create",
         "version": 1,
-        "related_resource_types": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
         "related_actions": [
-          "list_strategy",
-          "list_notice_group",
-          "list_link_table"
+          "manage_scene",
+          "list_strategy_v2",
+          "list_notice_group_v2",
+          "list_link_table_v2"
         ],
         "description": "",
         "description_en": ""
@@ -707,9 +943,10 @@
           }
         ],
         "related_actions": [
-          "list_strategy",
-          "list_notice_group",
-          "list_link_table",
+          "manage_scene",
+          "list_strategy_v2",
+          "list_notice_group_v2",
+          "list_link_table_v2",
           "generate_strategy_risk",
           "process_risk"
         ],
@@ -740,8 +977,9 @@
           }
         ],
         "related_actions": [
-          "list_strategy",
-          "list_notice_group"
+          "manage_scene",
+          "list_strategy_v2",
+          "list_notice_group_v2"
         ],
         "description": "",
         "description_en": ""
@@ -770,7 +1008,8 @@
           }
         ],
         "related_actions": [
-          "list_strategy"
+          "manage_scene",
+          "list_strategy_v2"
         ],
         "description": "",
         "description_en": ""
@@ -779,13 +1018,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_link_table",
-        "name": "联表列表访问",
-        "name_en": "List Link Table",
+        "id": "list_link_table_v2",
+        "name": "联表列表访问(V2)",
+        "name_en": "List Link Table(V2)",
         "type": "list",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -813,7 +1066,8 @@
           }
         ],
         "related_actions": [
-          "list_link_table"
+          "manage_scene",
+          "list_link_table_v2"
         ],
         "description": "",
         "description_en": ""
@@ -822,14 +1076,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "create_link_table",
-        "name": "创建联表",
-        "name_en": "Create Link Table",
+        "id": "create_link_table_v2",
+        "name": "创建联表(V2)",
+        "name_en": "Create Link Table(V2)",
         "type": "create",
         "version": 1,
-        "related_resource_types": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
         "related_actions": [
-          "list_link_table"
+          "manage_scene",
+          "list_link_table_v2"
         ],
         "description": "",
         "description_en": ""
@@ -858,6 +1125,7 @@
           }
         ],
         "related_actions": [
+          "manage_scene",
           "view_link_table"
         ],
         "description": "",
@@ -887,6 +1155,7 @@
           }
         ],
         "related_actions": [
+          "manage_scene",
           "view_link_table"
         ],
         "description": "",
@@ -981,13 +1250,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_notice_group",
-        "name": "通知组列表",
-        "name_en": "List Notice Group",
+        "id": "list_notice_group_v2",
+        "name": "通知组列表(V2)",
+        "name_en": "List Notice Group(V2)",
         "type": "list",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -995,14 +1278,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "create_notice_group",
-        "name": "新建通知组",
-        "name_en": "Create Notice Group",
+        "id": "create_notice_group_v2",
+        "name": "新建通知组(V2)",
+        "name_en": "Create Notice Group(V2)",
         "type": "create",
         "version": 1,
-        "related_resource_types": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
         "related_actions": [
-          "list_notice_group"
+          "manage_scene",
+          "list_notice_group_v2"
         ],
         "description": "",
         "description_en": ""
@@ -1031,7 +1327,8 @@
           }
         ],
         "related_actions": [
-          "list_notice_group"
+          "manage_scene",
+          "list_notice_group_v2"
         ],
         "description": "",
         "description_en": ""
@@ -1060,7 +1357,8 @@
           }
         ],
         "related_actions": [
-          "list_notice_group"
+          "manage_scene",
+          "list_notice_group_v2"
         ],
         "description": "",
         "description_en": ""
@@ -1069,13 +1367,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_rule",
-        "name": "规则列表访问",
-        "name_en": "List Rules",
+        "id": "list_rule_v2",
+        "name": "规则列表访问(V2)",
+        "name_en": "List Rules(V2)",
         "type": "list",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1083,13 +1395,28 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "create_rule",
-        "name": "新建规则",
-        "name_en": "Create Rule",
+        "id": "create_rule_v2",
+        "name": "新建规则(V2)",
+        "name_en": "Create Rule(V2)",
         "type": "create",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene",
+          "list_rule_v2"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1097,13 +1424,28 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "edit_rule",
-        "name": "编辑规则",
-        "name_en": "Edit Rule",
+        "id": "edit_rule_v2",
+        "name": "编辑规则(V2)",
+        "name_en": "Edit Rule(V2)",
         "type": "edit",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene",
+          "list_rule_v2"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1111,13 +1453,28 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "delete_rule",
-        "name": "删除规则",
-        "name_en": "Delete Rule",
+        "id": "delete_rule_v2",
+        "name": "删除规则(V2)",
+        "name_en": "Delete Rule(V2)",
         "type": "delete",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene",
+          "list_rule_v2"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1125,13 +1482,27 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_pa",
-        "name": "处理套餐列表",
-        "name_en": "List Tools",
+        "id": "list_pa_v2",
+        "name": "处理套餐列表(V2)",
+        "name_en": "List Tools(V2)",
         "type": "list",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1139,13 +1510,28 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "create_pa",
-        "name": "创建处理套餐",
-        "name_en": "Create Tool",
+        "id": "create_pa_v2",
+        "name": "创建处理套餐(V2)",
+        "name_en": "Create Tool(V2)",
         "type": "create",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene",
+          "list_pa_v2"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1153,13 +1539,28 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "edit_pa",
-        "name": "编辑处理套餐",
-        "name_en": "Edit Tool",
+        "id": "edit_pa_v2",
+        "name": "编辑处理套餐(V2)",
+        "name_en": "Edit Tool(V2)",
         "type": "edit",
         "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "scene",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "scene_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "manage_scene",
+          "list_pa_v2"
+        ],
         "description": "",
         "description_en": ""
       }
@@ -1346,8 +1747,7 @@
             ]
           }
         ],
-        "related_actions": [
-        ],
+        "related_actions": [],
         "description": "",
         "description_en": ""
       }
@@ -1373,8 +1773,7 @@
             ]
           }
         ],
-        "related_actions": [
-        ],
+        "related_actions": [],
         "description": "",
         "description_en": ""
       }
@@ -1384,7 +1783,7 @@
       "data": {
         "id": "manage_tool",
         "name": "管理工具",
-        "name_en": " Manage Tool",
+        "name_en": "Manage Tool",
         "type": "edit",
         "version": 1,
         "related_resource_types": [
@@ -1440,66 +1839,36 @@
       "operation": "upsert_action_groups",
       "data": [
         {
+          "name": "场景管理",
+          "name_en": "Scene",
+          "sub_groups": [
+            {
+              "name": "场景",
+              "name_en": "Scene",
+              "actions": [
+                {
+                  "id": "view_scene"
+                },
+                {
+                  "id": "manage_scene"
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "分析",
           "name_en": "Analysis",
           "sub_groups": [
-            {
-              "name": "检索",
-              "name_en": "Search",
-              "actions": [
-                {
-                  "id": "search_regular_event"
-                },
-                {
-                  "id": "access_audit_sensitive_info"
-                }
-              ]
-            },
             {
               "name": "报表",
               "name_en": "Report",
               "actions": [
                 {
-                  "id": "list_base_panel"
-                },
-                {
-                  "id": "view_base_panel_v2"
-                },
-                {
                   "id": "view_tag_panel"
                 },
                 {
                   "id": "view_panel"
-                }
-              ]
-            },
-            {
-              "name": "场景报表",
-              "name_en": "ScenePanel",
-              "actions": [
-                {
-                  "id": "view_system_diagnosis_panel"
-                },
-                {
-                  "id": "view_scenario_panel"
-                }
-              ]
-            },
-            {
-              "name": "工具",
-              "name_en": "Tool",
-              "actions": [
-                {
-                  "id": "use_tool"
-                },
-                {
-                  "id": "use_tool_by_tag"
-                },
-                {
-                  "id": "manage_tool"
-                },
-                {
-                  "id": "manage_tool_by_tag"
                 }
               ]
             }
@@ -1514,10 +1883,10 @@
               "name_en": "Strategy",
               "actions": [
                 {
-                  "id": "list_strategy"
+                  "id": "list_strategy_v2"
                 },
                 {
-                  "id": "create_strategy"
+                  "id": "create_strategy_v2"
                 },
                 {
                   "id": "edit_strategy"
@@ -1550,16 +1919,16 @@
               "name_en": "Rule",
               "actions": [
                 {
-                  "id": "list_rule"
+                  "id": "list_rule_v2"
                 },
                 {
-                  "id": "create_rule"
+                  "id": "create_rule_v2"
                 },
                 {
-                  "id": "edit_rule"
+                  "id": "edit_rule_v2"
                 },
                 {
-                  "id": "delete_rule"
+                  "id": "delete_rule_v2"
                 }
               ]
             },
@@ -1568,13 +1937,13 @@
               "name_en": "Process Application",
               "actions": [
                 {
-                  "id": "list_pa"
+                  "id": "list_pa_v2"
                 },
                 {
-                  "id": "create_pa"
+                  "id": "create_pa_v2"
                 },
                 {
-                  "id": "edit_pa"
+                  "id": "edit_pa_v2"
                 }
               ]
             },
@@ -1583,10 +1952,10 @@
               "name_en": "Notice Group",
               "actions": [
                 {
-                  "id": "list_notice_group"
+                  "id": "list_notice_group_v2"
                 },
                 {
-                  "id": "create_notice_group"
+                  "id": "create_notice_group_v2"
                 },
                 {
                   "id": "edit_notice_group_v2"
@@ -1601,10 +1970,10 @@
               "name_en": "Link Table",
               "actions": [
                 {
-                  "id": "list_link_table"
+                  "id": "list_link_table_v2"
                 },
                 {
-                  "id": "create_link_table"
+                  "id": "create_link_table_v2"
                 },
                 {
                   "id": "edit_link_table"
@@ -1648,6 +2017,15 @@
           "name_en": "Administration",
           "sub_groups": [
             {
+              "name": "平台管理",
+              "name_en": "Platform",
+              "actions": [
+                {
+                  "id": "manage_platform"
+                }
+              ]
+            },
+            {
               "name": "存储",
               "name_en": "Storage",
               "actions": [
@@ -1673,7 +2051,97 @@
               "name_en": "Global Setting",
               "actions": [
                 {
+                  "id": "access_global_setting"
+                },
+                {
                   "id": "manage_global_setting"
+                }
+              ]
+            },
+            {
+              "name": "敏感信息",
+              "name_en": "Sensitive Info",
+              "actions": [
+                {
+                  "id": "access_audit_sensitive_info"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "废弃",
+          "name_en": "Deprecated",
+          "sub_groups": [
+            {
+              "name": "废弃操作",
+              "name_en": "Deprecated Actions",
+              "actions": [
+                {
+                  "id": "list_strategy"
+                },
+                {
+                  "id": "create_strategy"
+                },
+                {
+                  "id": "list_link_table"
+                },
+                {
+                  "id": "create_link_table"
+                },
+                {
+                  "id": "list_rule"
+                },
+                {
+                  "id": "create_rule"
+                },
+                {
+                  "id": "edit_rule"
+                },
+                {
+                  "id": "delete_rule"
+                },
+                {
+                  "id": "edit_pa"
+                },
+                {
+                  "id": "list_pa"
+                },
+                {
+                  "id": "create_pa"
+                },
+                {
+                  "id": "list_notice_group"
+                },
+                {
+                  "id": "create_notice_group"
+                },
+                {
+                  "id": "search_regular_event"
+                },
+                {
+                  "id": "list_base_panel"
+                },
+                {
+                  "id": "view_base_panel_v2"
+                },
+                {
+                  "id": "view_system_diagnosis_panel"
+                },
+                {
+                  "id": "view_scenario_panel"
+                },
+                {
+                  "id": "use_tool"
+                },
+                {
+                  "id": "use_tool_by_tag"
+                },
+                {
+                  "id": "manage_tool"
+                },
+                {
+                  "id": "manage_tool_by_tag"
                 }
               ]
             }
