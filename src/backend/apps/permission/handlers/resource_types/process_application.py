@@ -21,32 +21,32 @@ from django.utils.translation import gettext
 from iam import Resource
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
-from apps.notice.models import NoticeGroup as NoticeGroupModel
-from apps.permission.handlers.resource_types import ResourceTypeMeta
+from apps.permission.handlers.resource_types.base import ResourceTypeMeta
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
 
 
-class NoticeGroup(ResourceTypeMeta):
+class ProcessApplication(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
-    id = "notice_group"
-    name = gettext("通知组")
+    id = "process_application"
+    name = gettext("处理套餐")
     selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "notice_group"}]
+    related_instance_selections = [{"system_id": system_id, "id": "process_application"}]
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        resource = cls.create_simple_instance(instance_id, attribute)
+        from services.web.risk.models import ProcessApplication as PAModel
 
+        resource = cls.create_simple_instance(instance_id, attribute)
         instance_name = str(instance_id)
-        notice_group = NoticeGroupModel.objects.filter(group_id=instance_id).first()
-        if notice_group:
-            instance_name = notice_group.group_name
+        pa = PAModel.objects.filter(pk=instance_id).first()
+        if pa:
+            instance_name = pa.name
 
         # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
         scene_id = (
             ResourceBindingScene.objects.filter(
-                binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                binding__resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
                 binding__resource_id=str(instance_id),
             )
             .values_list("scene_id", flat=True)
@@ -57,6 +57,6 @@ class NoticeGroup(ResourceTypeMeta):
         resource.attribute = {
             "id": str(instance_id),
             "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/notice_group,{instance_id}/",
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/process_application,{instance_id}/",
         }
         return resource
