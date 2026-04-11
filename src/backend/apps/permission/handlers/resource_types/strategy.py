@@ -19,8 +19,13 @@ to the current version of the project delivered to anyone in the future.
 from django.conf import settings
 from django.utils.translation import gettext
 from iam import Resource
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
+from services.web.strategy_v2.models import LinkTable as LinkTableModel
+from services.web.strategy_v2.models import Strategy as StrategyModel
 
 
 class Strategy(ResourceTypeMeta):
@@ -32,16 +37,29 @@ class Strategy(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        from services.web.strategy_v2.models import Strategy
-
         resource = cls.create_simple_instance(instance_id, attribute)
 
         instance_name = str(instance_id)
-        strategy = Strategy.objects.filter(pk=instance_id).first()
+        strategy = StrategyModel.objects.filter(pk=instance_id).first()
         if strategy:
             instance_name = strategy.strategy_name
 
-        resource.attribute = {"id": str(instance_id), "name": instance_name}
+        # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
+        scene_id = (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id=str(instance_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+        scene_id = str(scene_id) if scene_id else ""
+
+        resource.attribute = {
+            "id": str(instance_id),
+            "name": instance_name,
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/strategy,{instance_id}/",
+        }
         return resource
 
 
@@ -54,16 +72,29 @@ class LinkTable(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        from services.web.strategy_v2.models import LinkTable
-
         resource = cls.create_simple_instance(instance_id, attribute)
 
         instance_name = str(instance_id)
-        link_table = LinkTable.last_version_link_table(instance_id)
+        link_table = LinkTableModel.last_version_link_table(instance_id)
         if link_table:
             instance_name = link_table.name
 
-        resource.attribute = {"id": str(instance_id), "name": instance_name}
+        # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
+        scene_id = (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+                binding__resource_id=str(instance_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+        scene_id = str(scene_id) if scene_id else ""
+
+        resource.attribute = {
+            "id": str(instance_id),
+            "name": instance_name,
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/link_table,{instance_id}/",
+        }
         return resource
 
 
