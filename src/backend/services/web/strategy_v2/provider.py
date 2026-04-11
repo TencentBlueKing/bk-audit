@@ -25,8 +25,10 @@ from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.permission.provider.base import BaseResourceProvider, IAMResourceProvider
+from apps.permission.provider.base import IAMResourceProvider
 from core.serializers import get_serializer_fields
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.models import (
     LinkTable,
     Strategy,
@@ -40,9 +42,10 @@ from services.web.strategy_v2.serializers import (
 )
 
 
-class StrategyBaseProvider(BaseResourceProvider):
+class StrategyBaseProvider(IAMResourceProvider):
     attrs = None
     resource_type = None
+    resource_provider_serializer = StrategyProviderSerializer
     resource_type_index_fields = [
         "strategy_id",
         "strategy_name",
@@ -59,8 +62,19 @@ class StrategyBaseProvider(BaseResourceProvider):
         queryset = Strategy.objects.none()
         with_path = False
 
-        if not (filters.parent or filters.search):
-            queryset = Strategy.objects.all()
+        if filters.parent:
+            parent_id = filters.parent["id"]
+            resource_type = filters.parent["type"]
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_ids = ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.STRATEGY,
+                    scene_id=parent_id,
+                ).values_list("binding__resource_id", flat=True)
+                queryset = Strategy.objects.filter(strategy_id__in=bound_ids)
+            elif resource_type == ResourceEnum.STRATEGY.id:
+                queryset = Strategy.objects.filter(strategy_id=parent_id)
+            else:
+                queryset = Strategy.objects.none()
         elif filters.search:
             # 返回结果需要带上资源拓扑路径信息
             with_path = True
@@ -71,6 +85,8 @@ class StrategyBaseProvider(BaseResourceProvider):
             for keyword in keywords:
                 q_filter |= Q(strategy_name__icontains=keyword)
             queryset = Strategy.objects.filter(q_filter)
+        else:
+            queryset = Strategy.objects.all()
 
         if not with_path:
             results = [
@@ -98,6 +114,50 @@ class StrategyBaseProvider(BaseResourceProvider):
 
         results = [{"id": item.pk, "display_name": item.strategy_name} for item in queryset]
         return ListResult(results=results, count=queryset.count())
+
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
+
+    def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
+        queryset = Strategy.objects.none()
+        if parent_id:
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_ids = ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.STRATEGY,
+                    scene_id=parent_id,
+                ).values_list("binding__resource_id", flat=True)
+                queryset = Strategy.objects.filter(strategy_id__in=bound_ids)
+            elif resource_type == ResourceEnum.STRATEGY.id:
+                queryset = Strategy.objects.filter(strategy_id=parent_id)
+            else:
+                queryset = Strategy.objects.none()
+        else:
+            queryset = Strategy.objects.all()
+
+        results = [
+            {"id": item.pk, "display_name": item.strategy_name} for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return results, queryset.count()
+
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
+        queryset = Strategy.objects.filter(strategy_id__in=ids)
+        results = [{"id": item.pk, "display_name": item.strategy_name} for item in queryset]
+        return results, queryset.count()
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple:
+        queryset = Strategy.objects.filter(strategy_name__icontains=keyword)
+        if parent_id and resource_type == ResourceEnum.SCENE.id:
+            bound_ids = ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                scene_id=parent_id,
+            ).values_list("binding__resource_id", flat=True)
+            queryset = queryset.filter(strategy_id__in=bound_ids)
+        results = [
+            {"id": item.pk, "display_name": item.strategy_name} for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return results, queryset.count()
 
     def list_instance_by_policy(self, filters, page, **options):
         expression = filters.expression
@@ -166,16 +226,29 @@ class StrategyResourceProvider(StrategyBaseProvider):
     resource_type = "strategy"
 
 
-class LinkTableProvider(BaseResourceProvider):
+class LinkTableProvider(IAMResourceProvider):
     attrs = None
     resource_type = "link_table"
+    resource_provider_serializer = LinkTableInfoSerializer
+
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
 
     def list_instance(self, filters, page, **options):
         queryset = LinkTable.objects.none()
         with_path = False
 
-        if not (filters.parent or filters.search):
-            queryset = LinkTable.list_max_version_link_table()
+        if filters.parent:
+            parent_id = filters.parent["id"]
+            resource_type = filters.parent["type"]
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_uids = ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+                    scene_id=parent_id,
+                ).values_list("binding__resource_id", flat=True)
+                queryset = LinkTable.list_max_version_link_table().filter(uid__in=bound_uids)
+            else:
+                queryset = LinkTable.objects.none()
         elif filters.search:
             # 返回结果需要带上资源拓扑路径信息
             with_path = True
@@ -186,6 +259,8 @@ class LinkTableProvider(BaseResourceProvider):
             for keyword in keywords:
                 q_filter |= Q(name__icontains=keyword)
             queryset = LinkTable.list_max_version_link_table().filter(q_filter)
+        else:
+            queryset = LinkTable.list_max_version_link_table()
 
         if not with_path:
             results = [
@@ -212,6 +287,41 @@ class LinkTableProvider(BaseResourceProvider):
 
         results = [{"id": item.uid, "display_name": item.name} for item in queryset]
         return ListResult(results=results, count=queryset.count())
+
+    def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
+        queryset = LinkTable.objects.none()
+        if parent_id:
+            if resource_type == ResourceEnum.SCENE.id:
+                bound_uids = ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+                    scene_id=parent_id,
+                ).values_list("binding__resource_id", flat=True)
+                queryset = LinkTable.list_max_version_link_table().filter(uid__in=bound_uids)
+            else:
+                queryset = LinkTable.objects.none()
+        else:
+            queryset = LinkTable.list_max_version_link_table()
+
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
+        return results, queryset.count()
+
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
+        queryset = LinkTable.list_max_version_link_table().filter(uid__in=ids)
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset]
+        return results, queryset.count()
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple:
+        queryset = LinkTable.list_max_version_link_table().filter(name__icontains=keyword)
+        if parent_id and resource_type == ResourceEnum.SCENE.id:
+            bound_uids = ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+                scene_id=parent_id,
+            ).values_list("binding__resource_id", flat=True)
+            queryset = queryset.filter(uid__in=bound_uids)
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
+        return results, queryset.count()
 
     def list_instance_by_policy(self, filters, page, **options):
         expression = filters.expression

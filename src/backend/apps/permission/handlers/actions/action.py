@@ -161,23 +161,56 @@ class ActionEnum:
         version=1,
     )
 
-    # 策略分析
-    LIST_STRATEGY = ActionMeta(
-        id="list_strategy",
-        name=gettext("策略列表访问"),
-        name_en="List Strategy",
-        type="list",
+    # 平台管理
+    MANAGE_PLATFORM = ActionMeta(
+        id="manage_platform",
+        name=gettext("平台管理"),
+        name_en="Manage Platform",
+        type="manage",
         related_resource_types=[],
         related_actions=[],
         version=1,
     )
-    CREATE_STRATEGY = ActionMeta(
-        id="create_strategy",
-        name=gettext("创建策略"),
-        name_en="Create Strategy",
-        type="create",
-        related_resource_types=[],
+
+    # 场景管理
+    VIEW_SCENE = ActionMeta(
+        id="view_scene",
+        name=gettext("查看场景"),
+        name_en="View Scene",
+        type="view",
+        related_resource_types=[ResourceEnum.SCENE],
         related_actions=[],
+        version=1,
+    )
+    MANAGE_SCENE = ActionMeta(
+        id="manage_scene",
+        name=gettext("管理场景"),
+        name_en="Manage Scene",
+        type="manage",
+        related_resource_types=[ResourceEnum.SCENE],
+        # 注意：VIEW_SCENE 也在本文件定义，但不构成前向引用（类属性赋值时已可用）
+        related_actions=[VIEW_SCENE],
+        version=1,
+    )
+
+    # 策略分析
+    LIST_STRATEGY = ActionMeta(
+        id="list_strategy_v2",
+        name=gettext("策略列表访问(V2)"),
+        name_en="List Strategy(V2)",
+        type="list",
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE],
+        version=1,
+    )
+    CREATE_STRATEGY = ActionMeta(
+        id="create_strategy_v2",
+        name=gettext("创建策略(V2)"),
+        name_en="Create Strategy(V2)",
+        type="create",
+        related_resource_types=[ResourceEnum.SCENE],
+        # related_actions 在下方 _patch_related_actions 中补齐（含 LIST_NOTICE_GROUP、LIST_LINK_TABLE 前向引用）
+        related_actions=[MANAGE_SCENE],
         version=1,
     )
     GENERATE_STRATEGY_RISK = ActionMeta(
@@ -186,7 +219,8 @@ class ActionEnum:
         name_en="Generate Strategy Risk",
         type="create",
         related_resource_types=[ResourceEnum.STRATEGY],
-        related_actions=[],
+        # related_actions 在下方 _patch_related_actions 中补齐（含 LIST_NOTICE_GROUP 前向引用）
+        related_actions=[MANAGE_SCENE, LIST_STRATEGY],
         version=1,
     )
     EDIT_STRATEGY = ActionMeta(
@@ -195,7 +229,8 @@ class ActionEnum:
         name_en="Edit Strategy",
         type="edit",
         related_resource_types=[ResourceEnum.STRATEGY],
-        related_actions=[],
+        # related_actions 在下方 _patch_related_actions 中补齐（含 LIST_NOTICE_GROUP、LIST_LINK_TABLE、PROCESS_RISK 前向引用）
+        related_actions=[MANAGE_SCENE, LIST_STRATEGY, GENERATE_STRATEGY_RISK],
         version=1,
     )
     DELETE_STRATEGY = ActionMeta(
@@ -204,17 +239,17 @@ class ActionEnum:
         name_en="Delete Strategy",
         type="delete",
         related_resource_types=[ResourceEnum.STRATEGY],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, LIST_STRATEGY],
         version=1,
     )
     # 联表
     LIST_LINK_TABLE = ActionMeta(
-        id="list_link_table",
-        name=gettext("联表列表访问"),
-        name_en="List Link Table",
+        id="list_link_table_v2",
+        name=gettext("联表列表访问(V2)"),
+        name_en="List Link Table(V2)",
         type="list",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE],
         version=1,
     )
     VIEW_LINK_TABLE = ActionMeta(
@@ -223,16 +258,16 @@ class ActionEnum:
         name_en="View Link Table",
         type="view",
         related_resource_types=[ResourceEnum.LINK_TABLE],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, LIST_LINK_TABLE],
         version=1,
     )
     CREATE_LINK_TABLE = ActionMeta(
-        id="create_link_table",
-        name=gettext("创建联表"),
-        name_en="Create Link Table",
+        id="create_link_table_v2",
+        name=gettext("创建联表(V2)"),
+        name_en="Create Link Table(V2)",
         type="create",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_LINK_TABLE],
         version=1,
     )
     EDIT_LINK_TABLE = ActionMeta(
@@ -241,7 +276,7 @@ class ActionEnum:
         name_en="Edit Link Table",
         type="edit",
         related_resource_types=[ResourceEnum.LINK_TABLE],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, VIEW_LINK_TABLE],
         version=1,
     )
     DELETE_LINK_TABL = ActionMeta(
@@ -250,7 +285,7 @@ class ActionEnum:
         name_en="Delete Link Table",
         type="delete",
         related_resource_types=[ResourceEnum.LINK_TABLE],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, VIEW_LINK_TABLE],
         version=1,
     )
     LIST_RISK = ActionMeta(
@@ -281,84 +316,84 @@ class ActionEnum:
         version=1,
     )
     LIST_RULE = ActionMeta(
-        id="list_rule",
-        name=gettext("规则列表访问"),
-        name_en="List Rule",
+        id="list_rule_v2",
+        name=gettext("规则列表访问(V2)"),
+        name_en="List Rule(V2)",
         type="list",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE],
         version=1,
     )
     CREATE_RULE = ActionMeta(
-        id="create_rule",
-        name=gettext("新建规则"),
-        name_en="Create Rule",
+        id="create_rule_v2",
+        name=gettext("新建规则(V2)"),
+        name_en="Create Rule(V2)",
         type="create",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_RULE],
         version=1,
     )
     EDIT_RULE = ActionMeta(
-        id="edit_rule",
-        name=gettext("编辑规则"),
-        name_en="Edit Rule",
+        id="edit_rule_v2",
+        name=gettext("编辑规则(V2)"),
+        name_en="Edit Rule(V2)",
         type="edit",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_RULE],
         version=1,
     )
     DELETE_RULE = ActionMeta(
-        id="delete_rule",
-        name=gettext("删除规则"),
-        name_en="Delete Rule",
+        id="delete_rule_v2",
+        name=gettext("删除规则(V2)"),
+        name_en="Delete Rule(V2)",
         type="delete",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_RULE],
         version=1,
     )
     LIST_PA = ActionMeta(
-        id="list_pa",
-        name=gettext("处理套餐列表"),
-        name_en="List Tools",
+        id="list_pa_v2",
+        name=gettext("处理套餐列表(V2)"),
+        name_en="List Tools(V2)",
         type="list",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE],
         version=1,
     )
     CREATE_PA = ActionMeta(
-        id="create_pa",
-        name=gettext("创建处理套餐"),
-        name_en="Create Tool",
+        id="create_pa_v2",
+        name=gettext("创建处理套餐(V2)"),
+        name_en="Create Tool(V2)",
         type="create",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_PA],
         version=1,
     )
     EDIT_PA = ActionMeta(
-        id="edit_pa",
-        name=gettext("编辑处理套餐"),
-        name_en="Edit Tool",
+        id="edit_pa_v2",
+        name=gettext("编辑处理套餐(V2)"),
+        name_en="Edit Tool(V2)",
         type="edit",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_PA],
         version=1,
     )
     LIST_NOTICE_GROUP = ActionMeta(
-        id="list_notice_group",
-        name=gettext("通知组列表"),
-        name_en="List Notice Group",
+        id="list_notice_group_v2",
+        name=gettext("通知组列表(V2)"),
+        name_en="List Notice Group(V2)",
         type="list",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE],
         version=1,
     )
     CREATE_NOTICE_GROUP = ActionMeta(
-        id="create_notice_group",
-        name=gettext("新建通知组"),
-        name_en="Create Notice Group",
+        id="create_notice_group_v2",
+        name=gettext("新建通知组(V2)"),
+        name_en="Create Notice Group(V2)",
         type="create",
-        related_resource_types=[],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SCENE],
+        related_actions=[MANAGE_SCENE, LIST_NOTICE_GROUP],
         version=1,
     )
     EDIT_NOTICE_GROUP_V2 = ActionMeta(
@@ -367,7 +402,7 @@ class ActionEnum:
         name_en="Edit Notice Group V2",
         type="edit",
         related_resource_types=[ResourceEnum.NOTICE_GROUP],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, LIST_NOTICE_GROUP],
         version=1,
     )
     DELETE_NOTICE_GROUP_V2 = ActionMeta(
@@ -376,7 +411,7 @@ class ActionEnum:
         name_en="Delete Notice Group V2",
         type="delete",
         related_resource_types=[ResourceEnum.NOTICE_GROUP],
-        related_actions=[],
+        related_actions=[MANAGE_SCENE, LIST_NOTICE_GROUP],
         version=1,
     )
     LIST_BASE_PANEL = ActionMeta(
@@ -537,3 +572,18 @@ class ActionEnum:
             for name, action in vars(cls).items()
             if not name.startswith('_') and isinstance(action, ActionMeta)
         ]
+
+
+# 补齐存在前向引用的 related_actions（在类定义完成后执行）
+_CREATE_STRATEGY_EXTRA = [ActionEnum.LIST_STRATEGY, ActionEnum.LIST_NOTICE_GROUP, ActionEnum.LIST_LINK_TABLE]
+ActionEnum.CREATE_STRATEGY.related_actions.extend(_CREATE_STRATEGY_EXTRA)
+
+_GENERATE_STRATEGY_RISK_EXTRA = [ActionEnum.LIST_NOTICE_GROUP]
+ActionEnum.GENERATE_STRATEGY_RISK.related_actions.extend(_GENERATE_STRATEGY_RISK_EXTRA)
+
+_EDIT_STRATEGY_EXTRA = [
+    ActionEnum.LIST_NOTICE_GROUP,
+    ActionEnum.LIST_LINK_TABLE,
+    ActionEnum.PROCESS_RISK,
+]
+ActionEnum.EDIT_STRATEGY.related_actions.extend(_EDIT_STRATEGY_EXTRA)
