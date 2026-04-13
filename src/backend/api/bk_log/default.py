@@ -76,6 +76,16 @@ class BKLogBaseResource(BkApiResource, abc.ABC):
     module_name = "bk-log"
 
 
+class DataLinkMixin(BKLogBaseResource, abc.ABC):
+    """SG环境需要传递data_link_id的Mixin"""
+
+    def build_request_data(self, validated_request_data):
+        data = super().build_request_data(validated_request_data)
+        if settings.BKLOG_DATA_LINK_ID:
+            data["data_link_id"] = int(settings.BKLOG_DATA_LINK_ID)
+        return data
+
+
 class GetOperators(BKLogBaseResource):
     action = "/search_index_set/operators/"
     method = "GET"
@@ -273,14 +283,14 @@ class CollectorsBaseResource(BKLogBaseResource, abc.ABC):
     tags = ["Collector"]
 
 
-class CreateCollector(CollectorsBaseResource):
+class CreateCollector(DataLinkMixin, CollectorsBaseResource):
     name = gettext_lazy("创建采集项")
     action = "/databus_collector_plugins/{collector_plugin_id}/instances/"
     method = "POST"
     url_keys = ["collector_plugin_id"]
 
 
-class UpdateCollector(CollectorsBaseResource):
+class UpdateCollector(DataLinkMixin, CollectorsBaseResource):
     name = gettext_lazy("更新采集")
     action = "/databus_collector_plugins/update_instance/"
     method = "PUT"
@@ -304,13 +314,13 @@ class ValidateContainerConfigYaml(CollectorsBaseResource):
     serializer_class = ValidateContainerConfigYamlResponseSerializer
 
 
-class CreateCollectorNormal(CollectorsBaseResource):
+class CreateCollectorNormal(DataLinkMixin, CollectorsBaseResource):
     name = gettext_lazy("创建采集")
     action = "/databus_collectors/"
     method = "POST"
 
 
-class UpdateCollectorNormal(CollectorsBaseResource):
+class UpdateCollectorNormal(DataLinkMixin, CollectorsBaseResource):
     name = gettext_lazy("更新采集")
     action = "/databus_collectors/{collector_config_id}/"
     method = "PUT"
@@ -512,7 +522,7 @@ class CreateCustomCollector(CollectorsBaseResource):
     method = "POST"
 
 
-class CreateApiPush(CreateCustomCollector):
+class CreateApiPush(DataLinkMixin, CreateCustomCollector):
     name = gettext_lazy("创建自定义日志上报")
     platform_authorization = True
 
