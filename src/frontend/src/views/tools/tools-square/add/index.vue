@@ -393,6 +393,8 @@
     value: 'sql',
   }];
   const isEditMode = route.name === 'toolsEdit';
+  // 返回工具广场页面
+  const backRouteName = 'toolsSquare';
   const isShowComponent = ref(false);
   const configUid = ref<string[]>([]);
   const hasPermission = ref(true);
@@ -784,7 +786,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'toolsSquare',
+      name: backRouteName,
     });
   };
 
@@ -941,7 +943,7 @@
 
   useRouterBack(() => {
     router.push({
-      name: 'toolsSquare',
+      name: backRouteName,
     });
   });
 </script>
