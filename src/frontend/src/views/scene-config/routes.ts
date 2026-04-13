@@ -52,5 +52,24 @@ export default {
         nodeSideContent: false,
       },
     },
+    {
+      path: 'scene-tool-create',
+      component: () => import('@views/scene-config/tool-manege/create-tool/index.vue'),
+      name: 'sceneToolCreate',
+      meta: {
+        title: '新建工具',
+        hideSidebar: true,
+      },
+    },
+    {
+      path: 'scene-tool-edit/:id',
+      component: () => import('@views/scene-config/tool-manege/create-tool/index.vue'),
+      name: 'sceneToolEdit',
+      meta: {
+        title: '编辑工具',
+        skeleton: 'strategyEdit',
+        hideSidebar: true,
+      },
+    },
   ],
 };
