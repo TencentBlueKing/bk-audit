@@ -75,6 +75,19 @@ class StrategyTest(TestCase):
         self.scene = Scene.objects.create(name="test_scene", description="test")
         self.scene_id = self.scene.scene_id
 
+    def _bind_strategy_to_scene(self, strategy_id: int):
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene_id,
+        )
+
+    def _list_strategy(self, **kwargs):
+        return resource.strategy_v2.list_strategy(namespace=self.namespace, scene_id=self.scene_id, **kwargs)
+
     def _inject_tool_config(self, data, field_name="field_1", field_source="basic"):
         key_map = {
             "basic": "event_basic_field_configs",
@@ -273,7 +286,7 @@ class StrategyTest(TestCase):
             configs={},
         )
 
-        result = resource.strategy_v2.list_strategy(namespace=self.namespace, order_field="-strategy_id")
+        result = self._list_strategy(order_field="-strategy_id")
 
         # 确保返回多个策略
         strategy_ids = [s["strategy_id"] for s in result]
@@ -307,6 +320,7 @@ class StrategyTest(TestCase):
             report_enabled=True,
             report_auto_render=True,
         )
+        self._bind_strategy_to_scene(auto_strategy.strategy_id)
         manual_strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="manual_report_strategy",
@@ -314,6 +328,7 @@ class StrategyTest(TestCase):
             report_enabled=True,
             report_auto_render=False,
         )
+        self._bind_strategy_to_scene(manual_strategy.strategy_id)
         disabled_strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="disabled_report_strategy",
@@ -321,8 +336,9 @@ class StrategyTest(TestCase):
             report_enabled=False,
             report_auto_render=True,  # 即使 auto_render=True，但 enabled=False 仍为未开启
         )
+        self._bind_strategy_to_scene(disabled_strategy.strategy_id)
 
-        result = resource.strategy_v2.list_strategy(namespace=self.namespace)
+        result = self._list_strategy()
         result_map = {s["strategy_id"]: s for s in result}
 
         # 验证 report_status 字段返回正确
@@ -342,6 +358,7 @@ class StrategyTest(TestCase):
             report_enabled=True,
             report_auto_render=True,
         )
+        self._bind_strategy_to_scene(auto_strategy.strategy_id)
         manual_strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="filter_manual_strategy",
@@ -349,44 +366,39 @@ class StrategyTest(TestCase):
             report_enabled=True,
             report_auto_render=False,
         )
+        self._bind_strategy_to_scene(manual_strategy.strategy_id)
         disabled_strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="filter_disabled_strategy",
             configs={},
             report_enabled=False,
         )
+        self._bind_strategy_to_scene(disabled_strategy.strategy_id)
 
         # 测试筛选自动生成
-        result = resource.strategy_v2.list_strategy(
-            namespace=self.namespace, report_status=StrategyReportStatus.AUTO.value
-        )
+        result = self._list_strategy(report_status=StrategyReportStatus.AUTO.value)
         strategy_ids = [s["strategy_id"] for s in result]
         self.assertIn(auto_strategy.strategy_id, strategy_ids)
         self.assertNotIn(manual_strategy.strategy_id, strategy_ids)
         self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
 
         # 测试筛选手动生成
-        result = resource.strategy_v2.list_strategy(
-            namespace=self.namespace, report_status=StrategyReportStatus.MANUAL.value
-        )
+        result = self._list_strategy(report_status=StrategyReportStatus.MANUAL.value)
         strategy_ids = [s["strategy_id"] for s in result]
         self.assertNotIn(auto_strategy.strategy_id, strategy_ids)
         self.assertIn(manual_strategy.strategy_id, strategy_ids)
         self.assertNotIn(disabled_strategy.strategy_id, strategy_ids)
 
         # 测试筛选未开启
-        result = resource.strategy_v2.list_strategy(
-            namespace=self.namespace, report_status=StrategyReportStatus.DISABLED.value
-        )
+        result = self._list_strategy(report_status=StrategyReportStatus.DISABLED.value)
         strategy_ids = [s["strategy_id"] for s in result]
         self.assertNotIn(auto_strategy.strategy_id, strategy_ids)
         self.assertNotIn(manual_strategy.strategy_id, strategy_ids)
         self.assertIn(disabled_strategy.strategy_id, strategy_ids)
 
         # 测试多选筛选（自动生成 + 手动生成）
-        result = resource.strategy_v2.list_strategy(
-            namespace=self.namespace,
-            report_status=f"{StrategyReportStatus.AUTO.value},{StrategyReportStatus.MANUAL.value}",
+        result = self._list_strategy(
+            report_status=f"{StrategyReportStatus.AUTO.value},{StrategyReportStatus.MANUAL.value}"
         )
         strategy_ids = [s["strategy_id"] for s in result]
         self.assertIn(auto_strategy.strategy_id, strategy_ids)

@@ -11,6 +11,40 @@ from services.web.scene.models import (
     SceneSystem,
 )
 
+
+class FlexibleListField(serializers.ListField):
+    """兼容单值、数组、重复查询参数的列表字段"""
+
+    def get_value(self, dictionary):
+        if hasattr(dictionary, "getlist"):
+            values = dictionary.getlist(self.field_name)
+            if len(values) > 1:
+                return values
+            if len(values) == 1:
+                return values[0]
+        return super().get_value(dictionary)
+
+    def to_internal_value(self, data):
+        if data in (None, ""):
+            data = []
+        elif not isinstance(data, (list, tuple, set, frozenset)):
+            data = [data]
+        else:
+            data = list(data)
+
+        normalized = []
+        for item in data:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                parts = [part.strip() for part in item.split(",")]
+                normalized.extend([part for part in parts if part != ""])
+            elif item != "":
+                normalized.append(item)
+
+        return super().to_internal_value(normalized)
+
+
 # ==================== 场景管理 ====================
 
 

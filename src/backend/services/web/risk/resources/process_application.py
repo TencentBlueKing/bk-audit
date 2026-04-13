@@ -71,10 +71,6 @@ class ListProcessApplications(ProcessApplicationMeta):
                 _q |= Q(**{key: item})
             q &= _q
         # 场景过滤
-        if scene_id is not None:
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="user")
         from services.web.scene.filters import SceneScopeFilter
 
         # 筛选数据（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回全部）
@@ -100,9 +96,11 @@ class ListProcessApplications(ProcessApplicationMeta):
 
 class ListAllProcessApplications(ProcessApplicationMeta):
     name = gettext_lazy("获取所有处理套餐列表")
+    RequestSerializer = ListProcessApplicationsReqSerializer
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
+        scene_id = validated_request_data.pop("scene_id", None)
         if (
             not ActionPermission(
                 actions=[
@@ -117,9 +115,17 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             and not TicketPermission.objects.filter(user=get_request_username(), user_type=UserType.OPERATOR).exists()
         ):
             return []
+        from services.web.scene.filters import SceneScopeFilter
+
+        process_applications = SceneScopeFilter.filter_queryset(
+            queryset=ProcessApplication.objects.all(),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            pk_field="id",
+        )
         return [
             {"id": pa.id, "name": pa.name, "sops_template_id": pa.sops_template_id, "is_enabled": pa.is_enabled}
-            for pa in ProcessApplication.objects.all()
+            for pa in process_applications
         ]
 
 
@@ -130,14 +136,7 @@ class CreateProcessApplication(ProcessApplicationMeta):
     audit_action = ActionEnum.CREATE_PA
 
     def perform_request(self, validated_request_data):
-        # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        if scene_id is not None:
-            from blueapps.utils.request_provider import get_local_request
-
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         pa = ProcessApplication.objects.create(**validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
         from services.web.scene.filters import SceneScopeFilter

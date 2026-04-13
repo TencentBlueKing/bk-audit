@@ -5,28 +5,32 @@
 覆盖：
 - 模型层：ResourceBinding / ResourceBindingScene 关联表
 - Serializer 层：列表查询和创建序列化器的 scene_id 参数
-- Resource 层：SceneScopeFilter / BindingScopeFilter 场景过滤
+- Resource 层：SceneScopeFilter / CompositeScopeFilter 场景过滤
 - 创建场景时自动创建"场景管理员通知组"
 - 删除场景时检查关联资源（策略/通知组/处理套餐/处理规则）
 """
+import datetime
 import json
+from unittest import mock
 
 import pytest
 from django.test import RequestFactory
 
 from apps.notice.models import NoticeGroup
-from services.web.risk.models import ProcessApplication, RiskRule
+from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,
     SceneStatus,
+    VisibilityScope,
 )
-from services.web.scene.filters import BindingScopeFilter, SceneScopeFilter
+from services.web.scene.filters import CompositeScopeFilter, SceneScopeFilter
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
     ResourceBindingSystem,
     Scene,
+    SceneSystem,
 )
 from services.web.strategy_v2.models import Strategy
 
@@ -576,8 +580,8 @@ class TestNoticeGroupSceneFilter:
         assert qs.first().group_name == "场景1通知组"
 
     @pytest.mark.django_db
-    def test_filter_notice_groups_no_scene(self, scene):
-        """测试不传 scene_id 和 system_id 时返回全部（兼容存量）"""
+    def test_filter_notice_groups_no_scene_returns_none(self, scene):
+        """测试不传 scene_id 和 system_id 时返回空结果"""
         NoticeGroup.objects.all().delete()
         ng1 = NoticeGroup.objects.create(
             group_name="通知组1",
@@ -590,14 +594,14 @@ class TestNoticeGroupSceneFilter:
             group_member=["admin"],
             notice_config=[],
         )
-        # scene_id=None 且 system_id=None 时返回全部（兼容存量）
+        # scene_id=None 且 system_id=None 时返回空结果
         qs = SceneScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             scene_id=None,
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             pk_field="group_id",
         )
-        assert qs.count() == 2
+        assert qs.count() == 0
 
 
 class TestProcessApplicationSceneFilter:
@@ -624,6 +628,27 @@ class TestProcessApplicationSceneFilter:
         )
         assert qs.count() == 1
         assert qs.first().name == "场景1套餐"
+
+    @pytest.mark.django_db
+    def test_list_all_process_applications_filter_by_scene(self, scene, another_scene):
+        """测试 ListAllProcessApplications 支持按场景过滤"""
+        from services.web.risk.resources.process_application import (
+            ListAllProcessApplications,
+        )
+
+        pa1 = ProcessApplication.objects.create(name="场景1套餐", sops_template_id=10001)
+        pa2 = ProcessApplication.objects.create(name="场景2套餐", sops_template_id=10002)
+        _bind_resource_to_scene(pa1.id, ResourceVisibilityType.PROCESS_APPLICATION, scene.scene_id)
+        _bind_resource_to_scene(pa2.id, ResourceVisibilityType.PROCESS_APPLICATION, another_scene.scene_id)
+
+        with mock.patch(
+            "services.web.risk.resources.process_application.ActionPermission.has_permission",
+            return_value=True,
+        ):
+            result = ListAllProcessApplications().perform_request({"scene_id": scene.scene_id})
+
+        assert len(result) == 1
+        assert result[0]["id"] == pa1.id
 
 
 class TestRiskRuleSceneFilter:
@@ -657,6 +682,65 @@ class TestRiskRuleSceneFilter:
         assert qs.count() == 1
         assert qs.first().name == "场景1规则"
 
+    @pytest.mark.django_db
+    def test_list_all_risk_rule_filter_by_scene(self, scene, another_scene):
+        """测试 ListAllRiskRule 按场景过滤"""
+        from services.web.risk.resources.rule import ListAllRiskRule
+
+        rule1 = RiskRule.objects.create(name="场景1规则", scope=[], version=1, rule_id=91001)
+        rule2 = RiskRule.objects.create(name="场景2规则", scope=[], version=1, rule_id=91002)
+        _bind_resource_to_scene(rule1.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+        _bind_resource_to_scene(rule2.rule_id, ResourceVisibilityType.RISK_RULE, another_scene.scene_id)
+
+        with mock.patch(
+            "services.web.risk.resources.rule.ActionPermission.has_permission",
+            return_value=True,
+        ):
+            result = ListAllRiskRule().perform_request({"scene_id": scene.scene_id})
+
+        assert len(result) == 1
+        assert result[0]["id"] == rule1.rule_id
+
+
+class TestRiskSceneFilter:
+    """风险场景过滤测试（基于策略绑定）"""
+
+    @pytest.mark.django_db
+    def test_filter_risk_by_strategy_scene(self, scene, another_scene):
+        """测试风险按策略绑定场景过滤"""
+        event_time = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+        strategy1 = Strategy.objects.create(strategy_name="场景1策略")
+        strategy2 = Strategy.objects.create(strategy_name="场景2策略")
+        _bind_resource_to_scene(strategy1.strategy_id, ResourceVisibilityType.STRATEGY, scene.scene_id)
+        _bind_resource_to_scene(strategy2.strategy_id, ResourceVisibilityType.STRATEGY, another_scene.scene_id)
+
+        risk1 = Risk.objects.create(
+            strategy=strategy1,
+            raw_event_id="raw-scene-1",
+            event_time=event_time,
+            event_end_time=event_time,
+            event_data={},
+            event_type=[],
+        )
+        Risk.objects.create(
+            strategy=strategy2,
+            raw_event_id="raw-scene-2",
+            event_time=event_time,
+            event_end_time=event_time,
+            event_data={},
+            event_type=[],
+        )
+
+        qs = SceneScopeFilter.filter_queryset(
+            queryset=Risk.objects.all(),
+            scene_id=scene.scene_id,
+            resource_type=ResourceVisibilityType.RISK,
+            pk_field="risk_id",
+        )
+
+        assert qs.count() == 1
+        assert qs.first().risk_id == risk1.risk_id
+
 
 # ==================== ScopeFilter 单元测试 ====================
 
@@ -680,8 +764,26 @@ class TestSceneScopeFilter:
         assert qs.first().group_name == "绑定组"
 
     @pytest.mark.django_db
-    def test_filter_without_scene_id(self):
-        """测试不传 scene_id 和 system_id 时返回全部（兼容存量）"""
+    def test_filter_with_multiple_scene_ids(self, scene, another_scene):
+        """测试传入多个 scene_id 时返回并集"""
+        ng1 = NoticeGroup.objects.create(group_name="场景1组", group_member=["admin"], notice_config=[])
+        ng2 = NoticeGroup.objects.create(group_name="场景2组", group_member=["admin"], notice_config=[])
+        _bind_resource_to_scene(ng1.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
+        _bind_resource_to_scene(ng2.group_id, ResourceVisibilityType.NOTICE_GROUP, another_scene.scene_id)
+
+        qs = SceneScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            scene_id=[scene.scene_id, another_scene.scene_id],
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 2
+        assert set(qs.values_list("group_name", flat=True)) == {"场景1组", "场景2组"}
+
+    @pytest.mark.django_db
+    def test_filter_without_scene_id_returns_none(self):
+        """测试不传 scene_id 和 system_id 时返回空结果"""
         NoticeGroup.objects.all().delete()
         NoticeGroup.objects.create(group_name="组1", group_member=["admin"], notice_config=[])
         NoticeGroup.objects.create(group_name="组2", group_member=["admin"], notice_config=[])
@@ -691,7 +793,7 @@ class TestSceneScopeFilter:
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             pk_field="group_id",
         )
-        assert qs.count() == 2
+        assert qs.count() == 0
 
     @pytest.mark.django_db
     def test_get_bound_resource_ids(self, scene):
@@ -701,9 +803,27 @@ class TestSceneScopeFilter:
         ids = SceneScopeFilter.get_bound_resource_ids(scene.scene_id, ResourceVisibilityType.PROCESS_APPLICATION)
         assert str(pa.id) in ids
 
+    @pytest.mark.django_db
+    def test_get_bound_risk_ids_uses_strategy_binding(self, scene):
+        """测试风险 ID 通过策略绑定反查"""
+        event_time = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+        strategy = Strategy.objects.create(strategy_name="风险策略")
+        _bind_resource_to_scene(strategy.strategy_id, ResourceVisibilityType.STRATEGY, scene.scene_id)
+        risk = Risk.objects.create(
+            strategy=strategy,
+            raw_event_id="raw-risk-bound",
+            event_time=event_time,
+            event_end_time=event_time,
+            event_data={},
+            event_type=[],
+        )
 
-class TestBindingScopeFilter:
-    """BindingScopeFilter 组合过滤器测试"""
+        ids = SceneScopeFilter.get_bound_resource_ids(scene.scene_id, ResourceVisibilityType.RISK)
+        assert risk.risk_id in ids
+
+
+class TestCompositeScopeFilter:
+    """CompositeScopeFilter 组合过滤器测试"""
 
     @pytest.mark.django_db
     def test_filter_platform_binding_with_scene(self, scene):
@@ -715,18 +835,17 @@ class TestBindingScopeFilter:
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             binding_type=BindingType.PLATFORM_BINDING,
         )
-        # 平台级 + 未指定场景/系统时返回所有平台级资源
-        qs = BindingScopeFilter.filter_queryset(
+        # 平台级 + 未指定场景/系统时返回空结果
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type=BindingType.PLATFORM_BINDING,
             scene_id=None,
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             pk_field="group_id",
         )
-        assert qs.count() == 1
-        assert qs.first().group_name == "平台组"
+        assert qs.count() == 0
         # 平台级 + 指定 scene_id 时返回可见的平台级资源
-        qs = BindingScopeFilter.filter_queryset(
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type=BindingType.PLATFORM_BINDING,
             scene_id=scene.scene_id,
@@ -742,7 +861,7 @@ class TestBindingScopeFilter:
         ng1 = NoticeGroup.objects.create(group_name="场景组", group_member=["admin"], notice_config=[])
         NoticeGroup.objects.create(group_name="未绑定组", group_member=["admin"], notice_config=[])
         _bind_resource_to_scene(ng1.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
-        qs = BindingScopeFilter.filter_queryset(
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type=BindingType.SCENE_BINDING,
             scene_id=scene.scene_id,
@@ -751,6 +870,25 @@ class TestBindingScopeFilter:
         )
         assert qs.count() == 1
         assert qs.first().group_name == "场景组"
+
+    @pytest.mark.django_db
+    def test_filter_scene_binding_with_multiple_scene_ids(self, scene, another_scene):
+        """测试按场景级绑定 + 多个 scene_id 过滤"""
+        ng1 = NoticeGroup.objects.create(group_name="场景1组", group_member=["admin"], notice_config=[])
+        ng2 = NoticeGroup.objects.create(group_name="场景2组", group_member=["admin"], notice_config=[])
+        _bind_resource_to_scene(ng1.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
+        _bind_resource_to_scene(ng2.group_id, ResourceVisibilityType.NOTICE_GROUP, another_scene.scene_id)
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=BindingType.SCENE_BINDING,
+            scene_id=[scene.scene_id, another_scene.scene_id],
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 2
+        assert set(qs.values_list("group_name", flat=True)) == {"场景1组", "场景2组"}
 
     @pytest.mark.django_db
     def test_filter_scene_id_only_returns_union(self, scene):
@@ -764,7 +902,7 @@ class TestBindingScopeFilter:
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             binding_type=BindingType.PLATFORM_BINDING,
         )
-        qs = BindingScopeFilter.filter_queryset(
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type="",
             scene_id=scene.scene_id,
@@ -776,19 +914,19 @@ class TestBindingScopeFilter:
         assert names == {"场景组", "平台组"}
 
     @pytest.mark.django_db
-    def test_filter_no_params_returns_all(self):
-        """测试都不传时返回全部（兼容存量）"""
+    def test_filter_no_params_returns_none(self):
+        """测试都不传时返回空结果"""
         NoticeGroup.objects.all().delete()
         NoticeGroup.objects.create(group_name="组1", group_member=["admin"], notice_config=[])
         NoticeGroup.objects.create(group_name="组2", group_member=["admin"], notice_config=[])
-        qs = BindingScopeFilter.filter_queryset(
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type="",
             scene_id=None,
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             pk_field="group_id",
         )
-        assert qs.count() == 2
+        assert qs.count() == 0
 
     @pytest.mark.django_db
     def test_filter_system_id_returns_system_bound_resources(self, scene):
@@ -805,8 +943,6 @@ class TestBindingScopeFilter:
         ResourceBindingScene.objects.create(binding=binding1, scene_id=scene.scene_id)
         ResourceBindingSystem.objects.create(binding=binding1, system_id="bk_job")
         # 平台级绑定 + ResourceBindingSystem（specific_systems 可见）
-        from services.web.scene.constants import VisibilityScope
-
         binding2 = ResourceBinding.objects.create(
             resource_id=str(ng2.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
@@ -815,7 +951,7 @@ class TestBindingScopeFilter:
         )
         ResourceBindingSystem.objects.create(binding=binding2, system_id="bk_job")
         # 传 system_id 但不传 binding_type，场景级资源无法绑定到系统，仅返回对该系统可见的平台级资源
-        qs = BindingScopeFilter.filter_queryset(
+        qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type="",
             system_id="bk_job",
@@ -825,6 +961,116 @@ class TestBindingScopeFilter:
         assert qs.count() == 1
         names = set(qs.values_list("group_name", flat=True))
         assert names == {"平台组"}
+
+    @pytest.mark.django_db
+    def test_filter_multiple_system_ids_returns_union(self, scene):
+        """测试传多个 system_id 时返回平台资源并集"""
+        ng1 = NoticeGroup.objects.create(group_name="JOB平台组", group_member=["admin"], notice_config=[])
+        ng2 = NoticeGroup.objects.create(group_name="ESB平台组", group_member=["admin"], notice_config=[])
+        binding1 = ResourceBinding.objects.create(
+            resource_id=str(ng1.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        binding2 = ResourceBinding.objects.create(
+            resource_id=str(ng2.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=binding1, system_id="bk_job")
+        ResourceBindingSystem.objects.create(binding=binding2, system_id="bk_esb")
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type="",
+            system_id=["bk_job", "bk_esb"],
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 2
+        assert set(qs.values_list("group_name", flat=True)) == {"JOB平台组", "ESB平台组"}
+
+    @pytest.mark.django_db
+    def test_filter_multiple_scene_ids_returns_union_with_platform_resources(self, scene, another_scene):
+        """测试仅传多个 scene_id 时返回场景级和平台级资源并集"""
+        ng1 = NoticeGroup.objects.create(group_name="场景1组", group_member=["admin"], notice_config=[])
+        ng2 = NoticeGroup.objects.create(group_name="场景2组", group_member=["admin"], notice_config=[])
+        ng3 = NoticeGroup.objects.create(group_name="平台组", group_member=["admin"], notice_config=[])
+        _bind_resource_to_scene(ng1.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
+        _bind_resource_to_scene(ng2.group_id, ResourceVisibilityType.NOTICE_GROUP, another_scene.scene_id)
+        ResourceBinding.objects.create(
+            resource_id=str(ng3.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type="",
+            scene_id=[scene.scene_id, another_scene.scene_id],
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 3
+        assert set(qs.values_list("group_name", flat=True)) == {"场景1组", "场景2组", "平台组"}
+
+    @pytest.mark.django_db
+    def test_filter_system_id_returns_all_systems_resources(self, scene):
+        """测试 all_systems 在按 system_id 过滤时可见"""
+        ng = NoticeGroup.objects.create(group_name="全系统平台组", group_member=["admin"], notice_config=[])
+        ResourceBinding.objects.create(
+            resource_id=str(ng.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SYSTEMS,
+        )
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type="",
+            system_id="bk_job",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 1
+        assert qs.first().group_name == "全系统平台组"
+
+    @pytest.mark.django_db
+    def test_filter_scene_id_returns_all_systems_resources_only_for_system_scenes(self, scene, another_scene):
+        """测试 all_systems 仅对有关联系统的场景可见"""
+        ng = NoticeGroup.objects.create(group_name="全系统平台组", group_member=["admin"], notice_config=[])
+        ResourceBinding.objects.create(
+            resource_id=str(ng.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SYSTEMS,
+        )
+        SceneSystem.objects.create(scene=scene, system_id="bk_job")
+
+        visible_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type="",
+            scene_id=scene.scene_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        hidden_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type="",
+            scene_id=another_scene.scene_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert visible_qs.count() == 1
+        assert visible_qs.first().group_name == "全系统平台组"
+        assert hidden_qs.count() == 0
 
 
 # ==================== 创建序列化器 scope 校验测试 ====================

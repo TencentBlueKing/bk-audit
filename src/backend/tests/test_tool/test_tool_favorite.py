@@ -30,6 +30,12 @@ from rest_framework.test import APIRequestFactory
 
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    VisibilityScope,
+)
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     FieldCategory,
@@ -65,6 +71,8 @@ class ToolFavoriteTestCase(TestCase):
         self.namespace = "default_ns"
         self.test_user = "test_user"
         self.other_user = "other_user"
+        self.scene = Scene.objects.create(name="tool-favorite-scene")
+        self.scene_id = self.scene.scene_id
 
         # 创建测试工具 1
         self.tool_1 = Tool.objects.create(
@@ -125,6 +133,7 @@ class ToolFavoriteTestCase(TestCase):
         # 创建标签
         self.tag1 = Tag.objects.create(tag_name="tag1")
         ToolTag.objects.create(tool_uid=self.tool_1.uid, tag_id=self.tag1.tag_id)
+        self._bind_tools()
 
         # Mock 权限校验
         self.patcher_auth = mock.patch.object(
@@ -140,13 +149,30 @@ class ToolFavoriteTestCase(TestCase):
     def tearDown(self):
         mock.patch.stopall()
 
+    def _bind_tools(self):
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.tool_1.uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+        scene_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.tool_2.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=scene_binding, scene_id=self.scene_id)
+
     def _call_resource_with_request(self, resource_cls: Type[Resource], data):
         factory = APIRequestFactory()
         django_request = factory.post('/fake-url/', data, format='json')
         drf_request = Request(django_request)
 
         resource = resource_cls()
-        response = resource.request(data, _request=drf_request)
+        request_data = dict(data)
+        if resource_cls is ListTool:
+            request_data.setdefault("scene_id", self.scene_id)
+        response = resource.request(request_data, _request=drf_request)
         # response 可能直接是 ReturnDict/list 或者是 Response 对象
         if hasattr(response, 'data'):
             return response.data.get("results", response.data)

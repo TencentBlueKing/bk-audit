@@ -603,6 +603,7 @@ class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
 
 
 class ListRiskMetaRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
     risk_view_type = serializers.ChoiceField(
         label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
     )
@@ -1172,6 +1173,7 @@ class RiskExportReqSerializer(serializers.Serializer):
     Risk Export Request Serializer
     """
 
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
     risk_ids = serializers.ListField(
         label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1, max_length=300
     )
@@ -1230,6 +1232,7 @@ class ListRiskBriefRequestSerializer(serializers.Serializer):
     获取风险简要列表请求序列化器
     """
 
+    scene_id = serializers.IntegerField(required=False, label=gettext_lazy("场景ID"))
     strategy_id = serializers.IntegerField(required=False, label=gettext_lazy("策略ID"))
     start_time = serializers.DateTimeField(required=True, label=gettext_lazy("开始时间"))
     end_time = serializers.DateTimeField(required=True, label=gettext_lazy("结束时间"))

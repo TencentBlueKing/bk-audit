@@ -26,6 +26,9 @@ from services.web.risk.constants import RAW_EVENT_ID_REMARK, RiskExportField, Ri
 from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
 from services.web.risk.serializers import RetrieveRiskStrategyInfoResponseSerializer
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -39,6 +42,8 @@ class TestRiskExport(TestCase):
     def setUp(self):
         super().setUp()
         self.maxDiff = None
+        self.scene = Scene.objects.create(name="risk-export-scene")
+        self.other_scene = Scene.objects.create(name="risk-export-other-scene")
         # 创建策略
         self.strategy_1 = Strategy.objects.create(
             strategy_id=1,
@@ -54,6 +59,16 @@ class TestRiskExport(TestCase):
             strategy_name="Strategy B",
             risk_level=RiskLevel.MIDDLE,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.strategy_1.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene.scene_id,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.strategy_2.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene.scene_id,
         )
         # 创建风险
         self.risk_1 = Risk.objects.create(
@@ -128,7 +143,7 @@ class TestRiskExport(TestCase):
 
         # Call resource
         risk_ids = ["risk001", "risk002", "risk003", "risk004"]
-        resp = resource.risk.risk_export(risk_ids=risk_ids)
+        resp = resource.risk.risk_export(risk_ids=risk_ids, scene_id=self.scene.scene_id)
 
         # Verify response
         self.assertIn("attachment; filename*", resp["Content-Disposition"])
@@ -183,6 +198,33 @@ class TestRiskExport(TestCase):
         # Row 3 (risk004, no events)
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_risk_export_blocks_risks_outside_scene(self, mock_load_authed_risks):
+        from services.web.risk.exceptions import ExportRiskNoPermission
+
+        strategy = Strategy.objects.create(
+            strategy_id=3,
+            strategy_name="Strategy C",
+            risk_level=RiskLevel.LOW,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.other_scene.scene_id,
+        )
+        risk = Risk.objects.create(
+            risk_id="risk-outside-scene",
+            title="Outside Scene",
+            strategy=strategy,
+            status=RiskStatus.NEW,
+            event_time=datetime.datetime(2023, 1, 5, 10, 0, 0),
+            event_end_time=datetime.datetime(2023, 1, 5, 11, 0, 0),
+        )
+        mock_load_authed_risks.return_value = Risk.objects.all()
+
+        with self.assertRaises(ExportRiskNoPermission):
+            resource.risk.risk_export(risk_ids=[risk.risk_id], scene_id=self.scene.scene_id)
 
     def test_retrieve_strategy_serializer_populates_raw_event_description(self):
         strategy = Strategy(

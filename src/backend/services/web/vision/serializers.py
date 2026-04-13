@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from rest_framework import serializers
 
 from core.serializers import ExtraDataSerializerMixin
+from services.web.scene.serializers import FlexibleListField
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -37,19 +38,21 @@ class VisionPanelInfoQuerySerializer(serializers.Serializer):
         label="绑定类型",
         help_text="platform_binding=平台级, scene_binding=场景级, 空=全部",
     )
-    scene_id = serializers.IntegerField(
+    scene_id = FlexibleListField(
+        child=serializers.IntegerField(),
         required=False,
-        allow_null=True,
-        default=None,
-        label="所属场景ID",
-        help_text="按场景过滤，与 system_id 互斥",
+        allow_empty=True,
+        default=list,
+        label="所属场景ID列表",
+        help_text="按场景过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
     )
-    system_id = serializers.CharField(
+    system_id = FlexibleListField(
+        child=serializers.CharField(),
         required=False,
-        allow_blank=True,
-        default=None,
-        label="系统ID",
-        help_text="按接入系统过滤，与 scene_id 互斥",
+        allow_empty=True,
+        default=list,
+        label="系统ID列表",
+        help_text="按接入系统过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
     )
 
 

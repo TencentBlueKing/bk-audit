@@ -48,7 +48,7 @@ class ListPanels(BKVision):
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import BindingScopeFilter
+        from services.web.scene.filters import CompositeScopeFilter
 
         queryset = VisionPanel.objects.filter(scenario=validated_request_data['scenario'])
 
@@ -57,7 +57,7 @@ class ListPanels(BKVision):
         scene_id = validated_request_data.get("scene_id")
         system_id = validated_request_data.get("system_id")
 
-        queryset = BindingScopeFilter.filter_queryset(
+        queryset = CompositeScopeFilter.filter_queryset(
             queryset=queryset,
             binding_type=binding_type,
             scene_id=scene_id,

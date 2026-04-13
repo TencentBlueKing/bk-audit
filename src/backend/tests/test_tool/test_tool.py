@@ -17,6 +17,12 @@ from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.testing import assert_list_contains
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    VisibilityScope,
+)
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.tool.constants import (
     ApiOutputFieldType,
     ApiToolConfig,
@@ -57,6 +63,8 @@ class ToolResourceTestCase(TestCase):
         self.uid = str(uuid.uuid4())
         self.uid_2 = str(uuid.uuid4())
         self.namespace = "default_ns"
+        self.scene = Scene.objects.create(name="tool-scene")
+        self.scene_id = self.scene.scene_id
 
         self.sql_tool = Tool.objects.create(
             uid=self.uid,
@@ -95,6 +103,7 @@ class ToolResourceTestCase(TestCase):
         self.tag2 = Tag.objects.create(tag_name="tag2")
         ToolTag.objects.create(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id)
         ToolTag.objects.create(tool_uid=self.bk_tool.uid, tag_id=self.tag2.tag_id)
+        self._bind_tools()
         self.api_debug_config = {
             "api_config": {
                 "url": "http://example.com/{path_id}",
@@ -166,13 +175,30 @@ class ToolResourceTestCase(TestCase):
         BkVisionToolConfig.objects.create(tool=tool, panel=panel)
         return tool
 
+    def _bind_tools(self):
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.sql_tool.uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+        scene_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.bk_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=scene_binding, scene_id=self.scene_id)
+
     def _call_resource_with_request(self, resource_cls: Type[Resource], data):
         factory = APIRequestFactory()
         django_request = factory.post('/fake-url/', data, format='json')
         drf_request = Request(django_request)
 
         resource = resource_cls()
-        response = resource.request(data, _request=drf_request)
+        request_data = dict(data)
+        if resource_cls is ListTool:
+            request_data.setdefault("scene_id", self.scene_id)
+        response = resource.request(request_data, _request=drf_request)
         return response.data.get("results", [])
 
     @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)

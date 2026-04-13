@@ -108,25 +108,6 @@ class ResourceBinding(OperateRecordModel):
     def __str__(self):
         return f"ResourceBinding({self.resource_type}: {self.resource_id}, {self.binding_type})"
 
-    def is_visible_to_scene(self, scene_id: int) -> bool:
-        """判断资源对指定场景是否可见"""
-        if self.binding_type == BindingType.SCENE_BINDING:
-            # 场景级绑定：检查是否绑定到该场景
-            return self.binding_scenes.filter(scene_id=scene_id).exists()
-        # 平台级绑定：根据 visibility_type 判断
-        if self.visibility_type == VisibilityScope.ALL_VISIBLE:
-            return True
-        if self.visibility_type == VisibilityScope.ALL_SCENES:
-            return True
-        if self.visibility_type == VisibilityScope.SPECIFIC_SCENES:
-            return self.binding_scenes.filter(scene_id=scene_id).exists()
-        if self.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS:
-            # 检查场景关联的系统是否在可见系统列表中
-            scene_system_ids = set(SceneSystem.objects.filter(scene_id=scene_id).values_list("system_id", flat=True))
-            binding_system_ids = set(self.binding_systems.values_list("system_id", flat=True))
-            return bool(scene_system_ids & binding_system_ids)
-        return False
-
 
 class ResourceBindingScene(OperateRecordModel):
     """资源绑定-场景关联（一对多）"""

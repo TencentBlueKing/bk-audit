@@ -294,9 +294,9 @@ class ListTool(ToolBase):
 
         # 按绑定类型和场景过滤（通过 ResourceBinding 关联）
         from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import BindingScopeFilter
+        from services.web.scene.filters import CompositeScopeFilter
 
-        queryset = BindingScopeFilter.filter_queryset(
+        queryset = CompositeScopeFilter.filter_queryset(
             queryset=queryset,
             binding_type=binding_type,
             scene_id=scene_id,

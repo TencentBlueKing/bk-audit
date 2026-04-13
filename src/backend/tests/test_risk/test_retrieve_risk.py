@@ -55,12 +55,27 @@ def assert_hive_sql(testcase: TestCase, sql_statements: List[str]) -> None:
             testcase.fail(f"Hive SQL parse raised unexpected error: {exc}\nSQL: {normalized}")
 
 
+def bind_strategy_to_scene(strategy_id: int, scene_id) -> None:
+    from services.web.scene.constants import ResourceVisibilityType
+    from services.web.scene.filters import SceneScopeFilter
+
+    SceneScopeFilter.create_resource_binding(
+        resource_id=str(strategy_id),
+        resource_type=ResourceVisibilityType.STRATEGY,
+        scene_id=scene_id,
+    )
+
+
 class TestListRiskResource(TestCase):
     def setUp(self):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
         self.bkbase_title = "bkbase-title"
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="risk-list-scene")
+        self.scene_id = self.scene.scene_id
         self.authed_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.authed_risk_filter", return_value=Q(), autospec=True
         )
@@ -99,6 +114,7 @@ class TestListRiskResource(TestCase):
             risk_level=RiskLevel.HIGH.value,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
         )
+        bind_strategy_to_scene(self.strategy.strategy_id, self.scene_id)
         self.risk = Risk.objects.create(
             risk_id="risk-db",
             raw_event_id="raw",
@@ -133,8 +149,11 @@ class TestListRiskResource(TestCase):
 
     def _call_resource(self, payload):
         request = self._make_request()
-        data = self.resource.risk.list_risk(payload, _request=request)
+        data = self.resource.risk.list_risk({"scene_id": self.scene_id, **payload}, _request=request)
         return data
+
+    def _payload(self, **kwargs):
+        return {"scene_id": self.scene_id, **kwargs}
 
     def test_list_risk_via_db(self):
         data = self._call_resource({})
@@ -802,6 +821,7 @@ class TestListRiskResource(TestCase):
 
         request_first = self._make_request({"page": 1, "page_size": 1})
         bkbase_payload = {
+            "scene_id": self.scene_id,
             "title": "bkbase-title",
             "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
@@ -851,6 +871,7 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
+            "scene_id": self.scene_id,
             "title": "bkbase-title",
             "event_filters": [
                 {
@@ -890,6 +911,8 @@ class TestListRiskResource(TestCase):
         """创建多风险等级数据用于排序测试"""
         strategy_mid = Strategy.objects.create(strategy_id=202, strategy_name="S-MID", risk_level=RiskLevel.MIDDLE)
         strategy_low = Strategy.objects.create(strategy_id=203, strategy_name="S-LOW", risk_level=RiskLevel.LOW)
+        bind_strategy_to_scene(strategy_mid.strategy_id, self.scene_id)
+        bind_strategy_to_scene(strategy_low.strategy_id, self.scene_id)
         Risk.objects.create(
             risk_id="risk-mid",
             raw_event_id="raw-mid",
@@ -911,7 +934,7 @@ class TestListRiskResource(TestCase):
         """风险等级逆序 HIGH > MIDDLE > LOW"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["-risk_level", "-event_time"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids, [self.risk.risk_id, "risk-mid", "risk-low"])
 
@@ -919,7 +942,7 @@ class TestListRiskResource(TestCase):
         """风险等级正序 LOW < MIDDLE < HIGH"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["risk_level", "-event_time"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["risk_level", "-event_time"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
 
@@ -927,7 +950,7 @@ class TestListRiskResource(TestCase):
         """多字段排序: sort=['-risk_level', '-event_time']"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["-risk_level", "-event_time"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids[0], self.risk.risk_id)
         self.assertEqual(ids[-1], "risk-low")
@@ -936,7 +959,7 @@ class TestListRiskResource(TestCase):
         """多字段排序: sort=['-event_time', '-risk_id']"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["-event_time", "-risk_id"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["-event_time", "-risk_id"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
 
@@ -944,7 +967,7 @@ class TestListRiskResource(TestCase):
         """多字段排序: sort=['display_status', '-event_time'] 常规字段+事件时间"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["display_status", "-event_time"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["display_status", "-event_time"]), _request=request)
         statuses = [r["status"] for r in data["results"]]
         self.assertEqual(statuses[0], RiskDisplayStatus.CLOSED.value)
         for i in range(len(statuses) - 1):
@@ -954,7 +977,7 @@ class TestListRiskResource(TestCase):
         """风险等级+事件时间排序"""
         self._create_sort_data()
         request = self._make_request()
-        data = self.resource.risk.list_risk({"sort": ["-risk_level", "-event_time"]}, _request=request)
+        data = self.resource.risk.list_risk(self._payload(sort=["-risk_level", "-event_time"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids[0], self.risk.risk_id)
         self.assertEqual(ids[-1], "risk-low")
@@ -973,7 +996,7 @@ class TestListRiskResource(TestCase):
     def test_list_risk_uses_iam_only(self):
         """ListRisk 使用 iam_risk_filter"""
         request = self._make_request()
-        self.resource.risk.list_risk({"sort": ["-event_time"]}, _request=request)
+        self.resource.risk.list_risk(self._payload(sort=["-event_time"]), _request=request)
         self.iam_filter_patcher.target.iam_risk_filter.assert_called()
 
     # ──── Tags / Strategy ────
@@ -982,21 +1005,51 @@ class TestListRiskResource(TestCase):
         """ListRiskTags 应使用子查询而非将 risk_id 物化到内存"""
         from apps.meta.models import Tag
         from services.web.risk.resources.risk import ListRiskTags
+        from services.web.scene.models import Scene
         from services.web.strategy_v2.models import StrategyTag
 
         tag = Tag.objects.create(tag_name="test-tag")
         StrategyTag.objects.create(strategy=self.strategy, tag=tag)
-        result = ListRiskTags().perform_request({"risk_view_type": "all"})
+        other_scene = Scene.objects.create(name="other-risk-tag-scene")
+        other_strategy = Strategy.objects.create(strategy_name="other-strategy", risk_level=RiskLevel.LOW.value)
+        bind_strategy_to_scene(other_strategy.strategy_id, other_scene.scene_id)
+        Risk.objects.create(
+            risk_id="risk-other-tag",
+            raw_event_id="raw-other-tag",
+            strategy=other_strategy,
+            status=RiskStatus.NEW,
+            title="other",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+        other_tag = Tag.objects.create(tag_name="other-tag")
+        StrategyTag.objects.create(strategy=other_strategy, tag=other_tag)
+
+        result = ListRiskTags().perform_request({"risk_view_type": "all", "scene_id": self.scene_id})
         tag_ids = [t.tag_id if hasattr(t, "tag_id") else t["tag_id"] for t in result]
         self.assertIn(tag.tag_id, tag_ids)
+        self.assertNotIn(other_tag.tag_id, tag_ids)
 
     def test_list_risk_strategy_returns_correct_strategies(self):
         """ListRiskStrategy 应返回风险关联的策略"""
         from services.web.risk.resources.risk import ListRiskStrategy
+        from services.web.scene.models import Scene
 
-        result = ListRiskStrategy().perform_request({"risk_view_type": "all"})
+        other_scene = Scene.objects.create(name="other-risk-strategy-scene")
+        other_strategy = Strategy.objects.create(strategy_name="other-strategy", risk_level=RiskLevel.LOW.value)
+        bind_strategy_to_scene(other_strategy.strategy_id, other_scene.scene_id)
+        Risk.objects.create(
+            risk_id="risk-other-strategy",
+            raw_event_id="raw-other-strategy",
+            strategy=other_strategy,
+            status=RiskStatus.NEW,
+            title="other",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+
+        result = ListRiskStrategy().perform_request({"risk_view_type": "all", "scene_id": self.scene_id})
         strategy_ids = {s.strategy_id if hasattr(s, "strategy_id") else s["strategy_id"] for s in result}
         self.assertIn(self.strategy.strategy_id, strategy_ids)
+        self.assertNotIn(other_strategy.strategy_id, strategy_ids)
 
 
 class TestListMineAndNoticingRisk(TestCase):
@@ -1005,6 +1058,10 @@ class TestListMineAndNoticingRisk(TestCase):
         self.factory = APIRequestFactory()
         self.username = "admin"
         self.bkbase_title = "bkbase-title"
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="risk-mine-scene")
+        self.scene_id = self.scene.scene_id
 
         self.iam_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.iam_risk_filter", return_value=Q(), autospec=True
@@ -1018,6 +1075,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_level=RiskLevel.HIGH.value,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
+        bind_strategy_to_scene(self.strategy.strategy_id, self.scene_id)
         self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
 
         self.risk_owned = Risk.objects.create(
@@ -1067,9 +1125,12 @@ class TestListMineAndNoticingRisk(TestCase):
         setattr(request_local, "request", request)
         return request
 
+    def _payload(self, **kwargs):
+        return {"scene_id": self.scene_id, **kwargs}
+
     def test_list_mine_risk(self):
         request = self._make_request()
-        response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
+        response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
 
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
@@ -1090,16 +1151,14 @@ class TestListMineAndNoticingRisk(TestCase):
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             response = ListMineRisk().request(
-                {
-                    "page": 1,
-                    "page_size": 10,
-                    "title": "bkbase-title",
-                    "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
-                    "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
-                    "event_filters": [
-                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
-                    ],
-                },
+                self._payload(
+                    page=1,
+                    page_size=10,
+                    title="bkbase-title",
+                    start_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
+                    end_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
+                    event_filters=[{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
+                ),
                 _request=request,
             )
 
@@ -1112,7 +1171,7 @@ class TestListMineAndNoticingRisk(TestCase):
     def test_list_mine_risk_no_perm_check(self):
         """ListMineRisk 不依赖 load_authed_risks，直接按 current_operator 查询"""
         request = self._make_request()
-        response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
+        response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_owned.risk_id, risk_ids)
@@ -1123,7 +1182,7 @@ class TestListMineAndNoticingRisk(TestCase):
         from services.web.risk.resources.risk import ListNoticingRisk
 
         request = self._make_request()
-        response = ListNoticingRisk().request({"page": 1, "page_size": 10}, _request=request)
+        response = ListNoticingRisk().request(self._payload(page=1, page_size=10), _request=request)
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
@@ -1134,6 +1193,7 @@ class TestListMineAndNoticingRisk(TestCase):
     def _create_sort_data(self):
         """创建低风险等级数据用于排序测试，返回 risk_owned_low"""
         strategy_low = Strategy.objects.create(strategy_id=204, strategy_name="S-LOW", risk_level=RiskLevel.LOW)
+        bind_strategy_to_scene(strategy_low.strategy_id, self.scene_id)
         risk_owned_low = Risk.objects.create(
             risk_id="risk-owned-low",
             raw_event_id="raw-owned-low",
@@ -1157,7 +1217,7 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_owned_low = self._create_sort_data()
         request = self._make_request()
         response = ListMineRisk().request(
-            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            self._payload(page=1, page_size=10, sort=["-risk_level", "-event_time", "-risk_id"]),
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
@@ -1168,7 +1228,7 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_owned_low = self._create_sort_data()
         request = self._make_request()
         response = ListMineRisk().request(
-            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            self._payload(page=1, page_size=10, sort=["-risk_level", "-event_time", "-risk_id"]),
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
@@ -1182,7 +1242,7 @@ class TestListMineAndNoticingRisk(TestCase):
         self._create_sort_data()
         request = self._make_request()
         response = ListNoticingRisk().request(
-            {"page": 1, "page_size": 10, "sort": ["-risk_level", "-event_time", "-risk_id"]},
+            self._payload(page=1, page_size=10, sort=["-risk_level", "-event_time", "-risk_id"]),
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
@@ -1195,7 +1255,7 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_owned_low = self._create_sort_data()
         request = self._make_request()
         response = ListNoticingRisk().request(
-            {"page": 1, "page_size": 10, "sort": ["-event_time", "-risk_id"]},
+            self._payload(page=1, page_size=10, sort=["-event_time", "-risk_id"]),
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
@@ -1644,12 +1704,17 @@ class TestListProcessedRisk(TestCase):
         self.factory = APIRequestFactory()
         self.username = "admin"
         self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="risk-processed-scene")
+        self.scene_id = self.scene.scene_id
         self.strategy = Strategy.objects.create(
             strategy_id=404,
             strategy_name="processed-strategy",
             risk_level=RiskLevel.HIGH.value,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
+        bind_strategy_to_scene(self.strategy.strategy_id, self.scene_id)
         self.risk_past = Risk.objects.create(
             risk_id="R-PAST",
             title="past-processed",
@@ -1712,6 +1777,7 @@ class TestListProcessedRisk(TestCase):
             strategy_name="processed-strategy-low",
             risk_level=RiskLevel.LOW.value,
         )
+        bind_strategy_to_scene(self.strategy_low.strategy_id, self.scene_id)
         self.risk_past_low = Risk.objects.create(
             risk_id="R-PAST-LOW",
             title="past-processed-low",
@@ -1737,11 +1803,14 @@ class TestListProcessedRisk(TestCase):
         setattr(request_local, "request", request)
         return request
 
+    def _payload(self, **kwargs):
+        return {"scene_id": self.scene_id, **kwargs}
+
     def test_list_processed_risk_returns_past_risks(self):
         from services.web.risk.resources.risk import ListProcessedRisk
 
         request = self._make_request()
-        resp = ListProcessedRisk().request({"page": 1, "page_size": 10}, _request=request)
+        resp = ListProcessedRisk().request(self._payload(page=1, page_size=10), _request=request)
         risk_ids = {item["risk_id"] for item in resp["results"]}
         self.assertIn("R-PAST", risk_ids)
         self.assertIn("R-OPEN", risk_ids)
@@ -1752,7 +1821,7 @@ class TestListProcessedRisk(TestCase):
         from services.web.risk.resources.risk import ListProcessedRisk
 
         request = self._make_request()
-        resp = ListProcessedRisk().request({"page": 1, "page_size": 10}, _request=request)
+        resp = ListProcessedRisk().request(self._payload(page=1, page_size=10), _request=request)
         statuses = {item["risk_id"]: item["status"] for item in resp["results"]}
         self.assertIn("R-PAST", statuses)
         self.assertEqual(statuses["R-PAST"], RiskDisplayStatus.CLOSED)
@@ -1765,7 +1834,7 @@ class TestListProcessedRisk(TestCase):
         # 只筛选高风险：应返回 R-PAST 和 R-OPEN（高风险），不含 R-PAST-LOW（低风险）
         # 接口要求 risk_level 为字符串，serializer 会按逗号拆成列表
         resp = ListProcessedRisk().request(
-            {"page": 1, "page_size": 10, "risk_level": RiskLevel.HIGH.value},
+            self._payload(page=1, page_size=10, risk_level=RiskLevel.HIGH.value),
             _request=request,
         )
         risk_ids = {item["risk_id"] for item in resp["results"]}
@@ -1776,7 +1845,7 @@ class TestListProcessedRisk(TestCase):
 
         # 只筛选低风险：应只返回 R-PAST-LOW
         resp = ListProcessedRisk().request(
-            {"page": 1, "page_size": 10, "risk_level": RiskLevel.LOW.value},
+            self._payload(page=1, page_size=10, risk_level=RiskLevel.LOW.value),
             _request=request,
         )
         risk_ids = {item["risk_id"] for item in resp["results"]}
@@ -1799,7 +1868,7 @@ class TestListProcessedRisk(TestCase):
 
         request = self._make_request()
         resp = ListProcessedRisk().request(
-            {"page": 1, "page_size": 10, "sort": ["-last_operate_time", "-risk_id"]},
+            self._payload(page=1, page_size=10, sort=["-last_operate_time", "-risk_id"]),
             _request=request,
         )
         ids = [item["risk_id"] for item in resp["results"]]
@@ -1843,13 +1912,11 @@ class TestListProcessedRisk(TestCase):
         request = self._make_request()
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             resp = ListProcessedRisk().request(
-                {
-                    "page": 1,
-                    "page_size": 10,
-                    "event_filters": [
-                        {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
-                    ],
-                },
+                self._payload(
+                    page=1,
+                    page_size=10,
+                    event_filters=[{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
+                ),
                 _request=request,
             )
 

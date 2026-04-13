@@ -328,100 +328,6 @@ class TestResourceBinding:
     """资源绑定关系测试"""
 
     @pytest.mark.django_db
-    def test_platform_binding_all_visible(self, scene):
-        """测试平台级绑定-全部可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="1",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_VISIBLE,
-        )
-        assert binding.is_visible_to_scene(scene.scene_id) is True
-
-    @pytest.mark.django_db
-    def test_platform_binding_all_scenes(self, scene):
-        """测试平台级绑定-全部场景可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="2",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_SCENES,
-        )
-        assert binding.is_visible_to_scene(scene.scene_id) is True
-
-    @pytest.mark.django_db
-    def test_platform_binding_specific_scenes_visible(self, scene):
-        """测试平台级绑定-指定场景可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="3",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SCENES,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
-        assert binding.is_visible_to_scene(scene.scene_id) is True
-
-    @pytest.mark.django_db
-    def test_platform_binding_specific_scenes_not_visible(self, scene):
-        """测试平台级绑定-指定场景不可见"""
-        other_scene = Scene.objects.create(name="其他场景", managers=[], users=[])
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="4",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SCENES,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=other_scene.scene_id)
-        assert binding.is_visible_to_scene(scene.scene_id) is False
-
-    @pytest.mark.django_db
-    def test_platform_binding_specific_systems_visible(self, scene_with_systems):
-        """测试平台级绑定-指定系统可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.TOOL,
-            resource_id="5",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
-        )
-        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_cmdb")
-        assert binding.is_visible_to_scene(scene_with_systems.scene_id) is True
-
-    @pytest.mark.django_db
-    def test_platform_binding_specific_systems_not_visible(self, scene_with_systems):
-        """测试平台级绑定-指定系统不可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.TOOL,
-            resource_id="6",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
-        )
-        ResourceBindingSystem.objects.create(binding=binding, system_id="unknown_system")
-        assert binding.is_visible_to_scene(scene_with_systems.scene_id) is False
-
-    @pytest.mark.django_db
-    def test_scene_binding_visible(self, scene):
-        """测试场景级绑定-对绑定场景可见"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="7",
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
-        assert binding.is_visible_to_scene(scene.scene_id) is True
-
-    @pytest.mark.django_db
-    def test_scene_binding_not_visible(self, scene):
-        """测试场景级绑定-对其他场景不可见"""
-        other_scene = Scene.objects.create(name="其他场景2", managers=[], users=[])
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.PANEL,
-            resource_id="8",
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=other_scene.scene_id)
-        assert binding.is_visible_to_scene(scene.scene_id) is False
-
-    @pytest.mark.django_db
     def test_unique_together(self, db):
         """测试资源绑定唯一约束"""
         ResourceBinding.objects.create(
@@ -769,6 +675,11 @@ class TestPanelResources(TestCase):
             status=SceneStatus.ENABLED,
             managers=["admin"],
         )
+        self.another_scene = Scene.objects.create(
+            name="容器安全审计",
+            status=SceneStatus.ENABLED,
+            managers=["admin"],
+        )
         from core.utils.data import unique_id
 
         self.platform_panel = VisionPanel.objects.create(
@@ -798,25 +709,42 @@ class TestPanelResources(TestCase):
         )
         ResourceBindingScene.objects.create(binding=scene_binding, scene_id=self.scene.scene_id)
 
+        self.another_scene_panel = VisionPanel.objects.create(
+            id=unique_id(),
+            name="另一个场景报表",
+            category=PanelCategory.ASSET_SECURITY,
+            description="另一个场景级报表",
+        )
+        another_scene_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(self.another_scene_panel.pk),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=another_scene_binding, scene_id=self.another_scene.scene_id)
+
+        self.system_panel = VisionPanel.objects.create(
+            id=unique_id(),
+            name="系统报表",
+            category=PanelCategory.SECURITY_OVERVIEW,
+            description="指定系统可见报表",
+        )
+        system_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(self.system_panel.pk),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=system_binding, system_id="bk_job")
+
     def test_panel_list(self):
-        """测试报表列表（通过 binding_type 过滤）"""
+        """测试报表列表在缺少隔离维度时返回空结果"""
         result = self.resource.vision.list_panels({"scenario": "default", "binding_type": "platform_binding"})
-        platform_names = [item["name"] for item in result]
-        self.assertIn("安全总览报表", platform_names)
+        self.assertEqual(result, [])
 
     def test_panel_list_filter_platform(self):
-        """测试按平台级过滤报表"""
+        """测试按平台级过滤报表时缺少隔离维度返回空结果"""
         result = self.resource.vision.list_panels({"scenario": "default", "binding_type": "platform_binding"})
-        # 只应返回平台级绑定的报表
-        panel_ids = [item["id"] for item in result]
-        for pid in panel_ids:
-            self.assertTrue(
-                ResourceBinding.objects.filter(
-                    resource_type=ResourceVisibilityType.PANEL,
-                    resource_id=str(pid),
-                    binding_type=BindingType.PLATFORM_BINDING,
-                ).exists()
-            )
+        self.assertEqual(result, [])
 
     def test_panel_list_filter_scene(self):
         """测试按场景过滤报表"""
@@ -843,10 +771,44 @@ class TestPanelResources(TestCase):
         self.assertIn("安全总览报表", names)
         self.assertIn("场景报表", names)
 
+    def test_panel_list_filter_multiple_scenes(self):
+        """测试报表列表支持多场景筛选"""
+        result = self.resource.vision.list_panels(
+            {
+                "scenario": "default",
+                "binding_type": "scene_binding",
+                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"场景报表", "另一个场景报表"})
+
+    def test_panel_list_filter_multiple_scenes_with_platform(self):
+        """测试报表列表仅传多个 scene_id 时返回场景级与平台级并集"""
+        result = self.resource.vision.list_panels(
+            {
+                "scenario": "default",
+                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表", "场景报表", "另一个场景报表"})
+
+    def test_panel_list_filter_multiple_systems(self):
+        """测试报表列表支持多系统筛选"""
+        result = self.resource.vision.list_panels(
+            {
+                "scenario": "default",
+                "system_id": ["bk_job", "bk_cmdb"],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表", "系统报表"})
+
     def test_panel_list_no_scope(self):
-        """测试不传 scope 参数，返回全部报表（兼容存量）"""
+        """测试不传 scope 参数时返回空结果"""
         result = self.resource.vision.list_panels({"scenario": "default"})
-        self.assertGreaterEqual(len(result), 2)
+        self.assertEqual(result, [])
 
     def test_create_platform_panel(self):
         """测试创建平台级报表"""
@@ -967,6 +929,11 @@ class TestToolResources(TestCase):
             status=SceneStatus.ENABLED,
             managers=["admin"],
         )
+        self.another_scene = Scene.objects.create(
+            name="容器安全审计",
+            status=SceneStatus.ENABLED,
+            managers=["admin"],
+        )
         from core.utils.data import unique_id
 
         self.platform_tool = Tool.objects.create(
@@ -1004,6 +971,41 @@ class TestToolResources(TestCase):
         )
         ResourceBindingScene.objects.create(binding=scene_binding, scene_id=self.scene.scene_id)
 
+        self.another_scene_tool = Tool.objects.create(
+            name="另一个场景工具",
+            uid=unique_id(),
+            version=1,
+            namespace="default",
+            tool_type="data_search",
+            config={},
+            permission_owner="admin",
+            description="另一个场景级工具",
+        )
+        another_scene_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.another_scene_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=another_scene_binding, scene_id=self.another_scene.scene_id)
+
+        self.system_tool = Tool.objects.create(
+            name="系统工具",
+            uid=unique_id(),
+            version=1,
+            namespace="default",
+            tool_type="data_search",
+            config={},
+            permission_owner="admin",
+            description="指定系统可见工具",
+        )
+        system_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.system_tool.uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=system_binding, system_id="bk_job")
+
         self.resource = resource
 
     def _call_list_tool(self, data):
@@ -1036,17 +1038,14 @@ class TestToolResources(TestCase):
             return response.data.get("results", [])
 
     def test_tool_list(self):
-        """测试工具列表（不传过滤参数，返回全部工具）"""
+        """测试工具列表不传过滤参数时返回空结果"""
         result = self._call_list_tool({"page": 1, "page_size": 10})
-        tool_names = [item["name"] for item in result]
-        self.assertIn("查询工具", tool_names)
-        self.assertIn("场景工具", tool_names)
+        self.assertEqual(result, [])
 
     def test_tool_list_filter_platform(self):
-        """测试按平台级过滤工具"""
+        """测试按平台级过滤工具时缺少隔离维度返回空结果"""
         result = self._call_list_tool({"binding_type": "platform_binding", "page": 1, "page_size": 10})
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["name"], "查询工具")
+        self.assertEqual(result, [])
 
     def test_tool_list_filter_scene(self):
         """测试按场景过滤工具"""
@@ -1075,6 +1074,43 @@ class TestToolResources(TestCase):
         self.assertIn("查询工具", tool_names)  # 平台级
         self.assertIn("场景工具", tool_names)  # 场景级
         self.assertEqual(len(result), 2)
+
+    def test_tool_list_filter_multiple_scenes(self):
+        """测试工具列表支持多场景筛选"""
+        result = self._call_list_tool(
+            {
+                "binding_type": "scene_binding",
+                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+                "page": 1,
+                "page_size": 10,
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"场景工具", "另一个场景工具"})
+
+    def test_tool_list_filter_multiple_scenes_with_platform(self):
+        """测试工具列表仅传多个 scene_id 时返回场景级与平台级并集"""
+        result = self._call_list_tool(
+            {
+                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+                "page": 1,
+                "page_size": 10,
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"查询工具", "场景工具", "另一个场景工具"})
+
+    def test_tool_list_filter_multiple_systems(self):
+        """测试工具列表支持多系统筛选"""
+        result = self._call_list_tool(
+            {
+                "system_id": ["bk_job", "bk_cmdb"],
+                "page": 1,
+                "page_size": 10,
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"查询工具", "系统工具"})
 
     def test_create_platform_tool(self):
         """测试创建平台级工具"""
@@ -1227,6 +1263,7 @@ class TestConstants:
 
     def test_visibility_scope_choices(self):
         assert VisibilityScope.ALL_VISIBLE == "all_visible"
+        assert VisibilityScope.ALL_SYSTEMS == "all_systems"
         assert VisibilityScope.SPECIFIC_SCENES == "specific_scenes"
 
     def test_resource_scope_type_choices(self):

@@ -362,12 +362,7 @@ class CreateStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
-        # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        if scene_id is not None:
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
@@ -616,10 +611,6 @@ class ListStrategy(StrategyV2Base):
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # 按场景过滤（通过 ResourceBinding）
-        if scene_id is not None:
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="user")
         from services.web.scene.constants import ResourceVisibilityType
         from services.web.scene.filters import SceneScopeFilter
 
@@ -1468,12 +1459,7 @@ class CreateLinkTable(LinkTableBase):
         return link_table
 
     def perform_request(self, validated_request_data):
-        # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        if scene_id is not None:
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         link_table = self.create_link_table(validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
         from services.web.scene.constants import ResourceVisibilityType
@@ -1580,10 +1566,6 @@ class ListLinkTable(LinkTableBase):
         # 获取最新版本的联表
         link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
         # 按场景过滤（通过 ResourceBinding）
-        if scene_id is not None:
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(request, scene_id, require_role="user")
         from services.web.scene.constants import ResourceVisibilityType
         from services.web.scene.filters import SceneScopeFilter
 

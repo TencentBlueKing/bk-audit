@@ -66,15 +66,9 @@ class ListRiskRule(RiskRuleMeta):
                 _q |= Q(**{key: item})
             q &= _q
         # 按场景过滤（通过 ResourceBinding）
-        if scene_id is not None:
-            from blueapps.utils.request_provider import get_local_request
-
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="user")
         from services.web.scene.filters import SceneScopeFilter
 
-        # 筛选（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回全部）
+        # 筛选（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回空结果）
         rules = SceneScopeFilter.filter_queryset(
             queryset=RiskRule.load_latest_rules().filter(q),
             scene_id=scene_id,
@@ -86,16 +80,23 @@ class ListRiskRule(RiskRuleMeta):
 
 class ListAllRiskRule(RiskRuleMeta):
     name = gettext_lazy("风险处理规则列表")
+    RequestSerializer = ListRiskRuleReqSerializer
 
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_RULE, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        return [
-            {"id": risk_rule.rule_id, "name": risk_rule.name, "version": risk_rule.version}
-            for risk_rule in RiskRule.objects.all()
-        ]
+        scene_id = validated_request_data.get("scene_id")
+        from services.web.scene.filters import SceneScopeFilter
+
+        rules = SceneScopeFilter.filter_queryset(
+            queryset=RiskRule.objects.all(),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            pk_field="rule_id",
+        )
+        return [{"id": risk_rule.rule_id, "name": risk_rule.name, "version": risk_rule.version} for risk_rule in rules]
 
 
 class CreateRiskRule(RiskRuleMeta):
@@ -105,14 +106,7 @@ class CreateRiskRule(RiskRuleMeta):
     audit_action = ActionEnum.CREATE_RULE
 
     def perform_request(self, validated_request_data):
-        # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
-        if scene_id is not None:
-            from blueapps.utils.request_provider import get_local_request
-
-            from services.web.scene.permissions import check_scene_permission
-
-            check_scene_permission(get_local_request(), scene_id, require_role="manager")
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
