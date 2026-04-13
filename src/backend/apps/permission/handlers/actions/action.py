@@ -477,6 +477,26 @@ class ActionEnum:
         description_en="Manage Tool(Tag),including tool editing and deletion",
     )
 
+    # 场景管理
+    VIEW_SCENE = ActionMeta(
+        id="view_scene",
+        name=gettext("查看场景"),
+        name_en="View Scene",
+        type="view",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
+    MANAGE_SCENE = ActionMeta(
+        id="manage_scene",
+        name=gettext("管理场景"),
+        name_en="Manage Scene",
+        type="manage",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
+
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(
         id=BkLogPermissionVersion("create_collection").action_id,

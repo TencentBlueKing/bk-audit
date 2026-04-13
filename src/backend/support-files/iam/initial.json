@@ -1437,8 +1437,80 @@
       }
     },
     {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_scene",
+        "name": "查看场景",
+        "name_en": "View Scene",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "manage_scene",
+        "name": "管理场景",
+        "name_en": "Manage Scene",
+        "type": "manage",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "view_scene",
+          "list_strategy",
+          "create_strategy",
+          "edit_strategy",
+          "delete_strategy",
+          "generate_strategy_risk",
+          "list_risk_v2",
+          "edit_risk_v2",
+          "process_risk",
+          "list_rule",
+          "create_rule",
+          "edit_rule",
+          "delete_rule",
+          "list_pa",
+          "create_pa",
+          "edit_pa",
+          "list_notice_group",
+          "create_notice_group",
+          "edit_notice_group_v2",
+          "delete_notice_group_v2",
+          "list_link_table",
+          "create_link_table",
+          "edit_link_table",
+          "delete_link_table",
+          "view_link_table"
+        ],
+        "description": "管理场景，包含场景下跟踪模块的所有操作权限",
+        "description_en": "Manage Scene, including all tracking module permissions"
+      }
+    },
+    {
       "operation": "upsert_action_groups",
       "data": [
+        {
+          "name": "场景管理",
+          "name_en": "Scene Management",
+          "sub_groups": [
+            {
+              "name": "场景",
+              "name_en": "Scene",
+              "actions": [
+                {
+                  "id": "view_scene"
+                },
+                {
+                  "id": "manage_scene"
+                }
+              ]
+            }
+          ]
+        },
         {
           "name": "分析",
           "name_en": "Analysis",
