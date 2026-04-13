@@ -17,8 +17,8 @@
 <template>
   <bk-select
     v-if="config.custom_type === 'select'"
-    v-model="generalValue"
-    allow-create
+    v-model="selectTypeValue"
+    :allow-empty-values="[ '0', 0]"
     class="bk-select"
     filterable
     :placeholder="t('请选择已有选项')"
@@ -187,6 +187,8 @@
   const { t } = useI18n();
   const tipText = ref('');
   const selectValue = ref();
+  // 专门用于 select 类型的下拉框值（支持数字类型如 0, 1）
+  const selectTypeValue = ref<string | number>('');
 
   const datePickerValue = computed(() => {
     if (props.config.custom_type === 'datetime' && props.config.type === 'self') {
@@ -196,20 +198,22 @@
     return undefined;
   });
 
-  const userSelectorValue = computed<string | string[] | undefined | number>(() => {
+  const userSelectorValue = computed<string | string[] | number>(() => {
     if (props.config.custom_type === 'bk_user_selector') {
       return modelValue.value.value || [];
     }
-    return undefined;
+    return [];
   });
 
-  const generalValue = computed<string>(() => {
-    const value = modelValue.value.value || modelValue.value.field;
+  const generalValue = computed<string | number>(() => {
+    // 兼容数字类型的值（如 0），不能用 || 因为 0 是 false 值
+    const val = modelValue.value.value;
+    const value = (val !== undefined && val !== null && val !== '') ? val : modelValue.value.field;
     if (Array.isArray(value)) {
       return value.join(', ');
     }
-    if (value === 0) {
-      return '0';
+    if (typeof value === 'number') {
+      return value;
     }
 
     return value ? String(value) : '';
@@ -242,10 +246,14 @@
     };
   };
   // 选择
-  const handlerSelectChange = (val: string) => {
+  const handlerSelectChange = (val: string | number) => {
+    // 兼容数字类型的值（如 0, 1），需要判断 val !== undefined && val !== null
+    // 而不是直接用 val，因为 0 是 false 值但是有效的选择
+    const isValidValue = val !== undefined && val !== null;
+    selectTypeValue.value = isValidValue ? val : '';
     modelValue.value = {
       field: '',
-      value: val,
+      value: isValidValue ? val : '',
     };
   };
 
@@ -330,6 +338,14 @@
       modelValue.value = {
         field: props.config.default_value || [],
         value: props.config.default_value || [],
+      };
+    } else if (props.config.custom_type === 'select') {
+      // 对于 select 类型，需要同步初始化 selectTypeValue
+      const defaultVal = props.config.default_value;
+      selectTypeValue.value = (defaultVal !== undefined && defaultVal !== null) ? defaultVal : '';
+      modelValue.value = {
+        field: '',
+        value: selectTypeValue.value,
       };
     } else {
       modelValue.value = {
