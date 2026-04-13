@@ -163,22 +163,14 @@
                             {{ t('编辑') }}
                           </bk-button>
                           <bk-button
-                            v-if="report.status === 'enabled'"
                             class="mr8"
                             text
                             theme="primary"
-                            @click="handleShowToggleStatusConfirm(report)">
-                            {{ t('停用') }}
+                            @click="handleShowMoveToGroup(report, group.id)">
+                            {{ t('移动到分组') }}
                           </bk-button>
-                          <bk-button
-                            v-else
-                            class="mr8"
-                            text
-                            theme="primary"
-                            @click="handleShowToggleStatusConfirm(report)">
-                            {{ t('启用') }}
-                          </bk-button>
-                          <bk-dropdown>
+                          <bk-dropdown
+                            trigger="hover">
                             <bk-button
                               text
                               theme="primary">
@@ -188,8 +180,20 @@
                               <bk-dropdown-menu>
                                 <bk-dropdown-item>
                                   <div
+                                    class="action-item"
+                                    @click="handleShowToggleStatusConfirm(report)">
+                                    {{ report.status === 'enabled' ? t('停用') : t('启用') }}
+                                  </div>
+                                </bk-dropdown-item>
+                                <bk-dropdown-item>
+                                  <div
+                                    v-bk-tooltips="{
+                                      content: t('请先停用后再删除'),
+                                      disabled: report.status !== 'enabled'
+                                    }"
                                     class="action-item danger"
-                                    @click="handleShowDeleteConfirm(report)">
+                                    :class="{ disableddel: report.status === 'enabled' }"
+                                    @click="report.status !== 'enabled' && handleShowDeleteConfirm(report)">
                                     {{ t('删除') }}
                                   </div>
                                 </bk-dropdown-item>
@@ -284,6 +288,41 @@
           {{ toggleStatusTarget?.status === 'enabled' ? t('停用') : t('启用') }}
         </bk-button>
         <bk-button @click="handleCancelToggleStatus">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </bk-dialog>
+
+    <!-- 移动到分组弹窗 -->
+    <bk-dialog
+      v-model:is-show="moveToGroupDialogVisible"
+      :title="t('移动到分组')"
+      width="480">
+      <bk-form form-type="vertical">
+        <bk-form-item
+          :label="t('目标分组')"
+          required>
+          <bk-select
+            v-model="moveToGroupTargetId"
+            :clearable="false"
+            :placeholder="t('请选择')">
+            <bk-option
+              v-for="group in localGroups.filter(g => g.id !== moveToGroupSourceId)"
+              :id="group.id"
+              :key="group.id"
+              :name="group.name" />
+          </bk-select>
+        </bk-form-item>
+      </bk-form>
+      <template #footer>
+        <bk-button
+          class="mr8"
+          :disabled="!moveToGroupTargetId"
+          theme="primary"
+          @click="handleConfirmMoveToGroup">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button @click="handleCancelMoveToGroup">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -390,6 +429,13 @@
   // 启用/停用确认相关状态
   const toggleStatusDialogVisible = ref(false);
   const toggleStatusTarget = ref<Report | null>(null);
+
+  // 移动到分组相关状态
+  const moveToGroupDialogVisible = ref(false);
+  const moveToGroupTarget = ref<Report | null>(null);
+  const moveToGroupSourceId = ref<number | null>(null);
+  const moveToGroupTargetId = ref<number | null>(null);
+
   // 用于跟踪报表原始所属分组
   const reportGroupMap = ref<Map<string, number>>(new Map());
 
@@ -543,6 +589,50 @@
   // 编辑报表
   const handleEdit = (report: Report) => {
     emit('edit', report);
+  };
+
+  // 显示移动到分组弹窗
+  const handleShowMoveToGroup = (report: Report, currentGroupId: number) => {
+    moveToGroupTarget.value = report;
+    moveToGroupSourceId.value = currentGroupId;
+    moveToGroupTargetId.value = null;
+    moveToGroupDialogVisible.value = true;
+  };
+
+  // 确认移动到分组
+  const handleConfirmMoveToGroup = () => {
+    if (moveToGroupTarget.value && moveToGroupTargetId.value && moveToGroupSourceId.value) {
+      // 从源分组移除报表
+      const sourceGroup = localGroups.value.find(g => g.id === moveToGroupSourceId.value);
+      const targetGroup = localGroups.value.find(g => g.id === moveToGroupTargetId.value);
+
+      if (sourceGroup && targetGroup) {
+        const reportIndex = sourceGroup.reports.findIndex(r => r.id === moveToGroupTarget.value!.id);
+        if (reportIndex > -1) {
+          const [report] = sourceGroup.reports.splice(reportIndex, 1);
+          targetGroup.reports.push(report);
+
+          // 调用排序接口更新目标分组
+          const params = buildOrderParams(moveToGroupTargetId.value);
+          orderPanels(params);
+
+          // 更新映射
+          reportGroupMap.value.set(report.id, moveToGroupTargetId.value);
+        }
+      }
+    }
+    moveToGroupDialogVisible.value = false;
+    moveToGroupTarget.value = null;
+    moveToGroupSourceId.value = null;
+    moveToGroupTargetId.value = null;
+  };
+
+  // 取消移动到分组
+  const handleCancelMoveToGroup = () => {
+    moveToGroupDialogVisible.value = false;
+    moveToGroupTarget.value = null;
+    moveToGroupSourceId.value = null;
+    moveToGroupTargetId.value = null;
   };
 
   // 显示启用/停用确认弹窗
@@ -881,7 +971,7 @@
 }
 
 .action-cell {
-  width: 150px;
+  width: 200px;
 }
 
 /* 空状态 */
@@ -977,10 +1067,11 @@
   font-size: 12px;
   color: #63656e;
   cursor: pointer;
+}
 
-  &.danger {
-    color: #ea3636;
-  }
+.disableddel {
+  color: #c4c6cc;
+  cursor: not-allowed;
 }
 
 /* 删除确认弹窗样式 */
