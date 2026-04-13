@@ -41,9 +41,9 @@
             {{ t('新建分组') }}
           </bk-button>
           <bk-button @click="handleToggleExpand">
-            <audit-icon
-              class="mr4"
-              :type="isAllExpanded ? 'un-full-screen' : 'fullscreen'" />
+            <img
+              class="mr4 expand-icon"
+              :src="isAllExpanded ? collapseIcon : expandIcon">
             {{ isAllExpanded ? t('全部收起') : t('全部展开') }}
           </bk-button>
         </div>
@@ -154,6 +154,9 @@
   import PanelModel from '@model/report-config/panel';
 
   import useRequest from '@hooks/use-request';
+
+  import collapseIcon from '@images/collapse.svg';
+  import expandIcon from '@images/expand.svg';
 
   import ReportCreateSideslider, {
     type ReportFormData,
@@ -566,6 +569,12 @@
 
   .mr4 {
     margin-right: 4px;
+  }
+
+  .expand-icon {
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
   }
 
   .mr8 {
