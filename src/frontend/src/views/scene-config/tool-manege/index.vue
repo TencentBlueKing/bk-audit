@@ -30,7 +30,7 @@
             <audit-icon
               class="mr4"
               type="plus-circle" />
-            {{ t('新建报表') }}
+            {{ t('新建工具') }}
           </bk-button>
         </div>
         <div class="header-right">
@@ -47,33 +47,50 @@
 
       <!-- 内容区域 -->
       <div class="report-config-content">
-        <tdesign-list
-          ref="listRef"
-          class="report-config-list"
-          :columns="tableColumns"
-          :data-source="dataSource"
-          need-empty-search-tip
-          row-key="risk_id"
+        <tool-list-table
+          ref="toolListRef"
           :search-params="searchModel"
-          secondary-sort-field="-event_time"
+          :strategy-list="strategyList"
+          :tags-enums="tagsEnums"
           @clear-search="handleClearSearch"
-          @request-success="handleRequestSuccess" />
+          @delete="handleDelete"
+          @edit="handleEdit"
+          @preview="handlePreview"
+          @request-success="handleRequestSuccess"
+          @toggle-status="handleToggleStatus" />
       </div>
     </div>
   </skeleton-loading>
+
+  <!-- 工具预览抽屉 -->
+  <tool-preview-drawer
+    ref="previewDrawerRef"
+    v-model:is-show="isPreviewShow"
+    :all-tools-data="allToolsData"
+    :tags-enums="tagsEnums" />
+
+  <!-- 删除确认弹窗 -->
+  <delete-confirm-dialog
+    v-model:is-show="deleteDialogVisible"
+    :delete-target="deleteTarget"
+    @deleted="handleDeleted" />
 </template>
 
-<script setup lang='tsx'>
+<script setup lang='ts'>
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import StrategyManageService from '@service/strategy-manage';
   import ToolManageService from '@service/tool-manage';
+
+  import ToolDetailModel from '@model/tool/tool-detail';
 
   import useRequest from '@hooks/use-request';
 
-  // 工具类型枚举
-  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
+  import DeleteConfirmDialog from './components/delete-confirm-dialog.vue';
+  import ToolListTable from './components/tool-list-table.vue';
+  import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
 
   interface TagItem {
     tag_id: string;
@@ -82,27 +99,11 @@
     icon?: string;
   }
 
-  // 工具模型接口定义
-  interface toolModel {
+  interface ToolItem {
     uid: string;
     name: string;
-    tool_type: ToolTypeKey;
-    version: number;
-    description: string;
-    favorite: boolean;
-    is_bkvision: boolean;
-    namespace: string;
-    status: 'enabled' | 'disabled'; // 启用/停用状态
-    permission: {
-      use_tool: boolean;
-      manage_tool: boolean;
-    };
+    status: 'enabled' | 'disabled';
     strategies: number[];
-    tags: string[];
-    created_at: string;
-    created_by: string;
-    updated_at: string;
-    updated_by: string;
   }
 
   const { t } = useI18n();
@@ -110,226 +111,57 @@
 
   const isLoading = ref(true);
   const searchKeyword = ref('');
-  const listRef = ref();
-  const dataSource = ToolManageService.fetchToolsList;
+  const toolListRef = ref();
+  const previewDrawerRef = ref();
   const searchModel = ref<Record<string, any>>({});
-  const toolType: Record<ToolTypeKey, string> = {
-    api: t('API接口'),
-    data_search: t('数据查询'),
-    bk_vision: t('BKVision图标'),
-  };
   const tagsEnums = ref<Array<TagItem>>([]);
-  // 标签名称
-  const returnTagsName = (tagId: string) => {
-    let tagName = '';
-    tagsEnums.value.forEach((item: TagItem) => {
-      if (item.tag_id === tagId) {
-        tagName = item.tag_name;
-      }
-    });
-    return tagName;
-  };
+  // 策略列表（用于匹配策略名称）
+  const strategyList = ref<Array<{ label: string; value: number }>>([]);
+  // 全部工具数据（用于下钻时获取工具名称）
+  const allToolsData = ref<Array<ToolDetailModel>>([]);
 
-  // 获取标签完整内容（用于 tooltip）
-  const getTagsTooltipContent = (tags: string[]) => tags
-    .slice(3)
-    .map(tagId => returnTagsName(tagId))
-    .join('、');
-  const tableColumns = ref([
-    {
-      title: t('工具名称'),
-      colKey: 'name',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: t('工具说明'),
-      colKey: 'description',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: t('工具类型'),
-      colKey: 'tool_type',
-      width: 200,
-      ellipsis: true,
-      cell: (h: any, { row }: { row: toolModel }) => <span>
-        {toolType[row.tool_type]}
-        </span>,
-    },
-    {
-      title: t('标签'),
-      colKey: 'tags',
-      width: 200,
-      ellipsis: true,
-      cell: (h: any, { row }: { row: toolModel }) => (
-        <div class="tags-cell">
-          {row.tags && row.tags.length > 0 ? (
-            <>
-              {row.tags.slice(0, 3).map((tagId: string) => (
-                <bk-tag class="desc-tag ml8">
-                  {returnTagsName(tagId)}
-                </bk-tag>
-              ))}
-              {row.tags.length > 3 && (
-                <bk-tag
-                  class="desc-tag ml8"
-                  v-bk-tooltips={{
-                    content: getTagsTooltipContent(row.tags),
-                    placement: 'top',
-                  }}>
-                  + {row.tags.length - 3}
-                </bk-tag>
-              )}
-            </>
-          ) : (
-            <span>--</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: t('引用策略'),
-      colKey: 'strategies',
-      width: 100,
-      ellipsis: true,
-      cell: (h: any, { row }: { row: toolModel }) => <span>
-        {row.strategies.length} 个
-        </span>,
-    },
-    {
-      title: t('状态'),
-      colKey: 'strategies',
-      width: 80,
-      ellipsis: true,
-      cell: () => <span>
-          <bk-tag radius="4px" theme="success" > 启用</bk-tag>
-        </span>,
-    },
-    {
-      title: t('更新人'),
-      colKey: 'updated_by',
-      width: 130,
-      ellipsis: true,
-    },
-    {
-      title: t('更新时间'),
-      colKey: 'updated_at',
-      width: 130,
-      ellipsis: true,
-    },
-    {
-      title: t('操作'),
-      colKey: 'action',
-      width: 90,
-      fixed: 'right',
-      cell: (_h: any, { row }: { row: toolModel }) => {
-        const isEnabled = row.status === 'enabled';
-        const hasStrategies = row.strategies && row.strategies.length > 0;
-        // 删除按钮禁用条件：启用状态或被策略引用
-        const isDeleteDisabled = isEnabled || hasStrategies;
-        // 删除按钮提示文字
-        const getDeleteTooltip = () => {
-          if (isEnabled) return t('请先停用后再删除');
-          if (hasStrategies) return t('该工具已被策略引用，无法删除');
-          return '';
-        };
-        const deleteTooltip = getDeleteTooltip();
+  // 删除弹窗相关
+  const deleteDialogVisible = ref(false);
+  const deleteTarget = ref<ToolItem | null>(null);
 
-        return (
-          <div class="action-cell">
-            <bk-button
-              text
-              theme="primary"
-              class="mr8"
-              onClick={() => handleEdit(row)}>
-              {t('编辑')}
-            </bk-button>
-            <bk-button
-              text
-              theme="primary"
-              class="mr8"
-              onClick={() => handlePreview(row)}>
-              {t('预览')}
-            </bk-button>
-            <bk-popover
-              placement="bottom-start"
-              theme="light"
-              trigger="click">
-              {{
-                default: () => (
-                  <bk-button
-                    text
-                    class="more-action-btn">
-                    <audit-icon type="more" />
-                  </bk-button>
-                ),
-                content: () => (
-                  <div class="more-action-menu">
-                    <bk-button
-                      text
-                      class="mr8"
-                      onClick={() => handleToggleStatus(row)}>
-                      {isEnabled ? t('停用') : t('启用')}
-                    </bk-button>
-                    {isDeleteDisabled ? (
-                      <bk-tooltips
-                        content={deleteTooltip}
-                        placement="top">
-                        <bk-button
-                          text
-                          disabled
-                          class="mr8 mr8-disabled">
-                          {t('删除')}
-                        </bk-button>
-                      </bk-tooltips>
-                    ) : (
-                      <bk-button
-                        text
-                        class="mr8"
-                        onClick={() => handleDelete(row)}>
-                        {t('删除')}
-                      </bk-button>
-                    )}
-                  </div>
-                ),
-              }}
-            </bk-popover>
-          </div>
-        );
-      },
-    },
-  ]);
+  // 预览抽屉相关
+  const isPreviewShow = ref(false);
 
-  // 新建报表
+  // 新建工具
   const handleCreateReport = () => {
-    router.push({ name: 'toolCreate' });
+    router.push({ name: 'sceneToolCreate' });
   };
 
   // 编辑工具
-  const handleEdit = (row: toolModel) => {
+  const handleEdit = (row: ToolItem) => {
     router.push({
-      name: 'toolEdit',
-      params: { uid: row.uid },
+      name: 'sceneToolEdit',
+      params: { id: row.uid },
     });
   };
 
   // 预览工具
-  const handlePreview = (row: toolModel) => {
-    router.push({
-      name: 'toolPreview',
-      params: { uid: row.uid },
+  const handlePreview = (row: ToolItem) => {
+    isPreviewShow.value = true;
+    previewDrawerRef.value?.open(row.uid);
+  };
+
+  // 显示删除确认弹窗
+  const handleDelete = (row: ToolItem) => {
+    deleteTarget.value = row;
+    deleteDialogVisible.value = true;
+  };
+
+  // 删除成功后刷新列表
+  const handleDeleted = () => {
+    deleteTarget.value = null;
+    toolListRef.value?.fetchData({
+      keyword: searchKeyword.value,
     });
   };
 
-  // 删除工具
-  const handleDelete = (row: toolModel) => {
-    console.log('delete', row);
-    // TODO: 实现删除逻辑
-  };
-
   // 启用/停用工具
-  const handleToggleStatus = (row: toolModel) => {
+  const handleToggleStatus = (row: ToolItem) => {
     const newStatus = row.status === 'enabled' ? 'disabled' : 'enabled';
     console.log('toggle status', row.uid, newStatus);
     // TODO: 实现启用/停用逻辑
@@ -337,16 +169,14 @@
 
   // 搜索
   const handleSearch = () => {
-    fetchData();
-  };
-
-  // 获取数据
-  const fetchData = () => {
+    toolListRef.value?.fetchData({
+      keyword: searchKeyword.value,
+    });
   };
 
   const handleClearSearch = () => {
     searchKeyword.value = '';
-    searchModel.value = {};
+    toolListRef.value?.fetchData({ keyword: '' });
   };
 
   const handleRequestSuccess = (data: any) => {
@@ -364,8 +194,29 @@
     },
   });
 
+  const {
+    run: fetchStrategyList,
+  } = useRequest(StrategyManageService.fetchAllStrategyList, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      strategyList.value = data;
+    },
+  });
+
+  // 获取全部工具（用于下钻时获取工具名称）
+  const {
+    run: fetchAllToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      allToolsData.value = data;
+    },
+  });
+
   onMounted(() => {
     fetchToolsTagsList();
+    fetchStrategyList();
+    fetchAllToolsData();
   });
 </script>
 
@@ -404,87 +255,11 @@
     margin-right: 8px;
   }
 
-  .mr16 {
-    margin-right: 16px;
-  }
-
-  .status-filter {
-    :deep(.bk-radio-button) {
-      .bk-radio-button-label {
-        display: flex;
-        align-items: center;
-      }
-    }
-  }
-
   .search-input {
     width: 600px;
   }
 
   .report-config-content {
     min-height: 400px;
-  }
-
-  .tags-cell {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    align-items: center;
-  }
-
-  .action-cell {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-
-    .action-btn {
-      margin-right: 8px;
-    }
-
-    .more-action-btn {
-      padding: 0 4px;
-      font-size: 16px;
-      color: #979ba5;
-      cursor: pointer;
-
-      &:hover {
-        color: #3a84ff;
-      }
-    }
-  }
-
-  .more-action-menu {
-    display: flex;
-    flex-direction: column;
-    min-width: 80px;
-
-    .mr8 {
-      display: block;
-      width: 100%;
-      padding: 8px 12px;
-      font-size: 12px;
-      color: #63656e;
-      text-align: left;
-
-      &:hover {
-        color: #3a84ff;
-        background-color: #f5f7fa;
-      }
-    }
-
-    .mr8-disabled {
-      color: #c4c6cc;
-
-      &:hover {
-        color: #c4c6cc;
-        background-color: transparent;
-      }
-    }
-  }
-
-  .report-config-list {
-    :deep(.t-table__row--hover) {
-      background-color: #fff !important;
-    }
   }
 </style>
