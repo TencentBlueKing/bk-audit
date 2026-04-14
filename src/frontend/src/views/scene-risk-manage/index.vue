@@ -69,13 +69,12 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
-  import EditTag from '@components/edit-box/tag.vue';
   import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
+  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
   import FieldConfig from './components/config';
 
@@ -91,229 +90,12 @@
   const router = useRouter();
   const route = useRoute();
   const { getSearchParamsPost } = useUrlSearch();
-  const statusToMap: Record<string, {
-    tag: string,
-    icon: string,
-    color: string,
-  }> = {
-    new: {
-      tag: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    closed: {
-      tag: '',
-      icon: 'corret-fill',
-      color: '#979BA5',
-    },
-    await_deal: {
-      tag: 'warning',
-      icon: 'daichuli',
-      color: '#FF9E00',
-    },
-    for_approve: {
-      tag: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    auto_process: {
-      tag: 'success',
-      icon: 'taocanchulizhong',
-      color: '#0CA668',
-    },
-    processing: {
-      tag: 'info',
-      icon: 'loading',
-      color: '#3A84FF',
-    },
-  };
-
-  // 直接按 TDesign PrimaryTable 格式定义列配置
-  const initTableColumns = [
-    {
-      // 选择列
-      type: 'multiple',
-      colKey: 'row-select',
-      width: 80,
-      fixed: 'left',
-    },
-    {
-      title: t('风险ID'),
-      colKey: 'risk_id',
-      width: 200,
-      minWidth: 180,
-      fixed: 'left',
-      ellipsis: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const to = {
-          name: 'processedManageDetail',
-          params: {
-            riskId: row.risk_id,
-          },
-        };
-        return <router-link to={to}>
-        <Tooltips data={row.risk_id} />
-      </router-link>;
-      },
-    },
-    {
-      title: t('风险标题'),
-      colKey: 'title',
-      minWidth: 320,
-      ellipsis: true,
-    },
-    {
-      title: t('风险描述'),
-      colKey: 'event_content',
-      minWidth: 320,
-      ellipsis: true,
-    },
-    {
-      title: t('风险等级'),
-      colKey: 'risk_level',
-      width: 120,
-      sortType: 'all',
-      sorter: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <>
-      <RiskLevel levelData={levelData.value} data={row}></RiskLevel>
-    </>,
-    },
-    {
-      title: t('风险标签'),
-      colKey: 'tags',
-      width: 120,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const tags = row.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={row.strategy_id} />;
-      },
-    },
-    {
-      title: t('责任人'),
-      colKey: 'operator',
-      width: 160,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator} />,
-    },
-    {
-      title: t('处理状态'),
-      colKey: 'status',
-      width: 110,
-      cell: (h: any, { row }: { row: RiskManageModel }) => (
-        row.status === 'closed' && row.experiences > 0
-          ? (
-          <div style='display: flex;align-items: center;height: 100%;'>
-            <bk-tag
-              theme={statusToMap[row.status].tag}>
-              <p style='display: flex;align-items: center;'>
-                <audit-icon type={statusToMap[row.status].icon} style={`margin-right: 6px;color: ${statusToMap[row.status].color || ''}`} />
-                <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-              </p>
-            </bk-tag>
-            <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
-              <audit-icon v-bk-tooltips={t('已填写“风险总结”')} type="report" style='font-size: 14px;' />
-            </bk-button>
-          </div>
-        )
-          : (
-          <bk-tag
-            theme={statusToMap[row.status].tag}>
-            <p style='display: flex;align-items: center;'>
-              <audit-icon type={statusToMap[row.status].icon} style={`margin-right: 6px;color: ${statusToMap[row.status].color || ''}`} />
-              <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-            </p>
-          </bk-tag>)
-      ),
-    },
-    {
-      title: t('当前处理人'),
-      colKey: 'current_operator',
-      width: 200,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.current_operator} />,
-    },
-    {
-      title: t('关注人'),
-      colKey: 'notice_users',
-      width: 200,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.notice_users} />,
-    },
-    {
-      title: t('风险命中策略(ID)'),
-      colKey: 'strategy_id',
-      width: 200,
-      ellipsis: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const to = {
-          name: 'strategyList',
-          query: {
-            strategy_id: row.strategy_id,
-          },
-        };
-        const strategyName = strategyList.value
-          .find(item => item.value === row.strategy_id)?.label;
-        return strategyName
-          ? (
-          <router-link to={to} target='_blank'>
-            <span>{`${strategyName}(${row.strategy_id})`}</span>
-          </router-link>
-          ) : (
-          <span>--</span>
-        );
-      },
-    },
-    {
-      title: t('首次发现时间'),
-      colKey: 'event_time',
-      width: 168,
-      minWidth: 168,
-      sortType: 'all',
-      sorter: true,
-    },
-    {
-      title: t('最后一次处理时间'),
-      colKey: 'last_operate_time',
-      width: 160,
-      sorter: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => row.last_operate_time || '--',
-    },
-    {
-      title: t('事件调查报告'),
-      colKey: 'has_report',
-      width: 160,
-      filter: {
-        type: 'single',
-        showConfirmAndReset: true,
-        resetValue: undefined,
-        list: [
-          {
-            label: t('已生成'),
-            value: true,
-          },
-          {
-            label: t('未生成'),
-            value: false,
-          },
-        ],
-      },
-      cell: (h: any, { row }: { row: RiskManageModel }) => <bk-tag
-    >{row.has_report ? t('已生成') : t('未生成')}</bk-tag>,
-    },
-    {
-      title: t('风险标记'),
-      colKey: 'risk_label',
-      width: 110,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <span
-      class={{
-        misreport: row.risk_label === 'misreport',
-        'risk-label-status': true,
-      }}>
-      {row.risk_label === 'normal' ? t('正常') : t('误报')}
-    </span>,
-    },
-    {
-      title: t('操作'),
-      colKey: 'action',
-      width: 180,
-      fixed: 'right',
-      cell: (h: any, { row }: { row: RiskManageModel }) => <p>
+  const actionColumn = {
+    title: t('操作'),
+    colKey: 'action',
+    width: 180,
+    fixed: 'right',
+    cell: (h: any, { row }: { row: RiskManageModel }) => <p>
       <auth-button
         text
         theme='primary'
@@ -330,8 +112,8 @@
             class="is-disabled"
             v-bk-tooltips={{
               content: row.risk_label === 'normal'
-                ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
             }}>
             {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
           </bk-button>
@@ -364,11 +146,18 @@
         }}
       </bk-dropdown>
     </p>,
-    },
-  ];
+  };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
+  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
+    if (!initTableColumns.length) {
+      initTableColumns = useRiskColumns({
+        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, handleToDetail },
+        detailRouteName: 'processedManageDetail',
+        appendColumns: [actionColumn],
+      });
+    }
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
