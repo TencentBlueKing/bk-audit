@@ -16,74 +16,80 @@
 -->
 <template>
   <bk-sideslider
-    v-model:isShow="isShow"
-    quick-close
+    v-for="(drawer, index) in drawerStack"
+    :key="drawer.id"
+    v-model:isShow="drawer.isShow"
+    :before-close="() => handleDrawerClose(index)"
+    ext-cls="tool-preview-sideslider"
+    :quick-close="index === drawerStack.length - 1"
+    :show-mask="index === drawerStack.length - 1"
     :title="t('工具详情')"
     transfer
-    width="calc(100vw - 300px)">
+    :width="getDrawerWidth(index)"
+    :z-index="2000 + index">
     <template #default>
       <div
-        v-if="toolDetails"
+        v-if="drawer.toolDetails"
         class="preview-drawer-content">
         <!-- 头部工具信息 -->
         <div class="preview-header-info">
           <audit-icon
             class="preview-tool-icon"
             svg
-            :type="toolIconMap[toolDetails.tool_type] || ''" />
+            :type="toolIconMap[drawer.toolDetails.tool_type] || ''" />
           <div class="preview-tool-info">
             <div class="preview-tool-title">
-              <span class="preview-tool-name">{{ toolDetails.name }}</span>
+              <span class="preview-tool-name">{{ drawer.toolDetails.name }}</span>
               <bk-tag
-                v-for="(tag, tagIndex) in toolDetails.tags?.slice(0, 3)"
+                v-for="(tag, tagIndex) in drawer.toolDetails.tags?.slice(0, 3)"
                 :key="tagIndex"
                 class="desc-tag">
                 {{ returnTagsName(tag) }}
               </bk-tag>
               <bk-tag
-                v-if="toolDetails.tags && toolDetails.tags.length > 3"
+                v-if="drawer.toolDetails.tags && drawer.toolDetails.tags.length > 3"
                 v-bk-tooltips="{
-                  content: getTagsTooltipContent(toolDetails.tags),
+                  content: getTagsTooltipContent(drawer.toolDetails.tags),
                   placement: 'top',
                 }"
                 class="desc-tag">
-                + {{ toolDetails.tags.length - 3 }}
+                + {{ drawer.toolDetails.tags.length - 3 }}
               </bk-tag>
               <bk-tag
                 class="desc-tag desc-tag-info"
                 theme="info"
-                @click="handleStrategiesClick(toolDetails)">
-                {{ t('运用在') }} {{ toolDetails.strategies?.length || 0 }} {{ t('个策略中') }}
+                @click="handleStrategiesClick(drawer.toolDetails)">
+                {{ t('运用在') }} {{ drawer.toolDetails.strategies?.length || 0 }} {{ t('个策略中') }}
               </bk-tag>
             </div>
             <div class="preview-tool-desc">
-              {{ toolDetails.description }}
+              {{ drawer.toolDetails.description }}
             </div>
           </div>
         </div>
-        <!-- 工具内容区域（复用工具广场组件） -->
         <tool-content
-          ref="toolContentRef"
+          :ref="(el: any) => setToolContentRef(el, index)"
           :content-style="{ padding: '0 16px 16px' }"
           :get-tool-name-and-type="getToolNameAndType"
           max-height="calc(100vh - 300px)"
-          :search-list="searchList"
-          :tool-details="toolDetails"
-          :uid="currentUid"
-          @open-field-down="handleFieldDown"
-          @update:search-list="(val: any) => searchList = val" />
+          :search-list="drawer.searchList"
+          :tool-details="drawer.toolDetails"
+          :uid="drawer.uid"
+          @open-field-down="(drillDownItem: any, rowData: Record<string, any>, activeUid?: string) =>
+            handleFieldDown(drillDownItem, rowData, activeUid)"
+          @update:search-list="(val: any) => drawer.searchList = val" />
       </div>
       <div
         v-else
         class="preview-loading">
-        <bk-loading :loading="isLoading" />
+        <bk-loading :loading="drawer.isLoading" />
       </div>
     </template>
   </bk-sideslider>
 </template>
 
 <script setup lang="ts">
-  import { nextTick, ref, watch } from 'vue';
+  import { nextTick, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -106,6 +112,14 @@
     tagsEnums: TagItem[];
     allToolsData: ToolDetailModel[];
   }
+  interface DrawerItem {
+    id: number;
+    isShow: boolean;
+    isLoading: boolean;
+    uid: string;
+    toolDetails: ToolDetailModel | null;
+    searchList: any[];
+  }
 
   const props = defineProps<Props>();
 
@@ -113,17 +127,29 @@
   const router = useRouter();
 
   const isShow = defineModel<boolean>('isShow', { default: false });
-  const isLoading = ref(false);
-  const currentUid = ref('');
-  const toolDetails = ref<ToolDetailModel | null>(null);
-  const searchList = ref<any[]>([]);
-  const toolContentRef = ref();
+  // 抽屉栈：支持多层叠加
+  const drawerStack = ref<DrawerItem[]>([]);
+  const toolContentRefs = ref<Record<number, any>>({});
+  let drawerIdCounter = 0;
+  const DRILL_DOWN_OFFSET = 200;
 
   // 工具图标映射
   const toolIconMap: Record<string, string> = {
     data_search: 'sqlxiao',
     bk_vision: 'bkvisonxiao',
     api: 'apixiao',
+  };
+
+  const setToolContentRef = (el: any, index: number) => {
+    if (el) {
+      toolContentRefs.value[index] = el;
+    }
+  };
+
+  const getDrawerWidth = (index: number) => {
+    const depth = drawerStack.value.length - 1 - index;
+    // depth=0 表示最顶层，使用基础宽度；depth>0 表示被覆盖的层，宽度增加以露出左边缘
+    return `calc(100vw - ${1000 - depth * DRILL_DOWN_OFFSET}px)`;
   };
 
   // 标签名称
@@ -195,25 +221,28 @@
     return field.value !== null && field.value !== '';
   };
 
-  // 创建抽屉内容（构造表单）
-  const createDialogContent = (currentToolDetail: ToolDetailModel) => {
+  const createDialogContent = (currentToolDetail: ToolDetailModel, drawerIndex: number) => {
     const createSearchItem = (item: any) => ({
       ...item,
       value: getSearchItemDefaultValue(item),
       required: item.required,
       disabled: false,
     });
-    searchList.value = currentToolDetail.config.input_variable.map(createSearchItem);
+
+    const drawer = drawerStack.value[drawerIndex];
+    if (!drawer) return;
+
+    drawer.searchList = currentToolDetail.config.input_variable.map(createSearchItem);
 
     nextTick(() => {
-      if (toolContentRef.value) {
-        toolContentRef.value.setFormItemData(searchList.value);
-
+      const toolContentRef = toolContentRefs.value[drawerIndex];
+      if (toolContentRef) {
+        toolContentRef.setFormItemData(drawer.searchList);
         // 如果所有必填字段都有值，则自动查询
         nextTick(() => {
-          const isValid = searchList.value.every(validateField);
+          const isValid = drawer.searchList.every(validateField);
           if (isValid) {
-            toolContentRef.value.submit();
+            toolContentRef.submit();
           }
         });
       }
@@ -226,23 +255,27 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      toolDetails.value = data;
-      currentUid.value = data.uid;
-      isLoading.value = false;
+      // 找到对应的抽屉层并更新数据
+      const drawerIndex = drawerStack.value.findIndex(d => d.uid === data.uid && d.isLoading);
+      if (drawerIndex === -1) return;
+
+      const drawer = drawerStack.value[drawerIndex];
+      drawer.toolDetails = data;
+      drawer.isLoading = false;
 
       if (data.tool_type !== 'bk_vision') {
-        createDialogContent(data);
+        createDialogContent(data, drawerIndex);
       } else {
         nextTick(() => {
-          if (toolContentRef.value) {
-            toolContentRef.value.executeBkVision();
+          const toolContentRef = toolContentRefs.value[drawerIndex];
+          if (toolContentRef) {
+            toolContentRef.executeBkVision();
           }
         });
       }
     },
   });
 
-  // 下钻字段点击处理
   const handleFieldDown = (
     drillDownItem: any,
     _drillDownItemRowData: Record<string, any>,
@@ -252,29 +285,65 @@
       || drillDownItem?.drill_config?.[0]?.tool?.uid;
     if (!targetUid) return;
 
-    isLoading.value = true;
-    toolDetails.value = null;
-    searchList.value = [];
-    currentUid.value = targetUid;
+    // 创建新的抽屉层
+    drawerIdCounter += 1;
+    const newDrawer: DrawerItem = reactive({
+      id: drawerIdCounter,
+      isShow: true,
+      isLoading: true,
+      uid: targetUid,
+      toolDetails: null,
+      searchList: [],
+    });
+
+    drawerStack.value.push(newDrawer);
     fetchToolDetail({ uid: targetUid });
   };
 
-  // 关闭时重置状态
+  // 关闭指定层的抽屉
+  const handleDrawerClose = (index: number) => {
+    // 关闭该层及其上方所有抽屉
+    drawerStack.value.splice(index);
+    // 清理对应的组件引用
+    Object.keys(toolContentRefs.value).forEach((key) => {
+      if (Number(key) >= index) {
+        delete toolContentRefs.value[Number(key)];
+      }
+    });
+
+    if (drawerStack.value.length === 0) {
+      isShow.value = false;
+    }
+    return true;
+  };
+
+  // 监听外部 isShow 变化（关闭时清空所有抽屉）
   watch(isShow, (val) => {
     if (!val) {
-      toolDetails.value = null;
-      searchList.value = [];
-      currentUid.value = '';
+      drawerStack.value = [];
+      toolContentRefs.value = {};
     }
   });
 
   // 暴露打开预览的方法
   const open = (uid: string) => {
+    // 清空之前的抽屉栈
+    drawerStack.value = [];
+    toolContentRefs.value = {};
     isShow.value = true;
-    isLoading.value = true;
-    toolDetails.value = null;
-    searchList.value = [];
-    currentUid.value = uid;
+
+    // 创建第一层抽屉
+    drawerIdCounter += 1;
+    const firstDrawer: DrawerItem = reactive({
+      id: drawerIdCounter,
+      isShow: true,
+      isLoading: true,
+      uid,
+      toolDetails: null,
+      searchList: [],
+    });
+
+    drawerStack.value.push(firstDrawer);
     fetchToolDetail({ uid });
   };
 
@@ -366,4 +435,10 @@
   .bk-sideslider .bk-sideslider-content {
     height: 100%;
   }
+
+  .tool-preview-sideslider .bk-modal-wrapper {
+    transition: width .3s ease-in-out;
+  }
+
+
 </style>
