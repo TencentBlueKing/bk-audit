@@ -179,6 +179,7 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
+  import { RISK_STATUS_THEME_MAP } from '@views/risk-manage/constants';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import RenderInfoItem from './render-info-item.vue';
@@ -238,42 +239,7 @@
     },
   };
 
-  const statusToMap: Record<string, {
-    theme: 'info' | 'warning' | 'success' | 'danger' | undefined,
-    icon: string,
-    color: string,
-  }> = {
-    new: {
-      theme: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    closed: {
-      theme: undefined,
-      icon: 'corret-fill',
-      color: '#979BA5',
-    },
-    await_deal: {
-      theme: 'warning',
-      icon: 'daichuli',
-      color: '#FF9E00',
-    },
-    for_approve: {
-      theme: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    auto_process: {
-      theme: 'success',
-      icon: 'taocanchulizhong',
-      color: '#0CA668',
-    },
-    processing: {
-      theme: 'info',
-      icon: 'loading',
-      color: '#3A84FF',
-    },
-  };
+  const statusToMap = RISK_STATUS_THEME_MAP;
   // 判断值是否为数组（包括字符串形式的数组）
   const handleShowText = (value: any) => {
     // 1. 如果是真正的数组，直接连接
