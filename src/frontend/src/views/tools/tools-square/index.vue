@@ -49,6 +49,8 @@
           :final="3"
           :labels="strategyLabelList"
           :render-style="renderStyle"
+          :total="0"
+          :upgrade-total="0"
           @checked="handleChecked" />
         <!-- 内侧折叠图标，垂直居中靠右 -->
         <div
