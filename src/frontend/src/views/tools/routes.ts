@@ -54,6 +54,15 @@ export default {
         hideSidebar: true,
       },
     },
+    {
+      path: 'tool-detail/:uid',
+      component: () => import('@views/tools/tools-square/index.vue'),
+      name: 'toolDetail',
+      meta: {
+        title: '工具详情',
+        nodeSideContent: true,
+      },
+    },
   ],
 };
 
