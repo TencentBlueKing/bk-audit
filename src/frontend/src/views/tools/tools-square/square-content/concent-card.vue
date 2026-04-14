@@ -17,15 +17,6 @@
 <template>
   <div class="card">
     <div class="card-search">
-      <bk-button
-        class="search-button"
-        theme="primary"
-        @click="handleCreate">
-        <audit-icon
-          style="margin-right: 6px;"
-          type="add" />
-        {{ t('创建工具') }}
-      </bk-button>
       <bk-input
         v-model="searchValue"
         class="search-input"
@@ -66,59 +57,7 @@
                   :src="item.favorite ? pentagramFillIcon : pentagramIcon"
                   @click.stop="handleToggleFavorite(item)">
               </div>
-              <div
-                v-show="itemMouseenter === item.uid"
-                class="item-top-right-icon">
-                <auth-button
-                  v-if="!item.permission.manage_tool"
-                  v-bk-tooltips="t('暂无编辑权限')"
-                  action-id="manage_tool"
-                  :permission="false"
-                  :resource="item.uid"
-                  text
-                  theme="primary">
-                  <audit-icon
-                    class="edit-fill"
-                    type="edit-fill" />
-                </auth-button>
-                <audit-icon
-                  v-else
-                  class="edit-fill"
-                  type="edit-fill"
-                  @click.stop="handleEdit(item)" />
 
-                <bk-popover
-                  :ref="(el: any) => popoverRefs.set(item.uid, el)"
-                  placement="bottom"
-                  theme="light"
-                  trigger="click">
-                  <template #content>
-                    <div
-                      class="delete-title"
-                      @click="handleOpenDel(item)">
-                      {{ t('删除') }}
-                    </div>
-                  </template>
-
-                  <auth-button
-                    v-if="!item.permission.manage_tool"
-                    v-bk-tooltips="t('暂无权限')"
-                    action-id="manage_tool"
-                    :permission="false"
-                    :resource="item.uid"
-                    text
-                    theme="primary">
-                    <audit-icon
-                      class="delete"
-                      type="more" />
-                  </auth-button>
-                  <audit-icon
-                    v-else
-                    class="delete"
-                    type="more"
-                    @click.stop="handleDelete(item)" />
-                </bk-popover>
-              </div>
 
               <div class="item-top">
                 <div class="item-top-left">
@@ -262,11 +201,6 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
-  <del-dialog
-    v-model:visible="delDialogVisible"
-    :service-name="delDialogServiceName"
-    @cancel="handleCancelDel"
-    @confirm="handleConfirmDel" />
 </template>
 
 <script setup lang='tsx'>
@@ -286,8 +220,6 @@
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
   import DialogVue from '../components/dialog.vue';
-
-  import delDialog from './delete-confirm-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -337,10 +269,9 @@
   } = useToolDialog();
 
   const searchValue = ref<string>('');
-  const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
   const dataList = ref<ToolInfo[]>([]);
-  const popoverRefs = ref<Map<string, any>>(new Map());
+
   const currentPage = ref(1);
   const currentPagSize = ref(50);
   const hasMore = ref(false);
@@ -425,21 +356,6 @@
     },
   });
 
-  // 删除
-  const {
-    run: fetchDeleteTool,
-  } = useRequest(ToolManageService.fetchDeleteTool, {
-    defaultValue: {},
-    onSuccess: () => {
-      messageSuccess(t('删除成功'));
-      // 刷新右侧标签数据
-      emits('change');
-    },
-  });
-
-  const delDialogVisible = ref(false);
-  const delDialogServiceName = ref('');
-  const delDialogItem = ref<Record<string, any> | null>(null);
 
   // 标签名称
   const returnTagsName = (tags: string) => {
@@ -463,100 +379,13 @@
     return tagNameList.join(',');
   };
 
-  const handleDeleteItem = (item: Record<string, any>) => {
-    fetchDeleteTool({
-      uid: item.uid,
-    }).then(() => {
-      handleCancel(item.uid);
-      loading.value = true;
-      currentPage.value = 1;
-      fetchToolsList({
-        page: currentPage.value,
-        page_size: currentPagSize.value,
-        my_created: props.myCreated,
-        recent_used: props.recentUsed,
-        keyword: searchValue.value,
-        tags: [props.tagId],
-      }).then((data) => {
-        // 非拼接模式，重新赋值
-        dataList.value = data.results;
-        total.value = data.total;
-      })
-        .finally(() => {
-          loading.value = false;
-        });
-    });
-  };
-
-  const handleCancel = (itemUid: string) => {
-    const popover = popoverRefs.value.get(itemUid);
-    popover?.hide();
-    isFixedDelete.value = false;
-    itemMouseenter.value = null;
-  };
-
-  const handleEdit = (item: Record<string, any>) => {
-    if (!item.permission.manage_tool) {
-      return;
-    }
-    if (item.permission.use_tool) {
-      router.push({
-        name: 'toolsEdit',
-        params: {
-          id: item.uid,
-        },
-      });
-    }
-  };
-  // 删除 handleOpenDel
-  const handleOpenDel = (item: Record<string, any>) => {
-    // 先收起 popover，避免“菜单固定”状态残留
-    handleCancel(item.uid);
-    delDialogItem.value = item;
-    delDialogServiceName.value = item?.name || '';
-    delDialogVisible.value = true;
-  };
-  const handleCancelDel = () => {
-    delDialogVisible.value = false;
-    delDialogItem.value = null;
-    delDialogServiceName.value = '';
-  };
-  const handleConfirmDel = () => {
-    if (!delDialogItem.value) {
-      handleCancelDel();
-      return;
-    }
-    handleDeleteItem(delDialogItem.value);
-    handleCancelDel();
-  };
   const handleMouseenter = (item: Record<string, any>) => {
-    if (isFixedDelete.value) {
-      return;
-    }
     itemMouseenter.value = item.uid;
   };
 
   const handleMouseleave = () => {
-    if (isFixedDelete.value) {
-      return;
-    }
     itemMouseenter.value = null;
   };
-
-  const handleCreate = () => {
-    router.push({
-      name: 'toolsAdd',
-    });
-  };
-
-  // 删除
-  const handleDelete = (item: Record<string, any>) => {
-    if (item.permission.manage_tool) {
-      isFixedDelete.value = !isFixedDelete.value;
-      itemMouseenter.value = item.uid;
-    }
-  };
-
   // 收藏/取消收藏
   const handleToggleFavorite = (item: ToolInfo) => {
     const newFavoriteStatus = !item.favorite;
@@ -673,8 +502,6 @@
       tool_id: Array.from(urlToolsIds.value).join(','),
     });
 
-    handleCancel(toolInfo.uid);
-
     // 使用hooks中的handleOpenTool
     // handleOpenTool(toolInfo.uid);
     emits('openTool', toolInfo);
@@ -786,10 +613,9 @@
     position: relative;
     display: flex;
     width: 98%;
+    justify-content: flex-end;
 
     .search-input {
-      position: absolute;
-      right: 0;
       width: 600px;
     }
   }
@@ -969,29 +795,6 @@
           }
         }
 
-        .item-top-right-icon {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          font-size: 16px;
-          line-height: 22px;
-          letter-spacing: 0;
-          color: #979ba5;
-
-          .edit-fill {
-            margin-right: 5px;
-
-            &:hover {
-              color: #3a84ff;
-            }
-          }
-
-          .delete {
-            &:hover {
-              color: #3a84ff;
-            }
-          }
-        }
 
       }
 
@@ -1035,7 +838,5 @@
   }
 }
 
-.delete-title {
-  cursor: pointer;
-}
+
 </style>
