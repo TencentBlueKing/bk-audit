@@ -14,6 +14,7 @@
 - 菜单 & 权限引导
 """
 import json
+from unittest import mock
 
 import pytest
 from bk_resource import resource
@@ -624,6 +625,51 @@ class TestSceneResource(TestCase):
 
         with self.assertRaises(SceneNotExist):
             self.resource.scene.retrieve_scene({"scene_id": 999999})
+
+    def test_scene_retrieve_with_iam_members(self):
+        """测试场景详情 - IAM 成员覆盖"""
+        self.scene.iam_manager_group_id = 1001
+        self.scene.iam_viewer_group_id = 1002
+        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+
+        mock_manager_members = [
+            {"type": "user", "id": "iam_admin"},
+            {"type": "user", "id": "iam_manager1"},
+        ]
+        mock_viewer_members = [
+            {"type": "user", "id": "iam_user1"},
+        ]
+
+        with mock.patch(
+            "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
+            side_effect=[mock_manager_members, mock_viewer_members],
+        ):
+            result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
+            # 验证返回的是 IAM 实时成员（字符串列表），而非 DB 中的原始值
+            self.assertEqual(result["managers"], ["iam_admin", "iam_manager1"])
+            self.assertEqual(result["users"], ["iam_user1"])
+
+    def test_scene_info_get_with_iam_members(self):
+        """测试获取场景信息 - IAM 成员覆盖"""
+        self.scene.iam_manager_group_id = 2001
+        self.scene.iam_viewer_group_id = 2002
+        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+
+        mock_manager_members = [
+            {"type": "user", "id": "scene_admin"},
+        ]
+        mock_viewer_members = [
+            {"type": "user", "id": "scene_user1"},
+            {"type": "user", "id": "scene_user2"},
+        ]
+
+        with mock.patch(
+            "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
+            side_effect=[mock_manager_members, mock_viewer_members],
+        ):
+            result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
+            self.assertEqual(result["managers"], ["scene_admin"])
+            self.assertEqual(result["users"], ["scene_user1", "scene_user2"])
 
     def test_scene_disable(self):
         """测试停用场景"""

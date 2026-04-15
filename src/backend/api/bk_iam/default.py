@@ -60,3 +60,81 @@ class GetSystemInfo(IAMBaseResource):
             clients = result_json["base_info"].get("clients") or ""
             result_json["base_info"]["clients"] = [client for client in clients.split(",") if client]
         return result_json
+
+
+class CreateGradeManagerGroups(IAMBaseResource):
+    """分级管理员批量创建用户组"""
+
+    name = gettext_lazy("分级管理员批量创建用户组")
+    action = "/api/v2/open/management/systems/{system_id}/grade_managers/{id}/groups/"
+    method = "POST"
+    url_keys = ["system_id", "id"]
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        """构建请求数据，将 groups 作为请求体"""
+        data = {"groups": validated_request_data.pop("groups", [])}
+        if "sync_subject_template" in validated_request_data:
+            data["sync_subject_template"] = validated_request_data.pop("sync_subject_template")
+        return data
+
+
+class GrantGroupPolicies(IAMBaseResource):
+    """用户组授权
+
+    通过管理类API为用户组添加权限，创建用户组后调用此接口为用户组授予对应的操作权限
+    """
+
+    name = gettext_lazy("用户组授权")
+    action = "/api/v2/open/management/systems/{system_id}/groups/{id}/policies/"
+    method = "POST"
+    url_keys = ["system_id", "id"]
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        """构建请求数据，提取 actions 和 resources"""
+        return {
+            "actions": validated_request_data.pop("actions", []),
+            "resources": validated_request_data.pop("resources", []),
+        }
+
+
+class GetGroupMembers(IAMBaseResource):
+    name = gettext_lazy("用户组成员列表")
+    action = "/api/v2/open/management/systems/{system_id}/groups/{id}/members/"
+    method = "GET"
+    url_keys = ["system_id", "id"]
+
+
+class AddGroupMembers(IAMBaseResource):
+    """
+    添加用户组成员
+    """
+
+    name = gettext_lazy("添加用户组成员")
+    action = "/api/v2/open/management/systems/{system_id}/groups/{id}/members/"
+    method = "POST"
+    url_keys = ["system_id", "id"]
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        """构建请求数据，提取 members 和 expired_at"""
+        return {
+            "members": validated_request_data.pop("members", []),
+            "expired_at": validated_request_data.pop("expired_at", 0),
+        }
+
+
+class DeleteGroupMembers(IAMBaseResource):
+    """
+    删除用户组成员
+    """
+
+    name = gettext_lazy("删除用户组成员")
+    action = "/api/v2/open/management/systems/{system_id}/groups/{id}/members/"
+    method = "DELETE"
+    url_keys = ["system_id", "id"]
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        """构建请求数据，提取 type 和 ids 作为请求体"""
+        return {
+            "type": validated_request_data.pop("type", ""),
+            "ids": validated_request_data.pop("ids", []),
+        }
