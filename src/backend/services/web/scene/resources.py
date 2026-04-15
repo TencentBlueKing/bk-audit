@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
 from services.web.scene.exceptions import SceneHasRelatedResources, SceneNotExist
 from services.web.scene.models import Scene, SceneDataTable, SceneSystem
@@ -110,6 +111,7 @@ class CreateScene(SceneResource):
             binding_type=BindingType.SCENE_BINDING,
         )
         ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
+        assert_binding_relation_integrity(binding)
 
 
 class RetrieveScene(SceneResource):

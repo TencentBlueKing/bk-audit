@@ -17,6 +17,7 @@ import json
 
 import pytest
 from bk_resource import resource
+from bk_resource.exceptions import ValidateException
 from django.db.models import Q
 from django.test import RequestFactory
 
@@ -841,6 +842,30 @@ class TestPanelResources(TestCase):
         )
         self.assertEqual(result["name"], "更新后的报表")
 
+    def test_create_platform_panel_specific_scenes_without_scene_ids_raise(self):
+        """测试平台级报表 specific_scenes 未传 scene_ids 时校验失败"""
+        with self.assertRaises(ValidateException):
+            self.resource.vision.create_platform_panel(
+                {
+                    "name": "非法报表",
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    },
+                }
+            )
+
+    def test_update_platform_panel_specific_systems_without_system_ids_raise(self):
+        """测试平台级报表 specific_systems 未传 system_ids 时校验失败"""
+        with self.assertRaises(ValidateException):
+            self.resource.vision.update_platform_panel(
+                {
+                    "panel_id": self.platform_panel.pk,
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SYSTEMS,
+                    },
+                }
+            )
+
     def test_delete_platform_panel(self):
         """测试删除平台级报表"""
         pk = self.platform_panel.pk
@@ -1148,6 +1173,40 @@ class TestToolResources(TestCase):
         )
         updated_tool = Tool.last_version_tool(self.platform_tool.uid)
         self.assertEqual(updated_tool.name, "更新后的工具")
+
+    def test_create_platform_tool_specific_scenes_without_scene_ids_raise(self):
+        """测试平台级工具 specific_scenes 未传 scene_ids 时校验失败"""
+        with self.assertRaises(ValidateException):
+            self.resource.tool.create_platform_scene_tool(
+                {
+                    "name": "非法工具",
+                    "tool_type": "data_search",
+                    "tags": ["测试"],
+                    "data_search_config_type": "sql",
+                    "config": {
+                        "sql": "SELECT * FROM test_table",
+                        "referenced_tables": [{"table_name": "test_table"}],
+                        "input_variable": [],
+                        "output_fields": [],
+                    },
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    },
+                }
+            )
+
+    def test_update_platform_tool_specific_systems_without_system_ids_raise(self):
+        """测试平台级工具 specific_systems 未传 system_ids 时校验失败"""
+        with self.assertRaises(ValidateException):
+            self.resource.tool.update_platform_scene_tool(
+                {
+                    "uid": self.platform_tool.uid,
+                    "tags": ["测试"],
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SYSTEMS,
+                    },
+                }
+            )
 
     def test_delete_platform_tool(self):
         """测试删除平台级工具"""

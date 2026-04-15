@@ -15,7 +15,7 @@ class Scene(OperateRecordModel):
     """审计场景"""
 
     scene_id = models.BigAutoField(gettext_lazy("场景ID"), primary_key=True)
-    name = models.CharField(gettext_lazy("场景名称"), max_length=128, db_index=True)
+    name = models.CharField(gettext_lazy("场景名称"), max_length=128, db_index=True, unique=True)
     description = models.TextField(gettext_lazy("场景描述"), blank=True, default="")
     status = models.CharField(
         gettext_lazy("状态"),
@@ -95,7 +95,7 @@ class ResourceBinding(OperateRecordModel):
         gettext_lazy("可见范围类型"),
         max_length=32,
         choices=VisibilityScope.choices,
-        default=VisibilityScope.ALL_VISIBLE,
+        default=VisibilityScope.SPECIFIC_SCENES,
         blank=True,
         help_text="仅 platform_binding 时有效",
     )
