@@ -68,7 +68,7 @@ class ListPanels(BKVision):
         queryset = VisionPanel.objects.filter(scenario=validated_request_data['scenario'])
 
         # 按绑定类型和场景/系统过滤
-        binding_type = validated_request_data.get("binding_type", "")
+        binding_type = validated_request_data.get("binding_type")
         scene_id = validated_request_data.get("scene_id")
         system_id = validated_request_data.get("system_id")
 

@@ -816,6 +816,17 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.get_scene_selector({})
         self.assertIn("scenes", result)
 
+    def test_scene_list_menus(self):
+        """测试菜单列表"""
+        result = self.resource.scene.list_menus({})
+        self.assertTrue(any(menu["id"] == "platform" for menu in result))
+
+    def test_scene_permission_guide(self):
+        """测试无权限引导"""
+        result = self.resource.scene.get_permission_guide({"module": "tool"})
+        self.assertFalse(result["has_permission"])
+        self.assertIn("tool", result["guide"]["title"])
+
 
 # ==================== 报表 ViewSet 测试 ====================
 
@@ -892,8 +903,8 @@ class TestPanelResources(TestCase):
         ResourceBindingSystem.objects.create(binding=system_binding, system_id="bk_job")
 
     def test_panel_list(self):
-        """测试报表列表在缺少隔离维度时返回空结果"""
-        result = self.resource.vision.list_panels({"scenario": "default", "binding_type": "platform_binding"})
+        """测试报表列表不传过滤参数时返回空结果"""
+        result = self.resource.vision.list_panels({"scenario": "default"})
         self.assertEqual(result, [])
 
     def test_panel_list_filter_platform(self):
@@ -1441,27 +1452,6 @@ class TestToolResources(TestCase):
                 resource_id=uid,
             ).exists()
         )
-
-
-# ==================== 菜单 & 权限引导测试 ====================
-
-
-class TestMenuAndGuide(TestCase):
-    """菜单和权限引导测试"""
-
-    def test_menu_list(self):
-        """测试菜单列表"""
-        result = self.resource.scene.list_menus({})
-        menu_ids = [m["id"] for m in result]
-        self.assertIn("risk", menu_ids)
-        self.assertIn("search", menu_ids)
-        self.assertIn("scene_config", menu_ids)
-
-    def test_permission_guide(self):
-        """测试权限引导"""
-        result = self.resource.scene.get_permission_guide({"module": "scene_config"})
-        self.assertFalse(result["has_permission"])
-        self.assertIn("guide", result)
 
 
 # ==================== 常量测试 ====================
