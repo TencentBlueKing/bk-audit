@@ -29,7 +29,6 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
-        :height="tableHeight"
         need-empty-search-tip
         row-key="risk_id"
         :search-params="searchModel"
@@ -414,9 +413,6 @@
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const dataSource = RiskManageService.fetchProcessedRiskList;
-  // TDesign 默认行高约 42px，这里固定 10 行高度
-  const tableHeight = 42 * 10;
-
   // 导出数据
   const handleExport = () => {
     const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
@@ -604,6 +600,8 @@
 </script>
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
+  padding-bottom: 44px;
+
   .risk-manage-list {
     margin-top: 16px;
     background-color: white;
