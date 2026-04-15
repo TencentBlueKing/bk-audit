@@ -290,7 +290,7 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
-        binding_type = validated_request_data.get("binding_type", "")
+        binding_type = validated_request_data.get("binding_type")
         scene_id = validated_request_data.get("scene_id")
         system_id = validated_request_data.get("system_id")
         recent_tool_uids = []

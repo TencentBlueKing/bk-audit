@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from typing import List, Optional, Tuple
 
+from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult
 from iam.resource.utils import Page
 
@@ -32,7 +33,21 @@ class SceneResourceProvider(IAMResourceProvider):
         return []
 
     def list_instance_by_policy(self, filters, page, **options):
-        return ListResult(results=[], count=0)
+        expression = filters.expression
+        if not expression:
+            return ListResult(results=[], count=0)
+
+        from services.web.scene.models import Scene as SceneModel
+
+        key_mapping = {
+            f"{self.resource_type}.id": "scene_id",
+        }
+        converter = PathEqDjangoQuerySetConverter(key_mapping)
+        django_filters = converter.convert(expression)
+        queryset = SceneModel.objects.filter(django_filters).order_by("pk")
+        scenes = queryset[page.slice_from : page.slice_to]
+        results = [{"id": str(scene.pk), "display_name": scene.name} for scene in scenes]
+        return ListResult(results=results, count=queryset.count())
 
     def filter_list_instance_results(
         self, parent_id: Optional[str], resource_type: Optional[str], page: Page

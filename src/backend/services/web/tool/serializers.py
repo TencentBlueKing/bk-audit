@@ -26,6 +26,7 @@ from rest_framework.fields import DictField
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
+from services.web.scene.constants import BindingType
 from services.web.scene.serializers import (
     FlexibleListField,
     ResourceBindingInputSerializer,
@@ -333,12 +334,13 @@ class ListRequestSerializer(serializers.Serializer):
     my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
     recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
     # 场景隔离过滤字段
-    binding_type = serializers.CharField(
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices,
         required=False,
-        allow_blank=True,
-        default="",
+        allow_null=True,
+        default=None,
         label=gettext_lazy("绑定类型"),
-        help_text="platform_binding=平台级, scene_binding=场景级, 空=全部",
+        help_text="不传/null=全部，platform_binding=平台级，scene_binding=场景级",
     )
     scene_id = FlexibleListField(
         child=serializers.IntegerField(),
