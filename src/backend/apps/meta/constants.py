@@ -266,3 +266,7 @@ class SystemPermissionTypeEnum(TextChoices):
 # 未标签
 NO_TAG_ID = "-2"
 NO_TAG_NAME = gettext_lazy("No Tag")
+
+
+# 为"-"时表明在对应system_id的系统管理员下创建用户组
+DEFAULT_GRADE_MANAGER_ID = "-"

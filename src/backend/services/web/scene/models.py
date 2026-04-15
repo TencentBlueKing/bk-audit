@@ -26,6 +26,12 @@ class Scene(OperateRecordModel):
     )
     managers = models.JSONField(gettext_lazy("场景管理员列表"), default=list)
     users = models.JSONField(gettext_lazy("场景使用者列表"), default=list)
+    iam_manager_group_id = models.BigIntegerField(
+        gettext_lazy("管理用户组ID"), null=True, blank=True, help_text="IAM 管理用户组 ID"
+    )
+    iam_viewer_group_id = models.BigIntegerField(
+        gettext_lazy("使用用户组ID"), null=True, blank=True, help_text="IAM 使用用户组 ID"
+    )
 
     class Meta:
         verbose_name = gettext_lazy("审计场景")
