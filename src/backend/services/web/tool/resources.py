@@ -30,6 +30,7 @@ from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.translation import gettext_lazy
 from pypinyin import lazy_pinyin
+from rest_framework import serializers as drf_serializers
 
 from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.serializers import UserAuthCheckRespSerializer
@@ -47,6 +48,7 @@ from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.strategy_v2.models import StrategyTool
 from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionKeysWithCallerSerializer,
@@ -71,6 +73,11 @@ from services.web.tool.serializers import (
     GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
     ListToolTagsResponseSerializer,
+    PlatformSceneToolCreateRequestSerializer,
+    PlatformSceneToolUpdateRequestSerializer,
+    SceneScopeToolCreateRequestSerializer,
+    SceneScopeToolDeleteRequestSerializer,
+    SceneScopeToolUpdateRequestSerializer,
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
@@ -161,6 +168,13 @@ class ToolBase(AuditMixinResource, abc.ABC):
                                 tool_uid=tool_uid,
                                 field_name=unique_key,
                             )
+
+    @staticmethod
+    def _ensure_binding_integrity_or_raise(binding):
+        try:
+            assert_binding_relation_integrity(binding)
+        except ValueError:
+            raise drf_serializers.ValidationError({"binding": gettext_lazy("资源绑定关系不合法")})
 
 
 class ListToolTags(ToolBase):
@@ -1220,6 +1234,7 @@ class CreatePlatformSceneTool(CreateTool):
     """创建平台级场景工具（继承 CreateTool，复用核心创建逻辑）"""
 
     name = gettext_lazy("创建平台级场景工具")
+    RequestSerializer = PlatformSceneToolCreateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -1234,6 +1249,7 @@ class CreatePlatformSceneTool(CreateTool):
             ResourceBindingSystem,
         )
 
+        visibility_data = validated_request_data.pop("visibility", None) or {}
         validated_request_data.setdefault("status", PanelStatus.UNPUBLISHED)
 
         with transaction.atomic():
@@ -1249,7 +1265,6 @@ class CreatePlatformSceneTool(CreateTool):
             )
 
             # 处理可见范围配置
-            visibility_data = validated_request_data.get("visibility")
             if visibility_data:
                 binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
                 binding.save(update_fields=["visibility_type"])
@@ -1257,6 +1272,7 @@ class CreatePlatformSceneTool(CreateTool):
                     ResourceBindingScene.objects.create(binding=binding, scene_id=sid)
                 for sys_id in visibility_data.get("system_ids", []):
                     ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+            self._ensure_binding_integrity_or_raise(binding)
 
         return tool
 
@@ -1265,6 +1281,7 @@ class UpdatePlatformSceneTool(UpdateTool):
     """编辑平台级场景工具（继承 UpdateTool，复用核心更新逻辑）"""
 
     name = gettext_lazy("编辑平台级场景工具")
+    RequestSerializer = PlatformSceneToolUpdateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -1290,12 +1307,12 @@ class UpdatePlatformSceneTool(UpdateTool):
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
 
+        visibility_data = validated_request_data.pop("visibility", None)
         with transaction.atomic():
             # 复用父类 UpdateTool 的核心更新逻辑
             result = super().perform_request(validated_request_data)
 
             # 处理可见范围配置
-            visibility_data = validated_request_data.get("visibility")
             if visibility_data:
                 binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
                 binding.save(update_fields=["visibility_type"])
@@ -1305,6 +1322,7 @@ class UpdatePlatformSceneTool(UpdateTool):
                 binding.binding_systems.all().delete()
                 for sys_id in visibility_data.get("system_ids", []):
                     ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+            self._ensure_binding_integrity_or_raise(binding)
 
         return result
 
@@ -1336,6 +1354,7 @@ class DeletePlatformSceneTool(DeleteTool):
             )
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         tool = Tool.last_version_tool(uid)
         if tool and tool.status == PanelStatus.PUBLISHED:
@@ -1352,6 +1371,7 @@ class PublishPlatformSceneTool(ToolBase):
     """上架/下架平台级场景工具"""
 
     name = gettext_lazy("上架/下架平台级场景工具")
+    RequestSerializer = ToolRetrieveRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -1364,12 +1384,14 @@ class PublishPlatformSceneTool(ToolBase):
 
         uid = validated_request_data.get("uid")
         # 通过 ResourceBinding 确认是平台级工具
-        if not ResourceBinding.objects.filter(
+        binding = ResourceBinding.objects.filter(
             resource_type=ResourceVisibilityType.TOOL,
             resource_id=uid,
             binding_type=BindingType.PLATFORM_BINDING,
-        ).exists():
+        ).first()
+        if not binding:
             raise SceneToolNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         tool = Tool.last_version_tool(uid)
         if not tool:
@@ -1387,6 +1409,7 @@ class CreateSceneScopeTool(CreateTool):
     """创建场景级工具（继承 CreateTool，复用核心创建逻辑）"""
 
     name = gettext_lazy("创建场景级工具")
+    RequestSerializer = SceneScopeToolCreateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
@@ -1405,6 +1428,7 @@ class CreateSceneScopeTool(CreateTool):
                 binding_type=BindingType.SCENE_BINDING,
             )
             ResourceBindingScene.objects.create(binding=binding, scene_id=int(scene_id))
+            self._ensure_binding_integrity_or_raise(binding)
 
         return tool
 
@@ -1413,6 +1437,7 @@ class UpdateSceneScopeTool(UpdateTool):
     """编辑场景级工具（继承 UpdateTool，复用核心更新逻辑）"""
 
     name = gettext_lazy("编辑场景级工具")
+    RequestSerializer = SceneScopeToolUpdateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
@@ -1430,6 +1455,7 @@ class UpdateSceneScopeTool(UpdateTool):
             )
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
             raise SceneToolNotExist()
@@ -1442,6 +1468,7 @@ class DeleteSceneScopeTool(DeleteTool):
     """删除场景级工具（继承 DeleteTool，复用核心删除逻辑）"""
 
     name = gettext_lazy("删除场景级工具")
+    RequestSerializer = SceneScopeToolDeleteRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
@@ -1459,6 +1486,7 @@ class DeleteSceneScopeTool(DeleteTool):
             )
         except ResourceBinding.DoesNotExist:
             raise SceneToolNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
             raise SceneToolNotExist()

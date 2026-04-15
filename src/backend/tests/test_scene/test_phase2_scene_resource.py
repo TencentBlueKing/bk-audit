@@ -834,6 +834,7 @@ class TestCompositeScopeFilter:
             resource_id=str(ng1.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
         )
         # 平台级 + 未指定场景/系统时返回空结果
         qs = CompositeScopeFilter.filter_queryset(
@@ -901,6 +902,7 @@ class TestCompositeScopeFilter:
             resource_id=str(ng2.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
         )
         qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
@@ -927,6 +929,43 @@ class TestCompositeScopeFilter:
             pk_field="group_id",
         )
         assert qs.count() == 0
+
+    @pytest.mark.django_db
+    def test_filter_platform_binding_specific_scenes_without_scene_relation_raise(self):
+        """测试平台级 specific_scenes 未配置场景关联时报错"""
+        ng = NoticeGroup.objects.create(group_name="非法平台组", group_member=["admin"], notice_config=[])
+        ResourceBinding.objects.create(
+            resource_id=str(ng.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SCENES,
+        )
+        with pytest.raises(ValueError, match="specific_scenes"):
+            CompositeScopeFilter.filter_queryset(
+                queryset=NoticeGroup.objects.all(),
+                binding_type=BindingType.PLATFORM_BINDING,
+                scene_id=1,
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                pk_field="group_id",
+            )
+
+    @pytest.mark.django_db
+    def test_filter_scene_binding_without_scene_relation_raise(self):
+        """测试场景级绑定未配置 scene 关联时报错"""
+        ng = NoticeGroup.objects.create(group_name="非法场景组", group_member=["admin"], notice_config=[])
+        ResourceBinding.objects.create(
+            resource_id=str(ng.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        with pytest.raises(ValueError, match="scene_binding"):
+            CompositeScopeFilter.filter_queryset(
+                queryset=NoticeGroup.objects.all(),
+                binding_type=BindingType.SCENE_BINDING,
+                scene_id=1,
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                pk_field="group_id",
+            )
 
     @pytest.mark.django_db
     def test_filter_system_id_returns_system_bound_resources(self, scene):

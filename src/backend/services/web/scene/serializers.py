@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from rest_framework import serializers
 
+from services.web.scene.binding_validation import validate_platform_visibility_payload
 from services.web.scene.constants import SceneStatus, VisibilityScope
 from services.web.scene.models import (
     ResourceBinding,
@@ -181,3 +182,15 @@ class ResourceBindingInputSerializer(serializers.Serializer):
     visibility_type = serializers.ChoiceField(choices=VisibilityScope.choices, required=False, default="all_visible")
     scene_ids = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
     system_ids = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        try:
+            validate_platform_visibility_payload(
+                visibility_type=attrs.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                scene_ids=attrs.get("scene_ids", []),
+                system_ids=attrs.get("system_ids", []),
+            )
+        except ValueError:
+            raise serializers.ValidationError({"visibility": "可见性配置不合法"})
+        return attrs
