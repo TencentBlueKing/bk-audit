@@ -20,16 +20,24 @@ import abc
 
 from bk_resource import api
 from django.utils.translation import gettext_lazy
+from rest_framework import serializers as drf_serializers
 from rest_framework.generics import get_object_or_404
 
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.vision.constants import PANEL
 from services.web.vision.handlers.query import VisionHandler
 from services.web.vision.models import VisionPanel, VisionPanelInstance
 from services.web.vision.serializers import (
+    CreatePlatformPanelRequestSerializer,
+    CreateScenePanelRequestSerializer,
+    DeleteScenePanelRequestSerializer,
+    PlatformPanelOperateRequestSerializer,
     QueryMetaReqSerializer,
     QueryShareDetailSerializer,
+    UpdatePlatformPanelRequestSerializer,
+    UpdateScenePanelRequestSerializer,
     VisionPanelInfoQuerySerializer,
     VisionPanelInfoSerializer,
 )
@@ -37,6 +45,13 @@ from services.web.vision.serializers import (
 
 class BKVision(AuditMixinResource, abc.ABC):
     tags = ["BKVision"]
+
+    @staticmethod
+    def _ensure_binding_integrity_or_raise(binding):
+        try:
+            assert_binding_relation_integrity(binding)
+        except ValueError:
+            raise drf_serializers.ValidationError({"binding": gettext_lazy("资源绑定关系不合法")})
 
 
 class ListPanels(BKVision):
@@ -149,6 +164,7 @@ class CreatePlatformPanel(BKVision):
     """创建平台级报表"""
 
     name = gettext_lazy("创建平台级报表")
+    RequestSerializer = CreatePlatformPanelRequestSerializer
 
     def perform_request(self, validated_request_data):
         from django.db import transaction
@@ -166,6 +182,7 @@ class CreatePlatformPanel(BKVision):
             ResourceBindingSystem,
         )
 
+        visibility_data = validated_request_data.pop("visibility", None) or {}
         with transaction.atomic():
             panel = VisionPanel.objects.create(
                 id=validated_request_data.get("id") or unique_id(),
@@ -184,7 +201,6 @@ class CreatePlatformPanel(BKVision):
             )
 
             # 处理可见范围配置
-            visibility_data = validated_request_data.get("visibility")
             if visibility_data:
                 binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
                 binding.save(update_fields=["visibility_type"])
@@ -194,6 +210,7 @@ class CreatePlatformPanel(BKVision):
                 # 创建系统关联
                 for sys_id in visibility_data.get("system_ids", []):
                     ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+            self._ensure_binding_integrity_or_raise(binding)
 
         return {"id": panel.pk, "name": panel.name}
 
@@ -202,6 +219,7 @@ class UpdatePlatformPanel(BKVision):
     """编辑平台级报表"""
 
     name = gettext_lazy("编辑平台级报表")
+    RequestSerializer = UpdatePlatformPanelRequestSerializer
 
     def perform_request(self, validated_request_data):
         from django.db import transaction
@@ -234,13 +252,13 @@ class UpdatePlatformPanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
+        visibility_data = validated_request_data.pop("visibility", None)
         with transaction.atomic():
             for field in ["name", "category", "description", "status"]:
                 if field in validated_request_data:
                     setattr(panel, field, validated_request_data[field])
             panel.save()
 
-            visibility_data = validated_request_data.get("visibility")
             if visibility_data:
                 binding.visibility_type = visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE)
                 binding.save(update_fields=["visibility_type"])
@@ -252,6 +270,7 @@ class UpdatePlatformPanel(BKVision):
                 binding.binding_systems.all().delete()
                 for sys_id in visibility_data.get("system_ids", []):
                     ResourceBindingSystem.objects.create(binding=binding, system_id=sys_id)
+            self._ensure_binding_integrity_or_raise(binding)
 
         return {"id": panel.pk, "name": panel.name}
 
@@ -260,6 +279,7 @@ class DeletePlatformPanel(BKVision):
     """删除平台级报表"""
 
     name = gettext_lazy("删除平台级报表")
+    RequestSerializer = PlatformPanelOperateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -288,6 +308,7 @@ class DeletePlatformPanel(BKVision):
             panel = VisionPanel.objects.get(pk=panel_id)
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         if panel.status == PanelStatus.PUBLISHED:
             raise ScenePanelCannotDelete()
@@ -302,6 +323,7 @@ class PublishPlatformPanel(BKVision):
     """上架/下架平台级报表"""
 
     name = gettext_lazy("上架/下架平台级报表")
+    RequestSerializer = PlatformPanelOperateRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -314,12 +336,14 @@ class PublishPlatformPanel(BKVision):
 
         panel_id = validated_request_data.get("panel_id")
         # 通过 ResourceBinding 确认是平台级报表
-        if not ResourceBinding.objects.filter(
+        binding = ResourceBinding.objects.filter(
             resource_type=ResourceVisibilityType.PANEL,
             resource_id=str(panel_id),
             binding_type=BindingType.PLATFORM_BINDING,
-        ).exists():
+        ).first()
+        if not binding:
             raise ScenePanelNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         try:
             panel = VisionPanel.objects.get(pk=panel_id)
@@ -338,6 +362,7 @@ class CreateScenePanel(BKVision):
     """创建场景级报表"""
 
     name = gettext_lazy("创建场景级报表")
+    RequestSerializer = CreateScenePanelRequestSerializer
 
     def perform_request(self, validated_request_data):
         from django.db import transaction
@@ -363,6 +388,7 @@ class CreateScenePanel(BKVision):
                 binding_type=BindingType.SCENE_BINDING,
             )
             ResourceBindingScene.objects.create(binding=binding, scene_id=int(scene_id))
+            self._ensure_binding_integrity_or_raise(binding)
 
         return {"id": panel.pk, "name": panel.name}
 
@@ -371,6 +397,7 @@ class UpdateScenePanel(BKVision):
     """编辑场景级报表"""
 
     name = gettext_lazy("编辑场景级报表")
+    RequestSerializer = UpdateScenePanelRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
@@ -389,6 +416,7 @@ class UpdateScenePanel(BKVision):
             )
         except ResourceBinding.DoesNotExist:
             raise ScenePanelNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
             raise ScenePanelNotExist()
@@ -409,6 +437,7 @@ class DeleteScenePanel(BKVision):
     """删除场景级报表"""
 
     name = gettext_lazy("删除场景级报表")
+    RequestSerializer = DeleteScenePanelRequestSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
@@ -427,6 +456,7 @@ class DeleteScenePanel(BKVision):
             )
         except ResourceBinding.DoesNotExist:
             raise ScenePanelNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
 
         if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
             raise ScenePanelNotExist()

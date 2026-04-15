@@ -26,7 +26,10 @@ from rest_framework.fields import DictField
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
-from services.web.scene.serializers import FlexibleListField
+from services.web.scene.serializers import (
+    FlexibleListField,
+    ResourceBindingInputSerializer,
+)
 from services.web.tool.constants import (
     ApiToolConfig,
     BkVisionConfig,
@@ -192,6 +195,36 @@ class ToolRetrieveRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     # 场景隔离相关字段（场景级工具删除时使用）
     scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
+
+
+class PlatformSceneToolCreateRequestSerializer(ToolCreateRequestSerializer):
+    """平台级工具创建请求（支持可见范围校验）"""
+
+    visibility = ResourceBindingInputSerializer(required=False)
+
+
+class PlatformSceneToolUpdateRequestSerializer(ToolUpdateRequestSerializer):
+    """平台级工具更新请求（支持可见范围校验）"""
+
+    visibility = ResourceBindingInputSerializer(required=False)
+
+
+class SceneScopeToolCreateRequestSerializer(ToolCreateRequestSerializer):
+    """场景级工具创建请求（scene_id 必填）"""
+
+    scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
+
+
+class SceneScopeToolUpdateRequestSerializer(ToolUpdateRequestSerializer):
+    """场景级工具更新请求（scene_id 必填）"""
+
+    scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
+
+
+class SceneScopeToolDeleteRequestSerializer(ToolRetrieveRequestSerializer):
+    """场景级工具删除请求（scene_id 必填）"""
+
+    scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
 
 
 class ToolListAllResponseSerializer(serializers.ModelSerializer):

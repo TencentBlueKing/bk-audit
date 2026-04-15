@@ -50,8 +50,9 @@
             return queryset
 """
 
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
 
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,
@@ -81,6 +82,21 @@ class SceneScopeFilter:
     """
 
     @staticmethod
+    def _assert_scene_binding_integrity(resource_type: str) -> None:
+        """校验指定资源类型的 scene_binding 绑定完整性。"""
+        bindings = ResourceBinding.objects.filter(
+            resource_type=resource_type,
+            binding_type=BindingType.SCENE_BINDING,
+        ).annotate(
+            scene_count=Count("binding_scenes", distinct=True),
+            system_count=Count("binding_systems", distinct=True),
+        )
+        for binding in bindings:
+            assert_binding_relation_integrity(
+                binding, scene_count=binding.scene_count, system_count=binding.system_count
+            )
+
+    @staticmethod
     def filter_queryset(
         queryset: QuerySet,
         scene_id=None,
@@ -99,11 +115,13 @@ class SceneScopeFilter:
         scene_ids = _normalize_scope_values(scene_id)
         if scene_ids:
             if resource_type == ResourceVisibilityType.RISK:
+                SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
                 strategy_ids = ResourceBindingScene.objects.filter(
                     scene_id__in=scene_ids,
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
                 ).values_list("binding__resource_id", flat=True)
                 return queryset.filter(strategy_id__in=list(strategy_ids))
+            SceneScopeFilter._assert_scene_binding_integrity(resource_type)
             # 按场景列表过滤：通过 ResourceBindingScene 查找并取并集
             bound_ids = ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
@@ -127,12 +145,14 @@ class SceneScopeFilter:
         if resource_type == ResourceVisibilityType.RISK:
             from services.web.risk.models import Risk
 
+            SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
             strategy_ids = ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
             ).values_list("binding__resource_id", flat=True)
             return list(Risk.objects.filter(strategy_id__in=list(strategy_ids)).values_list("risk_id", flat=True))
 
+        SceneScopeFilter._assert_scene_binding_integrity(resource_type)
         return list(
             ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
@@ -169,6 +189,7 @@ class SceneScopeFilter:
             binding_type=_BindingType.SCENE_BINDING,
         )
         ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
+        assert_binding_relation_integrity(binding)
         return binding
 
 
@@ -191,16 +212,22 @@ class CompositeScopeFilter:
     @staticmethod
     def _get_scene_binding_ids(resource_type: str, scene_ids: list) -> set:
         """获取指定场景列表中的场景级绑定资源 ID"""
+        all_scene_bindings = ResourceBinding.objects.filter(
+            resource_type=resource_type,
+            binding_type=BindingType.SCENE_BINDING,
+        ).annotate(
+            scene_count=Count("binding_scenes", distinct=True),
+            system_count=Count("binding_systems", distinct=True),
+        )
+        for binding in all_scene_bindings:
+            assert_binding_relation_integrity(
+                binding, scene_count=binding.scene_count, system_count=binding.system_count
+            )
+
         binding_ids = ResourceBindingScene.objects.filter(
             scene_id__in=scene_ids,
         ).values_list("binding_id", flat=True)
-        return set(
-            ResourceBinding.objects.filter(
-                id__in=binding_ids,
-                resource_type=resource_type,
-                binding_type=BindingType.SCENE_BINDING,
-            ).values_list("resource_id", flat=True)
-        )
+        return set(all_scene_bindings.filter(id__in=binding_ids).values_list("resource_id", flat=True))
 
     @staticmethod
     def _get_visible_platform_ids(
@@ -220,6 +247,9 @@ class CompositeScopeFilter:
         platform_bindings = ResourceBinding.objects.filter(
             resource_type=resource_type,
             binding_type=BindingType.PLATFORM_BINDING,
+        ).annotate(
+            scene_count=Count("binding_scenes", distinct=True),
+            system_count=Count("binding_systems", distinct=True),
         )
         scene_ids = _normalize_scope_values(scene_id)
         system_ids = _normalize_scope_values(system_id)
@@ -227,6 +257,9 @@ class CompositeScopeFilter:
         visible_ids = set()
 
         for binding in platform_bindings:
+            assert_binding_relation_integrity(
+                binding, scene_count=binding.scene_count, system_count=binding.system_count
+            )
             if binding.visibility_type in (VisibilityScope.ALL_VISIBLE, VisibilityScope.ALL_SCENES):
                 # 全部可见 / 全部场景可见
                 visible_ids.add(binding.resource_id)

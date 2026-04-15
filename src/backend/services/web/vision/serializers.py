@@ -19,7 +19,11 @@ to the current version of the project delivered to anyone in the future.
 from rest_framework import serializers
 
 from core.serializers import ExtraDataSerializerMixin
-from services.web.scene.serializers import FlexibleListField
+from services.web.scene.constants import PanelStatus
+from services.web.scene.serializers import (
+    FlexibleListField,
+    ResourceBindingInputSerializer,
+)
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -70,3 +74,46 @@ class QueryDataReqSerializer(serializers.Serializer):
 
 class QueryShareDetailSerializer(ExtraDataSerializerMixin):
     share_uid = serializers.CharField()
+
+
+class CreatePlatformPanelRequestSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=True, max_length=255)
+    category = serializers.CharField(required=False, allow_blank=True, default="")
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
+    visibility = ResourceBindingInputSerializer(required=False)
+
+
+class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
+    panel_id = serializers.CharField(required=True)
+    name = serializers.CharField(required=False, max_length=255)
+    category = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    visibility = ResourceBindingInputSerializer(required=False)
+
+
+class PlatformPanelOperateRequestSerializer(serializers.Serializer):
+    panel_id = serializers.CharField(required=True)
+
+
+class CreateScenePanelRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    id = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=True, max_length=255)
+    category = serializers.CharField(required=False, allow_blank=True, default="")
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class UpdateScenePanelRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    panel_id = serializers.CharField(required=True)
+    name = serializers.CharField(required=False, max_length=255)
+    category = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+
+
+class DeleteScenePanelRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    panel_id = serializers.CharField(required=True)
