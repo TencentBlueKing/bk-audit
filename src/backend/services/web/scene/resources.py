@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.handlers.iam_group import IAMGroupManager
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
 from services.web.scene.exceptions import SceneHasRelatedResources, SceneNotExist
@@ -24,6 +25,39 @@ class SceneResource(AuditMixinResource, abc.ABC):
     """场景模块 Resource 基类"""
 
     tags = ["Scene"]
+
+    @staticmethod
+    def _enrich_iam_members(scene):
+        """用 IAM 用户组的真实成员替代 DB 中的 managers/users，用于场景详情展示"""
+
+        if scene.iam_manager_group_id:
+            members = IAMGroupManager.get_all_group_members(
+                group_id=scene.iam_manager_group_id,
+            )
+            scene.managers = [m["id"] for m in members]
+
+        if scene.iam_viewer_group_id:
+            members = IAMGroupManager.get_all_group_members(
+                group_id=scene.iam_viewer_group_id,
+            )
+            scene.users = [m["id"] for m in members]
+
+        return scene
+
+    @staticmethod
+    def _sync_iam_group_members(scene, validated_request_data):
+        """当 managers 或 users 变更时，同步到对应的 IAM 用户组"""
+
+        if "managers" in validated_request_data and scene.iam_manager_group_id:
+            IAMGroupManager.sync_group_members(
+                group_id=scene.iam_manager_group_id,
+                members=[{"type": "user", "id": m} for m in scene.managers],
+            )
+        if "users" in validated_request_data and scene.iam_viewer_group_id:
+            IAMGroupManager.sync_group_members(
+                group_id=scene.iam_viewer_group_id,
+                members=[{"type": "user", "id": u} for u in scene.users],
+            )
 
 
 # ==================== 场景管理 ====================
@@ -69,6 +103,8 @@ class CreateScene(SceneResource):
         self._save_tables(scene, validated_request_data.get("tables", []))
         # 自动创建"场景管理员通知组"
         self._create_scene_manager_notice_group(scene)
+        # 创建 IAM 用户组、授权并添加成员
+        self._create_iam_groups(scene)
 
         return scene
 
@@ -113,6 +149,23 @@ class CreateScene(SceneResource):
         ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
         assert_binding_relation_integrity(binding)
 
+    @staticmethod
+    def _create_iam_groups(scene):
+        """创建场景时自动创建 IAM 管理用户组和使用用户组，并授权、添加成员"""
+
+        manager_members = [{"type": "user", "id": m} for m in (scene.managers or [])]
+        viewer_members = [{"type": "user", "id": u} for u in (scene.users or [])]
+
+        group_result = IAMGroupManager.create_scene_groups_with_members(
+            scene_id=str(scene.scene_id),
+            scene_name=scene.name,
+            manager_members=manager_members,
+            viewer_members=viewer_members,
+        )
+        scene.iam_manager_group_id = group_result["iam_manager_group_id"]
+        scene.iam_viewer_group_id = group_result["iam_viewer_group_id"]
+        scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+
 
 class RetrieveScene(SceneResource):
     """场景详情"""
@@ -123,9 +176,10 @@ class RetrieveScene(SceneResource):
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
         try:
-            return Scene.objects.get(scene_id=scene_id)
+            scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
+        return self._enrich_iam_members(scene)
 
 
 class UpdateScene(SceneResource):
@@ -169,6 +223,9 @@ class UpdateScene(SceneResource):
                     table_id=table_data.get("table_id", ""),
                     filter_rules=table_data.get("filter_rules", []),
                 )
+
+        # 同步 IAM 用户组成员
+        self._sync_iam_group_members(scene, validated_request_data)
 
         return scene
 
@@ -244,9 +301,10 @@ class GetSceneInfo(SceneResource):
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
         try:
-            return Scene.objects.get(scene_id=scene_id)
+            scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
+        return self._enrich_iam_members(scene)
 
 
 class UpdateSceneInfo(SceneResource):
@@ -267,6 +325,10 @@ class UpdateSceneInfo(SceneResource):
             if field in validated_request_data:
                 setattr(scene, field, validated_request_data[field])
         scene.save()
+
+        # 同步 IAM 用户组成员
+        self._sync_iam_group_members(scene, validated_request_data)
+
         return scene
 
 
