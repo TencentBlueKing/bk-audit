@@ -247,6 +247,32 @@ class System(OperateRecordModel):
             )
         return []
 
+    @classmethod
+    def get_managed_system_ids(cls, username: str) -> List[str]:
+        """获取用户作为管理员的所有系统 ID（单条 SQL，避免 N+1）
+
+        查询逻辑：
+        1. managers JSONField 中包含该用户名
+        2. 或在 SystemRole 表中有 manager 角色记录
+        """
+        # managers JSONField 包含用户名（MySQL / SQLite 均支持 __contains）
+        json_q = Q(managers__contains=[username])
+        # SystemRole 表回退（IAM V3 系统）
+        role_system_ids = set(
+            SystemRole.objects.filter(username=username, role=IAM_MANAGER_ROLE).values_list("system_id", flat=True)
+        )
+        qs = cls.objects.filter(json_q | Q(system_id__in=role_system_ids)).values_list("system_id", flat=True)
+        return list(qs)
+
+    @classmethod
+    def is_manager(cls, system_id: str, username: str) -> bool:
+        """判断用户是否为指定系统的管理员（单次查询）"""
+        # 优先检查 managers JSONField
+        if cls.objects.filter(system_id=system_id, managers__contains=[username]).exists():
+            return True
+        # 回退检查 SystemRole
+        return SystemRole.objects.filter(system_id=system_id, username=username, role=IAM_MANAGER_ROLE).exists()
+
     @cached_property
     def base64_token(self):
         """

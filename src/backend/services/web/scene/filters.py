@@ -70,6 +70,18 @@ def _normalize_scope_values(value) -> list:
     return [value]
 
 
+def _normalize_binding_type(binding_type):
+    """将 binding_type 统一归一为枚举值或 None。"""
+    if binding_type in {None, ""}:
+        return None
+
+    valid_binding_types = {BindingType.PLATFORM_BINDING, BindingType.SCENE_BINDING}
+    if binding_type not in valid_binding_types:
+        raise ValueError(f"binding_type={binding_type} 不合法，可选值：{', '.join(sorted(valid_binding_types))}")
+
+    return binding_type
+
+
 class SceneScopeFilter:
     """简单场景过滤器
 
@@ -310,7 +322,7 @@ class CompositeScopeFilter:
     @staticmethod
     def filter_queryset(
         queryset: QuerySet,
-        binding_type: str,
+        binding_type=None,
         scene_id=None,
         system_id: str = None,
         resource_type: str = "",
@@ -320,13 +332,14 @@ class CompositeScopeFilter:
         按 binding_type + scene_id/system_id 组合过滤 queryset
 
         :param queryset: 原始 queryset
-        :param binding_type: 绑定类型，BindingType 枚举值或空字符串
+        :param binding_type: 绑定类型，BindingType 枚举值或 None（None=全部）
         :param scene_id: 场景 ID，可为 None
         :param system_id: 系统 ID，可为 None
         :param resource_type: ResourceVisibilityType 枚举值，如 "tool"、"panel" 等
         :param pk_field: queryset 中用于匹配 resource_id 的主键字段名
         :return: 过滤后的 queryset
         """
+        binding_type = _normalize_binding_type(binding_type)
         scene_ids = _normalize_scope_values(scene_id)
         system_ids = _normalize_scope_values(system_id)
 

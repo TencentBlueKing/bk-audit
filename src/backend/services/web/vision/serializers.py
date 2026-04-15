@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from rest_framework import serializers
 
 from core.serializers import ExtraDataSerializerMixin
+from services.web.scene.constants import BindingType
 from services.web.scene.constants import PanelStatus
 from services.web.scene.serializers import (
     FlexibleListField,
@@ -35,12 +36,13 @@ class VisionPanelInfoSerializer(serializers.ModelSerializer):
 
 class VisionPanelInfoQuerySerializer(serializers.Serializer):
     scenario = serializers.ChoiceField(choices=Scenario.choices, default=Scenario.DEFAULT)
-    binding_type = serializers.CharField(
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices,
         required=False,
-        allow_blank=True,
-        default="",
+        allow_null=True,
+        default=None,
         label="绑定类型",
-        help_text="platform_binding=平台级, scene_binding=场景级, 空=全部",
+        help_text="不传/null=全部，platform_binding=平台级，scene_binding=场景级",
     )
     scene_id = FlexibleListField(
         child=serializers.IntegerField(),
