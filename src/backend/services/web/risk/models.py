@@ -54,7 +54,6 @@ def generate_risk_id() -> str:
     """ "
     年月日时分秒+6位随机码
     """
-
     now = datetime.datetime.now()
     risk_id = f"{now.strftime('%Y%m%d%H%M%S')}{('%.6f' % now.timestamp()).split('.')[1]}"
     if Risk.objects.filter(risk_id=risk_id).exists():
