@@ -1,0 +1,377 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
+from typing import Union
+
+from bk_resource import api
+from blueapps.utils.logger import logger
+from django.conf import settings
+
+from apps.permission.handlers.actions.action import ActionEnum
+
+# 场景管理用户组拥有的操作列表
+SCENE_MANAGER_GROUP_ACTIONS = [
+    ActionEnum.VIEW_SCENE,
+    ActionEnum.MANAGE_SCENE,
+    # 策略
+    ActionEnum.LIST_STRATEGY,
+    ActionEnum.CREATE_STRATEGY,
+    ActionEnum.EDIT_STRATEGY,
+    ActionEnum.DELETE_STRATEGY,
+    ActionEnum.GENERATE_STRATEGY_RISK,
+    # 风险
+    ActionEnum.LIST_RISK,
+    ActionEnum.EDIT_RISK,
+    ActionEnum.PROCESS_RISK,
+    # 规则
+    ActionEnum.LIST_RULE,
+    ActionEnum.CREATE_RULE,
+    ActionEnum.EDIT_RULE,
+    ActionEnum.DELETE_RULE,
+    # 套餐
+    ActionEnum.LIST_PA,
+    ActionEnum.CREATE_PA,
+    ActionEnum.EDIT_PA,
+    # 通知组
+    ActionEnum.LIST_NOTICE_GROUP,
+    ActionEnum.CREATE_NOTICE_GROUP,
+    ActionEnum.EDIT_NOTICE_GROUP_V2,
+    ActionEnum.DELETE_NOTICE_GROUP_V2,
+    # 联表管理
+    ActionEnum.LIST_LINK_TABLE,
+    ActionEnum.CREATE_LINK_TABLE,
+    ActionEnum.EDIT_LINK_TABLE,
+    ActionEnum.DELETE_LINK_TABL,
+    ActionEnum.VIEW_LINK_TABLE,
+]
+
+# 场景使用用户组拥有的操作列表
+SCENE_VIEWER_GROUP_ACTIONS = [
+    ActionEnum.VIEW_SCENE,
+]
+
+
+class IAMGroupManager:
+    """
+    IAM 用户组管理
+    """
+
+    @staticmethod
+    def build_permissions(
+        actions: list,
+        system_id: str,
+        scene_id: str,
+        scene_name: str,
+    ) -> dict:
+        """
+        构建权限数据结构
+        """
+        actions = [{"id": action.id} for action in actions]
+        resources = [
+            {
+                "system": system_id,
+                "type": "scene",
+                "paths": [
+                    [
+                        {
+                            "system": system_id,
+                            "type": "scene",
+                            "id": scene_id,
+                            "name": scene_name,
+                        }
+                    ]
+                ],
+            }
+        ]
+        return {"actions": actions, "resources": resources}
+
+    @classmethod
+    def get_all_group_members(
+        cls,
+        group_id: Union[int, str],
+        page_size: int = 100,
+        system_id: str = None,
+    ) -> list:
+        """
+        分页获取用户组全部成员
+        """
+        system_id = system_id or settings.BK_IAM_SYSTEM_ID
+        all_members = []
+        page = 1
+        while True:
+            try:
+                result = api.bk_iam.get_group_members(
+                    system_id=system_id,
+                    id=group_id,
+                    page=page,
+                    page_size=page_size,
+                )
+            except Exception as e:
+                logger.error(
+                    "[get_all_group_members] 获取用户组成员列表失败, group_id=%s, page=%s, error=%s",
+                    group_id,
+                    page,
+                    e,
+                )
+                raise
+            members = result.get("results", [])
+            all_members.extend(members)
+            total = result.get("count", 0)
+            if len(all_members) >= total or not members:
+                break
+            page += 1
+        logger.info(
+            "[get_all_group_members] 获取全部成员完成, group_id=%s, total=%s",
+            group_id,
+            len(all_members),
+        )
+        return all_members
+
+    @staticmethod
+    def add_group_members(
+        group_id: Union[int, str],
+        members: list,
+        expired_at: int = 0,
+        system_id: str = None,
+    ) -> None:
+        """
+        添加用户组成员
+        """
+        system_id = system_id or settings.BK_IAM_SYSTEM_ID
+        try:
+            api.bk_iam.add_group_members(
+                system_id=system_id,
+                id=group_id,
+                members=members,
+                expired_at=expired_at,
+            )
+        except Exception as e:
+            logger.error(
+                "[add_group_members] 添加用户组成员失败, group_id=%s, members=%s, error=%s",
+                group_id,
+                members,
+                e,
+            )
+            raise
+
+    @staticmethod
+    def delete_group_members(
+        group_id: Union[int, str],
+        member_type: str,
+        member_ids: list,
+        system_id: str = None,
+    ) -> None:
+        """
+        删除用户组成员
+        """
+        system_id = system_id or settings.BK_IAM_SYSTEM_ID
+        try:
+            api.bk_iam.delete_group_members(
+                system_id=system_id,
+                id=group_id,
+                type=member_type,
+                ids=member_ids,
+            )
+        except Exception as e:
+            logger.error(
+                "[delete_group_members] 删除用户组成员失败, group_id=%s, type=%s, ids=%s, error=%s",
+                group_id,
+                member_type,
+                member_ids,
+                e,
+            )
+            raise
+
+    @classmethod
+    def create_scene_groups_with_members(
+        cls,
+        scene_id: str,
+        scene_name: str,
+        manager_members: list = None,
+        viewer_members: list = None,
+        expired_at: int = 0,
+        system_id: str = None,
+    ) -> dict:
+        """
+        创建场景用户组、授权并添加成员
+        """
+        system_id = system_id or settings.BK_IAM_SYSTEM_ID
+        grade_manager_id = "-"
+
+        # 1. 构建需要创建的用户组列表
+        groups = [
+            {
+                "name": f"{scene_name}-管理用户组",
+                "description": f"{scene_name} 场景管理用户组，拥有查看和管理场景权限",
+            },
+            {
+                "name": f"{scene_name}-使用用户组",
+                "description": f"{scene_name} 场景使用用户组，拥有查看场景权限",
+            },
+        ]
+
+        # 2. 创建用户组
+        try:
+            created_group_ids = api.bk_iam.create_grade_manager_groups(
+                system_id=system_id,
+                id=grade_manager_id,
+                groups=groups,
+            )
+        except Exception as e:
+            logger.error(
+                "[create_scene_groups_with_members] 创建场景用户组失败, scene_name=%s, error=%s",
+                scene_name,
+                e,
+            )
+            raise
+
+        logger.info(
+            "[create_scene_groups_with_members] 创建用户组成功, groups=%s, result=%s",
+            [g["name"] for g in groups],
+            created_group_ids,
+        )
+
+        if not created_group_ids or len(created_group_ids) < 2:
+            raise ValueError(f"创建场景用户组返回数据异常, 期望2个用户组ID, 实际返回: {created_group_ids}")
+
+        iam_manager_group_id = created_group_ids[0]
+        iam_viewer_group_id = created_group_ids[1]
+
+        # 3. 为用户组授权
+        grant_configs = [
+            (iam_manager_group_id, SCENE_MANAGER_GROUP_ACTIONS, "管理用户组"),
+            (iam_viewer_group_id, SCENE_VIEWER_GROUP_ACTIONS, "使用用户组"),
+        ]
+        granted_group_ids = []
+        for group_id, group_actions, group_label in grant_configs:
+            permissions = cls.build_permissions(
+                actions=group_actions,
+                system_id=system_id,
+                scene_id=scene_id,
+                scene_name=scene_name,
+            )
+            try:
+                api.bk_iam.grant_group_policies(
+                    system_id=system_id,
+                    id=group_id,
+                    actions=permissions["actions"],
+                    resources=permissions["resources"],
+                )
+                granted_group_ids.append(group_id)
+                logger.info(
+                    "[create_scene_groups_with_members] %s授权成功, group_id=%s",
+                    group_label,
+                    group_id,
+                )
+            except Exception as e:
+                logger.error(
+                    "[create_scene_groups_with_members] %s授权失败, group_id=%s, error=%s, "
+                    "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
+                    group_label,
+                    group_id,
+                    e,
+                    created_group_ids,
+                    granted_group_ids,
+                )
+                raise ValueError(
+                    f"授权失败: {group_label}(group_id={group_id}), "
+                    f"已创建的用户组IDs: {created_group_ids}, "
+                    f"已授权成功的用户组IDs: {granted_group_ids}, "
+                    f"错误: {e}"
+                ) from e
+
+        # 4. 为管理用户组添加成员
+        if manager_members:
+            cls.add_group_members(
+                group_id=iam_manager_group_id,
+                members=manager_members,
+                expired_at=expired_at,
+                system_id=system_id,
+            )
+
+        # 5. 为使用用户组添加成员
+        if viewer_members:
+            cls.add_group_members(
+                group_id=iam_viewer_group_id,
+                members=viewer_members,
+                expired_at=expired_at,
+                system_id=system_id,
+            )
+
+        logger.info(
+            "[create_scene_groups_with_members] 场景用户组创建完成, scene_id=%s, "
+            "iam_manager_group_id=%s, iam_viewer_group_id=%s",
+            scene_id,
+            iam_manager_group_id,
+            iam_viewer_group_id,
+        )
+        return {
+            "iam_manager_group_id": iam_manager_group_id,
+            "iam_viewer_group_id": iam_viewer_group_id,
+        }
+
+    @classmethod
+    def sync_group_members(
+        cls,
+        group_id: Union[int, str],
+        members: list,
+        expired_at: int = 0,
+        system_id: str = None,
+    ) -> None:
+        """
+        同步用户组成员（先删除全部原有成员，再添加新成员）
+        """
+        system_id = system_id or settings.BK_IAM_SYSTEM_ID
+
+        # 1. 分页获取当前用户组全部成员
+        current_members = cls.get_all_group_members(
+            group_id=group_id,
+            system_id=system_id,
+        )
+
+        # 2. 按 type 分组删除原有成员
+        if current_members:
+            members_by_type: dict = {}
+            for member in current_members:
+                m_type = member.get("type", "")
+                m_id = member.get("id", "")
+                if m_type and m_id:
+                    members_by_type.setdefault(m_type, []).append(m_id)
+
+            for member_type, member_ids in members_by_type.items():
+                cls.delete_group_members(
+                    group_id=group_id,
+                    member_type=member_type,
+                    member_ids=member_ids,
+                    system_id=system_id,
+                )
+
+        # 3. 添加新成员
+        if members:
+            cls.add_group_members(
+                group_id=group_id,
+                members=members,
+                expired_at=expired_at,
+                system_id=system_id,
+            )
+
+        logger.info(
+            "[sync_group_members] 同步成员完成, group_id=%s, new_members_count=%s",
+            group_id,
+            len(members),
+        )
