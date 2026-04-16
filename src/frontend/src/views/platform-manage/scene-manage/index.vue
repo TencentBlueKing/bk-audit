@@ -90,7 +90,7 @@
           :columns="tableColumns"
           :data-source="dataSource"
           need-empty-search-tip
-          row-key="uid"
+          row-key="scene_id"
           @clear-search="handleClearSearch"
           @request-success="handleRequestSuccess" />
       </div>
@@ -172,30 +172,40 @@
         </template>
       </bk-dialog>
 
-      <!-- 新建场景侧边栏 -->
+      <!-- 新建/编辑场景侧边栏 -->
       <create-scene-sideslider
         v-model:is-show="createSceneVisible"
+        :scene-id="editSceneId"
         @success="handleCreateSceneSuccess" />
 
       <!-- 场景详情侧边栏 -->
       <scene-detail-sideslider
+        ref="sceneDetailRef"
         v-model:is-show="sceneDetailVisible"
-        :scene-id="currentDetailSceneId" />
+        :scene-id="currentDetailSceneId"
+        @delete="handleDeleteScene"
+        @edit="handleDetailEdit"
+        @toggle-status="handleToggleStatus" />
     </div>
   </skeleton-loading>
 </template>
 
 <script setup lang='tsx'>
   import {
+    nextTick,
     onMounted,
     reactive,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import ToolManageService from '@service/tool-manage';
+  import SceneManageService from '@service/scene-manage';
+
+  import SceneModel from '@model/scene/scene';
 
   import useMessage from '@hooks/use-message';
+  import useUrlSearch from '@hooks/use-url-search';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
@@ -203,25 +213,9 @@
   import CreateSceneSideslider from './components/create-scene-sideslider.vue';
   import SceneDetailSideslider from './components/scene-detail-sideslider.vue';
 
-  // 场景数据模型
-  interface SceneModel {
-    uid: string;
-    name: string;
-    scene_id: number;
-    scene_name: string;
-    description: string;
-    data_source: string;
-    managers: string[];
-    users: string[];
-    strategy_count: number;
-    risk_count: number;
-    status: 'enabled' | 'disabled';
-    updated_by: string;
-    updated_at: string;
-  }
-
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const { replaceSearchParams } = useUrlSearch();
 
   const isLoading = ref(false);
   // 状态筛选
@@ -241,12 +235,14 @@
   const disableConfirmName = ref('');
   const currentDisableScene = ref<SceneModel | null>(null);
 
-  // 新建场景侧边栏
+  // 新建/编辑场景侧边栏
   const createSceneVisible = ref(false);
+  const editSceneId = ref<string | number | undefined>(undefined);
 
   // 场景详情侧边栏
   const sceneDetailVisible = ref(false);
   const currentDetailSceneId = ref<string | number>('');
+  const sceneDetailRef = ref<InstanceType<typeof SceneDetailSideslider>>();
 
   // 状态统计
   const statusCounts = reactive({
@@ -259,7 +255,7 @@
   const tableColumns = [
     {
       title: t('场景ID'),
-      colKey: 'uid',
+      colKey: 'scene_id',
       width: 180,
       ellipsis: true,
     },
@@ -269,10 +265,9 @@
         {t('场景名称')}
       </span>
     ),
-      colKey: 'scene_name',
+      colKey: 'name',
       minWidth: 180,
       ellipsis: true,
-
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span
         class="scene-name-cell"
@@ -307,18 +302,42 @@
     {
       title: t('场景管理员'),
       colKey: 'managers',
-      minWidth: 140,
-      cell: () => (
-      <span>zzl  </span>
-    ),
+      minWidth: 360,
+      cell: (_: any, { row }: { row: SceneModel }) => (
+        row.managers.length > 0
+          ? <div class="tag-list">
+              {row.managers.slice(0, 2).map((manager: string) => <bk-tag class="mr8" key={manager}>{manager}</bk-tag>)}
+              {row.managers.length > 2 && (
+                <bk-popover placement="top" theme="light">
+                  {{
+                    default: () => <bk-tag>+{row.managers.length - 2}</bk-tag>,
+                    content: () => <div class="tag-popover-content">{row.managers.join('、')}</div>,
+                  }}
+                </bk-popover>
+              )}
+            </div>
+          : '--'
+      ),
     },
     {
       title: t('场景使用者'),
       colKey: 'users',
       minWidth: 140,
-      cell: () => (
-      <bk-tag>raja</bk-tag>
-    ),
+      cell: (_: any, { row }: { row: SceneModel }) => (
+        row.users.length > 0
+          ? <div class="tag-list">
+              {row.users.slice(0, 2).map((user: string) => <bk-tag class="mr8" key={user}>{user}</bk-tag>)}
+              {row.users.length > 2 && (
+                <bk-popover placement="top" theme="light">
+                  {{
+                    default: () => <bk-tag>+{row.users.length - 2}</bk-tag>,
+                    content: () => <div class="tag-popover-content">{row.users.join('、')}</div>,
+                  }}
+                </bk-popover>
+              )}
+            </div>
+          : '--'
+      ),
     },
     {
       title: t('策略数'),
@@ -356,15 +375,15 @@
       title: t('状态'),
       colKey: 'status',
       width: 100,
-      // filter: {
-      //   type: 'single',
-      //   showConfirmAndReset: true,
-      //   resetValue: undefined,
-      //   list: [
-      //     { label: t('启用'), value: 'enabled' },
-      //     { label: t('停用'), value: 'disabled' },
-      //   ],
-      // },
+      filter: {
+        type: 'single',
+        showConfirmAndReset: true,
+        resetValue: undefined,
+        list: [
+          { label: t('启用'), value: 'enabled' },
+          { label: t('停用'), value: 'disabled' },
+        ],
+      },
       cell: (_: any, { row }: { row: SceneModel }) => (
       <bk-tag theme={row.status === 'enabled' ? 'success' : ''}>
         {row.status === 'enabled' ? t('启用') : t('停用')}
@@ -376,7 +395,7 @@
       colKey: 'updated_by',
       width: 120,
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span>{row.updated_by || '-'}</span>
+      <span>{row.updated_by || '--'}</span>
     ),
     },
     {
@@ -386,7 +405,7 @@
       sortType: 'all',
       sorter: true,
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span>{row.updated_at || '-'}</span>
+      <span>{row.updated_at || '--'}</span>
     ),
     },
     {
@@ -441,7 +460,7 @@
   ];
 
   // 模拟数据源 - 实际应替换为真实API
-  const dataSource = ToolManageService.fetchToolsList;
+  const dataSource = SceneManageService.fetchSceneList;
 
   // 处理请求成功
   const handleRequestSuccess = (data: { results: SceneModel[]; total: number }) => {
@@ -452,8 +471,13 @@
     statusCounts.disabled = data.results.filter(item => item.status === 'disabled').length;
   };
 
-  // 搜索
+  // 搜索（回车或点击搜索按钮时触发）
   const handleSearch = () => {
+    // 清除防抖定时器，立即执行搜索
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
     fetchList();
   };
 
@@ -462,27 +486,56 @@
     fetchList();
   };
 
-  // 清空搜索
+  // 清空搜索条件，重新请求初始化数据
   const handleClearSearch = () => {
+    // 清除防抖定时器
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    // 重置搜索条件
     searchKeyword.value = '';
-    fetchList();
+    statusFilter.value = 'all';
+    // 清除 URL 中的所有搜索参数，只保留基础分页参数
+    replaceSearchParams({
+      page: 1,
+      page_size: 10,
+    });
+    // 刷新列表 - 由于 URL 已清除，重新加载页面时会使用干净的参数
+    nextTick(() => {
+      if (listRef.value) {
+        // 使用 initData 方法刷新，但需要先清理内部的 paramsMemo
+        // 由于组件限制，这里我们传入空值覆盖
+        listRef.value.fetchData({
+          keyword: '',
+          status: '',
+          page: 1,
+        });
+      }
+    });
   };
 
   // 获取列表数据
-  const fetchList = () => {
+  const fetchList = (extraParams: Record<string, any> = {}) => {
     if (!listRef.value) return;
-    const params: Record<string, any> = {};
-    if (statusFilter.value !== 'all') {
+    const params: Record<string, any> = {
+      ...extraParams,
+    };
+    // 状态过滤
+    if (statusFilter.value && statusFilter.value !== 'all') {
       params.status = statusFilter.value;
+    } else {
+      params.status = '';
     }
-    if (searchKeyword.value) {
-      params.keyword = searchKeyword.value;
-    }
+    // 关键字搜索
+    params.keyword = searchKeyword.value.trim();
+
     listRef.value.fetchData(params);
   };
 
   // 新建场景
   const handleCreateScene = () => {
+    editSceneId.value = undefined;
     createSceneVisible.value = true;
   };
 
@@ -493,14 +546,20 @@
 
   // 显示场景详情
   const handleShowSceneDetail = (row: SceneModel) => {
-    currentDetailSceneId.value = row.scene_id || row.uid;
+    currentDetailSceneId.value = row.scene_id;
     sceneDetailVisible.value = true;
   };
 
   // 编辑场景
   const handleEditScene = (row: SceneModel) => {
-    // TODO: 实现编辑场景逻辑
-    console.log('编辑场景', row);
+    editSceneId.value = row.scene_id;
+    createSceneVisible.value = true;
+  };
+
+  // 从详情侧边栏触发编辑
+  const handleDetailEdit = (row: SceneModel) => {
+    sceneDetailVisible.value = false;
+    handleEditScene(row);
   };
 
   // 切换状态
@@ -512,9 +571,11 @@
       disableDialogVisible.value = true;
     } else {
       // 启用直接执行
-      // TODO: 调用真实API
-      messageSuccess(t('启用成功'));
-      fetchList();
+      SceneManageService.enableScene(row.scene_id).then(() => {
+        messageSuccess(t('启用成功'));
+        fetchList();
+        sceneDetailRef.value?.refresh();
+      });
     }
   };
 
@@ -524,12 +585,14 @@
     if (disableConfirmName.value !== currentDisableScene.value.name) {
       return;
     }
-    // TODO: 调用真实API
-    messageSuccess(t('停用成功'));
-    disableDialogVisible.value = false;
-    disableConfirmName.value = '';
-    currentDisableScene.value = null;
-    fetchList();
+    SceneManageService.disableScene(currentDisableScene.value.scene_id).then(() => {
+      messageSuccess(t('停用成功'));
+      disableDialogVisible.value = false;
+      disableConfirmName.value = '';
+      currentDisableScene.value = null;
+      fetchList();
+      sceneDetailRef.value?.refresh();
+    });
   };
 
   // 取消停用
@@ -552,12 +615,13 @@
     if (deleteConfirmName.value !== currentDeleteScene.value.name) {
       return;
     }
-    // TODO: 调用真实API
-    messageSuccess(t('删除成功'));
-    deleteDialogVisible.value = false;
-    deleteConfirmName.value = '';
-    currentDeleteScene.value = null;
-    fetchList();
+    SceneManageService.deleteScene(currentDeleteScene.value.scene_id).then(() => {
+      messageSuccess(t('删除成功'));
+      deleteDialogVisible.value = false;
+      deleteConfirmName.value = '';
+      currentDeleteScene.value = null;
+      fetchList();
+    });
   };
 
   // 取消删除
@@ -574,6 +638,21 @@
       messageSuccess(t('复制成功'));
     });
   };
+
+  // 防抖搜索定时器
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // 监听搜索关键词变化，添加防抖
+  watch(searchKeyword, (newVal, oldVal) => {
+    if (newVal !== oldVal) {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+      }
+      searchDebounceTimer = setTimeout(() => {
+        fetchList();
+      }, 300);
+    }
+  });
 
   onMounted(() => {
     fetchList();
@@ -753,5 +832,24 @@
       }
     }
   }
+}
+
+.tag-list {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+  overflow: hidden;
+
+  .bk-tag {
+    flex-shrink: 0;
+  }
+}
+
+.tag-popover-content {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 20px;
+  word-break: break-all;
 }
 </style>
