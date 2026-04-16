@@ -135,7 +135,7 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import CardPartVue from '../../../tools/tools-square/add/components/card-part.vue';
+  import CardPartVue from '../../../scene-config/tool-manege/create-tool/components/card-part.vue';
 
   import fieldCom from './field-components.vue';
 
