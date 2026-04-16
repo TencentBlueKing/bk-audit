@@ -43,11 +43,11 @@
             :com-ref="comRef"
             :is-edit-mode="isEditMode"
             @apply-permission="handleApplyPermission"
-            @update:bk-vision-update-time="(val) => bkVisionUpdateTime = val"
-            @update:is-first-edit="(val) => isFirstEdit = val"
-            @update:is-show-component="(val) => isShowComponent = val"
-            @update:is-update="(val) => isUpdate = val"
-            @update:report-lists-panels="(val) => reportListsPanels = val" />
+            @update:bk-vision-update-time="(val: string) => bkVisionUpdateTime = val"
+            @update:is-first-edit="(val: boolean) => isFirstEdit = val"
+            @update:is-show-component="(val: boolean) => isShowComponent = val"
+            @update:is-update="(val: boolean) => isUpdate = val"
+            @update:report-lists-panels="(val: any) => reportListsPanels = val" />
 
           <component
             :is="ToolTypeComMap[formData.tool_type]"
