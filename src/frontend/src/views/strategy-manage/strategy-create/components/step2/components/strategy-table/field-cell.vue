@@ -161,7 +161,7 @@
   import ToolDetailModel from '@model/tool/tool-detail';
 
   import type StrategyFieldEvent from '@/domain/model/strategy/strategy-field-event';
-  import FieldReference from '@/views/tools/tools-square/add/components/data-search/components/field-reference/index.vue';
+  import FieldReference from '@/views/scene-config/tool-manege/create-tool/components/data-search/components/field-reference/index.vue';
 
 
   interface Props {
