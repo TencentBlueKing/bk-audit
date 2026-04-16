@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
+from collections import defaultdict
+
+from django.db.models import Count
 from rest_framework import serializers
 
 from services.web.scene.binding_validation import validate_platform_visibility_payload
-from services.web.scene.constants import SceneStatus, VisibilityScope
+from services.web.scene.constants import (
+    ResourceVisibilityType,
+    SceneStatus,
+    VisibilityScope,
+)
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -61,8 +68,92 @@ class SceneDataTableSerializer(serializers.ModelSerializer):
         fields = ["table_id", "filter_rules"]
 
 
+class SceneSystemInputSerializer(serializers.Serializer):
+    system_id = serializers.CharField(max_length=64)
+    is_all_systems = serializers.BooleanField(required=False, default=False)
+    filter_rules = serializers.ListField(child=serializers.DictField(), required=False, default=list)
+
+
+class SceneTableInputSerializer(serializers.Serializer):
+    table_id = serializers.CharField(max_length=128)
+    filter_rules = serializers.ListField(child=serializers.DictField(), required=False, default=list)
+
+
 class SceneListSerializer(serializers.ModelSerializer):
     """场景列表序列化器"""
+
+    system_count = serializers.IntegerField(read_only=True)
+    table_count = serializers.IntegerField(read_only=True)
+    strategy_ids = serializers.SerializerMethodField()
+    risk_count = serializers.SerializerMethodField()
+
+    def _get_scene_related_ids_map(self):
+        if hasattr(self, "_scene_related_ids_map"):
+            return self._scene_related_ids_map
+
+        instance = self.instance
+        if instance is None:
+            self._scene_related_ids_map = {}
+            return self._scene_related_ids_map
+
+        if hasattr(instance, "__iter__") and not isinstance(instance, (dict, str, bytes)):
+            scenes = list(instance)
+        else:
+            scenes = [instance]
+
+        scene_ids = [scene.scene_id for scene in scenes if getattr(scene, "scene_id", None) is not None]
+        if not scene_ids:
+            self._scene_related_ids_map = {}
+            return self._scene_related_ids_map
+
+        raw_scene_strategy_ids_map = defaultdict(set)
+        raw_strategy_ids = set()
+        bindings = ResourceBindingScene.objects.filter(
+            scene_id__in=scene_ids,
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+        ).values_list("scene_id", "binding__resource_id")
+        for scene_id, strategy_id_str in bindings:
+            try:
+                strategy_id = int(strategy_id_str)
+            except (TypeError, ValueError):
+                continue
+            raw_scene_strategy_ids_map[scene_id].add(strategy_id)
+            raw_strategy_ids.add(strategy_id)
+
+        valid_strategy_ids = set()
+        if raw_strategy_ids:
+            from services.web.strategy_v2.models import Strategy
+
+            valid_strategy_ids = set(
+                Strategy.objects.filter(strategy_id__in=raw_strategy_ids).values_list("strategy_id", flat=True)
+            )
+
+        strategy_risk_count_map = {}
+        if valid_strategy_ids:
+            from services.web.risk.models import Risk
+
+            strategy_risk_count_map = {
+                item["strategy_id"]: item["count"]
+                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids)
+                .values("strategy_id")
+                .annotate(count=Count("risk_id"))
+            }
+
+        self._scene_related_ids_map = {}
+        for scene_id in scene_ids:
+            scene_strategy_ids = sorted(raw_scene_strategy_ids_map.get(scene_id, set()) & valid_strategy_ids)
+            scene_risk_count = sum(strategy_risk_count_map.get(strategy_id, 0) for strategy_id in scene_strategy_ids)
+            self._scene_related_ids_map[scene_id] = {
+                "strategy_ids": scene_strategy_ids,
+                "risk_count": scene_risk_count,
+            }
+        return self._scene_related_ids_map
+
+    def get_strategy_ids(self, obj):
+        return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("strategy_ids", [])
+
+    def get_risk_count(self, obj):
+        return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("risk_count", 0)
 
     class Meta:
         model = Scene
@@ -78,6 +169,10 @@ class SceneListSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "updated_at",
+            "system_count",
+            "table_count",
+            "strategy_ids",
+            "risk_count",
         ]
 
 
@@ -114,8 +209,8 @@ class CreateSceneSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, default="", allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), min_length=1)
     users = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-    systems = serializers.ListField(child=serializers.DictField(), required=False, default=list)
-    tables = serializers.ListField(child=serializers.DictField(), required=False, default=list)
+    systems = SceneSystemInputSerializer(many=True, required=False, default=list)
+    tables = SceneTableInputSerializer(many=True, required=False, default=list)
 
 
 class UpdateSceneSerializer(serializers.Serializer):
@@ -126,8 +221,8 @@ class UpdateSceneSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), required=False)
     users = serializers.ListField(child=serializers.CharField(), required=False)
-    systems = serializers.ListField(child=serializers.DictField(), required=False)
-    tables = serializers.ListField(child=serializers.DictField(), required=False)
+    systems = SceneSystemInputSerializer(many=True, required=False)
+    tables = SceneTableInputSerializer(many=True, required=False)
 
 
 class SceneInfoUpdateSerializer(serializers.Serializer):

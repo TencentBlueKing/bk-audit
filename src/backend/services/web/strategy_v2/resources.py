@@ -574,8 +574,15 @@ class DeleteStrategy(StrategyV2Base):
             strategy.save(update_fields=["status", "status_msg"])
             raise err
         # delete strategy
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
+        ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+        ).delete()
         self.delete_enum_mappings(strategy_id=strategy.strategy_id)
 
 

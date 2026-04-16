@@ -21,7 +21,9 @@ from bk_resource import resource
 from bk_resource.exceptions import ValidateException
 from django.db.models import Q
 from django.test import RequestFactory
+from django.utils import timezone
 
+from services.web.risk.models import Risk
 from services.web.scene.constants import (
     BindingType,
     PanelCategory,
@@ -43,6 +45,7 @@ from services.web.scene.models import (
     SceneSystem,
 )
 from services.web.scene.permissions import check_scene_permission
+from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
 from services.web.vision.models import VisionPanel
 from tests.base import TestCase
@@ -604,6 +607,54 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.list_scene({})
         self.assertGreaterEqual(len(result), 1)
 
+    def test_scene_list_contains_related_strategy_ids_and_risk_count(self):
+        """测试场景列表返回关联策略ID和风险数量"""
+        strategy = Strategy.objects.create(strategy_name="场景策略")
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        Risk.objects.create(
+            raw_event_id="raw-scene-list-1",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+        self.assertIn(strategy.strategy_id, target["strategy_ids"])
+        self.assertEqual(target["risk_count"], 1)
+
+    def test_scene_list_contains_system_count_and_table_count(self):
+        """测试场景列表返回系统和数据表数量"""
+        SceneSystem.objects.create(scene=self.scene, system_id="bk_cmdb", is_all_systems=False, filter_rules=[])
+        SceneSystem.objects.create(scene=self.scene, system_id="bk_iam", is_all_systems=False, filter_rules=[])
+        SceneDataTable.objects.create(scene=self.scene, table_id="table_1", filter_rules=[])
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+        self.assertEqual(target["system_count"], 2)
+        self.assertEqual(target["table_count"], 1)
+
+    def test_scene_list_ignores_deleted_strategy_binding(self):
+        """测试场景列表忽略已删除策略的残留绑定"""
+        strategy = Strategy.objects.create(strategy_name="已删除场景策略")
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        strategy.delete()
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+        self.assertNotIn(strategy.strategy_id, target["strategy_ids"])
+        self.assertEqual(target["risk_count"], 0)
+
     def test_scene_list_filter_by_status(self):
         """测试按状态过滤场景列表"""
         result = self.resource.scene.list_scene({"status": "enabled"})
@@ -618,6 +669,28 @@ class TestSceneResource(TestCase):
         """测试场景详情"""
         result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
         self.assertEqual(result["name"], "主机安全审计")
+
+    def test_create_scene_validate_systems_schema(self):
+        """测试创建场景时 systems 子序列化器校验生效"""
+        with self.assertRaises(ValidateException):
+            self.resource.scene.create_scene(
+                {
+                    "name": "systems-校验",
+                    "managers": ["admin"],
+                    "systems": [{"is_all_systems": True}],
+                }
+            )
+
+    def test_create_scene_validate_tables_schema(self):
+        """测试创建场景时 tables 子序列化器校验生效"""
+        with self.assertRaises(ValidateException):
+            self.resource.scene.create_scene(
+                {
+                    "name": "tables-校验",
+                    "managers": ["admin"],
+                    "tables": [{"filter_rules": []}],
+                }
+            )
 
     def test_scene_retrieve_not_found(self):
         """测试场景不存在"""
@@ -670,6 +743,41 @@ class TestSceneResource(TestCase):
             result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
             self.assertEqual(result["managers"], ["scene_admin"])
             self.assertEqual(result["users"], ["scene_user1", "scene_user2"])
+
+    def test_update_scene_validate_systems_schema(self):
+        """测试更新场景时 systems 子序列化器校验生效"""
+        with self.assertRaises(ValidateException):
+            self.resource.scene.update_scene(
+                {
+                    "scene_id": self.scene.scene_id,
+                    "systems": [{"is_all_systems": True}],
+                }
+            )
+
+    def test_update_scene_validate_tables_schema(self):
+        """测试更新场景时 tables 子序列化器校验生效"""
+        with self.assertRaises(ValidateException):
+            self.resource.scene.update_scene(
+                {
+                    "scene_id": self.scene.scene_id,
+                    "tables": [{"filter_rules": []}],
+                }
+            )
+
+    def test_delete_scene_ignores_deleted_strategy_binding(self):
+        """测试删除场景时会清理已删除策略的残留绑定"""
+        strategy = Strategy.objects.create(strategy_name="待删除策略")
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        strategy.delete()
+
+        result = self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
+        self.assertEqual(result["message"], "success")
+        self.assertFalse(Scene.objects.filter(scene_id=self.scene.scene_id).exists())
 
     def test_scene_disable(self):
         """测试停用场景"""
