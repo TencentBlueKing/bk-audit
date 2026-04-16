@@ -27,6 +27,7 @@ from iam import Resource
 
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE
 from apps.permission.handlers.actions import ActionMeta
+from services.web.common.constants import ScopeType
 from services.web.query.constants import COLLECT_SEARCH_CONFIG, DATE_FORMAT
 from services.web.query.constants import DEFAULT_TIMEDELTA as _DEFAULT_TIMEDELTA
 from tests.test_databus.collector_plugin.constants import INDEX_SET_ID as _INDEX_SET_ID
@@ -66,6 +67,7 @@ GET_AUTH_SYSTEMS_API_RESP = [
 ]
 SEARCH_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
+    "scope_type": ScopeType.CROSS_SYSTEM,
     "start_time": "2022-01-01 00:00:00",
     "end_time": "2022-12-31 00:00:00",
     "query_string": "",
@@ -107,6 +109,7 @@ start_timestamp = int(start_time.timestamp()) * 1000
 end_timestamp = int(end_time.timestamp()) * 1000
 COLLECTOR_SEARCH_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
+    "scope_type": ScopeType.CROSS_SYSTEM,
     "start_time": start_time.isoformat(),
     "end_time": end_time.isoformat(),
     "conditions": [
@@ -167,6 +170,9 @@ COLLECTOR_SEARCH_PARAMS = {
     "page": PAGE,
     "page_size": PAGE_SIZE,
 }
+
+COLLECTOR_SEARCH_ALL_PARAMS = copy.deepcopy(COLLECTOR_SEARCH_PARAMS)
+COLLECTOR_SEARCH_ALL_PARAMS.pop("scope_type")
 
 # CollectorSearch BKBASE RESP
 BKBASE_COLLECTOR_SEARCH_DATA_RESP = {

@@ -14,6 +14,12 @@ from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.fields import EXTEND_DATA, SNAPSHOT_USER_INFO
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    SceneStatus,
+)
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
@@ -27,6 +33,7 @@ from tests.base import TestCase
 class StrategyResourcesTest(TestCase):
     def setUp(self):
         super().setUp()
+        self.scene = Scene.objects.create(name="test-scene", status=SceneStatus.ENABLED, managers=["admin"])
         self.strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="example",
@@ -140,8 +147,14 @@ class StrategyResourcesTest(TestCase):
         mock_list_updates.return_value = [self.strategy]
         tag = Tag.objects.create(tag_name="Beta")
         StrategyTag.objects.create(strategy=self.strategy, tag=tag)
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(self.strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
 
-        tags = self.resource.strategy_v2.list_strategy_tags()
+        tags = self.resource.strategy_v2.list_strategy_tags(scene_id=self.scene.scene_id)
 
         self.assertEqual(tags[0]["tag_id"], HAS_UPDATE_TAG_ID)
         self.assertEqual(tags[0]["strategy_count"], len(mock_list_updates.return_value))

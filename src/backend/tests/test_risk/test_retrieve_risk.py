@@ -17,6 +17,7 @@ from sqlglot import errors as sqlglot_errors
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
+from services.web.common.constants import ScopeType
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
@@ -149,11 +150,14 @@ class TestListRiskResource(TestCase):
 
     def _call_resource(self, payload):
         request = self._make_request()
-        data = self.resource.risk.list_risk({"scene_id": self.scene_id, **payload}, _request=request)
+        data = self.resource.risk.list_risk(
+            {"scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id), **payload},
+            _request=request,
+        )
         return data
 
     def _payload(self, **kwargs):
-        return {"scene_id": self.scene_id, **kwargs}
+        return {"scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id), **kwargs}
 
     def test_list_risk_via_db(self):
         data = self._call_resource({})
@@ -821,7 +825,8 @@ class TestListRiskResource(TestCase):
 
         request_first = self._make_request({"page": 1, "page_size": 1})
         bkbase_payload = {
-            "scene_id": self.scene_id,
+            "scope_type": ScopeType.SCENE,
+            "scope_id": str(self.scene_id),
             "title": "bkbase-title",
             "event_filters": [{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
         }
@@ -871,7 +876,8 @@ class TestListRiskResource(TestCase):
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
         payload = {
-            "scene_id": self.scene_id,
+            "scope_type": ScopeType.SCENE,
+            "scope_id": str(self.scene_id),
             "title": "bkbase-title",
             "event_filters": [
                 {
@@ -1024,7 +1030,9 @@ class TestListRiskResource(TestCase):
         other_tag = Tag.objects.create(tag_name="other-tag")
         StrategyTag.objects.create(strategy=other_strategy, tag=other_tag)
 
-        result = ListRiskTags().perform_request({"risk_view_type": "all", "scene_id": self.scene_id})
+        result = ListRiskTags().perform_request(
+            {"risk_view_type": "all", "scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id)}
+        )
         tag_ids = [t.tag_id if hasattr(t, "tag_id") else t["tag_id"] for t in result]
         self.assertIn(tag.tag_id, tag_ids)
         self.assertNotIn(other_tag.tag_id, tag_ids)
@@ -1046,7 +1054,9 @@ class TestListRiskResource(TestCase):
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
         )
 
-        result = ListRiskStrategy().perform_request({"risk_view_type": "all", "scene_id": self.scene_id})
+        result = ListRiskStrategy().perform_request(
+            {"risk_view_type": "all", "scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id)}
+        )
         strategy_ids = {s.strategy_id if hasattr(s, "strategy_id") else s["strategy_id"] for s in result}
         self.assertIn(self.strategy.strategy_id, strategy_ids)
         self.assertNotIn(other_strategy.strategy_id, strategy_ids)
@@ -1126,7 +1136,7 @@ class TestListMineAndNoticingRisk(TestCase):
         return request
 
     def _payload(self, **kwargs):
-        return {"scene_id": self.scene_id, **kwargs}
+        return {"scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id), **kwargs}
 
     def test_list_mine_risk(self):
         request = self._make_request()
@@ -1187,6 +1197,23 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
+
+    def test_list_mine_risk_without_scope(self):
+        """个人视图不传 scope 时也应可查询。"""
+        request = self._make_request()
+        response = ListMineRisk().request({"page": 1, "page_size": 10}, _request=request)
+        risk_ids = {item["risk_id"] for item in response["results"]}
+        self.assertIn(self.risk_owned.risk_id, risk_ids)
+        self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
+
+    def test_list_noticing_risk_without_scope(self):
+        """关注视图不传 scope 时也应可查询。"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        request = self._make_request()
+        response = ListNoticingRisk().request({"page": 1, "page_size": 10}, _request=request)
+        risk_ids = {item["risk_id"] for item in response["results"]}
+        self.assertIn(self.risk_noticed.risk_id, risk_ids)
 
     # ──── 排序 ────
 
@@ -1804,7 +1831,7 @@ class TestListProcessedRisk(TestCase):
         return request
 
     def _payload(self, **kwargs):
-        return {"scene_id": self.scene_id, **kwargs}
+        return {"scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id), **kwargs}
 
     def test_list_processed_risk_returns_past_risks(self):
         from services.web.risk.resources.risk import ListProcessedRisk
@@ -1816,6 +1843,15 @@ class TestListProcessedRisk(TestCase):
         self.assertIn("R-OPEN", risk_ids)
         self.assertNotIn("R-CURRENT", risk_ids)
         self.assertNotIn("R-NOTICED", risk_ids)
+
+    def test_list_processed_risk_without_scope(self):
+        from services.web.risk.resources.risk import ListProcessedRisk
+
+        request = self._make_request()
+        resp = ListProcessedRisk().request({"page": 1, "page_size": 10}, _request=request)
+        risk_ids = {item["risk_id"] for item in resp["results"]}
+        self.assertIn("R-PAST", risk_ids)
+        self.assertIn("R-OPEN", risk_ids)
 
     def test_list_processed_risk_includes_closed(self):
         from services.web.risk.resources.risk import ListProcessedRisk

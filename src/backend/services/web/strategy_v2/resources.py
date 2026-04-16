@@ -88,6 +88,8 @@ from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -163,11 +165,13 @@ from services.web.strategy_v2.serializers import (
     ListLinkTableAllResponseSerializer,
     ListLinkTableRequestSerializer,
     ListLinkTableResponseSerializer,
+    ListLinkTableTagsRequestSerializer,
     ListLinkTableTagsResponseSerializer,
     ListStrategyFieldsRequestSerializer,
     ListStrategyFieldsResponseSerializer,
     ListStrategyRequestSerializer,
     ListStrategyResponseSerializer,
+    ListStrategyTagsRequestSerializer,
     ListStrategyTagsResponseSerializer,
     ListTablesRequestSerializer,
     PreviewReportRequestSerializer,
@@ -917,12 +921,26 @@ class ListHasUpdateStrategy(StrategyV2Base):
 
 class ListStrategyTags(StrategyV2Base):
     name = gettext_lazy("List Strategy Tags")
+    RequestSerializer = ListStrategyTagsRequestSerializer
     ResponseSerializer = ListStrategyTagsResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+        strategies = SceneScopeFilter.filter_queryset(
+            queryset=Strategy.objects.exclude(source=StrategySource.SYSTEM),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
+        strategy_ids = list(strategies.values_list("strategy_id", flat=True))
         # load all tags
-        tag_count = list(StrategyTag.objects.all().values("tag_id").annotate(strategy_count=Count("tag_id")).order_by())
+        tag_count = list(
+            StrategyTag.objects.filter(strategy_id__in=strategy_ids)
+            .values("tag_id")
+            .annotate(strategy_count=Count("tag_id"))
+            .order_by()
+        )
         tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
         for t in tag_count:
             t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
@@ -933,7 +951,13 @@ class ListStrategyTags(StrategyV2Base):
             {
                 "tag_name": str(HAS_UPDATE_TAG_NAME),
                 "tag_id": HAS_UPDATE_TAG_ID,
-                "strategy_count": len(resource.strategy_v2.list_has_update_strategy()),
+                "strategy_count": len(
+                    [
+                        item
+                        for item in resource.strategy_v2.list_has_update_strategy()
+                        if item.strategy_id in strategy_ids
+                    ]
+                ),
             }
         ] + tag_count
         # response
@@ -1659,14 +1683,26 @@ class GetLinkTable(LinkTableBase):
 
 class ListLinkTableTags(LinkTableBase):
     name = gettext_lazy("查询联表标签列表")
+    RequestSerializer = ListLinkTableTagsRequestSerializer
     ResponseSerializer = ListLinkTableTagsResponseSerializer
     many_response_data = True
     audit_action = ActionEnum.LIST_LINK_TABLE
 
     def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+        link_tables = SceneScopeFilter.filter_queryset(
+            queryset=LinkTable.list_max_version_link_table(),
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.LINK_TABLE,
+            pk_field="uid",
+        )
+        link_table_uids = list(link_tables.values_list("uid", flat=True))
         # load all tags
         tag_count = list(
-            LinkTableTag.objects.all().values("tag_id").annotate(link_table_count=Count("tag_id")).order_by()
+            LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
+            .values("tag_id")
+            .annotate(link_table_count=Count("tag_id"))
+            .order_by()
         )
         tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
         for t in tag_count:
@@ -1674,13 +1710,17 @@ class ListLinkTableTags(LinkTableBase):
         # sort
         tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
         # add no tags
+        tagged_link_table_uids = set(
+            LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
+            .values_list("link_table_uid", flat=True)
+            .distinct()
+        )
+        no_tag_count = len(set(link_table_uids) - tagged_link_table_uids)
         tag_count = [
             {
                 "tag_name": str(NO_TAG_NAME),
                 "tag_id": NO_TAG_ID,
-                "link_table_count": LinkTable.list_max_version_link_table()
-                .exclude(uid__in=LinkTableTag.objects.values_list("link_table_uid").distinct())
-                .count(),
+                "link_table_count": no_tag_count,
             }
         ] + tag_count
         # response

@@ -19,10 +19,9 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from typing import Type
 from unittest import mock
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 from bk_resource import Resource
-from django.db.models import Q
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.request import Request
@@ -30,6 +29,7 @@ from rest_framework.test import APIRequestFactory
 
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
+from apps.permission.handlers.permission import Permission
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,
@@ -48,17 +48,12 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import ToolDoesNotExist
 from services.web.tool.models import DataSearchToolConfig, Tool, ToolFavorite, ToolTag
-from services.web.tool.permissions import ToolPermission
 from services.web.tool.resources import (
     DeleteTool,
     FavoriteTool,
     GetToolDetail,
     ListTool,
     ListToolAll,
-)
-from tests.test_tool.constants import (
-    MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY,
-    mock_wrapper_permission_field,
 )
 
 
@@ -170,9 +165,16 @@ class ToolFavoriteTestCase(TestCase):
 
         resource = resource_cls()
         request_data = dict(data)
-        if resource_cls is ListTool:
-            request_data.setdefault("scene_id", self.scene_id)
-        response = resource.request(request_data, _request=drf_request)
+        if resource_cls in [ListTool, ListToolAll]:
+            request_data.setdefault("scope_type", "scene")
+            request_data.setdefault("scope_id", str(self.scene_id))
+            with (
+                patch("services.web.tool.resources.ScopePermission.get_scene_ids", return_value=[self.scene_id]),
+                patch("services.web.tool.resources.ScopePermission.get_system_ids", return_value=[]),
+            ):
+                response = resource.request(request_data, _request=drf_request)
+        else:
+            response = resource.request(request_data, _request=drf_request)
         # response 可能直接是 ReturnDict/list 或者是 Response 对象
         if hasattr(response, 'data'):
             return response.data.get("results", response.data)
@@ -254,12 +256,8 @@ class ToolFavoriteTestCase(TestCase):
 
     # ==================== 收藏状态在列表中的返回测试 ====================
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_with_favorite_status(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_list_tool_with_favorite_status(self):
         """测试工具列表返回收藏状态"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_1
         ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
@@ -277,12 +275,8 @@ class ToolFavoriteTestCase(TestCase):
         self.assertTrue(tool_1_data["favorite"])
         self.assertFalse(tool_2_data["favorite"])
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_favorite_first_ordering(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_list_tool_favorite_first_ordering(self):
         """测试工具列表收藏优先排序"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_2（名称为 Beta，按名称排序应该在后面）
         ToolFavorite.objects.create(tool_uid=self.tool_2.uid, username=self.test_user)
@@ -297,12 +291,8 @@ class ToolFavoriteTestCase(TestCase):
 
     # ==================== 收藏筛选测试 ====================
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_filter_by_favorite_tag(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_list_tool_filter_by_favorite_tag(self):
         """测试通过收藏虚拟标签筛选工具"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_1
         ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
@@ -315,12 +305,8 @@ class ToolFavoriteTestCase(TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["uid"], self.tool_1.uid)
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_filter_by_favorite_tag_empty(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_list_tool_filter_by_favorite_tag_empty(self):
         """测试没有收藏时通过收藏虚拟标签筛选返回空"""
-        mock_authed_tool_filter.return_value = Q()
 
         with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
             data = {"keyword": "", "tags": [int(ToolTagsEnum.FAVORITE_TOOLS.value)], "page": 1, "page_size": 10}
@@ -331,12 +317,8 @@ class ToolFavoriteTestCase(TestCase):
 
     # ==================== 收藏状态在详情中的返回测试 ====================
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_get_tool_detail_with_favorite_status(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_get_tool_detail_with_favorite_status(self):
         """测试工具详情返回收藏状态"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_1
         ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
@@ -346,12 +328,9 @@ class ToolFavoriteTestCase(TestCase):
 
         self.assertTrue(result["favorite"])
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_get_tool_detail_without_favorite(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    @patch.object(Permission, "has_action_any_permission", return_value=True)
+    def test_get_tool_detail_without_favorite(self, _mock_has_action_any_permission):
         """测试工具详情未收藏状态"""
-        mock_authed_tool_filter.return_value = Q()
 
         with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
             result = self._call_resource_with_request(GetToolDetail, {"uid": self.tool_1.uid})
@@ -377,14 +356,8 @@ class ToolFavoriteTestCase(TestCase):
 
     # ==================== 工具版本更新后收藏状态测试 ====================
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_favorite_persists_after_tool_version_update(
-        self, mock_authed_tool_filter, mock_fetch_tool_permission_tags
-    ):
+    def test_favorite_persists_after_tool_version_update(self):
         """测试工具版本更新后收藏状态仍然保留（核心场景：使用 tool_uid 而非 tool_id 关联）"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_1（版本1）
         ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
@@ -437,12 +410,8 @@ class ToolFavoriteTestCase(TestCase):
 
     # ==================== ListToolAll 收藏状态测试 ====================
 
-    @patch("services.web.tool.permissions.wrapper_permission_field", mock_wrapper_permission_field)
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_all_with_favorite_status(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+    def test_list_tool_all_with_favorite_status(self):
         """测试全量工具列表返回收藏状态"""
-        mock_authed_tool_filter.return_value = Q()
 
         # 收藏 tool_1
         ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)

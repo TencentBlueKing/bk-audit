@@ -38,6 +38,7 @@ from services.web.risk.models import (
 )
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
+    ListAllProcessApplicationsReqSerializer,
     ListProcessApplicationsReqSerializer,
     ListRiskResponseSerializer,
     ProcessApplicationsInfoSerializer,
@@ -96,11 +97,10 @@ class ListProcessApplications(ProcessApplicationMeta):
 
 class ListAllProcessApplications(ProcessApplicationMeta):
     name = gettext_lazy("获取所有处理套餐列表")
-    RequestSerializer = ListProcessApplicationsReqSerializer
+    RequestSerializer = ListAllProcessApplicationsReqSerializer
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data.pop("scene_id", None)
         if (
             not ActionPermission(
                 actions=[
@@ -115,10 +115,12 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             and not TicketPermission.objects.filter(user=get_request_username(), user_type=UserType.OPERATOR).exists()
         ):
             return []
+        scene_id = validated_request_data["scene_id"]
+        process_applications = ProcessApplication.objects.all()
         from services.web.scene.filters import SceneScopeFilter
 
         process_applications = SceneScopeFilter.filter_queryset(
-            queryset=ProcessApplication.objects.all(),
+            queryset=process_applications,
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             pk_field="id",

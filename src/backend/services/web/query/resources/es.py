@@ -24,8 +24,6 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.permissions import SearchLogPermission
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
-from core.exceptions import PermissionException
 from services.web.databus.constants import DEFAULT_STORAGE_CONFIG_KEY
 from services.web.query.serializers import (
     EsQueryAttrSerializer,
@@ -75,6 +73,8 @@ class SearchAllResource(QueryBaseResource, SearchDataParser):
         # 调用BK-LOG查询事件
         page = validated_request_data.pop("page")
         num_pages = validated_request_data.pop("page_size")
+        validated_request_data.pop("scope_type", None)
+        validated_request_data.pop("scope_id", None)
         resp = resource.query.es_query(**validated_request_data)
         total = resp.get("hits", {}).get("total", 0)
         hits = self.parse_data([hit["_source"] for hit in resp.get("hits", {}).get("hits", [])])
@@ -102,16 +102,13 @@ class SearchResource(SearchAllResource):
 
     def validate_request_data(self, request_data):
         validated_request_data = super().validate_request_data(request_data)
-        # 过滤有权限的系统
-        systems, authorized_systems = SearchLogPermission.get_auth_systems(validated_request_data["namespace"])
-        if not authorized_systems:
-            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
-            raise PermissionException(
-                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
-                apply_url=apply_url,
-                permission=apply_data,
-            )
-        if len(systems) != len(authorized_systems):
+        authorized_systems = SearchLogPermission.get_scope_auth_systems(
+            namespace=validated_request_data["namespace"],
+            scope_type=validated_request_data["scope_type"],
+            scope_id=validated_request_data.get("scope_id"),
+            username=self.get_request_username(),
+        )
+        if SearchLogPermission.should_append_system_filter(validated_request_data["namespace"], authorized_systems):
             validated_request_data["filter"].append(
                 {
                     "field": "system_id",

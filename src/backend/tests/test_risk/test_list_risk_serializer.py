@@ -22,6 +22,7 @@ from django.test import SimpleTestCase
 from django.utils import timezone
 from sqlglot import exp
 
+from services.web.common.constants import ScopeType
 from services.web.risk.constants import (
     EventFilterOperator,
     RiskDisplayStatus,
@@ -189,19 +190,25 @@ class TestListRiskResponseSerializer(SimpleTestCase):
 
 
 class TestListRiskRequestSerializer(SimpleTestCase):
+    @staticmethod
+    def _scope_data(data: dict) -> dict:
+        return {"scope_type": ScopeType.CROSS_SCENE, **data}
+
     def test_event_data_order_requires_matching_filter(self):
         serializer = ListRiskRequestSerializer(
-            data={
-                "sort": ["event_data.ip"],
-                "event_filters": [
-                    {
-                        "field": "other",
-                        "display_name": "其他",
-                        "operator": EventFilterOperator.EQUAL.value,
-                        "value": "x",
-                    }
-                ],
-            }
+            data=self._scope_data(
+                {
+                    "sort": ["event_data.ip"],
+                    "event_filters": [
+                        {
+                            "field": "other",
+                            "display_name": "其他",
+                            "operator": EventFilterOperator.EQUAL.value,
+                            "value": "x",
+                        }
+                    ],
+                }
+            )
         )
 
         self.assertFalse(serializer.is_valid())
@@ -210,17 +217,19 @@ class TestListRiskRequestSerializer(SimpleTestCase):
 
     def test_event_data_order_passes_with_matching_filter(self):
         serializer = ListRiskRequestSerializer(
-            data={
-                "sort": ["-event_data.ip"],
-                "event_filters": [
-                    {
-                        "field": "ip",
-                        "display_name": "IP",
-                        "operator": EventFilterOperator.EQUAL.value,
-                        "value": "1.1.1.1",
-                    }
-                ],
-            }
+            data=self._scope_data(
+                {
+                    "sort": ["-event_data.ip"],
+                    "event_filters": [
+                        {
+                            "field": "ip",
+                            "display_name": "IP",
+                            "operator": EventFilterOperator.EQUAL.value,
+                            "value": "1.1.1.1",
+                        }
+                    ],
+                }
+            )
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -230,7 +239,7 @@ class TestListRiskRequestSerializer(SimpleTestCase):
 
     def test_status_mapped_to_display_status_in_validated_data(self):
         """传入 status 后，validate 应将其重命名为 display_status"""
-        serializer = ListRiskRequestSerializer(data={"status": "closed"})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"status": "closed"}))
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         validated = serializer.validated_data
@@ -241,7 +250,7 @@ class TestListRiskRequestSerializer(SimpleTestCase):
 
     def test_empty_status_not_mapped_to_display_status(self):
         """传入空字符串 status 时，display_status 不应出现在 validated_data 中"""
-        serializer = ListRiskRequestSerializer(data={"status": ""})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"status": ""}))
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         validated = serializer.validated_data
@@ -251,13 +260,29 @@ class TestListRiskRequestSerializer(SimpleTestCase):
 
     def test_multiple_status_values_mapped_to_display_status(self):
         """传入多个 status 值（逗号分隔），应正确拆分映射到 display_status"""
-        serializer = ListRiskRequestSerializer(data={"status": "closed,processing,await_deal"})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"status": "closed,processing,await_deal"}))
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         validated = serializer.validated_data
         self.assertIn("display_status", validated)
         self.assertEqual(validated["display_status"], ["closed", "processing", "await_deal"])
         self.assertNotIn("status", validated)
+
+    def test_scope_is_optional(self):
+        """风险列表接口应支持不传 scope。"""
+        serializer = ListRiskRequestSerializer(data={"status": "closed"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        self.assertNotIn("scope_type", validated)
+        self.assertNotIn("scope_id", validated)
+
+    def test_scope_id_requires_scope_type(self):
+        """仅传 scope_id 时应校验失败。"""
+        serializer = ListRiskRequestSerializer(data={"scope_id": "2"})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("scope_type", serializer.errors)
 
 
 class TestBkBaseEventOrdering(SimpleTestCase):
@@ -402,33 +427,37 @@ class TestBkBaseEventOrdering(SimpleTestCase):
 class TestListRiskRequestSerializerHasReport(SimpleTestCase):
     """ListRiskRequestSerializer has_report 字段验证"""
 
+    @staticmethod
+    def _scope_data(data: dict) -> dict:
+        return {"scope_type": ScopeType.CROSS_SCENE, **data}
+
     def test_has_report_true_is_valid(self):
         """传入 has_report=True 时序列化器合法"""
-        serializer = ListRiskRequestSerializer(data={"has_report": True})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"has_report": True}))
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertIs(serializer.validated_data["has_report"], True)
 
     def test_has_report_false_is_valid(self):
         """传入 has_report=False 时序列化器合法，且值保留为 False"""
-        serializer = ListRiskRequestSerializer(data={"has_report": False})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"has_report": False}))
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertIs(serializer.validated_data["has_report"], False)
 
     def test_has_report_null_is_valid(self):
         """传入 has_report=null 时序列化器合法（allow_null=True）"""
-        serializer = ListRiskRequestSerializer(data={"has_report": None})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"has_report": None}))
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertIsNone(serializer.validated_data["has_report"])
 
     def test_has_report_not_provided_is_valid(self):
         """不传 has_report 时序列化器合法，validated_data 中不含该键"""
-        serializer = ListRiskRequestSerializer(data={})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({}))
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertNotIn("has_report", serializer.validated_data)
 
     def test_has_report_not_split_by_comma_logic(self):
         """has_report 不被通用逗号分割逻辑处理，布尔值保持原样"""
-        serializer = ListRiskRequestSerializer(data={"has_report": True})
+        serializer = ListRiskRequestSerializer(data=self._scope_data({"has_report": True}))
         self.assertTrue(serializer.is_valid(), serializer.errors)
         # 确认 validated_data 中 has_report 是布尔值，而非列表
         self.assertIsInstance(serializer.validated_data["has_report"], bool)

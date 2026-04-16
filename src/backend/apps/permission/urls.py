@@ -73,14 +73,12 @@ except (RuntimeError, ImportError):
     SceneResourceProvider = None
 
 try:
-    from services.web.process_application.provider import (
-        ProcessApplicationResourceProvider,
-    )
+    from services.web.risk.provider import ProcessApplicationResourceProvider
 except (RuntimeError, ImportError):
     ProcessApplicationResourceProvider = None
 
 try:
-    from services.web.rule.provider import RuleResourceProvider
+    from services.web.risk.provider import RuleResourceProvider
 except (RuntimeError, ImportError):
     RuleResourceProvider = None
 

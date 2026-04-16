@@ -407,12 +407,12 @@ class TestListStrategyRequestSerializer:
         serializer = ListStrategyRequestSerializer()
         assert "scene_id" in serializer.fields
 
-    def test_scene_id_not_required(self):
-        """测试 scene_id 非必填"""
+    def test_scene_id_required(self):
+        """测试 scene_id 为必填"""
         from services.web.strategy_v2.serializers import ListStrategyRequestSerializer
 
         serializer = ListStrategyRequestSerializer()
-        assert serializer.fields["scene_id"].required is False
+        assert serializer.fields["scene_id"].required is True
 
 
 class TestCreateStrategyRequestSerializer:
@@ -436,12 +436,12 @@ class TestListNoticeGroupRequestSerializer:
         serializer = ListNoticeGroupRequestSerializer()
         assert "scene_id" in serializer.fields
 
-    def test_scene_id_not_required(self):
-        """测试 scene_id 非必填"""
+    def test_scene_id_required(self):
+        """测试 scene_id 为必填"""
         from apps.notice.serializers import ListNoticeGroupRequestSerializer
 
         serializer = ListNoticeGroupRequestSerializer()
-        assert serializer.fields["scene_id"].required is False
+        assert serializer.fields["scene_id"].required is True
 
 
 class TestCreateNoticeGroupRequestSerializer:
@@ -516,12 +516,12 @@ class TestListRiskRequestSerializer:
         serializer = ListRiskRequestSerializer()
         assert "scope_type" in serializer.fields
 
-    def test_scope_type_is_required(self):
-        """测试 scope_type 必填"""
+    def test_scope_type_is_optional(self):
+        """测试 scope_type 可选"""
         from services.web.risk.serializers import ListRiskRequestSerializer
 
         serializer = ListRiskRequestSerializer()
-        assert serializer.fields["scope_type"].required is True
+        assert serializer.fields["scope_type"].required is False
 
     def test_scope_id_field_exists(self):
         """测试 ListRiskRequestSerializer 包含 scope_id 字段"""
@@ -1145,6 +1145,32 @@ class TestCreateSerializerScopeValidation:
         assert "scene_id" in serializer.fields
         assert serializer.fields["scene_id"].required is True
         assert "system_id" not in serializer.fields
+
+    def test_risk_rule_all_serializer_scene_id_required(self):
+        """测试风险规则 all 序列化器 scene_id 为必传字段"""
+        from services.web.risk.serializers import ListAllRiskRuleReqSerializer
+
+        serializer = ListAllRiskRuleReqSerializer()
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+
+    def test_process_application_all_serializer_scene_id_required(self):
+        """测试处理套餐 all 序列化器 scene_id 为必传字段"""
+        from services.web.risk.serializers import (
+            ListAllProcessApplicationsReqSerializer,
+        )
+
+        serializer = ListAllProcessApplicationsReqSerializer()
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
+
+    def test_notice_group_all_serializer_scene_id_required(self):
+        """测试通知组 all 序列化器 scene_id 为必传字段"""
+        from apps.notice.serializers import ListAllNoticeGroupRequestSerializer
+
+        serializer = ListAllNoticeGroupRequestSerializer()
+        assert "scene_id" in serializer.fields
+        assert serializer.fields["scene_id"].required is True
 
 
 class TestCreateResourceBinding:

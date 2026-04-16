@@ -666,8 +666,23 @@ class ScopeEntryPermission(BasePermission):
         permission_classes = [ScopeEntryPermission]
     """
 
+    def __init__(self, allowed_scope_types: Optional[List[ScopeType]] = None):
+        """可选限制入口允许的 scope_type。"""
+        self.allowed_scope_types = allowed_scope_types
+
+    def _validate_allowed_scope_type(self, scope: ScopeContext) -> None:
+        if not self.allowed_scope_types:
+            return
+
+        if scope.scope_type in self.allowed_scope_types:
+            return
+
+        allowed_values = [scope_type.value for scope_type in ScopeType if scope_type in self.allowed_scope_types]
+        raise ValidationError(f"scope_type={scope.scope_type.value} 不支持，允许值：{', '.join(allowed_values)}")
+
     def has_permission(self, request, view) -> bool:
         scope = ScopeContext.from_request(request, view)
+        self._validate_allowed_scope_type(scope)
 
         username = get_request_username()
         scope_perm = ScopePermission(username)
@@ -689,7 +704,8 @@ class ScopeEntryActionPermission(ScopeEntryPermission):
     - 非 scene/system action 应直接使用普通 IAM 权限类，不应混入 scope 入口权限
     """
 
-    def __init__(self, action: ActionMeta):
+    def __init__(self, action: ActionMeta, allowed_scope_types: Optional[List[ScopeType]] = None):
+        super().__init__(allowed_scope_types=allowed_scope_types)
         if not _is_scope_action(action):
             raise ValueError("ScopeEntryActionPermission 仅支持 scene/system 方向的 action")
         self.action = action
@@ -706,7 +722,7 @@ class ScopeEntryActionPermission(ScopeEntryPermission):
 # ---------------------------------------------------------------------------
 
 
-class ScopeInstancePermission(ScopeEntryPermission, InstancePermission):
+class ScopeInstancePermission(InstancePermission):
     """资源实例级鉴权基类。
 
     各模块继承后配置 resource_type / resource_id_field。
@@ -717,18 +733,17 @@ class ScopeInstancePermission(ScopeEntryPermission, InstancePermission):
     - 不适合资源列表接口；列表接口应该先按 scope 过滤出可见资源集合，而不是对不存在的单个实例做鉴权
 
     使用示例：
-        class PanelScopePermission(ScopeInstancePermission):
-            resource_type = BindingResourceType.PANEL
+        panel_scope_permission = ScopeInstancePermission(BindingResourceType.PANEL)
     """
 
-    resource_type: BindingResourceType = None
+    def __init__(self, resource_type: BindingResourceType, *args, **kwargs):
+        self.resource_type = resource_type
+        super().__init__(*args, **kwargs)
 
     def has_permission(self, request, view) -> bool:
-        super().has_permission(request, view)
         resource_id = self._get_instance_id(request, view)
-
-        # 复用 request 上已有的 ScopePermission 实例
-        return request.scope_permission.check_resource_permission(
+        scope_perm = ScopePermission(get_request_username())
+        return scope_perm.check_resource_permission(
             resource_type=self.resource_type,
             resource_id=str(resource_id),
             raise_exception=True,

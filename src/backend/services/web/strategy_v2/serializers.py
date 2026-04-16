@@ -463,7 +463,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     """
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤策略")
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤策略")
     strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"), required=False)
     tag = serializers.CharField(label=gettext_lazy("Tag"), required=False)
@@ -672,6 +672,12 @@ class ListStrategyTagsResponseSerializer(serializers.Serializer):
     tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
     tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
     strategy_count = serializers.IntegerField(label=gettext_lazy("Strategy Count"))
+
+
+class ListStrategyTagsRequestSerializer(serializers.Serializer):
+    """List Strategy Tags Request"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤策略标签")
 
 
 class StrategyTagResourceSerializer(serializers.Serializer):
@@ -1186,7 +1192,7 @@ class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
     )
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤联表")
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤联表")
     name__contains = serializers.CharField(label=gettext_lazy("Link Table Name"), required=False)
     created_by = serializers.CharField(label=gettext_lazy("Created By"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Updated By"), required=False)
@@ -1235,6 +1241,12 @@ class ListLinkTableTagsResponseSerializer(serializers.Serializer):
     tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
     tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
     link_table_count = serializers.IntegerField(label=gettext_lazy("Link Table Count"))
+
+
+class ListLinkTableTagsRequestSerializer(serializers.Serializer):
+    """List Link Table Tags Request"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤联表标签")
 
 
 class RuleAuditFieldSerializer(serializers.Serializer):
