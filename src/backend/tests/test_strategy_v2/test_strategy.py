@@ -415,6 +415,29 @@ class StrategyTest(TestCase):
         self.assertGreaterEqual(len(s.risk_meta_field_config), 1)
         self.assertEqual(s.risk_meta_field_config[0]["field_name"], "risk_title")
 
+    @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
+    def test_delete_strategy_cleans_scene_binding(self):
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+
+        data = self._create_rule_strategy(name_suffix="delete_binding")
+        strategy_id = data["strategy_id"]
+        self.assertTrue(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy_id),
+            ).exists()
+        )
+
+        resource.strategy_v2.delete_strategy(strategy_id=strategy_id)
+
+        self.assertFalse(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy_id),
+            ).exists()
+        )
+
     @mock.patch("services.web.strategy_v2.resources.call_controller")
     def test_create_rule_strategy_with_manual_sql(self, mock_call_controller):
         mock_call_controller.return_value = None
