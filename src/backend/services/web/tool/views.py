@@ -2,21 +2,23 @@
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
-from apps.permission.handlers.drf import AnyOfPermissions
-from core.utils.data import get_value_by_request
-from services.web.tool.permissions import (
-    CallerContextPermission,
-    ManageToolPermission,
-    UseToolPermission,
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import (
+    AnyOfPermissions,
+    IAMPermission,
+    InstanceActionPermission,
 )
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.utils.data import get_value_by_request
+from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
 
 class ToolViewSet(ResourceViewSet):
     lookup_field = "uid"
 
     def get_permissions(self):
-        if self.action in ["sql_analyse_with_tool"]:
-            return [ManageToolPermission()]
+        if self.action in ["retrieve", "sql_analyse_with_tool"]:
+            return [UseToolPermission(get_instance_id=self.get_tool_uid)]
         if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [
                 AnyOfPermissions(
@@ -79,6 +81,9 @@ class PlatformSceneToolViewSet(ResourceViewSet):
     POST   /api/v1/tool/platform/{uid}/publish/  上架/下架
     """
 
+    def get_permissions(self):
+        return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
+
     resource_routes = [
         ResourceRoute("POST", resource.tool.create_platform_scene_tool),
         ResourceRoute("PUT", resource.tool.update_platform_scene_tool, pk_field="uid"),
@@ -95,6 +100,18 @@ class SceneScopeToolViewSet(ResourceViewSet):
     PUT    /api/v1/tool/scene/{uid}/           编辑场景级工具
     DELETE /api/v1/tool/scene/{uid}/           删除场景级工具
     """
+
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
+    def get_permissions(self):
+        return [
+            InstanceActionPermission(
+                actions=[ActionEnum.MANAGE_SCENE],
+                resource_meta=ResourceEnum.SCENE,
+                get_instance_id=self.get_scene_id,
+            )
+        ]
 
     resource_routes = [
         ResourceRoute("POST", resource.tool.create_scene_scope_tool),

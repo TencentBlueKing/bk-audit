@@ -30,6 +30,8 @@ from apps.meta.models import Tag
 from core.serializers import AnyValueField, TimestampIntegerField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
+from services.web.common.constants import ScopeQueryField, ScopeType
+from services.web.common.serializers import ScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
@@ -398,16 +400,35 @@ class TicketNodeProviderSerializer(serializers.ModelSerializer):
         fields = ["id", "risk_id", "operator"]
 
 
-class ListRiskRequestSerializer(serializers.Serializer):
+class RiskScopeQuerySerializer(ScopeQuerySerializer):
+    """风险域可选 scope 参数。
+
+    - 不传 scope_type/scope_id：表示不过滤场景范围
+    - 传了 scope_type：沿用 ScopeQuerySerializer 的校验规则
+    """
+
+    scope_type = serializers.ChoiceField(choices=ScopeType.choices, required=False, allow_null=True)
+    scope_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs: dict) -> dict:
+        scope_type = attrs.get(ScopeQueryField.SCOPE_TYPE)
+        scope_id = attrs.get(ScopeQueryField.SCOPE_ID)
+
+        if not scope_type:
+            if scope_id:
+                raise serializers.ValidationError({ScopeQueryField.SCOPE_TYPE: "传入 scope_id 时必须同时传入 scope_type。"})
+            attrs.pop(ScopeQueryField.SCOPE_TYPE, None)
+            attrs.pop(ScopeQueryField.SCOPE_ID, None)
+            return attrs
+
+        return super().validate(attrs)
+
+
+class ListRiskRequestSerializer(RiskScopeQuerySerializer):
     """
     List Risk
     """
 
-    scene_id = serializers.IntegerField(
-        label=gettext_lazy("场景ID"),
-        required=False,
-        help_text=gettext_lazy("按场景过滤风险"),
-    )
     risk_id = serializers.CharField(
         label=gettext_lazy("Risk ID"),
         allow_blank=True,
@@ -569,14 +590,14 @@ class ListRiskRequestSerializer(serializers.Serializer):
         # 将逗号分隔的字符串参数拆分为列表
         for key, val in attrs.items():
             if key in [
+                ScopeQueryField.SCOPE_TYPE,
+                ScopeQueryField.SCOPE_ID,
                 "event_time__gte",
                 "event_time__lt",
                 "use_bkbase",
                 "event_filters",
                 "order_fields",
                 "has_report",
-                "scene_id",
-                "system_id",
             ]:
                 continue
             if key in ["tag_objs__in"]:
@@ -602,8 +623,7 @@ class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
         return data
 
 
-class ListRiskMetaRequestSerializer(serializers.Serializer):
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
+class ListRiskMetaRequestSerializer(RiskScopeQuerySerializer):
     risk_view_type = serializers.ChoiceField(
         label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
     )
@@ -856,6 +876,7 @@ class BatchUpdateRiskRulePriorityIndexItemSerializer(serializers.ModelSerializer
 
 
 class BatchUpdateRiskRulePriorityIndexReqSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
     config = BatchUpdateRiskRulePriorityIndexItemSerializer(many=True)
 
 
@@ -878,7 +899,7 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
 
 class ListRiskRuleReqSerializer(serializers.Serializer):
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理规则")
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤处理规则")
     rule_id = serializers.CharField(label=gettext_lazy("Rule ID"), required=False)
     name = serializers.CharField(label=gettext_lazy("Rule Name"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Update User"), required=False)
@@ -978,7 +999,7 @@ class ToggleProcessApplicationReqSerializer(serializers.Serializer):
 
 
 class ListProcessApplicationsReqSerializer(serializers.Serializer):
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, help_text="按场景过滤处理套餐")
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤处理套餐")
     id = serializers.CharField(required=False)
     name = serializers.CharField(required=False)
     updated_by = serializers.CharField(required=False)
@@ -1173,7 +1194,6 @@ class RiskExportReqSerializer(serializers.Serializer):
     Risk Export Request Serializer
     """
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
     risk_ids = serializers.ListField(
         label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1, max_length=300
     )
@@ -1232,10 +1252,21 @@ class ListRiskBriefRequestSerializer(serializers.Serializer):
     获取风险简要列表请求序列化器
     """
 
-    scene_id = serializers.IntegerField(required=False, label=gettext_lazy("场景ID"))
     strategy_id = serializers.IntegerField(required=False, label=gettext_lazy("策略ID"))
     start_time = serializers.DateTimeField(required=True, label=gettext_lazy("开始时间"))
     end_time = serializers.DateTimeField(required=True, label=gettext_lazy("结束时间"))
+
+
+class ListAllRiskRuleReqSerializer(serializers.Serializer):
+    """风险规则 all 接口请求参数（按场景过滤）"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+
+class ListAllProcessApplicationsReqSerializer(serializers.Serializer):
+    """处理套餐 all 接口请求参数（按场景过滤）"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
 
 
 class ListRiskBriefResponseSerializer(serializers.ModelSerializer):

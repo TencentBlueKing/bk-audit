@@ -21,6 +21,7 @@ from unittest import mock
 
 from django.utils import timezone
 
+from services.web.common.constants import ScopeType
 from services.web.risk.constants import RiskReportStatus, RiskStatus
 from services.web.risk.models import Risk, RiskReport
 from services.web.scene.constants import ResourceVisibilityType
@@ -322,7 +323,8 @@ class TestListRiskBrief(TestCase):
         """测试获取风险简要列表"""
         result = self.resource.risk.list_risk_brief(
             {
-                "scene_id": self.scene.scene_id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene.scene_id),
                 "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
                 "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
             }
@@ -356,7 +358,8 @@ class TestListRiskBrief(TestCase):
 
         result = self.resource.risk.list_risk_brief(
             {
-                "scene_id": self.scene.scene_id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene.scene_id),
                 "strategy_id": self.strategy.strategy_id,
                 "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
                 "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
@@ -372,7 +375,8 @@ class TestListRiskBrief(TestCase):
         # 查询过去很久的时间范围，应该没有结果
         result = self.resource.risk.list_risk_brief(
             {
-                "scene_id": self.scene.scene_id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene.scene_id),
                 "start_time": (self.now - datetime.timedelta(days=100)).isoformat(),
                 "end_time": (self.now - datetime.timedelta(days=99)).isoformat(),
             }
@@ -380,8 +384,8 @@ class TestListRiskBrief(TestCase):
 
         self.assertEqual(len(result), 0)
 
-    def test_list_risk_brief_filters_by_scene(self):
-        """测试风险简要列表按场景隔离"""
+    def test_list_risk_brief_not_filter_by_scene(self):
+        """测试风险简要列表不按场景隔离（仅策略+时间过滤）"""
         other_strategy = Strategy.objects.create(
             namespace="default",
             strategy_name="other-scene-strategy",
@@ -403,7 +407,8 @@ class TestListRiskBrief(TestCase):
 
         result = self.resource.risk.list_risk_brief(
             {
-                "scene_id": self.scene.scene_id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene.scene_id),
                 "start_time": (self.now - datetime.timedelta(days=2)).isoformat(),
                 "end_time": (self.now + datetime.timedelta(days=1)).isoformat(),
             }
@@ -412,7 +417,7 @@ class TestListRiskBrief(TestCase):
         risk_ids = [r["risk_id"] for r in result]
         self.assertIn(self.risk1.risk_id, risk_ids)
         self.assertIn(self.risk2.risk_id, risk_ids)
-        self.assertNotIn("risk-brief-other-scene", risk_ids)
+        self.assertIn("risk-brief-other-scene", risk_ids)
 
 
 class TestReportEnabled(TestCase):

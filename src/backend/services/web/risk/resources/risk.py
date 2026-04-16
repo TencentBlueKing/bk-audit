@@ -52,6 +52,7 @@ from core.utils.data import build_preserved_order_queryset, choices_to_dict, dat
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
@@ -148,6 +149,8 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -305,21 +308,24 @@ class ListRisk(RiskMeta):
         order_fields = validated_request_data.pop("order_fields", [])
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
-        # 场景过滤
-        scene_id = validated_request_data.pop("scene_id", None)
+        scope_type = validated_request_data.pop("scope_type", None)
+        scope_id = validated_request_data.pop("scope_id", None)
+
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
         thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
-        # 按场景过滤（通过 ResourceBinding）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
 
-        base_queryset = SceneScopeFilter.filter_queryset(
-            queryset=base_queryset,
-            scene_id=scene_id,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
+        # 仅在显式传入 scope 时应用场景过滤；个人视图可不传 scope
+        if scope_type:
+            scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+            scene_ids = ScopePermission(get_request_username(request)).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+            base_queryset = SceneScopeFilter.filter_queryset(
+                queryset=base_queryset,
+                scene_id=scene_ids,
+                resource_type=ResourceVisibilityType.RISK,
+                pk_field="risk_id",
+            )
+
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
         if use_bkbase:
@@ -809,7 +815,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     }
 
     @classmethod
-    def load_risk_view_type_risks(cls, risk_view_type: str, filter_dict: dict, scene_id=None) -> QuerySet[Risk]:
+    def load_risk_view_type_risks(cls, risk_view_type: str, filter_dict: dict, scene_ids=None) -> QuerySet[Risk]:
         """
         加载指定风险视图下有权限的风险
         """
@@ -818,12 +824,12 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         if not risk_cls:
             return Risk.objects.none()
         risks = risk_cls().load_risks(filter_dict)
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
+        if scene_ids is None:
+            return risks
 
         return SceneScopeFilter.filter_queryset(
             queryset=risks,
-            scene_id=scene_id,
+            scene_id=scene_ids,
             resource_type=ResourceVisibilityType.RISK,
             pk_field="risk_id",
         )
@@ -842,8 +848,13 @@ class ListRiskTags(ListRiskMetaBase):
     def perform_request(self, validated_request_data):
         tags = Tag.objects.all().only("tag_id", "tag_name")
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
-        scene_id = validated_request_data.pop("scene_id", None)
-        risk_qs = self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_id=scene_id)
+        scope_type = validated_request_data.pop("scope_type", None)
+        scope_id = validated_request_data.pop("scope_id", None)
+        scene_ids = None
+        if scope_type:
+            scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+            scene_ids = ScopePermission(get_request_username()).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+        risk_qs = self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_ids=scene_ids)
         strategy_id_qs = risk_qs.order_by().values("strategy_id").distinct()
         tag_id_qs = StrategyTag.objects.filter(strategy_id__in=strategy_id_qs).values("tag_id")
         return tags.filter(tag_id__in=tag_id_qs)
@@ -862,9 +873,14 @@ class ListRiskStrategy(ListRiskMetaBase):
     def perform_request(self, validated_request_data):
         strategies: QuerySet[Strategy] = Strategy.objects.all().only("strategy_id", "strategy_name")
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
-        scene_id = validated_request_data.pop("scene_id", None)
+        scope_type = validated_request_data.pop("scope_type", None)
+        scope_id = validated_request_data.pop("scope_id", None)
+        scene_ids = None
+        if scope_type:
+            scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+            scene_ids = ScopePermission(get_request_username()).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
         strategy_id_qs = (
-            self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_id=scene_id)
+            self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_ids=scene_ids)
             .order_by()
             .values("strategy_id")
             .distinct()
@@ -1126,19 +1142,9 @@ class RiskExport(RiskMeta):
     def perform_request(self, validated_request_data):
         risk_view_type: str = validated_request_data.get("risk_view_type", "")
         risk_ids: List[str] = validated_request_data["risk_ids"]
-        scene_id = validated_request_data.get("scene_id")
 
         # 1. 获取有权限的风险列表
         qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
-        qs = SceneScopeFilter.filter_queryset(
-            queryset=qs,
-            scene_id=scene_id,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
         risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.annotated_queryset(qs)).filter(risk_id__in=risk_ids)
 
         authed_risk_ids = list(risks.values_list("risk_id", flat=True))
@@ -1283,16 +1289,6 @@ class ListRiskBrief(RiskMeta):
 
     def perform_request(self, validated_request_data):
         queryset = Risk.objects.all()
-        scene_id = validated_request_data.get("scene_id")
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
-        queryset = SceneScopeFilter.filter_queryset(
-            queryset=queryset,
-            scene_id=scene_id,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
 
         # 策略过滤
         strategy_id = validated_request_data.get("strategy_id")

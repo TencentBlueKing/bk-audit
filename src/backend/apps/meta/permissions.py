@@ -33,28 +33,59 @@ from apps.permission.handlers.drf import (
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from core.models import get_request_username
+from services.web.common.constants import ScopeType
 
 
 class SearchLogPermission:
     @classmethod
+    def _raise_system_view_permission_exception(cls) -> None:
+        from apps.permission.handlers.permission import Permission
+
+        apply_data, apply_url = Permission().get_apply_data([ActionEnum.VIEW_SYSTEM])
+        raise PermissionException(
+            action_name=ActionEnum.VIEW_SYSTEM.name,
+            apply_url=apply_url,
+            permission=apply_data,
+        )
+
+    @classmethod
     def get_auth_systems(cls, namespace) -> (list, list):
-        systems = resource.meta.system_list_all(namespace=namespace, action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id)
-        authorized_systems = [
-            system["id"] for system in systems if system["permission"].get(ActionEnum.SEARCH_REGULAR_EVENT.id)
-        ]
+        from services.web.common.scope_permission import ScopeContext, ScopePermission
+
+        username = get_request_username()
+        scoped_system_ids = set(
+            ScopePermission(username).get_system_ids_for_scope(ScopeContext(scope_type=ScopeType.CROSS_SYSTEM))
+        )
+        systems = resource.meta.system_list_all(namespace=namespace)
+        authorized_systems = [str(system["id"]) for system in systems if str(system["id"]) in scoped_system_ids]
         return systems, authorized_systems
 
     @classmethod
     def any_search_log_permission(cls, namespace) -> None:
         if not cls.get_auth_systems(namespace)[1]:
-            from apps.permission.handlers.permission import Permission
+            cls._raise_system_view_permission_exception()
 
-            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
-            raise PermissionException(
-                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
-                apply_url=apply_url,
-                permission=apply_data,
-            )
+    @classmethod
+    def get_scope_auth_systems(cls, namespace: str, scope_type: str, scope_id: str | None, username: str) -> list[str]:
+        from services.web.common.scope_permission import ScopeContext, ScopePermission
+
+        scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+        permission = ScopePermission(username)
+        all_system_ids_in_namespace = {
+            str(system["id"]) for system in resource.meta.system_list_all(namespace=namespace)
+        }
+
+        scoped_system_ids = {str(system_id) for system_id in permission.get_system_ids_for_scope(scope)}
+        authorized_systems = list(scoped_system_ids & all_system_ids_in_namespace)
+        if not authorized_systems:
+            cls._raise_system_view_permission_exception()
+        return authorized_systems
+
+    @classmethod
+    def should_append_system_filter(cls, namespace: str, authorized_systems: list[str]) -> bool:
+        systems = resource.meta.system_list_all(namespace=namespace)
+        all_system_ids = {str(system["id"]) for system in systems}
+        return set(map(str, authorized_systems)) != all_system_ids
 
 
 class SystemManagerPermission(InstancePermission):

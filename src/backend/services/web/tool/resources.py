@@ -38,6 +38,9 @@ from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, Tag
 from apps.meta.serializers import EnumMappingSerializer
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -48,7 +51,11 @@ from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
+from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.filters import CompositeScopeFilter
+from services.web.scene.models import ResourceBinding
 from services.web.strategy_v2.models import StrategyTool
 from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionKeysWithCallerSerializer,
@@ -65,7 +72,6 @@ from services.web.tool.constants import (
 from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolFavorite, ToolTag
-from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
@@ -78,6 +84,7 @@ from services.web.tool.serializers import (
     SceneScopeToolCreateRequestSerializer,
     SceneScopeToolDeleteRequestSerializer,
     SceneScopeToolUpdateRequestSerializer,
+    ScopeBindingRequestSerializer,
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
@@ -176,21 +183,47 @@ class ToolBase(AuditMixinResource, abc.ABC):
         except ValueError:
             raise drf_serializers.ValidationError({"binding": gettext_lazy("资源绑定关系不合法")})
 
+    def filter_queryset_by_scope(self, queryset, validated_request_data: dict, username: str):
+        scope_type = validated_request_data.get("scope_type")
+        binding_type = validated_request_data.get("binding_type")
+        if not scope_type:
+            binding_filter = binding_type or BindingType.PLATFORM_BINDING
+            tool_uids = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                binding_type=binding_filter,
+            ).values_list("resource_id", flat=True)
+            return queryset.filter(uid__in=tool_uids)
+
+        scope = ScopeContext(
+            scope_type=scope_type,
+            scope_id=validated_request_data.get("scope_id"),
+        )
+        scope_permission = ScopePermission(username=username)
+        scene_ids = scope_permission.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+        system_ids = scope_permission.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
+
+        return CompositeScopeFilter.filter_queryset(
+            queryset=queryset,
+            binding_type=binding_type,
+            scene_id=scene_ids,
+            system_id=system_ids,
+            resource_type=ResourceVisibilityType.TOOL,
+            pk_field="uid",
+        )
+
 
 class ListToolTags(ToolBase):
     name = gettext_lazy("列出工具标签")
+    RequestSerializer = ScopeBindingRequestSerializer
     ResponseSerializer = ListToolTagsResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         current_user = get_request_username()
-        permission = ToolPermission(username=current_user)
-        authed_tool_filter = permission.authed_tool_filter  # 获取权限过滤条件
+        scoped_tools = self.filter_queryset_by_scope(Tool.all_latest_tools(), validated_request_data, current_user)
 
         tag_count = list(
-            ToolTag.objects.filter(
-                tool_uid__in=Tool.all_latest_tools().filter(authed_tool_filter).values_list("uid", flat=True)
-            )
+            ToolTag.objects.filter(tool_uid__in=scoped_tools.values_list("uid", flat=True))
             .values("tag_id")
             .annotate(tool_count=Count("tag_id"))
             .order_by()
@@ -205,28 +238,26 @@ class ListToolTags(ToolBase):
             {
                 "tag_name": str(ToolTagsEnum.ALL_TOOLS.label),
                 "tag_id": ToolTagsEnum.ALL_TOOLS.value,
-                "tool_count": Tool.all_latest_tools().filter(authed_tool_filter).count(),
+                "tool_count": scoped_tools.count(),
             },
             {
                 "tag_name": str(ToolTagsEnum.MY_CREATED_TOOLS.label),
                 "tag_id": ToolTagsEnum.MY_CREATED_TOOLS.value,
-                "tool_count": Tool.all_latest_tools().filter(created_by=get_request_username()).count(),
+                "tool_count": scoped_tools.filter(created_by=current_user).count(),
             },
             {
                 "tag_name": str(ToolTagsEnum.RECENTLY_USED_TOOLS.label),
                 "tag_id": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
-                "tool_count": Tool.all_latest_tools()
-                .filter(uid__in=recent_tool_usage_manager.get_recent_uids(current_user))
-                .filter(authed_tool_filter)
-                .count(),
+                "tool_count": scoped_tools.filter(
+                    uid__in=recent_tool_usage_manager.get_recent_uids(current_user)
+                ).count(),
             },
             {
                 "tag_name": str(NO_TAG_NAME),
                 "tag_id": NO_TAG_ID,
-                "tool_count": Tool.all_latest_tools()
-                .exclude(uid__in=ToolTag.objects.values_list("tool_uid", flat=True).distinct())
-                .filter(authed_tool_filter)
-                .count(),
+                "tool_count": scoped_tools.exclude(
+                    uid__in=ToolTag.objects.values_list("tool_uid", flat=True).distinct()
+                ).count(),
             },
         ] + tag_count
         return tag_count
@@ -290,34 +321,18 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
-        binding_type = validated_request_data.get("binding_type")
-        scene_id = validated_request_data.get("scene_id")
-        system_id = validated_request_data.get("system_id")
+        status = validated_request_data.get("status")
         recent_tool_uids = []
 
         # 判断是否筛选收藏的工具（通过虚拟标签 FAVORITE_TOOLS）
         favorite = int(ToolTagsEnum.FAVORITE_TOOLS.value) in tags
 
         current_user = get_request_username()
-        permission = ToolPermission(username=current_user)
-        authed_tool_filter = permission.authed_tool_filter
 
         # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
-        queryset = Tool.all_latest_tools().filter(authed_tool_filter).annotate(favorite=Exists(favorite_subquery))
-
-        # 按绑定类型和场景过滤（通过 ResourceBinding 关联）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import CompositeScopeFilter
-
-        queryset = CompositeScopeFilter.filter_queryset(
-            queryset=queryset,
-            binding_type=binding_type,
-            scene_id=scene_id,
-            system_id=system_id,
-            resource_type=ResourceVisibilityType.TOOL,
-            pk_field="uid",
-        )
+        queryset = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
+        queryset = self.filter_queryset_by_scope(queryset, validated_request_data, current_user)
 
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
@@ -344,6 +359,9 @@ class ListTool(ToolBase):
 
         if my_created:
             queryset = queryset.filter(created_by=current_user)
+
+        if status:
+            queryset = queryset.filter(status=status)
 
         if keyword:
             keyword_filter = (
@@ -387,9 +405,6 @@ class ListTool(ToolBase):
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
         serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
-        # 权限字段注入
-        tool_tag_ids = list(tool_tags.values_list("tag_id", flat=True).distinct())
-        serialized_data = permission.wrapper_tool_permission_field(tool_list=serialized_data, tool_tag_ids=tool_tag_ids)
         return page.get_paginated_response(data=serialized_data)
 
 
@@ -935,6 +950,7 @@ class ToolExecuteDebug(ToolBase):
 
 class ListToolAll(ToolBase):
     name = gettext_lazy("工具列表(all)")
+    RequestSerializer = ScopeBindingRequestSerializer
     many_response_data = True
     ResponseSerializer = ToolListAllResponseSerializer
 
@@ -946,7 +962,8 @@ class ListToolAll(ToolBase):
 
         # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
-        tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery)).order_by("name")
+        tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
+        tool_qs = self.filter_queryset_by_scope(tool_qs, validated_request_data, current_user).order_by("name")
 
         tool_uids = [tool.uid for tool in tool_qs]
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
@@ -963,11 +980,7 @@ class ListToolAll(ToolBase):
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
         serialized_data = self.ResponseSerializer(tool_qs, many=True).data
-
-        permission = ToolPermission(username=current_user)
-        tool_tag_ids = list(tool_tags.values_list("tag_id", flat=True).distinct())
-        data = permission.wrapper_tool_permission_field(tool_list=serialized_data, tool_tag_ids=tool_tag_ids)
-        return data
+        return serialized_data
 
 
 class ExportToolData(ToolBase):
@@ -984,6 +997,28 @@ class GetToolDetail(ToolBase):
 
     def validate_response_data(self, response_data):
         return response_data
+
+    def _is_tool_manager(self, username: str, tool_uid: str) -> bool:
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=tool_uid,
+        ).first()
+        if not binding:
+            return False
+
+        permission = Permission(username=username)
+
+        if binding.binding_type == BindingType.PLATFORM_BINDING:
+            return permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
+
+        if binding.binding_type == BindingType.SCENE_BINDING:
+            scene_id = binding.binding_scenes.values_list("scene_id", flat=True).first()
+            if not scene_id:
+                return False
+            scene_resource = ResourceEnum.SCENE.create_instance(scene_id)
+            return permission.is_allowed(ActionEnum.MANAGE_SCENE, [scene_resource], raise_exception=False)
+
+        return False
 
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
@@ -1016,11 +1051,10 @@ class GetToolDetail(ToolBase):
                 table["permission"] = auth_results.get(table["table_name"], {})
         data = self.ResponseSerializer(instance=tool).data
 
-        # 权限注入与脱敏
-        permission = ToolPermission(username=current_user)
-        data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
+        # 权限判定仅用于 API 配置脱敏：平台工具需平台管理员，场景工具需对应场景管理员
+        is_tool_manager = self._is_tool_manager(current_user, tool.uid)
 
-        if not data.get("permission", {}).get("manage_tool") and tool.tool_type == ToolTypeEnum.API.value:
+        if not is_tool_manager and tool.tool_type == ToolTypeEnum.API.value:
             if "config" in data and "api_config" in data["config"]:
                 data["config"]["api_config"] = None
 
