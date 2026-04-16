@@ -17,9 +17,11 @@
 <template>
   <bk-sideslider
     :before-close="handleBeforeClose"
+    :esc-close="false"
     :is-show="isShow"
-    :title="t('新建场景')"
-    :width="640"
+    :show-mask="false"
+    :title="isEditMode ? t('编辑场景') : t('新建场景')"
+    :width="740"
     @closed="handleClose">
     <template #default>
       <div class="create-scene-content">
@@ -56,8 +58,7 @@
               v-model="formData.managers"
               :auto-focus="false"
               :collapse-tags="false"
-              multiple
-              need-record />
+              multiple />
           </bk-form-item>
 
           <!-- 场景描述 -->
@@ -90,8 +91,7 @@
               v-model="formData.users"
               :auto-focus="false"
               :collapse-tags="false"
-              multiple
-              need-record />
+              multiple />
           </bk-form-item>
 
           <!-- 关联系统 -->
@@ -110,15 +110,19 @@
             <bk-select
               v-model="formData.system_id"
               :clearable="false"
+              collapse-tags
               filterable
               :loading="systemLoading"
+              multiple
+              multiple-mode="tag"
               :placeholder="t('请选择')"
+              show-all
               @change="handleSystemChange">
               <bk-option
                 v-for="item in systemList"
-                :key="item.id"
+                :key="item.system_id"
                 :label="item.name"
-                :value="item.id" />
+                :value="item.system_id" />
             </bk-select>
           </bk-form-item>
 
@@ -169,17 +173,26 @@
 
 <script setup lang="ts">
   import {
+    computed,
     ref,
-    watch,
-  } from 'vue';
+    watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import MetaManageService from '@service/meta-manage';
+  import SceneManageService from '@service/scene-manage';
+
+  import SystemModel from '@model/meta/system';
+  import SceneModel from '@model/scene/scene';
 
   import useMessage from '@hooks/use-message';
 
   import AuditUserSelector from '@components/audit-user-selector/index.vue';
 
+  import useRequest from '@/hooks/use-request';
+
   interface Props {
     isShow: boolean;
+    sceneId?: string | number;
   }
 
   interface Emits {
@@ -192,14 +205,10 @@
     managers: string[];
     description: string;
     users: string[];
-    system_id: string;
+    system_id: string[];
     table_id: string;
   }
 
-  interface SystemItem {
-    id: string;
-    name: string;
-  }
 
   interface TableItem {
     id: string;
@@ -212,13 +221,16 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
 
+  // 编辑模式判断
+  const isEditMode = computed(() => !!props.sceneId);
+
   const formRef = ref();
   const submitLoading = ref(false);
   const systemLoading = ref(false);
   const tableLoading = ref(false);
 
   // 系统列表
-  const systemList = ref<SystemItem[]>([]);
+  const systemList = ref<SystemModel[]>([]);
   // 数据表列表
   const tableList = ref<TableItem[]>([]);
 
@@ -228,7 +240,7 @@
     managers: [],
     description: '',
     users: [],
-    system_id: '',
+    system_id: [] as string[],
     table_id: '',
   });
 
@@ -245,7 +257,7 @@
       {
         required: true,
         message: t('场景管理员不能为空'),
-        trigger: 'change',
+        trigger: 'blur',
       },
     ],
   };
@@ -254,7 +266,7 @@
   // 关联系统变更
   const handleSystemChange = () => {
     formData.value.table_id = '';
-    if (formData.value.system_id) {
+    if (formData.value.system_id.length > 0) {
       fetchTableList();
     } else {
       tableList.value = [];
@@ -262,28 +274,30 @@
   };
 
   // 获取系统列表
-  const fetchSystemList = async () => {
-    systemLoading.value = true;
-    try {
-      // TODO: 调用真实 API
-      systemList.value = [
-        { id: '1', name: '系统A' },
-        { id: '2', name: '系统B' },
-      ];
-    } finally {
-      systemLoading.value = false;
-    }
-  };
-
+  const {
+    run: fetchSystemList,
+  } = useRequest(MetaManageService.fetchSystemList, {
+    defaultValue: {
+      results: [] as SystemModel[],
+      page: 1,
+      num_pages: 1000,
+      total: 0,
+    },
+    onSuccess: (res) => {
+      systemList.value = res.results;
+      // 编辑模式下，系统列表加载完成后回填关联系统
+      if (isEditMode.value && props.sceneId) {
+        fetchSceneDetail(props.sceneId as any);
+      } else {
+        resetForm();
+      }
+    },
+  });
   // 获取数据表列表
   const fetchTableList = async () => {
     tableLoading.value = true;
     try {
-      // TODO: 调用真实 API，传入 system_id
-      tableList.value = [
-        { id: '1', name: '数据表A' },
-        { id: '2', name: '数据表B' },
-      ];
+      tableList.value = [];
     } finally {
       tableLoading.value = false;
     }
@@ -296,7 +310,7 @@
       managers: [],
       description: '',
       users: [],
-      system_id: '',
+      system_id: [],
       table_id: '',
     };
     tableList.value = [];
@@ -309,7 +323,7 @@
       || formData.value.managers.length > 0
       || formData.value.description
       || formData.value.users.length > 0
-      || formData.value.system_id
+      || formData.value.system_id.length > 0
       || formData.value.table_id;
 
     if (hasData) {
@@ -321,20 +335,101 @@
     return true;
   };
 
+  // 创建场景
+  const {
+    run: createScene,
+  } = useRequest(SceneManageService.createScene, {
+    defaultValue: new SceneModel(),
+    onSuccess: () => {
+      messageSuccess(t(isEditMode.value ? '编辑成功' : '创建成功'));
+      emits('success');
+      handleClose();
+    },
+  });
+
+  // 编辑场景
+  const {
+    run: updateScene,
+  } = useRequest(SceneManageService.updateScene, {
+    defaultValue: new SceneModel(),
+    onSuccess: () => {
+      messageSuccess(t('编辑成功'));
+      emits('success');
+      handleClose();
+    },
+  });
+
+  // 获取场景详情
+  const {
+    run: fetchSceneDetail,
+  } = useRequest(SceneManageService.fetchSceneDetail, {
+    defaultValue: new SceneModel(),
+    onSuccess: (res) => {
+      fillFormFromSceneData(res);
+    },
+  });
+
+  // 编辑模式下回填表单基础字段
+  const fillFormFromSceneData = (data: SceneModel) => {
+    formData.value = {
+      name: data.name || '',
+      managers: data.managers || [],
+      description: data.description || '',
+      users: data.users || [],
+      system_id: data.systems.map(item => item.system_id),
+      table_id: '',
+    };
+  };
+
+  // 判断是否选择了"全部"
+  const isSelectAllSystems = computed(() => {
+    // show-all 模式下，选中全部时 system_id 会包含一个特殊标记或与系统列表长度一致
+    const selected = formData.value.system_id;
+    return selected.length > 0 && selected.includes('__ALL__');
+  });
+
+  // 构建 systems 参数
+  const buildSystemsParam = () => {
+    if (isSelectAllSystems.value) {
+      // 选择全部时，返回完整系统列表
+      return systemList.value.map(item => ({
+        system_id: item.system_id,
+        is_all_systems: true,
+        filter_rules: '',
+      }));
+    }
+    return formData.value.system_id.map(id => ({
+      system_id: id,
+      is_all_systems: false,
+      filter_rules: '',
+    }));
+  };
+
   // 提交表单
+  const submitParams = () => ({
+    scene_id: typeof props.sceneId === 'number' ? props.sceneId : undefined,
+    name: formData.value.name,
+    description: formData.value.description || undefined,
+    managers: formData.value.managers as string[],
+    users: (formData.value.users as string[]).length > 0 ? (formData.value.users as string[]) : undefined,
+    systems: buildSystemsParam(),
+    tables: [],
+  });
+
   const handleSubmit = async () => {
     try {
       await formRef.value?.validate();
-      submitLoading.value = true;
-      // TODO: 调用真实 API 创建场景
-      await new Promise(resolve => setTimeout(resolve, 500));
-      messageSuccess(t('创建成功'));
-      emits('success');
-      handleClose();
+      if (isEditMode.value) {
+        if (!props.sceneId) return;
+        updateScene({
+          id: props.sceneId,
+          ...submitParams(),
+        } as any);
+      } else {
+        createScene(submitParams() as any);
+      }
     } catch (e) {
       console.error('表单校验失败', e);
-    } finally {
-      submitLoading.value = false;
     }
   };
 
@@ -348,6 +443,7 @@
     resetForm();
     emits('update:isShow', false);
   };
+
 
   // 监听显示状态，打开时加载系统列表
   watch(() => props.isShow, (val) => {
