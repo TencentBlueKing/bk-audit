@@ -45,6 +45,7 @@ from services.web.scene.models import (
     SceneSystem,
 )
 from services.web.scene.permissions import check_scene_permission
+from services.web.scene.views import SceneViewSet
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
 from services.web.vision.models import VisionPanel
@@ -665,6 +666,19 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.list_scene({"keyword": "主机"})
         self.assertGreaterEqual(len(result), 1)
 
+    def test_scene_list_all(self):
+        """测试场景精简列表返回字段"""
+        result = self.resource.scene.list_all_scene({})
+        self.assertGreaterEqual(len(result), 1)
+        self.assertSetEqual(set(result[0].keys()), {"scene_id", "name", "status"})
+
+    def test_scene_list_all_filter_by_status(self):
+        """测试场景精简列表支持 status 过滤"""
+        Scene.objects.create(name="停用场景", status=SceneStatus.DISABLED, managers=["admin"])
+        result = self.resource.scene.list_all_scene({"status": SceneStatus.DISABLED})
+        self.assertTrue(result)
+        self.assertTrue(all(item["status"] == SceneStatus.DISABLED for item in result))
+
     def test_scene_retrieve(self):
         """测试场景详情"""
         result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
@@ -806,29 +820,56 @@ class TestSceneResource(TestCase):
         )
         self.assertEqual(result["name"], "修改后的名称")
 
-    def test_scene_my_scenes(self):
-        """测试用户场景列表"""
-        result = self.resource.scene.list_my_scenes({})
-        self.assertIsInstance(result, list)
-
-    def test_scene_selector(self):
-        """测试场景选择器"""
-        result = self.resource.scene.get_scene_selector({})
-        self.assertIn("scenes", result)
-
-    def test_scene_list_menus(self):
-        """测试菜单列表"""
-        result = self.resource.scene.list_menus({})
-        self.assertTrue(any(menu["id"] == "platform" for menu in result))
-
-    def test_scene_permission_guide(self):
-        """测试无权限引导"""
-        result = self.resource.scene.get_permission_guide({"module": "tool"})
-        self.assertFalse(result["has_permission"])
-        self.assertIn("tool", result["guide"]["title"])
-
 
 # ==================== 报表 ViewSet 测试 ====================
+
+
+class TestSceneViewSetPermission(TestCase):
+    def test_list_requires_manage_platform(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from apps.permission.handlers.drf import IAMPermission
+
+        view = SceneViewSet()
+        view.action = "list"
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], IAMPermission)
+        self.assertEqual(permissions[0].actions, [ActionEnum.MANAGE_PLATFORM])
+
+    def test_list_all_no_permission(self):
+        view = SceneViewSet()
+        view.action = "all"
+
+        self.assertEqual(view.get_permissions(), [])
+
+    def test_info_get_requires_view_scene(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from apps.permission.handlers.drf import InstanceActionPermission
+
+        view = SceneViewSet()
+        view.action = "info"
+        view.kwargs = {"scene_id": 1001}
+        view.request = RequestFactory().get("/api/v1/scenes/1001/info/")
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], InstanceActionPermission)
+        self.assertEqual(permissions[0].actions, [ActionEnum.VIEW_SCENE])
+
+    def test_info_patch_requires_manage_scene(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from apps.permission.handlers.drf import InstanceActionPermission
+
+        view = SceneViewSet()
+        view.action = "info"
+        view.kwargs = {"scene_id": 1001}
+        view.request = RequestFactory().patch("/api/v1/scenes/1001/info/")
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], InstanceActionPermission)
+        self.assertEqual(permissions[0].actions, [ActionEnum.MANAGE_SCENE])
 
 
 class TestPanelResources(TestCase):
@@ -903,22 +944,31 @@ class TestPanelResources(TestCase):
         ResourceBindingSystem.objects.create(binding=system_binding, system_id="bk_job")
 
     def test_panel_list(self):
-        """测试报表列表不传过滤参数时返回空结果"""
+        """测试报表列表不传 scope 时返回平台级资源"""
         result = self.resource.vision.list_panels({"scenario": "default"})
-        self.assertEqual(result, [])
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表", "系统报表"})
 
     def test_panel_list_filter_platform(self):
-        """测试按平台级过滤报表时缺少隔离维度返回空结果"""
-        result = self.resource.vision.list_panels({"scenario": "default", "binding_type": "platform_binding"})
-        self.assertEqual(result, [])
+        """测试按平台级过滤报表"""
+        result = self.resource.vision.list_panels(
+            {
+                "scenario": "default",
+                "scope_type": "cross_scene",
+                "binding_type": "platform_binding",
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表"})
 
     def test_panel_list_filter_scene(self):
         """测试按场景过滤报表"""
         result = self.resource.vision.list_panels(
             {
                 "scenario": "default",
+                "scope_type": "scene",
+                "scope_id": str(self.scene.scene_id),
                 "binding_type": "scene_binding",
-                "scene_id": self.scene.scene_id,
             }
         )
         panel_ids = [item["id"] for item in result]
@@ -926,11 +976,12 @@ class TestPanelResources(TestCase):
         self.assertNotIn(self.platform_panel.pk, panel_ids)
 
     def test_panel_list_filter_scene_with_platform(self):
-        """测试传 scene_id 但不传 binding_type，应返回该场景报表 + 平台级报表"""
+        """测试 scene scope 不传 binding_type 时返回该场景报表 + 平台级报表"""
         result = self.resource.vision.list_panels(
             {
                 "scenario": "default",
-                "scene_id": self.scene.scene_id,
+                "scope_type": "scene",
+                "scope_id": str(self.scene.scene_id),
             }
         )
         names = [item["name"] for item in result]
@@ -942,19 +993,19 @@ class TestPanelResources(TestCase):
         result = self.resource.vision.list_panels(
             {
                 "scenario": "default",
+                "scope_type": "cross_scene",
                 "binding_type": "scene_binding",
-                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
             }
         )
         names = {item["name"] for item in result}
         self.assertEqual(names, {"场景报表", "另一个场景报表"})
 
     def test_panel_list_filter_multiple_scenes_with_platform(self):
-        """测试报表列表仅传多个 scene_id 时返回场景级与平台级并集"""
+        """测试报表列表 cross_scene 时返回场景级与平台级并集"""
         result = self.resource.vision.list_panels(
             {
                 "scenario": "default",
-                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+                "scope_type": "cross_scene",
             }
         )
         names = {item["name"] for item in result}
@@ -965,16 +1016,35 @@ class TestPanelResources(TestCase):
         result = self.resource.vision.list_panels(
             {
                 "scenario": "default",
-                "system_id": ["bk_job", "bk_cmdb"],
+                "scope_type": "cross_system",
             }
         )
         names = {item["name"] for item in result}
-        self.assertEqual(names, {"安全总览报表", "系统报表"})
+        self.assertEqual(names, set())
 
     def test_panel_list_no_scope(self):
-        """测试不传 scope 参数时返回空结果"""
+        """测试不传 scope 参数时返回平台级资源"""
         result = self.resource.vision.list_panels({"scenario": "default"})
-        self.assertEqual(result, [])
+        panel_ids = {item["id"] for item in result}
+        self.assertEqual(panel_ids, {self.platform_panel.pk, self.system_panel.pk})
+
+    def test_panel_list_with_scope(self):
+        """测试传 scope 参数时按 CompositeScopeFilter 返回场景+平台级报表"""
+        result = self.resource.vision.list_panels(
+            {
+                "scenario": "default",
+                "scope_type": "cross_scene",
+            }
+        )
+        panel_ids = {item["id"] for item in result}
+        self.assertEqual(
+            panel_ids,
+            {
+                self.platform_panel.pk,
+                self.scene_panel.pk,
+                self.another_scene_panel.pk,
+            },
+        )
 
     def test_create_platform_panel(self):
         """测试创建平台级报表"""
@@ -1200,47 +1270,64 @@ class TestToolResources(TestCase):
 
     def _call_list_tool(self, data):
         """调用 ListTool Resource（需要 mock request 和权限）"""
-        from unittest.mock import PropertyMock, patch
+        from unittest.mock import patch
 
-        from django.db.models import Q
         from rest_framework.request import Request
         from rest_framework.test import APIRequestFactory
 
-        from services.web.tool.permissions import ToolPermission
+        from services.web.common.constants import ScopeType
+        from services.web.common.scope_permission import ScopePermission
         from services.web.tool.resources import ListTool
+
+        scope_type = data.get("scope_type")
+        scope_id = data.get("scope_id")
+
+        if scope_type == ScopeType.SCENE:
+            scene_ids, system_ids = [int(scope_id)], []
+        elif scope_type == ScopeType.CROSS_SCENE:
+            scene_ids, system_ids = [self.scene.scene_id, self.another_scene.scene_id], []
+        elif scope_type == ScopeType.SYSTEM:
+            scene_ids, system_ids = [], [scope_id]
+        elif scope_type == ScopeType.CROSS_SYSTEM:
+            scene_ids, system_ids = [], ["bk_job", "bk_cmdb"]
+        else:
+            scene_ids, system_ids = [], []
 
         factory = APIRequestFactory()
         django_request = factory.get('/fake-url/', data, format='json')
         drf_request = Request(django_request)
 
-        with patch.object(
-            ToolPermission, 'authed_tool_filter', new_callable=PropertyMock, return_value=Q()
-        ), patch.object(
-            ToolPermission,
-            'fetch_tool_permission_tags',
-            return_value={
-                "use_tool_permission_tags": [],
-                "manage_tool_permission_tags": [],
-            },
+        with patch.object(ScopePermission, "get_scene_ids", return_value=scene_ids), patch.object(
+            ScopePermission, "get_system_ids", return_value=system_ids
         ):
             res = ListTool()
             response = res.request(data, _request=drf_request)
             return response.data.get("results", [])
 
     def test_tool_list(self):
-        """测试工具列表不传过滤参数时返回空结果"""
-        result = self._call_list_tool({"page": 1, "page_size": 10})
-        self.assertEqual(result, [])
+        """测试跨场景视角返回场景工具与平台工具并集"""
+        result = self._call_list_tool({"scope_type": "cross_scene", "page": 1, "page_size": 10})
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"查询工具", "场景工具", "另一个场景工具"})
 
     def test_tool_list_filter_platform(self):
-        """测试按平台级过滤工具时缺少隔离维度返回空结果"""
-        result = self._call_list_tool({"binding_type": "platform_binding", "page": 1, "page_size": 10})
-        self.assertEqual(result, [])
+        """测试跨场景视角按平台级过滤"""
+        result = self._call_list_tool(
+            {"scope_type": "cross_scene", "binding_type": "platform_binding", "page": 1, "page_size": 10}
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"查询工具"})
 
     def test_tool_list_filter_scene(self):
-        """测试按场景过滤工具"""
+        """测试单场景视角按场景级过滤工具"""
         result = self._call_list_tool(
-            {"binding_type": "scene_binding", "scene_id": self.scene.scene_id, "page": 1, "page_size": 10}
+            {
+                "scope_type": "scene",
+                "scope_id": str(self.scene.scene_id),
+                "binding_type": "scene_binding",
+                "page": 1,
+                "page_size": 10,
+            }
         )
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "场景工具")
@@ -1258,19 +1345,21 @@ class TestToolResources(TestCase):
             self.resource.tool.get_tool_detail({"uid": "nonexistent_uid"})
 
     def test_tool_list_filter_scene_with_platform(self):
-        """测试传 scene_id 但不传 binding_type，应返回该场景工具 + 平台级工具"""
-        result = self._call_list_tool({"scene_id": self.scene.scene_id, "page": 1, "page_size": 10})
+        """测试单场景视角不传 binding_type 时返回场景级 + 平台级工具"""
+        result = self._call_list_tool(
+            {"scope_type": "scene", "scope_id": str(self.scene.scene_id), "page": 1, "page_size": 10}
+        )
         tool_names = [item["name"] for item in result]
         self.assertIn("查询工具", tool_names)  # 平台级
         self.assertIn("场景工具", tool_names)  # 场景级
         self.assertEqual(len(result), 2)
 
     def test_tool_list_filter_multiple_scenes(self):
-        """测试工具列表支持多场景筛选"""
+        """测试跨场景视角按场景级过滤"""
         result = self._call_list_tool(
             {
+                "scope_type": "cross_scene",
                 "binding_type": "scene_binding",
-                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
                 "page": 1,
                 "page_size": 10,
             }
@@ -1279,10 +1368,10 @@ class TestToolResources(TestCase):
         self.assertEqual(names, {"场景工具", "另一个场景工具"})
 
     def test_tool_list_filter_multiple_scenes_with_platform(self):
-        """测试工具列表仅传多个 scene_id 时返回场景级与平台级并集"""
+        """测试跨场景视角返回场景级与平台级并集"""
         result = self._call_list_tool(
             {
-                "scene_id": [self.scene.scene_id, self.another_scene.scene_id],
+                "scope_type": "cross_scene",
                 "page": 1,
                 "page_size": 10,
             }
@@ -1291,10 +1380,10 @@ class TestToolResources(TestCase):
         self.assertEqual(names, {"查询工具", "场景工具", "另一个场景工具"})
 
     def test_tool_list_filter_multiple_systems(self):
-        """测试工具列表支持多系统筛选"""
+        """测试跨系统视角支持系统可见工具"""
         result = self._call_list_tool(
             {
-                "system_id": ["bk_job", "bk_cmdb"],
+                "scope_type": "cross_system",
                 "page": 1,
                 "page_size": 10,
             }

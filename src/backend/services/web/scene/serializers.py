@@ -176,6 +176,14 @@ class SceneListSerializer(serializers.ModelSerializer):
         ]
 
 
+class SceneSimpleListSerializer(serializers.ModelSerializer):
+    """场景精简列表序列化器"""
+
+    class Meta:
+        model = Scene
+        fields = ["scene_id", "name", "status"]
+
+
 class SceneDetailSerializer(serializers.ModelSerializer):
     """场景详情序列化器"""
 
@@ -240,6 +248,12 @@ class SceneFilterSerializer(serializers.Serializer):
 
     status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
     keyword = serializers.CharField(required=False, allow_blank=True)
+
+
+class SceneStatusFilterSerializer(serializers.Serializer):
+    """场景精简列表过滤参数"""
+
+    status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
 
 
 # ==================== 场景选择器 ====================

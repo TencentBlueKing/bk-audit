@@ -17,11 +17,13 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from unittest import TestCase
+from uuid import uuid4
 
 import pytest
 from bk_resource import resource
 
 from services.web.risk.models import ProcessApplication, Risk, RiskRule
+from services.web.scene.models import Scene
 from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
 
 
@@ -47,10 +49,8 @@ class RuleContext:
     def __init__(self, pa_info: dict = None, rule_info: dict = None):
         ProcessApplication.objects.all().delete()
         RiskRule.objects.all().delete()
-        # 创建场景用于 ResourceBinding
-        from services.web.scene.models import Scene
-
-        self.scene = Scene.objects.create(name="test_risk_scene", description="test")
+        # 创建独立场景用于 ResourceBinding，避免测试间场景名冲突
+        self.scene = Scene.objects.create(name=f"test_risk_scene_{uuid4().hex}", description="test")
         pa_info = pa_info or {}
         self.pa = resource.risk.create_process_application.perform_request(
             {**PA_INFO, "scene_id": self.scene.scene_id, **pa_info}
@@ -68,3 +68,4 @@ class RuleContext:
     def __exit__(self, exc_type, exc_value, traceback):
         self.pa.delete()
         self.rule.delete()
+        self.scene.delete()

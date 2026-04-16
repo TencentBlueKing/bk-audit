@@ -33,6 +33,7 @@ from apps.notice.serializers import (
     DeleteNoticeGroupRequestSerializer,
     GetMsgTypeResponseSerializer,
     GetNoticeCommonResponseSerializer,
+    ListAllNoticeGroupRequestSerializer,
     ListAllNoticeGroupResponseSerializer,
     ListNoticeGroupRequestSerializer,
     ListNoticeGroupResponseSerializer,
@@ -108,11 +109,23 @@ class ListNoticeGroup(NoticeMeta):
 
 class ListAllNoticeGroup(NoticeMeta):
     name = gettext_lazy("通知组列表(all)")
+    RequestSerializer = ListAllNoticeGroupRequestSerializer
     ResponseSerializer = ListAllNoticeGroupResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        return NoticeGroup.objects.all()
+        scene_id = validated_request_data["scene_id"]
+        queryset = NoticeGroup.objects.all()
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
+        queryset = SceneScopeFilter.filter_queryset(
+            queryset=queryset,
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        return queryset
 
 
 class RetrieveNoticeGroup(NoticeMeta):

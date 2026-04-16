@@ -25,6 +25,8 @@ from rest_framework.generics import get_object_or_404
 
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
+from core.models import get_request_username
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.vision.constants import PANEL
 from services.web.vision.handlers.query import VisionHandler
@@ -33,12 +35,12 @@ from services.web.vision.serializers import (
     CreatePlatformPanelRequestSerializer,
     CreateScenePanelRequestSerializer,
     DeleteScenePanelRequestSerializer,
+    OptionalVisionPanelInfoQuerySerializer,
     PlatformPanelOperateRequestSerializer,
     QueryMetaReqSerializer,
     QueryShareDetailSerializer,
     UpdatePlatformPanelRequestSerializer,
     UpdateScenePanelRequestSerializer,
-    VisionPanelInfoQuerySerializer,
     VisionPanelInfoSerializer,
 )
 
@@ -57,31 +59,44 @@ class BKVision(AuditMixinResource, abc.ABC):
 class ListPanels(BKVision):
     name = gettext_lazy("仪表盘列表")
     ResponseSerializer = VisionPanelInfoSerializer
-    RequestSerializer = VisionPanelInfoQuerySerializer
+    RequestSerializer = OptionalVisionPanelInfoQuerySerializer
     many_response_data = True
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.filters import CompositeScopeFilter
+        from services.web.scene.models import ResourceBinding
 
-        queryset = VisionPanel.objects.filter(scenario=validated_request_data['scenario'])
+        queryset = VisionPanel.objects.filter(scenario=validated_request_data["scenario"])
 
-        # 按绑定类型和场景/系统过滤
         binding_type = validated_request_data.get("binding_type")
-        scene_id = validated_request_data.get("scene_id")
-        system_id = validated_request_data.get("system_id")
+        scope_type = validated_request_data.get("scope_type")
 
-        queryset = CompositeScopeFilter.filter_queryset(
+        if not scope_type:
+            binding_filter = binding_type or BindingType.PLATFORM_BINDING
+            panel_ids = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.PANEL,
+                binding_type=binding_filter,
+            ).values_list("resource_id", flat=True)
+            return queryset.filter(id__in=panel_ids).all()
+
+        scope = ScopeContext(
+            scope_type=scope_type,
+            scope_id=validated_request_data.get("scope_id"),
+        )
+        scope_permission = ScopePermission(username=get_request_username())
+        scene_ids = scope_permission.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+        system_ids = scope_permission.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
+
+        return CompositeScopeFilter.filter_queryset(
             queryset=queryset,
             binding_type=binding_type,
-            scene_id=scene_id,
-            system_id=system_id,
+            scene_id=scene_ids,
+            system_id=system_ids,
             resource_type=ResourceVisibilityType.PANEL,
             pk_field="id",
-        )
-
-        return queryset.all()
+        ).all()
 
 
 class QueryMixIn(AuditMixinResource, abc.ABC):

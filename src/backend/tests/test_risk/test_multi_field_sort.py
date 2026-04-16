@@ -6,20 +6,25 @@ ListRisk 各子类的排序集成测试见 test_retrieve_risk.py 对应的 TestC
 
 from sqlglot import exp
 
+from services.web.common.constants import ScopeType
 from services.web.risk.converter.bkbase import BkBaseFieldResolver, FinalSelectAssembler
 from services.web.risk.serializers import ListRiskRequestSerializer
 from tests.base import TestCase
 
 
 class TestListRiskRequestSerializerSort(TestCase):
+    @staticmethod
+    def _scope_data(data: dict) -> dict:
+        return {"scope_type": ScopeType.CROSS_SCENE, **data}
+
     def test_sort_param_produces_order_fields(self):
-        data = {"sort": ["-event_time", "-risk_id"]}
+        data = self._scope_data({"sort": ["-event_time", "-risk_id"]})
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
         self.assertEqual(s.validated_data["order_fields"], ["-event_time", "-risk_id"])
 
     def test_sort_risk_level_converted(self):
-        data = {"sort": ["-risk_level", "-event_time"]}
+        data = self._scope_data({"sort": ["-risk_level", "-event_time"]})
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
         self.assertEqual(
@@ -28,47 +33,53 @@ class TestListRiskRequestSerializerSort(TestCase):
         )
 
     def test_no_sort_defaults_to_empty(self):
-        data = {}
+        data = self._scope_data({})
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
         self.assertIn("order_fields", s.validated_data)
         self.assertEqual(s.validated_data["order_fields"], [])
 
     def test_sort_empty_list_produces_empty_order_fields(self):
-        data = {"sort": []}
+        data = self._scope_data({"sort": []})
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
         self.assertEqual(s.validated_data["order_fields"], [])
 
     def test_sort_event_data_without_filters_rejected(self):
-        data = {"sort": ["-event_data.ip"]}
+        data = self._scope_data({"sort": ["-event_data.ip"]})
         s = ListRiskRequestSerializer(data=data)
         self.assertFalse(s.is_valid())
 
     def test_sort_event_data_with_matching_filter_accepted(self):
-        data = {
-            "sort": ["-event_data.ip"],
-            "event_filters": [{"field": "ip", "display_name": "IP", "operator": "=", "value": "1.2.3.4"}],
-        }
+        data = self._scope_data(
+            {
+                "sort": ["-event_data.ip"],
+                "event_filters": [{"field": "ip", "display_name": "IP", "operator": "=", "value": "1.2.3.4"}],
+            }
+        )
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
 
     def test_sort_event_data_with_unmatched_filter_rejected(self):
-        data = {
-            "sort": ["-event_data.ip"],
-            "event_filters": [{"field": "host", "display_name": "Host", "operator": "=", "value": "abc"}],
-        }
+        data = self._scope_data(
+            {
+                "sort": ["-event_data.ip"],
+                "event_filters": [{"field": "host", "display_name": "Host", "operator": "=", "value": "abc"}],
+            }
+        )
         s = ListRiskRequestSerializer(data=data)
         self.assertFalse(s.is_valid())
 
     def test_sort_multiple_event_data_fields_accepted(self):
-        data = {
-            "sort": ["-event_data.ip", "-event_data.amount"],
-            "event_filters": [
-                {"field": "ip", "display_name": "IP", "operator": "=", "value": "1.2.3.4"},
-                {"field": "amount", "display_name": "Amount", "operator": "=", "value": "100"},
-            ],
-        }
+        data = self._scope_data(
+            {
+                "sort": ["-event_data.ip", "-event_data.amount"],
+                "event_filters": [
+                    {"field": "ip", "display_name": "IP", "operator": "=", "value": "1.2.3.4"},
+                    {"field": "amount", "display_name": "Amount", "operator": "=", "value": "100"},
+                ],
+            }
+        )
         s = ListRiskRequestSerializer(data=data)
         self.assertTrue(s.is_valid(), s.errors)
 

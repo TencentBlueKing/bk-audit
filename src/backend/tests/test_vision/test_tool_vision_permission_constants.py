@@ -103,3 +103,57 @@ class TestToolVisionPermissionConstants(TestCase):
             self.assertTrue(ok)
             # 非 meta 不应以 constants 字典形式触发 should_skip_permission_from
             self.assertFalse(m_skip.called)
+
+    def test_non_meta_uses_use_tool_permission_with_tool_uid(self):
+        from services.web.tool.constants import ToolTypeEnum
+        from services.web.tool.models import Tool
+        from services.web.vision.views import ToolVisionPermission
+
+        req = DummyRequest()
+        real_tool = Tool.objects.create(
+            namespace="ns",
+            name="vision_related_tool_2",
+            uid="tool-2",
+            version=1,
+            tool_type=ToolTypeEnum.BK_VISION.value,
+            config={"uid": "v_panel", "input_variable": []},
+            updated_by="u",
+        )
+
+        with (
+            mock.patch.object(ToolVisionPermission, "get_tool_and_panel_id", return_value=("panel", "tool-2")),
+            mock.patch("services.web.vision.views.UseToolPermission") as m_use_tool_perm,
+            mock.patch("services.web.vision.views.check_bkvision_share_permission", return_value=True),
+            mock.patch("services.web.vision.views.Tool.last_version_tool", return_value=real_tool),
+        ):
+            m_use_tool_perm.return_value.has_permission.return_value = True
+            ok = ToolVisionPermission().has_permission(req, DummyOtherView())
+            self.assertTrue(ok)
+            m_use_tool_perm.assert_called_once()
+            kwargs = m_use_tool_perm.call_args.kwargs
+            self.assertIn("get_instance_id", kwargs)
+            self.assertEqual(kwargs["get_instance_id"](), "tool-2")
+
+
+class TestScenePanelManageViewSetPermission(TestCase):
+    def test_get_permissions_uses_instance_action_permission(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from apps.permission.handlers.drf import InstanceActionPermission
+        from apps.permission.handlers.resource_types import ResourceEnum
+        from services.web.vision.views import ScenePanelManageViewSet
+
+        view = ScenePanelManageViewSet()
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], InstanceActionPermission)
+        self.assertEqual(permissions[0].actions, [ActionEnum.MANAGE_SCENE])
+        self.assertEqual(permissions[0].resource_meta, ResourceEnum.SCENE)
+
+    def test_get_scene_id_from_query_params(self):
+        from services.web.vision.views import ScenePanelManageViewSet
+
+        view = ScenePanelManageViewSet()
+        view.request = mock.MagicMock(query_params={"scene_id": "123"}, data={})
+
+        self.assertEqual(view.get_scene_id(), "123")

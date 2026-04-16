@@ -19,12 +19,10 @@ to the current version of the project delivered to anyone in the future.
 from rest_framework import serializers
 
 from core.serializers import ExtraDataSerializerMixin
-from services.web.scene.constants import BindingType
-from services.web.scene.constants import PanelStatus
-from services.web.scene.serializers import (
-    FlexibleListField,
-    ResourceBindingInputSerializer,
-)
+from services.web.common.constants import ScopeQueryField, ScopeType
+from services.web.common.serializers import ScopeQuerySerializer
+from services.web.scene.constants import BindingType, PanelStatus
+from services.web.scene.serializers import ResourceBindingInputSerializer
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -34,7 +32,7 @@ class VisionPanelInfoSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "scenario", "status", "category", "description"]
 
 
-class VisionPanelInfoQuerySerializer(serializers.Serializer):
+class VisionPanelInfoQuerySerializer(ScopeQuerySerializer):
     scenario = serializers.ChoiceField(choices=Scenario.choices, default=Scenario.DEFAULT)
     binding_type = serializers.ChoiceField(
         choices=BindingType.choices,
@@ -42,24 +40,40 @@ class VisionPanelInfoQuerySerializer(serializers.Serializer):
         allow_null=True,
         default=None,
         label="绑定类型",
-        help_text="不传/null=全部，platform_binding=平台级，scene_binding=场景级",
+        help_text="可选：platform_binding=平台级，scene_binding=场景级；不传时按接口默认行为",
     )
-    scene_id = FlexibleListField(
-        child=serializers.IntegerField(),
-        required=False,
-        allow_empty=True,
-        default=list,
-        label="所属场景ID列表",
-        help_text="按场景过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
-    )
-    system_id = FlexibleListField(
-        child=serializers.CharField(),
-        required=False,
-        allow_empty=True,
-        default=list,
-        label="系统ID列表",
-        help_text="按接入系统过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
-    )
+
+    def validate(self, attrs: dict) -> dict:
+        attrs = super().validate(attrs)
+        scope_type = attrs.get(ScopeQueryField.SCOPE_TYPE)
+        binding_type = attrs.get("binding_type")
+
+        if scope_type in {ScopeType.CROSS_SYSTEM, ScopeType.SYSTEM} and binding_type == BindingType.SCENE_BINDING:
+            raise serializers.ValidationError(
+                {"binding_type": "系统视角 scope 不支持 binding_type=scene_binding，请使用 platform_binding 或不传。"}
+            )
+
+        return attrs
+
+
+class OptionalVisionPanelInfoQuerySerializer(VisionPanelInfoQuerySerializer):
+    """报表列表可选 scope 参数。"""
+
+    scope_type = serializers.ChoiceField(choices=ScopeType.choices, required=False, allow_null=True)
+    scope_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs: dict) -> dict:
+        scope_type = attrs.get(ScopeQueryField.SCOPE_TYPE)
+        scope_id = attrs.get(ScopeQueryField.SCOPE_ID)
+
+        if not scope_type:
+            if scope_id:
+                raise serializers.ValidationError({ScopeQueryField.SCOPE_TYPE: "传入 scope_id 时必须同时传入 scope_type。"})
+            attrs.pop(ScopeQueryField.SCOPE_TYPE, None)
+            attrs.pop(ScopeQueryField.SCOPE_ID, None)
+            return attrs
+
+        return super().validate(attrs)
 
 
 class QueryMetaReqSerializer(ExtraDataSerializerMixin):

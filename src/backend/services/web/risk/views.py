@@ -22,17 +22,19 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
-    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.utils.data import get_value_by_request
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
     BatchRiskTicketPermission,
     RiskTicketPermission,
     RiskViewPermission,
 )
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 
 
 class EventsViewSet(ResourceViewSet):
@@ -235,15 +237,55 @@ class RiskExperiencesViewSet(ResourceViewSet):
 
 
 class ProcessApplicationsViewSet(ResourceViewSet):
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
+    def get_scene_id_by_pa(self):
+        pa_id = get_value_by_request(self.request, "id") or get_value_by_request(self.request, "pk")
+        if not pa_id:
+            return None
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+                binding__resource_id=str(pa_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
     def get_permissions(self):
         if self.action in ["list"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_PA])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_PA],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["update", "toggle"]:
-            return [IAMPermission(actions=[ActionEnum.EDIT_PA])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_PA],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_pa,
+                ),
+            ]
         if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_PA])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.CREATE_PA],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["rules"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_RULE])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_pa,
+                ),
+            ]
         return []
 
     resource_routes = [
@@ -258,15 +300,71 @@ class ProcessApplicationsViewSet(ResourceViewSet):
 
 
 class RiskRulesViewSet(ResourceViewSet):
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
+    def get_scene_id_by_rule(self):
+        rule_id = get_value_by_request(self.request, "rule_id") or get_value_by_request(self.request, "pk")
+        if not rule_id:
+            return None
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.RISK_RULE,
+                binding__resource_id=str(rule_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
     def get_permissions(self):
-        if self.action in ["list", "risks"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_RULE])]
+        if self.action in ["list"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
+        if self.action in ["risks"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_rule,
+                )
+            ]
         if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_RULE])]
-        if self.action in ["update", "toggle", "set_priority_index"]:
-            return [IAMPermission(actions=[ActionEnum.EDIT_RULE])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.CREATE_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
+        if self.action in ["update", "toggle"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_rule,
+                ),
+            ]
+        if self.action in ["set_priority_index"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["destroy"]:
-            return [IAMPermission(actions=[ActionEnum.DELETE_RULE])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.DELETE_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_rule,
+                ),
+            ]
         return []
 
     resource_routes = [

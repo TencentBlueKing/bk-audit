@@ -21,11 +21,13 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
-    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.utils.data import get_value_by_request
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 
 
 class NoticeViewSet(ResourceViewSet):
@@ -44,11 +46,47 @@ class NoticeGroupsViewSet(ResourceViewSet):
     Notice Group
     """
 
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
+    def get_scene_id_by_notice_group(self):
+        group_id = get_value_by_request(self.request, "group_id") or get_value_by_request(self.request, "pk")
+        if not group_id:
+            return None
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                binding__resource_id=str(group_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "all"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_NOTICE_GROUP])]
+        if self.action in ["list"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_NOTICE_GROUP],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
+        if self.action in ["retrieve"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_NOTICE_GROUP],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_notice_group,
+                )
+            ]
         if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_NOTICE_GROUP])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.CREATE_NOTICE_GROUP],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["update"]:
             return [
                 InstanceActionPermission(
