@@ -2,7 +2,7 @@
 import abc
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
@@ -72,7 +72,10 @@ class ListScene(SceneResource):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        queryset = Scene.objects.all()
+        queryset = Scene.objects.annotate(
+            system_count=Count("scene_systems", distinct=True),
+            table_count=Count("scene_tables", distinct=True),
+        )
         if "status" in validated_request_data:
             queryset = queryset.filter(status=validated_request_data["status"])
         if validated_request_data.get("keyword"):
@@ -244,7 +247,15 @@ class DeleteScene(SceneResource):
             raise SceneNotExist()
 
         # 检查是否有关联资源
-        from services.web.scene.models import ResourceBindingScene
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding, ResourceBindingScene
+        from services.web.strategy_v2.models import Strategy
+
+        valid_strategy_ids = Strategy.objects.filter(is_deleted=False).values_list("strategy_id", flat=True)
+        ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            binding_scenes__scene_id=scene.scene_id,
+        ).exclude(resource_id__in=[str(strategy_id) for strategy_id in valid_strategy_ids]).delete()
 
         # 通过 ResourceBindingScene 检查是否有绑定到该场景的资源
         has_resources = ResourceBindingScene.objects.filter(scene_id=scene.scene_id).exists()
