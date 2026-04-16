@@ -25,6 +25,7 @@ from tests.test_databus.collector_plugin.constants import PLUGIN_ID
 from tests.test_query.constants import (
     BKBASE_COLLECTOR_SEARCH_API_RESP,
     COLLECTOR_SEARCH_ALL_DATA_RESP,
+    COLLECTOR_SEARCH_ALL_PARAMS,
     COLLECTOR_SEARCH_CONFIG,
     COLLECTOR_SEARCH_DATA_RESP,
     COLLECTOR_SEARCH_PARAMS,
@@ -44,8 +45,12 @@ class EsQueryTest(TestCase):
         CollectorPlugin.objects.create(**PLUGIN_DATA)
 
     @mock.patch(
-        "query.resources.SearchLogPermission.get_auth_systems",
-        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP),
+        "query.resources.SearchLogPermission.get_scope_auth_systems",
+        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
+    )
+    @mock.patch(
+        "query.resources.SearchLogPermission.should_append_system_filter",
+        mock.Mock(return_value=True),
     )
     @mock.patch("query.resources.resource.query.es_query", mock.Mock(return_value=ES_QUERY_SEARCH_API_RESP))
     def test_search(self):
@@ -53,7 +58,10 @@ class EsQueryTest(TestCase):
         result = self.resource.query.search(**SEARCH_PARAMS)
         self.assertEqual(result, SEARCH_DATA)
 
-    @mock.patch("query.resources.es.Permission", PermissionMock())
+    @mock.patch(
+        "query.resources.SearchLogPermission.get_scope_auth_systems",
+        mock.Mock(side_effect=PermissionException(action_name="", apply_url="", permission={})),
+    )
     def test_search_of_not_authorized_systems(self):
         """SearchResource"""
         with self.assertRaises(PermissionException):
@@ -77,8 +85,12 @@ class CollectorQueryTest(TestCase):
 
     @mock.patch("services.web.query.resources.GlobalMetaConfig.get", mock.Mock(return_value=PLUGIN_ID))
     @mock.patch(
-        "services.web.query.resources.SearchLogPermission.get_auth_systems",
-        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP),
+        "services.web.query.resources.SearchLogPermission.get_scope_auth_systems",
+        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
+    )
+    @mock.patch(
+        "services.web.query.resources.SearchLogPermission.should_append_system_filter",
+        mock.Mock(return_value=True),
     )
     @mock.patch(
         "services.web.query.resources.api.bk_base.query_sync.bulk_request",
@@ -91,8 +103,12 @@ class CollectorQueryTest(TestCase):
 
     @mock.patch("services.web.query.resources.GlobalMetaConfig.get", mock.Mock(return_value=PLUGIN_ID))
     @mock.patch(
-        "services.web.query.resources.SearchLogPermission.get_auth_systems",
-        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP),
+        "services.web.query.resources.SearchLogPermission.get_scope_auth_systems",
+        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
+    )
+    @mock.patch(
+        "services.web.query.resources.SearchLogPermission.should_append_system_filter",
+        mock.Mock(return_value=True),
     )
     @mock.patch(
         "services.web.query.resources.api.bk_base.query_sync.bulk_request",
@@ -100,5 +116,5 @@ class CollectorQueryTest(TestCase):
     )
     def test_collector_search_all(self):
         """CollectorSearchResource"""
-        result = self.resource.query.collector_search_all(**COLLECTOR_SEARCH_PARAMS)
+        result = self.resource.query.collector_search_all(**COLLECTOR_SEARCH_ALL_PARAMS)
         self.assertEqual(result, COLLECTOR_SEARCH_ALL_DATA_RESP)

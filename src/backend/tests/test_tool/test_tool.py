@@ -4,10 +4,9 @@ from copy import deepcopy
 from datetime import timedelta
 from typing import Type
 from unittest import mock
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 from bk_resource import Resource
-from django.db.models import Q
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.request import Request
@@ -15,10 +14,12 @@ from rest_framework.test import APIRequestFactory
 
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
+from apps.permission.handlers.permission import Permission
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.testing import assert_list_contains
 from services.web.scene.constants import (
     BindingType,
+    PanelStatus,
     ResourceVisibilityType,
     VisibilityScope,
 )
@@ -42,7 +43,6 @@ from services.web.tool.models import (
     Tool,
     ToolTag,
 )
-from services.web.tool.permissions import ToolPermission
 from services.web.tool.resources import (
     CreateTool,
     DeleteTool,
@@ -54,8 +54,8 @@ from services.web.tool.resources import (
     UpdateTool,
     UserQueryTableAuthCheck,
 )
+from services.web.tool.serializers import ListRequestSerializer
 from services.web.vision.models import Scenario, VisionPanel
-from tests.test_tool.constants import MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY
 
 
 class ToolResourceTestCase(TestCase):
@@ -197,14 +197,18 @@ class ToolResourceTestCase(TestCase):
         resource = resource_cls()
         request_data = dict(data)
         if resource_cls is ListTool:
-            request_data.setdefault("scene_id", self.scene_id)
-        response = resource.request(request_data, _request=drf_request)
+            request_data.setdefault("scope_type", "scene")
+            request_data.setdefault("scope_id", str(self.scene_id))
+            with (
+                patch("services.web.tool.resources.ScopePermission.get_scene_ids", return_value=[self.scene_id]),
+                patch("services.web.tool.resources.ScopePermission.get_system_ids", return_value=[]),
+            ):
+                response = resource.request(request_data, _request=drf_request)
+        else:
+            response = resource.request(request_data, _request=drf_request)
         return response.data.get("results", [])
 
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool(self, mock_authed_tool_filter, fetch_tool_permission_tags):
-        mock_authed_tool_filter.return_value = Q()
+    def test_list_tool(self):
         data = {"keyword": "SQL", "page": 1, "page_size": 10}
         result = self._call_resource_with_request(ListTool, data)
         tool_names = [item["name"] for item in result]
@@ -217,6 +221,14 @@ class ToolResourceTestCase(TestCase):
         data_paged = {"keyword": "", "page": 1, "page_size": 2}
         paged_result = self._call_resource_with_request(ListTool, data_paged)
         self.assertEqual(len(paged_result), 2)
+
+        self.sql_tool.status = PanelStatus.PUBLISHED
+        self.sql_tool.save(update_fields=["status"])
+        status_result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "status": PanelStatus.PUBLISHED, "page": 1, "page_size": 10},
+        )
+        self.assertTrue(all(item["status"] == PanelStatus.PUBLISHED for item in status_result))
 
         tag_result_2 = self._call_resource_with_request(
             ListTool, {"keyword": "", "page": 1, "page_size": 10, "tags": [self.tag1.tag_id, self.tag2.tag_id]}
@@ -378,9 +390,7 @@ class ToolResourceTestCase(TestCase):
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
 
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_filter_only_created_by_me(self, mock_authed_tool_filter):
-        mock_authed_tool_filter.return_value = Q()
+    def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
                 "keyword": "",
@@ -393,10 +403,7 @@ class ToolResourceTestCase(TestCase):
             result = self._call_resource_with_request(ListTool, data)
             self.assertTrue(all(tool["created_by"] == self.uid for tool in result))
 
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_list_tool_filter_recent_uids_flag(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
-        mock_authed_tool_filter.return_value = Q()
+    def test_list_tool_filter_recent_uids_flag(self):
         recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
 
         with (
@@ -418,10 +425,27 @@ class ToolResourceTestCase(TestCase):
             result_uids = [tool["uid"] for tool in result]
             self.assertCountEqual(result_uids, recent_uids)
 
-    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
-    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
-    def test_tool_detail(self, mock_authed_tool_filter, fetch_tool_permission_tags):
-        mock_authed_tool_filter.return_value = Q()
+    def test_list_tool_request_serializer_reject_scene_binding_in_system_scope(self):
+        serializer = ListRequestSerializer(
+            data={
+                "scope_type": "system",
+                "scope_id": "bkbase",
+                "binding_type": BindingType.SCENE_BINDING,
+            }
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("binding_type", serializer.errors)
+
+    def test_list_tool_request_serializer_scope_is_optional(self):
+        serializer = ListRequestSerializer(data={"keyword": ""})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_list_tool_request_serializer_no_scope_support_scene_binding(self):
+        serializer = ListRequestSerializer(data={"binding_type": BindingType.SCENE_BINDING})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    @patch.object(Permission, "has_action_any_permission", return_value=True)
+    def test_tool_detail(self, _mock_has_action_any_permission):
         tool_detail_resource = GetToolDetail()
         result = tool_detail_resource({"uid": self.sql_tool.uid})
 
@@ -434,6 +458,77 @@ class ToolResourceTestCase(TestCase):
         if result["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
             for table in result["config"]["referenced_tables"]:
                 self.assertIn("permission", table)
+
+    @patch.object(Permission, "has_action_any_permission", return_value=False)
+    def test_tool_detail_masks_api_config_for_non_platform_manager(self, _mock_has_action_any_permission):
+        api_tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="API Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.API.value,
+            config={
+                "api_config": {
+                    "url": "http://example.com/api",
+                    "method": "GET",
+                    "auth_config": {"method": "none"},
+                    "headers": [],
+                },
+                "input_variable": [],
+                "output_config": {"enable_grouping": False, "groups": []},
+            },
+            is_deleted=False,
+            description="API Tool Desc",
+            updated_at=timezone.now(),
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=api_tool.uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+        result = GetToolDetail()({"uid": api_tool.uid})
+
+        self.assertNotIn("permission", result)
+        self.assertIsNone(result["config"]["api_config"])
+
+    @patch.object(Permission, "is_allowed", return_value=True)
+    @patch.object(Permission, "has_action_any_permission", return_value=False)
+    def test_tool_detail_scene_api_uses_scene_manager_permission(
+        self, _mock_has_action_any_permission, _mock_is_allowed
+    ):
+        api_scene_tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Scene API Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.API.value,
+            config={
+                "api_config": {
+                    "url": "http://example.com/scene-api",
+                    "method": "GET",
+                    "auth_config": {"method": "none"},
+                    "headers": [],
+                },
+                "input_variable": [],
+                "output_config": {"enable_grouping": False, "groups": []},
+            },
+            is_deleted=False,
+            description="Scene API Tool Desc",
+            updated_at=timezone.now(),
+        )
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=api_scene_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene_id)
+
+        result = GetToolDetail()({"uid": api_scene_tool.uid})
+
+        self.assertNotIn("permission", result)
+        self.assertIsNotNone(result["config"]["api_config"])
 
     @patch("services.web.tool.resources.ToolExecutorFactory")
     def test_tool_execute_debug_api(self, mock_factory):

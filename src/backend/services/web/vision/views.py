@@ -33,6 +33,8 @@ from core.exceptions import ValidationError
 from core.models import get_request_username
 from core.utils.renderers import API200Renderer
 from services.web.common.caller_permission import should_skip_permission_from
+from services.web.common.constants import BindingResourceType
+from services.web.common.scope_permission import ScopeInstancePermission
 from services.web.tool.models import Tool
 from services.web.tool.permissions import (
     UseToolPermission,
@@ -107,6 +109,15 @@ class ToolVisionPermission(BasePermission):
         raise ValidationError(message=gettext("无法获取报表ID"))
 
 
+class UsePanelPermission(ScopeInstancePermission):
+    """
+    检查用户是否拥有使用Panel的权限。
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(resource_type=BindingResourceType.PANEL, *args, **kwargs)
+
+
 class ShareDetailPermission(BasePermission):
     def has_permission(self, request, view):
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
@@ -124,7 +135,7 @@ class BKVisionViewSet(ResourceViewSet, abc.ABC):
     escape_scenario = [Scenario.PER_APP.value]  # 去除接口鉴权
 
     def get_permissions(self):
-        return [IAMPermission(actions=[ActionEnum.LIST_BASE_PANEL])]
+        return []
 
 
 class PanelsViewSet(BKVisionViewSet):
@@ -145,7 +156,7 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         try:
             instance_id = self.get_instance_id()
         except ValidationError:
-            return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
+            return []
 
         panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
         # 部分场景无需鉴权
@@ -155,9 +166,8 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
             # 工具场景除了meta无需鉴权
             return []
         return [
-            InstanceActionPermission(
-                actions=[ActionEnum.VIEW_BASE_PANEL],
-                resource_meta=ResourceEnum.PANEL,
+            ScopeInstancePermission(
+                resource_type=BindingResourceType.PANEL,
                 get_instance_id=self.get_instance_id,
             )
         ]
@@ -232,6 +242,9 @@ class PlatformPanelViewSet(ResourceViewSet):
     POST   /bkvision/api/v1/panel/platform/{panel_id}/publish/ 上架/下架
     """
 
+    def get_permissions(self):
+        return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
+
     resource_routes = [
         ResourceRoute("POST", resource.vision.create_platform_panel),
         ResourceRoute("PUT", resource.vision.update_platform_panel, pk_field="panel_id"),
@@ -248,6 +261,21 @@ class ScenePanelManageViewSet(ResourceViewSet):
     PUT    /bkvision/api/v1/panel/scene/{panel_id}/     编辑场景级报表
     DELETE /bkvision/api/v1/panel/scene/{panel_id}/     删除场景级报表
     """
+
+    def get_scene_id(self):
+        scene_id = self.request.query_params.get("scene_id") or self.request.data.get("scene_id")
+        if scene_id:
+            return scene_id
+        raise ValidationError(message=gettext("无法获取场景ID"))
+
+    def get_permissions(self):
+        return [
+            InstanceActionPermission(
+                actions=[ActionEnum.MANAGE_SCENE],
+                resource_meta=ResourceEnum.SCENE,
+                get_instance_id=self.get_scene_id,
+            )
+        ]
 
     resource_routes = [
         ResourceRoute("POST", resource.vision.create_scene_panel),

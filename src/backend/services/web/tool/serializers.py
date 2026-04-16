@@ -26,11 +26,10 @@ from rest_framework.fields import DictField
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
-from services.web.scene.constants import BindingType
-from services.web.scene.serializers import (
-    FlexibleListField,
-    ResourceBindingInputSerializer,
-)
+from services.web.common.constants import ScopeQueryField, ScopeType
+from services.web.common.serializers import ScopeQuerySerializer
+from services.web.scene.constants import BindingType, PanelStatus
+from services.web.scene.serializers import ResourceBindingInputSerializer
 from services.web.tool.constants import (
     ApiToolConfig,
     BkVisionConfig,
@@ -229,7 +228,6 @@ class SceneScopeToolDeleteRequestSerializer(ToolRetrieveRequestSerializer):
 
 
 class ToolListAllResponseSerializer(serializers.ModelSerializer):
-    permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
@@ -243,7 +241,6 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
             "tool_type",
             "version",
             "namespace",
-            "permission",
             "tags",
             "strategies",
             "favorite",
@@ -285,7 +282,6 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
 
 
 class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
-    permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
@@ -314,7 +310,6 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_by",
             "updated_at",
-            "permission",
             "strategies",
             "config",
             "tags",
@@ -326,37 +321,62 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
         ]
 
 
-class ListRequestSerializer(serializers.Serializer):
-    keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
-    tags = serializers.ListField(
-        child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
-    )
-    my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
-    recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
-    # 场景隔离过滤字段
+class ScopeBindingRequestSerializer(ScopeQuerySerializer):
     binding_type = serializers.ChoiceField(
         choices=BindingType.choices,
         required=False,
         allow_null=True,
         default=None,
         label=gettext_lazy("绑定类型"),
-        help_text="不传/null=全部，platform_binding=平台级，scene_binding=场景级",
+        help_text="可选：platform_binding=平台级，scene_binding=场景级；不传时按接口默认行为",
     )
-    scene_id = FlexibleListField(
-        child=serializers.IntegerField(),
-        required=False,
-        allow_empty=True,
-        default=list,
-        label=gettext_lazy("所属场景ID列表"),
-        help_text="按场景过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
+
+    def validate(self, attrs: dict) -> dict:
+        attrs = super().validate(attrs)
+        scope_type = attrs.get(ScopeQueryField.SCOPE_TYPE)
+        binding_type = attrs.get("binding_type")
+
+        if scope_type in {ScopeType.CROSS_SYSTEM, ScopeType.SYSTEM} and binding_type == BindingType.SCENE_BINDING:
+            raise serializers.ValidationError(
+                {"binding_type": "系统视角 scope 不支持 binding_type=scene_binding，请使用 platform_binding 或不传。"}
+            )
+
+        return attrs
+
+
+class OptionalScopeBindingRequestSerializer(ScopeBindingRequestSerializer):
+    """工具列表可选 scope 参数。"""
+
+    scope_type = serializers.ChoiceField(choices=ScopeType.choices, required=False, allow_null=True)
+    scope_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs: dict) -> dict:
+        scope_type = attrs.get(ScopeQueryField.SCOPE_TYPE)
+        scope_id = attrs.get(ScopeQueryField.SCOPE_ID)
+
+        if not scope_type:
+            if scope_id:
+                raise serializers.ValidationError({ScopeQueryField.SCOPE_TYPE: "传入 scope_id 时必须同时传入 scope_type。"})
+            attrs.pop(ScopeQueryField.SCOPE_TYPE, None)
+            attrs.pop(ScopeQueryField.SCOPE_ID, None)
+            return attrs
+
+        return super().validate(attrs)
+
+
+class ListRequestSerializer(OptionalScopeBindingRequestSerializer):
+    keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
+    tags = serializers.ListField(
+        child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
     )
-    system_id = FlexibleListField(
-        child=serializers.CharField(),
+    my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
+    recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
+    status = serializers.ChoiceField(
+        choices=PanelStatus.choices,
         required=False,
-        allow_empty=True,
-        default=list,
-        label=gettext_lazy("系统ID列表"),
-        help_text="按接入系统过滤，支持单个值、多个同名参数、数组或逗号分隔字符串",
+        allow_null=True,
+        default=None,
+        label=gettext_lazy("上架状态"),
     )
 
 

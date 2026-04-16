@@ -633,6 +633,24 @@ class TestScopeEntryPermission(TestCase):
         assert perm.has_permission(cross_scene_request, MagicMock()) is True
         assert perm.has_permission(system_request, MagicMock()) is True
 
+    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
+    @patch("services.web.common.scope_permission.Permission")
+    def test_allowed_scope_types_limit_applies(self, mock_perm_cls, mock_get_username):
+        """基础入口支持按 allowed_scope_types 限制 scope_type"""
+        mock_perm_cls.return_value = MagicMock()
+        perm = ScopeEntryPermission(allowed_scope_types=[ScopeType.SCENE])
+
+        scene_request = _make_request(
+            self.rf,
+            self.user,
+            {ScopeQueryField.SCOPE_TYPE: "scene", ScopeQueryField.SCOPE_ID: "1"},
+        )
+        cross_scene_request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
+
+        assert perm.has_permission(scene_request, MagicMock()) is True
+        with pytest.raises(ValidationError):
+            perm.has_permission(cross_scene_request, MagicMock())
+
 
 @pytest.mark.django_db
 class TestScopeEntryActionPermission(TestCase):
@@ -695,6 +713,14 @@ class TestScopeEntryActionPermission(TestCase):
         with pytest.raises(ValueError):
             perm.has_permission(request, MagicMock())
 
+    def test_allowed_scope_types_rejects_unexpected_scope(self):
+        """严格入口权限支持额外限定 allowed_scope_types"""
+        perm = ScopeEntryActionPermission(action=ActionEnum.MANAGE_SCENE, allowed_scope_types=[ScopeType.SCENE])
+        request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
+
+        with pytest.raises(ValidationError):
+            perm.has_permission(request, MagicMock())
+
 
 # ==================== ScopeInstancePermission Tests ====================
 
@@ -714,10 +740,7 @@ class TestScopeInstancePermission(TestCase):
 
         mock_scope_perm_cls.return_value = MagicMock()
 
-        class TestPerm(ScopeInstancePermission):
-            resource_type = BindingResourceType.PANEL
-
-        perm = TestPerm()
+        perm = ScopeInstancePermission(resource_type=BindingResourceType.PANEL)
         request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
         view = MagicMock()
         view.kwargs = {}
@@ -736,10 +759,7 @@ class TestScopeInstancePermission(TestCase):
         mock_scope_perm.check_resource_permission.return_value = True
         mock_scope_perm_cls.return_value = mock_scope_perm
 
-        class TestPerm(ScopeInstancePermission):
-            resource_type = BindingResourceType.PANEL
-
-        perm = TestPerm()
+        perm = ScopeInstancePermission(resource_type=BindingResourceType.PANEL)
         request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
         view = MagicMock()
         view.kwargs = {"pk": "panel_1"}
@@ -757,11 +777,7 @@ class TestScopeInstancePermission(TestCase):
     def test_resource_type_is_enum(self):
         """resource_type 应为 BindingResourceType 枚举"""
 
-        class TestPerm(ScopeInstancePermission):
-            resource_type = BindingResourceType.TOOL
-            resource_id_field = "pk"
-
-        perm = TestPerm()
+        perm = ScopeInstancePermission(resource_type=BindingResourceType.PANEL)
         assert isinstance(perm.resource_type, BindingResourceType)
 
 

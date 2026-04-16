@@ -2,6 +2,14 @@
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import (
+    IAMPermission,
+    InstanceActionPermission,
+    insert_permission_field,
+)
+from apps.permission.handlers.resource_types import ResourceEnum
+
 
 class SceneViewSet(ResourceViewSet):
     """
@@ -16,12 +24,50 @@ class SceneViewSet(ResourceViewSet):
     POST   /api/v1/scenes/{scene_id}/enable/    启用场景
     GET    /api/v1/scenes/{scene_id}/info/       场景信息（场景管理员可查看）
     PATCH  /api/v1/scenes/{scene_id}/info/       编辑场景基础信息（场景管理员）
-    GET    /api/v1/scenes/my/                    用户场景列表
-    GET    /api/v1/scenes/selector/              场景选择器数据
     """
 
+    def get_scene_id(self):
+        return self.kwargs.get("scene_id")
+
+    def get_permissions(self):
+        if self.action in ["list", "create", "retrieve", "update", "destroy", "disable", "enable"]:
+            return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
+        if self.action in ["info"]:
+            if self.request.method == "GET":
+                return [
+                    InstanceActionPermission(
+                        actions=[ActionEnum.VIEW_SCENE],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    )
+                ]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.MANAGE_SCENE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                )
+            ]
+        return []
+
     resource_routes = [
-        ResourceRoute("GET", resource.scene.list_scene, enable_paginate=True),
+        ResourceRoute(
+            "GET",
+            resource.scene.list_scene,
+            enable_paginate=True,
+        ),
+        ResourceRoute(
+            "GET",
+            resource.scene.list_all_scene,
+            endpoint="all",
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.MANAGE_SCENE, ActionEnum.VIEW_SCENE],
+                    id_field=lambda item: item["scene_id"],
+                    data_field=lambda data: data,
+                )
+            ],
+        ),
         ResourceRoute("POST", resource.scene.create_scene),
         ResourceRoute("GET", resource.scene.retrieve_scene, pk_field="scene_id"),
         ResourceRoute("PUT", resource.scene.update_scene, pk_field="scene_id"),
@@ -30,30 +76,4 @@ class SceneViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.scene.enable_scene, endpoint="enable", pk_field="scene_id"),
         ResourceRoute("GET", resource.scene.get_scene_info, endpoint="info", pk_field="scene_id"),
         ResourceRoute("PATCH", resource.scene.update_scene_info, endpoint="info", pk_field="scene_id"),
-        ResourceRoute("GET", resource.scene.list_my_scenes, endpoint="my"),
-        ResourceRoute("GET", resource.scene.get_scene_selector, endpoint="selector"),
-    ]
-
-
-class MenuViewSet(ResourceViewSet):
-    """
-    菜单权限控制
-
-    GET /api/v1/menus/  根据用户角色返回可见菜单
-    """
-
-    resource_routes = [
-        ResourceRoute("GET", resource.scene.list_menus),
-    ]
-
-
-class PermissionGuideViewSet(ResourceViewSet):
-    """
-    无权限引导页
-
-    GET /api/v1/permission/guide/{module}/
-    """
-
-    resource_routes = [
-        ResourceRoute("GET", resource.scene.get_permission_guide, pk_field="module"),
     ]

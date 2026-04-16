@@ -23,26 +23,80 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
     ActionPermission,
     AnyOfPermissions,
-    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.utils.data import get_value_by_request
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 from services.web.tool.permissions import CallerContextPermission
 
 
 class StrategyViewSet(ResourceViewSet):
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
+    def get_strategy_id(self):
+        return (
+            get_value_by_request(self.request, "strategy_id")
+            or get_value_by_request(self.request, "pk")
+            or get_value_by_request(self.request, "related_object_id")
+        )
+
+    def get_scene_id_by_strategy(self):
+        strategy_id = self.get_strategy_id()
+        if not strategy_id:
+            return None
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id=str(strategy_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
     def get_permissions(self):
-        if self.action in ["list", "strategy_running_status_list", "retrieve"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
+        if self.action in ["list"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_STRATEGY],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
+        if self.action in ["strategy_running_status_list", "retrieve"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_STRATEGY],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id_by_strategy,
+                ),
+            ]
         if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_STRATEGY])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.CREATE_STRATEGY],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["update", "toggle", "retry"]:
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_STRATEGY], resource_meta=ResourceEnum.STRATEGY)]
         if self.action in ["destroy"]:
             return [InstanceActionPermission(actions=[ActionEnum.DELETE_STRATEGY], resource_meta=ResourceEnum.STRATEGY)]
         if self.action in ["enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
-            return [AnyOfPermissions(CallerContextPermission(), IAMPermission(actions=[ActionEnum.LIST_STRATEGY]))]
+            return [
+                AnyOfPermissions(
+                    CallerContextPermission(),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id_by_strategy,
+                    ),
+                )
+            ]
         return []
 
     resource_routes = [
@@ -89,9 +143,18 @@ class StrategyViewSet(ResourceViewSet):
 
 
 class StrategyTagsViewSet(ResourceViewSet):
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
     def get_permissions(self):
         if self.action in ["list"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_STRATEGY],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                )
+            ]
         return []
 
     resource_routes = [
@@ -111,6 +174,8 @@ class StrategyFieldsViewSet(ResourceViewSet):
 
 
 class StrategyTableViewSet(ResourceViewSet):
+    # TODO: 需要补充内部数据权限筛选
+
     def get_permissions(self):
         return [
             ActionPermission(
@@ -133,11 +198,26 @@ class StrategyTableViewSet(ResourceViewSet):
 
 
 class LinkTableViewSet(ResourceViewSet):
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
+
     def get_permissions(self):
         if self.action in ["list", "tags"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_LINK_TABLE])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.LIST_LINK_TABLE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_LINK_TABLE])]
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.CREATE_LINK_TABLE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
+            ]
         if self.action in ["update"]:
             return [
                 InstanceActionPermission(actions=[ActionEnum.EDIT_LINK_TABLE], resource_meta=ResourceEnum.LINK_TABLE)

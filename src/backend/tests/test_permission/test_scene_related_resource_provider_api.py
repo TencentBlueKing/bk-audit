@@ -5,9 +5,11 @@ from iam.eval.constants import KEYWORD_BK_IAM_PATH
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from services.web.process_application.provider import ProcessApplicationResourceProvider
 from services.web.risk.models import ProcessApplication, RiskRule
-from services.web.rule.provider import RuleResourceProvider
+from services.web.risk.provider import (
+    ProcessApplicationResourceProvider,
+    RuleResourceProvider,
+)
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,

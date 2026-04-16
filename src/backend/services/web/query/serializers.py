@@ -34,12 +34,12 @@ from apps.meta.utils.fields import (
     SYSTEM_ID,
     get_field_choices,
 )
-from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
-from core.exceptions import PermissionException, ValidationError
+from core.exceptions import ValidationError
+from core.models import get_request_username
 from core.serializers import OrderBaseSerializer
 from core.sql.constants import FieldType
 from core.utils.time import format_date_string, parse_datetime
+from services.web.common.serializers import ScopeQuerySerializer
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import (
@@ -68,6 +68,10 @@ from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import ES_SEARCH_ORIGIN_FIELDS
 
 
+class QueryScopeQuerySerializer(ScopeQuerySerializer):
+    pass
+
+
 class EsQueryAttrSerializer(serializers.Serializer):
     namespace = serializers.CharField()
     start_time = serializers.CharField(required=False)
@@ -94,7 +98,7 @@ class FieldMapRequestSerializer(serializers.Serializer):
         return [field for field in value.split(",") if field]
 
 
-class EsQuerySearchAttrSerializer(serializers.Serializer):
+class EsQuerySearchAttrSerializer(QueryScopeQuerySerializer):
     namespace = serializers.CharField()
     start_time = serializers.CharField()
     end_time = serializers.CharField()
@@ -391,15 +395,13 @@ class CollectorSearchReqPermissionCheckMixIn:
         """
 
         namespace = validated_request_data["namespace"]
-        systems, authorized_systems = SearchLogPermission.get_auth_systems(namespace)
-        if not authorized_systems:
-            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
-            raise PermissionException(
-                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
-                apply_url=apply_url,
-                permission=apply_data,
-            )
-        if len(systems) != len(authorized_systems):
+        authorized_systems = SearchLogPermission.get_scope_auth_systems(
+            namespace=namespace,
+            scope_type=validated_request_data["scope_type"],
+            scope_id=validated_request_data.get("scope_id"),
+            username=get_request_username(),
+        )
+        if SearchLogPermission.should_append_system_filter(namespace, authorized_systems):
             return [
                 {
                     "field": {"raw_name": SYSTEM_ID.field_name, "field_type": FieldType.STRING.value, "keys": []},
@@ -416,7 +418,11 @@ class CollectorSearchReqPermissionCheckMixIn:
         return attrs
 
 
-class CollectorSearchReqSerializer(CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllReqSerializer):
+class CollectorSearchReqSerializer(
+    CollectorSearchReqPermissionCheckMixIn,
+    CollectorSearchAllReqSerializer,
+    QueryScopeQuerySerializer,
+):
     """
     日志查询请求序列化器
     """
@@ -425,7 +431,9 @@ class CollectorSearchReqSerializer(CollectorSearchReqPermissionCheckMixIn, Colle
 
 
 class CollectorSearchStatisticReqSerializer(
-    CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllStatisticReqSerializer
+    CollectorSearchReqPermissionCheckMixIn,
+    CollectorSearchAllStatisticReqSerializer,
+    QueryScopeQuerySerializer,
 ):
     """
     日志查询统计请求序列化器

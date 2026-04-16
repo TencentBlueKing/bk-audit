@@ -17,6 +17,8 @@ from services.web.scene.serializers import (
     SceneFilterSerializer,
     SceneInfoUpdateSerializer,
     SceneListSerializer,
+    SceneSimpleListSerializer,
+    SceneStatusFilterSerializer,
     UpdateSceneSerializer,
 )
 
@@ -81,6 +83,21 @@ class ListScene(SceneResource):
         if validated_request_data.get("keyword"):
             keyword = validated_request_data["keyword"]
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
+        return queryset
+
+
+class ListAllScene(SceneResource):
+    """场景精简列表"""
+
+    name = gettext_lazy("场景精简列表")
+    RequestSerializer = SceneStatusFilterSerializer
+    ResponseSerializer = SceneSimpleListSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        queryset = Scene.objects.all()
+        if "status" in validated_request_data:
+            queryset = queryset.filter(status=validated_request_data["status"])
         return queryset
 
 
@@ -341,105 +358,3 @@ class UpdateSceneInfo(SceneResource):
         self._sync_iam_group_members(scene, validated_request_data)
 
         return scene
-
-
-class ListMyScenes(SceneResource):
-    """用户场景列表"""
-
-    name = gettext_lazy("用户场景列表")
-
-    def perform_request(self, validated_request_data):
-        from core.models import get_request_username
-
-        username = get_request_username()
-        if not username:
-            return []
-
-        scenes = Scene.objects.filter(
-            Q(managers__contains=username) | Q(users__contains=username),
-            status=SceneStatus.ENABLED,
-        )
-
-        return [
-            {
-                "scene_id": scene.scene_id,
-                "name": scene.name,
-                "role": "manager" if username in scene.managers else "user",
-            }
-            for scene in scenes
-        ]
-
-
-class GetSceneSelector(SceneResource):
-    """场景选择器数据"""
-
-    name = gettext_lazy("场景选择器数据")
-
-    def perform_request(self, validated_request_data):
-        from core.models import get_request_username
-
-        username = get_request_username()
-        result = {"scenes": [], "systems": []}
-
-        if not username:
-            return result
-
-        scenes = Scene.objects.filter(
-            Q(managers__contains=username) | Q(users__contains=username),
-            status=SceneStatus.ENABLED,
-        )
-        for scene in scenes:
-            role = "manager" if username in scene.managers else "user"
-            result["scenes"].append(
-                {
-                    "scene_id": scene.scene_id,
-                    "name": scene.name,
-                    "role": role,
-                }
-            )
-
-        return result
-
-
-# ==================== 菜单与引导 ====================
-
-
-class ListMenus(SceneResource):
-    """返回用户可见菜单"""
-
-    name = gettext_lazy("菜单列表")
-
-    def perform_request(self, validated_request_data):
-        from core.models import get_request_username
-
-        menus = [
-            {"id": "risk", "name": "风险"},
-            {"id": "search", "name": "检索"},
-            {"id": "report", "name": "报表"},
-            {"id": "tool", "name": "工具广场"},
-            {"id": "scene_config", "name": "场景配置"},
-            {"id": "system", "name": "系统接入"},
-        ]
-
-        username = get_request_username()
-        if username:
-            menus.append({"id": "platform", "name": "平台管理"})
-
-        return menus
-
-
-class GetPermissionGuide(SceneResource):
-    """无权限引导页"""
-
-    name = gettext_lazy("无权限引导")
-
-    def perform_request(self, validated_request_data):
-        module = validated_request_data.get("module", "")
-        return {
-            "has_permission": False,
-            "guide": {
-                "title": f"暂无 {module} 模块的访问权限",
-                "description": "请联系场景管理员或 SaaS 管理员获取权限",
-                "action_url": "",
-            },
-        }

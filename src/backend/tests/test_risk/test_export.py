@@ -143,7 +143,7 @@ class TestRiskExport(TestCase):
 
         # Call resource
         risk_ids = ["risk001", "risk002", "risk003", "risk004"]
-        resp = resource.risk.risk_export(risk_ids=risk_ids, scene_id=self.scene.scene_id)
+        resp = resource.risk.risk_export(risk_ids=risk_ids)
 
         # Verify response
         self.assertIn("attachment; filename*", resp["Content-Disposition"])
@@ -200,7 +200,7 @@ class TestRiskExport(TestCase):
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
 
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
-    def test_risk_export_blocks_risks_outside_scene(self, mock_load_authed_risks):
+    def test_risk_export_blocks_unauthed_risks(self, mock_load_authed_risks):
         from services.web.risk.exceptions import ExportRiskNoPermission
 
         strategy = Strategy.objects.create(
@@ -221,10 +221,10 @@ class TestRiskExport(TestCase):
             event_time=datetime.datetime(2023, 1, 5, 10, 0, 0),
             event_end_time=datetime.datetime(2023, 1, 5, 11, 0, 0),
         )
-        mock_load_authed_risks.return_value = Risk.objects.all()
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
 
         with self.assertRaises(ExportRiskNoPermission):
-            resource.risk.risk_export(risk_ids=[risk.risk_id], scene_id=self.scene.scene_id)
+            resource.risk.risk_export(risk_ids=[risk.risk_id])
 
     def test_retrieve_strategy_serializer_populates_raw_event_description(self):
         strategy = Strategy(

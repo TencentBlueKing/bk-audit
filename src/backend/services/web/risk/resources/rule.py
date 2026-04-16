@@ -26,13 +26,14 @@ from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.exceptions import RiskRuleInUse
+from core.exceptions import RiskRuleInUse, ValidationError
 from core.utils.data import choices_to_dict
 from services.web.risk.constants import RiskRuleOperator, RiskStatus
 from services.web.risk.models import Risk, RiskRule, RiskRuleAuditInstance
 from services.web.risk.serializers import (
     BatchUpdateRiskRulePriorityIndexReqSerializer,
     CreateRiskRuleReqSerializer,
+    ListAllRiskRuleReqSerializer,
     ListRiskResponseSerializer,
     ListRiskRuleReqSerializer,
     RiskRuleInfoSerializer,
@@ -40,6 +41,7 @@ from services.web.risk.serializers import (
     UpdateRiskRuleReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.models import ResourceBindingScene
 
 
 class RiskRuleMeta(AuditMixinResource, abc.ABC):
@@ -80,18 +82,19 @@ class ListRiskRule(RiskRuleMeta):
 
 class ListAllRiskRule(RiskRuleMeta):
     name = gettext_lazy("风险处理规则列表")
-    RequestSerializer = ListRiskRuleReqSerializer
+    RequestSerializer = ListAllRiskRuleReqSerializer
 
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_RULE, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        scene_id = validated_request_data.get("scene_id")
+        scene_id = validated_request_data["scene_id"]
+        rules = RiskRule.objects.all()
         from services.web.scene.filters import SceneScopeFilter
 
         rules = SceneScopeFilter.filter_queryset(
-            queryset=RiskRule.objects.all(),
+            queryset=rules,
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.RISK_RULE,
             pk_field="rule_id",
@@ -205,7 +208,20 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
     audit_action = ActionEnum.EDIT_RULE
 
     def perform_request(self, validated_request_data):
+        scene_id = int(validated_request_data["scene_id"])
+        rule_ids = [str(item["rule_id"]) for item in validated_request_data["config"]]
+        binding_scene_map = {
+            item["binding__resource_id"]: item["scene_id"]
+            for item in ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.RISK_RULE,
+                binding__resource_id__in=rule_ids,
+            ).values("binding__resource_id", "scene_id")
+        }
+
         for config in validated_request_data["config"]:
+            rule_id = str(config["rule_id"])
+            if binding_scene_map.get(rule_id) != scene_id:
+                raise ValidationError(gettext_lazy("规则[%s]不属于场景[%s]") % (rule_id, scene_id))
             rule = RiskRule.objects.filter(rule_id=config["rule_id"]).order_by("-version").first()
             if not rule:
                 continue
