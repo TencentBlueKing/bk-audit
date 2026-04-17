@@ -31,11 +31,73 @@
         :loading="loading"
         :z-index="10000">
         <div
-          v-if="dataList.filter(item => item.permission.manage_tool || item.permission.use_tool).length > 0"
+          v-if="dataList.filter(item => item.permission.manage_tool || item.permission.use_tool).length > 0 || true"
           ref="cardListRef"
           class="card-list"
           @scroll="handleScroll">
           <div class="card-list-box">
+            <!-- 固定的审计用户画像卡片 -->
+            <div
+              class="card-list-item"
+              @click="handleClickAuditProfile"
+              @mouseenter="auditProfileHover = true"
+              @mouseleave="auditProfileHover = false">
+              <div class="item-top">
+                <div class="item-top-left">
+                  <div class="audit-profile-avatar">
+                    <audit-icon
+                      style="font-size: 32px; color: #979ba5;"
+                      type="user-shape" />
+                  </div>
+                </div>
+                <div class="item-top-right">
+                  <div class="top-right-title">
+                    <span class="title-text">{{ t('审计用户画像') }}</span>
+                    <bk-tag
+                      class="title-tag"
+                      size="small"
+                      theme="success"
+                      type="filled">
+                      {{ t('系统') }}
+                    </bk-tag>
+                  </div>
+                  <div class="top-right-desc">
+                    <bk-tag
+                      class="desc-tag"
+                      size="small">
+                      {{ t('安全审计') }}
+                    </bk-tag>
+                    <bk-tag
+                      class="desc-tag"
+                      size="small">
+                      {{ t('数据查询') }}
+                    </bk-tag>
+                    <bk-tag
+                      class="desc-tag"
+                      size="small">
+                      {{ t('合规检查') }}
+                    </bk-tag>
+                    <bk-tag
+                      class="desc-tag tag-cursor"
+                      size="small"
+                      theme="info">
+                      {{ t('运用在') }} 0 {{ t('个策略中') }}
+                    </bk-tag>
+                  </div>
+                </div>
+              </div>
+              <div class="item-middle">
+                {{ t('基于企业微信/QQ等身份标识，一站式查询账号用户信息及关联游戏资产信息') }}
+              </div>
+              <div class="item-footer">
+                <div>
+                  <span>ivonye</span>
+                  <span class="line" />
+                  <span>frodomei</span>
+                </div>
+                <span>2015-03-20 15:22:00</span>
+              </div>
+            </div>
             <div
               v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
               :key="index"
@@ -270,7 +332,27 @@
 
   const searchValue = ref<string>('');
   const itemMouseenter = ref(null);
+  const auditProfileHover = ref(false);
   const dataList = ref<ToolInfo[]>([]);
+
+  // 固定的审计用户画像工具数据
+  const auditProfileTool = new ToolInfo({
+    uid: 'audit_user_profile',
+    name: '审计用户画像',
+    version: 1,
+    tool_type: 'audit_profile',
+    description: '基于企业微信/QQ等身份标识，一站式查询账号用户信息及关联游戏资产信息',
+    namespace: '',
+    is_bkvision: false,
+    favorite: false,
+    permission: { use_tool: true, manage_tool: false },
+    strategies: [],
+    tags: [],
+    created_by: 'ivonye',
+    created_at: '2015-03-20 15:22:00',
+    updated_by: 'frodomei',
+    updated_at: '2015-03-20 15:22:00',
+  } as any);
 
   const currentPage = ref(1);
   const currentPagSize = ref(50);
@@ -495,6 +577,11 @@
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
    */
+  // 点击审计用户画像卡片
+  const handleClickAuditProfile = () => {
+    emits('openTool', auditProfileTool);
+  };
+
   const handleClickTool = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
@@ -673,6 +760,18 @@
               margin-top: 20px;
               margin-left: 20px;
               font-size: 48px;
+            }
+
+            .audit-profile-avatar {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 48px;
+              height: 48px;
+              margin-top: 20px;
+              margin-left: 20px;
+              background: #f0f1f5;
+              border-radius: 50%;
             }
           }
 

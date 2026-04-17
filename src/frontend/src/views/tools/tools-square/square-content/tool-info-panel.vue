@@ -67,7 +67,9 @@
       </div>
     </div>
     <div class="panel-content">
-      <div class="content-header">
+      <div
+        v-show="!activeUid.startsWith('game_detail_') && activeUid !== 'audit_user_profile'"
+        class="content-header">
         <div class="top-right">
           <audit-icon
             class="top-left-icon"
@@ -103,8 +105,20 @@
       <template
         v-for="tool in toolList"
         :key="tool.uid">
+        <!-- 审计用户画像工具 -->
+        <audit-user-profile
+          v-if="tool.uid === 'audit_user_profile'"
+          v-show="activeUid === tool.uid"
+          @open-game-detail="handleOpenGameDetail" />
+        <!-- 游戏数据详情 -->
+        <game-detail
+          v-else-if="tool.uid.startsWith('game_detail_')"
+          v-show="activeUid === tool.uid"
+          :game-data="gameDetailDataMap[tool.uid]"
+          :initial-tab="gameDetailInitialTabMap[tool.uid]" />
+        <!-- 普通工具 -->
         <tool-content
-          v-if="toolDetailMap[tool.uid]"
+          v-else-if="toolDetailMap[tool.uid]"
           v-show="activeUid === tool.uid"
           :ref="(el: any) => setToolContentRef(tool.uid, el)"
           :content-style="{ height: 'calc(100% - 160px)' }"
@@ -126,6 +140,8 @@
   import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
 
+  import AuditUserProfile from '../components/audit-user-profile.vue';
+  import GameDetail from '../components/game-detail.vue';
   import ToolContent from '../components/tool-content.vue';
 
   import AddToolPopover from './add-tool-popover.vue';
@@ -247,6 +263,10 @@
       return 'bkvisonxiao';
     case 'api':
       return 'apixiao';
+    case 'audit_profile':
+      return 'user-shape';
+    case 'game_detail':
+      return 'apixiao';
     default:
       return 'apixiao';
     }
@@ -330,13 +350,58 @@
     };
   };
 
+  // 游戏详情数据缓存
+  const gameDetailDataMap = ref<Record<string, any>>({});
+  // 游戏详情初始 tab 缓存
+  const gameDetailInitialTabMap = ref<Record<string, string>>({});
+
+  // 打开游戏数据详情
+  const handleOpenGameDetail = (gameData: Record<string, any>, initialTab?: string) => {
+    const gameUid = `game_detail_${gameData.name}`;
+    // 缓存游戏数据
+    gameDetailDataMap.value[gameUid] = {
+      name: gameData.name,
+      openid: gameData.openid || 'wx_oABCd1234567890',
+      wechat: 'm******4',
+      coinBalance: gameData.coinBalance || 350,
+      totalRecharge: gameData.totalRecharge || 3200,
+      totalGift: gameData.totalGift || 0,
+      totalIssue: gameData.totalIssue || 6978,
+    };
+    // 缓存初始 tab
+    gameDetailInitialTabMap.value[gameUid] = initialTab || 'overview';
+    // 构造一个 ToolInfo 实例用于 tab 展示
+    const gameTool = new ToolInfo({
+      uid: gameUid,
+      name: `frodomei - ${gameData.name}`,
+      version: 1,
+      tool_type: 'game_detail',
+      description: '',
+      namespace: '',
+      is_bkvision: false,
+      favorite: false,
+      permission: { use_tool: true, manage_tool: false },
+      strategies: [],
+      tags: [],
+      created_by: '',
+      created_at: '',
+      updated_by: '',
+      updated_at: '',
+    } as any);
+    emit('addTool', gameTool);
+    // 切换到新 tab
+    emit('switchTab', gameUid);
+  };
+
   // 监听激活工具变化，仅在未加载过时请求详情
   watch(
     () => props.activeUid,
     (newUid) => {
       if (!newUid) return;
-      // 如果该工具详情尚未加载，则请求
-      if (!toolDetailMap.value[newUid]) {
+      // 如果该工具详情尚未加载，则请求（跳过审计用户画像和游戏详情等固定工具）
+      if (!toolDetailMap.value[newUid]
+        && newUid !== 'audit_user_profile'
+        && !newUid.startsWith('game_detail_')) {
         fetchToolDetail({ uid: newUid });
       }
       // 已加载的工具无需任何操作，v-show 会自动切换显示
