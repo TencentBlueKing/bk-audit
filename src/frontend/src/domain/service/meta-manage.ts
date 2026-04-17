@@ -112,7 +112,15 @@ export default {
    * @desc 获取系统列表(All)
    * @param { String } action_ids
    */
-  fetchSystemWithAction(params: { action_ids?: string }) {
+  fetchSystemWithAction(params: {
+    action_ids?: string;
+    audit_status__in?: string;
+    namespace?: string;
+    order_type?: string;
+    sort_keys?: string;
+    with_favorite?: boolean;
+    with_system_status?: boolean;
+  }) {
     return MetaManageSource.getAllSysetemByActionId(params, {
       permission: 'page',
     })

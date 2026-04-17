@@ -21,6 +21,8 @@
       <scene-system-selector
         v-model="selectedScene"
         :popover-width="320"
+        scene-permission="view_scene"
+        system-permission="view_system"
         :width="240"
         @change="handleSceneChange" />
     </div>
@@ -99,11 +101,7 @@
   const isInit = ref(false);
 
   // 场景选择器
-  const selectedScene = ref<SceneItem | null>({
-    id: '100001',
-    name: '主机安全审计',
-    type: 'scene',
-  });
+  const selectedScene = ref<SceneItem | null>();
 
   const searchModel = ref<Record<string, any>>({});
   const searchResultCom = computed(() => comMap[renderType.value]);
