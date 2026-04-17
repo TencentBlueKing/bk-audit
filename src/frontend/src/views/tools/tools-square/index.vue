@@ -40,7 +40,10 @@
         <div class="scene-selector-wrapper">
           <scene-system-selector
             v-model="selectedScene"
+            :list-scope="['system', 'scene']"
             :popover-width="250"
+            scene-permission="view_scene"
+            system-permission="view_system"
             width="100%"
             @change="handleSceneChange" />
         </div>
@@ -146,11 +149,7 @@
   const isReturningHome = ref(false);
 
   // 场景选择器
-  const selectedScene = ref<SceneItem | null>({
-    id: '100001',
-    name: '主机安全审计',
-    type: 'scene',
-  });
+  const selectedScene = ref<SceneItem | null>();
 
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {

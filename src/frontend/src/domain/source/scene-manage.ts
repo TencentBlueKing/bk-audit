@@ -101,6 +101,16 @@ class SceneManage extends ModuleBase {
   deleteScene(id: string | number, payload = {} as IRequestPayload) {
     return Request.delete(`${this.module}/${id}/`, { payload });
   }
+
+  // 场景精简列表
+  getSceneAll(params: { status?: 'enabled' | 'disabled' } = {}, payload = {} as IRequestPayload) {
+    return Request.get<Array<{
+      scene_id: number;
+      name: string;
+      status: 'enabled' | 'disabled';
+      permission: Record<string, boolean>;
+    }>>(`${this.module}/all/`, { params, payload });
+  }
 }
 
 export default new SceneManage();

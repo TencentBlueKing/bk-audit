@@ -36,7 +36,10 @@
           class="ml24">
           <scene-system-selector
             v-model="selectedScene"
+            :list-scope="['system', 'scene']"
             :popover-width="280"
+            scene-permission="view_scene"
+            system-permission="view_system"
             width="300px"
             @change="handleSceneChange" />
         </span>
@@ -169,11 +172,7 @@
   });
 
   // 场景选择器
-  const selectedScene = ref<SceneItem | null>({
-    id: '100001',
-    name: '主机安全审计',
-    type: 'scene',
-  });
+  const selectedScene = ref<SceneItem | null>();
   const layoutRef = ref();
   const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
   const titleTip = computed(() => {
