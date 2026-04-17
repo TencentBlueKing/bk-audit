@@ -139,19 +139,38 @@
                 </template>
               </bk-popover>
             </template>
-            <bk-select
-              v-model="formData.table_id"
-              :clearable="false"
-              :disabled="!formData.system_id"
-              filterable
-              :loading="tableLoading"
-              :placeholder="t('请选择')">
-              <bk-option
-                v-for="item in tableList"
-                :key="item.id"
-                :label="item.name"
-                :value="item.id" />
-            </bk-select>
+            <bk-loading :loading="typeTableLoading">
+              <div class="select-group">
+                <bk-form-item
+                  v-if="allConfigTypeTable.length"
+                  class="no-label"
+                  label-width="0"
+                  property="table_id">
+                  <bk-cascader
+                    v-slot="{data, node}"
+                    v-model="tableId"
+                    :filter-method="configTypeTableFilter"
+                    filterable
+                    id-key="value"
+                    :list="allConfigTypeTable"
+                    name-key="label"
+                    :placeholder="t('搜索数据名称、别名、数据ID等')"
+                    trigger="hover"
+                    @change="handleChangeTable">
+                    <p
+                      v-bk-tooltips="{
+                        disabled: !data.disabled || !data.leaf,
+                        content: node.pathNames[0] === '资产数据'
+                          ? t('该系统暂未上报资源数据')
+                          : t('审计无权限，请前往BKBase申请授权'),
+                        delay: 400,
+                      }">
+                      {{ node.name }}
+                    </p>
+                  </bk-cascader>
+                </bk-form-item>
+              </div>
+            </bk-loading>
           </bk-form-item>
         </bk-form>
       </div>
@@ -180,9 +199,11 @@
 
   import MetaManageService from '@service/meta-manage';
   import SceneManageService from '@service/scene-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
   import SystemModel from '@model/meta/system';
   import SceneModel from '@model/scene/scene';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useMessage from '@hooks/use-message';
 
@@ -215,6 +236,18 @@
     name: string;
   }
 
+  interface ConfigTypeTableItem {
+    label: string;
+    value: string;
+    children: Array<{
+      label: string;
+      value: string;
+      leaf?: boolean;
+      disabled?: boolean;
+      children?: Array<{ label: string; value: string }>;
+    }>;
+  }
+
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
@@ -231,8 +264,13 @@
 
   // 系统列表
   const systemList = ref<SystemModel[]>([]);
-  // 数据表列表
+  // 数据表列表（保留兼容）
   const tableList = ref<TableItem[]>([]);
+
+  // 级联选择器相关
+  const tableId = ref<Array<string>>([]);
+  const typeTableLoading = ref(false);
+  const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
 
   // 表单数据
   const formData = ref<FormData>({
@@ -293,7 +331,7 @@
       }
     },
   });
-  // 获取数据表列表
+  // 获取数据表列表（仅保留用于 fetchTableList 调用兼容）
   const fetchTableList = async () => {
     tableLoading.value = true;
     try {
@@ -301,6 +339,89 @@
     } finally {
       tableLoading.value = false;
     }
+  };
+
+  // 根据 table_id 反查级联路径并回填 tableId
+  const fillTableIdFromCascader = (rtId: string) => {
+    if (!rtId || !allConfigTypeTable.value.length) return;
+    for (const typeItem of allConfigTypeTable.value) {
+      for (const child of typeItem.children) {
+        if (child.children && child.children.length) {
+          for (const leaf of child.children) {
+            if (leaf.value === rtId) {
+              tableId.value = [typeItem.value, child.value, leaf.value];
+              return;
+            }
+          }
+        } else if (child.value === rtId) {
+          tableId.value = [typeItem.value, child.value];
+          return;
+        }
+      }
+    }
+  };
+
+  // 获取全部级联数据（只取资产数据和其他数据，类型值来自 fetchStrategyCommon）
+  const {
+    run: fetchTable,
+  } = useRequest(StrategyManageService.fetchTable, {
+    defaultValue: [],
+  });
+
+  const {
+    run: fetchStrategyCommon,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    onSuccess: (data) => {
+      // 过滤掉 EventLog 和 LinkTable，只保留资产数据和其他数据
+      type ConfigTypeItem = { label: string; value: string };
+      // eslint-disable-next-line max-len
+      const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable');
+      const requests = targetTypes.map((item: ConfigTypeItem) => {
+        const req = fetchTable({ table_type: item.value });
+        return req.then((tableData: any[]) => ({
+          label: item.label,
+          value: item.value,
+          children: tableData.map((tableItem: any) => ({
+            ...tableItem,
+            leaf: true,
+            disabled: !(tableItem.children && tableItem.children.length),
+          })),
+        }));
+      });
+      Promise.all(requests).then((results) => {
+        allConfigTypeTable.value = results;
+        typeTableLoading.value = false;
+        // 若编辑模式已有 table_id（场景详情先于级联数据返回），补充回填路径
+        if (formData.value.table_id) {
+          fillTableIdFromCascader(formData.value.table_id);
+        }
+      });
+    },
+  });
+
+  const getAllConfigTypeTable = () => {
+    typeTableLoading.value = true;
+    fetchStrategyCommon();
+  };
+
+  // 搜索过滤方法
+  const configTypeTableFilter = (node: Record<string, any>, key: string) => {
+    const lowercaseKey = key.toLowerCase();
+    const isLeaf = !Array.isArray(node.children) || node.children.length === 0;
+    if (!isLeaf) return false;
+    return node.data.label.toLowerCase().includes(lowercaseKey)
+      || node.data.value.toLowerCase().includes(lowercaseKey);
+  };
+
+  // 级联选择回调
+  const handleChangeTable = (value: Array<string>) => {
+    if (!value || value.length === 0) {
+      formData.value.table_id = '';
+      return;
+    }
+    formData.value.table_id = value[value.length - 1];
+    console.log('[关联数据表] 选中路径:', value, '| table_id:', formData.value.table_id);
   };
 
   // 重置表单
@@ -371,14 +492,16 @@
 
   // 编辑模式下回填表单基础字段
   const fillFormFromSceneData = (data: SceneModel) => {
+    const rtId = data.tables && data.tables.length ? data.tables[0].table_id : '';
     formData.value = {
       name: data.name || '',
       managers: data.managers || [],
       description: data.description || '',
       users: data.users || [],
       system_id: data.systems.map(item => item.system_id),
-      table_id: '',
+      table_id: rtId,
     };
+    fillTableIdFromCascader(rtId);
   };
 
   // 判断是否选择了"全部"
@@ -413,10 +536,11 @@
     managers: formData.value.managers as string[],
     users: (formData.value.users as string[]).length > 0 ? (formData.value.users as string[]) : undefined,
     systems: buildSystemsParam(),
-    tables: [],
+    tables: formData.value.table_id ? [{ table_id: formData.value.table_id, filter_rules: '' }] : undefined,
   });
 
   const handleSubmit = async () => {
+    console.log('formData.value', submitParams);
     try {
       await formRef.value?.validate();
       if (isEditMode.value) {
@@ -445,10 +569,15 @@
   };
 
 
-  // 监听显示状态，打开时加载系统列表
+  // 监听显示状态，打开时加载系统列表和级联数据
   watch(() => props.isShow, (val) => {
     if (val) {
-      fetchSystemList();
+      fetchSystemList({
+        page: 1,
+        page_size: 1000,
+        audit_status: 'accessed',
+      });
+      getAllConfigTypeTable();
     }
   });
 </script>
@@ -467,6 +596,20 @@
   :deep(.label-tips) {
     cursor: pointer;
     border-bottom: 1px dashed #979ba5;
+  }
+
+  .no-label :deep(.bk-form-label::after) {
+    content: '';
+  }
+
+  .no-label :deep(.bk-form-label) {
+    padding-right: 0;
+  }
+
+  .select-group {
+    :deep(.bk-form-item) {
+      margin-bottom: 0;
+    }
   }
 }
 

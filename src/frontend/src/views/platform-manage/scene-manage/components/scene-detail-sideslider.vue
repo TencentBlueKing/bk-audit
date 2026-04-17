@@ -134,12 +134,12 @@
               </bk-tag>
             </div>
             <div class="table-list">
-              <!-- <bk-tag
+              <bk-tag
                 v-for="table in detailData.tables"
-                :key="table.id"
+                :key="table.table_id"
                 class="table-tag">
-                {{ table.name }}
-              </bk-tag> -->
+                {{ textTableTag(table.table_id) }}
+              </bk-tag>
             </div>
           </div>
         </bk-loading>
@@ -158,9 +158,11 @@
 
   import MetaManageService from '@service/meta-manage';
   import SceneManageService from '@service/scene-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
   import SystemModel from '@model/meta/system';
   import SceneModel from '@model/scene/scene';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@/hooks/use-request';
 
@@ -189,6 +191,54 @@
     const systemItem = systemList.value.find(item => item.system_id === id);
     return systemItem ? systemItem.name : id;
   };
+
+  // 级联表数据，用于反查 table_id 对应的显示名
+  interface FlatTableItem { pathName: string; value: string }
+  const flatTableList = ref<FlatTableItem[]>([]);
+
+  const textTableTag = (tableId: string) => {
+    const found = flatTableList.value.find(item => item.value === tableId);
+    return found ? found.pathName : tableId;
+  };
+
+  const {
+    run: fetchTable,
+  } = useRequest(StrategyManageService.fetchTable, {
+    defaultValue: [],
+  });
+
+  const {
+    run: fetchStrategyCommon,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    onSuccess: (data) => {
+      type ConfigTypeItem = { label: string; value: string };
+      // eslint-disable-next-line max-len
+      const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable');
+      const requests = targetTypes.map((typeItem: ConfigTypeItem) => {
+        const req = fetchTable({ table_type: typeItem.value });
+        return req.then((tableData: any[]) => {
+          const flat: FlatTableItem[] = [];
+          tableData.forEach((group: any) => {
+            if (group.children && group.children.length) {
+              group.children.forEach((child: any) => {
+                flat.push({
+                  value: child.value,
+                  pathName: `${typeItem.label}/${group.label}/${child.label}`,
+                });
+              });
+            } else {
+              flat.push({ value: group.value, pathName: `${typeItem.label}/${group.label}` });
+            }
+          });
+          return flat;
+        });
+      });
+      Promise.all(requests).then((results) => {
+        flatTableList.value = results.reduce((acc, curr) => acc.concat(curr), []);
+      });
+    },
+  });
   // 格式化管理员显示
   const formatManagers = (managers: string[]) => {
     if (!managers || managers.length === 0) return '--';
@@ -249,12 +299,14 @@
     onSuccess: (res) => {
       isLoading.value = false;
       detailData.value = res;
+      console.log('[关联数据表] tables 原始数据:', JSON.stringify(res.tables, null, 2));
     },
   });
 
   // 加载详情数据
   const loadDetail = () => {
     isLoading.value = true;
+    fetchStrategyCommon();
     fetchSystemList({
       page: 1,
       page_size: 1000,
