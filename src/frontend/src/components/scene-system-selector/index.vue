@@ -51,7 +51,9 @@
         class="scene-system-dropdown"
         :class="{ 'is-dark': dark }">
         <!-- 审计场景分组 -->
-        <div class="dropdown-group">
+        <div
+          v-if="listScope.includes('scene')"
+          class="dropdown-group">
           <div class="group-title">
             {{ t('审计场景') }}
           </div>
@@ -67,22 +69,18 @@
                 :class="[`type-${item.type}`]">
                 {{ getTypeLabel(item.type) }}
               </bk-tag>
-              <span
+              <show-tooltips-text
                 class="item-name"
-                :class="{ 'is-highlight': item.type !== 'aggregate' }">
-                {{ item.name }}
-              </span>
-              <span
-                v-if="item.id"
-                class="item-id">
-                ({{ item.id }})
-              </span>
+                :class="{ 'is-highlight': item.type !== 'aggregate' }"
+                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name" />
             </div>
           </div>
         </div>
 
         <!-- 接入系统分组 -->
-        <div class="dropdown-group">
+        <div
+          v-if="listScope.includes('system')"
+          class="dropdown-group">
           <div class="group-title">
             {{ t('接入系统') }}
           </div>
@@ -98,11 +96,10 @@
                 :class="[`type-${item.type}`]">
                 {{ getTypeLabel(item.type) }}
               </bk-tag>
-              <span
+              <show-tooltips-text
                 class="item-name"
-                :class="{ 'is-highlight': item.type !== 'aggregate' }">
-                {{ item.name }}
-              </span>
+                :class="{ 'is-highlight': item.type !== 'aggregate' }"
+                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name" />
             </div>
           </div>
         </div>
@@ -114,12 +111,18 @@
 <script setup lang="ts">
   import {
     computed,
+    onMounted,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
+  import sceneManageService from '@service/scene-manage';
+
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface SelectorItem {
     id: string;
@@ -132,6 +135,9 @@
     width?: number | string;
     popoverWidth?: number;
     dark?: boolean;
+    listScope?:  string[],
+    systemPermission: 'edit_system' | 'view_system';
+    scenePermission: 'manage_scene' | 'view_scene';
   }
 
   interface Emits {
@@ -144,6 +150,7 @@
     width: 320,
     popoverWidth: 400,
     dark: false,
+    listScope: () => ['scene', 'system'],
   });
 
   const emits = defineEmits<Emits>();
@@ -155,26 +162,18 @@
   const selectedItem = ref<SelectorItem | null>(props.modelValue);
 
   // 假数据 - 审计场景列表
-  const sceneList = ref<SelectorItem[]>([
-    { id: '1', name: '我的所有场景', type: 'aggregate' },
-    { id: '100001', name: '主机安全审计', type: 'scene' },
-    { id: '100002', name: '数据安全审计', type: 'scene' },
-    { id: '100003', name: '网络安全审计', type: 'scene' },
-  ]);
+  const sceneList = ref<SelectorItem[]>([]);
 
   // 假数据 - 接入系统列表
-  const systemList = ref<SelectorItem[]>([
-    { id: '2', name: '我的所有系统', type: 'aggregate' },
-    { id: 'bk_job', name: '蓝鲸作业平台', type: 'system' },
-  ]);
+  const systemList = ref<SelectorItem[]>([]);
 
   // 显示文本
   const displayText = computed(() => {
     if (!selectedItem.value) {
       return t('请选择');
     }
-    const { name, id } = selectedItem.value;
-    return id ? `${name}(${id})` : name;
+    const { name, id, type } = selectedItem.value;
+    return (id && type !== 'aggregate') ? `${name}(${id})` : name;
   });
 
   // 获取类型标签文本
@@ -193,9 +192,12 @@
     return selectedItem.value.id === item.id && selectedItem.value.type === item.type;
   };
 
+  const STORAGE_KEY = 'scene-system-selector:selected';
+
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
     selectedItem.value = item;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
     emits('update:modelValue', item);
     emits('change', item);
     isPopoverShow.value = false;
@@ -211,9 +213,64 @@
     isPopoverShow.value = false;
   };
 
+  // 获取系统列表
+  const {
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      const list = data
+        .filter(item => item.permission && item.permission[props.systemPermission] === true)
+        .map(item => ({
+          id: item.system_id,
+          name: item.name,
+          type: 'system' as const,
+        }));
+      systemList.value = [{ id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' }, ...list];
+    },
+  });
+  // 获取场景列表
+  const {
+    run: fetchSceneAll,
+  } = useRequest(sceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      const list = data
+        .filter(item => item.permission && item.permission[props.scenePermission] === true)
+        .map(item => ({
+          id: String(item.scene_id),
+          name: item.name,
+          type: 'scene' as const,
+        }));
+      sceneList.value = [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list];
+      // 默认选中第一个非聚合的场景
+      if (!selectedItem.value && list.length > 0) {
+        const defaultItem = list[0];
+        selectedItem.value = defaultItem;
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(defaultItem));
+        emits('update:modelValue', defaultItem);
+        emits('change', defaultItem);
+      }
+    },
+  });
   // 监听外部值变化
   watch(() => props.modelValue, (newVal) => {
     selectedItem.value = newVal;
+  });
+
+  onMounted(() => {
+    fetchSystemWithAction({
+      action_ids: 'view_system,edit_system',
+      audit_status__in: 'accessed',
+      namespace: 'default',
+      order_type: 'asc',
+      sort_keys: 'name',
+      with_favorite: false,
+      with_system_status: false,
+    });
+    fetchSceneAll({
+      status: 'enabled',
+    });
   });
 </script>
 
@@ -318,9 +375,43 @@
   max-height: 400px;
   overflow-y: auto;
 
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #c4c6cc;
+    border-radius: 2px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #979ba5;
+  }
+
   /* 深色主题 */
   &.is-dark {
     background: #1a2233;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #2e3847;
+      border-radius: 2px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: #3c4558;
+    }
 
     .dropdown-group {
       .group-title {
