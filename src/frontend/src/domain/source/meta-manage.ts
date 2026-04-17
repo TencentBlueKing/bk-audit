@@ -95,7 +95,15 @@ class MetaManage extends ModuleBase {
     });
   }
   // 获取系统列表(All)
-  getAllSysetemByActionId(params: { action_ids?: string }, payload = {} as IRequestPayload) {
+  getAllSysetemByActionId(params: {
+    action_ids?: string;
+    audit_status__in?: string;
+    namespace?: string;
+    order_type?: string;
+    sort_keys?: string;
+    with_favorite?: boolean;
+    with_system_status?: boolean;
+  }, payload = {} as IRequestPayload) {
     return Request.get<Array<EventSourceAppModel>>(`${this.path}/systems/all/`, {
       params,
       payload,

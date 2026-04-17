@@ -21,7 +21,10 @@
       <scene-system-selector
         v-model="selectedScene"
         dark
-        :popover-width="280"
+        :list-scope="['system', 'scene']"
+        :popover-width="320"
+        scene-permission="manage_scene"
+        system-permission="edit_system"
         width="100%"
         @change="handleSceneChange" />
     </div>
@@ -168,11 +171,7 @@
   const currentRoute = computed(() => route.name as string);
 
   // 场景选择器
-  const selectedScene = ref<SceneItem | null>({
-    id: '100001',
-    name: '主机安全审计',
-    type: 'scene',
-  });
+  const selectedScene = ref<SceneItem | null>();
 
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {

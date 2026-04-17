@@ -105,4 +105,13 @@ export default {
   deleteScene(id: string | number) {
     return SceneManageSource.deleteScene(id);
   },
+
+  /**
+   * @desc 场景精简列表
+   * @param { Object } params
+   */
+  fetchSceneAll(params: { status?: 'enabled' | 'disabled' } = {}) {
+    return SceneManageSource.getSceneAll(params)
+      .then(({ data }) => data);
+  },
 };
