@@ -22,7 +22,10 @@ from django.db import models
 from django.db.models.enums import TextChoices
 from django.utils.translation import gettext_lazy
 
-from core.models import SoftDeleteModel
+from core.models import OperateRecordModel, SoftDeleteModel
+from services.web.scene.constants import PanelStatus
+from services.web.scene.models import Scene
+from services.web.vision.constants import ReportGroupType
 from services.web.vision.exceptions import VisionHandlerInvalid
 
 
@@ -46,9 +49,9 @@ class VisionPanel(SoftDeleteModel):
     status = models.CharField(
         gettext_lazy("上架状态"),
         max_length=32,
-        default="",
-        blank=True,
-        help_text="published=已上架, unpublished=未上架, 空=存量数据",
+        choices=PanelStatus.choices,
+        default=PanelStatus.UNPUBLISHED,
+        help_text="published=已上架, unpublished=未上架",
     )
     category = models.CharField(
         gettext_lazy("分类"),
@@ -78,3 +81,67 @@ class VisionPanelInstance:
     @property
     def instance(self):
         return AuditInstance(self)
+
+
+class SceneReportGroup(OperateRecordModel):
+    """场景报表分组。"""
+
+    scene = models.ForeignKey(Scene, on_delete=models.CASCADE, related_name="report_groups", db_index=True)
+    name = models.CharField(gettext_lazy("分组名称"), max_length=255)
+    group_type = models.CharField(
+        gettext_lazy("分组类型"),
+        max_length=32,
+        choices=ReportGroupType.choices,
+        default=ReportGroupType.CUSTOM,
+        db_index=True,
+    )
+    priority_index = models.IntegerField(gettext_lazy("排序权重"), default=0, db_index=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("场景报表分组")
+        verbose_name_plural = verbose_name
+        ordering = ["-priority_index", "id"]
+        unique_together = [("scene", "name")]
+
+
+class SceneReportGroupItem(OperateRecordModel):
+    """场景报表分组项（报表归组关系）。"""
+
+    group = models.ForeignKey(SceneReportGroup, on_delete=models.CASCADE, related_name="items")
+    panel = models.ForeignKey(VisionPanel, on_delete=models.CASCADE, related_name="scene_group_items")
+    priority_index = models.IntegerField(gettext_lazy("排序权重"), default=0, db_index=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("场景报表分组项")
+        verbose_name_plural = verbose_name
+        ordering = ["-priority_index", "id"]
+        unique_together = [("group", "panel")]
+
+
+class ReportUserPreference(models.Model):
+    """用户报表偏好。"""
+
+    username = models.CharField(gettext_lazy("用户名"), max_length=255, unique=True)
+    config = models.JSONField(gettext_lazy("偏好配置"), default=dict)
+
+    class Meta:
+        verbose_name = gettext_lazy("用户报表偏好")
+        verbose_name_plural = verbose_name
+
+
+class UserPanelFavorite(OperateRecordModel):
+    """用户报表收藏。"""
+
+    username = models.CharField(gettext_lazy("用户名"), max_length=255, db_index=True)
+    panel = models.ForeignKey(
+        VisionPanel,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+        verbose_name=gettext_lazy("收藏报表"),
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("用户报表收藏")
+        verbose_name_plural = verbose_name
+        unique_together = ("username", "panel")
+        ordering = ["-created_at"]
