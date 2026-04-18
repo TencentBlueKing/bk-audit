@@ -48,7 +48,8 @@ from services.web.scene.permissions import check_scene_permission
 from services.web.scene.views import SceneViewSet
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
-from services.web.vision.models import VisionPanel
+from services.web.vision.constants import ReportGroupType
+from services.web.vision.models import SceneReportGroup, VisionPanel
 from tests.base import TestCase
 
 # ==================== Fixtures ====================
@@ -942,18 +943,47 @@ class TestPanelResources(TestCase):
             visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
         )
         ResourceBindingSystem.objects.create(binding=system_binding, system_id="bk_job")
+        self.scene_group = SceneReportGroup.objects.create(
+            scene=self.scene,
+            name="默认分组",
+            group_type=ReportGroupType.CUSTOM,
+            priority_index=0,
+        )
+
+    def _call_list_panels(self, data):
+        """调用 list_panels 并 mock ScopePermission，避免真实 IAM 依赖。"""
+        from services.web.common.constants import ScopeType
+        from services.web.common.scope_permission import ScopePermission
+
+        scope_type = data.get("scope_type")
+        scope_id = data.get("scope_id")
+
+        if scope_type == ScopeType.SCENE:
+            scene_ids, system_ids = [int(scope_id)], []
+        elif scope_type == ScopeType.CROSS_SCENE:
+            scene_ids, system_ids = [self.scene.scene_id, self.another_scene.scene_id], []
+        elif scope_type == ScopeType.SYSTEM:
+            scene_ids, system_ids = [], [scope_id]
+        elif scope_type == ScopeType.CROSS_SYSTEM:
+            scene_ids, system_ids = [], []
+        else:
+            scene_ids, system_ids = [], []
+
+        with mock.patch.object(ScopePermission, "get_scene_ids", return_value=scene_ids), mock.patch.object(
+            ScopePermission, "get_system_ids", return_value=system_ids
+        ):
+            return self.resource.vision.list_panels(data)
 
     def test_panel_list(self):
-        """测试报表列表不传 scope 时返回平台级资源"""
-        result = self.resource.vision.list_panels({"scenario": "default"})
+        """测试报表列表按 scope 返回资源"""
+        result = self._call_list_panels({"scope_type": "cross_scene"})
         names = {item["name"] for item in result}
-        self.assertEqual(names, {"安全总览报表", "系统报表"})
+        self.assertEqual(names, {"安全总览报表", "场景报表", "另一个场景报表"})
 
     def test_panel_list_filter_platform(self):
         """测试按平台级过滤报表"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "cross_scene",
                 "binding_type": "platform_binding",
             }
@@ -963,9 +993,8 @@ class TestPanelResources(TestCase):
 
     def test_panel_list_filter_scene(self):
         """测试按场景过滤报表"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "scene",
                 "scope_id": str(self.scene.scene_id),
                 "binding_type": "scene_binding",
@@ -977,9 +1006,8 @@ class TestPanelResources(TestCase):
 
     def test_panel_list_filter_scene_with_platform(self):
         """测试 scene scope 不传 binding_type 时返回该场景报表 + 平台级报表"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "scene",
                 "scope_id": str(self.scene.scene_id),
             }
@@ -990,9 +1018,8 @@ class TestPanelResources(TestCase):
 
     def test_panel_list_filter_multiple_scenes(self):
         """测试报表列表支持多场景筛选"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "cross_scene",
                 "binding_type": "scene_binding",
             }
@@ -1002,9 +1029,8 @@ class TestPanelResources(TestCase):
 
     def test_panel_list_filter_multiple_scenes_with_platform(self):
         """测试报表列表 cross_scene 时返回场景级与平台级并集"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "cross_scene",
             }
         )
@@ -1013,9 +1039,8 @@ class TestPanelResources(TestCase):
 
     def test_panel_list_filter_multiple_systems(self):
         """测试报表列表支持多系统筛选"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "cross_system",
             }
         )
@@ -1023,16 +1048,14 @@ class TestPanelResources(TestCase):
         self.assertEqual(names, set())
 
     def test_panel_list_no_scope(self):
-        """测试不传 scope 参数时返回平台级资源"""
-        result = self.resource.vision.list_panels({"scenario": "default"})
-        panel_ids = {item["id"] for item in result}
-        self.assertEqual(panel_ids, {self.platform_panel.pk, self.system_panel.pk})
+        """测试不传 scope 参数时校验失败"""
+        with self.assertRaises(ValidateException):
+            self.resource.vision.list_panels({})
 
     def test_panel_list_with_scope(self):
         """测试传 scope 参数时按 CompositeScopeFilter 返回场景+平台级报表"""
-        result = self.resource.vision.list_panels(
+        result = self._call_list_panels(
             {
-                "scenario": "default",
                 "scope_type": "cross_scene",
             }
         )
@@ -1138,6 +1161,7 @@ class TestPanelResources(TestCase):
         result = self.resource.vision.create_scene_panel(
             {
                 "scene_id": self.scene.scene_id,
+                "group_id": self.scene_group.id,
                 "name": "新场景报表",
                 "category": PanelCategory.BEHAVIOR_ANALYSIS,
             }
@@ -1156,6 +1180,7 @@ class TestPanelResources(TestCase):
         result = self.resource.vision.update_scene_panel(
             {
                 "scene_id": self.scene.scene_id,
+                "group_id": self.scene_group.id,
                 "panel_id": self.scene_panel.pk,
                 "name": "更新后的场景报表",
             }

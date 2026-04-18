@@ -125,6 +125,8 @@ class CreateScene(SceneResource):
         self._create_scene_manager_notice_group(scene)
         # 创建 IAM 用户组、授权并添加成员
         self._create_iam_groups(scene)
+        # 新场景补齐全可见平台报表的分组映射
+        self._sync_all_visible_platform_panels(scene)
 
         return scene
 
@@ -185,6 +187,49 @@ class CreateScene(SceneResource):
         scene.iam_manager_group_id = group_result["iam_manager_group_id"]
         scene.iam_viewer_group_id = group_result["iam_viewer_group_id"]
         scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+
+    @staticmethod
+    def _sync_all_visible_platform_panels(scene):
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            VisibilityScope,
+        )
+        from services.web.scene.models import ResourceBinding
+        from services.web.vision.constants import (
+            PLATFORM_REPORT_GROUP_NAME,
+            PLATFORM_REPORT_GROUP_PRIORITY,
+            ReportGroupType,
+        )
+        from services.web.vision.models import (
+            SceneReportGroup,
+            SceneReportGroupItem,
+            VisionPanel,
+        )
+
+        platform_group, _ = SceneReportGroup.objects.get_or_create(
+            scene=scene,
+            name=PLATFORM_REPORT_GROUP_NAME,
+            defaults={"group_type": ReportGroupType.PLATFORM, "priority_index": PLATFORM_REPORT_GROUP_PRIORITY},
+        )
+        platform_bindings = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.PANEL,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type__in=[VisibilityScope.ALL_VISIBLE, VisibilityScope.ALL_SCENES],
+        ).values_list("resource_id", flat=True)
+        panels = VisionPanel.objects.filter(id__in=list(platform_bindings))
+        existing_panel_ids = set(
+            SceneReportGroupItem.objects.filter(
+                group=platform_group, panel_id__in=panels.values_list("id", flat=True)
+            ).values_list("panel_id", flat=True)
+        )
+        to_create = [
+            SceneReportGroupItem(group=platform_group, panel=panel, priority_index=0)
+            for panel in panels
+            if panel.id not in existing_panel_ids
+        ]
+        if to_create:
+            SceneReportGroupItem.objects.bulk_create(to_create, ignore_conflicts=True)
 
 
 class RetrieveScene(SceneResource):
