@@ -139,15 +139,20 @@ class BKVisionViewSet(ResourceViewSet, abc.ABC):
 
 
 class PanelsViewSet(BKVisionViewSet):
-    def get_permissions(self):
-        if self.action in ["list"]:
-            scenario = self.request.query_params.get("scenario")
-            if scenario in self.escape_scenario:
-                return []
-        return super().get_permissions()
+    """报表广场相关接口。
+
+    - GET /panel/                    报表列表
+    - GET /panel/group/              分组列表（system/cross_system 视角返回空）
+    - POST /panel/favorite/          收藏/取消收藏
+    - GET|PUT /panel/preference/     获取/更新用户偏好
+    """
 
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
+        ResourceRoute("GET", resource.vision.list_scene_report_group, endpoint="group"),
+        ResourceRoute("POST", resource.vision.toggle_panel_favorite, endpoint="favorite"),
+        ResourceRoute("GET", resource.vision.get_panel_preference, endpoint="preference"),
+        ResourceRoute("PUT", resource.vision.update_panel_preference, endpoint="preference"),
     ]
 
 
@@ -246,6 +251,7 @@ class PlatformPanelViewSet(ResourceViewSet):
         return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
 
     resource_routes = [
+        ResourceRoute("GET", resource.vision.list_platform_panels, enable_paginate=True),
         ResourceRoute("POST", resource.vision.create_platform_panel),
         ResourceRoute("PUT", resource.vision.update_platform_panel, pk_field="panel_id"),
         ResourceRoute("DELETE", resource.vision.delete_platform_panel, pk_field="panel_id"),
@@ -278,7 +284,14 @@ class ScenePanelManageViewSet(ResourceViewSet):
         ]
 
     resource_routes = [
+        ResourceRoute("GET", resource.vision.list_scene_panels),
         ResourceRoute("POST", resource.vision.create_scene_panel),
         ResourceRoute("PUT", resource.vision.update_scene_panel, pk_field="panel_id"),
         ResourceRoute("DELETE", resource.vision.delete_scene_panel, pk_field="panel_id"),
+        ResourceRoute("POST", resource.vision.publish_scene_panel, endpoint="publish", pk_field="panel_id"),
+        ResourceRoute("POST", resource.vision.create_scene_report_group, endpoint="group"),
+        ResourceRoute("PUT", resource.vision.update_scene_report_group, endpoint="group", pk_field="group_id"),
+        ResourceRoute("DELETE", resource.vision.delete_scene_report_group, endpoint="group", pk_field="group_id"),
+        ResourceRoute("POST", resource.vision.update_scene_report_group_order, endpoint="group/order"),
+        ResourceRoute("POST", resource.vision.update_scene_report_group_panel_order, endpoint="group-item/order"),
     ]

@@ -23,7 +23,12 @@ from services.web.common.constants import ScopeQueryField, ScopeType
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.scene.constants import BindingType, PanelStatus
 from services.web.scene.serializers import ResourceBindingInputSerializer
-from services.web.vision.models import Scenario, VisionPanel
+from services.web.vision.models import (
+    ReportUserPreference,
+    Scenario,
+    SceneReportGroup,
+    VisionPanel,
+)
 
 
 class VisionPanelInfoSerializer(serializers.ModelSerializer):
@@ -116,6 +121,7 @@ class PlatformPanelOperateRequestSerializer(serializers.Serializer):
 
 class CreateScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
+    group_id = serializers.IntegerField(required=True)
     id = serializers.CharField(required=False, allow_blank=True)
     name = serializers.CharField(required=True, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True, default="")
@@ -124,6 +130,7 @@ class CreateScenePanelRequestSerializer(serializers.Serializer):
 
 class UpdateScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
+    group_id = serializers.IntegerField(required=True)
     panel_id = serializers.CharField(required=True)
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
@@ -133,3 +140,147 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
 class DeleteScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     panel_id = serializers.CharField(required=True)
+
+
+class ScenePanelOperateRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    panel_id = serializers.CharField(required=True)
+
+
+class PlatformPanelListQuerySerializer(serializers.Serializer):
+    enable_paginate = serializers.BooleanField(required=False, default=False)
+    page = serializers.IntegerField(required=False, min_value=1, default=1)
+    page_size = serializers.IntegerField(required=False, min_value=1, default=20)
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    name = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+
+
+class SceneReportGroupOrderItemSerializer(serializers.Serializer):
+    group_id = serializers.IntegerField(required=True)
+    priority_index = serializers.IntegerField(required=True)
+
+
+class SceneReportGroupOrderRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    groups = SceneReportGroupOrderItemSerializer(many=True)
+
+
+class SceneReportGroupPanelOrderItemSerializer(serializers.Serializer):
+    panel_id = serializers.CharField(required=True)
+    group_id = serializers.IntegerField(required=True)
+    priority_index = serializers.IntegerField(required=True)
+
+
+class SceneReportGroupPanelOrderRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    items = SceneReportGroupPanelOrderItemSerializer(many=True)
+
+
+class DeleteSceneReportGroupRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    group_id = serializers.IntegerField(required=True)
+
+
+class ScenePanelListQuerySerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    keyword = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+
+
+class PanelSquareListQuerySerializer(VisionPanelInfoQuerySerializer):
+    """广场报表列表：按 scope 查询。"""
+
+    keyword = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+
+
+class PanelGroupListQuerySerializer(ScopeQuerySerializer):
+    """报表分组列表：按 scope 查询。"""
+
+
+class SceneReportGroupSerializer(serializers.ModelSerializer):
+    scene_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SceneReportGroup
+        fields = ["id", "scene_id", "name", "group_type", "priority_index"]
+
+
+class SceneReportGroupListItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    scene_id = serializers.IntegerField()
+    name = serializers.CharField()
+    group_type = serializers.CharField()
+    priority_index = serializers.IntegerField()
+
+
+class ScenePanelListItemSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    category = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    group_id = serializers.IntegerField(allow_null=True)
+    group_name = serializers.CharField(allow_blank=True)
+    group_type = serializers.CharField(allow_blank=True)
+    binding_type = serializers.CharField(allow_blank=True)
+
+
+class PlatformPanelListItemSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    category = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    visibility_type = serializers.CharField()
+    scene_ids = serializers.ListField(child=serializers.IntegerField())
+    system_ids = serializers.ListField(child=serializers.CharField())
+
+
+class PanelPublishResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VisionPanel
+        fields = ["id", "name", "status"]
+
+
+class PanelSquareListItemSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    category = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    group_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+    favorite_created_at = serializers.DateTimeField(allow_null=True)
+
+
+class CreateSceneReportGroupRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    name = serializers.CharField(required=True, max_length=255)
+    priority_index = serializers.IntegerField(required=False, default=0)
+
+
+class UpdateSceneReportGroupRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(required=True)
+    group_id = serializers.IntegerField(required=True)
+    name = serializers.CharField(required=False, max_length=255)
+    priority_index = serializers.IntegerField(required=False)
+
+
+class TogglePanelFavoriteRequestSerializer(serializers.Serializer):
+    panel_id = serializers.CharField(required=True)
+    favorite = serializers.BooleanField(required=True)
+
+
+class TogglePanelFavoriteResponseSerializer(serializers.Serializer):
+    favorite = serializers.BooleanField()
+
+
+class PanelPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportUserPreference
+        fields = ["config"]
+
+
+class UpdatePanelPreferenceRequestSerializer(serializers.Serializer):
+    config = serializers.JSONField(required=True)

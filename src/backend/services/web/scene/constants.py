@@ -68,7 +68,7 @@ class PanelCategory(TextChoices):
 
 
 class PanelStatus(TextChoices):
-    """报表状态（仅平台级）"""
+    """报表状态"""
 
     PUBLISHED = "published", gettext_lazy("已上架")
     UNPUBLISHED = "unpublished", gettext_lazy("未上架")
