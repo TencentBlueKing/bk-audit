@@ -18,9 +18,42 @@ to the current version of the project delivered to anyone in the future.
 
 from django.contrib import admin
 
-from services.web.vision.models import VisionPanel
+from services.web.vision.models import (
+    ReportUserPreference,
+    SceneReportGroup,
+    SceneReportGroupItem,
+    UserPanelFavorite,
+    VisionPanel,
+)
 
 
 @admin.register(VisionPanel)
 class VisionPanelAdmin(admin.ModelAdmin):
     list_display = ["id", "name", "priority_index", "vision_id"]
+
+
+@admin.register(SceneReportGroup)
+class SceneReportGroupAdmin(admin.ModelAdmin):
+    list_display = ["id", "scene", "name", "group_type", "priority_index", "updated_by", "updated_at"]
+    list_filter = ["group_type", "scene"]
+    search_fields = ["name", "scene__name"]
+
+
+@admin.register(SceneReportGroupItem)
+class SceneReportGroupItemAdmin(admin.ModelAdmin):
+    list_display = ["id", "group_id", "priority_index", "updated_by", "updated_at"]
+    list_filter = ["group"]
+    search_fields = ["panel__id", "group__name"]
+
+
+@admin.register(ReportUserPreference)
+class ReportUserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ["username"]
+    search_fields = ["username"]
+
+
+@admin.register(UserPanelFavorite)
+class UserPanelFavoriteAdmin(admin.ModelAdmin):
+    list_display = ["username", "panel_id", "created_at"]
+    list_filter = ["username"]
+    search_fields = ["username", "panel_id"]

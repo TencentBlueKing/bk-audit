@@ -41,6 +41,21 @@ class PanelType(TextChoices):
     ACTION = "Action", gettext_lazy("筛选")
 
 
+class ReportGroupType(TextChoices):
+    """场景报表分组类型。"""
+
+    PLATFORM = "platform", gettext_lazy("平台报表")
+    CUSTOM = "custom", gettext_lazy("自定义分组")
+
+
+# 场景自定义报表默认分组
+DEFAULT_SCENE_REPORT_GROUP_NAME = "默认分组"
+
+# 平台授权报表在场景侧的默认分组配置
+PLATFORM_REPORT_GROUP_NAME = "平台报表"
+PLATFORM_REPORT_GROUP_PRIORITY = -1
+
+
 PANEL = ResourceType(
     id="panel",
     name=None,
