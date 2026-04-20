@@ -903,3 +903,101 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
         ):
             with self.assertRaises(APIRequestError):
                 SceneResource._sync_iam_group_members(scene, validated_data)
+
+
+class TestBuildRequestData(SimpleTestCase):
+    """测试各 IAM API 资源类的 build_request_data 方法，确保 url_keys 参数被正确保留"""
+
+    def test_create_grade_manager_groups_preserves_url_keys(self):
+        """测试 CreateGradeManagerGroups.build_request_data 保留 system_id 和 id"""
+        resource = CreateGradeManagerGroups()
+        validated_data = {
+            "system_id": "test_system",
+            "id": "grade_manager_1",
+            "groups": [{"name": "测试组", "description": "描述"}],
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["system_id"], "test_system")
+        self.assertEqual(result["id"], "grade_manager_1")
+        self.assertEqual(result["groups"], [{"name": "测试组", "description": "描述"}])
+
+    def test_create_grade_manager_groups_with_sync_subject_template(self):
+        """测试 CreateGradeManagerGroups.build_request_data 包含 sync_subject_template"""
+        resource = CreateGradeManagerGroups()
+        validated_data = {
+            "system_id": "test_system",
+            "id": "grade_manager_1",
+            "groups": [{"name": "测试组", "description": "描述"}],
+            "sync_subject_template": True,
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["system_id"], "test_system")
+        self.assertEqual(result["id"], "grade_manager_1")
+        self.assertTrue(result["sync_subject_template"])
+
+    def test_grant_group_policies_preserves_url_keys(self):
+        """测试 GrantGroupPolicies.build_request_data 保留 system_id 和 id"""
+        resource = GrantGroupPolicies()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "actions": [{"id": "view_scene"}],
+            "resources": [{"system": "test_system", "type": "scene"}],
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["system_id"], "test_system")
+        self.assertEqual(result["id"], 1001)
+        self.assertEqual(result["actions"], [{"id": "view_scene"}])
+        self.assertEqual(result["resources"], [{"system": "test_system", "type": "scene"}])
+
+    def test_add_group_members_preserves_url_keys(self):
+        """测试 AddGroupMembers.build_request_data 保留 system_id 和 id"""
+        resource = AddGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "members": [{"type": "user", "id": "admin"}],
+            "expired_at": 4102444800,
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["system_id"], "test_system")
+        self.assertEqual(result["id"], 1001)
+        self.assertEqual(result["members"], [{"type": "user", "id": "admin"}])
+        self.assertEqual(result["expired_at"], 4102444800)
+
+    def test_add_group_members_default_expired_at(self):
+        """测试 AddGroupMembers.build_request_data 默认 expired_at 为 0"""
+        resource = AddGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "members": [{"type": "user", "id": "admin"}],
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["expired_at"], 0)
+
+    def test_delete_group_members_preserves_url_keys(self):
+        """测试 DeleteGroupMembers.build_request_data 保留 system_id 和 id"""
+        resource = DeleteGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "type": "user",
+            "ids": ["admin", "test_user"],
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["system_id"], "test_system")
+        self.assertEqual(result["id"], 1001)
+        self.assertEqual(result["type"], "user")
+        self.assertEqual(result["ids"], ["admin", "test_user"])
+
+    def test_delete_group_members_default_values(self):
+        """测试 DeleteGroupMembers.build_request_data 默认值"""
+        resource = DeleteGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["type"], "")
+        self.assertEqual(result["ids"], [])
