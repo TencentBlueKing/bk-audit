@@ -343,7 +343,6 @@
     if (!props.treeData) {
       return [];
     }
-    // console.log('props.outputFields', props.outputFields);
     return transformTreeData(props.treeData);
   });
 

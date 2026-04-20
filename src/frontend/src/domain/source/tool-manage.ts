@@ -23,6 +23,7 @@ import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
@@ -82,7 +83,7 @@ class ToolManage extends ModuleBase {
   }
   // 获取全部工具
   getAllTools() {
-    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/`);
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?scope_id=${getSceneSystemParams().scope_id}&scope_type=${getSceneSystemParams().scope_type}`);
   }
   // 工具执行
   getToolsExecute(params: {

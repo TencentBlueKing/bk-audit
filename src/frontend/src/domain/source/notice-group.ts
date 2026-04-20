@@ -23,6 +23,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class NoticeGroup extends ModuleBase {
   constructor() {
     super();
@@ -38,7 +40,7 @@ class NoticeGroup extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/`, {
+    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });

@@ -233,9 +233,8 @@
             ...cleanedParams,
             page: isUnload.value ? 1 : pagination.current,
             page_size: pageSize,
-            ...(isNeedSceneParams ? {} : getSceneSystemParams()),
+            ...(isNeedSceneParams ? getSceneSystemParams() : {}),
           };
-          console.log('isNeedSceneParams', isNeedSceneParams, params, getSceneSystemParams());
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
           run(params).finally(() => {

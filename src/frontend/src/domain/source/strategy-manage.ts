@@ -32,6 +32,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 
 class Strategy extends ModuleBase {
   constructor() {
@@ -45,7 +47,7 @@ class Strategy extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/`, {
+    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });
@@ -232,7 +234,7 @@ class Strategy extends ModuleBase {
 
   // 获取策略标签
   getStrategyTags() {
-    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/`);
+    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/?scene_id=${getSceneSystemParams().scope_id}`);
   }
 
   // 获取方案列表
