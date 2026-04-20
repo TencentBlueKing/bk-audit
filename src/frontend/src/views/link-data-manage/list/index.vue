@@ -62,7 +62,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import type { Ref } from 'vue';
-  import { computed, h, onMounted, ref, shallowRef } from 'vue';
+  import { computed, h, onMounted, onUnmounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
@@ -80,6 +80,7 @@
 
   import RenderLabel from './components/render-label.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
@@ -119,6 +120,7 @@
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const { on: onEvent, off } = useEventBus();
   const {
     getSearchParams,
   } = useUrlSearch();
@@ -559,7 +561,17 @@
 
   onMounted(() => {
     fetchData();
+    onEvent('scene:change', handleSceneRefresh);
   });
+
+  onUnmounted(() => {
+    off('scene:change', handleSceneRefresh);
+  });
+
+  // 监听场景切换事件，刷新表格数据
+  const handleSceneRefresh = () => {
+    listRef.value?.fetchData();
+  };
 </script>
 <style scoped lang="postcss">
 .link-data-manage {

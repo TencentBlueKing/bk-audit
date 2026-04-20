@@ -169,9 +169,6 @@
     run: fetchServiceDetail,
   } = useRequest(ItsmManageService.fetchServiceDetail, {
     defaultValue: null,
-    // onSuccess(data) {
-    //   console.log('fetchServiceDetail', data);
-    // },
   });
   onMounted(() => {
     if (!props.data) return;
