@@ -274,13 +274,15 @@ class QuerySearchConditionSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        field_name = attrs["field"]["raw_name"]
+        field_config = COLLECT_SEARCH_CONFIG.query_field_map.get(field_name)
+        if not field_config:
+            raise ValidationError(message=gettext("不支持的查询字段: %s") % field_name)
         # 判断字段是否支持嵌套 keys
-        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field"]["raw_name"]].field.is_json:
+        if not field_config.field.is_json:
             attrs["field"]["keys"] = []
         # 判断操作是否允许
-        allow = COLLECT_SEARCH_CONFIG.judge_operator(
-            attrs["field"]["raw_name"], attrs["field"]["keys"], attrs["operator"]
-        )
+        allow = COLLECT_SEARCH_CONFIG.judge_operator(field_name, attrs["field"]["keys"], attrs["operator"])
         if not allow:
             raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
         return attrs
@@ -394,22 +396,18 @@ class CollectorSearchReqPermissionCheckMixIn:
         过滤有权限的系统
         """
 
-        namespace = validated_request_data["namespace"]
         authorized_systems = SearchLogPermission.get_scope_auth_systems(
-            namespace=namespace,
             scope_type=validated_request_data["scope_type"],
             scope_id=validated_request_data.get("scope_id"),
             username=get_request_username(),
         )
-        if SearchLogPermission.should_append_system_filter(namespace, authorized_systems):
-            return [
-                {
-                    "field": {"raw_name": SYSTEM_ID.field_name, "field_type": FieldType.STRING.value, "keys": []},
-                    "operator": QueryConditionOperator.INCLUDE.value,
-                    "filters": authorized_systems,
-                }
-            ]
-        return []
+        return [
+            {
+                "field": {"raw_name": SYSTEM_ID.field_name, "field_type": FieldType.STRING.value, "keys": []},
+                "operator": QueryConditionOperator.INCLUDE.value,
+                "filters": authorized_systems,
+            }
+        ]
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

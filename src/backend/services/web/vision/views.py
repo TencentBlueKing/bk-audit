@@ -35,6 +35,7 @@ from core.utils.renderers import API200Renderer
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
 from services.web.common.scope_permission import ScopeInstancePermission
+from services.web.scene.constants import PanelStatus
 from services.web.tool.models import Tool
 from services.web.tool.permissions import (
     UseToolPermission,
@@ -110,12 +111,21 @@ class ToolVisionPermission(BasePermission):
 
 
 class UsePanelPermission(ScopeInstancePermission):
-    """
-    检查用户是否拥有使用Panel的权限。
-    """
+    """检查用户是否拥有使用Panel的权限（含启停态与管理员例外）。"""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(resource_type=BindingResourceType.PANEL, *args, **kwargs)
+        super().__init__(
+            resource_type=BindingResourceType.PANEL,
+            status_getter=self._get_panel_status,
+            published_status=PanelStatus.PUBLISHED,
+            *args,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _get_panel_status(panel_id: str):
+        panel = VisionPanel.objects.filter(id=panel_id).first()
+        return panel.status if panel else None
 
 
 class ShareDetailPermission(BasePermission):

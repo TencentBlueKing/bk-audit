@@ -14,7 +14,7 @@ Scope 权限组件
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from rest_framework.permissions import BasePermission
 
@@ -32,7 +32,7 @@ from services.web.common.constants import (
     ScopeQueryField,
     ScopeType,
 )
-from services.web.scene.constants import BindingType, VisibilityScope
+from services.web.scene.constants import BindingType, SceneStatus, VisibilityScope
 from services.web.scene.converter import SceneDjangoQuerySetConverter
 from services.web.scene.models import (
     ResourceBinding,
@@ -736,15 +736,78 @@ class ScopeInstancePermission(InstancePermission):
         panel_scope_permission = ScopeInstancePermission(BindingResourceType.PANEL)
     """
 
-    def __init__(self, resource_type: BindingResourceType, *args, **kwargs):
+    def __init__(
+        self,
+        resource_type: BindingResourceType,
+        status_getter: Optional[Callable[[str], Optional[str]]] = None,
+        published_status: Optional[str] = None,
+        *args,
+        **kwargs,
+    ):
         self.resource_type = resource_type
+        self.status_getter = status_getter
+        self.published_status = published_status
         super().__init__(*args, **kwargs)
 
-    def has_permission(self, request, view) -> bool:
-        resource_id = self._get_instance_id(request, view)
-        scope_perm = ScopePermission(get_request_username())
-        return scope_perm.check_resource_permission(
+    def _get_binding(self, resource_id: str) -> Optional[ResourceBinding]:
+        return ResourceBinding.objects.filter(
             resource_type=self.resource_type,
             resource_id=str(resource_id),
+        ).first()
+
+    def _is_resource_manager_exception(self, username: str, resource_id: str) -> bool:
+        binding = self._get_binding(resource_id)
+        if not binding:
+            return False
+
+        permission = Permission(username=username)
+        if binding.binding_type == BindingType.PLATFORM_BINDING:
+            return permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
+
+        if binding.binding_type == BindingType.SCENE_BINDING:
+            scene_ids = list(binding.binding_scenes.values_list("scene_id", flat=True))
+            return any(
+                permission.is_allowed(
+                    ActionEnum.MANAGE_SCENE,
+                    [ResourceEnum.SCENE.create_instance(scene_id)],
+                    raise_exception=False,
+                )
+                for scene_id in scene_ids
+            )
+        return False
+
+    def _is_scene_binding_enabled(self, resource_id: str) -> bool:
+        binding = self._get_binding(resource_id)
+        if not binding or binding.binding_type != BindingType.SCENE_BINDING:
+            return True
+
+        scene_ids = list(binding.binding_scenes.values_list("scene_id", flat=True))
+        if not scene_ids:
+            return False
+        return Scene.objects.filter(scene_id__in=scene_ids, status=SceneStatus.ENABLED).exists()
+
+    def _is_resource_published(self, resource_id: str) -> bool:
+        if not self.status_getter or self.published_status is None:
+            return True
+
+        return self.status_getter(str(resource_id)) == self.published_status
+
+    def has_permission(self, request, view) -> bool:
+        resource_id = str(self._get_instance_id(request, view))
+        username = get_request_username()
+
+        if self._is_resource_manager_exception(username, resource_id):
+            return True
+
+        if not self._is_scene_binding_enabled(resource_id):
+            return False
+
+        if not self._is_resource_published(resource_id):
+            return False
+
+        scope_perm = ScopePermission(username)
+        return scope_perm.check_resource_permission(
+            resource_type=self.resource_type,
+            resource_id=resource_id,
             raise_exception=True,
         )

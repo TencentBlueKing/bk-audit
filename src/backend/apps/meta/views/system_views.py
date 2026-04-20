@@ -20,14 +20,12 @@ from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.meta.constants import SYSTEM_INSTANCE_SEPARATOR
-from apps.meta.permissions import SystemPermissionHandler
-from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import (
-    IAMPermission,
-    InstanceActionPermission,
-    insert_action_permission_field,
+from apps.meta.permissions import (
+    SearchLogSystemSearchPermission,
+    SystemPermissionHandler,
 )
-from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import IAMPermission, insert_action_permission_field
 
 
 class SystemsViewSet(ResourceViewSet):
@@ -43,9 +41,7 @@ class SystemsViewSet(ResourceViewSet):
         if self.action in ["update"]:
             return SystemPermissionHandler.system_edit_permissions()
         if self.action in ["search", "resource_type_schema_search"]:
-            return [
-                InstanceActionPermission(actions=[ActionEnum.SEARCH_REGULAR_EVENT], resource_meta=ResourceEnum.SYSTEM)
-            ]
+            return [SearchLogSystemSearchPermission()]
         # all,favorite,resource_type_search,action_search
         return []
 
