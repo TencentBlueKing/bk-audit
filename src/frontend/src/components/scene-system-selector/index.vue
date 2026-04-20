@@ -112,10 +112,12 @@
   import {
     computed,
     onMounted,
+    onUnmounted,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import sceneManageService from '@service/scene-manage';
@@ -138,6 +140,9 @@
     listScope?:  string[],
     systemPermission: 'edit_system' | 'view_system';
     scenePermission: 'manage_scene' | 'view_scene';
+    isAllSystem?: boolean; // 是否展示全部接入系统
+    isAllSecen?: boolean; // 是否展示全部审计场景
+    isDefaultSelectFirst?: boolean; // 是否默认选中第一个场景（优先级低于外部传入的值和sessionStorage存储的值）
   }
 
   interface Emits {
@@ -151,11 +156,15 @@
     popoverWidth: 400,
     dark: false,
     listScope: () => ['scene', 'system'],
+    isAllSecen: true,
+    isAllSystem: true,
+    isDefaultSelectFirst: false,
   });
 
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const router = useRouter();
 
   const popoverRef = ref();
   const isPopoverShow = ref(false);
@@ -226,7 +235,7 @@
           name: item.name,
           type: 'system' as const,
         }));
-      systemList.value = [{ id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' }, ...list];
+      systemList.value = props.isAllSystem ? [{ id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' }, ...list] : list;
     },
   });
   // 获取场景列表
@@ -242,14 +251,31 @@
           name: item.name,
           type: 'scene' as const,
         }));
-      sceneList.value = [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list];
-      // 默认选中第一个非聚合的场景
+      sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
+      // 默认选中逻辑：isDefaultSelectFirst 为 true 时优先选中第一个非聚合场景，否则有存储值则用存储值，没有则默认选中第一个非聚合的场景
       if (!selectedItem.value && list.length > 0) {
-        const defaultItem = list[0];
-        selectedItem.value = defaultItem;
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(defaultItem));
-        emits('update:modelValue', defaultItem);
-        emits('change', defaultItem);
+        // 先尝试从sessionStorage获取存储的值
+        const storedValue = sessionStorage.getItem(STORAGE_KEY);
+        let targetItem = null;
+        if (props.isDefaultSelectFirst) {
+          // isDefaultSelectFirst 为 true 时，优先选中第一个非聚合的场景
+          [targetItem] = list;
+        } else if (storedValue) {
+          try {
+            targetItem = JSON.parse(storedValue);
+          } catch (e) {
+            // 解析失败，使用第一个非聚合的场景
+            [targetItem] = list;
+          }
+        } else {
+          // 没有存储值，使用第一个非聚合的场景
+          [targetItem] = list;
+        }
+        // 设置选中项并触发事件
+        selectedItem.value = targetItem;
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
+        emits('update:modelValue', targetItem);
+        emits('change', targetItem);
       }
     },
   });
@@ -258,19 +284,40 @@
     selectedItem.value = newVal;
   });
 
+  // 获取数据的方法
+  const fetchData = () => {
+    setTimeout(() => {
+      fetchSystemWithAction({
+        action_ids: 'view_system,edit_system',
+        audit_status__in: 'accessed',
+        namespace: 'default',
+        order_type: 'asc',
+        sort_keys: 'name',
+        with_favorite: false,
+        with_system_status: false,
+      });
+      fetchSceneAll({
+        status: 'enabled',
+      });
+      emits('change', selectedItem.value);
+    }, 0);
+  };
+
   onMounted(() => {
-    fetchSystemWithAction({
-      action_ids: 'view_system,edit_system',
-      audit_status__in: 'accessed',
-      namespace: 'default',
-      order_type: 'asc',
-      sort_keys: 'name',
-      with_favorite: false,
-      with_system_status: false,
+    fetchData();
+
+    // 监听路由变化，当路由变化时重新获取数据
+    router.afterEach((to, from) => {
+      // 只有当路由真正发生变化时才重新获取数据
+      if (to.fullPath !== from.fullPath) {
+        fetchData();
+      }
     });
-    fetchSceneAll({
-      status: 'enabled',
-    });
+  });
+
+  onUnmounted(() => {
+    // 清理路由监听器（如果需要的话）
+    // 通常不需要手动清理，因为router.afterEach返回的函数会在组件卸载时自动清理
   });
 </script>
 

@@ -21,7 +21,9 @@
       <scene-system-selector
         v-model="selectedScene"
         dark
-        :list-scope="['system', 'scene']"
+        :is-all-secen="false"
+        is-default-select-first
+        :list-scope="['scene']"
         :popover-width="320"
         scene-permission="manage_scene"
         system-permission="edit_system"
@@ -154,6 +156,8 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import useEventBus from '@hooks/use-event-bus';
+
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
@@ -166,6 +170,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const { emit } = useEventBus();
 
   // 当前激活的路由
   const currentRoute = computed(() => route.name as string);
@@ -175,8 +180,7 @@
 
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {
-    console.log('场景切换:', value);
-    // TODO: 根据选择的场景/系统重新加载数据
+    emit('scene:change', value);
   };
 
   // 展开的分组列表
