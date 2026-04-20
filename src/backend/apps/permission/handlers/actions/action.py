@@ -25,6 +25,7 @@ from apps.permission.handlers.version import BkLogPermissionVersion
 
 
 class ActionEnum:
+    # TODO: 待废弃
     SEARCH_REGULAR_EVENT = ActionMeta(
         id="search_regular_event",
         name=gettext("审计日志检索"),
@@ -414,6 +415,7 @@ class ActionEnum:
         related_actions=[MANAGE_SCENE, LIST_NOTICE_GROUP],
         version=1,
     )
+    # TODO: 待废弃
     LIST_BASE_PANEL = ActionMeta(
         id="list_base_panel",
         name=gettext("报表列表"),
@@ -423,6 +425,7 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    # TODO: 待废弃
     VIEW_BASE_PANEL = ActionMeta(
         id="view_base_panel_v2",
         name=gettext("查看报表"),
@@ -452,6 +455,7 @@ class ActionEnum:
     )
 
     # 系统诊断
+    # TODO: 待废弃
     VIEW_SYSTEM_DIAGNOSIS_PANEL = ActionMeta(
         id="view_system_diagnosis_panel",
         name=gettext("系统诊断报表查看"),
@@ -462,6 +466,7 @@ class ActionEnum:
         version=1,
     )
     # 查看场景视图
+    # TODO: 待废弃
     VIEW_SCENARIO_PANEL = ActionMeta(
         id="view_scenario_panel",
         name=gettext("查看场景视图"),
@@ -470,46 +475,6 @@ class ActionEnum:
         related_resource_types=[ResourceEnum.TAG],
         related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
         version=1,
-    )
-    USE_TOOL = ActionMeta(
-        id="use_tool",
-        name=gettext("使用工具"),
-        name_en="Use Tool",
-        type="view",
-        related_resource_types=[ResourceEnum.TOOL],
-        related_actions=[],
-        version=1,
-    )
-    USE_TOOL_BY_TAG = ActionMeta(
-        id="use_tool_by_tag",
-        name=gettext("使用工具(标签)"),
-        name_en="Use Tool by Tag",
-        type="view",
-        related_resource_types=[ResourceEnum.TAG],
-        related_actions=[],
-        version=1,
-    )
-    MANAGE_TOOL = ActionMeta(
-        id="manage_tool",
-        name=gettext("管理工具"),
-        name_en="Manage Tool",
-        type="edit",
-        related_resource_types=[ResourceEnum.TOOL],
-        related_actions=[],
-        version=1,
-        description="管理工具,包含工具的编辑、删除操作",
-        description_en="Manage Tool,including tool editing and deletion",
-    )
-    MANAGE_TOOL_BY_TAG = ActionMeta(
-        id="manage_tool_by_tag",
-        name=gettext("管理工具(标签)"),
-        name_en="Manage Tool by Tag",
-        type="edit",
-        related_resource_types=[ResourceEnum.TAG],
-        related_actions=[],
-        version=1,
-        description="管理工具(标签),包含工具的编辑、删除操作",
-        description_en="Manage Tool(Tag),including tool editing and deletion",
     )
 
     # 日志平台

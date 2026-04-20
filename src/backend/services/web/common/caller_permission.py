@@ -24,6 +24,14 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from services.web.common.constants import CallerResourceType
+from services.web.scene.constants import (
+    PanelStatus,
+    ResourceVisibilityType,
+    SceneStatus,
+)
+from services.web.scene.filters import CompositeScopeFilter
+from services.web.scene.models import ResourceBindingScene, Scene
+from services.web.tool.models import Tool
 
 
 class BaseCallerPermission:
@@ -58,7 +66,7 @@ class RiskCallerPermission(BaseCallerPermission):
         if ct == CurrentType.STRATEGY:
             return is_risk_related_to_strategy(instance_id, current_object_id)
         if ct == CurrentType.TOOL:
-            # 先校验工具与风险所属策略是否建立关联
+            # 先校验工具与风险所属策略是否建立关联，且当前场景仍具备该工具可见性
             if not is_tool_related_to_risk(instance_id, current_object_id):
                 return False
             # 如调用方传入了工具变量值，则基于策略字段 drill_config 与风险事件进行值校验
@@ -181,8 +189,9 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
 
 def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     """
-    校验指定风险的策略是否关联给定工具。
-    返回 True 表示存在关联，False 表示不存在或无法定位。
+    校验指定风险的策略是否关联给定工具，并确保风险所属场景启用且工具在该场景可见、已发布。
+
+    返回 True 表示存在关联且可访问，False 表示不存在或无法定位。
     """
     from services.web.risk.models import Risk
     from services.web.strategy_v2.models import StrategyTool
@@ -190,7 +199,35 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     strategy_id = Risk.objects.filter(risk_id=risk_id).values_list("strategy_id", flat=True).first()
     if not strategy_id:
         return False
-    return StrategyTool.objects.filter(strategy_id=strategy_id, tool_uid=tool_uid).exists()
+
+    if not StrategyTool.objects.filter(strategy_id=strategy_id, tool_uid=tool_uid).exists():
+        return False
+
+    scene_id = (
+        ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id=str(strategy_id),
+        )
+        .values_list("scene_id", flat=True)
+        .first()
+    )
+    if not scene_id:
+        return False
+
+    if not Scene.objects.filter(scene_id=scene_id, status=SceneStatus.ENABLED).exists():
+        return False
+
+    tool = CompositeScopeFilter.filter_queryset(
+        queryset=Tool.all_latest_tools().filter(uid=tool_uid),
+        scene_id=[scene_id],
+        system_id=[],
+        resource_type=ResourceVisibilityType.TOOL,
+        pk_field="uid",
+    ).first()
+    if not tool:
+        return False
+
+    return tool.status == PanelStatus.PUBLISHED
 
 
 @singledispatch

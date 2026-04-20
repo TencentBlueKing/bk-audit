@@ -46,10 +46,45 @@ class TestCallerPermission(TestCase):
         from django.utils import timezone
 
         from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
 
         strategy = Strategy.objects.create(namespace="ns", strategy_name="s1")
+        scene = Scene.objects.create(name="scene_s1", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        Tool.objects.create(
+            namespace="ns",
+            uid="T1",
+            version=1,
+            name="tool-t1",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.PUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id="T1",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
         # 风险关联到策略
         risk = Risk.objects.create(
             raw_event_id="e1",
@@ -101,6 +136,63 @@ class TestCallerPermission(TestCase):
         # 风险不存在
         self.assertFalse(is_tool_related_to_risk("R-not-exist", "T1"))
 
+    def test_is_tool_related_to_risk_when_tool_not_visible_in_scene(self):
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
+
+        scene_1 = Scene.objects.create(name="scene-1", status=SceneStatus.ENABLED, managers=["admin"])
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+
+        strategy = Strategy.objects.create(namespace="ns", strategy_name="s_scene")
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene_1)
+
+        risk = Risk.objects.create(raw_event_id="e_scene", strategy=strategy, event_time=timezone.now())
+        Tool.objects.create(
+            namespace="ns",
+            uid="T_SCENE",
+            version=1,
+            name="tool-scene",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.PUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id="T_SCENE",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene_2)
+        StrategyTool.objects.create(
+            strategy=strategy,
+            tool_uid="T_SCENE",
+            tool_version=1,
+            field_name="f1",
+            field_source=StrategyFieldSourceEnum.BASIC.value,
+        )
+
+        self.assertFalse(is_tool_related_to_risk(risk.risk_id, "T_SCENE"))
+
     def test_extract_extra_variables(self):
         # 读取 current_type / current_object_id
         data = {"current_type": "tool", "current_object_id": "T2"}
@@ -114,8 +206,20 @@ class TestCallerPermission(TestCase):
         from django.utils import timezone
 
         from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
 
         strategy = Strategy.objects.create(
             namespace="ns",
@@ -141,6 +245,30 @@ class TestCallerPermission(TestCase):
                 }
             ],
         )
+        scene = Scene.objects.create(name="scene_s3", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        Tool.objects.create(
+            namespace="ns",
+            uid="T1",
+            version=1,
+            name="tool-t1-s3",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.PUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id="T1",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
+
         risk = Risk.objects.create(
             raw_event_id="e3",
             strategy=strategy,
@@ -176,8 +304,20 @@ class TestCallerPermission(TestCase):
         from django.utils import timezone
 
         from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
 
         strategy = Strategy.objects.create(
             namespace="ns",
@@ -204,6 +344,30 @@ class TestCallerPermission(TestCase):
                 }
             ],
         )
+        scene = Scene.objects.create(name="scene_basic", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        Tool.objects.create(
+            namespace="ns",
+            uid="T1",
+            version=1,
+            name="tool-t1-basic",
+            tool_type="data_search",
+            config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+            permission_owner="admin",
+            status=PanelStatus.PUBLISHED,
+        )
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id="T1",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
+
         risk = Risk.objects.create(
             raw_event_id="e_basic",
             strategy=strategy,

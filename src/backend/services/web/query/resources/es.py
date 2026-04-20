@@ -103,21 +103,19 @@ class SearchResource(SearchAllResource):
     def validate_request_data(self, request_data):
         validated_request_data = super().validate_request_data(request_data)
         authorized_systems = SearchLogPermission.get_scope_auth_systems(
-            namespace=validated_request_data["namespace"],
             scope_type=validated_request_data["scope_type"],
             scope_id=validated_request_data.get("scope_id"),
             username=self.get_request_username(),
         )
-        if SearchLogPermission.should_append_system_filter(validated_request_data["namespace"], authorized_systems):
-            validated_request_data["filter"].append(
-                {
-                    "field": "system_id",
-                    "operator": "is one of",
-                    "value": authorized_systems,
-                    "condition": "and",
-                    "type": "field",
-                }
-            )
+        validated_request_data["filter"].append(
+            {
+                "field": "system_id",
+                "operator": "is one of",
+                "value": authorized_systems,
+                "condition": "and",
+                "type": "field",
+            }
+        )
         return validated_request_data
 
 

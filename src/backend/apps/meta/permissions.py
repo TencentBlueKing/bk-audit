@@ -49,15 +49,36 @@ class SearchLogPermission:
         )
 
     @classmethod
-    def get_auth_systems(cls, namespace) -> (list, list):
+    def _get_scene_scope_system_ids(cls, username: str) -> set[str]:
         from services.web.common.scope_permission import ScopeContext, ScopePermission
 
+        scene_scope = ScopeContext(scope_type=ScopeType.CROSS_SCENE)
+        return {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(scene_scope)}
+
+    @classmethod
+    def _get_system_scope_system_ids(cls, username: str, scope=None) -> set[str]:
+        from services.web.common.scope_permission import ScopeContext, ScopePermission
+
+        target_scope = scope or ScopeContext(scope_type=ScopeType.CROSS_SYSTEM)
+        return {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(target_scope)}
+
+    @classmethod
+    def has_system_search_permission(cls, system_id: str, username: str) -> bool:
+        if not system_id:
+            return False
+
+        target_system_id = str(system_id)
+        if target_system_id in cls._get_system_scope_system_ids(username):
+            return True
+        return target_system_id in cls._get_scene_scope_system_ids(username)
+
+    @classmethod
+    def get_auth_systems(cls, namespace) -> (list, list):
         username = get_request_username()
-        scoped_system_ids = set(
-            ScopePermission(username).get_system_ids_for_scope(ScopeContext(scope_type=ScopeType.CROSS_SYSTEM))
-        )
+        scoped_system_ids = cls._get_system_scope_system_ids(username) | cls._get_scene_scope_system_ids(username)
         systems = resource.meta.system_list_all(namespace=namespace)
-        authorized_systems = [str(system["id"]) for system in systems if str(system["id"]) in scoped_system_ids]
+        system_ids = {str(system["id"]) for system in systems}
+        authorized_systems = [system_id for system_id in scoped_system_ids if system_id in system_ids]
         return systems, authorized_systems
 
     @classmethod
@@ -66,26 +87,26 @@ class SearchLogPermission:
             cls._raise_system_view_permission_exception()
 
     @classmethod
-    def get_scope_auth_systems(cls, namespace: str, scope_type: str, scope_id: str | None, username: str) -> list[str]:
+    def get_scope_auth_systems(cls, scope_type: str, scope_id: str | None, username: str) -> list[str]:
         from services.web.common.scope_permission import ScopeContext, ScopePermission
 
         scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
-        permission = ScopePermission(username)
-        all_system_ids_in_namespace = {
-            str(system["id"]) for system in resource.meta.system_list_all(namespace=namespace)
-        }
+        scoped_system_ids = {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(scope)}
 
-        scoped_system_ids = {str(system_id) for system_id in permission.get_system_ids_for_scope(scope)}
-        authorized_systems = list(scoped_system_ids & all_system_ids_in_namespace)
-        if not authorized_systems:
+        if not scoped_system_ids:
             cls._raise_system_view_permission_exception()
-        return authorized_systems
+        return list(scoped_system_ids)
 
-    @classmethod
-    def should_append_system_filter(cls, namespace: str, authorized_systems: list[str]) -> bool:
-        systems = resource.meta.system_list_all(namespace=namespace)
-        all_system_ids = {str(system["id"]) for system in systems}
-        return set(map(str, authorized_systems)) != all_system_ids
+
+class SearchLogSystemSearchPermission(InstancePermission):
+    """系统检索权限：系统查看权限 OR 可查看场景下授权系统。"""
+
+    def has_permission(self, request, view) -> bool:
+        system_id = self._get_instance_id(request, view)
+        if SearchLogPermission.has_system_search_permission(system_id=system_id, username=get_request_username()):
+            return True
+
+        return False
 
 
 class SystemManagerPermission(InstancePermission):

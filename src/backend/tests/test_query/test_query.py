@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 from copy import deepcopy
 from unittest import mock
 
-from core.exceptions import PermissionException
+from core.exceptions import PermissionException, ValidationError
 from services.web.databus.models import CollectorPlugin
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import PLUGIN_ID
@@ -47,10 +47,6 @@ class EsQueryTest(TestCase):
     @mock.patch(
         "query.resources.SearchLogPermission.get_scope_auth_systems",
         mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
-    )
-    @mock.patch(
-        "query.resources.SearchLogPermission.should_append_system_filter",
-        mock.Mock(return_value=True),
     )
     @mock.patch("query.resources.resource.query.es_query", mock.Mock(return_value=ES_QUERY_SEARCH_API_RESP))
     def test_search(self):
@@ -89,10 +85,6 @@ class CollectorQueryTest(TestCase):
         mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
     )
     @mock.patch(
-        "services.web.query.resources.SearchLogPermission.should_append_system_filter",
-        mock.Mock(return_value=True),
-    )
-    @mock.patch(
         "services.web.query.resources.api.bk_base.query_sync.bulk_request",
         mock.Mock(return_value=deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)),
     )
@@ -107,10 +99,6 @@ class CollectorQueryTest(TestCase):
         mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP[1]),
     )
     @mock.patch(
-        "services.web.query.resources.SearchLogPermission.should_append_system_filter",
-        mock.Mock(return_value=True),
-    )
-    @mock.patch(
         "services.web.query.resources.api.bk_base.query_sync.bulk_request",
         mock.Mock(return_value=deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)),
     )
@@ -118,3 +106,17 @@ class CollectorQueryTest(TestCase):
         """CollectorSearchResource"""
         result = self.resource.query.collector_search_all(**COLLECTOR_SEARCH_ALL_PARAMS)
         self.assertEqual(result, COLLECTOR_SEARCH_ALL_DATA_RESP)
+
+    def test_collector_search_with_invalid_raw_name(self):
+        """不合法字段名应返回参数校验错误，而不是抛出 KeyError"""
+        invalid_params = deepcopy(COLLECTOR_SEARCH_PARAMS)
+        invalid_params["conditions"] = [
+            {
+                "field": {"raw_name": "string", "field_type": "string"},
+                "operator": "include",
+                "filters": ["s1"],
+            }
+        ]
+
+        with self.assertRaises(ValidationError):
+            self.resource.query.collector_search(**invalid_params)

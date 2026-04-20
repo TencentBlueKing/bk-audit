@@ -25,7 +25,7 @@ from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_NAME,
     StrategyType,
 )
-from services.web.strategy_v2.models import Strategy, StrategyTag
+from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
 from services.web.strategy_v2.resources import ListStrategyFields, ListTables
 from tests.base import TestCase
 
@@ -54,6 +54,22 @@ class StrategyResourcesTest(TestCase):
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
+
+    def test_list_link_table_all_filters_by_scene(self):
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+        link_table = LinkTable.objects.create(namespace=self.namespace, uid="lt_1", version=1, name="LT-1", config={})
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.LINK_TABLE,
+            resource_id=link_table.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+
+        scene_1_result = self.resource.strategy_v2.list_link_table_all(scene_id=self.scene.scene_id)
+        scene_2_result = self.resource.strategy_v2.list_link_table_all(scene_id=scene_2.scene_id)
+
+        self.assertEqual([item["uid"] for item in scene_1_result], [link_table.uid])
+        self.assertEqual(list(scene_2_result), [])
 
     @mock.patch("services.web.strategy_v2.resources.get_local_request")
     @mock.patch("services.web.strategy_v2.resources.ActionPermission")
