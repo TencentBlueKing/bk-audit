@@ -35,9 +35,10 @@
         :style="styles">
         <div class="action-header">
           <auth-button
-            action-id="create_strategy"
+            action-id="create_strategy_v2"
             class="w88"
             :permission="permissionCheckData"
+            resource-is-scene
             theme="primary"
             @click="handleCreate">
             {{ t('新建') }}
@@ -121,12 +122,13 @@
               content: t('处理中，不能克隆'),
               disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
             }"
-            action-id="create_strategy"
+            action-id="create_strategy_v2"
             class="ml8"
             :class="{
               'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
             }"
             :permission="permissionCheckData"
+            resource-is-scene
             style="width: 64px;"
             @click="handleClone(strategyItem)">
             {{ t('克隆') }}
@@ -260,6 +262,7 @@
   import {
     computed,
     onMounted,
+    onUnmounted,
     ref,
     shallowRef,
   } from 'vue';
@@ -296,6 +299,9 @@
   import StrategyDetail from './components/detail.vue';
   import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
+
+  import useEventBus from '@/hooks/use-event-bus';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   enum FullEnum {
     FULL = 'full',
@@ -354,6 +360,8 @@
   };
   let timeout: number | undefined = undefined;
   const isLoading = ref(false);
+  const { on: onEvent, off } = useEventBus();
+
   const router = useRouter();
   const {
     recordPageParams,
@@ -871,8 +879,9 @@
             {t('克隆')}
           </bk-button>
           : <auth-button
-            actionId="create_strategy"
+            actionId="create_strategy_v2"
             permission={permissionCheckData.value}
+            resource-is-scene
             class="ml8"
             theme="primary"
             onClick={() => handleClone(data)}
@@ -1018,12 +1027,13 @@
   // 获取策略新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_strategy',
+      action_ids: 'create_strategy_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
     onSuccess: (data) => {
-      permissionCheckData.value = data.create_strategy;
+      permissionCheckData.value = data.create_strategy_v2;
     },
   });
   // 获取标签列表
@@ -1522,18 +1532,29 @@
   const fetchData = () => {
     const hasKey = setSearchKey();
     if (hasKey) {
-      handleSearch(searchKey.value);
+      fetchStrategyTags().then(() => {
+        handleSearch(searchKey.value);
+      });
     } else {
-      listRef.value.fetchData();
+      fetchStrategyTags().then(() => {
+        listRef.value.fetchData();
+      });
     }
   };
-
+  const handlFetchData = () => {
+    listRef.value.fetchData();
+  };
   onMounted(() => {
-    fetchData();
+    onEvent('scene:change', handlFetchData);
+  });
+  onUnmounted(() => {
+    off('scene:change', handlFetchData);
   });
   onBeforeRouteLeave(() => {
     clearTimeout(timeout);
   });
+
+
 </script>
 <style lang="postcss">
 .table-new-tip {
@@ -1681,3 +1702,4 @@
   }
 }
 </style>
+

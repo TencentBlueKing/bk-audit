@@ -19,6 +19,7 @@ import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
 import LinkDataSource from '../source/link-data-manage';
 
+
 export default {
 
   /**
@@ -29,7 +30,7 @@ export default {
     label?: string
     name?: string,
     page: number,
-    page_size: number
+    page_size: number,
   }) {
     return LinkDataSource.getLinkDataList(
       params,

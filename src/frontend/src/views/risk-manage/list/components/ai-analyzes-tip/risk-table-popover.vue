@@ -146,12 +146,6 @@
     },
   });
   const handleAfterShow = () => {
-    console.log({
-      report_id: props.reportId,
-      page: 1,
-      page_size: props.count === 0 ? 10 : props.count,
-    });
-
     getReportRiskList({
       report_id: props.reportId,
       page: 1,
