@@ -22,6 +22,7 @@
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
+      is-need-scene-params
       :settings="settings"
       @clear-search="handleClearSearch"
       @request-success="handleRequestSuccess">
@@ -89,6 +90,7 @@
   interface Exposes {
     loading: Ref<boolean>,
     tableSearchModel: Ref<Record<string, any>>,
+    handleUpdateField: () => void,
   }
   interface ResultFilter {
     conditions: Array<{
@@ -503,6 +505,7 @@
   defineExpose<Exposes>({
     loading: isLoading,
     tableSearchModel,
+    handleUpdateField,
   });
 
 </script>

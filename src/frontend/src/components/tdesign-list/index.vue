@@ -494,8 +494,6 @@
             page_size: currentLimit < 10 ? 10 : currentLimit,
             ...(isNeedSceneParams ? getSceneSystemParams() : {}),
           };
-          console.log('isNeedSceneParams', isNeedSceneParams, params, getSceneSystemParams());
-
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           isLoading.value = true;
