@@ -227,8 +227,8 @@
 
   import CardPartVue from '../card-part.vue';
 
-  import deDug from './debug-sideslider.vue';
   import paramsConfig from './params-config.vue';
+  import deDug from './result.vue';
   import { buildTree } from './result/build-tree';
   import resultConfig from './result/index.vue';
 
