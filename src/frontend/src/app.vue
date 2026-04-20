@@ -144,6 +144,7 @@
   import AccountModel from '@model/account/account';
   import ConfigModel from '@model/root/config';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import RouterBack from '@components/router-back/index.vue';
@@ -215,10 +216,12 @@
     window.location.reload();
   };
 
+  // 事件总线
+  const { emit } = useEventBus();
+
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {
-    console.log('场景切换:', value);
-    // TODO: 根据选择的场景/系统重新加载数据
+    emit('scene-change', value);
   };
 
   watch(() => route, () => {

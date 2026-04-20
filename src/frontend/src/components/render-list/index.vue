@@ -115,6 +115,8 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
     reverseSortFields?:Array<string>, // 颠倒排序的字段数组
@@ -124,6 +126,8 @@
     settings?: Settings,
     border?: string | ('col' | 'none' | 'row' | 'horizontal' | 'outer')[],
     needEmptySearchTip?:boolean,
+    // 是否需要场景参数
+    isNeedSceneParams?: boolean,
   }
 
   interface ISettings{
@@ -154,6 +158,7 @@
     needEmptySearchTip: true,
     paginationValidator: undefined,
     settings: undefined,
+    isNeedSceneParams: false,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -216,16 +221,21 @@
       .then((result: boolean) => {
         if (result) {
           // 如果存在 sort，则删除 order_field 和 order_type 字段
+          const { isNeedSceneParams } = props;
+
           const cleanedParams = { ...paramsMemo };
           if (cleanedParams.sort) {
             delete cleanedParams.order_field;
             delete cleanedParams.order_type;
           }
+          const pageSize = Math.max(pagination.limit, 10);
           const params = {
             ...cleanedParams,
-            page: isUnload.value ? 1 :  pagination.current,
-            page_size: Math.max(pagination.limit, 1) < 10 ? 10 :  Math.max(pagination.limit, 1),
+            page: isUnload.value ? 1 : pagination.current,
+            page_size: pageSize,
+            ...(isNeedSceneParams ? {} : getSceneSystemParams()),
           };
+          console.log('isNeedSceneParams', isNeedSceneParams, params, getSceneSystemParams());
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
           run(params).finally(() => {
