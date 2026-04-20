@@ -195,6 +195,7 @@
   import type { IRequestResponsePaginationData } from '@utils/request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
     count: number;
@@ -223,6 +224,7 @@
     tableMaxHeight?: number | string;
     /** 搜索参数（含 event_filters 等），排序时合并以保留其他参数 */
     searchParams?: Record<string, any>;
+    isNeedSceneParams?: boolean;
   }
 
   interface Emits {
@@ -255,6 +257,7 @@
     rowKey: 'id',
     tableMaxHeight: undefined,
     searchParams: undefined,
+    isNeedSceneParams: false, // 是否需要场景参数
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -483,11 +486,16 @@
         if (result) {
           // 确保使用当前的 pagination.limit 值
           const currentLimit = pagination.limit;
+          const { isNeedSceneParams } = props;
+
           const params: Record<string, any> = {
             ...paramsMemo,
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
+            ...(isNeedSceneParams ? getSceneSystemParams() : {}),
           };
+          console.log('isNeedSceneParams', isNeedSceneParams, params, getSceneSystemParams());
+
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           isLoading.value = true;

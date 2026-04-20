@@ -29,7 +29,7 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
-        :height="tableHeight"
+        is-need-scene-params
         need-empty-search-tip
         row-key="risk_id"
         :search-params="searchModel"
@@ -47,6 +47,7 @@
     computed,
     nextTick,
     onMounted,
+    onUnmounted,
     ref,
   } from 'vue';
   import {
@@ -65,6 +66,7 @@
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -202,10 +204,7 @@
   const listRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
-  const dataSource = RiskManageService.fetchProcessedRiskList;
-  // TDesign 默认行高约 42px，这里固定 10 行高度
-  const tableHeight = 42 * 10;
-
+  const dataSource = RiskManageService.fetchRiskList;
   // 导出数据
   const handleExport = () => {
     const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
@@ -368,8 +367,18 @@
     }
   };
 
+  // 监听场景切换事件
+  const { on, off } = useEventBus();
+
   onMounted(() => {
     getEventFields();
+    on('scene-change', () => {
+      fetchList();
+    });
+  });
+
+  onUnmounted(() => {
+    off('scene-change');
   });
 
 
