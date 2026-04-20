@@ -71,8 +71,12 @@ class CreateGradeManagerGroups(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        """构建请求数据，将 groups 作为请求体"""
-        data = {"groups": validated_request_data.pop("groups", [])}
+        """构建请求数据，将 groups 作为请求体，保留 url_keys 参数供 build_url 使用"""
+        data = {
+            "system_id": validated_request_data.get("system_id"),
+            "id": validated_request_data.get("id"),
+            "groups": validated_request_data.pop("groups", []),
+        }
         if "sync_subject_template" in validated_request_data:
             data["sync_subject_template"] = validated_request_data.pop("sync_subject_template")
         return data
@@ -90,8 +94,10 @@ class GrantGroupPolicies(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        """构建请求数据，提取 actions 和 resources"""
+        """构建请求数据，提取 actions 和 resources，保留 url_keys 参数供 build_url 使用"""
         return {
+            "system_id": validated_request_data.get("system_id"),
+            "id": validated_request_data.get("id"),
             "actions": validated_request_data.pop("actions", []),
             "resources": validated_request_data.pop("resources", []),
         }
@@ -115,8 +121,10 @@ class AddGroupMembers(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        """构建请求数据，提取 members 和 expired_at"""
+        """构建请求数据，提取 members 和 expired_at，保留 url_keys 参数供 build_url 使用"""
         return {
+            "system_id": validated_request_data.get("system_id"),
+            "id": validated_request_data.get("id"),
             "members": validated_request_data.pop("members", []),
             "expired_at": validated_request_data.pop("expired_at", 0),
         }
@@ -133,8 +141,10 @@ class DeleteGroupMembers(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        """构建请求数据，提取 type 和 ids 作为请求体"""
+        """构建请求数据，提取 type 和 ids 作为请求体，保留 url_keys 参数供 build_url 使用"""
         return {
+            "system_id": validated_request_data.get("system_id"),
+            "id": validated_request_data.get("id"),
             "type": validated_request_data.pop("type", ""),
             "ids": validated_request_data.pop("ids", []),
         }

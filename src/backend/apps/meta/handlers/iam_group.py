@@ -82,23 +82,114 @@ class IAMGroupManager:
         构建权限数据结构
         """
         actions = [{"id": action.id} for action in actions]
-        resources = [
-            {
-                "system": system_id,
-                "type": "scene",
-                "paths": [
-                    [
+
+        # 根据动作类型分组，支持多资源类型动作
+        action_groups = {}
+
+        for action in actions:
+            action_id = action["id"]
+
+            # 确定每个动作的资源类型
+            resource_type = "scene"  # 默认资源类型
+
+            # 场景相关动作使用 scene 资源类型（优先级最高）
+            if action_id in ["view_scene", "manage_scene"]:
+                resource_type = "scene"
+            # 策略相关动作使用 strategy 资源类型
+            elif action_id in [
+                "list_strategy_v2",
+                "create_strategy_v2",
+                "edit_strategy",
+                "delete_strategy",
+                "generate_strategy_risk",
+            ]:
+                resource_type = "strategy"
+            # 风险相关动作使用 risk 资源类型
+            elif action_id in ["list_risk_v2", "edit_risk_v2", "process_risk"]:
+                resource_type = "risk"
+            # 规则相关动作使用 rule 资源类型
+            elif action_id in ["list_rule_v2", "create_rule_v2", "edit_rule_v2", "delete_rule_v2"]:
+                resource_type = "rule"
+            # 联表相关动作使用 link_table 资源类型
+            elif action_id in [
+                "list_link_table_v2",
+                "create_link_table_v2",
+                "edit_link_table",
+                "delete_link_table",
+                "view_link_table",
+            ]:
+                resource_type = "link_table"
+            # 通知组相关动作使用 notice_group 资源类型
+            elif action_id in [
+                "list_notice_group_v2",
+                "create_notice_group_v2",
+                "edit_notice_group_v2",
+                "delete_notice_group_v2",
+            ]:
+                resource_type = "notice_group"
+            # 套餐相关动作使用 panel 资源类型
+            elif action_id in ["list_pa_v2", "create_pa_v2", "edit_pa_v2"]:
+                resource_type = "panel"
+
+            # 按资源类型分组动作
+            if resource_type not in action_groups:
+                action_groups[resource_type] = []
+            action_groups[resource_type].append(action)
+
+        # 构建批量资源授权结构
+        if not action_groups:
+            # 空动作列表时返回默认的scene类型资源
+            return {
+                "_multi_permissions": [
+                    {
+                        "actions": [],
+                        "resources": [
+                            {
+                                "system": system_id,
+                                "type": "scene",
+                                "paths": [
+                                    [
+                                        {
+                                            "system": system_id,
+                                            "type": "scene",
+                                            "id": scene_id,
+                                            "name": scene_name,
+                                        }
+                                    ]
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+
+        # 构建多资源类型权限结构
+        multi_permissions = []
+        for resource_type, grouped_actions in action_groups.items():
+            multi_permissions.append(
+                {
+                    "actions": grouped_actions,
+                    "resources": [
                         {
                             "system": system_id,
-                            "type": "scene",
-                            "id": scene_id,
-                            "name": scene_name,
+                            "type": resource_type,
+                            "paths": [
+                                [
+                                    {
+                                        "system": system_id,
+                                        "type": resource_type,
+                                        "id": scene_id,
+                                        "name": scene_name,
+                                    }
+                                ]
+                            ],
                         }
-                    ]
-                ],
-            }
-        ]
-        return {"actions": actions, "resources": resources}
+                    ],
+                }
+            )
+
+        # 返回多资源类型权限结构
+        return {"_multi_permissions": multi_permissions}
 
     @classmethod
     def get_all_group_members(
@@ -210,6 +301,10 @@ class IAMGroupManager:
         """
         创建场景用户组、授权并添加成员
         """
+        # 参数验证
+        if scene_name is None:
+            raise TypeError("scene_name cannot be None")
+
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
         grade_manager_id = "-"
 
@@ -265,35 +360,74 @@ class IAMGroupManager:
                 scene_id=scene_id,
                 scene_name=scene_name,
             )
-            try:
-                api.bk_iam.grant_group_policies(
-                    system_id=system_id,
-                    id=group_id,
-                    actions=permissions["actions"],
-                    resources=permissions["resources"],
-                )
-                granted_group_ids.append(group_id)
-                logger.info(
-                    "[create_scene_groups_with_members] %s授权成功, group_id=%s",
-                    group_label,
-                    group_id,
-                )
-            except Exception as e:
-                logger.error(
-                    "[create_scene_groups_with_members] %s授权失败, group_id=%s, error=%s, "
-                    "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
-                    group_label,
-                    group_id,
-                    e,
-                    created_group_ids,
-                    granted_group_ids,
-                )
-                raise ValueError(
-                    f"授权失败: {group_label}(group_id={group_id}), "
-                    f"已创建的用户组IDs: {created_group_ids}, "
-                    f"已授权成功的用户组IDs: {granted_group_ids}, "
-                    f"错误: {e}"
-                ) from e
+
+            # 处理多资源类型权限请求
+            if "_multi_permissions" in permissions:
+                # 多资源类型：合并所有资源类型为一个批量授权调用
+                all_actions = []
+                all_resources = []
+
+                for permission in permissions["_multi_permissions"]:
+                    all_actions.extend(permission["actions"])
+                    all_resources.extend(permission["resources"])
+
+                # 批量授权调用
+                try:
+                    api.bk_iam.grant_group_policies(
+                        system_id=system_id,
+                        id=group_id,
+                        actions=all_actions,
+                        resources=all_resources,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "[create_scene_groups_with_members] %s批量授权失败, group_id=%s, error=%s, "
+                        "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
+                        group_label,
+                        group_id,
+                        e,
+                        created_group_ids,
+                        granted_group_ids,
+                    )
+                    raise ValueError(
+                        f"授权失败: {group_label}(group_id={group_id}), "
+                        f"已创建的用户组IDs: {created_group_ids}, "
+                        f"已授权成功的用户组IDs: {granted_group_ids}, "
+                        f"错误: {e}"
+                    ) from e
+            else:
+                # 单资源类型：保持原有逻辑
+                try:
+                    api.bk_iam.grant_group_policies(
+                        system_id=system_id,
+                        id=group_id,
+                        actions=permissions["actions"],
+                        resources=permissions["resources"],
+                    )
+                except Exception as e:
+                    logger.error(
+                        "[create_scene_groups_with_members] %s授权失败, group_id=%s, error=%s, "
+                        "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
+                        group_label,
+                        group_id,
+                        e,
+                        created_group_ids,
+                        granted_group_ids,
+                    )
+                    raise ValueError(
+                        f"授权失败: {group_label}(group_id={group_id}), "
+                        f"已创建的用户组IDs: {created_group_ids}, "
+                        f"已授权成功的用户组IDs: {granted_group_ids}, "
+                        f"错误: {e}"
+                    ) from e
+
+            granted_group_ids.append(group_id)
+            logger.info(
+                "[create_scene_groups_with_members] %s授权成功, group_id=%s, 资源类型数量=%s",
+                group_label,
+                group_id,
+                len(permissions.get("_multi_permissions", [])) if "_multi_permissions" in permissions else 1,
+            )
 
         # 4. 为管理用户组添加成员
         if manager_members:
