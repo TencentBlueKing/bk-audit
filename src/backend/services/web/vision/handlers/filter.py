@@ -229,6 +229,7 @@ class SystemDiagnosisFilter(DataFilter):
     """
     获取系统诊断面板筛选数据
     权限: 系统诊断面板查看系统权限
+    TODO: 权限需要替换为场景关联系统权限
     """
 
     iam_action = ActionEnum.VIEW_SYSTEM_DIAGNOSIS_PANEL
@@ -296,6 +297,7 @@ class SingleSystemDiagnosisFilter(SystemDiagnosisFilter):
     """
     获取单个系统诊断面板筛选数据
     权限: 系统编辑权限
+    TODO: 权限需要替换为场景关联系统权限
     """
 
     iam_action = ActionEnum.EDIT_SYSTEM

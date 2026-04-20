@@ -162,6 +162,7 @@ from services.web.strategy_v2.serializers import (
     GetStrategyFieldValueResponseSerializer,
     GetStrategyStatusRequestSerializer,
     LinkTableInfoSerializer,
+    ListLinkTableAllRequestSerializer,
     ListLinkTableAllResponseSerializer,
     ListLinkTableRequestSerializer,
     ListLinkTableResponseSerializer,
@@ -1654,11 +1655,17 @@ class ListLinkTable(LinkTableBase):
 
 class ListLinkTableAll(LinkTableBase):
     name = gettext_lazy("查询所有联表")
+    RequestSerializer = ListLinkTableAllRequestSerializer
     ResponseSerializer = ListLinkTableAllResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        return LinkTable.list_max_version_link_table()
+        return SceneScopeFilter.filter_queryset(
+            queryset=LinkTable.list_max_version_link_table(),
+            scene_id=validated_request_data["scene_id"],
+            resource_type=ResourceVisibilityType.LINK_TABLE,
+            pk_field="uid",
+        )
 
 
 class GetLinkTable(LinkTableBase):

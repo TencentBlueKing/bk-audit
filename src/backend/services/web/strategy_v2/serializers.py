@@ -1200,6 +1200,10 @@ class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
     uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
 
 
+class ListLinkTableAllRequestSerializer(serializers.Serializer):
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤联表")
+
+
 class ListLinkTableAllResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = LinkTable

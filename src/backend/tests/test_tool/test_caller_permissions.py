@@ -115,6 +115,17 @@ class TestToolViewPermissions(TestCase):
         from django.utils import timezone
 
         from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
         from services.web.tool.models import DataSearchToolConfig
@@ -141,6 +152,7 @@ class TestToolViewPermissions(TestCase):
                 ],
                 "output_fields": [],
             },
+            status=PanelStatus.PUBLISHED,
             updated_by="someone_else",
         )
         DataSearchToolConfig.objects.create(tool=sql_tool, data_search_config_type="sql", sql="SELECT 1")
@@ -178,6 +190,19 @@ class TestToolViewPermissions(TestCase):
             field_name="operator",
             field_source=StrategyFieldSourceEnum.BASIC.value,
         )
+        scene = Scene.objects.create(name="scene_for_execute", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=sql_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
         # 2) 创建归属于该策略的风险
         risk = Risk.objects.create(
             raw_event_id="e-for-execute",
@@ -236,6 +261,17 @@ class TestToolViewPermissions(TestCase):
         from django.utils import timezone
 
         from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
         from services.web.tool.models import DataSearchToolConfig
@@ -262,6 +298,7 @@ class TestToolViewPermissions(TestCase):
                 ],
                 "output_fields": [],
             },
+            status=PanelStatus.PUBLISHED,
             updated_by="someone_else",
         )
         DataSearchToolConfig.objects.create(tool=sql_tool, data_search_config_type="sql", sql="SELECT 1")
@@ -299,6 +336,20 @@ class TestToolViewPermissions(TestCase):
             field_name="env",
             field_source=StrategyFieldSourceEnum.BASIC.value,
         )
+
+        scene = Scene.objects.create(name="scene_for_execute_fixed", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene)
+        tool_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=sql_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
 
         risk = Risk.objects.create(
             raw_event_id="e-for-execute-fixed",
