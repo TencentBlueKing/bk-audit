@@ -82,15 +82,65 @@ class IAMGroupManager:
         构建权限数据结构
         """
         actions = [{"id": action.id} for action in actions]
+
+        # 根据动作类型确定资源类型
+        resource_type = "scene"  # 默认资源类型
+
+        # 检查动作列表中的动作类型，确定正确的资源类型
+        for action in actions:
+            action_id = action["id"]
+
+            # 策略相关动作使用 strategy 资源类型
+            if action_id in [
+                "list_strategy",
+                "create_strategy",
+                "edit_strategy",
+                "delete_strategy",
+                "generate_strategy_risk",
+            ]:
+                resource_type = "strategy"
+                break
+            # 风险相关动作使用 risk 资源类型
+            elif action_id in ["list_risk", "edit_risk", "process_risk"]:
+                resource_type = "risk"
+                break
+            # 规则相关动作使用 rule 资源类型
+            elif action_id in ["list_rule", "create_rule", "edit_rule", "delete_rule"]:
+                resource_type = "rule"
+                break
+            # 联表相关动作使用 link_table 资源类型
+            elif action_id in [
+                "list_link_table",
+                "create_link_table",
+                "edit_link_table",
+                "delete_link_table",
+                "view_link_table",
+            ]:
+                resource_type = "link_table"
+                break
+            # 通知组相关动作使用 notice_group 资源类型
+            elif action_id in [
+                "list_notice_group",
+                "create_notice_group",
+                "edit_notice_group_v2",
+                "delete_notice_group_v2",
+            ]:
+                resource_type = "notice_group"
+                break
+            # 套餐相关动作使用 panel 资源类型
+            elif action_id in ["list_pa", "create_pa", "edit_pa"]:
+                resource_type = "panel"
+                break
+
         resources = [
             {
                 "system": system_id,
-                "type": "scene",
+                "type": resource_type,
                 "paths": [
                     [
                         {
                             "system": system_id,
-                            "type": "scene",
+                            "type": resource_type,
                             "id": scene_id,
                             "name": scene_name,
                         }

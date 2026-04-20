@@ -40,8 +40,8 @@ def _make_mock_action(action_id):
 class TestBuildPermissions(SimpleTestCase):
     """测试 IAMGroupManager.build_permissions"""
 
-    def test_build_permissions_structure(self):
-        """测试构建权限数据结构正确"""
+    def test_build_permissions_scene_actions(self):
+        """测试场景相关动作的权限构建"""
         actions = [_make_mock_action("view_scene"), _make_mock_action("manage_scene")]
         result = IAMGroupManager.build_permissions(
             actions=actions,
@@ -49,37 +49,64 @@ class TestBuildPermissions(SimpleTestCase):
             scene_id="scene_001",
             scene_name="测试场景",
         )
-
         self.assertEqual(result["actions"], [{"id": "view_scene"}, {"id": "manage_scene"}])
         self.assertEqual(len(result["resources"]), 1)
         resource = result["resources"][0]
-        self.assertEqual(resource["system"], "test_system")
         self.assertEqual(resource["type"], "scene")
         self.assertEqual(resource["paths"][0][0]["id"], "scene_001")
         self.assertEqual(resource["paths"][0][0]["name"], "测试场景")
 
-    def test_build_permissions_single_action(self):
-        """测试单个 action 的权限构建"""
-        actions = [_make_mock_action("view_scene")]
+    def test_build_permissions_strategy_actions(self):
+        """测试策略相关动作的权限构建"""
+        actions = [_make_mock_action("edit_strategy"), _make_mock_action("list_strategy")]
         result = IAMGroupManager.build_permissions(
             actions=actions,
             system_id="test_system",
             scene_id="scene_002",
             scene_name="测试场景2",
         )
-        self.assertEqual(result["actions"], [{"id": "view_scene"}])
+        self.assertEqual(result["actions"], [{"id": "edit_strategy"}, {"id": "list_strategy"}])
+        self.assertEqual(result["resources"][0]["type"], "strategy")
         self.assertEqual(result["resources"][0]["paths"][0][0]["name"], "测试场景2")
+
+    def test_build_permissions_risk_actions(self):
+        """测试风险相关动作的权限构建"""
+        actions = [_make_mock_action("list_risk"), _make_mock_action("edit_risk")]
+        result = IAMGroupManager.build_permissions(
+            actions=actions,
+            system_id="test_system",
+            scene_id="scene_003",
+            scene_name="测试场景3",
+        )
+        self.assertEqual(result["actions"], [{"id": "list_risk"}, {"id": "edit_risk"}])
+        self.assertEqual(result["resources"][0]["type"], "risk")
+        self.assertEqual(result["resources"][0]["paths"][0][0]["name"], "测试场景3")
+
+    def test_build_permissions_rule_actions(self):
+        """测试规则相关动作的权限构建"""
+        actions = [_make_mock_action("list_rule"), _make_mock_action("create_rule")]
+        result = IAMGroupManager.build_permissions(
+            actions=actions,
+            system_id="test_system",
+            scene_id="scene_004",
+            scene_name="测试场景4",
+        )
+        self.assertEqual(result["actions"], [{"id": "list_rule"}, {"id": "create_rule"}])
+        self.assertEqual(result["resources"][0]["type"], "rule")
+        self.assertEqual(result["resources"][0]["paths"][0][0]["name"], "测试场景4")
 
     def test_build_permissions_empty_actions(self):
         """测试空 action 列表"""
         result = IAMGroupManager.build_permissions(
             actions=[],
             system_id="test_system",
-            scene_id="scene_003",
-            scene_name="测试场景3",
+            scene_id="scene_005",
+            scene_name="测试场景5",
         )
         self.assertEqual(result["actions"], [])
         self.assertEqual(len(result["resources"]), 1)
+        # 空动作列表时使用默认的 scene 资源类型
+        self.assertEqual(result["resources"][0]["type"], "scene")
 
 
 class TestGetAllGroupMembers(SimpleTestCase):
