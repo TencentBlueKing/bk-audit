@@ -97,10 +97,13 @@
     IRequestResponsePaginationData,
   } from '@utils/request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
     dataSource: (params: any)=> Promise<IRequestResponsePaginationData<any>>,
     paginationValidator?: (pagination: IPagination) => boolean
+    isNeedSceneParams?: boolean;
   }
   interface Emits {
     (e: 'requestSuccess', value: any, total: number): void,
@@ -113,7 +116,10 @@
     getParamsMemo: () => Ref<Record<string, any>>
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    paginationValidator: () => true,
+    isNeedSceneParams: false,
+  });
 
   const emits = defineEmits<Emits>();
 
@@ -170,11 +176,15 @@
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
         if (result) {
+          const { isNeedSceneParams } = props;
+
           params.value = {
             ...paramsMemo.value,
             page: pagination.current,
             page_size: pagination.limit,
+            ...(isNeedSceneParams ? getSceneSystemParams() : {}),
           };
+
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           run(params.value);

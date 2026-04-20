@@ -113,9 +113,8 @@
   provide('tableSearchModel', tableSearchModel);
 
   // 场景切换
-  const handleSceneChange = (value: SceneItem | null) => {
-    console.log('场景切换:', value);
-    // TODO: 根据选择的场景/系统重新加载数据
+  const handleSceneChange = () => {
+    resultRef.value?.handleUpdateField();
   };
 
   // 搜索
