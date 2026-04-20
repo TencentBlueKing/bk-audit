@@ -424,7 +424,7 @@ class RiskScopeQuerySerializer(ScopeQuerySerializer):
         return super().validate(attrs)
 
 
-class ListRiskRequestSerializer(RiskScopeQuerySerializer):
+class ListRiskBaseRequestSerializer(serializers.Serializer):
     """
     List Risk
     """
@@ -607,7 +607,11 @@ class ListRiskRequestSerializer(RiskScopeQuerySerializer):
         return data
 
 
-class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
+class ListRiskRequestSerializer(ListRiskBaseRequestSerializer, RiskScopeQuerySerializer):
+    ...
+
+
+class ListRiskAPIGWRequestSerializer(ListRiskBaseRequestSerializer):
     """
     APIGW 获取风险列表 - 继承 ListRiskRequestSerializer，逻辑完全一致，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权）
     分页由 DRF 分页器统一处理（通过 URL 参数 page/page_size）
