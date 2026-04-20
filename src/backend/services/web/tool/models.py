@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import unique_id
+from services.web.scene.constants import PanelStatus
 from services.web.tool.constants import (
     BkVisionConfig,
     DataSearchConfigTypeEnum,
@@ -34,9 +35,10 @@ class Tool(SoftDeleteModel):
     status = models.CharField(
         gettext_lazy("上架状态"),
         max_length=32,
-        default="",
+        default=PanelStatus.UNPUBLISHED,
         blank=True,
         help_text="仅平台级工具需要，published/unpublished",
+        # 新建工具默认未发布；存量工具通过 migration 0011 默认设为 published
     )
 
     class Meta:

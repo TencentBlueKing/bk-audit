@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from copy import deepcopy
 from datetime import timedelta
+from importlib import import_module
 from typing import Type
 from unittest import mock
 from unittest.mock import MagicMock, patch
@@ -236,6 +237,28 @@ class ToolResourceTestCase(TestCase):
         tag_names_2 = [item["name"] for item in tag_result_2]
         self.assertIn("SQL Tool", tag_names_2)
         self.assertIn("BK Vision Tool", tag_names_2)
+
+    def test_tool_status_default_compatibility(self):
+        migration_module = import_module("services.web.tool.migrations.0011_add_scope_fields_to_tool")
+        status_field_op = next(
+            operation
+            for operation in migration_module.Migration.operations
+            if getattr(operation, "name", None) == "status"
+        )
+        self.assertEqual(status_field_op.field.default, PanelStatus.PUBLISHED)
+
+        tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="status-default-tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            config={},
+            is_deleted=False,
+            description="status default test",
+            updated_at=timezone.now(),
+        )
+        self.assertEqual(tool.status, PanelStatus.UNPUBLISHED)
 
     def test_create_tool_sql(self):
         resource = CreateTool()

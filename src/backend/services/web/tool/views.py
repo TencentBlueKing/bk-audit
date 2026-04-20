@@ -17,7 +17,7 @@ class ToolViewSet(ResourceViewSet):
     lookup_field = "uid"
 
     def get_permissions(self):
-        if self.action in ["retrieve", "sql_analyse_with_tool"]:
+        if self.action in ["sql_analyse_with_tool"]:
             return [UseToolPermission(get_instance_id=self.get_tool_uid)]
         if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [

@@ -33,5 +33,6 @@ router.register("share", views.ShareViewSet)
 # 场景报表管理：/panel/platform/ 和 /panel/scene/ 风格
 router.register("panel/platform", views.PlatformPanelViewSet)
 router.register("panel/scene", views.ScenePanelManageViewSet)
+router.register("panel/scene/group", views.SceneReportGroupManageViewSet)
 
 urlpatterns = router.urls

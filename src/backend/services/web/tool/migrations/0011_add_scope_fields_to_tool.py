@@ -33,7 +33,12 @@ class Migration(migrations.Migration):
             model_name='tool',
             name='status',
             field=models.CharField(
-                blank=True, default='', help_text='仅平台级工具需要，published/unpublished', max_length=32, verbose_name='上架状态'
+                blank=True,
+                default='published',
+                help_text='仅平台级工具需要，published/unpublished',
+                max_length=32,
+                verbose_name='上架状态',
+                # 存量工具默认已发布，新建工具的默认值以 Model 定义为准（unpublished）
             ),
         ),
     ]

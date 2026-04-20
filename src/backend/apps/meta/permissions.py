@@ -38,7 +38,7 @@ from services.web.common.constants import ScopeType
 
 class SearchLogPermission:
     @classmethod
-    def _raise_system_view_permission_exception(cls) -> None:
+    def raise_system_view_permission_exception(cls) -> None:
         from apps.permission.handlers.permission import Permission
 
         apply_data, apply_url = Permission().get_apply_data([ActionEnum.VIEW_SYSTEM])
@@ -84,7 +84,7 @@ class SearchLogPermission:
     @classmethod
     def any_search_log_permission(cls, namespace) -> None:
         if not cls.get_auth_systems(namespace)[1]:
-            cls._raise_system_view_permission_exception()
+            cls.raise_system_view_permission_exception()
 
     @classmethod
     def get_scope_auth_systems(cls, scope_type: str, scope_id: str | None, username: str) -> list[str]:
@@ -94,7 +94,7 @@ class SearchLogPermission:
         scoped_system_ids = {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(scope)}
 
         if not scoped_system_ids:
-            cls._raise_system_view_permission_exception()
+            cls.raise_system_view_permission_exception()
         return list(scoped_system_ids)
 
 
@@ -105,8 +105,7 @@ class SearchLogSystemSearchPermission(InstancePermission):
         system_id = self._get_instance_id(request, view)
         if SearchLogPermission.has_system_search_permission(system_id=system_id, username=get_request_username()):
             return True
-
-        return False
+        SearchLogPermission.raise_system_view_permission_exception()
 
 
 class SystemManagerPermission(InstancePermission):

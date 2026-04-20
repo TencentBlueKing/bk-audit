@@ -135,14 +135,28 @@ class TestToolVisionPermissionConstants(TestCase):
             self.assertEqual(kwargs["get_instance_id"](), "tool-2")
 
 
-class TestScenePanelManageViewSetPermission(TestCase):
-    def test_get_permissions_uses_instance_action_permission(self):
+class TestSceneManageViewSetPermission(TestCase):
+    def test_scene_panel_manage_permissions_uses_instance_action_permission(self):
         from apps.permission.handlers.actions import ActionEnum
         from apps.permission.handlers.drf import InstanceActionPermission
         from apps.permission.handlers.resource_types import ResourceEnum
         from services.web.vision.views import ScenePanelManageViewSet
 
         view = ScenePanelManageViewSet()
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], InstanceActionPermission)
+        self.assertEqual(permissions[0].actions, [ActionEnum.MANAGE_SCENE])
+        self.assertEqual(permissions[0].resource_meta, ResourceEnum.SCENE)
+
+    def test_scene_group_manage_permissions_uses_instance_action_permission(self):
+        from apps.permission.handlers.actions import ActionEnum
+        from apps.permission.handlers.drf import InstanceActionPermission
+        from apps.permission.handlers.resource_types import ResourceEnum
+        from services.web.vision.views import SceneReportGroupManageViewSet
+
+        view = SceneReportGroupManageViewSet()
         permissions = view.get_permissions()
 
         self.assertEqual(len(permissions), 1)
@@ -157,3 +171,11 @@ class TestScenePanelManageViewSetPermission(TestCase):
         view.request = mock.MagicMock(query_params={"scene_id": "123"}, data={})
 
         self.assertEqual(view.get_scene_id(), "123")
+
+    def test_scene_group_manage_get_scene_id_from_body(self):
+        from services.web.vision.views import SceneReportGroupManageViewSet
+
+        view = SceneReportGroupManageViewSet()
+        view.request = mock.MagicMock(query_params={}, data={"scene_id": "456"})
+
+        self.assertEqual(view.get_scene_id(), "456")

@@ -269,14 +269,8 @@ class PlatformPanelViewSet(ResourceViewSet):
     ]
 
 
-class ScenePanelManageViewSet(ResourceViewSet):
-    """
-    场景级报表增删改 ViewSet（场景管理员）
-
-    POST   /bkvision/api/v1/panel/scene/                创建场景级报表
-    PUT    /bkvision/api/v1/panel/scene/{panel_id}/     编辑场景级报表
-    DELETE /bkvision/api/v1/panel/scene/{panel_id}/     删除场景级报表
-    """
+class SceneManageBaseViewSet(ResourceViewSet):
+    """场景管理相关接口基类（统一 scene_id 提取和场景管理员权限）。"""
 
     def get_scene_id(self):
         scene_id = self.request.query_params.get("scene_id") or self.request.data.get("scene_id")
@@ -293,15 +287,34 @@ class ScenePanelManageViewSet(ResourceViewSet):
             )
         ]
 
+
+class ScenePanelManageViewSet(SceneManageBaseViewSet):
+    """
+    场景级报表增删改 ViewSet（场景管理员）
+
+    GET    /bkvision/api/v1/panel/scene/                场景报表列表
+    POST   /bkvision/api/v1/panel/scene/                创建场景级报表
+    PUT    /bkvision/api/v1/panel/scene/{panel_id}/     编辑场景级报表
+    DELETE /bkvision/api/v1/panel/scene/{panel_id}/     删除场景级报表
+    POST   /bkvision/api/v1/panel/scene/{panel_id}/publish/ 上架/下架场景报表
+    """
+
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_scene_panels),
         ResourceRoute("POST", resource.vision.create_scene_panel),
         ResourceRoute("PUT", resource.vision.update_scene_panel, pk_field="panel_id"),
         ResourceRoute("DELETE", resource.vision.delete_scene_panel, pk_field="panel_id"),
         ResourceRoute("POST", resource.vision.publish_scene_panel, endpoint="publish", pk_field="panel_id"),
-        ResourceRoute("POST", resource.vision.create_scene_report_group, endpoint="group"),
-        ResourceRoute("PUT", resource.vision.update_scene_report_group, endpoint="group", pk_field="group_id"),
-        ResourceRoute("DELETE", resource.vision.delete_scene_report_group, endpoint="group", pk_field="group_id"),
-        ResourceRoute("POST", resource.vision.update_scene_report_group_order, endpoint="group/order"),
-        ResourceRoute("POST", resource.vision.update_scene_report_group_panel_order, endpoint="group-item/order"),
+    ]
+
+
+class SceneReportGroupManageViewSet(SceneManageBaseViewSet):
+    """场景报表分组管理 ViewSet（场景管理员）。"""
+
+    resource_routes = [
+        ResourceRoute("POST", resource.vision.create_scene_report_group),
+        ResourceRoute("PUT", resource.vision.update_scene_report_group, pk_field="group_id"),
+        ResourceRoute("DELETE", resource.vision.delete_scene_report_group, pk_field="group_id"),
+        ResourceRoute("POST", resource.vision.update_scene_report_group_order, endpoint="order"),
+        ResourceRoute("POST", resource.vision.update_scene_report_group_panel_order, endpoint="item/order"),
     ]
