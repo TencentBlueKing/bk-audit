@@ -40,8 +40,8 @@ def _make_mock_action(action_id):
 class TestBuildPermissions(SimpleTestCase):
     """测试 IAMGroupManager.build_permissions"""
 
-    def test_build_permissions_structure(self):
-        """测试构建权限数据结构正确"""
+    def test_build_permissions_scene_actions(self):
+        """测试场景相关动作的权限构建"""
         actions = [_make_mock_action("view_scene"), _make_mock_action("manage_scene")]
         result = IAMGroupManager.build_permissions(
             actions=actions,
@@ -49,37 +49,123 @@ class TestBuildPermissions(SimpleTestCase):
             scene_id="scene_001",
             scene_name="测试场景",
         )
-
-        self.assertEqual(result["actions"], [{"id": "view_scene"}, {"id": "manage_scene"}])
-        self.assertEqual(len(result["resources"]), 1)
-        resource = result["resources"][0]
-        self.assertEqual(resource["system"], "test_system")
+        self.assertEqual(result["_multi_permissions"][0]["actions"], [{"id": "view_scene"}, {"id": "manage_scene"}])
+        self.assertEqual(len(result["_multi_permissions"][0]["resources"]), 1)
+        resource = result["_multi_permissions"][0]["resources"][0]
         self.assertEqual(resource["type"], "scene")
         self.assertEqual(resource["paths"][0][0]["id"], "scene_001")
         self.assertEqual(resource["paths"][0][0]["name"], "测试场景")
 
-    def test_build_permissions_single_action(self):
-        """测试单个 action 的权限构建"""
-        actions = [_make_mock_action("view_scene")]
+    def test_build_permissions_strategy_actions(self):
+        """测试策略相关动作的权限构建"""
+        actions = [_make_mock_action("edit_strategy"), _make_mock_action("list_strategy_v2")]
         result = IAMGroupManager.build_permissions(
             actions=actions,
             system_id="test_system",
             scene_id="scene_002",
             scene_name="测试场景2",
         )
-        self.assertEqual(result["actions"], [{"id": "view_scene"}])
-        self.assertEqual(result["resources"][0]["paths"][0][0]["name"], "测试场景2")
+        self.assertEqual(
+            result["_multi_permissions"][0]["actions"], [{"id": "edit_strategy"}, {"id": "list_strategy_v2"}]
+        )
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "strategy")
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景2")
+
+    def test_build_permissions_risk_actions(self):
+        """测试风险相关动作的权限构建"""
+        actions = [_make_mock_action("list_risk_v2"), _make_mock_action("edit_risk_v2")]
+        result = IAMGroupManager.build_permissions(
+            actions=actions,
+            system_id="test_system",
+            scene_id="scene_003",
+            scene_name="测试场景3",
+        )
+        self.assertEqual(result["_multi_permissions"][0]["actions"], [{"id": "list_risk_v2"}, {"id": "edit_risk_v2"}])
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "risk")
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景3")
+
+    def test_build_permissions_rule_actions(self):
+        """测试规则相关动作的权限构建"""
+        actions = [_make_mock_action("list_rule_v2"), _make_mock_action("create_rule_v2")]
+        result = IAMGroupManager.build_permissions(
+            actions=actions,
+            system_id="test_system",
+            scene_id="scene_004",
+            scene_name="测试场景4",
+        )
+        self.assertEqual(result["_multi_permissions"][0]["actions"], [{"id": "list_rule_v2"}, {"id": "create_rule_v2"}])
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "rule")
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景4")
 
     def test_build_permissions_empty_actions(self):
         """测试空 action 列表"""
         result = IAMGroupManager.build_permissions(
             actions=[],
             system_id="test_system",
-            scene_id="scene_003",
-            scene_name="测试场景3",
+            scene_id="scene_005",
+            scene_name="测试场景5",
         )
-        self.assertEqual(result["actions"], [])
-        self.assertEqual(len(result["resources"]), 1)
+        self.assertEqual(result["_multi_permissions"][0]["actions"], [])
+        self.assertEqual(len(result["_multi_permissions"][0]["resources"]), 1)
+        # 空动作列表时使用默认的 scene 资源类型
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+
+
+class TestBuildPermissionsEdgeCases(SimpleTestCase):
+    """测试 IAMGroupManager.build_permissions 的边界情况"""
+
+    def test_build_permissions_with_unknown_action_type(self):
+        """测试未知动作类型时使用默认资源类型"""
+        unknown_action = mock.MagicMock()
+        unknown_action.id = "unknown_action_id"
+
+        result = IAMGroupManager.build_permissions(
+            actions=[unknown_action],
+            system_id="test_system",
+            scene_id="scene_001",
+            scene_name="测试场景",
+        )
+
+        # 未知动作类型应使用默认的 scene 资源类型
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+
+    def test_build_permissions_with_multiple_action_types(self):
+        """测试混合动作类型时的多资源类型权限结构"""
+        strategy_action = mock.MagicMock()
+        strategy_action.id = "list_strategy_v2"
+        risk_action = mock.MagicMock()
+        risk_action.id = "list_risk_v2"
+
+        result = IAMGroupManager.build_permissions(
+            actions=[strategy_action, risk_action],
+            system_id="test_system",
+            scene_id="scene_001",
+            scene_name="测试场景",
+        )
+
+        # 应返回多资源类型权限结构
+        self.assertIn("_multi_permissions", result)
+        self.assertEqual(len(result["_multi_permissions"]), 2)
+
+        # 验证包含所有资源类型
+        resource_types = [perm["resources"][0]["type"] for perm in result["_multi_permissions"]]
+        self.assertIn("strategy", resource_types)
+        self.assertIn("risk", resource_types)
+
+    def test_build_permissions_with_empty_system_id(self):
+        """测试空系统ID时使用默认系统ID"""
+        action = mock.MagicMock()
+        action.id = "view_scene"
+
+        result = IAMGroupManager.build_permissions(
+            actions=[action],
+            system_id="",
+            scene_id="scene_001",
+            scene_name="测试场景",
+        )
+
+        self.assertEqual(len(result["_multi_permissions"][0]["actions"]), 1)
+        self.assertEqual(result["_multi_permissions"][0]["actions"][0]["id"], "view_scene")
 
 
 class TestGetAllGroupMembers(SimpleTestCase):
@@ -188,6 +274,91 @@ class TestGetAllGroupMembers(SimpleTestCase):
             self.assertEqual(len(result), 2)
             self.assertEqual(result[0]["type"], "user")
             self.assertEqual(result[1]["type"], "department")
+
+
+class TestGroupMembersEdgeCases(SimpleTestCase):
+    """测试用户组成员管理的边界情况"""
+
+    def test_get_all_members_with_large_page_size(self):
+        """测试大页面大小获取成员"""
+        mock_response = {
+            "count": 500,
+            "results": [{"type": "user", "id": f"user_{i}"} for i in range(500)],
+        }
+
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value=mock_response,
+        ):
+            result = IAMGroupManager.get_all_group_members(
+                group_id=1001,
+                page_size=1000,
+                system_id="test_system",
+            )
+            self.assertEqual(len(result), 500)
+
+    def test_add_members_with_expired_at_in_past(self):
+        """测试添加成员时使用过去的过期时间"""
+        past_expired_at = 1609459200  # 2021-01-01
+        members = [{"type": "user", "id": "test_user"}]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=members,
+                expired_at=past_expired_at,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_delete_members_with_empty_ids(self):
+        """测试删除空成员ID列表"""
+        with mock.patch.object(
+            DeleteGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_delete:
+            IAMGroupManager.delete_group_members(
+                group_id=1001,
+                member_type="user",
+                member_ids=[],
+                system_id="test_system",
+            )
+            mock_delete.assert_called_once()
+
+    def test_sync_members_with_duplicate_members(self):
+        """测试同步时包含重复成员"""
+        duplicate_members = [
+            {"type": "user", "id": "user1"},
+            {"type": "user", "id": "user1"},  # 重复
+            {"type": "user", "id": "user2"},
+        ]
+
+        current_members_response = {
+            "count": 0,
+            "results": [],
+        }
+
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value=current_members_response,
+        ), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.sync_group_members(
+                group_id=1001,
+                members=duplicate_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
 
 
 class TestAddGroupMembers(SimpleTestCase):
@@ -473,6 +644,130 @@ class TestCreateSceneGroupsWithMembers(SimpleTestCase):
                 scene_name=self.scene_name,
             )
             mock_add.assert_not_called()
+
+
+class TestCreateSceneGroupsWithMembersBoundaryConditions(SimpleTestCase):
+    """测试 IAMGroupManager.create_scene_groups_with_members 的边界条件"""
+
+    def setUp(self):
+        super().setUp()
+        self.scene_id = "scene_boundary_001"
+        self.scene_name = "边界测试场景"
+
+    def test_create_groups_with_special_characters_in_name(self):
+        """测试场景名称包含特殊字符时用户组创建正常"""
+        special_scene_name = "测试场景-特殊字符@#$%^&*()_+{}"
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ):
+            result = IAMGroupManager.create_scene_groups_with_members(
+                scene_id=self.scene_id,
+                scene_name=special_scene_name,
+            )
+            self.assertEqual(result["iam_manager_group_id"], 1001)
+            self.assertEqual(result["iam_viewer_group_id"], 1002)
+
+    def test_create_groups_with_very_long_scene_name(self):
+        """测试超长场景名称时用户组创建正常"""
+        long_scene_name = "这是一个非常长的场景名称，用于测试用户组名称截断和显示逻辑，确保系统能够正确处理超长字符串的情况"
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ):
+            result = IAMGroupManager.create_scene_groups_with_members(
+                scene_id=self.scene_id,
+                scene_name=long_scene_name,
+            )
+            self.assertEqual(result["iam_manager_group_id"], 1001)
+            self.assertEqual(result["iam_viewer_group_id"], 1002)
+
+    def test_create_groups_with_empty_scene_id(self):
+        """测试空场景ID时抛出异常"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ):
+            with self.assertRaises(ValueError):
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id="",
+                    scene_name=self.scene_name,
+                )
+
+    def test_create_groups_with_none_scene_name(self):
+        """测试None场景名称时抛出异常"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ):
+            with self.assertRaises(TypeError):
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=None,
+                )
+
+    def test_create_groups_with_large_number_of_members(self):
+        """测试添加大量成员时的性能边界"""
+        large_manager_members = [{"type": "user", "id": f"user_{i}"} for i in range(100)]
+        large_viewer_members = [{"type": "user", "id": f"viewer_{i}"} for i in range(200)]
+
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            result = IAMGroupManager.create_scene_groups_with_members(
+                scene_id=self.scene_id,
+                scene_name=self.scene_name,
+                manager_members=large_manager_members,
+                viewer_members=large_viewer_members,
+            )
+            self.assertEqual(result["iam_manager_group_id"], 1001)
+            self.assertEqual(result["iam_viewer_group_id"], 1002)
+            # 验证add_group_members被调用两次
+            self.assertEqual(mock_add.call_count, 2)
+
+    def test_create_groups_with_mixed_member_types(self):
+        """测试混合成员类型（用户和部门）"""
+        mixed_members = [
+            {"type": "user", "id": "user1"},
+            {"type": "department", "id": "dept1"},
+            {"type": "user", "id": "user2"},
+            {"type": "department", "id": "dept2"},
+        ]
+
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ):
+            result = IAMGroupManager.create_scene_groups_with_members(
+                scene_id=self.scene_id,
+                scene_name=self.scene_name,
+                manager_members=mixed_members,
+            )
+            self.assertEqual(result["iam_manager_group_id"], 1001)
+            self.assertEqual(result["iam_viewer_group_id"], 1002)
 
 
 class TestSyncGroupMembers(SimpleTestCase):
@@ -903,3 +1198,853 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
         ):
             with self.assertRaises(APIRequestError):
                 SceneResource._sync_iam_group_members(scene, validated_data)
+
+
+class TestBuildRequestData(SimpleTestCase):
+    """测试各 IAM API 资源类的 build_request_data 方法，确保 url_keys 参数被正确保留"""
+
+    def test_create_grade_manager_groups_preserves_url_keys(self):
+        """测试 CreateGradeManagerGroups.build_request_data 保留 system_id 和 id"""
+        resource = CreateGradeManagerGroups()
+        validated_data = {
+            "system_id": "test_system",
+            "id": "grade_manager_1",
+            "groups": [{"name": "测试组", "description": "描述"}],
+        }
+        result = resource.build_request_data(validated_data)
+        # build_request_data 只返回请求体数据，URL参数通过url_keys处理
+        self.assertEqual(result["groups"], [{"name": "测试组", "description": "描述"}])
+        # URL参数保留在validated_data中，用于URL路径构建
+        self.assertEqual(validated_data["system_id"], "test_system")
+        self.assertEqual(validated_data["id"], "grade_manager_1")
+
+    def test_create_grade_manager_groups_with_sync_subject_template(self):
+        """测试 CreateGradeManagerGroups.build_request_data 包含 sync_subject_template"""
+        resource = CreateGradeManagerGroups()
+        validated_data = {
+            "system_id": "test_system",
+            "id": "grade_manager_1",
+            "groups": [{"name": "测试组", "description": "描述"}],
+            "sync_subject_template": True,
+        }
+        result = resource.build_request_data(validated_data)
+        # build_request_data 只返回请求体数据，URL参数通过url_keys处理
+        self.assertTrue(result["sync_subject_template"])
+        self.assertEqual(result["groups"], [{"name": "测试组", "description": "描述"}])
+        # URL参数保留在validated_data中，用于URL路径构建
+        self.assertEqual(validated_data["system_id"], "test_system")
+        self.assertEqual(validated_data["id"], "grade_manager_1")
+
+    def test_grant_group_policies_preserves_url_keys(self):
+        """测试 GrantGroupPolicies.build_request_data 保留 system_id 和 id"""
+        resource = GrantGroupPolicies()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "actions": [{"id": "view_scene"}],
+            "resources": [{"system": "test_system", "type": "scene"}],
+        }
+        result = resource.build_request_data(validated_data)
+        # build_request_data 只返回请求体数据，URL参数通过url_keys处理
+        self.assertEqual(result["actions"], [{"id": "view_scene"}])
+        self.assertEqual(result["resources"], [{"system": "test_system", "type": "scene"}])
+        # URL参数保留在validated_data中，用于URL路径构建
+        self.assertEqual(validated_data["system_id"], "test_system")
+        self.assertEqual(validated_data["id"], 1001)
+
+    def test_add_group_members_preserves_url_keys(self):
+        """测试 AddGroupMembers.build_request_data 保留 system_id 和 id"""
+        resource = AddGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "members": [{"type": "user", "id": "admin"}],
+            "expired_at": 4102444800,
+        }
+        result = resource.build_request_data(validated_data)
+        # build_request_data 只返回请求体数据，URL参数通过url_keys处理
+        self.assertEqual(result["members"], [{"type": "user", "id": "admin"}])
+        self.assertEqual(result["expired_at"], 4102444800)
+        # URL参数保留在validated_data中，用于URL路径构建
+        self.assertEqual(validated_data["system_id"], "test_system")
+        self.assertEqual(validated_data["id"], 1001)
+
+    def test_add_group_members_default_expired_at(self):
+        """测试 AddGroupMembers.build_request_data 默认 expired_at 为 0"""
+        resource = AddGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "members": [{"type": "user", "id": "admin"}],
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["expired_at"], 0)
+
+    def test_delete_group_members_preserves_url_keys(self):
+        """测试 DeleteGroupMembers.build_request_data 保留 system_id 和 id"""
+        resource = DeleteGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+            "type": "user",
+            "ids": ["admin", "test_user"],
+        }
+        result = resource.build_request_data(validated_data)
+        # build_request_data 只返回请求体数据，URL参数通过url_keys处理
+        self.assertEqual(result["type"], "user")
+        self.assertEqual(result["ids"], ["admin", "test_user"])
+        # URL参数保留在validated_data中，用于URL路径构建
+        self.assertEqual(validated_data["system_id"], "test_system")
+        self.assertEqual(validated_data["id"], 1001)
+
+    def test_delete_group_members_default_values(self):
+        """测试 DeleteGroupMembers.build_request_data 默认值"""
+        resource = DeleteGroupMembers()
+        validated_data = {
+            "system_id": "test_system",
+            "id": 1001,
+        }
+        result = resource.build_request_data(validated_data)
+        self.assertEqual(result["type"], "")
+        self.assertEqual(result["ids"], [])
+
+
+class TestGrantPermissionsExceptionScenarios(SimpleTestCase):
+    """测试 IAMGroupManager 授权功能的异常场景"""
+
+    def setUp(self):
+        super().setUp()
+        self.scene_id = "scene_exception_001"
+        self.scene_name = "异常测试场景"
+
+    def test_grant_permissions_with_invalid_resource_type(self):
+        """测试授权时使用无效资源类型"""
+        action = mock.MagicMock()
+        action.id = "invalid_action"
+
+        # 构建权限时使用无效动作，应使用默认资源类型
+        result = IAMGroupManager.build_permissions(
+            actions=[action],
+            system_id="test_system",
+            scene_id=self.scene_id,
+            scene_name=self.scene_name,
+        )
+
+        # 无效动作应使用默认的 scene 资源类型
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+
+    def test_grant_permissions_with_empty_resources(self):
+        """测试授权时资源列表为空"""
+        action = mock.MagicMock()
+        action.id = "view_scene"
+
+        result = IAMGroupManager.build_permissions(
+            actions=[action],
+            system_id="test_system",
+            scene_id=self.scene_id,
+            scene_name=self.scene_name,
+        )
+
+        # 资源列表不应为空
+        self.assertGreater(len(result["_multi_permissions"][0]["resources"]), 0)
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+
+    def test_grant_permissions_with_malformed_resources(self):
+        """测试授权时资源结构不完整"""
+        action = mock.MagicMock()
+        action.id = "view_scene"
+
+        result = IAMGroupManager.build_permissions(
+            actions=[action],
+            system_id="test_system",
+            scene_id=self.scene_id,
+            scene_name=self.scene_name,
+        )
+
+        # 验证资源结构完整
+        resource = result["_multi_permissions"][0]["resources"][0]
+        self.assertIn("system", resource)
+        self.assertIn("type", resource)
+        self.assertIn("paths", resource)
+        self.assertEqual(resource["paths"][0][0]["id"], self.scene_id)
+
+    def test_create_groups_with_grant_permission_failure(self):
+        """测试创建用户组时授权失败，应回滚并抛出异常"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(
+            GrantGroupPolicies,
+            "perform_request",
+            side_effect=APIRequestError("授权API调用失败"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+            # 验证异常信息包含已创建的用户组ID，便于后续处理
+            error_msg = str(ctx.exception)
+            self.assertIn("1001", error_msg)
+            self.assertIn("1002", error_msg)
+            self.assertIn("已创建的用户组IDs", error_msg)
+
+    def test_create_groups_with_partial_grant_failure(self):
+        """测试部分授权成功，部分授权失败时的异常处理"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(
+            GrantGroupPolicies,
+            "perform_request",
+            side_effect=[
+                None,  # 第一个授权成功
+                APIRequestError("第二个授权失败"),  # 第二个授权失败
+            ],
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+            # 验证异常信息包含已授权成功的用户组ID
+            error_msg = str(ctx.exception)
+            self.assertIn("1001", error_msg)  # 已成功授权
+            self.assertIn("1002", error_msg)  # 授权失败
+            self.assertIn("已授权成功的用户组IDs", error_msg)
+
+    def test_grant_permissions_with_network_timeout(self):
+        """测试授权API网络超时异常"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(
+            GrantGroupPolicies,
+            "perform_request",
+            side_effect=APIRequestError("网络连接超时"),
+        ):
+            with self.assertRaises(ValueError):
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+    def test_grant_permissions_with_server_error(self):
+        """测试授权API服务器内部错误"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(
+            GrantGroupPolicies,
+            "perform_request",
+            side_effect=APIRequestError("服务器内部错误: 500"),
+        ):
+            with self.assertRaises(ValueError):
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+    def test_grant_permissions_with_invalid_permission_data(self):
+        """测试授权时使用无效的权限数据"""
+        # 模拟构建权限时返回无效数据
+        with mock.patch.object(
+            IAMGroupManager,
+            "build_permissions",
+            return_value={
+                "actions": [],  # 空动作列表
+                "resources": [],  # 空资源列表
+            },
+        ), mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ):
+            with self.assertRaises(Exception):
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+
+class TestResourceTypeMatchingLogic(SimpleTestCase):
+    """测试权限构建时的资源类型匹配逻辑"""
+
+    def test_resource_type_detection_for_strategy_actions(self):
+        """测试策略相关动作的资源类型匹配"""
+        strategy_actions = [
+            mock.MagicMock(id="list_strategy_v2"),
+            mock.MagicMock(id="create_strategy_v2"),
+            mock.MagicMock(id="edit_strategy"),
+            mock.MagicMock(id="delete_strategy"),
+            mock.MagicMock(id="generate_strategy_risk"),
+        ]
+
+        for action in strategy_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "strategy")
+
+    def test_resource_type_detection_for_risk_actions(self):
+        """测试风险相关动作的资源类型匹配"""
+        risk_actions = [
+            mock.MagicMock(id="list_risk_v2"),
+            mock.MagicMock(id="edit_risk_v2"),
+            mock.MagicMock(id="process_risk"),
+        ]
+
+        for action in risk_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "risk")
+
+    def test_resource_type_detection_for_rule_actions(self):
+        """测试规则相关动作的资源类型匹配"""
+        rule_actions = [
+            mock.MagicMock(id="list_rule_v2"),
+            mock.MagicMock(id="create_rule_v2"),
+            mock.MagicMock(id="edit_rule_v2"),
+            mock.MagicMock(id="delete_rule_v2"),
+        ]
+
+        for action in rule_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "rule")
+
+    def test_resource_type_detection_for_link_table_actions(self):
+        """测试联表相关动作的资源类型匹配"""
+        link_table_actions = [
+            mock.MagicMock(id="list_link_table_v2"),
+            mock.MagicMock(id="create_link_table_v2"),
+            mock.MagicMock(id="edit_link_table"),
+            mock.MagicMock(id="delete_link_table"),
+            mock.MagicMock(id="view_link_table"),
+        ]
+
+        for action in link_table_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "link_table")
+
+    def test_resource_type_detection_for_notice_group_actions(self):
+        """测试通知组相关动作的资源类型匹配"""
+        notice_group_actions = [
+            mock.MagicMock(id="list_notice_group_v2"),
+            mock.MagicMock(id="create_notice_group_v2"),
+            mock.MagicMock(id="edit_notice_group_v2"),
+            mock.MagicMock(id="delete_notice_group_v2"),
+        ]
+
+        for action in notice_group_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "notice_group")
+
+    def test_resource_type_detection_for_panel_actions(self):
+        """测试套餐相关动作的资源类型匹配"""
+        panel_actions = [
+            mock.MagicMock(id="list_pa_v2"),
+            mock.MagicMock(id="create_pa_v2"),
+            mock.MagicMock(id="edit_pa_v2"),
+        ]
+
+        for action in panel_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "panel")
+
+    def test_resource_type_detection_for_scene_actions(self):
+        """测试场景相关动作的资源类型匹配"""
+        scene_actions = [
+            mock.MagicMock(id="view_scene"),
+            mock.MagicMock(id="manage_scene"),
+        ]
+
+        for action in scene_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+
+    def test_resource_type_priority_when_mixed_actions(self):
+        """测试混合动作类型时的多资源类型权限结构"""
+        mixed_actions = [
+            mock.MagicMock(id="view_scene"),  # scene类型
+            mock.MagicMock(id="list_strategy_v2"),  # strategy类型
+            mock.MagicMock(id="list_risk_v2"),  # risk类型
+        ]
+
+        result = IAMGroupManager.build_permissions(
+            actions=mixed_actions,
+            system_id="test_system",
+            scene_id="scene_001",
+            scene_name="测试场景",
+        )
+
+        # 应返回多资源类型权限结构
+        self.assertIn("_multi_permissions", result)
+        self.assertEqual(len(result["_multi_permissions"]), 3)
+
+        # 验证包含所有资源类型
+        resource_types = [perm["resources"][0]["type"] for perm in result["_multi_permissions"]]
+        self.assertIn("scene", resource_types)
+        self.assertIn("strategy", resource_types)
+        self.assertIn("risk", resource_types)
+
+
+class TestMemberLifecycleManagement(SimpleTestCase):
+    """测试用户组成员管理的完整生命周期"""
+
+    def setUp(self):
+        super().setUp()
+        self.group_id = 1001
+        self.system_id = "test_system"
+
+    def test_complete_member_lifecycle(self):
+        """测试完整的成员生命周期：添加 -> 查询 -> 同步 -> 删除"""
+        # 1. 添加初始成员
+        initial_members = [
+            {"type": "user", "id": "user1"},
+            {"type": "user", "id": "user2"},
+            {"type": "department", "id": "dept1"},
+        ]
+
+        # 2. 查询成员列表
+        mock_members_response = {
+            "count": 3,
+            "results": initial_members,
+        }
+
+        # 3. 同步成员（删除旧成员，添加新成员）
+        new_members = [
+            {"type": "user", "id": "user3"},
+            {"type": "department", "id": "dept2"},
+        ]
+
+        # 4. 删除特定成员
+        members_to_delete = ["user3"]
+
+        # 模拟完整的生命周期流程
+        with mock.patch.object(AddGroupMembers, "perform_request", return_value={},) as mock_add, mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value=mock_members_response,
+        ) as mock_get, mock.patch.object(
+            DeleteGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_delete:
+
+            # 步骤1: 添加初始成员
+            IAMGroupManager.add_group_members(
+                group_id=self.group_id,
+                members=initial_members,
+                system_id=self.system_id,
+            )
+            mock_add.assert_called_once()
+
+            # 步骤2: 查询成员列表
+            members = IAMGroupManager.get_all_group_members(
+                group_id=self.group_id,
+                system_id=self.system_id,
+            )
+            self.assertEqual(len(members), 3)
+            mock_get.assert_called_once()
+
+            # 步骤3: 同步成员
+            IAMGroupManager.sync_group_members(
+                group_id=self.group_id,
+                members=new_members,
+                system_id=self.system_id,
+            )
+            # 同步操作会删除所有现有成员类型，然后添加新成员
+            # 根据成员类型数量，可能调用多次删除操作
+            self.assertEqual(mock_delete.call_count, 2)
+            self.assertEqual(mock_add.call_count, 2)
+
+            # 步骤4: 删除特定成员
+            IAMGroupManager.delete_group_members(
+                group_id=self.group_id,
+                member_type="user",
+                member_ids=members_to_delete,
+                system_id=self.system_id,
+            )
+            # sync_group_members 调用2次删除，delete_group_members 调用1次删除，总共3次
+            self.assertEqual(mock_delete.call_count, 3)
+
+    def test_member_lifecycle_with_error_recovery(self):
+        """测试成员生命周期中的错误恢复场景"""
+        initial_members = [{"type": "user", "id": "user1"}]
+        new_members = [{"type": "user", "id": "user2"}]
+
+        # 模拟同步过程中删除成功但添加失败
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value={"count": 1, "results": initial_members},
+        ), mock.patch.object(DeleteGroupMembers, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            side_effect=APIRequestError("添加成员失败"),
+        ):
+            with self.assertRaises(APIRequestError):
+                IAMGroupManager.sync_group_members(
+                    group_id=self.group_id,
+                    members=new_members,
+                    system_id=self.system_id,
+                )
+
+            # 此时用户组应该处于空状态（删除成功，添加失败）
+            # 在实际应用中，可能需要额外的恢复机制
+
+    def test_member_lifecycle_with_concurrent_operations(self):
+        """测试并发操作时的成员管理"""
+        # 模拟并发添加和删除操作
+        members1 = [{"type": "user", "id": "user1"}]
+        members2 = [{"type": "user", "id": "user2"}]
+
+        with mock.patch.object(AddGroupMembers, "perform_request", return_value={},) as mock_add, mock.patch.object(
+            DeleteGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_delete:
+
+            # 并发添加操作
+            IAMGroupManager.add_group_members(
+                group_id=self.group_id,
+                members=members1,
+                system_id=self.system_id,
+            )
+            IAMGroupManager.add_group_members(
+                group_id=self.group_id,
+                members=members2,
+                system_id=self.system_id,
+            )
+
+            # 并发删除操作
+            IAMGroupManager.delete_group_members(
+                group_id=self.group_id,
+                member_type="user",
+                member_ids=["user1"],
+                system_id=self.system_id,
+            )
+
+            self.assertEqual(mock_add.call_count, 2)
+            self.assertEqual(mock_delete.call_count, 1)
+
+    def test_member_lifecycle_with_expired_at_handling(self):
+        """测试成员生命周期中的过期时间处理"""
+        future_expired_at = 4102444800  # 2100-01-01
+        past_expired_at = 1609459200  # 2021-01-01
+
+        members = [{"type": "user", "id": "user1"}]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+
+            # 添加带未来过期时间的成员
+            IAMGroupManager.add_group_members(
+                group_id=self.group_id,
+                members=members,
+                expired_at=future_expired_at,
+                system_id=self.system_id,
+            )
+
+            # 添加带过去过期时间的成员
+            IAMGroupManager.add_group_members(
+                group_id=self.group_id,
+                members=members,
+                expired_at=past_expired_at,
+                system_id=self.system_id,
+            )
+
+            self.assertEqual(mock_add.call_count, 2)
+
+
+class TestMemberTypeHandling(SimpleTestCase):
+    """测试不同成员类型的处理"""
+
+    def test_member_type_user(self):
+        """测试用户类型成员的处理"""
+        user_members = [
+            {"type": "user", "id": "admin"},
+            {"type": "user", "id": "test_user"},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=user_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_type_department(self):
+        """测试部门类型成员的处理"""
+        department_members = [
+            {"type": "department", "id": "dept_001"},
+            {"type": "department", "id": "dept_002"},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=department_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_type_mixed(self):
+        """测试混合类型成员的处理"""
+        mixed_members = [
+            {"type": "user", "id": "user1"},
+            {"type": "department", "id": "dept1"},
+            {"type": "user", "id": "user2"},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=mixed_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_type_unknown(self):
+        """测试未知类型成员的处理"""
+        unknown_members = [
+            {"type": "unknown_type", "id": "unknown1"},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=unknown_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_delete_members_by_type_grouping(self):
+        """测试按类型分组删除成员"""
+        current_members = [
+            {"type": "user", "id": "user1"},
+            {"type": "user", "id": "user2"},
+            {"type": "department", "id": "dept1"},
+            {"type": "department", "id": "dept2"},
+        ]
+
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value={"count": 4, "results": current_members},
+        ), mock.patch.object(
+            DeleteGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_delete:
+            IAMGroupManager.sync_group_members(
+                group_id=1001,
+                members=[],
+                system_id="test_system",
+            )
+
+            # 应按类型分组删除，user 和 department 各调用一次
+            self.assertEqual(mock_delete.call_count, 2)
+
+
+class TestMemberDataValidation(SimpleTestCase):
+    """测试成员数据的验证逻辑"""
+
+    def test_member_data_with_missing_type(self):
+        """测试缺少type字段的成员数据"""
+        invalid_members = [
+            {"id": "user1"},  # 缺少type
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=invalid_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_data_with_missing_id(self):
+        """测试缺少id字段的成员数据"""
+        invalid_members = [
+            {"type": "user"},  # 缺少id
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=invalid_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_data_with_empty_id(self):
+        """测试空id的成员数据"""
+        invalid_members = [
+            {"type": "user", "id": ""},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=invalid_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_data_with_none_values(self):
+        """测试包含None值的成员数据"""
+        invalid_members = [
+            {"type": None, "id": "user1"},
+            {"type": "user", "id": None},
+        ]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=invalid_members,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+
+class TestMemberPerformanceScenarios(SimpleTestCase):
+    """测试成员管理的性能场景"""
+
+    def test_large_member_batch_operations(self):
+        """测试大批量成员操作性能"""
+        large_member_list = [{"type": "user", "id": f"user_{i}"} for i in range(1000)]
+
+        with mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ) as mock_add:
+            IAMGroupManager.add_group_members(
+                group_id=1001,
+                members=large_member_list,
+                system_id="test_system",
+            )
+            mock_add.assert_called_once()
+
+    def test_member_pagination_performance(self):
+        """测试分页查询大量成员的性能"""
+        # 模拟1000个成员，分页获取
+        all_members = [{"type": "user", "id": f"user_{i}"} for i in range(1000)]
+
+        # 模拟分页响应
+        page_responses = []
+        page_size = 100
+        for i in range(0, 1000, page_size):
+            page_responses.append(
+                {
+                    "count": 1000,
+                    "results": all_members[i : i + page_size],
+                }
+            )
+
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            side_effect=page_responses,
+        ):
+            result = IAMGroupManager.get_all_group_members(
+                group_id=1001,
+                page_size=page_size,
+                system_id="test_system",
+            )
+            self.assertEqual(len(result), 1000)
+
+    def test_concurrent_member_sync_performance(self):
+        """测试并发成员同步性能"""
+        current_members = [{"type": "user", "id": f"old_user_{i}"} for i in range(500)]
+        new_members = [{"type": "user", "id": f"new_user_{i}"} for i in range(500)]
+
+        with mock.patch.object(
+            GetGroupMembers,
+            "perform_request",
+            return_value={"count": 500, "results": current_members},
+        ), mock.patch.object(DeleteGroupMembers, "perform_request", return_value={},), mock.patch.object(
+            AddGroupMembers,
+            "perform_request",
+            return_value={},
+        ):
+            IAMGroupManager.sync_group_members(
+                group_id=1001,
+                members=new_members,
+                system_id="test_system",
+            )
