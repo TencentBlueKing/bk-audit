@@ -25,9 +25,10 @@
       <div class="action-header">
         <div class="btns-wrap">
           <auth-button
-            action-id="create_rule"
+            action-id="create_rule_v2"
             class="mr8"
-            :permission="permissionCheckData.create_rule"
+            :permission="permissionCheckData.create_rule_v2"
+            resource-is-scene
             theme="primary"
             @click="handleCreate">
             <audit-icon
@@ -36,8 +37,9 @@
             {{ t('处理规则', 2) }}
           </auth-button>
           <auth-button
-            action-id="edit_rule"
-            :permission="permissionCheckData.edit_rule"
+            action-id="edit_rule_v2"
+            :permission="permissionCheckData.edit_rule_v2"
+            resource-is-scene
             @click="handleShowBatchPriorityIndexSlider">
             {{ t('批量调整优先级') }}
           </auth-button>
@@ -62,6 +64,8 @@
         class="audit-highlight-table mt16"
         :columns="tableColumn"
         :data-source="dataSource"
+        is-need-scene-id
+        scene-id-key="scene_id"
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
@@ -90,10 +94,11 @@
             {{ t('启/停') }}
           </span>
           <auth-switch
-            v-if="!permissionCheckData.edit_rule"
-            action-id="edit_rule"
+            v-if="!permissionCheckData.edit_rule_v2"
+            action-id="edit_rule_v2"
             :model-value="riskRuleDetailItem.is_enabled"
-            :permission="permissionCheckData.edit_rule"
+            :permission="permissionCheckData.edit_rule_v2"
+            resource-is-scene
             theme="primary"
             @click="()=>handleToggle(riskRuleDetailItem)" />
           <template v-else>
@@ -105,16 +110,18 @@
                 : t('处理规则启用后，若有风险命中本规则会按照规则制定的套餐自动处理。请确认是否启用规则？')"
               :title="riskRuleDetailItem.is_enabled ? t('规则停用确认') : t('规则启用确认')">
               <auth-switch
-                action-id="edit_rule"
+                action-id="edit_rule_v2"
                 :model-value="riskRuleDetailItem.is_enabled"
-                :permission="permissionCheckData.edit_rule"
+                :permission="permissionCheckData.edit_rule_v2"
+                resource-is-scene
                 theme="primary" />
             </audit-popconfirm>
           </template>
           <auth-button
-            action-id="edit_rule"
+            action-id="edit_rule_v2"
             class="mr8 ml8"
-            :permission="permissionCheckData.edit_rule"
+            :permission="permissionCheckData.edit_rule_v2"
+            resource-is-scene
             theme="primary"
             @click="()=>handleEdit(riskRuleDetailItem)">
             {{ t('编辑') }}
@@ -135,8 +142,9 @@
               <bk-dropdown-menu>
                 <bk-dropdown-item>
                   <auth-button
-                    action-id="create_rule"
-                    :permission="permissionCheckData.create_rule"
+                    action-id="create_rule_v2"
+                    :permission="permissionCheckData.create_rule_v2"
+                    resource-is-scene
                     text
                     @click="()=>handleClone(riskRuleDetailItem)">
                     {{ t('克隆') }}
@@ -144,9 +152,10 @@
                 </bk-dropdown-item>
                 <bk-dropdown-item>
                   <auth-button
-                    v-if="!permissionCheckData.delete_rule"
-                    action-id="delete_rule"
-                    :permission="permissionCheckData.delete_rule"
+                    v-if="!permissionCheckData.delete_rule_v2"
+                    action-id="delete_rule_v2"
+                    :permission="permissionCheckData.delete_rule_v2"
+                    resource-is-scene
                     text
                     @click="()=>handleDelete(riskRuleDetailItem)">
                     {{ t('删除') }}
@@ -157,8 +166,9 @@
                     :content="t('删除后不可恢复')"
                     :title="t('确认删除？')">
                     <auth-button
-                      action-id="delete_rule"
-                      :permission="permissionCheckData.delete_rule"
+                      action-id="delete_rule_v2"
+                      :permission="permissionCheckData.delete_rule_v2"
+                      resource-is-scene
                       text>
                       {{ t('删除') }}
                     </auth-button>
@@ -207,8 +217,8 @@
   import _ from 'lodash';
   import {
     computed,
-    // nextTick,
     onMounted,
+    onUnmounted,
     ref,
   } from 'vue';
   import {
@@ -224,6 +234,7 @@
 
   import RiskRuleManageModel from '@model/risk-rule/risk-rule';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -235,6 +246,8 @@
   import BatchPriorityIndexSlider from './components/batch-priority-index-slider.vue';
   import RiskRuleDetail from './components/risk-rule-detail.vue';
   import ScopeRiskRuleDetail from './components/scope-rule-detail.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface SearchKey {
     id: string,
@@ -336,7 +349,7 @@
       field: () => 'is_enabled',
       align: 'center',
       render: ({ data }: { data: RiskRuleManageModel }) => (
-        permissionCheckData.value.edit_rule
+        permissionCheckData.value.edit_rule_v2
           ? (
             <audit-popconfirm
               confirm-text={data.is_enabled ? t('停用') : t('启用')}
@@ -347,9 +360,10 @@
               confirm-handler={() => handleToggle(data)}>
               <auth-switch
                 size="small"
-                action-id="edit_rule"
+                action-id="edit_rule_v2"
+                resource-is-scene
                 model-value={data.is_enabled}
-                permission={permissionCheckData.value.edit_rule}
+                permission={permissionCheckData.value.edit_rule_v2}
                 theme="primary"
                 />
           </audit-popconfirm>
@@ -357,9 +371,10 @@
           : (
           <auth-switch
           size="small"
-          action-id="edit_rule"
+          action-id="edit_rule_v2"
+          resource-is-scene
           model-value={data.is_enabled}
-          permission={permissionCheckData.value.edit_rule}
+          permission={permissionCheckData.value.edit_rule_v2}
           onClick = { () => handleToggle(data)}
           theme="primary"
         />
@@ -374,8 +389,9 @@
           <auth-button
             theme='primary'
             class='mr16'
-            action-id='edit_rule'
-            permission={permissionCheckData.value.edit_rule}
+            action-id='edit_rule_v2'
+            resource-is-scene
+            permission={permissionCheckData.value.edit_rule_v2}
             onClick={() => handleEdit(data)}
             text>
             {t('编辑')}
@@ -395,15 +411,16 @@
                           <bk-dropdown-item >
                             <auth-button
                               text
-                              action-id='create_rule'
-                              permission={permissionCheckData.value.create_rule}
+                              action-id='create_rule_v2'
+                              permission={permissionCheckData.value.create_rule_v2}
+                              resource-is-scene
                               onClick={() => handleClone(data)}>
                                 {t('克隆')}
                             </auth-button>
                           </bk-dropdown-item>
                           <bk-dropdown-item >
                           {
-                            permissionCheckData.value.delete_rule
+                            permissionCheckData.value.delete_rule_v2
                               ? (
                                 <audit-popconfirm
                                   title={t('确认删除？')}
@@ -411,15 +428,16 @@
                                   confirmHandler={() => handleDelete(data)}>
                                   <bk-button
                                     text
-                                    action-id='delete_rule'>
+                                    action-id='delete_rule_v2'>
                                       {t('删除')}
                                   </bk-button>
                                 </audit-popconfirm>)
                               : (
                                 <auth-button
                                   text
-                                  action-id='delete_rule'
-                                  permission={permissionCheckData.value.delete_rule}
+                                  resource-is-scene
+                                  action-id='delete_rule_v2'
+                                  permission={permissionCheckData.value.delete_rule_v2}
                                   onClick={() => handleDelete(data)}>
                                     {t('删除')}
                                 </auth-button>)
@@ -437,6 +455,8 @@
   const { t } = useI18n();
   const router = useRouter();
   const { messageSuccess } = useMessage();
+  const { on: onEvent, off } = useEventBus();
+
   const { getSearchParams, removeSearchParam, replaceSearchParams } = useUrlSearch();
   let isInit = false;
   const searchData: SearchData[] = [
@@ -489,10 +509,10 @@
   const showScopeRiskDetail = ref(false);
   const riskScopeRiskDetailItem = ref(new RiskRuleManageModel());
   const permissionCheckData = ref<Record<string, boolean>>({
-    create_rule: false,
-    edit_rule: false,
+    create_rule_v2: false,
+    edit_rule_v2: false,
     // list_event: false,
-    delete_rule: false,
+    delete_rule_v2: false,
   });
   const data = ref < RiskRuleManageModel[]>([]);
   for (let index = 0; index < 50; index++) {
@@ -556,7 +576,8 @@
   // 判断是否有全新啊
   useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_rule,edit_rule,delete_rule',
+      action_ids: 'create_rule_v2,edit_rule_v2,delete_rule_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
@@ -759,6 +780,9 @@
     listRef.value.fetchData(params);
   };
 
+  const handleSceneChange = () => {
+    listRef.value.fetchData();
+  };
 
   onMounted(() => {
     const params = getSearchParams();
@@ -774,6 +798,13 @@
     } else {
       fetchList();
     }
+    setTimeout(() => {
+      onEvent('scene:change', handleSceneChange);
+    }, 1000);
+  });
+
+  onUnmounted(() => {
+    off('scene:change', handleSceneChange);
   });
 </script>
 <style scoped lang="postcss">
