@@ -23,7 +23,9 @@
       class="notice-group-list">
       <div class="action-header">
         <auth-button
-          action-id="create_notice_group"
+          action-id="create_notice_group_v2"
+          :permission="permissionCheckData.create_notice_group_v2"
+          resource-is-scene
           style="width: 88px;"
           theme="primary"
           @click="handleCreate">
@@ -39,7 +41,9 @@
         ref="listRef"
         :columns="tableColumn"
         :data-source="dataSource"
+        is-need-scene-id
         :reverse-sort-fields="['name']"
+        scene-id-key="scene_id"
         @clear-search="handleClearSearch"
         @request-success="handleRequestSuccess" />
     </div>
@@ -62,6 +66,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
     onMounted,
+    onUnmounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -71,6 +76,7 @@
 
   import type NoticeGroupsModel from '@model/notice/notice-group';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -80,6 +86,8 @@
   import CreateGroup from '../notice-group-create/index.vue';
 
   import Detail from './components/detail.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Groups {
     page: number;
@@ -100,6 +108,10 @@
   const dataSource = NoticeManageService.fetchGroupList;
   const groupItem = ref({} as NoticeGroupsModel);
   const isNeedShowDetail = ref(false);
+  const { on: onEvent, off } = useEventBus();
+  const permissionCheckData = ref<Record<string, boolean>>({
+    create_notice_group_v2: false,
+  });
   const tableColumn = [
     {
       label: () => 'ID',
@@ -176,10 +188,14 @@
   // 获取权限
   useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_notice_group',
+      action_ids: 'create_notice_group_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
+    onSuccess: (data) => {
+      permissionCheckData.value = data;
+    },
   });
   // 删除
   const {
@@ -230,6 +246,9 @@
       isNeedShowDetail.value = false;
     }
   };
+  const handleSceneChange = () => {
+    listRef.value.fetchData();
+  };
   onMounted(() => {
     const { keyword, create } = getSearchParams();
     if (keyword) {
@@ -239,6 +258,13 @@
       handleCreate();
     }
     listRef.value.fetchData({ keyword });
+    setTimeout(() => {
+      onEvent('scene:change', handleSceneChange);
+    }, 1000);
+  });
+
+  onUnmounted(() => {
+    off('scene:change', handleSceneChange);
   });
 </script>
 <style lang="postcss">
