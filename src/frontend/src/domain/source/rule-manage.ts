@@ -68,6 +68,7 @@ class RuleManage extends ModuleBase {
       priority_index: number,
       is_enabled: boolean
     }>
+    scene_id: string | number
   }) {
     return Request.put(`${this.module}/set_priority_index/`, {
       params,
