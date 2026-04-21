@@ -53,6 +53,7 @@ class NoticeGroup extends ModuleBase {
       msg_type: string;
     }>;
     description: string;
+    scene_id: string | number;
   }) {
     return Request.post(`${this.module}/`, {
       params,
