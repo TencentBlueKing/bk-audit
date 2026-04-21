@@ -22,6 +22,7 @@ export default class ApplicationCreate {
   approve_service_id: number;
   approve_config: Record<string, any>;
   description: string;
+  scene_id: string | number;
 
   constructor(payload = {} as ApplicationCreate) {
     this.id = payload.id;
@@ -31,5 +32,6 @@ export default class ApplicationCreate {
     this.approve_service_id = payload.approve_service_id;
     this.approve_config = payload.approve_config || {};
     this.description = payload.description || '';
+    this.scene_id = payload.scene_id;
   }
 }

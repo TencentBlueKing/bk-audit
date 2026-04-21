@@ -41,6 +41,7 @@
 </script>
 <script setup lang="ts">
   import {
+    toRef,
     useAttrs,
   } from 'vue';
 
@@ -75,7 +76,7 @@
   } = useBase({
     actionId: props.actionId,
     resource: props.resourceIsScene ? getSceneSystemParams().scope_id : props.resource,
-    permission: props.permission,
+    permission: toRef(props, 'permission'),
   });
 
 </script>

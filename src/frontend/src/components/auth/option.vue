@@ -49,17 +49,22 @@
 </script>
 <script setup lang="ts">
   import {
+    toRef,
     useAttrs,
     useSlots,
   } from 'vue';
 
   import useBase from './use-base';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   /* eslint-disable vue/no-unused-properties */
   interface Props {
     permission?: boolean | string,
     actionId: string,
     resource?: string | number,
+    resourceIsScene?: boolean,
+
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -73,7 +78,11 @@
   const {
     isShowRaw,
     handleRequestPermission,
-  } = useBase(props);
+  } = useBase({
+    actionId: props.actionId,
+    resource: props.resourceIsScene ? getSceneSystemParams().scope_id : props.resource,
+    permission: toRef(props, 'permission'),
+  });
 
 </script>
 <style lang="postcss" scoped>

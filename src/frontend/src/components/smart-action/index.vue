@@ -48,7 +48,7 @@
   } from 'vue';
 
   interface Props {
-    offsetTarget: () => Element | null;
+    offsetTarget?: () => Element | null;
     fill?: number;
   }
 
