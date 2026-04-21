@@ -161,11 +161,9 @@
     });
   });
   watch(() => props.total, (data) => {
-    if (data) {
-      nextTick(() => {
-        all.value[0].link_table_count = data;
-      });
-    }
+    nextTick(() => {
+      all.value[0].link_table_count = data;
+    });
   }, {
     immediate: true,
   });
