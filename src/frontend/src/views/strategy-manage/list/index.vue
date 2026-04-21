@@ -1542,10 +1542,16 @@
     }
   };
   const handlFetchData = () => {
+    total.value = 0;
+    groupList.value.results = [];
+    isRequest = false;
     listRef.value.fetchData();
   };
   onMounted(() => {
-    onEvent('scene:change', handlFetchData);
+    fetchData();
+    setTimeout(() => {
+      onEvent('scene:change', handlFetchData);
+    }, 1000);
   });
   onUnmounted(() => {
     off('scene:change', handlFetchData);

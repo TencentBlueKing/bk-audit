@@ -128,6 +128,8 @@
     needEmptySearchTip?:boolean,
     // 是否需要场景参数
     isNeedSceneParams?: boolean,
+    // 是否需要场景ID
+    isNeedSceneId?: boolean,
   }
 
   interface ISettings{
@@ -158,7 +160,8 @@
     needEmptySearchTip: true,
     paginationValidator: undefined,
     settings: undefined,
-    isNeedSceneParams: false,
+    cc: false,
+    isNeedSceneId: false,
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -221,8 +224,7 @@
       .then((result: boolean) => {
         if (result) {
           // 如果存在 sort，则删除 order_field 和 order_type 字段
-          const { isNeedSceneParams } = props;
-
+          const { isNeedSceneParams, isNeedSceneId } = props;
           const cleanedParams = { ...paramsMemo };
           if (cleanedParams.sort) {
             delete cleanedParams.order_field;
@@ -234,6 +236,7 @@
             page: isUnload.value ? 1 : pagination.current,
             page_size: pageSize,
             ...(isNeedSceneParams ? getSceneSystemParams() : {}),
+            ...(isNeedSceneId ? { scope_id: getSceneSystemParams().scope_id } : {}),
           };
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
