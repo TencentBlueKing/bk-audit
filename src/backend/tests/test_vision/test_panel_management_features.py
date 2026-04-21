@@ -424,3 +424,162 @@ class TestPanelManagementFeatures(TestCase):
                 "priority_index": 1,
             },
         )
+
+
+class TestVisionIdFeature(TestCase):
+    """测试 vision_id 字段在创建/更新报表时的传入与持久化"""
+
+    def setUp(self):
+        self.scene1 = Scene.objects.create(name="场景A", managers=["admin"], users=["u1"])
+        self.scene_group = SceneReportGroup.objects.create(
+            scene=self.scene1,
+            name="自定义分组",
+            group_type=ReportGroupType.CUSTOM,
+            priority_index=1,
+        )
+
+    def test_create_platform_panel_with_vision_id(self):
+        """创建平台报表时传入 vision_id，应正确持久化"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "带vision_id的平台报表",
+                "vision_id": "bk_vision_dashboard_001",
+                "status": "published",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "bk_vision_dashboard_001")
+
+    def test_create_platform_panel_without_vision_id(self):
+        """创建平台报表时不传 vision_id，应为 None"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "无vision_id的平台报表",
+                "visibility": {
+                    "visibility_type": VisibilityScope.ALL_VISIBLE,
+                    "scene_ids": [],
+                    "system_ids": [],
+                },
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertIsNone(panel.vision_id)
+
+    def test_create_platform_panel_auto_generates_id(self):
+        """创建平台报表时 id 应自动生成（UUID），不依赖前端传入"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "自动ID的平台报表",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertIsNotNone(panel.id)
+        self.assertEqual(len(panel.id), 32)
+
+    def test_update_platform_panel_vision_id(self):
+        """更新平台报表时修改 vision_id，应正确持久化"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "待更新vision_id的平台报表",
+                "vision_id": "old_vision_id",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        UpdatePlatformPanel().request(
+            {
+                "panel_id": resp["id"],
+                "vision_id": "new_vision_id",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "new_vision_id")
+
+    def test_update_platform_panel_clear_vision_id(self):
+        """更新平台报表时将 vision_id 置空"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "待清空vision_id的平台报表",
+                "vision_id": "will_be_cleared",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        UpdatePlatformPanel().request(
+            {
+                "panel_id": resp["id"],
+                "vision_id": "",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "")
+
+    def test_create_scene_panel_with_vision_id(self):
+        """创建场景报表时传入 vision_id，应正确持久化"""
+        resp = CreateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "带vision_id的场景报表",
+                "vision_id": "scene_vision_001",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "scene_vision_001")
+
+    def test_create_scene_panel_without_vision_id(self):
+        """创建场景报表时不传 vision_id，应为 None"""
+        resp = CreateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "无vision_id的场景报表",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertIsNone(panel.vision_id)
+
+    def test_create_scene_panel_auto_generates_id(self):
+        """创建场景报表时 id 应自动生成（UUID），不依赖前端传入"""
+        resp = CreateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "自动ID的场景报表",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertIsNotNone(panel.id)
+        self.assertEqual(len(panel.id), 32)
+
+    def test_update_scene_panel_vision_id(self):
+        """更新场景报表时修改 vision_id，应正确持久化"""
+        resp = CreateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "待更新vision_id的场景报表",
+                "vision_id": "old_scene_vision",
+            }
+        )
+        UpdateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "panel_id": resp["id"],
+                "vision_id": "new_scene_vision",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "new_scene_vision")

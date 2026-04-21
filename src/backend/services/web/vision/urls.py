@@ -31,8 +31,10 @@ router.register("variable", views.VariableViewSet)
 router.register("share", views.ShareViewSet)
 
 # 场景报表管理：/panel/platform/ 和 /panel/scene/ 风格
+# 注意：panel/scene/group 必须在 panel/scene 之前注册，
+# 否则 "group" 会被 DefaultRouter 误匹配为 panel/scene/{pk} 的 pk 值，导致 405
 router.register("panel/platform", views.PlatformPanelViewSet)
-router.register("panel/scene", views.ScenePanelManageViewSet)
 router.register("panel/scene/group", views.SceneReportGroupManageViewSet)
+router.register("panel/scene", views.ScenePanelManageViewSet)
 
 urlpatterns = router.urls

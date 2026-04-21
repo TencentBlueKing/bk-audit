@@ -227,6 +227,12 @@ class SceneScopeToolDeleteRequestSerializer(ToolRetrieveRequestSerializer):
     scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
 
 
+class SceneScopeToolPublishRequestSerializer(ToolRetrieveRequestSerializer):
+    """场景级工具上架/下架请求（scene_id 必填）"""
+
+    scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
+
+
 class ToolListAllResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")

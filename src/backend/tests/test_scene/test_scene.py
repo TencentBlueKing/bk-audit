@@ -1516,6 +1516,25 @@ class TestToolResources(TestCase):
         updated_tool = Tool.last_version_tool(self.platform_tool.uid)
         self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
+    def test_publish_scene_tool(self):
+        """测试上架/下架场景级工具"""
+        self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
+        updated_tool = Tool.last_version_tool(self.scene_tool.uid)
+        self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
+
+        self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
+        updated_tool = Tool.last_version_tool(self.scene_tool.uid)
+        self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
+    def test_publish_scene_tool_not_exist(self):
+        """测试上架/下架非本场景工具（应失败）"""
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        with self.assertRaises(SceneToolNotExist):
+            self.resource.tool.publish_scene_scope_tool(
+                {"scene_id": self.scene.scene_id, "uid": self.another_scene_tool.uid}
+            )
+
     def test_create_scene_tool(self):
         """测试创建场景级工具"""
         result = self.resource.tool.create_scene_scope_tool(

@@ -96,9 +96,10 @@ class SceneScopeToolViewSet(ResourceViewSet):
     """
     场景级工具增删改 ViewSet（场景管理员）
 
-    POST   /api/v1/tool/scene/                 创建场景级工具
-    PUT    /api/v1/tool/scene/{uid}/           编辑场景级工具
-    DELETE /api/v1/tool/scene/{uid}/           删除场景级工具
+    POST   /api/v1/tool/scene/                  创建场景级工具
+    PUT    /api/v1/tool/scene/{uid}/            编辑场景级工具
+    DELETE /api/v1/tool/scene/{uid}/            删除场景级工具
+    POST   /api/v1/tool/scene/{uid}/publish/    上架/下架
     """
 
     def get_scene_id(self):
@@ -117,4 +118,5 @@ class SceneScopeToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.create_scene_scope_tool),
         ResourceRoute("PUT", resource.tool.update_scene_scope_tool, pk_field="uid"),
         ResourceRoute("DELETE", resource.tool.delete_scene_scope_tool, pk_field="uid"),
+        ResourceRoute("POST", resource.tool.publish_scene_scope_tool, endpoint="publish", pk_field="uid"),
     ]
