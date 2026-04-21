@@ -44,8 +44,10 @@
       </p>
       <div class="btns">
         <auth-button
-          action-id="edit_rule"
+          action-id="edit_rule_v2"
           class="mr8"
+          :permission="permissionCheckData.edit_rule_v2"
+          resource-is-scene
           theme="primary"
           @click="handleSubmit">
           {{ t('去调整规则优先级') }}
@@ -66,7 +68,12 @@
     useRouter,
   } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
+
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Exposes{
     show():void,
@@ -92,6 +99,21 @@
     });
     messageSuccess(t('新建成功'));
   };
+  const permissionCheckData = ref<Record<string, boolean>>({
+    edit_rule_v2: false,
+  });
+  // 判断是否有全新啊
+  useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'edit_rule_v2',
+      resources: getSceneSystemParams().scope_id,
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      permissionCheckData.value = data;
+    },
+  });
   defineExpose<Exposes>({
     show() {
       isShow.value = true;

@@ -19,6 +19,8 @@ import type RiskRuleCreateModel from '@model/risk-rule/rule-create';
 
 import RiskRuleManageSource from '../source/rule-manage';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export default {
   /**
    * @desc 获取风险处理规则列表
@@ -41,7 +43,7 @@ export default {
    * @param { Object } params
    */
   create(params: RiskRuleCreateModel) {
-    return RiskRuleManageSource.create(params)
+    return RiskRuleManageSource.create({ ...params, scene_id: getSceneSystemParams().scope_id })
       .then(({ data }) => data);
   },
   /**
@@ -70,7 +72,7 @@ export default {
       is_enabled: boolean
     }>
   }) {
-    return RiskRuleManageSource.setPriorityIndex(params)
+    return RiskRuleManageSource.setPriorityIndex({ ...params, scene_id: getSceneSystemParams().scope_id })
       .then(({ data }) => data);
   },
   /**

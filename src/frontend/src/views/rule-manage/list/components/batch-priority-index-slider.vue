@@ -86,6 +86,9 @@
   import { changeConfirm } from '@utils/assist';
   import getAssetsFile from '@utils/getAssetsFile';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+
   interface Emits{
     (e: 'showDetail', data: RiskRuleManageModel): void,
     (e:'refreshList'): void,
@@ -148,7 +151,7 @@
     {
       label: () => t('启用/停用'),
       render: ({ data }: { data: RiskRuleManageModel }) => (
-        props.permissionCheckData.edit_rule
+        props.permissionCheckData.edit_rule_v2
           ? (
             <audit-popconfirm
               confirm-text={data.is_enabled ? t('停用') : t('启用')}
@@ -158,20 +161,22 @@
               title={data.is_enabled ? t('规则停用确认') : t('规则启用确认')}
               confirm-handler={() => handleToggle(data)}>
               <auth-switch
-              action-id="edit_rule"
+              action-id="edit_rule_v2"
               class='ignore-drag'
+              resource-is-scene
               model-value={data.is_enabled}
-              permission={props.permissionCheckData.edit_rule}
+              permission={props.permissionCheckData.edit_rule_v2}
               theme="primary"
               />
           </audit-popconfirm>
           )
           : (<auth-switch
-            action-id="edit_rule"
+            action-id="edit_rule_v2"
             class='ignore-drag'
             model-value={data.is_enabled}
+            resource-is-scene
             onClick = { () => handleToggle(data)}
-            permission={props.permissionCheckData.edit_rule}
+            permission={props.permissionCheckData.edit_rule_v2}
             theme="primary"
             />
           )
@@ -351,6 +356,7 @@
       fetchRuleList({
         page: 1,
         page_size: 5000,
+        scene_id: getSceneSystemParams().scope_id,
       });
     },
   });
