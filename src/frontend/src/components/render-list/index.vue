@@ -130,6 +130,7 @@
     isNeedSceneParams?: boolean,
     // 是否需要场景ID
     isNeedSceneId?: boolean,
+    sceneIdKey?: string
   }
 
   interface ISettings{
@@ -162,6 +163,7 @@
     settings: undefined,
     cc: false,
     isNeedSceneId: false,
+    sceneIdKey: 'scope_id',
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -236,7 +238,7 @@
             page: isUnload.value ? 1 : pagination.current,
             page_size: pageSize,
             ...(isNeedSceneParams ? getSceneSystemParams() : {}),
-            ...(isNeedSceneId ? { scope_id: getSceneSystemParams().scope_id } : {}),
+            ...(isNeedSceneId ? { [props.sceneIdKey]: getSceneSystemParams().scope_id } : {}),
           };
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
