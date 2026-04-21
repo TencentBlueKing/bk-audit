@@ -182,7 +182,7 @@
     });
   });
   watch(() => props.total, (data) => {
-    if (data) {
+    if (data !== undefined && data !== null) {
       nextTick(() => {
         all.value[0].strategy_count = data;
       });
@@ -191,7 +191,7 @@
     immediate: true,
   });
   watch(() => props.upgradeTotal, (data) => {
-    if (data) {
+    if (data !== undefined && data !== null) {
       nextTick(() => {
         all.value[1].strategy_count = data;
       });
