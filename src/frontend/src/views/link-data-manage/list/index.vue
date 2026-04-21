@@ -132,7 +132,7 @@
   const detailRef = ref();
   const renderLabelRef = ref();
   const isNeedShowDetail = ref(false);
-
+  const isChangeScene = ref(false);
   const validateValues = async (item: Record<string, any>, value: Array<Arrays>) => {
     if (item && item.id === 'tags') {
       const tag = value[0].id;
@@ -470,12 +470,17 @@
       ];
       setSearchKey();
     });
-    total.value = data.total > total.value ? data.total : total.value;
+    if (!isChangeScene.value) {
+      total.value = data.total > total.value ? data.total : total.value;
+    } else {
+      total.value = data.total;
+    }
     const { uid } = getSearchParams();
     if (uid && isNeedShowDetail.value && data.results.length) {
       detailRef.value.show(uid);
       isNeedShowDetail.value = false;
     }
+    isChangeScene.value = false;
   };
 
   const handleSettingChange = (setting: ISettings) => {
@@ -558,20 +563,22 @@
       listRef.value.fetchData();
     }
   };
-
+  const handlFetchData = () => {
+    console.log('11');
+    isChangeScene.value = true;
+    total.value = 0;
+    listRef.value.fetchData();
+  };
   onMounted(() => {
     fetchData();
-    onEvent('scene:change', handleSceneRefresh);
+    setTimeout(() => {
+      onEvent('scene:change', handlFetchData);
+    }, 1000);
   });
 
   onUnmounted(() => {
-    off('scene:change', handleSceneRefresh);
+    off('scene:change', handlFetchData);
   });
-
-  // 监听场景切换事件，刷新表格数据
-  const handleSceneRefresh = () => {
-    listRef.value?.fetchData();
-  };
 </script>
 <style scoped lang="postcss">
 .link-data-manage {

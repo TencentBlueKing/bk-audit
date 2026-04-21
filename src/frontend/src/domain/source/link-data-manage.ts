@@ -68,7 +68,8 @@ class LinkDataManage extends ModuleBase {
   addLinkData(params: {
     table_name: string;
     tags: Array<string>;
-    links: LinkDataDetailModel['config']['links']
+    links: LinkDataDetailModel['config']['links'],
+    scene_id: string | number;
   }) {
     return Request.post(`${this.path}/link_table/`, {
       params,

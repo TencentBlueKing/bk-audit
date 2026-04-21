@@ -19,6 +19,7 @@ import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
 import LinkDataSource from '../source/link-data-manage';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
 export default {
 
@@ -81,8 +82,9 @@ export default {
     table_name: string;
     tags: Array<string>;
     links: LinkDataDetailModel['config']['links']
+    scene_id: string | number;
   }) {
-    return LinkDataSource.addLinkData(params)
+    return LinkDataSource.addLinkData({ ...params, scene_id: getSceneSystemParams().scope_id })
       .then(({ data }) => data);
   },
   /**
