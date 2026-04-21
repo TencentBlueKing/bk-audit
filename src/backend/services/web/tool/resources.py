@@ -83,6 +83,7 @@ from services.web.tool.serializers import (
     PlatformSceneToolUpdateRequestSerializer,
     SceneScopeToolCreateRequestSerializer,
     SceneScopeToolDeleteRequestSerializer,
+    SceneScopeToolPublishRequestSerializer,
     SceneScopeToolUpdateRequestSerializer,
     ScopeBindingRequestSerializer,
     SqlAnalyseRequestSerializer,
@@ -1425,7 +1426,6 @@ class PublishPlatformSceneTool(ToolBase):
         ).first()
         if not binding:
             raise SceneToolNotExist()
-        self._ensure_binding_integrity_or_raise(binding)
 
         tool = Tool.last_version_tool(uid)
         if not tool:
@@ -1530,3 +1530,46 @@ class DeleteSceneScopeTool(DeleteTool):
 
         # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
         return super().perform_request(validated_request_data)
+
+
+class PublishSceneScopeTool(ToolBase):
+    """上架/下架场景级工具"""
+
+    name = gettext_lazy("上架/下架场景级工具")
+    RequestSerializer = SceneScopeToolPublishRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+        )
+        from services.web.scene.models import ResourceBinding
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        scene_id = validated_request_data["scene_id"]
+        uid = validated_request_data.get("uid")
+
+        # 通过 ResourceBinding + ResourceBindingScene 确认是该场景的工具
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=uid,
+            binding_type=BindingType.SCENE_BINDING,
+        ).first()
+        if not binding:
+            raise SceneToolNotExist()
+        self._ensure_binding_integrity_or_raise(binding)
+
+        if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
+            raise SceneToolNotExist()
+
+        tool = Tool.last_version_tool(uid)
+        if not tool:
+            raise SceneToolNotExist()
+
+        if tool.status == PanelStatus.PUBLISHED:
+            tool.status = PanelStatus.UNPUBLISHED
+        else:
+            tool.status = PanelStatus.PUBLISHED
+        tool.save(update_fields=["status"])
+        return tool

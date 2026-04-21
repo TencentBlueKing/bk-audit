@@ -378,7 +378,8 @@ class CreatePlatformPanel(BKVision):
         visibility_data = validated_request_data.pop("visibility", None) or {}
         with transaction.atomic():
             panel = VisionPanel.objects.create(
-                id=validated_request_data.get("id") or unique_id(),
+                id=unique_id(),
+                vision_id=validated_request_data.get("vision_id"),
                 name=validated_request_data["name"],
                 category=validated_request_data.get("category", ""),
                 description=validated_request_data.get("description", ""),
@@ -440,7 +441,7 @@ class UpdatePlatformPanel(BKVision):
 
         visibility_data = validated_request_data.pop("visibility", None)
         with transaction.atomic():
-            for field in ["name", "category", "description", "status"]:
+            for field in ["name", "category", "description", "status", "vision_id"]:
                 if field in validated_request_data:
                     setattr(panel, field, validated_request_data[field])
             panel.save()
@@ -557,7 +558,8 @@ class CreateScenePanel(BKVision):
 
         with transaction.atomic():
             panel = VisionPanel.objects.create(
-                id=validated_request_data.get("id") or unique_id(),
+                id=unique_id(),
+                vision_id=validated_request_data.get("vision_id"),
                 name=validated_request_data["name"],
                 category=validated_request_data.get("category", ""),
                 description=validated_request_data.get("description", ""),
@@ -613,7 +615,7 @@ class UpdateScenePanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
-        for field in ["name", "category", "description"]:
+        for field in ["name", "category", "description", "vision_id"]:
             if field in validated_request_data:
                 setattr(panel, field, validated_request_data[field])
         panel.save()
