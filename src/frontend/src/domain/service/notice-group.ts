@@ -20,6 +20,8 @@ import NoticeGroupsModel from '@model/notice/notice-group';
 
 import NoticeGroupSource from '../source/notice-group';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export default {
 
   /**
@@ -57,8 +59,9 @@ export default {
       msg_type: string;
     }>;
     description: string;
+    scene_id: string | number;
   }) {
-    return NoticeGroupSource.addGroup(params)
+    return NoticeGroupSource.addGroup({ ...params, scene_id: getSceneSystemParams().scope_id })
       .then(({ data }) => data);
   },
   /**
