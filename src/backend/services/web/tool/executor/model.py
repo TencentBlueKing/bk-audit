@@ -15,14 +15,18 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Annotated, List, Union
+from typing import Annotated, List, Literal, Union
 
 from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 from rest_framework.fields import JSONField
 
-from services.web.tool.constants import ApiToolErrorType, ApiVariablePosition
+from services.web.tool.constants import (
+    ApiToolErrorType,
+    ApiVariablePosition,
+    SmartPageDataSourceTypeEnum,
+)
 
 DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE = 100
 AnyValue = Annotated[Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)]
@@ -104,3 +108,31 @@ class ApiRequestParam(BaseModel):
     name: str = PydanticField(..., title="参数名")
     value: AnyValue = PydanticField(..., title="参数值")
     position: ApiVariablePosition = PydanticField(..., title="参数位置")
+
+
+class SmartPageExecuteParams(BaseModel):
+    """智能页面工具统一执行参数。"""
+
+    data_source_name: str = PydanticField(..., title="数据源名称")
+    params: dict = PydanticField(default_factory=dict, title="执行参数")
+
+
+class SmartPageSqlTemplateExecuteResult(BaseModel):
+    """SQL 模板数据源执行结果。"""
+
+    data_source_type: Literal[SmartPageDataSourceTypeEnum.SQL_TEMPLATE] = SmartPageDataSourceTypeEnum.SQL_TEMPLATE
+    results: List[dict] = PydanticField(default_factory=list, title="查询结果")
+    rendered_sql: str = PydanticField(..., title="渲染后的SQL")
+
+
+SmartPageExecuteResultUnion = Annotated[
+    Union[SmartPageSqlTemplateExecuteResult],
+    PydanticField(discriminator="data_source_type"),
+]
+
+
+class SmartPageExecuteResult(BaseModel):
+    """智能页面工具统一执行结果。"""
+
+    data_source_name: str = PydanticField(..., title="数据源名称")
+    result: SmartPageExecuteResultUnion = PydanticField(..., title="类型化结果")

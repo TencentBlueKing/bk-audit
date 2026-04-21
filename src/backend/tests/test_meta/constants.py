@@ -651,6 +651,7 @@ GLOBAL_CHOICES = {
         {'id': 'data_search', 'name': '数据查询'},
         {'id': 'api', 'name': 'API'},
         {'id': 'bk_vision', 'name': 'BK Vision'},
+        {'id': 'smart_page', 'name': '智能页面'},
     ],
     'api_variable_position': [
         {'id': 'query', 'name': '查询参数'},

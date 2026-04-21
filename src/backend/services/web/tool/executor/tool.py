@@ -34,6 +34,10 @@ from services.web.tool.constants import (
     ApiVariablePosition,
     BkVisionConfig,
     DataSearchConfigTypeEnum,
+    SmartPageDataSourceConfigUnion,
+    SmartPageDataSourceTypeEnum,
+    SmartPageSqlTemplateDataSourceConfig,
+    SmartPageToolConfig,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
     ToolTypeEnum,
@@ -43,6 +47,8 @@ from services.web.tool.exceptions import (
     BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
+    SmartPageDataSourceNotFound,
+    SmartPageDataSourceTypeNotSupport,
     ToolTypeNotSupport,
 )
 from services.web.tool.executor.auth import AuthHandlerFactory
@@ -54,11 +60,58 @@ from services.web.tool.executor.model import (
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
     DataSearchToolExecuteResult,
+    SmartPageExecuteParams,
+    SmartPageExecuteResult,
+    SmartPageSqlTemplateExecuteResult,
 )
 from services.web.tool.executor.parser import ApiVariableParser, SqlVariableParser
+from services.web.tool.executor.smart_page import render_sql_template
 from services.web.tool.models import Tool
 from services.web.tool.permissions import check_bkvision_share_permission
 from services.web.vision.handlers.query import VisionHandler
+
+
+class BaseSmartPageDataSourceExecutor(abc.ABC):
+    """Smart Page 数据源执行器基类。"""
+
+    @classmethod
+    @abc.abstractmethod
+    def execute(
+        cls,
+        executor: "SmartPageExecutor",
+        data_source: SmartPageDataSourceConfigUnion,
+        params: SmartPageExecuteParams,
+    ) -> SmartPageExecuteResult:
+        raise NotImplementedError()
+
+
+class SmartPageSqlTemplateExecutor(BaseSmartPageDataSourceExecutor):
+    """SQL 模板数据源执行器。"""
+
+    @classmethod
+    def execute(
+        cls,
+        executor: "SmartPageExecutor",
+        data_source: SmartPageSqlTemplateDataSourceConfig,
+        params: SmartPageExecuteParams,
+    ) -> SmartPageExecuteResult:
+        rendered_sql = render_sql_template(data_source.config.sql_template, params.params)
+
+        logger.info(f"[{cls.__name__}] Execute SQL: {rendered_sql}")
+        try:
+            bulk_resp = api.bk_base.query_sync.bulk_request([{"sql": rendered_sql}])
+        except APIRequestError as e:
+            logger.error(f"[{cls.__name__}] Request BKBASE Error: {e}")
+            raise BkbaseApiRequestError(sql=rendered_sql)
+
+        return SmartPageExecuteResult(
+            data_source_name=data_source.name,
+            result=SmartPageSqlTemplateExecuteResult(
+                results=bulk_resp[0].get("list", []),
+                rendered_sql=rendered_sql,
+            ),
+        )
+
 
 TConfig = TypeVar('TConfig', bound=BaseModel)
 TParams = TypeVar('TParams', bound=BaseModel)
@@ -408,6 +461,53 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             raise ApiToolExecuteError(status_code=500, detail=gettext("请求异常，请联系系统管理员"))
 
 
+class SmartPageExecutor(BaseToolExecutor[SmartPageToolConfig, SmartPageExecuteParams, SmartPageExecuteResult]):
+    """智能页面执行器"""
+
+    DATA_SOURCE_EXECUTOR_MAPPING: Dict[str, Type[BaseSmartPageDataSourceExecutor]] = {
+        SmartPageDataSourceTypeEnum.SQL_TEMPLATE.value: SmartPageSqlTemplateExecutor,
+    }
+
+    @classmethod
+    def _parse_config(cls, config: Any) -> SmartPageToolConfig:
+        return SmartPageToolConfig.model_validate(config)
+
+    def _parse_params(self, params: dict) -> SmartPageExecuteParams:
+        return SmartPageExecuteParams.model_validate(params)
+
+    @classmethod
+    def register_data_source_executor(
+        cls,
+        data_source_type: SmartPageDataSourceTypeEnum,
+        executor_cls: Type[BaseSmartPageDataSourceExecutor],
+    ):
+        """注册数据源类型到执行器的映射。"""
+        cls.DATA_SOURCE_EXECUTOR_MAPPING[str(data_source_type)] = executor_cls
+
+    @classmethod
+    def get_data_source_executor(
+        cls,
+        data_source_type: SmartPageDataSourceTypeEnum,
+    ) -> Type[BaseSmartPageDataSourceExecutor]:
+        """根据数据源类型获取对应执行器。"""
+        executor_cls = cls.DATA_SOURCE_EXECUTOR_MAPPING.get(str(data_source_type))
+        if not executor_cls:
+            raise SmartPageDataSourceTypeNotSupport(str(data_source_type))
+        return executor_cls
+
+    def _execute(self, params: SmartPageExecuteParams) -> SmartPageExecuteResult:
+        """按数据源名定位类型，再分发给对应的数据源执行器。"""
+        data_source = next(
+            (item for item in self.config.data_sources if item.name == params.data_source_name),
+            None,
+        )
+        if data_source is None:
+            raise SmartPageDataSourceNotFound(params.data_source_name)
+
+        data_source_executor = self.get_data_source_executor(data_source.data_source_type)
+        return data_source_executor.execute(executor=self, data_source=data_source, params=params)
+
+
 class ToolExecutorFactory:
     """工具执行器工厂"""
 
@@ -423,6 +523,8 @@ class ToolExecutorFactory:
             return BkVisionExecutor(tool)
         elif tool.tool_type == ToolTypeEnum.API.value:
             return ApiToolExecutor(tool)
+        elif tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            return SmartPageExecutor(tool)
         # 其他数据查询类型...
         raise ToolTypeNotSupport()
 
@@ -442,5 +544,5 @@ class ToolExecutorFactory:
             return SqlDataSearchExecutor(config, analyzer_cls=self.sql_analyzer_cls)
         elif tool_type == ToolTypeEnum.API.value:
             return ApiToolExecutor(config)
-        # BkVision 不支持调试执行
+        # BkVision / SmartPage 不支持调试执行
         raise ToolTypeNotSupport()

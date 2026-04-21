@@ -5,6 +5,7 @@ from unittest import TestCase, mock
 from unittest.mock import MagicMock, patch
 
 import requests
+from django.test import SimpleTestCase
 from django.test import TestCase as DjangoTestCase
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
@@ -16,6 +17,8 @@ from services.web.tool.constants import (
     ApiVariablePosition,
     BkVisionConfig,
     FieldCategory,
+    SmartPageDataSourceTypeEnum,
+    SmartPageToolConfig,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
     ToolTypeEnum,
@@ -26,6 +29,7 @@ from services.web.tool.exceptions import (
     InvalidVariableFormatError,
     InvalidVariableStructureError,
     ParseVariableError,
+    SmartPageDataSourceNotFound,
     ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import (
@@ -33,11 +37,15 @@ from services.web.tool.executor.model import (
     ApiToolExecuteResult,
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
+    SmartPageExecuteResult,
+    SmartPageSqlTemplateExecuteResult,
 )
 from services.web.tool.executor.parser import ApiVariableParser, SqlVariableParser
 from services.web.tool.executor.tool import (
     ApiToolExecutor,
+    BaseSmartPageDataSourceExecutor,
     BkVisionExecutor,
+    SmartPageExecutor,
     SqlDataSearchExecutor,
     ToolExecutorFactory,
 )
@@ -515,6 +523,21 @@ class TestToolExecutorFactory(DjangoTestCase):
             config={"uid": "vision_panel_123", "input_variable": []},
         )
 
+        self.smart_page_tool = Tool.objects.create(
+            tool_type=ToolTypeEnum.SMART_PAGE.value,
+            name="smart_page_tool",
+            version=1,
+            config=SmartPageToolConfig(
+                data_sources=[
+                    {
+                        "name": "smart_sql",
+                        "data_source_type": "sql_template",
+                        "config": {"sql_template": "SELECT id FROM smart_table"},
+                    }
+                ]
+            ).model_dump(),
+        )
+
     def test_create_sql_executor(self):
         """测试工厂创建SQL执行器"""
         factory = ToolExecutorFactory(self.analyzer_cls)
@@ -531,6 +554,14 @@ class TestToolExecutorFactory(DjangoTestCase):
         self.assertIsInstance(executor, BkVisionExecutor)
         self.assertEqual(executor.config.uid, "vision_panel_123")
 
+    def test_create_smart_page_executor(self):
+        """测试工厂创建 Smart Page 执行器"""
+        factory = ToolExecutorFactory(self.analyzer_cls)
+        executor = factory.create_from_tool(self.smart_page_tool)
+
+        self.assertIsInstance(executor, SmartPageExecutor)
+        self.assertEqual(executor.config.data_sources[0].name, "smart_sql")
+
     def test_create_with_unsupported_type(self):
         """测试工厂处理不支持的工具类型"""
         invalid_tool = Tool.objects.create(tool_type="invalid_type", name="invalid_tool", version=1, namespace="test")
@@ -538,6 +569,86 @@ class TestToolExecutorFactory(DjangoTestCase):
         factory = ToolExecutorFactory(self.analyzer_cls)
         with self.assertRaises(ToolTypeNotSupport):
             factory.create_from_tool(invalid_tool)
+
+
+class TestSmartPageExecutor(SimpleTestCase):
+    """SmartPage 执行器测试"""
+
+    def setUp(self):
+        self.config_dict = {
+            "data_sources": [
+                {
+                    "name": "risk_event_source",
+                    "description": "风险事件",
+                    "marker_type": "table",
+                    "data_source_type": "sql_template",
+                    "config": {
+                        "sql_template": (
+                            "SELECT id FROM risk_event WHERE 1=1 "
+                            "{% if has('kw') %} AND name = '{{ bind('kw') }}' {% endif %}"
+                        ),
+                    },
+                }
+            ]
+        }
+
+    def test_execute_should_return_datasource_metadata(self):
+        executor = SmartPageExecutor(self.config_dict)
+        with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+            mock_bulk.return_value = [{"list": [{"id": 1}]}]
+            result = executor.execute(
+                {
+                    "data_source_name": "risk_event_source",
+                    "params": {"kw": "risk"},
+                }
+            )
+
+        self.assertEqual(
+            result.model_dump(),
+            {
+                "data_source_name": "risk_event_source",
+                "result": {
+                    "data_source_type": "sql_template",
+                    "results": [{"id": 1}],
+                    "rendered_sql": "SELECT id FROM risk_event WHERE 1=1  AND name = 'risk' ",
+                },
+            },
+        )
+
+    def test_execute_should_raise_when_datasource_not_found(self):
+        executor = SmartPageExecutor(self.config_dict)
+        with self.assertRaises(SmartPageDataSourceNotFound):
+            executor.execute({"data_source_name": "non_exist", "params": {}})
+
+    def test_should_dispatch_to_registered_data_source_executor(self):
+        class DummyExecutor(BaseSmartPageDataSourceExecutor):
+            @classmethod
+            def execute(cls, executor, data_source, params):
+                return SmartPageExecuteResult(
+                    data_source_name=data_source.name,
+                    result=SmartPageSqlTemplateExecuteResult(
+                        data_source_type="sql_template",
+                        results=[{"via": "dummy"}],
+                        rendered_sql="SELECT 1",
+                    ),
+                )
+
+        original_mapping = dict(SmartPageExecutor.DATA_SOURCE_EXECUTOR_MAPPING)
+        try:
+            SmartPageExecutor.register_data_source_executor(
+                SmartPageDataSourceTypeEnum.SQL_TEMPLATE,
+                DummyExecutor,
+            )
+            executor = SmartPageExecutor(self.config_dict)
+            result = executor.execute(
+                {
+                    "data_source_name": "risk_event_source",
+                    "params": {},
+                }
+            )
+            self.assertEqual(result.result.results, [{"via": "dummy"}])
+        finally:
+            SmartPageExecutor.DATA_SOURCE_EXECUTOR_MAPPING = original_mapping
 
 
 class TestVariableParserPersonSelect(TestCase):
