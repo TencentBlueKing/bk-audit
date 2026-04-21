@@ -24,10 +24,11 @@
       class="application-list-wrap">
       <div class="action-header">
         <auth-button
-          action-id="create_pa"
+          action-id="create_pa_v2"
           class="mr8"
           :loading="checkLoading"
-          :permission="permissionCheckData.create_pa"
+          :permission="permissionCheckData.create_pa_v2"
+          resource-is-scene
           theme="primary"
           @click="handleCreate">
           <audit-icon
@@ -56,6 +57,8 @@
           class="audit-highlight-table mt16"
           :columns="tableColumn"
           :data-source="dataSource"
+          is-need-scene-id
+          scene-id-key="scene_id"
           :settings="settings"
           @clear-search="handleClearSearch"
           @on-setting-change="handleSettingChange"
@@ -83,10 +86,11 @@
             {{ t('启/停') }}
           </span>
           <auth-switch
-            v-if="!permissionCheckData.edit_pa"
-            action-id="edit_pa"
+            v-if="!permissionCheckData.edit_pa_v2"
+            action-id="edit_pa_v2"
             :model-value="detailItem.is_enabled"
-            :permission="permissionCheckData.edit_pa"
+            :permission="permissionCheckData.edit_pa_v2"
+            resource-is-scene
             theme="primary"
             @change="()=>handleToggle(detailItem)" />
           <template v-else>
@@ -97,24 +101,27 @@
                 : t('套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用？')"
               :title="detailItem.is_enabled ? t('套餐停用确认') : t('套餐启用确认')">
               <auth-switch
-                action-id="edit_pa"
+                action-id="edit_pa_v2"
                 :model-value="detailItem.is_enabled"
-                :permission="permissionCheckData.edit_pa"
+                :permission="permissionCheckData.edit_pa_v2"
+                resource-is-scene
                 theme="primary" />
             </audit-popconfirm>
           </template>
           <auth-button
-            action-id="edit_pa"
+            action-id="edit_pa_v2"
             class="mr8 ml8"
-            :permission="permissionCheckData.edit_pa"
+            :permission="permissionCheckData.edit_pa_v2"
+            resource-is-scene
             theme="primary"
             @click="()=>handleEdit(detailItem)">
             {{ t('编辑') }}
           </auth-button>
           <auth-button
-            action-id="list_rule"
+            action-id="list_rule_v2"
             class="mr8"
-            :permission="permissionCheckData.list_rule"
+            :permission="permissionCheckData.list_rule_v2"
+            resource-is-scene
             @click="()=>showRisks(detailItem)">
             {{ t('查看关联规则') }}
           </auth-button>
@@ -127,8 +134,9 @@
               <bk-dropdown-menu>
                 <bk-dropdown-item>
                   <auth-button
-                    action-id="create_pa"
-                    :permission="permissionCheckData.create_pa"
+                    action-id="create_pa_v2"
+                    :permission="permissionCheckData.create_pa_v2"
+                    resource-is-scene
                     text
                     @click="()=>handleClone(detailItem)">
                     {{ t('克隆') }}
@@ -169,6 +177,7 @@
   import {
     computed,
     onMounted,
+    onUnmounted,
     ref,
   } from 'vue';
   import {
@@ -184,6 +193,7 @@
 
   import ProcessApplicationManageModel from '@model/application/application';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -192,6 +202,8 @@
 
   import ProcessDetail from './components/detail.vue';
   import ScopeRiskDetail from './components/scope-risk-detail.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // import RenderInfoBlock from '@/views/notice-group/list/components/render-info-block.vue';
 
@@ -221,6 +233,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { getSearchParams, replaceSearchParams } = useUrlSearch();
+  const { on: onEvent, off } = useEventBus();
   const router = useRouter();
   const dataSource = ProcessApplicationManageService.fetchList;
   const isLoading = ref(false);
@@ -327,8 +340,8 @@
         if (data.rule_count) {
           return (
             <auth-button
-              action-id='list_rule'
-              permission={permissionCheckData.value.list_rule}
+              action-id='list_rule_v2'
+              permission={permissionCheckData.value.list_rule_v2}
               theme='primary'
               onClick={() => showRisks(data)}
               class='mr16'
@@ -369,7 +382,7 @@
       field: () => 'is_enabled',
       align: 'center',
       render: ({ data }: { data: ProcessApplicationManageModel }) => (
-        permissionCheckData.value.edit_pa
+        permissionCheckData.value.edit_pa_v2
           ? (
             <audit-popconfirm
               content={data.is_enabled
@@ -378,8 +391,9 @@
               title={data.is_enabled ? t('套餐停用确认') : t('套餐启用确认')}
               confirm-handler={() => handleToggle(data)}>
             <auth-switch
-              action-id="edit_pa"
-              permission={permissionCheckData.value.edit_pa}
+              action-id="edit_pa_v2"
+              resource-is-scene
+              permission={permissionCheckData.value.edit_pa_v2}
               model-value={data.is_enabled}
               theme="primary"
               size="small"
@@ -389,8 +403,9 @@
           : (
           <auth-switch
           size="small"
-          action-id="edit_pa"
-          permission={permissionCheckData.value.edit_pa}
+          action-id="edit_pa_v2"
+          resource-is-scene
+          permission={permissionCheckData.value.edit_pa_v2}
           model-value={data.is_enabled}
           onClick={() => handleToggle(data)}
           theme="primary"
@@ -406,18 +421,20 @@
       <auth-button
         theme='primary'
         class='mr16'
-        permission={permissionCheckData.value.edit_pa}
-        action-id='edit_pa'
+        permission={permissionCheckData.value.edit_pa_v2}
+        action-id='edit_pa_v2'
         onClick={() => handleEdit(data)}
+        resource-is-scene
         text>
         {t('编辑')}
       </auth-button>
       <auth-button
         theme='primary'
-        permission={permissionCheckData.value.create_pa}
+        permission={permissionCheckData.value.create_pa_v2}
         onClick={() => handleClone(data)}
         text
-        action-id='create_pa'
+        action-id='create_pa_v2'
+        resource-is-scene
       >
         {t('克隆')}
       </auth-button>
@@ -427,15 +444,17 @@
 
 
   const permissionCheckData = ref<Record<string, boolean>>({
-    create_pa: false,
-    edit_pa: false,
+    create_pa_v2: false,
+    edit_pa_v2: false,
+    list_rule_v2: false,
   });
 
   const {
     loading: checkLoading,
   } = useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_pa,edit_pa,list_rule',
+      action_ids: 'create_pa_v2,edit_pa_v2,list_rule_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
@@ -590,6 +609,10 @@
     });
   };
 
+  const handleSceneChange = () => {
+    listRef.value.fetchData();
+  };
+
   onMounted(() => {
     const params = getSearchParams();
     if (params.id) {
@@ -599,6 +622,13 @@
     fetchList({
       id: params.id,
     });
+    setTimeout(() => {
+      onEvent('scene:change', handleSceneChange);
+    }, 1000);
+  });
+
+  onUnmounted(() => {
+    off('scene:change', handleSceneChange);
   });
 </script>
 <style scoped lang="postcss">
