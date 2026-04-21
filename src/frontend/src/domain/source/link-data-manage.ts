@@ -31,7 +31,7 @@ class LinkDataManage extends ModuleBase {
   }
   // 获取联表列表
   getLinkDataList(params: Record<string, any>, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<LInkDataModel>>(`${this.path}/link_table/?scope_id=${getSceneSystemParams().scope_id}&scope_type=${getSceneSystemParams().scope_type}`, {
+    return Request.get<IRequestResponsePaginationData<LInkDataModel>>(`${this.path}/link_table/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });
@@ -42,7 +42,7 @@ class LinkDataManage extends ModuleBase {
       uid:string,
       name: string,
       version: number,
-    }>>(`${this.path}/link_table/all/`);
+    }>>(`${this.path}/link_table/all/?scene_id=${getSceneSystemParams().scope_id}`);
   }
   // 获取联表标签
   getLinkTableTags() {
@@ -50,7 +50,7 @@ class LinkDataManage extends ModuleBase {
       link_table_count: number,
       tag_id: string,
       tag_name: string
-    }>>(`${this.path}/link_table/tags/?scope_id=${getSceneSystemParams().scope_id}&scope_type=${getSceneSystemParams().scope_type}`);
+    }>>(`${this.path}/link_table/tags/?scene_id=${getSceneSystemParams().scope_id}`);
   }
   // 删除联表
   deleteLinkData(params: {

@@ -188,7 +188,7 @@
   useRequest(IamManageService.check, {
     defaultParams: {
       action_ids: 'create_strategy_v2',
-      resource_ids: getSceneSystemParams().scope_id,
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
