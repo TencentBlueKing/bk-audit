@@ -363,7 +363,7 @@
     defaultValue: {},
     manual: true,
     onSuccess: (data) => {
-      permissionCheckData.value = data.create_strategy;
+      permissionCheckData.value = data.create_system;
     },
   });
 

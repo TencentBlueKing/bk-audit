@@ -117,7 +117,6 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import sceneManageService from '@service/scene-manage';
@@ -164,7 +163,6 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const router = useRouter();
 
   const popoverRef = ref();
   const isPopoverShow = ref(false);
@@ -307,12 +305,12 @@
     fetchData();
 
     // 监听路由变化，当路由变化时重新获取数据
-    router.afterEach((to, from) => {
-      // 只有当路由真正发生变化时才重新获取数据
-      if (to.fullPath !== from.fullPath) {
-        fetchData();
-      }
-    });
+    // router.afterEach((to, from) => {
+    //   // 只有当路由真正发生变化时才重新获取数据
+    //   if (to.fullPath !== from.fullPath) {
+    //     fetchData();
+    //   }
+    // });
   });
 
   onUnmounted(() => {
