@@ -601,6 +601,27 @@ class ToolResourceTestCase(TestCase):
         with self.assertRaises(ToolTypeNotSupport):
             resource(request_data)
 
+    def test_tool_execute_debug_smart_page_not_support(self):
+        request_data = {
+            "tool_type": ToolTypeEnum.SMART_PAGE.value,
+            "config": {
+                "data_sources": [
+                    {
+                        "name": "risk_event_source",
+                        "data_source_type": "sql_template",
+                        "config": {"sql_template": "SELECT 1"},
+                    }
+                ]
+            },
+            "params": {
+                "data_source_name": "risk_event_source",
+                "params": {},
+            },
+        }
+        resource = ToolExecuteDebug()
+        with self.assertRaises(ToolTypeNotSupport):
+            resource(request_data)
+
 
 class UserQueryTableAuthCheckTestCase(TestCase):
     def setUp(self):

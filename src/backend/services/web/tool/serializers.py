@@ -34,6 +34,7 @@ from services.web.tool.constants import (
     ApiToolConfig,
     BkVisionConfig,
     DataSearchConfigTypeEnum,
+    SmartPageToolConfig,
     SQLDataSearchConfig,
     ToolTypeEnum,
 )
@@ -43,6 +44,8 @@ from services.web.tool.executor.model import (
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
     DataSearchToolExecuteResult,
+    SmartPageExecuteParams,
+    SmartPageExecuteResult,
 )
 from services.web.tool.models import Tool
 
@@ -65,6 +68,7 @@ class ListToolTagsResponseSerializer(serializers.Serializer):
             'data_search': SQLDataSearchConfig,
             'api': ApiToolConfig,
             'bk_vision': BkVisionConfig,
+            'smart_page': SmartPageToolConfig,
         },
         resource_type_field_name='tool_type',
     )
@@ -84,6 +88,7 @@ class ToolConfigField(serializers.DictField):
         serializers=[
             APIToolExecuteParams,
             DataSearchToolExecuteParams,
+            SmartPageExecuteParams,
         ],
         resource_type_field_name=None,
     )
@@ -101,6 +106,7 @@ class ToolParamsField(serializers.DictField):
             DataSearchToolExecuteResult,
             ApiToolExecuteResult,
             BkVisionExecuteResult,
+            SmartPageExecuteResult,
         ],
         resource_type_field_name=None,
     )
@@ -146,6 +152,8 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
         elif tool_type == ToolTypeEnum.API:
             validated_config = ApiToolConfig.model_validate(config).model_dump()
+        elif tool_type == ToolTypeEnum.SMART_PAGE:
+            validated_config = SmartPageToolConfig.model_validate(config).model_dump()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
@@ -180,6 +188,8 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
             elif tool_type == ToolTypeEnum.API:
                 validated_config = ApiToolConfig.model_validate(config).model_dump()
+            elif tool_type == ToolTypeEnum.SMART_PAGE:
+                validated_config = SmartPageToolConfig.model_validate(config).model_dump()
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
             attrs["config"] = validated_config

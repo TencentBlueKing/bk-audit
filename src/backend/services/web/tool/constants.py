@@ -50,6 +50,7 @@ class ToolTypeEnum(TextChoices):
     DATA_SEARCH = "data_search", gettext_lazy("数据查询")
     API = "api", gettext_lazy("API")
     BK_VISION = "bk_vision", gettext_lazy("BK Vision")
+    SMART_PAGE = "smart_page", gettext_lazy("智能页面")
 
 
 # ==========================================
@@ -586,4 +587,99 @@ class ApiToolConfig(BaseModel):
             variables,
             key_field="raw_name",
             error_msg=lambda key: gettext("输入变量 raw_name %s 重复") % key,
+        )
+
+
+# ==========================================
+# Smart Page 工具配置
+# ==========================================
+
+
+@register_choices("SmartPageDataSourceType")
+class SmartPageDataSourceTypeEnum(TextChoices):
+    """
+    智能页面数据源类型
+    """
+
+    SQL_TEMPLATE = "sql_template", gettext_lazy("SQL模板")
+
+
+SMART_PAGE_BOOL_RENDER_MAPPING = {
+    True: "TRUE",
+    False: "FALSE",
+}
+
+SMART_PAGE_BOOL_TRUE_LITERALS = {"true", "1", "yes", "y"}
+SMART_PAGE_BOOL_FALSE_LITERALS = {"false", "0", "no", "n"}
+
+
+@register_choices("SmartPageBindOutputType")
+class SmartPageBindOutputTypeEnum(TextChoices):
+    """SQL 模板 bind 输出类型。"""
+
+    AUTO = "auto", gettext_lazy("自动")
+    STR = "str", gettext_lazy("字符串")
+    INT = "int", gettext_lazy("整数")
+    FLOAT = "float", gettext_lazy("浮点数")
+    BOOL = "bool", gettext_lazy("布尔值")
+
+
+SMART_PAGE_BIND_OUTPUT_TYPE_ALIAS_MAPPING = {
+    SmartPageBindOutputTypeEnum.AUTO.value: SmartPageBindOutputTypeEnum.AUTO,
+    SmartPageBindOutputTypeEnum.STR.value: SmartPageBindOutputTypeEnum.STR,
+    "string": SmartPageBindOutputTypeEnum.STR,
+    "text": SmartPageBindOutputTypeEnum.STR,
+    SmartPageBindOutputTypeEnum.INT.value: SmartPageBindOutputTypeEnum.INT,
+    "integer": SmartPageBindOutputTypeEnum.INT,
+    SmartPageBindOutputTypeEnum.FLOAT.value: SmartPageBindOutputTypeEnum.FLOAT,
+    "double": SmartPageBindOutputTypeEnum.FLOAT,
+    SmartPageBindOutputTypeEnum.BOOL.value: SmartPageBindOutputTypeEnum.BOOL,
+    "boolean": SmartPageBindOutputTypeEnum.BOOL,
+}
+
+
+class SmartPageSqlTemplateConfig(BaseModel):
+    """SQL 模板类型的数据源配置。"""
+
+    data_source_type: Literal[SmartPageDataSourceTypeEnum.SQL_TEMPLATE] = SmartPageDataSourceTypeEnum.SQL_TEMPLATE
+    sql_template: str = PydanticField(title=gettext_lazy("SQL模板"))
+
+
+class SmartPageBaseDataSourceConfig(BaseModel):
+    """智能页面数据源统一公共字段。"""
+
+    name: str = PydanticField(title=gettext_lazy("数据源名称"))
+    description: str = PydanticField(default_factory=str, title=gettext_lazy("数据源描述"))
+    marker_type: Optional[str] = PydanticField(default=None, title=gettext_lazy("展示标记类型"))
+    data_source_type: SmartPageDataSourceTypeEnum = PydanticField(title=gettext_lazy("数据源类型"))
+
+
+class SmartPageSqlTemplateDataSourceConfig(SmartPageBaseDataSourceConfig):
+    """SQL 模板数据源配置。"""
+
+    data_source_type: Literal[SmartPageDataSourceTypeEnum.SQL_TEMPLATE] = SmartPageDataSourceTypeEnum.SQL_TEMPLATE
+    config: SmartPageSqlTemplateConfig = PydanticField(title=gettext_lazy("数据源配置"))
+
+
+SmartPageDataSourceConfigUnion = Annotated[
+    Union[SmartPageSqlTemplateDataSourceConfig],
+    PydanticField(discriminator="data_source_type"),
+]
+
+
+class SmartPageToolConfig(BaseModel):
+    """智能页面工具配置"""
+
+    data_sources: Annotated[List[SmartPageDataSourceConfigUnion], ListField(child=DictField())] = PydanticField(
+        default_factory=list,
+        title=gettext_lazy("数据源列表"),
+    )
+
+    @field_validator("data_sources")
+    @classmethod
+    def validate_unique_data_source_names(cls, v):
+        return validate_unique_keys(
+            v,
+            key_field="name",
+            error_msg=lambda key: gettext("数据源名称 %s 重复") % key,
         )

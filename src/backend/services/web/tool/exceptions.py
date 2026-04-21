@@ -198,3 +198,73 @@ class SceneToolCannotDelete(ToolException):
     MESSAGE = gettext_lazy("已上架的工具不可删除")
     STATUS_CODE = 400
     ERROR_CODE = "016"
+
+
+class SmartPageDataSourceNotFound(ToolException):
+    """
+    智能页面数据源不存在
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "017"
+    MESSAGE = gettext_lazy("数据源 {data_source_name} 不存在")
+
+    def __init__(self, data_source_name: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(data_source_name=data_source_name)
+        super().__init__(*args, **kwargs)
+
+
+class SmartPageDataSourceTypeNotSupport(ToolException):
+    """
+    智能页面数据源类型不支持
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "018"
+    MESSAGE = gettext_lazy("数据源类型 {data_source_type} 不支持")
+
+    def __init__(self, data_source_type: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(data_source_type=data_source_type)
+        super().__init__(*args, **kwargs)
+
+
+class SmartPageBindParamMissingError(ToolException):
+    """
+    智能页面模板参数缺失
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "019"
+    MESSAGE = gettext_lazy("模板参数 {param_name} 缺失")
+
+    def __init__(self, param_name: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(param_name=param_name)
+        super().__init__(*args, **kwargs)
+
+
+class SmartPageSqlTemplateRenderError(ToolException):
+    """
+    SQL 模板渲染异常
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "020"
+    MESSAGE = gettext_lazy("SQL 模板渲染异常: {detail}")
+
+    def __init__(self, detail: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(detail=detail)
+        super().__init__(*args, **kwargs)
+
+
+class SmartPageSqlSecurityCheckError(ToolException):
+    """
+    SQL 安全校验不通过
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "021"
+    MESSAGE = gettext_lazy("SQL 安全校验不通过: {detail}")
+
+    def __init__(self, detail: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(detail=detail)
+        super().__init__(*args, **kwargs)
