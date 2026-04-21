@@ -24,6 +24,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class ProcessApplicationManage extends ModuleBase {
   constructor() {
     super();
@@ -53,7 +55,7 @@ class ProcessApplicationManage extends ModuleBase {
       name: string,
       sops_template_id: number,
       is_enabled: boolean,
-    }>>(`${this.module}/all/`);
+    }>>(`${this.module}/all/?scene_id=${getSceneSystemParams().scope_id}`);
   }
 
   // 获取审批内置字段

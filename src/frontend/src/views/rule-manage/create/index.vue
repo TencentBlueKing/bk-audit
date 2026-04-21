@@ -342,6 +342,8 @@
 
   import BatchDialog from './components/dialog.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface ParamItem {
     custom_type: string;
     desc:string;
@@ -483,6 +485,7 @@
       page: 1,
       page_size: 1000,
       rule_id: route.params.id,
+      scene_id: getSceneSystemParams().scope_id,
     });
   }
   // 获取所有策略列表
