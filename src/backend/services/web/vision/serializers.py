@@ -98,7 +98,7 @@ class QueryShareDetailSerializer(ExtraDataSerializerMixin):
 
 
 class CreatePlatformPanelRequestSerializer(serializers.Serializer):
-    id = serializers.CharField(required=False, allow_blank=True)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     name = serializers.CharField(required=True, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -108,6 +108,7 @@ class CreatePlatformPanelRequestSerializer(serializers.Serializer):
 
 class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
     panel_id = serializers.CharField(required=True)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
@@ -122,7 +123,7 @@ class PlatformPanelOperateRequestSerializer(serializers.Serializer):
 class CreateScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     group_id = serializers.IntegerField(required=True)
-    id = serializers.CharField(required=False, allow_blank=True)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     name = serializers.CharField(required=True, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -132,6 +133,7 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     group_id = serializers.IntegerField(required=True)
     panel_id = serializers.CharField(required=True)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
