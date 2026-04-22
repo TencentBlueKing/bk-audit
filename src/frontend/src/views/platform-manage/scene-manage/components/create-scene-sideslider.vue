@@ -153,6 +153,7 @@
                     filterable
                     id-key="value"
                     :list="allConfigTypeTable"
+                    multiple
                     name-key="label"
                     :placeholder="t('搜索数据名称、别名、数据ID等')"
                     trigger="hover"
@@ -227,7 +228,7 @@
     description: string;
     users: string[];
     system_id: string[];
-    table_id: string;
+    table_id: string[];
   }
 
 
@@ -279,7 +280,7 @@
     description: '',
     users: [],
     system_id: [] as string[],
-    table_id: '',
+    table_id: [] as string[],
   });
 
   // 表单校验规则
@@ -303,7 +304,7 @@
 
   // 关联系统变更
   const handleSystemChange = () => {
-    formData.value.table_id = '';
+    formData.value.table_id = [];
     if (formData.value.system_id.length > 0) {
       fetchTableList();
     } else {
@@ -341,23 +342,29 @@
     }
   };
 
-  // 根据 table_id 反查级联路径并回填 tableId
-  const fillTableIdFromCascader = (rtId: string) => {
-    if (!rtId || !allConfigTypeTable.value.length) return;
-    for (const typeItem of allConfigTypeTable.value) {
-      for (const child of typeItem.children) {
-        if (child.children && child.children.length) {
-          for (const leaf of child.children) {
-            if (leaf.value === rtId) {
-              tableId.value = [typeItem.value, child.value, leaf.value];
-              return;
+  // 根据 table_ids 反查级联路径并回填 tableId（支持多选）
+  const fillTableIdFromCascader = (rtIds: string[]) => {
+    if (!rtIds || !rtIds.length || !allConfigTypeTable.value.length) return;
+    const paths: string[][] = [];
+    for (const rtId of rtIds) {
+      for (const typeItem of allConfigTypeTable.value) {
+        for (const child of typeItem.children) {
+          if (child.children && child.children.length) {
+            for (const leaf of child.children) {
+              if (leaf.value === rtId) {
+                paths.push([typeItem.value, child.value, leaf.value]);
+                break;
+              }
             }
+          } else if (child.value === rtId) {
+            paths.push([typeItem.value, child.value]);
+            break;
           }
-        } else if (child.value === rtId) {
-          tableId.value = [typeItem.value, child.value];
-          return;
         }
       }
+    }
+    if (paths.length > 0) {
+      tableId.value = paths as any;
     }
   };
 
@@ -392,8 +399,8 @@
       Promise.all(requests).then((results) => {
         allConfigTypeTable.value = results;
         typeTableLoading.value = false;
-        // 若编辑模式已有 table_id（场景详情先于级联数据返回），补充回填路径
-        if (formData.value.table_id) {
+        // 若编辑模式已有 table_ids（场景详情先于级联数据返回），补充回填路径
+        if (formData.value.table_id && formData.value.table_id.length > 0) {
           fillTableIdFromCascader(formData.value.table_id);
         }
       });
@@ -414,14 +421,14 @@
       || node.data.value.toLowerCase().includes(lowercaseKey);
   };
 
-  // 级联选择回调
-  const handleChangeTable = (value: Array<string>) => {
+  // 级联选择回调（多选）
+  const handleChangeTable = (value: Array<string[]>) => {
     if (!value || value.length === 0) {
-      formData.value.table_id = '';
+      formData.value.table_id = [];
       return;
     }
-    formData.value.table_id = value[value.length - 1];
-    console.log('[关联数据表] 选中路径:', value, '| table_id:', formData.value.table_id);
+    formData.value.table_id = value.map(path => path[path.length - 1]);
+    console.log('[关联数据表] 选中路径:', value, '| table_ids:', formData.value.table_id);
   };
 
   // 重置表单
@@ -432,9 +439,10 @@
       description: '',
       users: [],
       system_id: [],
-      table_id: '',
+      table_id: [] as string[],
     };
     tableList.value = [];
+    tableId.value = [];
   };
 
   // 关闭前确认
@@ -445,7 +453,7 @@
       || formData.value.description
       || formData.value.users.length > 0
       || formData.value.system_id.length > 0
-      || formData.value.table_id;
+      || formData.value.table_id.length > 0;
 
     if (hasData) {
       return new Promise<boolean>((resolve) => {
@@ -492,16 +500,18 @@
 
   // 编辑模式下回填表单基础字段
   const fillFormFromSceneData = (data: SceneModel) => {
-    const rtId = data.tables && data.tables.length ? data.tables[0].table_id : '';
+    const rtIds = data.tables && data.tables.length
+      ? data.tables.map(t => t.table_id)
+      : [];
     formData.value = {
       name: data.name || '',
       managers: data.managers || [],
       description: data.description || '',
       users: data.users || [],
       system_id: data.systems.map(item => item.system_id),
-      table_id: rtId,
+      table_id: rtIds,
     };
-    fillTableIdFromCascader(rtId);
+    fillTableIdFromCascader(rtIds);
   };
 
   // 判断是否选择了"全部"
@@ -517,14 +527,13 @@
       // 选择全部时，返回完整系统列表
       return systemList.value.map(item => ({
         system_id: item.system_id,
-        is_all_systems: true,
-        filter_rules: '',
+        is_all_systems: false,
+        filter_rules: [],
       }));
     }
     return formData.value.system_id.map(id => ({
       system_id: id,
-      is_all_systems: false,
-      filter_rules: '',
+      filter_rules: [],
     }));
   };
 
@@ -536,7 +545,9 @@
     managers: formData.value.managers as string[],
     users: (formData.value.users as string[]).length > 0 ? (formData.value.users as string[]) : undefined,
     systems: buildSystemsParam(),
-    tables: formData.value.table_id ? [{ table_id: formData.value.table_id, filter_rules: '' }] : undefined,
+    tables: formData.value.table_id.length > 0
+      ? formData.value.table_id.map(id => ({ table_id: id, filter_rules: [] }))
+      : undefined,
   });
 
   const handleSubmit = async () => {
