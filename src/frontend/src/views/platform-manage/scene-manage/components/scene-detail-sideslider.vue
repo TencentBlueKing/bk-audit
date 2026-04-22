@@ -299,7 +299,6 @@
     onSuccess: (res) => {
       isLoading.value = false;
       detailData.value = res;
-      console.log('[关联数据表] tables 原始数据:', JSON.stringify(res.tables, null, 2));
     },
   });
 
