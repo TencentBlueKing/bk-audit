@@ -19,25 +19,29 @@ export default class PanelModel {
   name: string;
   description: string;
   vision_id: string;
-  is_enabled: boolean;
   priority_index: number;
   group_id: number;
   group_name: string;
+  group_type: string;
   group_priority_index: number;
   updated_by: string;
   updated_at: string;
+  category: string;
+  status: 'published' | 'unpublished';
 
   constructor(payload: PanelModel) {
     this.id = payload.id;
     this.name = payload.name;
     this.description = payload.description;
     this.vision_id = payload.vision_id;
-    this.is_enabled = payload.is_enabled;
     this.priority_index = payload.priority_index;
     this.group_id = payload.group_id;
     this.group_name = payload.group_name;
+    this.group_type = payload.group_type;
     this.group_priority_index = payload.group_priority_index;
     this.updated_by = payload.updated_by;
     this.updated_at = payload.updated_at;
+    this.category = payload.category;
+    this.status = payload.status;
   }
 }

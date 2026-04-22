@@ -81,20 +81,26 @@
             @enter="handleSearch" />
         </div>
       </div>
-
-      <!-- 内容区域 -->
       <div class="report-config-content">
-        <report-group-list
-          :expand-all="isAllExpanded"
-          :groups="reportGroups"
-          @add-report="handleAddReport"
-          @cross-group-drag="handleCrossGroupDrag"
-          @deleted="handleDeleted"
-          @drag-sort="handleDragSort"
-          @edit="handleEdit"
-          @group-drag-sort="handleGroupDragSort"
-          @order-updated="handleOrderUpdated"
-          @status-updated="handleStatusUpdated" />
+        <bk-loading :loading="isDataLoading || isLoading">
+          <bk-exception
+            v-if="!isDataLoading && !isLoading && reportGroups.length === 0"
+            class="report-empty"
+            type="empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
+          <report-group-list
+            v-else-if="!isDataLoading && !isLoading"
+            :expand-all="isAllExpanded"
+            :groups="reportGroups"
+            @add-report="handleAddReport"
+            @deleted="handleDeleted"
+            @drag-sort="handleDragSort"
+            @edit="handleEdit"
+            @group-drag-sort="handleGroupDragSort"
+            @order-updated="handleOrderUpdated"
+            @status-updated="handleStatusUpdated" />
+        </bk-loading>
       </div>
 
       <!-- 新建分组弹窗 -->
@@ -135,6 +141,7 @@
         v-model:is-show="reportSidesliderVisible"
         :chart-lists="chartLists"
         :default-group-id="currentGroupId"
+        :default-group-name="pendingOpenCreateWithGroup"
         :edit-data="editReportData"
         :group-list="groupListForSelect"
         @cancel="handleReportSidesliderCancel"
@@ -145,7 +152,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, onMounted, ref } from 'vue';
+  import { computed, onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import PanelModelService from '@service/report-config';
@@ -153,6 +160,7 @@
 
   import PanelModel from '@model/report-config/panel';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import collapseIcon from '@images/collapse.svg';
@@ -162,12 +170,13 @@
     type ReportFormData,
   } from './components/report-create-sideslider.vue';
   import ReportGroupList, {
-    type CrossGroupDragResult,
     type DragSortResult,
     type GroupDragSortResult,
     type Report,
     type ReportGroup,
   } from './components/report-group-list.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   const { t } = useI18n();
 
@@ -194,31 +203,25 @@
       },
     ],
   };
+  const { on: onEvent, off } = useEventBus();
 
   // 新建/编辑报表侧边弹窗相关状态
   const reportSidesliderVisible = ref(false);
   const currentGroupId = ref<number | null>(null);
   const editReportData = ref<ReportFormData | null>(null);
+  // 新建分组后自动打开新建报表的分组名称
+  const pendingOpenCreateWithGroup = ref<string | null>(null);
 
-  // 分组列表（用于选择器），包含临时新建的分组
-  const tempNewGroup = ref<{ id: number; name: string; priority_index: number } | null>(null);
-  const groupListForSelect = computed(() => {
-    const list = reportGroups.value.map(g => ({
-      id: g.id,
-      name: g.name,
-    }));
-    // 如果有临时新建的分组，添加到列表开头
-    if (tempNewGroup.value) {
-      list.unshift({
-        id: tempNewGroup.value.id,
-        name: tempNewGroup.value.name,
-      });
-    }
-    return list;
-  });
+  // 分组列表（用于选择器）
+  const groupListForSelect = computed(() => reportGroups.value.map(g => ({
+    id: g.id,
+    name: g.name,
+  })));
 
   const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
   const reportGroups = ref<ReportGroup[]>([]);
+  // 数据加载状态（覆盖 fetchGroups + fetchPanels 完整链路）
+  const isDataLoading = ref(false);
 
   // 图表列表数据
   interface ChartListModel {
@@ -271,7 +274,7 @@
     },
   });
 
-  // 获取分组Panel
+  // 获取场景报表列表
   const {
     run: fetchPanels,
   } = useRequest(PanelModelService.fetchPanels, {
@@ -289,17 +292,19 @@
             .map((panel: PanelModel) => ({
               id: panel.id,
               name: panel.name,
-              description: panel.description || '-',
-              bkvisionReport: panel.vision_id,
+              description: panel.description || '--',
+              vision_id: panel.vision_id,
               bkvisionReportName: findVisionName(panel.vision_id),
               bkvisionSpaceUid: findVisionSpaceUid(panel.vision_id),
-              status: panel.is_enabled ? 'enabled' : 'disabled',
-              updatedBy: panel.updated_by,
-              updatedAt: panel.updated_at,
+              status: panel.status || 'unpublished',
+              updatedBy: panel.updated_by || '--',
+              updatedAt: panel.updated_at || '--',
             })) as Report[],
         }))
-        .filter(group => group.reports.length > 0)
         .sort((a, b) => b.priority_index - a.priority_index);
+    },
+    onFinally: () => {
+      isDataLoading.value = false;
     },
   });
   // 获取分组
@@ -309,16 +314,16 @@
     defaultValue: {},
     onSuccess: (data) => {
       groups.value = data;
-      // 根据状态筛选确定 is_enabled 参数
-      const isEnabled = statusFilter.value === 'all'
-        ? undefined
-        : statusFilter.value === 'enabled';
       fetchPanels({
         page: 1,
         page_size: 10000,
-        is_enabled: isEnabled,
+        status: '',
+        scene_id: getSceneSystemParams().scope_id,
         keyword: searchKeyword.value || undefined,
       });
+    },
+    onFinally: () => {
+      isDataLoading.value = false;
     },
   });
   // 新建报表 - 显示侧边弹窗
@@ -340,28 +345,31 @@
       await createGroupFormRef.value?.validate();
       createGroupLoading.value = true;
 
-      // 生成新分组 ID 和 priority_index（取当前最大值 + 1）
-      const newId = Date.now();
-      const maxPriorityIndex = reportGroups.value.length > 0
-        ? Math.max(...reportGroups.value.map(g => g.priority_index))
-        : -1;
+      const groupName = createGroupFormData.value.name.trim();
 
-      // 设置为临时分组（只在下拉选择器中显示，不加入主列表）
-      tempNewGroup.value = {
-        id: newId,
-        name: createGroupFormData.value.name,
-        priority_index: maxPriorityIndex + 1,
-      };
+      // 记录返回结果的分组 ID
+      const result = await PanelModelService.createGroup({
+        scene_id: getSceneSystemParams().scope_id,
+        name: groupName,
+        priority_index: groups.value.length + 1,
+      });
 
       createGroupDialogVisible.value = false;
       createGroupFormData.value.name = '';
       createGroupLoading.value = false;
-      // 自动弹出新建报表侧边抽屉，并默认选中新创建的分组
-      currentGroupId.value = newId;
+      // 用返回的分组 ID 赋值给所属分组
+      pendingOpenCreateWithGroup.value = null;
+      currentGroupId.value = (result as any)?.id ?? null;
       editReportData.value = null;
+      // 刷新分组列表
+      await fetchGroups({
+        scope_id: getSceneSystemParams().scope_id,
+        scope_type: getSceneSystemParams().scope_type,
+      });
+      // 分组列表刷新完成后再打开侧边栏
       reportSidesliderVisible.value = true;
-    } catch {
-      // 表单验证失败
+    } catch (e) {
+      createGroupLoading.value = false;
     }
   };
 
@@ -376,17 +384,23 @@
     isAllExpanded.value = !isAllExpanded.value;
   };
 
-  // 搜索
+  // 搜索/筛选
   const handleSearch = () => {
-    // 根据状态筛选确定 is_enabled 参数
-    const isEnabled = statusFilter.value === 'all'
-      ? undefined
-      : statusFilter.value === 'enabled';
+    // 根据状态筛选确定 status 参数
+    let statusParam: 'published' | 'unpublished' | '' = '';
+    if (statusFilter.value === 'enabled') {
+      statusParam = 'published';
+    } else if (statusFilter.value === 'disabled') {
+      statusParam = 'unpublished';
+    }
+    isDataLoading.value = true;
+    reportGroups.value = [];
     fetchPanels({
       page: 1,
       page_size: 10000,
-      is_enabled: isEnabled,
+      status: statusParam,
       keyword: searchKeyword.value || undefined,
+      scene_id: getSceneSystemParams().scope_id,
     });
   };
 
@@ -405,17 +419,26 @@
   // 编辑报表
   const handleEdit = (report: Report) => {
     // 查找报表所属的分组
-    const group = reportGroups.value.find(g => g.reports.some(r => r.id === report.id));
-    currentGroupId.value = group?.id ?? null;
+    let reportGroupId: number | null = null;
+    for (const group of reportGroups.value) {
+      if (group.reports.some(r => r.id === report.id)) {
+        reportGroupId = group.id;
+        break;
+      }
+    }
+
+    // 构建编辑数据并打开侧边栏
     editReportData.value = {
-      id: report.id,
-      bkvisionReport: report.bkvisionReport,
-      vision_id: report.bkvisionReport ? [report.bkvisionReport] : [],
+      id: String(report.id),
+      bkvisionReport: report.vision_id || '',
       name: report.name,
-      groupId: group?.id ?? null,
-      description: report.description,
-      enabled: report.status === 'enabled',
+      groupId: reportGroupId,
+      description: report.description === '-' ? '' : report.description,
+      status: report.status,
+      enabled: report.status === 'published',
+      vision_id: [],
     };
+    currentGroupId.value = null;
     reportSidesliderVisible.value = true;
   };
 
@@ -434,7 +457,12 @@
   const handleOrderUpdated = () => {
     // 排序成功后重新获取分组和Panel数据，确保数据与后端同步
     // 需要先获取分组（因为分组排序可能变化），fetchGroups 成功后会自动调用 fetchPanels
-    fetchGroups();
+    isDataLoading.value = true;
+    reportGroups.value = [];
+    fetchGroups({
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    });
   };
 
   // 处理表格拖拽排序
@@ -453,90 +481,48 @@
     reportGroups.value = result.newOrder;
   };
 
-  // 处理跨分组拖拽
-  const handleCrossGroupDrag = (result: CrossGroupDragResult) => {
-    const { fromGroupId, toGroupId } = result;
 
-    // 找到源分组和目标分组
-    const fromGroup = reportGroups.value.find(g => g.id === fromGroupId);
-    const toGroup = reportGroups.value.find(g => g.id === toGroupId);
-
-    if (fromGroup && toGroup) {
-      // 报表已经被 vuedraggable 自动移动了，这里只需要调用 API 更新
-      // TODO: 调用后端接口更新报表所属分组
-    }
-  };
-
-
-  // 报表提交（新建/编辑）
-  const handleReportSubmit = (data: ReportFormData) => {
-    if (editReportData.value) {
-      // 编辑模式 - 更新报表
-      // TODO: 调用后端接口更新报表
-    } else {
-      // 新建模式 - 创建报表
-      const newReport: Report = {
-        id: `RPT-${Date.now()}`,
-        name: data.name,
-        description: data.description || '-',
-        bkvisionReport: data.bkvisionReport,
-        status: data.enabled ? 'enabled' : 'disabled',
-        updatedBy: 'Current User',
-        updatedAt: new Date().toLocaleString(),
-      };
-
-      // 检查是否选择了临时新建的分组
-      if (tempNewGroup.value && data.groupId === tempNewGroup.value.id) {
-        // 将临时分组正式加入主列表
-        const newGroup: ReportGroup = {
-          id: tempNewGroup.value.id,
-          name: tempNewGroup.value.name,
-          priority_index: tempNewGroup.value.priority_index,
-          reports: [newReport],
-        };
-        reportGroups.value.unshift(newGroup);
-        tempNewGroup.value = null;
-      } else {
-        // 添加到已有分组
-        const group = reportGroups.value.find(g => g.id === data.groupId);
-        if (group) {
-          group.reports.push(newReport);
-        }
-        // 清除临时分组（如果有）
-        tempNewGroup.value = null;
-      }
-    }
-
+  // 报表提交（新建/编辑）— 侧边栏内部已调用 API，此处仅关闭弹窗
+  const handleReportSubmit = () => {
     reportSidesliderVisible.value = false;
     editReportData.value = null;
   };
 
   // 创建成功后刷新列表
   const handleCreateSuccess = () => {
-    // 清除临时分组
-    tempNewGroup.value = null;
     // 重新获取分组和Panel列表
+    isDataLoading.value = true;
+    reportGroups.value = [];
     fetchGroups({
-      page: 1,
-      page_size: 10000,
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
     });
   };
 
   // 报表侧边弹窗取消
   const handleReportSidesliderCancel = () => {
     editReportData.value = null;
-    // 取消时清除临时分组
-    tempNewGroup.value = null;
   };
-
-  onMounted(() => {
-    // 先获取图表列表，再获取分组数据
+  const handleSceneChange = () => {
+    isDataLoading.value = true;
+    reportGroups.value = [];
     fetchChartLists().then(() => {
       fetchGroups({
-        page: 1,
-        page_size: 10000,
+        scope_id: getSceneSystemParams().scope_id,
+        scope_type: getSceneSystemParams().scope_type,
       });
     });
+  };
+  onMounted(() => {
+    // 先获取图表列表，再获取分组数据
+    handleSceneChange();
+    setTimeout(() => {
+      onEvent('scene:change', handleSceneChange);
+    }, 1000);
+  });
+
+  onUnmounted(() => {
+    off('scene:change', handleSceneChange);
   });
 </script>
 
@@ -599,6 +585,13 @@
   }
 
   .report-config-content {
+    min-height: 400px;
+  }
+
+  .report-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 400px;
   }
 </style>
