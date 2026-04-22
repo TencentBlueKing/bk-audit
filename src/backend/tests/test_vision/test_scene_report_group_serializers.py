@@ -42,5 +42,5 @@ class TestSceneReportGroupSerializers(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_delete_group_serializer(self):
-        serializer = DeleteSceneReportGroupRequestSerializer(data={"scene_id": 100001, "group_id": 1})
+        serializer = DeleteSceneReportGroupRequestSerializer(data={"group_id": 1})
         self.assertTrue(serializer.is_valid(), serializer.errors)

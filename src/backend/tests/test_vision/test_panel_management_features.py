@@ -164,7 +164,7 @@ class TestPanelManagementFeatures(TestCase):
             priority_index=-1,
         )
 
-        DeleteSceneReportGroup().request({"scene_id": self.scene1.scene_id, "group_id": group.id})
+        DeleteSceneReportGroup().request({"group_id": group.id})
         self.assertFalse(SceneReportGroup.objects.filter(id=group.id).exists())
 
     def test_recreate_platform_group_when_platform_panel_authorized(self):
@@ -182,7 +182,7 @@ class TestPanelManagementFeatures(TestCase):
         panel_id = panel_data["id"]
         group = SceneReportGroup.objects.get(scene_id=self.scene1.scene_id, group_type=ReportGroupType.PLATFORM)
         SceneReportGroupItem.objects.filter(group=group, panel_id=panel_id).delete()
-        DeleteSceneReportGroup().request({"scene_id": self.scene1.scene_id, "group_id": group.id})
+        DeleteSceneReportGroup().request({"group_id": group.id})
         self.assertFalse(SceneReportGroup.objects.filter(id=group.id).exists())
 
         UpdatePlatformPanel().request(
@@ -207,7 +207,7 @@ class TestPanelManagementFeatures(TestCase):
             {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "待保护报表"}
         )
         with self.assertRaisesMessage(Exception, "分组下仍有报表，无法删除"):
-            DeleteSceneReportGroup().request({"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id})
+            DeleteSceneReportGroup().request({"group_id": self.scene_group.id})
 
         self.assertTrue(SceneReportGroup.objects.filter(id=self.scene_group.id).exists())
         self.assertTrue(
