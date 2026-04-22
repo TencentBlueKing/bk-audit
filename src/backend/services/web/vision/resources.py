@@ -724,7 +724,10 @@ class ListPlatformPanels(BKVision):
             binding_type=BindingType.PLATFORM_BINDING,
         )
         panel_ids = list(binding_qs.values_list("resource_id", flat=True))
-        queryset = VisionPanel.objects.filter(id__in=panel_ids)
+        queryset = VisionPanel.objects.filter(
+            id__in=panel_ids,
+            scenario=validated_request_data.get("scenario", Scenario.DEFAULT),
+        )
 
         status = validated_request_data.get("status")
         name = validated_request_data.get("name") or ""
@@ -774,7 +777,7 @@ class ListScenePanels(BKVision):
         status = validated_request_data.get("status")
 
         queryset = CompositeScopeFilter.filter_queryset(
-            queryset=VisionPanel.objects.all(),
+            queryset=VisionPanel.objects.filter(scenario=validated_request_data.get("scenario", Scenario.DEFAULT)),
             scene_id=[scene_id],
             system_id=[],
             resource_type=ResourceVisibilityType.PANEL,

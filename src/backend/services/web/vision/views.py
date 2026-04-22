@@ -155,15 +155,16 @@ class PanelsViewSet(BKVisionViewSet):
     - GET /panel/                    报表列表
     - GET /panel/group/              分组列表（system/cross_system 视角返回空）
     - POST /panel/favorite/          收藏/取消收藏
-    - GET|PUT /panel/preference/     获取/更新用户偏好
+    - GET /panel/get_panel_preference/     获取用户偏好
+    - PUT /panel/update_panel_preference/  更新用户偏好
     """
 
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
         ResourceRoute("GET", resource.vision.list_scene_report_group, endpoint="group"),
         ResourceRoute("POST", resource.vision.toggle_panel_favorite, endpoint="favorite"),
-        ResourceRoute("GET", resource.vision.get_panel_preference, endpoint="preference"),
-        ResourceRoute("PUT", resource.vision.update_panel_preference, endpoint="preference"),
+        ResourceRoute("GET", resource.vision.get_panel_preference, endpoint="get_panel_preference"),
+        ResourceRoute("PUT", resource.vision.update_panel_preference, endpoint="update_panel_preference"),
     ]
 
 
