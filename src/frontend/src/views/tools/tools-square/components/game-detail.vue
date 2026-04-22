@@ -207,6 +207,7 @@
       totalGift: 0,
       totalIssue: 6978,
     }),
+    initialTab: '',
   });
 
   const { t } = useI18n();
