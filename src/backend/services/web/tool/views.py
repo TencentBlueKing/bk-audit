@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
@@ -9,7 +10,8 @@ from apps.permission.handlers.drf import (
     InstanceActionPermission,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.utils.data import get_value_by_request
+from core.exceptions import ValidationError
+from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
 
@@ -29,7 +31,8 @@ class ToolViewSet(ResourceViewSet):
         return []
 
     def get_tool_uid(self):
-        return get_value_by_request(self.request, "uid")
+        """工具详情类接口优先从请求上下文中的路由主键读取 uid。"""
+        return get_value_by_request_or_path(self.request, "uid")
 
     resource_routes = [
         ResourceRoute(
@@ -102,15 +105,43 @@ class SceneScopeToolViewSet(ResourceViewSet):
     POST   /api/v1/tool/scene/{uid}/publish/    上架/下架
     """
 
+    lookup_field = "uid"
+    resource_bound_actions = {"update", "destroy", "publish"}
+
     def get_scene_id(self):
         return get_value_by_request(self.request, "scene_id")
 
+    def get_scene_id_from_tool(self):
+        """通过工具绑定关系反查场景，避免详情接口信任可伪造的请求 scene_id。"""
+        from django.shortcuts import get_object_or_404
+
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+
+        uid = get_value_by_request_or_path(self.request, "uid")
+        if not uid:
+            raise ValidationError(message=gettext("无法获取工具UID"))
+
+        binding = get_object_or_404(
+            ResourceBinding,
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        binding_scene = binding.binding_scenes.first()
+        if not binding_scene:
+            raise ValidationError(message=gettext("无法获取场景ID"))
+        return str(binding_scene.scene_id)
+
     def get_permissions(self):
+        get_instance_id = (
+            self.get_scene_id_from_tool if self.action in self.resource_bound_actions else self.get_scene_id
+        )
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.MANAGE_SCENE],
                 resource_meta=ResourceEnum.SCENE,
-                get_instance_id=self.get_scene_id,
+                get_instance_id=get_instance_id,
             )
         ]
 

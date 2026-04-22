@@ -31,6 +31,7 @@ from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.models import get_request_username
+from core.utils.data import get_value_by_request_or_path
 from core.utils.renderers import API200Renderer
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
@@ -298,6 +299,40 @@ class ScenePanelManageViewSet(SceneManageBaseViewSet):
     DELETE /bkvision/api/v1/panel/scene/{panel_id}/     删除场景级报表
     POST   /bkvision/api/v1/panel/scene/{panel_id}/publish/ 上架/下架场景报表
     """
+
+    lookup_field = "panel_id"
+    resource_bound_actions = {"update", "destroy", "publish"}
+
+    def _get_scene_id_from_panel(self):
+        """优先使用详情路由中的 panel_id，再通过报表绑定关系反查所属场景。"""
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+
+        panel_id = get_value_by_request_or_path(self.request, "panel_id")
+        if not panel_id:
+            raise ValidationError(message=gettext("无法获取报表ID"))
+
+        binding = get_object_or_404(
+            ResourceBinding,
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(panel_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        binding_scene = binding.binding_scenes.first()
+        if not binding_scene:
+            raise ValidationError(message=gettext("无法获取场景ID"))
+        return str(binding_scene.scene_id)
+
+    def get_permissions(self):
+        action = getattr(self, "action", None)
+        get_instance_id = self._get_scene_id_from_panel if action in self.resource_bound_actions else self.get_scene_id
+        return [
+            InstanceActionPermission(
+                actions=[ActionEnum.MANAGE_SCENE],
+                resource_meta=ResourceEnum.SCENE,
+                get_instance_id=get_instance_id,
+            )
+        ]
 
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_scene_panels),

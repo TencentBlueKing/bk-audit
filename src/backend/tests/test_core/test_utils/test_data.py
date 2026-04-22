@@ -22,6 +22,7 @@ from core.utils.data import (
     extract_nested_value,
     generate_random_string,
     get_value_by_request,
+    get_value_by_request_or_path,
     group_by,
     ignore_wrapper,
     modify_dict_by_path,
@@ -116,6 +117,18 @@ class TestDataUtils(TestCase):
         )
         self.assertEqual(get_value_by_request(request, "key"), "value")
         self.assertEqual(get_value_by_request(request, "missing"), "data")
+        path_only_request = SimpleNamespace(
+            query_params={},
+            data={},
+            parser_context={"kwargs": {"uid": "tool-uid-1"}},
+        )
+        self.assertEqual(get_value_by_request_or_path(path_only_request, "uid"), "tool-uid-1")
+        mixed_request = SimpleNamespace(
+            query_params={"uid": "query-uid"},
+            data={"uid": "data-uid"},
+            parser_context={"kwargs": {"uid": "path-uid"}},
+        )
+        self.assertEqual(get_value_by_request_or_path(mixed_request, "uid"), "path-uid")
         self.assertTrue(compare_dict_specific_keys({"a": 1, "b": 2}, {"a": 1, "b": 3}, ["a"]))
         self.assertEqual(data2string(["a", "b"]), "a,b")
 

@@ -252,6 +252,20 @@ def get_value_by_request(request, key: str):
     return request.query_params.get(key, request.data.get(key))
 
 
+def get_value_by_request_or_path(request, key: str):
+    """
+    先取路由 path kwargs，缺失时再回退到 query/body 入参。
+
+    适用于详情类接口的资源主键读取，确保权限校验与实际命中的详情资源使用
+    同一份主键值，同时兼容旧的请求入参写法。
+    """
+    parser_context = getattr(request, "parser_context", None) or {}
+    value = parser_context.get("kwargs", {}).get(key)
+    if value is not None:
+        return value
+    return get_value_by_request(request, key)
+
+
 def compare_dict_specific_keys(d1: dict, d2: dict, keys: list):
     """
     使用 all() 和生成器表达式比较字典中的指定键值
