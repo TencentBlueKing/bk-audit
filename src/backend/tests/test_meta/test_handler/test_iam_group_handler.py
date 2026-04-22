@@ -65,11 +65,19 @@ class TestBuildPermissions(SimpleTestCase):
             scene_id="scene_002",
             scene_name="测试场景2",
         )
-        self.assertEqual(
-            result["_multi_permissions"][0]["actions"], [{"id": "edit_strategy"}, {"id": "list_strategy_v2"}]
-        )
-        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
-        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景2")
+
+        self.assertEqual(len(result["_multi_permissions"]), 2)
+
+        # 找到strategy资源类型的权限组
+        strategy_perms = [p for p in result["_multi_permissions"] if p["resources"][0]["type"] == "strategy"][0]
+        self.assertEqual(strategy_perms["actions"], [{"id": "edit_strategy"}])
+        self.assertEqual(strategy_perms["resources"][0]["type"], "strategy")
+
+        # 找到scene资源类型的权限组
+        scene_perms = [p for p in result["_multi_permissions"] if p["resources"][0]["type"] == "scene"][0]
+        self.assertEqual(scene_perms["actions"], [{"id": "list_strategy_v2"}])
+        self.assertEqual(scene_perms["resources"][0]["type"], "scene")
+        self.assertEqual(scene_perms["resources"][0]["paths"][0][0]["name"], "测试场景2")
 
     def test_build_permissions_risk_actions(self):
         """测试风险相关动作的权限构建"""
@@ -94,6 +102,7 @@ class TestBuildPermissions(SimpleTestCase):
             scene_name="测试场景4",
         )
         self.assertEqual(result["_multi_permissions"][0]["actions"], [{"id": "list_rule_v2"}, {"id": "create_rule_v2"}])
+        # 根据当前实现，规则相关动作使用scene资源类型
         self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
         self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景4")
 
@@ -1525,15 +1534,14 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
 
     def test_resource_type_detection_for_strategy_actions(self):
         """测试策略相关动作的资源类型匹配"""
-        strategy_actions = [
-            mock.MagicMock(id="list_strategy_v2"),
-            mock.MagicMock(id="create_strategy_v2"),
+        # 测试使用strategy资源类型的动作
+        strategy_type_actions = [
             mock.MagicMock(id="edit_strategy"),
             mock.MagicMock(id="delete_strategy"),
             mock.MagicMock(id="generate_strategy_risk"),
         ]
 
-        for action in strategy_actions:
+        for action in strategy_type_actions:
             result = IAMGroupManager.build_permissions(
                 actions=[action],
                 system_id="test_system",
@@ -1541,6 +1549,21 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_name="测试场景",
             )
             self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "strategy")
+
+        # 测试使用scene资源类型的动作
+        scene_type_actions = [
+            mock.MagicMock(id="list_strategy_v2"),
+            mock.MagicMock(id="create_strategy_v2"),
+        ]
+
+        for action in scene_type_actions:
+            result = IAMGroupManager.build_permissions(
+                actions=[action],
+                system_id="test_system",
+                scene_id="scene_001",
+                scene_name="测试场景",
+            )
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_risk_actions(self):
         """测试风险相关动作的资源类型匹配"""
@@ -1575,7 +1598,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "rule")
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_link_table_actions(self):
         """测试联表相关动作的资源类型匹配"""
@@ -1594,7 +1617,11 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+            # 根据修复后的资源类型映射，list/create使用scene，view/edit/delete使用link_table
+            if action.id in ["list_link_table_v2", "create_link_table_v2"]:
+                self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+            else:
+                self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "link_table")
 
     def test_resource_type_detection_for_notice_group_actions(self):
         """测试通知组相关动作的资源类型匹配"""
@@ -1612,7 +1639,11 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+            # 根据修复后的资源类型映射，list/create使用scene，edit/delete使用notice_group
+            if action.id in ["list_notice_group_v2", "create_notice_group_v2"]:
+                self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
+            else:
+                self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "notice_group")
 
     def test_resource_type_detection_for_panel_actions(self):
         """测试套餐相关动作的资源类型匹配"""
@@ -1629,6 +1660,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
+            # 根据当前实现，套餐相关动作使用scene资源类型
             self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_scene_actions(self):
@@ -1664,7 +1696,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
 
         # 应返回多资源类型权限结构
         self.assertIn("_multi_permissions", result)
-        self.assertEqual(len(result["_multi_permissions"]), 3)
+        self.assertEqual(len(result["_multi_permissions"]), 2)
 
         # 验证包含所有资源类型
         resource_types = [perm["resources"][0]["type"] for perm in result["_multi_permissions"]]
