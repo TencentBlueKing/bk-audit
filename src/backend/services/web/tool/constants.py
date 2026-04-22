@@ -650,7 +650,6 @@ class SmartPageBaseDataSourceConfig(BaseModel):
 
     name: str = PydanticField(title=gettext_lazy("数据源名称"))
     description: str = PydanticField(default_factory=str, title=gettext_lazy("数据源描述"))
-    marker_type: Optional[str] = PydanticField(default=None, title=gettext_lazy("展示标记类型"))
     data_source_type: SmartPageDataSourceTypeEnum = PydanticField(title=gettext_lazy("数据源类型"))
 
 
@@ -670,6 +669,7 @@ SmartPageDataSourceConfigUnion = Annotated[
 class SmartPageToolConfig(BaseModel):
     """智能页面工具配置"""
 
+    marker_type: Optional[str] = PydanticField(default=None, title=gettext_lazy("页面标记类型"))
     data_sources: Annotated[List[SmartPageDataSourceConfigUnion], ListField(child=DictField())] = PydanticField(
         default_factory=list,
         title=gettext_lazy("数据源列表"),
