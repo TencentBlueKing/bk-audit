@@ -94,6 +94,3 @@ class SceneToolType(TextChoices):
 
 # 场景ID自增起始值
 SCENE_ID_START = 100001
-
-# 默认场景名称（用于存量数据迁移）
-DEFAULT_SCENE_NAME = gettext_lazy("默认场景")

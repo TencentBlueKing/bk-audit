@@ -77,6 +77,13 @@ class TestListRiskResource(TestCase):
 
         self.scene = Scene.objects.create(name="risk-list-scene")
         self.scene_id = self.scene.scene_id
+        self.scene_ids_patcher = mock.patch(
+            "services.web.risk.resources.risk.ScopePermission.get_scene_ids",
+            autospec=True,
+            return_value=[self.scene_id],
+        )
+        self.scene_ids_patcher.start()
+        self.addCleanup(self.scene_ids_patcher.stop)
         self.authed_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.authed_risk_filter", return_value=Q(), autospec=True
         )
@@ -1072,6 +1079,13 @@ class TestListMineAndNoticingRisk(TestCase):
 
         self.scene = Scene.objects.create(name="risk-mine-scene")
         self.scene_id = self.scene.scene_id
+        self.scene_ids_patcher = mock.patch(
+            "services.web.risk.resources.risk.ScopePermission.get_scene_ids",
+            autospec=True,
+            return_value=[self.scene_id],
+        )
+        self.scene_ids_patcher.start()
+        self.addCleanup(self.scene_ids_patcher.stop)
 
         self.iam_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.iam_risk_filter", return_value=Q(), autospec=True
@@ -1735,6 +1749,13 @@ class TestListProcessedRisk(TestCase):
 
         self.scene = Scene.objects.create(name="risk-processed-scene")
         self.scene_id = self.scene.scene_id
+        self.scene_ids_patcher = mock.patch(
+            "services.web.risk.resources.risk.ScopePermission.get_scene_ids",
+            autospec=True,
+            return_value=[self.scene_id],
+        )
+        self.scene_ids_patcher.start()
+        self.addCleanup(self.scene_ids_patcher.stop)
         self.strategy = Strategy.objects.create(
             strategy_id=404,
             strategy_name="processed-strategy",

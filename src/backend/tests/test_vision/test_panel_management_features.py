@@ -109,6 +109,38 @@ class TestPanelManagementFeatures(TestCase):
         )
         self.assertIsNotNone(data[0]["updated_at"])
 
+    def test_list_platform_panels_filters_by_scenario(self):
+        default_panel = CreatePlatformPanel().request(
+            {
+                "name": "默认场景平台报表",
+                "status": "published",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        tool_panel = VisionPanel.objects.create(
+            id="tool_platform_panel",
+            name="工具场景平台报表",
+            scenario=Scenario.TOOL,
+            status="published",
+        )
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=tool_panel.id,
+            binding_type="platform_binding",
+            visibility_type=VisibilityScope.SPECIFIC_SCENES,
+        )
+        binding.binding_scenes.create(scene_id=self.scene1.scene_id)
+
+        default_data = ListPlatformPanels().request({"enable_paginate": False})
+        self.assertEqual([item["id"] for item in default_data], [default_panel["id"]])
+
+        tool_data = ListPlatformPanels().request({"enable_paginate": False, "scenario": Scenario.TOOL})
+        self.assertEqual([item["id"] for item in tool_data], [tool_panel.id])
+
     def test_scene_group_item_bulk_order(self):
         p1 = CreateScenePanel().request(
             {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "报表A"}
@@ -171,6 +203,29 @@ class TestPanelManagementFeatures(TestCase):
         self.assertEqual(panel_item["updated_by"], VisionPanel.objects.get(id=panel_data["id"]).updated_by)
         self.assertIsNotNone(panel_item["updated_at"])
         self.assertFalse(SceneReportGroupItem.objects.filter(group=platform_group, panel_id=panel_data["id"]).exists())
+
+    def test_list_scene_panels_filters_by_scenario(self):
+        default_panel = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "默认场景报表"}
+        )
+        tool_panel = VisionPanel.objects.create(
+            id="tool_scene_panel",
+            name="工具场景报表",
+            scenario=Scenario.TOOL,
+            status="published",
+        )
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=tool_panel.id,
+            binding_type="scene_binding",
+        )
+        binding.binding_scenes.create(scene_id=self.scene1.scene_id)
+
+        default_data = ListScenePanels().request({"scene_id": self.scene1.scene_id})
+        self.assertEqual([item["id"] for item in default_data], [default_panel["id"]])
+
+        tool_data = ListScenePanels().request({"scene_id": self.scene1.scene_id, "scenario": Scenario.TOOL})
+        self.assertEqual([item["id"] for item in tool_data], [tool_panel.id])
 
     def test_delete_empty_platform_group_success(self):
         group = SceneReportGroup.objects.create(
@@ -378,6 +433,10 @@ class TestPanelManagementFeatures(TestCase):
             if route.endpoint == "group" and route.method.lower() == "get"
         ]
         self.assertEqual(len(group_routes), 1)
+
+    def test_panels_viewset_resource_routes_have_unique_endpoints(self):
+        endpoints = [(route.endpoint, route.pk_field) for route in PanelsViewSet.resource_routes if route.endpoint]
+        self.assertEqual(len(endpoints), len(set(endpoints)))
 
     def test_update_scene_panel_keeps_single_group_item_per_scene(self):
         another_group = SceneReportGroup.objects.create(
