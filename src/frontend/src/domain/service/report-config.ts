@@ -23,47 +23,53 @@ export default  {
    * @desc 分组列表
    */
   fetchGroups(params: {
-    page: number,
-    page_size: number,
+    scope_id: number | string,
+    scope_type : string,
   }) {
     return PanelModelSource.fetchGroups(params)
       .then(({ data }) => data);
   },
   /**
-   * @desc 分组Panel列表
+   * @desc 获取场景报表列表
    */
   fetchPanels(params:{
     page: number,
     page_size: number,
-    is_enabled?: boolean,
+    status?: 'published' | 'unpublished',
     keyword?: string,
+    scene_id: string,
   }) {
     return PanelModelSource.fetchPanels(params)
       .then(({ data }) => data.map((item: PanelModel) => new PanelModel(item)));
   },
   /**
-   * @desc 创建Panel
+   * @desc 创建场景级报表
    */
   createPanel(params: {
+    scene_id: string | number,
     vision_id: string,
+    group_id: string,
+    id: string,
     name: string,
-    group_name: string,
+    category: string,
+    status?: 'published' | 'unpublished',
     description?: string,
-    is_enabled?: boolean,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
   },
   /**
-   * @desc 更新Panel
+   * @desc 更新场景报表
    */
   updatePanel(params: {
     id: string,
-    name?: string,
+    scene_id: number | string,
+    group_id: number,
+    panel_id: string,
+    name: string,
+    status?: 'published' | 'unpublished',
+    category?: string,
     description?: string,
-    group_name?: string,
-    vision_id?: string,
-    is_enabled?: boolean,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);
@@ -71,15 +77,16 @@ export default  {
   /**
    * @desc 删除Panel
    */
-  deletePanel(params: { id: string }) {
+  deletePanel(params: { id: string, scene_id: number | string}) {
     return PanelModelSource.deletePanel(params);
   },
   /**
-   * @desc 更新Panel排序
+   * @desc 更新场景报表分组内排序
    */
   orderPanels(params: {
-    panels: Array<{
-      id: string,
+    scene_id: number | string,
+    items: Array<{
+      panel_id: string,
       group_id: number,
       priority_index: number,
     }>,
@@ -88,11 +95,12 @@ export default  {
       .then(({ data }) => data);
   },
   /**
-   * @desc 更新分组排序
+   * @desc 更新场景报表分组排序
    */
   orderGroups(params: {
+    scene_id: number | string,
     groups: Array<{
-      id: number,
+      group_id: number,
       priority_index: number,
     }>,
   }) {
@@ -125,5 +133,33 @@ export default  {
     return PanelModelSource.updatePanelPreference(params)
       .then(({ data }) => data);
   },
-
+  /**
+   * @desc 创建场景级报表分组
+   */
+  createGroup(params: {
+    scene_id: string | number,
+    name: string,
+    priority_index?: number,
+  }) {
+    return PanelModelSource.createGroup(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新场景级报表分组（重命名）
+   */
+  updateGroup(params: {
+    scene_id: number | string,
+    group_id: number,
+    name: string,
+    priority_index?: number,
+  }) {
+    return PanelModelSource.updateGroup(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 删除场景级报表分组
+   */
+  deleteGroup(params: { id: number | string, scene_id: number | string}) {
+    return PanelModelSource.deleteGroup(params);
+  },
 };

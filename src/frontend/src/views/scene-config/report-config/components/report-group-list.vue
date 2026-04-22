@@ -55,6 +55,37 @@
                       type="plus-circle" />
                     {{ t('新建报表') }}
                   </bk-button>
+                  <bk-dropdown trigger="hover">
+                    <bk-button
+                      class="group-more-btn ml8"
+                      text
+                      theme="primary">
+                      <audit-icon type="more" />
+                    </bk-button>
+                    <template #content>
+                      <bk-dropdown-menu>
+                        <bk-dropdown-item>
+                          <div
+                            class="action-item"
+                            @click="handleShowRenameGroup(group)">
+                            {{ t('重命名') }}
+                          </div>
+                        </bk-dropdown-item>
+                        <bk-dropdown-item>
+                          <div
+                            v-bk-tooltips="{
+                              content: t('当前分组下还有报表，不支持删除'),
+                              disabled: group.reports.length === 0,
+                            }"
+                            class="action-item danger"
+                            :class="{ disableddel: group.reports.length > 0 }"
+                            @click="group.reports.length === 0 && handleShowDeleteGroupConfirm(group)">
+                            {{ t('删除') }}
+                          </div>
+                        </bk-dropdown-item>
+                      </bk-dropdown-menu>
+                    </template>
+                  </bk-dropdown>
                 </div>
               </div>
             </template>
@@ -143,8 +174,8 @@
                         </span>
                       </div>
                       <div class="custom-table-cell status-cell">
-                        <bk-tag :theme="report.status === 'enabled' ? 'success' : ''">
-                          {{ report.status === 'enabled' ? t('启用') : t('停用') }}
+                        <bk-tag :theme="report.status === 'published' ? 'success' : ''">
+                          {{ report.status === 'published' ? t('启用') : t('停用') }}
                         </bk-tag>
                       </div>
                       <div class="custom-table-cell updater-cell">
@@ -182,18 +213,18 @@
                                   <div
                                     class="action-item"
                                     @click="handleShowToggleStatusConfirm(report)">
-                                    {{ report.status === 'enabled' ? t('停用') : t('启用') }}
+                                    {{ report.status === 'published' ? t('停用') : t('启用') }}
                                   </div>
                                 </bk-dropdown-item>
                                 <bk-dropdown-item>
                                   <div
                                     v-bk-tooltips="{
                                       content: t('请先停用后再删除'),
-                                      disabled: report.status !== 'enabled'
+                                      disabled: report.status !== 'published'
                                     }"
                                     class="action-item danger"
-                                    :class="{ disableddel: report.status === 'enabled' }"
-                                    @click="report.status !== 'enabled' && handleShowDeleteConfirm(report)">
+                                    :class="{ disableddel: report.status === 'published' }"
+                                    @click="report.status !== 'published' && handleShowDeleteConfirm(report)">
                                     {{ t('删除') }}
                                   </div>
                                 </bk-dropdown-item>
@@ -273,19 +304,19 @@
       width="400">
       <div class="toggle-status-dialog-content">
         <div class="toggle-status-title">
-          {{ toggleStatusTarget?.status === 'enabled' ? t('确认停用该报表？') : t('确认启用该报表？') }}
+          {{ toggleStatusTarget?.status === 'published' ? t('确认停用该报表？') : t('确认启用该报表？') }}
         </div>
         <div class="toggle-status-tip">
-          {{ toggleStatusTarget?.status === 'enabled' ? t('停用后，该报表将从审计报表菜单中隐藏') : t('启用后，该报表将在审计报表菜单中展示') }}
+          {{ toggleStatusTarget?.status === 'published' ? t('停用后，该报表将从审计报表菜单中隐藏') : t('启用后，该报表将在审计报表菜单中展示') }}
         </div>
       </div>
       <template #footer>
         <bk-button
           class="mr8"
           :loading="toggleStatusLoading"
-          :theme="toggleStatusTarget?.status === 'enabled' ? 'danger' : 'primary'"
+          :theme="toggleStatusTarget?.status === 'published' ? 'danger' : 'primary'"
           @click="handleConfirmToggleStatus">
-          {{ toggleStatusTarget?.status === 'enabled' ? t('停用') : t('启用') }}
+          {{ toggleStatusTarget?.status === 'published' ? t('停用') : t('启用') }}
         </bk-button>
         <bk-button @click="handleCancelToggleStatus">
           {{ t('取消') }}
@@ -327,6 +358,67 @@
         </bk-button>
       </template>
     </bk-dialog>
+
+    <!-- 重命名分组弹窗 -->
+    <bk-dialog
+      v-model:is-show="renameGroupDialogVisible"
+      :title="t('重命名')"
+      width="480">
+      <bk-form
+        ref="renameGroupFormRef"
+        form-type="vertical"
+        :model="renameGroupFormData"
+        :rules="renameGroupFormRules">
+        <bk-form-item
+          :label="t('分组名称')"
+          property="name"
+          required>
+          <bk-input
+            v-model="renameGroupFormData.name"
+            :placeholder="t('请输入')" />
+        </bk-form-item>
+      </bk-form>
+      <template #footer>
+        <bk-button
+          class="mr8"
+          :loading="renameGroupLoading"
+          theme="primary"
+          @click="handleConfirmRenameGroup">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button @click="handleCancelRenameGroup">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </bk-dialog>
+
+    <!-- 删除分组确认弹窗 -->
+    <bk-dialog
+      v-model:is-show="deleteGroupDialogVisible"
+      footer-align="center"
+      :show-head="false"
+      width="400">
+      <div class="toggle-status-dialog-content">
+        <div class="toggle-status-title">
+          {{ t('是否删除该分组？') }}
+        </div>
+        <div class="delete-group-info">
+          {{ t('分组：') }}<span class="group-name-highlight">{{ deleteGroupTarget?.name }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <bk-button
+          class="mr8"
+          :loading="deleteGroupLoading"
+          theme="danger"
+          @click="handleConfirmDeleteGroup">
+          {{ t('删除') }}
+        </bk-button>
+        <bk-button @click="handleCancelDeleteGroup">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </bk-dialog>
   </div>
 </template>
 
@@ -345,16 +437,17 @@
   import useRequest from '@hooks/use-request';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   export interface Report {
     id: string;
     name: string;
     description: string;
-    bkvisionReport: string;
+    vision_id: string;
+    bkvisionReport?: string;
     bkvisionReportName?: string;
     bkvisionSpaceUid?: string;
-    bkvisionUrl?: string;
-    status: 'enabled' | 'disabled';
+    status: 'published' | 'unpublished';
     updatedBy: string;
     updatedAt: string;
   }
@@ -401,7 +494,6 @@
     (e: 'deleted'): void;
     (e: 'drag-sort', result: DragSortResult): void;
     (e: 'group-drag-sort', result: GroupDragSortResult): void;
-    (e: 'cross-group-drag', result: CrossGroupDragResult): void;
     (e: 'order-updated'): void;
   }
 
@@ -439,6 +531,25 @@
   // 用于跟踪报表原始所属分组
   const reportGroupMap = ref<Map<string, number>>(new Map());
 
+  // 重命名分组相关状态
+  const renameGroupDialogVisible = ref(false);
+  const renameGroupFormRef = ref();
+  const renameGroupTarget = ref<ReportGroup | null>(null);
+  const renameGroupFormData = ref({ name: '' });
+  const renameGroupFormRules = {
+    name: [
+      {
+        required: true,
+        message: t('分组名称不能为空'),
+        trigger: 'blur',
+      },
+    ],
+  };
+
+  // 删除分组相关状态
+  const deleteGroupDialogVisible = ref(false);
+  const deleteGroupTarget = ref<ReportGroup | null>(null);
+
   // 更新报表-分组映射
   const updateReportGroupMap = () => {
     reportGroupMap.value.clear();
@@ -449,28 +560,6 @@
     });
   };
 
-  // 同步 props.groups 到 localGroups
-  watch(() => props.groups, (groups) => {
-    localGroups.value = [...groups];
-    // 默认全部展开
-    if (groups.length > 0) {
-      activeGroups.value = groups.map(group => group.id);
-    }
-  }, { immediate: true, deep: true });
-
-  // 监听全部展开/收起
-  watch(() => props.expandAll, (val) => {
-    if (val) {
-      activeGroups.value = localGroups.value.map(group => group.id);
-    } else {
-      activeGroups.value = [];
-    }
-  });
-
-  // 监听 props.groups 变化时更新映射
-  watch(() => props.groups, () => {
-    updateReportGroupMap();
-  }, { immediate: true, deep: true });
 
   // 获取配置数据（用于获取 BKVision URL）
   const {
@@ -519,43 +608,35 @@
 
   // 构建排序参数 - 收集指定分组的所有 Panel
   const buildOrderParams = (groupId: number) => {
-    const panels: Array<{ id: string; group_id: number; priority_index: number }> = [];
+    const items: Array<{ panel_id: string; group_id: number; priority_index: number }> = [];
     const group = localGroups.value.find(g => g.id === groupId);
 
     if (group) {
       // priority_index 按显示顺序从大到小赋值
       const totalReports = group.reports.length;
       group.reports.forEach((report, index) => {
-        panels.push({
-          id: report.id,
+        items.push({
+          panel_id: report.id,
           group_id: groupId, // 所有报表的 group_id 都设为目标分组 ID
           priority_index: totalReports - 1 - index, // 第一个显示的 priority_index 最大
         });
       });
     }
 
-    return { panels };
+    return {
+      scene_id: getSceneSystemParams().scope_id,
+      items,
+    };
   };
 
   // 处理报表拖拽变化（包括跨分组拖拽）
   const handleReportDragChange = (targetGroupId: number, evt: any) => {
     // 添加事件 - 从其他分组拖入（跨分组拖拽）
     if (evt.added) {
-      const { element: report, newIndex } = evt.added;
-      const fromGroupId = reportGroupMap.value.get(report.id);
-
+      const { element: report } = evt.added;
       // 跨分组拖拽 - 只传目标分组（B分组）的所有数据
       const params = buildOrderParams(targetGroupId);
       orderPanels(params);
-
-      // 通知父组件跨分组拖拽事件（用于 UI 更新）
-      emit('cross-group-drag', {
-        reportId: report.id,
-        fromGroupId: fromGroupId || 0,
-        toGroupId: targetGroupId,
-        newIndex,
-      });
-
       // 更新映射
       reportGroupMap.value.set(report.id, targetGroupId);
     }
@@ -648,7 +729,7 @@
   } = useRequest(ReportConfigService.updatePanel, {
     defaultValue: null,
     onSuccess: () => {
-      const isEnabling = toggleStatusTarget.value?.status === 'disabled';
+      const isEnabling = toggleStatusTarget.value?.status === 'unpublished';
       messageSuccess(isEnabling ? t('启用成功') : t('停用成功'));
       toggleStatusDialogVisible.value = false;
       toggleStatusTarget.value = null;
@@ -659,10 +740,17 @@
   // 确认启用/停用
   const handleConfirmToggleStatus = () => {
     if (toggleStatusTarget.value) {
-      const newStatus = toggleStatusTarget.value.status !== 'enabled';
+      // 查找报表所属分组
+      const group = localGroups.value.find(g => g.reports.some(r => r.id === toggleStatusTarget.value!.id));
+      const groupId = group?.id ?? 0;
+      const isEnabling = toggleStatusTarget.value.status !== 'published';
       updatePanelStatus({
         id: toggleStatusTarget.value.id,
-        is_enabled: newStatus,
+        scene_id: getSceneSystemParams().scope_id,
+        group_id: groupId,
+        panel_id: toggleStatusTarget.value.id,
+        name: toggleStatusTarget.value.name,
+        status: isEnabling ? 'published' : 'unpublished',
       });
     }
   };
@@ -698,7 +786,7 @@
   // 确认删除
   const handleConfirmDelete = () => {
     if (deleteTarget.value && deleteConfirmInput.value === deleteTarget.value.name) {
-      deletePanel({ id: deleteTarget.value.id });
+      deletePanel({ id: deleteTarget.value.id, scene_id: getSceneSystemParams().scope_id });
     }
   };
 
@@ -737,11 +825,13 @@
   const buildGroupOrderParams = () => {
     const totalGroups = localGroups.value.length;
     const groups = localGroups.value.map((group, index) => ({
-      id: group.id,
-      // priority_index 由大到小，最后一个是 0
+      group_id: group.id,
       priority_index: totalGroups - 1 - index,
     }));
-    return { groups };
+    return {
+      scene_id: getSceneSystemParams().scope_id,
+      groups,
+    };
   };
 
   // 处理分组拖拽结束
@@ -755,6 +845,108 @@
       newOrder: localGroups.value,
     });
   };
+
+  // 显示重命名分组弹窗
+  const handleShowRenameGroup = (group: ReportGroup) => {
+    renameGroupTarget.value = group;
+    renameGroupFormData.value.name = group.name;
+    renameGroupDialogVisible.value = true;
+  };
+
+  // 更新分组（重命名）
+  const {
+    run: updateGroup,
+    loading: renameGroupLoading,
+  } = useRequest(ReportConfigService.updateGroup, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('重命名成功'));
+      renameGroupDialogVisible.value = false;
+      renameGroupTarget.value = null;
+      renameGroupFormData.value.name = '';
+      emit('order-updated'); // 通知父组件刷新列表
+    },
+  });
+
+  // 确认重命名分组
+  const handleConfirmRenameGroup = async () => {
+    try {
+      await renameGroupFormRef.value?.validate();
+      if (renameGroupTarget.value) {
+        updateGroup({
+          scene_id: getSceneSystemParams().scope_id,
+          group_id: renameGroupTarget.value.id,
+          name: renameGroupFormData.value.name,
+          priority_index: renameGroupTarget.value.priority_index,
+        });
+      }
+    } catch {
+      // 表单验证失败
+    }
+  };
+
+  // 取消重命名分组
+  const handleCancelRenameGroup = () => {
+    renameGroupDialogVisible.value = false;
+    renameGroupTarget.value = null;
+    renameGroupFormData.value.name = '';
+  };
+
+  // 显示删除分组确认弹窗
+  const handleShowDeleteGroupConfirm = (group: ReportGroup) => {
+    deleteGroupTarget.value = group;
+    deleteGroupDialogVisible.value = true;
+  };
+
+  // 删除分组
+  const {
+    run: deleteGroup,
+    loading: deleteGroupLoading,
+  } = useRequest(ReportConfigService.deleteGroup, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(t('删除成功'));
+      deleteGroupDialogVisible.value = false;
+      deleteGroupTarget.value = null;
+      emit('order-updated'); // 通知父组件刷新列表
+    },
+  });
+
+  // 确认删除分组
+  const handleConfirmDeleteGroup = () => {
+    if (deleteGroupTarget.value) {
+      deleteGroup({ id: deleteGroupTarget.value.id, scene_id: getSceneSystemParams().scope_id });
+    }
+  };
+
+  // 取消删除分组
+  const handleCancelDeleteGroup = () => {
+    deleteGroupDialogVisible.value = false;
+    deleteGroupTarget.value = null;
+  };
+
+  // 同步 props.groups 到 localGroups
+  watch(() => props.groups, (groups) => {
+    localGroups.value = [...groups];
+    // 默认全部展开
+    if (groups.length > 0) {
+      activeGroups.value = groups.map(group => group.id);
+    }
+  }, { immediate: true, deep: true });
+
+  // 监听全部展开/收起
+  watch(() => props.expandAll, (val) => {
+    if (val) {
+      activeGroups.value = localGroups.value.map(group => group.id);
+    } else {
+      activeGroups.value = [];
+    }
+  });
+
+  // 监听 props.groups 变化时更新映射
+  watch(() => props.groups, () => {
+    updateReportGroupMap();
+  }, { immediate: true, deep: true });
 </script>
 
 <style lang="postcss" scoped>
@@ -877,8 +1069,27 @@
 /* 自定义表格样式 */
 .custom-table {
   width: 100%;
+  overflow-x: auto;
   border: 1px solid #dcdee5;
   border-top: none;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: #c4c6cc;
+    border-radius: 3px;
+
+    &:hover {
+      background-color: #979ba5;
+    }
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
 }
 
 .custom-table-header {
@@ -889,6 +1100,10 @@
   color: #313238;
   background-color: #f5f7fa;
   border-bottom: 1px solid #dcdee5;
+
+  .custom-table-cell {
+    background-color: #f5f7fa;
+  }
 }
 
 .custom-table-body {
@@ -925,6 +1140,7 @@
   height: 100%;
   padding: 0 16px;
   overflow: hidden;
+  background-color: inherit;
 }
 
 .cell-text {
@@ -1148,5 +1364,16 @@
     font-size: 14px;
     color: #63656e;
   }
+}
+
+/* 删除分组确认弹窗样式 */
+.delete-group-info {
+  font-size: 14px;
+  color: #63656e;
+}
+
+.group-name-highlight {
+  font-weight: 600;
+  color: #313238;
 }
 </style>
