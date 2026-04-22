@@ -41,7 +41,7 @@ from services.web.tool.permissions import (
     UseToolPermission,
     check_bkvision_share_permission,
 )
-from services.web.vision.models import Scenario, VisionPanel
+from services.web.vision.models import Scenario, SceneReportGroup, VisionPanel
 
 
 class ToolVisionPermission(BasePermission):
@@ -310,6 +310,41 @@ class ScenePanelManageViewSet(SceneManageBaseViewSet):
 
 class SceneReportGroupManageViewSet(SceneManageBaseViewSet):
     """场景报表分组管理 ViewSet（场景管理员）。"""
+
+    lookup_field = "group_id"
+    group_bound_actions = {"update", "destroy"}
+
+    def _get_scene_id_from_request(self):
+        scene_id = self.request.query_params.get("scene_id") or self.request.data.get("scene_id")
+        if scene_id:
+            return scene_id
+        raise ValidationError(message=gettext("无法获取场景ID"))
+
+    def _get_scene_id_from_group(self):
+        group_id = (
+            self.kwargs.get("group_id")
+            or self.request.query_params.get("group_id")
+            or self.request.data.get("group_id")
+        )
+        if not group_id:
+            raise ValidationError(message=gettext("无法获取分组ID"))
+
+        group = get_object_or_404(SceneReportGroup, id=group_id)
+        return str(group.scene_id)
+
+    def get_permissions(self):
+        get_instance_id = (
+            self._get_scene_id_from_group
+            if self.action in self.group_bound_actions
+            else self._get_scene_id_from_request
+        )
+        return [
+            InstanceActionPermission(
+                actions=[ActionEnum.MANAGE_SCENE],
+                resource_meta=ResourceEnum.SCENE,
+                get_instance_id=get_instance_id,
+            )
+        ]
 
     resource_routes = [
         ResourceRoute("POST", resource.vision.create_scene_report_group),
