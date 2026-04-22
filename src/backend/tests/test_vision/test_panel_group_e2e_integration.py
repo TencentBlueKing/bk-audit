@@ -114,7 +114,7 @@ class TestPanelGroupE2EIntegration(TestCase):
         self.assertIsNotNone(square_data[0]["favorite_created_at"])
 
         with self.assertRaisesMessage(Exception, "分组下仍有报表，无法删除"):
-            DeleteSceneReportGroup().request({"scene_id": self.scene1.scene_id, "group_id": group_b["id"]})
+            DeleteSceneReportGroup().request({"group_id": group_b["id"]})
 
         UpdateSceneReportGroupPanelOrder().request(
             {
@@ -128,7 +128,7 @@ class TestPanelGroupE2EIntegration(TestCase):
                 ],
             }
         )
-        DeleteSceneReportGroup().request({"scene_id": self.scene1.scene_id, "group_id": group_b["id"]})
+        DeleteSceneReportGroup().request({"group_id": group_b["id"]})
         self.assertFalse(SceneReportGroup.objects.filter(id=group_b["id"]).exists())
 
     @patch("services.web.vision.resources.get_request_username", return_value="tester")
@@ -193,12 +193,7 @@ class TestPanelGroupE2EIntegration(TestCase):
             ).exists()
         )
 
-        DeleteSceneReportGroup().request(
-            {
-                "scene_id": self.scene1.scene_id,
-                "group_id": scene1_platform_group.id,
-            }
-        )
+        DeleteSceneReportGroup().request({"group_id": scene1_platform_group.id})
         self.assertFalse(SceneReportGroup.objects.filter(id=scene1_platform_group.id).exists())
 
         UpdatePlatformPanel().request(

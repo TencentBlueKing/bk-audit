@@ -860,11 +860,7 @@ class DeleteSceneReportGroup(BKVision):
     RequestSerializer = DeleteSceneReportGroupRequestSerializer
 
     def perform_request(self, validated_request_data):
-        group = get_object_or_404(
-            SceneReportGroup,
-            id=validated_request_data["group_id"],
-            scene_id=validated_request_data["scene_id"],
-        )
+        group = get_object_or_404(SceneReportGroup, id=validated_request_data["group_id"])
         if group.items.exists():
             raise drf_serializers.ValidationError({"group_id": "分组下仍有报表，无法删除"})
         group.delete()

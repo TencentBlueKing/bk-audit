@@ -3,6 +3,8 @@ from unittest import mock
 
 from django.test import TestCase
 
+from services.web.scene.models import Scene
+
 
 class DummyUser:
     def __init__(self, username):
@@ -157,6 +159,9 @@ class TestSceneManageViewSetPermission(TestCase):
         from services.web.vision.views import SceneReportGroupManageViewSet
 
         view = SceneReportGroupManageViewSet()
+        view.action = "create"
+        view.request = mock.MagicMock(query_params={}, data={"scene_id": "1"})
+        view.kwargs = {}
         permissions = view.get_permissions()
 
         self.assertEqual(len(permissions), 1)
@@ -172,10 +177,44 @@ class TestSceneManageViewSetPermission(TestCase):
 
         self.assertEqual(view.get_scene_id(), "123")
 
-    def test_scene_group_manage_get_scene_id_from_body(self):
+    def test_scene_group_manage_create_permission_uses_request_scene_id(self):
         from services.web.vision.views import SceneReportGroupManageViewSet
 
         view = SceneReportGroupManageViewSet()
+        view.action = "create"
         view.request = mock.MagicMock(query_params={}, data={"scene_id": "456"})
+        view.kwargs = {}
+        permission = view.get_permissions()[0]
 
-        self.assertEqual(view.get_scene_id(), "456")
+        self.assertEqual(permission._get_instance_id(view.request, view), "456")
+
+    def test_scene_group_manage_destroy_permission_uses_group_scene_id(self):
+        from services.web.vision.models import SceneReportGroup
+        from services.web.vision.views import SceneReportGroupManageViewSet
+
+        scene = Scene.objects.create(name="分组归属场景", managers=["admin"])
+        group = SceneReportGroup.objects.create(scene=scene, name="待删分组")
+
+        view = SceneReportGroupManageViewSet()
+        view.action = "destroy"
+        view.request = mock.MagicMock(query_params={}, data={})
+        view.kwargs = {"group_id": str(group.id)}
+        permission = view.get_permissions()[0]
+
+        self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
+
+    def test_scene_group_manage_destroy_prefers_group_scene_id_over_request_scene_id(self):
+        from services.web.vision.models import SceneReportGroup
+        from services.web.vision.views import SceneReportGroupManageViewSet
+
+        scene = Scene.objects.create(name="真实归属场景", managers=["admin"])
+        other_scene = Scene.objects.create(name="伪造请求场景", managers=["admin"])
+        group = SceneReportGroup.objects.create(scene=scene, name="待更新分组")
+
+        view = SceneReportGroupManageViewSet()
+        view.action = "destroy"
+        view.request = mock.MagicMock(query_params={}, data={"scene_id": str(other_scene.scene_id)})
+        view.kwargs = {"group_id": str(group.id)}
+        permission = view.get_permissions()[0]
+
+        self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))

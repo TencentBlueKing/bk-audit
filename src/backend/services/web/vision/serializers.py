@@ -184,7 +184,6 @@ class SceneReportGroupPanelOrderRequestSerializer(serializers.Serializer):
 
 
 class DeleteSceneReportGroupRequestSerializer(serializers.Serializer):
-    scene_id = serializers.IntegerField(required=True)
     group_id = serializers.IntegerField(required=True)
 
 
