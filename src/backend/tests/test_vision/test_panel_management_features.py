@@ -82,9 +82,10 @@ class TestPanelManagementFeatures(TestCase):
             )
 
     def test_list_platform_panels_with_visibility(self):
-        CreatePlatformPanel().request(
+        panel_data = CreatePlatformPanel().request(
             {
                 "name": "平台报表1",
+                "vision_id": "platform_vision_001",
                 "status": "published",
                 "visibility": {
                     "visibility_type": VisibilityScope.SPECIFIC_SCENES,
@@ -93,10 +94,20 @@ class TestPanelManagementFeatures(TestCase):
                 },
             }
         )
+        panel = VisionPanel.objects.get(id=panel_data["id"])
         data = ListPlatformPanels().request({"enable_paginate": False})
         self.assertEqual(len(data), 1)
-        self.assertIn("visibility_type", data[0])
-        self.assertEqual(data[0]["scene_ids"], [self.scene1.scene_id])
+        assert_dict_contains(
+            data[0],
+            {
+                "id": panel.id,
+                "vision_id": "platform_vision_001",
+                "updated_by": panel.updated_by,
+                "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                "scene_ids": [self.scene1.scene_id],
+            },
+        )
+        self.assertIsNotNone(data[0]["updated_at"])
 
     def test_scene_group_item_bulk_order(self):
         p1 = CreateScenePanel().request(
@@ -137,6 +148,7 @@ class TestPanelManagementFeatures(TestCase):
         panel_data = CreatePlatformPanel().request(
             {
                 "name": "平台报表2",
+                "vision_id": "scene_list_vision_001",
                 "status": "published",
                 "visibility": {
                     "visibility_type": VisibilityScope.SPECIFIC_SCENES,
@@ -152,8 +164,12 @@ class TestPanelManagementFeatures(TestCase):
 
         data = ListScenePanels().request({"scene_id": self.scene1.scene_id})
         self.assertGreaterEqual(len(data), 1)
-        self.assertIn("group_id", data[0])
-        self.assertIn("binding_type", data[0])
+        panel_item = next(item for item in data if item["id"] == panel_data["id"])
+        self.assertIn("group_id", panel_item)
+        self.assertIn("binding_type", panel_item)
+        self.assertEqual(panel_item["vision_id"], "scene_list_vision_001")
+        self.assertEqual(panel_item["updated_by"], VisionPanel.objects.get(id=panel_data["id"]).updated_by)
+        self.assertIsNotNone(panel_item["updated_at"])
         self.assertFalse(SceneReportGroupItem.objects.filter(group=platform_group, panel_id=panel_data["id"]).exists())
 
     def test_delete_empty_platform_group_success(self):
@@ -274,6 +290,7 @@ class TestPanelManagementFeatures(TestCase):
         panel_info = CreatePlatformPanel().request(
             {
                 "name": "平台报表3",
+                "vision_id": "square_vision_001",
                 "status": "published",
                 "visibility": {
                     "visibility_type": VisibilityScope.SPECIFIC_SCENES,
@@ -289,6 +306,9 @@ class TestPanelManagementFeatures(TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(len(data[0]["group_ids"]), 2)
         self.assertIsNotNone(data[0]["favorite_created_at"])
+        self.assertEqual(data[0]["vision_id"], "square_vision_001")
+        self.assertEqual(data[0]["updated_by"], panel.updated_by)
+        self.assertIsNotNone(data[0]["updated_at"])
 
     def test_group_order_updates_with_scene_isolation(self):
         group2 = SceneReportGroup.objects.create(

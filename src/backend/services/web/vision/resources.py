@@ -244,10 +244,13 @@ class ListPanels(BKVision):
             data.append(
                 {
                     "id": panel.id,
+                    "vision_id": panel.vision_id,
                     "name": panel.name or "",
                     "status": panel.status,
                     "category": panel.category,
                     "description": panel.description,
+                    "updated_by": panel.updated_by,
+                    "updated_at": panel.updated_at,
                     "group_ids": group_map.get(panel_id, []),
                     "favorite_created_at": favorite_map.get(panel_id),
                 }
@@ -742,10 +745,13 @@ class ListPlatformPanels(BKVision):
             data.append(
                 {
                     "id": panel.id,
+                    "vision_id": panel.vision_id,
                     "name": panel.name or "",
                     "status": panel.status,
                     "category": panel.category,
                     "description": panel.description,
+                    "updated_by": panel.updated_by,
+                    "updated_at": panel.updated_at,
                     "visibility_type": binding.visibility_type,
                     "scene_ids": list(binding.binding_scenes.values_list("scene_id", flat=True)),
                     "system_ids": list(binding.binding_systems.values_list("system_id", flat=True)),
@@ -795,10 +801,13 @@ class ListScenePanels(BKVision):
             data.append(
                 {
                     "id": panel.id,
+                    "vision_id": panel.vision_id,
                     "name": panel.name or "",
                     "status": panel.status,
                     "category": panel.category,
                     "description": panel.description,
+                    "updated_by": panel.updated_by,
+                    "updated_at": panel.updated_at,
                     "group_id": item.group_id if item else None,
                     "group_name": item.group.name if item else "",
                     "group_type": item.group.group_type if item else "",
