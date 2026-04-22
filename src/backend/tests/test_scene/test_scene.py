@@ -22,6 +22,7 @@ from bk_resource.exceptions import ValidateException
 from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
+from rest_framework import serializers
 
 from services.web.risk.models import Risk
 from services.web.scene.constants import (
@@ -1090,6 +1091,17 @@ class TestPanelResources(TestCase):
             ).exists()
         )
 
+    def test_create_platform_panel_with_status(self):
+        """测试创建平台级报表支持传入上下架状态"""
+        result = self.resource.vision.create_platform_panel(
+            {
+                "name": "已上架报表",
+                "status": PanelStatus.PUBLISHED,
+            }
+        )
+        panel = VisionPanel.objects.get(pk=result["id"])
+        self.assertEqual(panel.status, PanelStatus.PUBLISHED)
+
     def test_update_platform_panel(self):
         """测试编辑平台级报表"""
         result = self.resource.vision.update_platform_panel(
@@ -1099,6 +1111,17 @@ class TestPanelResources(TestCase):
             }
         )
         self.assertEqual(result["name"], "更新后的报表")
+
+    def test_update_platform_panel_with_status(self):
+        """测试编辑平台级报表支持传入上下架状态"""
+        self.resource.vision.update_platform_panel(
+            {
+                "panel_id": self.platform_panel.pk,
+                "status": PanelStatus.PUBLISHED,
+            }
+        )
+        self.platform_panel.refresh_from_db()
+        self.assertEqual(self.platform_panel.status, PanelStatus.PUBLISHED)
 
     def test_create_platform_panel_specific_scenes_without_scene_ids_raise(self):
         """测试平台级报表 specific_scenes 未传 scene_ids 时校验失败"""
@@ -1156,6 +1179,32 @@ class TestPanelResources(TestCase):
         result = self.resource.vision.publish_platform_panel({"panel_id": self.platform_panel.pk})
         self.assertEqual(result["status"], PanelStatus.UNPUBLISHED)
 
+    def test_publish_platform_panel_with_status(self):
+        """测试平台级报表支持显式传入上下架状态"""
+        result = self.resource.vision.publish_platform_panel(
+            {"panel_id": self.platform_panel.pk, "status": PanelStatus.UNPUBLISHED}
+        )
+        self.assertEqual(result["status"], PanelStatus.UNPUBLISHED)
+
+    def test_publish_scene_panel_with_int_scene_id_and_status(self):
+        """测试场景级报表上下架支持整型 scene_id 和显式状态"""
+        result = self.resource.vision.publish_scene_panel(
+            {
+                "scene_id": self.scene.scene_id,
+                "panel_id": self.scene_panel.pk,
+                "status": PanelStatus.UNPUBLISHED,
+            }
+        )
+        self.assertEqual(result["status"], PanelStatus.UNPUBLISHED)
+
+    def test_scene_panel_publish_serializer_scene_id_is_required_int(self):
+        """测试场景级报表上下架请求的 scene_id 为必填整数"""
+        from services.web.vision.serializers import ScenePanelOperateRequestSerializer
+
+        field = ScenePanelOperateRequestSerializer().fields["scene_id"]
+        self.assertIsInstance(field, serializers.IntegerField)
+        self.assertTrue(field.required)
+
     def test_create_scene_panel(self):
         """测试创建场景级报表"""
         result = self.resource.vision.create_scene_panel(
@@ -1164,6 +1213,7 @@ class TestPanelResources(TestCase):
                 "group_id": self.scene_group.id,
                 "name": "新场景报表",
                 "category": PanelCategory.BEHAVIOR_ANALYSIS,
+                "status": PanelStatus.PUBLISHED,
             }
         )
         self.assertEqual(result["name"], "新场景报表")
@@ -1172,8 +1222,10 @@ class TestPanelResources(TestCase):
             resource_type=ResourceVisibilityType.PANEL,
             resource_id=str(result["id"]),
         )
+        panel = VisionPanel.objects.get(pk=result["id"])
         self.assertEqual(binding.binding_type, BindingType.SCENE_BINDING)
         self.assertTrue(binding.binding_scenes.filter(scene_id=self.scene.scene_id).exists())
+        self.assertEqual(panel.status, PanelStatus.PUBLISHED)
 
     def test_update_scene_panel(self):
         """测试编辑场景级报表"""
@@ -1183,9 +1235,12 @@ class TestPanelResources(TestCase):
                 "group_id": self.scene_group.id,
                 "panel_id": self.scene_panel.pk,
                 "name": "更新后的场景报表",
+                "status": PanelStatus.PUBLISHED,
             }
         )
         self.assertEqual(result["name"], "更新后的场景报表")
+        self.scene_panel.refresh_from_db()
+        self.assertEqual(self.scene_panel.status, PanelStatus.PUBLISHED)
 
     def test_delete_scene_panel(self):
         """测试删除场景级报表"""
@@ -1423,6 +1478,7 @@ class TestToolResources(TestCase):
             "tool_type": "data_search",
             "description": "新工具描述",
             "tags": ["测试"],
+            "status": PanelStatus.PUBLISHED,
             "data_search_config_type": "sql",
             "config": {
                 "sql": "SELECT * FROM test_table",
@@ -1432,6 +1488,7 @@ class TestToolResources(TestCase):
             },
         }
         result = self.resource.tool.create_platform_scene_tool(data)
+        tool = Tool.last_version_tool(result["uid"])
         # 验证 ResourceBinding 已创建
         self.assertTrue(
             ResourceBinding.objects.filter(
@@ -1440,6 +1497,7 @@ class TestToolResources(TestCase):
                 binding_type=BindingType.PLATFORM_BINDING,
             ).exists()
         )
+        self.assertEqual(tool.status, PanelStatus.PUBLISHED)
 
     def test_update_platform_tool(self):
         """测试编辑平台级工具"""
@@ -1448,10 +1506,12 @@ class TestToolResources(TestCase):
                 "uid": self.platform_tool.uid,
                 "name": "更新后的工具",
                 "tags": ["测试"],
+                "status": PanelStatus.PUBLISHED,
             }
         )
         updated_tool = Tool.last_version_tool(self.platform_tool.uid)
         self.assertEqual(updated_tool.name, "更新后的工具")
+        self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
     def test_create_platform_tool_specific_scenes_without_scene_ids_raise(self):
         """测试平台级工具 specific_scenes 未传 scene_ids 时校验失败"""
@@ -1516,6 +1576,14 @@ class TestToolResources(TestCase):
         updated_tool = Tool.last_version_tool(self.platform_tool.uid)
         self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
+    def test_publish_platform_tool_with_status(self):
+        """测试平台级工具支持显式传入上下架状态"""
+        self.resource.tool.publish_platform_scene_tool(
+            {"uid": self.platform_tool.uid, "status": PanelStatus.UNPUBLISHED}
+        )
+        updated_tool = Tool.last_version_tool(self.platform_tool.uid)
+        self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
     def test_publish_scene_tool(self):
         """测试上架/下架场景级工具"""
         self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
@@ -1525,6 +1593,49 @@ class TestToolResources(TestCase):
         self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
         updated_tool = Tool.last_version_tool(self.scene_tool.uid)
         self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
+    def test_publish_scene_tool_with_int_scene_id_and_status(self):
+        """测试场景级工具上下架支持整型 scene_id 和显式状态"""
+        self.resource.tool.publish_scene_scope_tool(
+            {
+                "scene_id": self.scene.scene_id,
+                "uid": self.scene_tool.uid,
+                "status": PanelStatus.UNPUBLISHED,
+            }
+        )
+        updated_tool = Tool.last_version_tool(self.scene_tool.uid)
+        self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
+    def test_publish_scene_tool_request_serializes_response(self):
+        """测试场景级工具上下架接口响应可被序列化"""
+        from rest_framework.request import Request
+        from rest_framework.test import APIRequestFactory
+
+        from services.web.tool.resources import PublishSceneScopeTool
+
+        data = {"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid}
+        factory = APIRequestFactory()
+        django_request = factory.post("/api/v1/tool/scene/publish/", data, format="json")
+        drf_request = Request(django_request)
+
+        response_data = PublishSceneScopeTool().request(data, _request=drf_request)
+
+        self.assertEqual(
+            response_data,
+            {
+                "uid": self.scene_tool.uid,
+                "name": self.scene_tool.name,
+                "status": PanelStatus.PUBLISHED,
+            },
+        )
+
+    def test_scene_tool_publish_serializer_scene_id_is_required_int(self):
+        """测试场景级工具上下架请求的 scene_id 为必填整数"""
+        from services.web.tool.serializers import SceneScopeToolPublishRequestSerializer
+
+        field = SceneScopeToolPublishRequestSerializer().fields["scene_id"]
+        self.assertIsInstance(field, serializers.IntegerField)
+        self.assertTrue(field.required)
 
     def test_publish_scene_tool_not_exist(self):
         """测试上架/下架非本场景工具（应失败）"""
@@ -1543,6 +1654,7 @@ class TestToolResources(TestCase):
                 "name": "新场景工具",
                 "tool_type": "data_search",
                 "tags": ["安全"],
+                "status": PanelStatus.PUBLISHED,
                 "data_search_config_type": "sql",
                 "config": {
                     "sql": "SELECT * FROM test_table",
@@ -1557,8 +1669,10 @@ class TestToolResources(TestCase):
             resource_type=ResourceVisibilityType.TOOL,
             resource_id=result["uid"],
         )
+        tool = Tool.last_version_tool(result["uid"])
         self.assertEqual(binding.binding_type, BindingType.SCENE_BINDING)
         self.assertTrue(binding.binding_scenes.filter(scene_id=self.scene.scene_id).exists())
+        self.assertEqual(tool.status, PanelStatus.PUBLISHED)
 
     def test_update_scene_tool(self):
         """测试编辑场景级工具"""
@@ -1568,10 +1682,12 @@ class TestToolResources(TestCase):
                 "uid": self.scene_tool.uid,
                 "name": "更新后的场景工具",
                 "tags": ["安全"],
+                "status": PanelStatus.PUBLISHED,
             }
         )
         updated_tool = Tool.last_version_tool(self.scene_tool.uid)
         self.assertEqual(updated_tool.name, "更新后的场景工具")
+        self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
     def test_delete_scene_tool(self):
         """测试删除场景级工具"""

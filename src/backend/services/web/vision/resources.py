@@ -520,6 +520,7 @@ class PublishPlatformPanel(BKVision):
         from services.web.vision.exceptions import ScenePanelNotExist
 
         panel_id = validated_request_data.get("panel_id")
+        status = validated_request_data.get("status")
         # 通过 ResourceBinding 确认是平台级报表
         binding = ResourceBinding.objects.filter(
             resource_type=ResourceVisibilityType.PANEL,
@@ -535,10 +536,9 @@ class PublishPlatformPanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
-        if panel.status == PanelStatus.PUBLISHED:
-            panel.status = PanelStatus.UNPUBLISHED
-        else:
-            panel.status = PanelStatus.PUBLISHED
+        panel.status = status or (
+            PanelStatus.UNPUBLISHED if panel.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
+        )
         panel.save(update_fields=["status"])
         return panel
 
@@ -551,6 +551,7 @@ class CreateScenePanel(BKVision):
 
     def perform_request(self, validated_request_data):
         from core.utils.data import unique_id
+        from services.web.scene.constants import PanelStatus
 
         scene_id = validated_request_data.get("scene_id")
         group_id = validated_request_data.get("group_id")
@@ -563,6 +564,7 @@ class CreateScenePanel(BKVision):
                 name=validated_request_data["name"],
                 category=validated_request_data.get("category", ""),
                 description=validated_request_data.get("description", ""),
+                status=validated_request_data.get("status", PanelStatus.UNPUBLISHED),
             )
 
             # 创建场景级绑定关系（有且仅有一个场景关联）
@@ -615,7 +617,7 @@ class UpdateScenePanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
-        for field in ["name", "category", "description", "vision_id"]:
+        for field in ["name", "category", "description", "vision_id", "status"]:
             if field in validated_request_data:
                 setattr(panel, field, validated_request_data[field])
         panel.save()
@@ -678,6 +680,7 @@ class PublishScenePanel(BKVision):
 
         scene_id = int(validated_request_data.get("scene_id"))
         panel_id = validated_request_data.get("panel_id")
+        status = validated_request_data.get("status")
 
         try:
             binding = ResourceBinding.objects.get(
@@ -697,10 +700,9 @@ class PublishScenePanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
-        if panel.status == PanelStatus.PUBLISHED:
-            panel.status = PanelStatus.UNPUBLISHED
-        else:
-            panel.status = PanelStatus.PUBLISHED
+        panel.status = status or (
+            PanelStatus.UNPUBLISHED if panel.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
+        )
         panel.save(update_fields=["status"])
         return panel
 

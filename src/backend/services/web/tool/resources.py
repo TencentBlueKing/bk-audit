@@ -80,6 +80,7 @@ from services.web.tool.serializers import (
     ListRequestSerializer,
     ListToolTagsResponseSerializer,
     PlatformSceneToolCreateRequestSerializer,
+    PlatformSceneToolPublishRequestSerializer,
     PlatformSceneToolUpdateRequestSerializer,
     SceneScopeToolCreateRequestSerializer,
     SceneScopeToolDeleteRequestSerializer,
@@ -95,6 +96,7 @@ from services.web.tool.serializers import (
     ToolFavoriteRespSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
+    ToolPublishResponseSerializer,
     ToolResponseSerializer,
     ToolRetrieveRequestSerializer,
     ToolRetrieveResponseSerializer,
@@ -640,6 +642,7 @@ class UpdateTool(ToolBase):
             "description": validated_request_data.get("description", old_tool.description),
             "namespace": validated_request_data.get("namespace", old_tool.namespace),
             "version": old_tool.version + 1,
+            "status": validated_request_data.get("status", old_tool.status),
             "config": new_config,
             "tags": validated_request_data.get("tags"),
             # 保持创建人与旧版本一致，避免因新版本创建导致创建人变更为当前操作者
@@ -1406,7 +1409,8 @@ class PublishPlatformSceneTool(ToolBase):
     """上架/下架平台级场景工具"""
 
     name = gettext_lazy("上架/下架平台级场景工具")
-    RequestSerializer = ToolRetrieveRequestSerializer
+    RequestSerializer = PlatformSceneToolPublishRequestSerializer
+    ResponseSerializer = ToolPublishResponseSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -1418,6 +1422,7 @@ class PublishPlatformSceneTool(ToolBase):
         from services.web.tool.exceptions import SceneToolNotExist
 
         uid = validated_request_data.get("uid")
+        status = validated_request_data.get("status")
         # 通过 ResourceBinding 确认是平台级工具
         binding = ResourceBinding.objects.filter(
             resource_type=ResourceVisibilityType.TOOL,
@@ -1431,10 +1436,9 @@ class PublishPlatformSceneTool(ToolBase):
         if not tool:
             raise SceneToolNotExist()
 
-        if tool.status == PanelStatus.PUBLISHED:
-            tool.status = PanelStatus.UNPUBLISHED
-        else:
-            tool.status = PanelStatus.PUBLISHED
+        tool.status = status or (
+            PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
+        )
         tool.save(update_fields=["status"])
         return tool
 
@@ -1537,6 +1541,7 @@ class PublishSceneScopeTool(ToolBase):
 
     name = gettext_lazy("上架/下架场景级工具")
     RequestSerializer = SceneScopeToolPublishRequestSerializer
+    ResponseSerializer = ToolPublishResponseSerializer
 
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
@@ -1549,6 +1554,7 @@ class PublishSceneScopeTool(ToolBase):
 
         scene_id = validated_request_data["scene_id"]
         uid = validated_request_data.get("uid")
+        status = validated_request_data.get("status")
 
         # 通过 ResourceBinding + ResourceBindingScene 确认是该场景的工具
         binding = ResourceBinding.objects.filter(
@@ -1567,9 +1573,8 @@ class PublishSceneScopeTool(ToolBase):
         if not tool:
             raise SceneToolNotExist()
 
-        if tool.status == PanelStatus.PUBLISHED:
-            tool.status = PanelStatus.UNPUBLISHED
-        else:
-            tool.status = PanelStatus.PUBLISHED
+        tool.status = status or (
+            PanelStatus.UNPUBLISHED if tool.status == PanelStatus.PUBLISHED else PanelStatus.PUBLISHED
+        )
         tool.save(update_fields=["status"])
         return tool
