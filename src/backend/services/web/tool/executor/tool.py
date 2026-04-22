@@ -171,7 +171,10 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
 
     def execute(self, params: dict):
         params = self._parse_params(params)
-        self.validate_permission(params)
+        has_permission = self.validate_permission(params)
+        if not has_permission:
+            # 权限不足，返回错误信息
+            return {"error": "权限不足，无法执行该操作"}
         return self._execute(params)
 
 

@@ -39,13 +39,14 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
+from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
-from apps.meta.models import DataMap, EnumMappingRelatedType, Tag
+from apps.meta.models import DataMap, EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.meta.utils.fields import (
     ACTION_ID,
@@ -89,6 +90,7 @@ from services.web.risk.permissions import RiskViewPermission
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import SceneScopeFilter
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
@@ -1141,8 +1143,73 @@ class GetStrategyCommon(StrategyV2Base):
         }
 
 
+class GetScenePermissionSystems(StrategyV2Base):
+    """获取场景下有权限的系统列表"""
+
+    name = gettext_lazy("获取场景下有权限的系统列表")
+    audit_action = ActionEnum.VIEW_SCENE
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+        system_name = serializers.CharField(label=gettext_lazy("系统名称"))
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.models import SceneSystem
+
+        scene_id = validated_request_data["scene_id"]
+
+        # 先判断场景是否配置了 is_all_systems=True（不限制系统）
+        scene_systems = SceneSystem.objects.filter(scene_id=scene_id)
+        if scene_systems.filter(is_all_systems=True).exists():
+            # 不限制，返回所有系统
+            systems = System.objects.all()
+        else:
+            # 获取场景关联的系统ID白名单
+            system_ids = list(scene_systems.values_list("system_id", flat=True))
+            if not system_ids:
+                # 没有配置任何系统，没有权限
+                return []
+            systems = System.objects.filter(system_id__in=system_ids)
+
+        return [
+            {
+                "system_id": system.system_id,
+                "system_name": system.name,
+            }
+            for system in systems
+        ]
+
+
+class GetScenePermissionTables(StrategyV2Base):
+    """获取场景下有权限的数据表"""
+
+    name = gettext_lazy("获取场景下有权限的数据表")
+    audit_action = ActionEnum.VIEW_SCENE
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        table_id = serializers.CharField(label=gettext_lazy("表ID"))
+
+    def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+
+        # 直接获取场景关联的数据表ID列表
+        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+        if not scene_table_ids:
+            # 场景没有配置任何数据表，没有权限，直接返回空
+            return []
+
+        return [{"table_id": table_id} for table_id in scene_table_ids]
+
+
 class ListTables(StrategyV2Base, CacheResource):
     name = gettext_lazy("List Tables")
+    audit_action = ActionEnum.MANAGE_PLATFORM
     RequestSerializer = ListTablesRequestSerializer
     cache_type = CacheTypeItem(key="ListTables", timeout=60, user_related=False)
 

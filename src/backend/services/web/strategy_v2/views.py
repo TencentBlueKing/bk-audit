@@ -140,6 +140,16 @@ class StrategyViewSet(ResourceViewSet):
             pk_field="strategy_id",
             endpoint="strategy_running_status_list",
         ),
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.get_scene_permission_systems,
+            endpoint="scene_permission_systems",
+        ),
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.get_scene_permission_tables,
+            endpoint="scene_permission_tables",
+        ),
     ]
 
 
