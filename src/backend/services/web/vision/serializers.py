@@ -31,10 +31,19 @@ from services.web.vision.models import (
 )
 
 
-class VisionPanelInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VisionPanel
-        fields = ["id", "name", "scenario", "status", "category", "description"]
+class VisionPanelBaseSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    vision_id = serializers.CharField(allow_blank=True, allow_null=True)
+    name = serializers.CharField(allow_blank=True, allow_null=True)
+    status = serializers.CharField()
+    category = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    updated_by = serializers.CharField(allow_blank=True, allow_null=True)
+    updated_at = serializers.DateTimeField(allow_null=True)
+
+
+class VisionPanelInfoSerializer(VisionPanelBaseSerializer):
+    scenario = serializers.ChoiceField(choices=Scenario.choices)
 
 
 class VisionPanelInfoQuerySerializer(ScopeQuerySerializer):
@@ -220,24 +229,14 @@ class SceneReportGroupListItemSerializer(serializers.Serializer):
     priority_index = serializers.IntegerField()
 
 
-class ScenePanelListItemSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    name = serializers.CharField()
-    status = serializers.CharField()
-    category = serializers.CharField(allow_blank=True)
-    description = serializers.CharField(allow_blank=True)
+class ScenePanelListItemSerializer(VisionPanelBaseSerializer):
     group_id = serializers.IntegerField(allow_null=True)
     group_name = serializers.CharField(allow_blank=True)
     group_type = serializers.CharField(allow_blank=True)
     binding_type = serializers.CharField(allow_blank=True)
 
 
-class PlatformPanelListItemSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    name = serializers.CharField()
-    status = serializers.CharField()
-    category = serializers.CharField(allow_blank=True)
-    description = serializers.CharField(allow_blank=True)
+class PlatformPanelListItemSerializer(VisionPanelBaseSerializer):
     visibility_type = serializers.CharField()
     scene_ids = serializers.ListField(child=serializers.IntegerField())
     system_ids = serializers.ListField(child=serializers.CharField())
@@ -249,12 +248,7 @@ class PanelPublishResponseSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "status"]
 
 
-class PanelSquareListItemSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    name = serializers.CharField()
-    status = serializers.CharField()
-    category = serializers.CharField(allow_blank=True)
-    description = serializers.CharField(allow_blank=True)
+class PanelSquareListItemSerializer(VisionPanelBaseSerializer):
     group_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
     favorite_created_at = serializers.DateTimeField(allow_null=True)
 
