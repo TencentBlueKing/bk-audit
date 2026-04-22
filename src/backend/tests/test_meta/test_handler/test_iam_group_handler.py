@@ -1298,7 +1298,9 @@ class TestBuildRequestData(SimpleTestCase):
         self.assertEqual(validated_data["id"], 1001)
 
     def test_add_group_members_default_expired_at(self):
-        """测试 AddGroupMembers.build_request_data 默认 expired_at 为 0"""
+        """测试 AddGroupMembers.build_request_data 默认 expired_at 为一年后时间戳"""
+        import time
+
         resource = AddGroupMembers()
         validated_data = {
             "system_id": "test_system",
@@ -1306,7 +1308,10 @@ class TestBuildRequestData(SimpleTestCase):
             "members": [{"type": "user", "id": "admin"}],
         }
         result = resource.build_request_data(validated_data)
-        self.assertEqual(result["expired_at"], 0)
+        # 检查是否为合理的一年后的时间戳（当前时间+一年，允许一定误差）
+        expected_min = int(time.time()) + 31536000 - 60  # 允许60秒误差
+        expected_max = int(time.time()) + 31536000 + 60  # 允许60秒误差
+        self.assertTrue(expected_min <= result["expired_at"] <= expected_max)
 
     def test_delete_group_members_preserves_url_keys(self):
         """测试 DeleteGroupMembers.build_request_data 保留 system_id 和 id"""
