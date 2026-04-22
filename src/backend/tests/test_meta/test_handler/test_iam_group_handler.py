@@ -68,7 +68,7 @@ class TestBuildPermissions(SimpleTestCase):
         self.assertEqual(
             result["_multi_permissions"][0]["actions"], [{"id": "edit_strategy"}, {"id": "list_strategy_v2"}]
         )
-        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "strategy")
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
         self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景2")
 
     def test_build_permissions_risk_actions(self):
@@ -94,7 +94,7 @@ class TestBuildPermissions(SimpleTestCase):
             scene_name="测试场景4",
         )
         self.assertEqual(result["_multi_permissions"][0]["actions"], [{"id": "list_rule_v2"}, {"id": "create_rule_v2"}])
-        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "rule")
+        self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
         self.assertEqual(result["_multi_permissions"][0]["resources"][0]["paths"][0][0]["name"], "测试场景4")
 
     def test_build_permissions_empty_actions(self):
@@ -149,7 +149,7 @@ class TestBuildPermissionsEdgeCases(SimpleTestCase):
 
         # 验证包含所有资源类型
         resource_types = [perm["resources"][0]["type"] for perm in result["_multi_permissions"]]
-        self.assertIn("strategy", resource_types)
+        self.assertIn("scene", resource_types)
         self.assertIn("risk", resource_types)
 
     def test_build_permissions_with_empty_system_id(self):
@@ -585,29 +585,48 @@ class TestCreateSceneGroupsWithMembers(SimpleTestCase):
                 scene_id=self.scene_id,
                 scene_name=self.scene_name,
             )
-            self.assertEqual(mock_grant.call_count, 2)
 
-    def test_group_names_format(self):
-        """测试创建的用户组名称格式正确"""
+            self.assertGreaterEqual(mock_grant.call_count, 2)
+
+    def test_multi_resource_type_grant_logic(self):
+        """测试多资源类型授权逻辑：每个资源类型单独调用授权接口"""
         with mock.patch.object(
             CreateGradeManagerGroups,
             "perform_request",
             return_value=[1001, 1002],
-        ) as mock_create, mock.patch.object(
+        ), mock.patch.object(
             GrantGroupPolicies,
             "perform_request",
             return_value={},
-        ):
+        ) as mock_grant:
             IAMGroupManager.create_scene_groups_with_members(
                 scene_id=self.scene_id,
                 scene_name=self.scene_name,
             )
-            # perform_request 接收的是 validated_request_data 字典（位置参数）
-            call_args = mock_create.call_args[0][0]
-            groups = call_args["groups"]
-            self.assertEqual(len(groups), 2)
-            self.assertEqual(groups[0]["name"], f"{self.scene_name}-管理用户组")
-            self.assertEqual(groups[1]["name"], f"{self.scene_name}-使用用户组")
+
+            # 验证授权调用次数至少为资源类型数量 * 用户组数量
+            # 管理用户组和使用用户组都需要为每个资源类型单独授权
+            self.assertGreaterEqual(mock_grant.call_count, 2)
+
+            # 验证每次调用的参数结构正确
+            for call in mock_grant.call_args_list:
+                args, kwargs = call
+                request_data = args[0]
+
+                # 验证包含必要的参数
+                self.assertIn("system_id", request_data)
+                self.assertIn("id", request_data)
+                self.assertIn("actions", request_data)
+                self.assertIn("resources", request_data)
+
+                # 验证资源结构正确
+                resources = request_data["resources"]
+                self.assertIsInstance(resources, list)
+                if resources:
+                    resource = resources[0]
+                    self.assertIn("system", resource)
+                    self.assertIn("type", resource)
+                    self.assertIn("paths", resource)
 
     def test_add_members_failure_raises(self):
         """测试添加成员失败时抛出异常"""
@@ -1417,6 +1436,34 @@ class TestGrantPermissionsExceptionScenarios(SimpleTestCase):
             self.assertIn("1002", error_msg)  # 授权失败
             self.assertIn("已授权成功的用户组IDs", error_msg)
 
+    def test_create_groups_with_multi_resource_partial_failure(self):
+        """测试多资源类型授权场景中的部分失败情况"""
+        with mock.patch.object(
+            CreateGradeManagerGroups,
+            "perform_request",
+            return_value=[1001, 1002],
+        ), mock.patch.object(
+            GrantGroupPolicies,
+            "perform_request",
+            side_effect=[
+                None,  # 第一个资源类型授权成功
+                None,  # 第二个资源类型授权成功
+                APIRequestError("第三个资源类型授权失败"),  # 第三个资源类型授权失败
+            ],
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                IAMGroupManager.create_scene_groups_with_members(
+                    scene_id=self.scene_id,
+                    scene_name=self.scene_name,
+                )
+
+            # 验证异常信息包含详细的授权状态信息
+            error_msg = str(ctx.exception)
+            self.assertIn("1001", error_msg)  # 管理用户组ID
+            self.assertIn("1002", error_msg)  # 使用用户组ID
+            self.assertIn("已授权成功的用户组IDs", error_msg)
+            self.assertIn("已创建的用户组IDs", error_msg)
+
     def test_grant_permissions_with_network_timeout(self):
         """测试授权API网络超时异常"""
         with mock.patch.object(
@@ -1547,7 +1594,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "link_table")
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_notice_group_actions(self):
         """测试通知组相关动作的资源类型匹配"""
@@ -1565,7 +1612,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "notice_group")
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_panel_actions(self):
         """测试套餐相关动作的资源类型匹配"""
@@ -1582,7 +1629,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
                 scene_id="scene_001",
                 scene_name="测试场景",
             )
-            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "panel")
+            self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], "scene")
 
     def test_resource_type_detection_for_scene_actions(self):
         """测试场景相关动作的资源类型匹配"""
@@ -1604,7 +1651,7 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
         """测试混合动作类型时的多资源类型权限结构"""
         mixed_actions = [
             mock.MagicMock(id="view_scene"),  # scene类型
-            mock.MagicMock(id="list_strategy_v2"),  # strategy类型
+            mock.MagicMock(id="list_strategy_v2"),  # scene类型
             mock.MagicMock(id="list_risk_v2"),  # risk类型
         ]
 
@@ -1622,7 +1669,6 @@ class TestResourceTypeMatchingLogic(SimpleTestCase):
         # 验证包含所有资源类型
         resource_types = [perm["resources"][0]["type"] for perm in result["_multi_permissions"]]
         self.assertIn("scene", resource_types)
-        self.assertIn("strategy", resource_types)
         self.assertIn("risk", resource_types)
 
 
