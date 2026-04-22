@@ -371,7 +371,7 @@
       }
       isCreating.value = true;
 
-      const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
+      const service = isEditMode ? ToolManageService.updateSceneTool : ToolManageService.createSceneTool;
 
       if (data.tags) {
         data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));

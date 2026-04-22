@@ -851,8 +851,7 @@
 
   // 构建工具级联列表的通用函数
   const buildToolCascaderList = (data: ToolDetailModel[], searchKeyword = '') => {
-    // 先过滤出有权限的数据
-    let filteredData = data.filter(tool => tool.permission.use_tool || tool.permission.manage_tool);
+    let filteredData = [...data];
 
     // 如果有搜索关键词，进一步过滤（匹配工具名称或工具类型）
     if (searchKeyword) {
