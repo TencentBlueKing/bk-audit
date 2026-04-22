@@ -163,6 +163,7 @@ class ScenePanelOperateRequestSerializer(serializers.Serializer):
 
 
 class PlatformPanelListQuerySerializer(serializers.Serializer):
+    scenario = serializers.ChoiceField(choices=Scenario.choices, required=False, default=Scenario.DEFAULT)
     enable_paginate = serializers.BooleanField(required=False, default=False)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     page_size = serializers.IntegerField(required=False, min_value=1, default=20)
@@ -197,6 +198,7 @@ class DeleteSceneReportGroupRequestSerializer(serializers.Serializer):
 
 
 class ScenePanelListQuerySerializer(serializers.Serializer):
+    scenario = serializers.ChoiceField(choices=Scenario.choices, required=False, default=Scenario.DEFAULT)
     scene_id = serializers.IntegerField(required=True)
     keyword = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)

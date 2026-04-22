@@ -686,6 +686,26 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
         self.assertEqual(result["name"], "主机安全审计")
 
+    def test_scene_retrieve_contains_related_strategy_ids_and_risk_count(self):
+        """测试场景详情返回关联策略ID和风险数量"""
+        strategy = Strategy.objects.create(strategy_name="详情场景策略")
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        Risk.objects.create(
+            raw_event_id="raw-scene-detail-1",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+
+        result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
+        self.assertEqual(result["strategy_ids"], [strategy.strategy_id])
+        self.assertEqual(result["risk_count"], 1)
+
     def test_create_scene_validate_systems_schema(self):
         """测试创建场景时 systems 子序列化器校验生效"""
         with self.assertRaises(ValidateException):
@@ -850,7 +870,7 @@ class TestSceneViewSetPermission(TestCase):
         from apps.permission.handlers.drf import InstanceActionPermission
 
         view = SceneViewSet()
-        view.action = "info"
+        view.action = "get_scene_info"
         view.kwargs = {"scene_id": 1001}
         view.request = RequestFactory().get("/api/v1/scenes/1001/info/")
         permissions = view.get_permissions()
@@ -864,7 +884,7 @@ class TestSceneViewSetPermission(TestCase):
         from apps.permission.handlers.drf import InstanceActionPermission
 
         view = SceneViewSet()
-        view.action = "info"
+        view.action = "update_scene_info"
         view.kwargs = {"scene_id": 1001}
         view.request = RequestFactory().patch("/api/v1/scenes/1001/info/")
         permissions = view.get_permissions()
@@ -872,6 +892,10 @@ class TestSceneViewSetPermission(TestCase):
         self.assertEqual(len(permissions), 1)
         self.assertIsInstance(permissions[0], InstanceActionPermission)
         self.assertEqual(permissions[0].actions, [ActionEnum.MANAGE_SCENE])
+
+    def test_resource_routes_have_unique_endpoints(self):
+        endpoints = [(route.endpoint, route.pk_field) for route in SceneViewSet.resource_routes if route.endpoint]
+        self.assertEqual(len(endpoints), len(set(endpoints)))
 
 
 class TestPanelResources(TestCase):

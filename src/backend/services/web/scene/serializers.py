@@ -79,13 +79,8 @@ class SceneTableInputSerializer(serializers.Serializer):
     filter_rules = serializers.ListField(child=serializers.DictField(), required=False, default=list)
 
 
-class SceneListSerializer(serializers.ModelSerializer):
-    """场景列表序列化器"""
-
-    system_count = serializers.IntegerField(read_only=True)
-    table_count = serializers.IntegerField(read_only=True)
-    strategy_ids = serializers.SerializerMethodField()
-    risk_count = serializers.SerializerMethodField()
+class SceneRelatedStatsMixin:
+    """场景关联策略与风险统计"""
 
     def _get_scene_related_ids_map(self):
         if hasattr(self, "_scene_related_ids_map"):
@@ -155,6 +150,15 @@ class SceneListSerializer(serializers.ModelSerializer):
     def get_risk_count(self, obj):
         return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("risk_count", 0)
 
+
+class SceneListSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
+    """场景列表序列化器"""
+
+    system_count = serializers.IntegerField(read_only=True)
+    table_count = serializers.IntegerField(read_only=True)
+    strategy_ids = serializers.SerializerMethodField()
+    risk_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Scene
         fields = [
@@ -184,11 +188,13 @@ class SceneSimpleListSerializer(serializers.ModelSerializer):
         fields = ["scene_id", "name", "status"]
 
 
-class SceneDetailSerializer(serializers.ModelSerializer):
+class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
     """场景详情序列化器"""
 
     systems = SceneSystemSerializer(source="scene_systems", many=True, read_only=True)
     tables = SceneDataTableSerializer(source="scene_tables", many=True, read_only=True)
+    strategy_ids = serializers.SerializerMethodField()
+    risk_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Scene
@@ -203,6 +209,8 @@ class SceneDetailSerializer(serializers.ModelSerializer):
             "iam_viewer_group_id",
             "systems",
             "tables",
+            "strategy_ids",
+            "risk_count",
             "created_by",
             "created_at",
             "updated_by",

@@ -22,9 +22,11 @@ class SceneViewSet(ResourceViewSet):
     DELETE /api/v1/scenes/{scene_id}/           删除场景
     POST   /api/v1/scenes/{scene_id}/disable/   停用场景
     POST   /api/v1/scenes/{scene_id}/enable/    启用场景
-    GET    /api/v1/scenes/{scene_id}/info/       场景信息（场景管理员可查看）
-    PATCH  /api/v1/scenes/{scene_id}/info/       编辑场景基础信息（场景管理员）
+    GET    /api/v1/scenes/{scene_id}/get_scene_info/       场景信息（场景管理员可查看）
+    PATCH  /api/v1/scenes/{scene_id}/update_scene_info/    编辑场景基础信息（场景管理员）
     """
+
+    lookup_field = "scene_id"
 
     def get_scene_id(self):
         return self.kwargs.get("scene_id")
@@ -32,7 +34,7 @@ class SceneViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["list", "create", "retrieve", "update", "destroy", "disable", "enable"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
-        if self.action in ["info"]:
+        if self.action in ["get_scene_info", "update_scene_info"]:
             if self.request.method == "GET":
                 return [
                     InstanceActionPermission(
@@ -74,6 +76,6 @@ class SceneViewSet(ResourceViewSet):
         ResourceRoute("DELETE", resource.scene.delete_scene, pk_field="scene_id"),
         ResourceRoute("POST", resource.scene.disable_scene, endpoint="disable", pk_field="scene_id"),
         ResourceRoute("POST", resource.scene.enable_scene, endpoint="enable", pk_field="scene_id"),
-        ResourceRoute("GET", resource.scene.get_scene_info, endpoint="info", pk_field="scene_id"),
-        ResourceRoute("PATCH", resource.scene.update_scene_info, endpoint="info", pk_field="scene_id"),
+        ResourceRoute("GET", resource.scene.get_scene_info, endpoint="get_scene_info", pk_field="scene_id"),
+        ResourceRoute("PATCH", resource.scene.update_scene_info, endpoint="update_scene_info", pk_field="scene_id"),
     ]
