@@ -185,6 +185,10 @@
   interface Props {
     toolList: ToolInfo[];
     tagsEnums: TagItem[];
+    scopeParams?: {
+      scope_type?: string;
+      scope_id?: string;
+    };
   }
 
   const props = defineProps<Props>();
@@ -256,9 +260,10 @@
   const handlePopoverShow = () => {
     popoverSearchValue.value = '';
     rightActiveTab.value = 'recent';
-    fetchAllToolsList({ page: 1, page_size: 200 });
-    fetchRecentTools({ page: 1, page_size: 50, recent_used: true } as any);
-    fetchFavoriteTools({ page: 1, page_size: 200 });
+    const scope = props.scopeParams || {};
+    fetchAllToolsList({ page: 1, page_size: 200, ...scope });
+    fetchRecentTools({ page: 1, page_size: 50, recent_used: true, ...scope } as any);
+    fetchFavoriteTools({ page: 1, page_size: 200, ...scope });
   };
 
   // 左侧分组标签（排除固定标签）
