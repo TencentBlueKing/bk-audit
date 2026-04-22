@@ -16,12 +16,14 @@
 */
 import StatementManageSource from '../source/statement-manage';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export default {
   /**
    * @desc 获取左侧菜单
    */
-  fetchMenuList(params: { scenario: 'perapp' | 'default' }) {
-    return StatementManageSource.getMenuList(params, {
+  fetchMenuList(params: { scenario: 'perapp' | 'default'; status?: string; scope_id?: string; scope_type?: string }) {
+    return StatementManageSource.getMenuList({ ...params, status: 'published', scope_id: getSceneSystemParams().scope_id, scope_type: getSceneSystemParams().scope_type }, {
       permission: 'page',
     })
       .then(({ data }) => data);
