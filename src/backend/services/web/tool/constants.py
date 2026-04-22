@@ -642,7 +642,19 @@ class SmartPageSqlTemplateConfig(BaseModel):
     """SQL 模板类型的数据源配置。"""
 
     data_source_type: Literal[SmartPageDataSourceTypeEnum.SQL_TEMPLATE] = SmartPageDataSourceTypeEnum.SQL_TEMPLATE
-    sql_template: str = PydanticField(title=gettext_lazy("SQL模板"))
+    sql_template: str = PydanticField(
+        title=gettext_lazy("SQL模板"),
+        description=gettext_lazy(
+            "基于 Jinja2 的 SQL 模板。支持 has(key) 判断参数是否存在且非空，"
+            "支持 bind(key, output_type=None) 渲染参数值。"
+            "has(key) 的判断规则为：key 在 params 中存在，且值不为 None 且不为空字符串。"
+            "典型用法：{% if has('username') %} AND username = '{{ bind(\"username\") }}' {% endif %}。"
+            "SQL 运算语义由模板自行控制，例如："
+            "AND username = '{{ bind(\"username\") }}'、"
+            "AND id IN ({{ bind(\"ids\", output_type=\"int\") }})、"
+            "AND title LIKE '%{{ bind(\"keyword\") }}%'。"
+        ),
+    )
 
 
 class SmartPageBaseDataSourceConfig(BaseModel):

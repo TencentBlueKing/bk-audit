@@ -146,6 +146,8 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         config = attrs["config"]
         if tool_type == ToolTypeEnum.DATA_SEARCH and "data_search_config_type" not in attrs:
             raise serializers.ValidationError({"data_search_config_type": gettext_lazy("数据查询配置类型不能为空")})
+        if tool_type == ToolTypeEnum.SMART_PAGE:
+            raise serializers.ValidationError({"tool_type": gettext_lazy("当前暂不支持智能页面工具创建")})
 
         if tool_type == ToolTypeEnum.BK_VISION:
             validated_config = BkVisionConfig.model_validate(config).model_dump()
@@ -153,8 +155,6 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
         elif tool_type == ToolTypeEnum.API:
             validated_config = ApiToolConfig.model_validate(config).model_dump()
-        elif tool_type == ToolTypeEnum.SMART_PAGE:
-            validated_config = SmartPageToolConfig.model_validate(config).model_dump()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
@@ -182,6 +182,8 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
 
         tool = Tool.last_version_tool(uid)
         tool_type = tool.tool_type
+        if tool_type == ToolTypeEnum.SMART_PAGE:
+            raise serializers.ValidationError({"uid": gettext_lazy("当前暂不支持智能页面工具更新")})
 
         if config:
             if tool_type == ToolTypeEnum.BK_VISION:
@@ -190,8 +192,6 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
             elif tool_type == ToolTypeEnum.API:
                 validated_config = ApiToolConfig.model_validate(config).model_dump()
-            elif tool_type == ToolTypeEnum.SMART_PAGE:
-                validated_config = SmartPageToolConfig.model_validate(config).model_dump()
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
             attrs["config"] = validated_config
