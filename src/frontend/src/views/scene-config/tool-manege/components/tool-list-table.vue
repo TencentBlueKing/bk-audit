@@ -20,10 +20,10 @@
     class="report-config-list"
     :columns="tableColumns"
     :data-source="dataSource"
+    is-need-scene-params
     need-empty-search-tip
-    row-key="risk_id"
+    row-key="uid"
     :search-params="searchParams"
-    secondary-sort-field="-event_time"
     @clear-search="handleClearSearch"
     @request-success="handleRequestSuccess" />
 </template>
@@ -47,6 +47,7 @@
 
   // 工具模型接口定义
   interface ToolModel {
+    id: string;
     uid: string;
     name: string;
     tool_type: ToolTypeKey;
@@ -55,11 +56,7 @@
     favorite: boolean;
     is_bkvision: boolean;
     namespace: string;
-    status: 'enabled' | 'disabled';
-    permission: {
-      use_tool: boolean;
-      manage_tool: boolean;
-    };
+    status: 'published' | '';
     strategies: number[];
     tags: string[];
     created_at: string;
@@ -231,12 +228,18 @@
     },
     {
       title: t('状态'),
-      colKey: 'strategies',
+      colKey: 'status',
       width: 80,
       ellipsis: true,
-      cell: () => <span>
-          <bk-tag radius="4px" theme="success" > 启用</bk-tag>
-        </span>,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span>
+          {row.status === 'published' ? (
+            <bk-tag radius="4px" theme="success">{t('启用')}</bk-tag>
+          ) : (
+            <bk-tag radius="4px" theme="default">{t('停用')}</bk-tag>
+          )}
+        </span>
+      ),
     },
     {
       title: t('更新人'),
@@ -256,7 +259,7 @@
       width: 90,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
-        const isEnabled = row.status === 'enabled';
+        const isEnabled = row.status === 'published';
         const hasStrategies = row.strategies && row.strategies.length > 0;
         // 删除按钮禁用条件：启用状态或被策略引用
         const isDeleteDisabled = isEnabled || hasStrategies;
@@ -305,16 +308,18 @@
                       {isEnabled ? t('停用') : t('启用')}
                     </bk-button>
                     {isDeleteDisabled ? (
-                      <bk-tooltips
-                        content={deleteTooltip}
-                        placement="top">
+                      <span
+                        v-bk-tooltips={{
+                          content: deleteTooltip,
+                          placement: 'bottom',
+                        }}>
                         <bk-button
                           text
                           disabled
                           class="mr8 mr8-disabled">
                           {t('删除')}
                         </bk-button>
-                      </bk-tooltips>
+                      </span>
                     ) : (
                       <bk-button
                         text

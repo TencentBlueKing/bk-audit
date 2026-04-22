@@ -19,8 +19,11 @@
     v-model:is-show="isShow"
     footer-align="center"
     :show-head="false"
-    width="480">
-    <div class="delete-dialog-content">
+    :width="isDelete ? 480 : 400">
+    <!-- 删除模式 -->
+    <div
+      v-if="isDelete"
+      class="delete-dialog-content">
       <img
         class="tip-icon"
         src="@images/tip-icon.svg">
@@ -36,20 +39,31 @@
         {{ t('请输入工具名称') }}「<span
           v-bk-tooltips="{ content: t('点击复制') }"
           class="tool-name"
-          @click="handleCopyToolName">{{ deleteTarget?.name }}</span>」{{ t('以确认删除') }}
+          @click="handleCopyToolName">{{ target?.name }}</span>」{{ t('以确认删除') }}
       </div>
       <bk-input
         v-model="confirmInput"
         :placeholder="t('请输入工具名称')" />
     </div>
+    <!-- 启用/停用模式 -->
+    <div
+      v-else
+      class="toggle-status-dialog-content">
+      <div class="toggle-status-title">
+        {{ isEnabling ? t('确认启用该工具？') : t('确认停用该工具？') }}
+      </div>
+      <div class="toggle-status-tip">
+        {{ isEnabling ? t('启用后，该工具将在「工具广场」中展示') : t('停用后，该工具将从「工具广场」中隐藏') }}
+      </div>
+    </div>
     <template #footer>
       <bk-button
         class="mr8"
-        :disabled="confirmInput !== deleteTarget?.name"
-        :loading="deleteLoading"
-        theme="danger"
-        @click="handleConfirmDelete">
-        {{ t('删除') }}
+        :disabled="isDelete && confirmInput !== target?.name"
+        :loading="loading"
+        :theme="confirmTheme"
+        @click="handleConfirm">
+        {{ confirmText }}
       </bk-button>
       <bk-button @click="handleCancel">
         {{ t('取消') }}
@@ -59,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -69,17 +83,21 @@
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
+  type ActionType = 'delete' | 'enable' | 'disable';
+
   interface ToolItem {
     uid: string;
     name: string;
+    status?: 'published' | '';
   }
 
   interface Props {
-    deleteTarget: ToolItem | null;
+    target: ToolItem | null;
+    actionType: ActionType;
   }
 
   interface Emits {
-    (e: 'deleted'): void;
+    (e: 'success'): void;
   }
 
   const props = defineProps<Props>();
@@ -91,6 +109,19 @@
   const isShow = defineModel<boolean>('isShow', { default: false });
   const confirmInput = ref('');
 
+  const isDelete = computed(() => props.actionType === 'delete');
+  const isEnabling = computed(() => props.actionType === 'enable');
+
+  const confirmTheme = computed(() => {
+    if (isDelete.value || props.actionType === 'disable') return 'danger';
+    return 'primary';
+  });
+
+  const confirmText = computed(() => {
+    if (isDelete.value) return t('删除');
+    return isEnabling.value ? t('启用') : t('停用');
+  });
+
   // 监听弹窗显示状态，重置输入
   watch(isShow, (val) => {
     if (val) {
@@ -98,7 +129,7 @@
     }
   });
 
-  // 删除场景级工具
+  // 删除接口
   const {
     loading: deleteLoading,
     run: runDeleteSceneTool,
@@ -106,33 +137,56 @@
     defaultValue: null,
     onSuccess: () => {
       messageSuccess(t('删除成功'));
-      isShow.value = false;
-      confirmInput.value = '';
-      emit('deleted');
+      close();
+      emit('success');
     },
   });
 
-  // 确认删除 - 统一使用场景级接口
-  const handleConfirmDelete = () => {
-    if (props.deleteTarget && confirmInput.value === props.deleteTarget.name) {
-      const scopeParams = getSceneSystemParams();
+  // 启用/停用接口
+  const {
+    loading: toggleLoading,
+    run: publishPlatformTool,
+  } = useRequest(ToolManageService.publishPlatformTool, {
+    defaultValue: null,
+    onSuccess: () => {
+      messageSuccess(isEnabling.value ? t('启用成功') : t('停用成功'));
+      close();
+      emit('success');
+    },
+  });
+
+  const loading = computed(() => deleteLoading.value || toggleLoading.value);
+
+  const handleConfirm = () => {
+    if (!props.target) return;
+    const scopeParams = getSceneSystemParams();
+    if (isDelete.value) {
+      if (confirmInput.value !== props.target.name) return;
       runDeleteSceneTool({
-        uid: props.deleteTarget.uid,
+        uid: props.target.uid,
+        scene_id: Number(scopeParams.scope_id) || 0,
+      });
+    } else {
+      publishPlatformTool({
+        uid: props.target.uid,
         scene_id: Number(scopeParams.scope_id) || 0,
       });
     }
   };
 
-  // 取消删除
-  const handleCancel = () => {
+  const close = () => {
     isShow.value = false;
     confirmInput.value = '';
   };
 
+  const handleCancel = () => {
+    close();
+  };
+
   // 复制工具名称到剪贴板
   const handleCopyToolName = () => {
-    if (props.deleteTarget?.name) {
-      navigator.clipboard.writeText(props.deleteTarget.name)
+    if (props.target?.name) {
+      navigator.clipboard.writeText(props.target.name)
         .then(() => {
           messageSuccess(t('复制成功'));
         })
@@ -198,6 +252,26 @@
 
     .bk-input {
       width: 100%;
+    }
+  }
+
+  /* 启用/停用弹窗样式 */
+  .toggle-status-dialog-content {
+    padding: 16px 0;
+    text-align: center;
+
+    .toggle-status-title {
+      margin-bottom: 8px;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 32px;
+      color: #313238;
+    }
+
+    .toggle-status-tip {
+      font-size: 14px;
+      line-height: 22px;
+      color: #63656e;
     }
   }
 </style>

@@ -69,15 +69,16 @@
     :all-tools-data="allToolsData"
     :tags-enums="tagsEnums" />
 
-  <!-- 删除确认弹窗 -->
-  <delete-confirm-dialog
-    v-model:is-show="deleteDialogVisible"
-    :delete-target="deleteTarget"
-    @deleted="handleDeleted" />
+  <!-- 确认操作弹窗（删除/启用/停用） -->
+  <confirm-action-dialog
+    v-model:is-show="confirmDialogVisible"
+    :action-type="confirmActionType"
+    :target="confirmTarget"
+    @success="handleActionSuccess" />
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, ref } from 'vue';
+  import { onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -86,11 +87,16 @@
 
   import ToolDetailModel from '@model/tool/tool-detail';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
-  import DeleteConfirmDialog from './components/delete-confirm-dialog.vue';
+  import ConfirmActionDialog from './components/confirm-action-dialog.vue';
   import ToolListTable from './components/tool-list-table.vue';
   import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  type ActionType = 'delete' | 'enable' | 'disable';
 
   interface TagItem {
     tag_id: string;
@@ -102,7 +108,7 @@
   interface ToolItem {
     uid: string;
     name: string;
-    status: 'enabled' | 'disabled';
+    status: 'published' | '';
     strategies: number[];
   }
 
@@ -120,9 +126,10 @@
   // 全部工具数据（用于下钻时获取工具名称）
   const allToolsData = ref<Array<ToolDetailModel>>([]);
 
-  // 删除弹窗相关
-  const deleteDialogVisible = ref(false);
-  const deleteTarget = ref<ToolItem | null>(null);
+  // 确认操作弹窗相关（删除/启用/停用）
+  const confirmDialogVisible = ref(false);
+  const confirmActionType = ref<ActionType>('delete');
+  const confirmTarget = ref<ToolItem | null>(null);
 
   // 预览抽屉相关
   const isPreviewShow = ref(false);
@@ -148,30 +155,34 @@
 
   // 显示删除确认弹窗
   const handleDelete = (row: ToolItem) => {
-    deleteTarget.value = row;
-    deleteDialogVisible.value = true;
+    confirmTarget.value = row;
+    confirmActionType.value = 'delete';
+    confirmDialogVisible.value = true;
   };
 
-  // 删除成功后刷新列表
-  const handleDeleted = () => {
-    deleteTarget.value = null;
+  // 显示启用/停用确认弹窗
+  const handleToggleStatus = (row: ToolItem) => {
+    confirmTarget.value = row;
+    confirmActionType.value = row.status === 'published' ? 'disable' : 'enable';
+    confirmDialogVisible.value = true;
+  };
+
+  // 操作成功后刷新列表
+  const handleActionSuccess = () => {
+    confirmTarget.value = null;
+    refreshList();
+  };
+
+  // 刷新列表（统一入口）
+  const refreshList = () => {
     toolListRef.value?.fetchData({
       keyword: searchKeyword.value,
     });
-  };
-
-  // 启用/停用工具
-  const handleToggleStatus = (row: ToolItem) => {
-    const newStatus = row.status === 'enabled' ? 'disabled' : 'enabled';
-    console.log('toggle status', row.uid, newStatus);
-    // TODO: 实现启用/停用逻辑
   };
 
   // 搜索
   const handleSearch = () => {
-    toolListRef.value?.fetchData({
-      keyword: searchKeyword.value,
-    });
+    refreshList();
   };
 
   const handleClearSearch = () => {
@@ -213,10 +224,30 @@
     },
   });
 
+  // 监听场景切换事件
+  const { on: onEvent, off } = useEventBus();
+
+  // 刷新所有数据（场景切换时调用）
+  const refreshAllData = () => {
+    const scopeParams = getSceneSystemParams();
+    fetchToolsTagsList(scopeParams);
+    fetchAllToolsData();
+    refreshList();
+  };
+
   onMounted(() => {
-    fetchToolsTagsList();
+    const scopeParams = getSceneSystemParams();
+    fetchToolsTagsList(scopeParams);
     fetchStrategyList();
     fetchAllToolsData();
+    // 监听场景切换事件
+    onEvent('scene:change', () => {
+      refreshAllData();
+    });
+  });
+
+  onUnmounted(() => {
+    off('scene:change');
   });
 </script>
 
