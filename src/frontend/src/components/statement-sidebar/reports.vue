@@ -136,13 +136,19 @@
         </audit-menu-item>
       </div>
     </div>
+    <!-- 暂无数据 -->
+    <div
+      v-if="showEmpty"
+      class="side-empty">
+      {{ t('暂无数据') }}
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
   import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import PanelModelService from '@service/report-config';
 
@@ -153,11 +159,12 @@
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface MenuDataType {
     id: string;
     name: string;
-    group_id?: number;
+    group_ids: number[];
     priority_index?: number;
     is_favorite?: boolean;
   }
@@ -189,14 +196,30 @@
   const { emit } = useEventBus();
   const { t } = useI18n();
   const route = useRoute();
+  const router = useRouter();
 
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
 
   // 场景切换
-  const handleSceneChange = (value: SceneItem | null) => {
-    console.log('场景切换:', value);
-    // TODO: 根据选择的场景/系统重新加载报表列表
+  const handleSceneChange = () => {
+    emit('refresh-menu');
+
+    fetchGroups({
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+      // 标记为场景切换，成功后自动选中第一项
+      isSceneChange: true,
+    });
+  };
+
+  // 场景切换后默认选中第一个子菜单项
+  const navigateToFirstChild = () => {
+    const firstGroup = sideRoutes.value[0];
+    if (firstGroup?.children?.length > 0) {
+      const firstChild = firstGroup.children[0];
+      router.replace({ params: { id: firstChild.id } });
+    }
   };
 
   // 侧边栏宽度阈值，小于此值认为是收起状态
@@ -232,6 +255,9 @@
 
   // 侧边路由数组变量，与reportGroups类型相同
   const sideRoutes = ref<SideRouteItem[]>([]);
+
+  // 是否显示暂无数据
+  const showEmpty = computed(() => sideRoutes.value.length === 0 && favoriteItems.value.length === 0);
 
   // 展开的分组ID列表
   const expandedGroups = ref<number[]>([]);
@@ -287,29 +313,29 @@
   }
   const userPreference = ref<PanelPreference>({});
 
-  // 获取用户偏好
-  const {
-    run: fetchPanelPreference,
-  } = useRequest(PanelModelService.fetchPanelPreference, {
-    defaultValue: null,
-    onSuccess: (data: { config: string } | null) => {
-      if (data && data.config) {
-        try {
-          userPreference.value = JSON.parse(data.config);
-        } catch (e) {
-          userPreference.value = {};
-        }
-      } else {
-        // 返回空对象，默认展开全部
-        userPreference.value = {};
-      }
-      // 获取用户偏好后，再获取分组数据
-      fetchGroups({
-        page: 1,
-        page_size: 10000,
-      });
-    },
-  });
+  // // 获取用户偏好
+  // const {
+  //   run: fetchPanelPreference,
+  // } = useRequest(PanelModelService.fetchPanelPreference, {
+  //   defaultValue: null,
+  //   onSuccess: (data: { config: string } | null) => {
+  //     if (data && data.config) {
+  //       try {
+  //         userPreference.value = JSON.parse(data.config);
+  //       } catch (e) {
+  //         userPreference.value = {};
+  //       }
+  //     } else {
+  //       // 返回空对象，默认展开全部
+  //       userPreference.value = {};
+  //     }
+  //     // 获取用户偏好后，再获取分组数据
+  //     fetchGroups({
+  //       scope_id: getSceneSystemParams().scope_id,
+  //       scope_type: getSceneSystemParams().scope_type,
+  //     });
+  //   },
+  // });
 
   // 更新用户偏好
   const {
@@ -335,17 +361,33 @@
     run: fetchGroups,
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
-    onSuccess: (data: Array<{ id: number; name: string; priority_index: number }>) => {
+    onSuccess: (
+      data: Array<{ id: number; name: string; priority_index: number }>,
+      params?: Record<string, unknown>,
+    ) => {
+      console.log('data>>>', data);
+      console.log('props.menuData', props.menuData);
+
       groups.value = data;
       sideRoutes.value =  data.map(item => ({
         id: item.id,
         name: item.name,
         priority_index: item.priority_index,
         children: props.menuData
-          .filter(menuItem => menuItem.group_id === item.id)
+          .filter(menuItem => Array.isArray(menuItem.group_ids)
+            && menuItem.group_ids.map(String).includes(String(item.id)))
           .sort((a, b) => (b.priority_index ?? 0) - (a.priority_index ?? 0)),
       }))
-        .sort((a, b) => b.priority_index - a.priority_index);
+        .sort((a, b) => b.priority_index - a.priority_index)
+        .filter(group => group.children.length > 0);
+
+      console.log(' sideRoutes.value>>>',  sideRoutes.value);
+
+      // 场景切换后默认选中第一个子菜单项
+      if (params?.isSceneChange) {
+        navigateToFirstChild();
+      }
+
       // 根据用户偏好设置展开的分组
       // 注意：expandedGroupIds 为空数组表示用户主动全部收起，应保持收起状态
       // expandedGroupIds 为 undefined 表示没有用户偏好，应默认展开所有分组
@@ -366,7 +408,7 @@
     // 初始化侧边栏宽度监听
     initResizeObserver();
     // 组件挂载时先获取用户偏好，再获取分组数据
-    fetchPanelPreference();
+    // fetchPanelPreference();
   });
 
   onBeforeUnmount(() => {
@@ -381,8 +423,8 @@
   watch(() => props.menuData, (newMenuData) => {
     if (newMenuData && newMenuData.length > 0) {
       fetchGroups({
-        page: 1,
-        page_size: 10000,
+        scope_id: getSceneSystemParams().scope_id,
+        scope_type: getSceneSystemParams().scope_type,
       });
     }
   });
@@ -528,5 +570,14 @@
     .side-child-dot {
       background: #fff;
     }
+  }
+
+  .side-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    font-size: 12px;
+    color: #63656e;
   }
 </style>
