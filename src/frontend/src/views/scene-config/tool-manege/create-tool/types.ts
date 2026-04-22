@@ -5,6 +5,8 @@
 // 表单数据接口
 export interface FormData {
   uid?: string; // 工具uid
+  scene_id?: string; // 场景ID，场景级工具创建/编辑时使用
+  scope_id?: string; // 作用域ID，用于接口传参
   source?: string;
   users?: string[];
   name: string;
