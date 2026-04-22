@@ -255,8 +255,26 @@ class SmartPageAPITestCase(TestCase):
 
     def setUp(self):
         self.namespace = "default_ns"
+        self.tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Smart Page Existing Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.SMART_PAGE.value,
+            config=SmartPageToolConfig(
+                marker_type="risk_profile",
+                data_sources=[
+                    {
+                        "name": "risk_event_source",
+                        "data_source_type": "sql_template",
+                        "config": {"sql_template": "SELECT 1"},
+                    }
+                ],
+            ).model_dump(),
+            description="smart page existing tool",
+        )
 
-    def test_create_smart_page_tool(self):
+    def test_create_smart_page_tool_not_support(self):
         create_resource = CreateTool()
         create_data = {
             "name": f"Smart Page Demo {uuid.uuid4()}",
@@ -273,37 +291,16 @@ class SmartPageAPITestCase(TestCase):
             },
             "description": "smart page test",
         }
-        created = create_resource(create_data)
-
-        saved_tool = Tool.last_version_tool(uid=created["uid"])
-        self.assertEqual(saved_tool.tool_type, ToolTypeEnum.SMART_PAGE.value)
+        with self.assertRaisesMessage(Exception, "当前暂不支持智能页面工具创建"):
+            create_resource(create_data)
 
     def test_execute_smart_page_tool(self):
-        create_resource = CreateTool()
-        created = create_resource(
-            {
-                "name": f"Smart Page Execute {uuid.uuid4()}",
-                "namespace": self.namespace,
-                "tool_type": ToolTypeEnum.SMART_PAGE.value,
-                "config": {
-                    "data_sources": [
-                        {
-                            "name": "risk_event_source",
-                            "data_source_type": "sql_template",
-                            "config": {"sql_template": "SELECT 1"},
-                        }
-                    ]
-                },
-                "description": "smart page execute",
-            }
-        )
-
         with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
             mock_bulk.return_value = [{"list": [{"col": "val"}]}]
             execute_resource = ExecuteTool()
             execute_resp = execute_resource(
                 {
-                    "uid": created["uid"],
+                    "uid": self.tool.uid,
                     "params": {
                         "data_source_name": "risk_event_source",
                         "params": {},
@@ -315,40 +312,21 @@ class SmartPageAPITestCase(TestCase):
         self.assertEqual(execute_resp["data"]["result"]["data_source_type"], "sql_template")
         self.assertEqual(execute_resp["data"]["result"]["results"], [{"col": "val"}])
 
-    def test_update_smart_page_tool(self):
-        create_resource = CreateTool()
-        created = create_resource(
-            {
-                "name": f"Smart Page Update {uuid.uuid4()}",
-                "namespace": self.namespace,
-                "tool_type": ToolTypeEnum.SMART_PAGE.value,
-                "config": {
-                    "data_sources": [
-                        {
-                            "name": "risk_event_source",
-                            "data_source_type": "sql_template",
-                            "config": {"sql_template": "SELECT 1"},
-                        }
-                    ]
-                },
-                "description": "smart page update",
-            }
-        )
-
+    def test_update_smart_page_tool_not_support(self):
         update_resource = UpdateTool()
-        updated = update_resource(
-            {
-                "uid": created["uid"],
-                "config": {
-                    "data_sources": [
-                        {
-                            "name": "risk_event_source",
-                            "data_source_type": "sql_template",
-                            "config": {"sql_template": "SELECT 2"},
-                        }
-                    ]
-                },
-                "tags": [],
-            }
-        )
-        self.assertEqual(updated["version"], 2)
+        with self.assertRaisesMessage(Exception, "当前暂不支持智能页面工具更新"):
+            update_resource(
+                {
+                    "uid": self.tool.uid,
+                    "config": {
+                        "data_sources": [
+                            {
+                                "name": "risk_event_source",
+                                "data_source_type": "sql_template",
+                                "config": {"sql_template": "SELECT 2"},
+                            }
+                        ]
+                    },
+                    "tags": [],
+                }
+            )
