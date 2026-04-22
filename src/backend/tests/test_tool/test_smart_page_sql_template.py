@@ -47,17 +47,18 @@ class TestSmartPageConfig(SimpleTestCase):
 
     def test_should_validate_sql_template_datasource_with_typed_config(self):
         cfg = {
+            "marker_type": "risk_profile",
             "data_sources": [
                 {
                     "name": "risk_event_source",
                     "description": "风险事件",
-                    "marker_type": "table",
                     "data_source_type": "sql_template",
                     "config": {"sql_template": "SELECT 1"},
                 }
-            ]
+            ],
         }
         model = SmartPageToolConfig.model_validate(cfg)
+        self.assertEqual(model.marker_type, "risk_profile")
         self.assertEqual(model.data_sources[0].name, "risk_event_source")
         self.assertEqual(model.data_sources[0].data_source_type, "sql_template")
         self.assertEqual(model.data_sources[0].config.sql_template, "SELECT 1")

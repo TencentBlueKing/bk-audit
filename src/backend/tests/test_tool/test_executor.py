@@ -528,13 +528,14 @@ class TestToolExecutorFactory(DjangoTestCase):
             name="smart_page_tool",
             version=1,
             config=SmartPageToolConfig(
+                marker_type="risk_profile",
                 data_sources=[
                     {
                         "name": "smart_sql",
                         "data_source_type": "sql_template",
                         "config": {"sql_template": "SELECT id FROM smart_table"},
                     }
-                ]
+                ],
             ).model_dump(),
         )
 
@@ -576,11 +577,11 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def setUp(self):
         self.config_dict = {
+            "marker_type": "risk_profile",
             "data_sources": [
                 {
                     "name": "risk_event_source",
                     "description": "风险事件",
-                    "marker_type": "table",
                     "data_source_type": "sql_template",
                     "config": {
                         "sql_template": (
@@ -589,7 +590,7 @@ class TestSmartPageExecutor(SimpleTestCase):
                         ),
                     },
                 }
-            ]
+            ],
         }
 
     def test_execute_should_return_datasource_metadata(self):
