@@ -27,7 +27,7 @@ from apps.permission.handlers.drf import (
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.utils.data import get_value_by_request
+from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
 from services.web.tool.permissions import CallerContextPermission
@@ -38,9 +38,10 @@ class StrategyViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_strategy_id(self):
+        """兼容 path/query/body 中的策略主键读取，优先使用详情路由里的主键值。"""
         return (
-            get_value_by_request(self.request, "strategy_id")
-            or get_value_by_request(self.request, "pk")
+            get_value_by_request_or_path(self.request, "strategy_id")
+            or get_value_by_request_or_path(self.request, "pk")
             or get_value_by_request(self.request, "related_object_id")
         )
 

@@ -26,7 +26,7 @@ from apps.permission.handlers.drf import (
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.utils.data import get_value_by_request
+from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from core.view_sets import APIGWViewSet
 from services.web.risk.permissions import (
     BatchRiskTicketPermission,
@@ -241,7 +241,8 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_scene_id_by_pa(self):
-        pa_id = get_value_by_request(self.request, "id") or get_value_by_request(self.request, "pk")
+        """详情类流程应用接口优先使用 path 主键，再反查所属场景。"""
+        pa_id = get_value_by_request_or_path(self.request, "id") or get_value_by_request_or_path(self.request, "pk")
         if not pa_id:
             return None
         return (
@@ -304,7 +305,10 @@ class RiskRulesViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_scene_id_by_rule(self):
-        rule_id = get_value_by_request(self.request, "rule_id") or get_value_by_request(self.request, "pk")
+        """兼容 rule_id/pk 两种主键名，并支持从路由参数中反查所属场景。"""
+        rule_id = get_value_by_request_or_path(self.request, "rule_id") or get_value_by_request_or_path(
+            self.request, "pk"
+        )
         if not rule_id:
             return None
         return (

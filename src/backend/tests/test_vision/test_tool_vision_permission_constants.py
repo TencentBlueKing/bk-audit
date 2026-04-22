@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+from types import SimpleNamespace
 from unittest import mock
 
 from django.test import TestCase
 
-from services.web.scene.models import Scene
+from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
+from services.web.vision.models import SceneReportGroup, VisionPanel
 
 
 class DummyUser:
@@ -145,6 +148,9 @@ class TestSceneManageViewSetPermission(TestCase):
         from services.web.vision.views import ScenePanelManageViewSet
 
         view = ScenePanelManageViewSet()
+        view.action = "list"
+        view.request = SimpleNamespace(query_params={"scene_id": "1"}, data={})
+        view.kwargs = {}
         permissions = view.get_permissions()
 
         self.assertEqual(len(permissions), 1)
@@ -204,7 +210,6 @@ class TestSceneManageViewSetPermission(TestCase):
         self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
 
     def test_scene_group_manage_destroy_prefers_group_scene_id_over_request_scene_id(self):
-        from services.web.vision.models import SceneReportGroup
         from services.web.vision.views import SceneReportGroupManageViewSet
 
         scene = Scene.objects.create(name="真实归属场景", managers=["admin"])
@@ -218,3 +223,39 @@ class TestSceneManageViewSetPermission(TestCase):
         permission = view.get_permissions()[0]
 
         self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
+
+    def test_scene_panel_manage_update_permission_uses_panel_scene_id(self):
+        from services.web.vision.views import ScenePanelManageViewSet
+
+        scene = Scene.objects.create(name="报表归属场景", managers=["admin"])
+        other_scene = Scene.objects.create(name="伪造请求场景", managers=["admin"])
+        panel = VisionPanel.objects.create(id="scene-panel-1", name="场景报表")
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(panel.id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
+
+        view = ScenePanelManageViewSet()
+        view.action = "update"
+        view.request = SimpleNamespace(
+            query_params={},
+            data={"scene_id": str(other_scene.scene_id)},
+            parser_context={"kwargs": {"panel_id": str(panel.id)}},
+        )
+        view.kwargs = {"panel_id": str(panel.id)}
+        permission = view.get_permissions()[0]
+
+        self.assertEqual(permission._get_instance_id(view.request, view), str(scene.scene_id))
+
+    def test_scene_panel_manage_create_permission_uses_request_scene_id(self):
+        from services.web.vision.views import ScenePanelManageViewSet
+
+        view = ScenePanelManageViewSet()
+        view.action = "create"
+        view.request = SimpleNamespace(query_params={}, data={"scene_id": "789"})
+        view.kwargs = {}
+        permission = view.get_permissions()[0]
+
+        self.assertEqual(permission._get_instance_id(view.request, view), "789")
