@@ -230,9 +230,13 @@ class IAMGroupManager:
     def add_group_members(
         group_id: Union[int, str],
         members: list,
-        expired_at: int = 0,
+        expired_at: int = None,
         system_id: str = None,
     ) -> None:
+        import time
+
+        if expired_at is None:
+            expired_at = int(time.time()) + 31536000
         """
         添加用户组成员
         """

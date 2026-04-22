@@ -122,11 +122,13 @@ class AddGroupMembers(IAMBaseResource):
 
     def build_request_data(self, validated_request_data: dict) -> dict:
         """构建请求数据，提取 members 和 expired_at，保留 url_keys 参数供 build_url 使用"""
+        import time
+
         return {
             "system_id": validated_request_data.get("system_id"),
             "id": validated_request_data.get("id"),
             "members": validated_request_data.pop("members", []),
-            "expired_at": validated_request_data.pop("expired_at", 0),
+            "expired_at": validated_request_data.pop("expired_at", int(time.time()) + 31536000),
         }
 
 
