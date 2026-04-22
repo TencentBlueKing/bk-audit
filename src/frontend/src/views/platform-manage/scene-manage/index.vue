@@ -199,6 +199,7 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import SceneManageService from '@service/scene-manage';
 
@@ -213,6 +214,7 @@
   import CreateSceneSideslider from './components/create-scene-sideslider.vue';
   import SceneDetailSideslider from './components/scene-detail-sideslider.vue';
 
+  const router = useRouter();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { replaceSearchParams } = useUrlSearch();
@@ -271,13 +273,20 @@
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span
         class="scene-name-cell"
-        style="color: #3A84FF;cursor: pointer;">
-        <span  onClick={() => handleShowSceneDetail(row)}>{row.name}</span>
+        style="color: #3A84FF;">
+        <span
+          class="scene-name-link"
+          onClick={() => handleShowSceneDetail(row)}>
+          {row.name}
+        </span>
         <audit-icon
           v-bk-tooltips={t('跳转至「场景信息」查看')}
           class="ml8 jump-link hover-show-icon"
           type="jump-link"
-         />
+          onClick={(e: Event) => {
+            e.stopPropagation();
+            handleJumpToSceneInfo(row);
+          }} />
       </span>
     ),
     },
@@ -550,6 +559,18 @@
     sceneDetailVisible.value = true;
   };
 
+  const handleJumpToSceneInfo = (row: SceneModel) => {
+    // 将场景信息写入 sessionStorage，供场景信息页面的选择器读取
+    const selectorData = {
+      id: String(row.scene_id),
+      name: row.name,
+      type: 'scene',
+    };
+    sessionStorage.setItem('scene-system-selector:selected', JSON.stringify(selectorData));
+    const routeData = router.resolve({ name: 'sceneInfo' });
+    window.open(routeData.href, '_blank');
+  };
+
   // 编辑场景
   const handleEditScene = (row: SceneModel) => {
     editSceneId.value = row.scene_id;
@@ -748,6 +769,10 @@
 
 :deep(.jump-link) {
   color: #3a84ff;
+  cursor: pointer;
+}
+
+:deep(.scene-name-link) {
   cursor: pointer;
 }
 
