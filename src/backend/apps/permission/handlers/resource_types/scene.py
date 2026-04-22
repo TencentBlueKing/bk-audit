@@ -29,7 +29,7 @@ class Scene(ResourceTypeMeta):
     id = "scene"
     name = gettext("审计场景")
     selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "scene"}]
+    related_instance_selections = [{"system_id": system_id, "id": "scene_list"}]
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
