@@ -118,6 +118,7 @@ class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
 
 class PlatformPanelOperateRequestSerializer(serializers.Serializer):
     panel_id = serializers.CharField(required=True)
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
 
 
 class CreateScenePanelRequestSerializer(serializers.Serializer):
@@ -127,6 +128,7 @@ class CreateScenePanelRequestSerializer(serializers.Serializer):
     name = serializers.CharField(required=True, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
 
 
 class UpdateScenePanelRequestSerializer(serializers.Serializer):
@@ -137,6 +139,7 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
 
 
 class DeleteScenePanelRequestSerializer(serializers.Serializer):
@@ -147,6 +150,7 @@ class DeleteScenePanelRequestSerializer(serializers.Serializer):
 class ScenePanelOperateRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     panel_id = serializers.CharField(required=True)
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
 
 
 class PlatformPanelListQuerySerializer(serializers.Serializer):

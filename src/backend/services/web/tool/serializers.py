@@ -126,6 +126,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(label=gettext_lazy("命名空间"), required=False, default="default")
     version = serializers.IntegerField(default=1, label=gettext_lazy("版本"))
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
     tags = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表"), default=[]
     )
@@ -166,6 +167,7 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, label=gettext_lazy("工具名称"))
     namespace = serializers.CharField(required=False, label=gettext_lazy("命名空间"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, label=gettext_lazy("上架状态"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
     )
@@ -199,6 +201,12 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
 class ToolResponseSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
+
+
+class ToolPublishResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tool
+        fields = ["uid", "name", "status"]
 
 
 class ToolRetrieveRequestSerializer(serializers.Serializer):
@@ -237,10 +245,19 @@ class SceneScopeToolDeleteRequestSerializer(ToolRetrieveRequestSerializer):
     scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
 
 
-class SceneScopeToolPublishRequestSerializer(ToolRetrieveRequestSerializer):
+class PlatformSceneToolPublishRequestSerializer(serializers.Serializer):
+    """平台级工具上架/下架请求"""
+
+    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, label=gettext_lazy("上架状态"))
+
+
+class SceneScopeToolPublishRequestSerializer(serializers.Serializer):
     """场景级工具上架/下架请求（scene_id 必填）"""
 
+    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     scene_id = serializers.IntegerField(required=True, label=gettext_lazy("所属场景ID"))
+    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, label=gettext_lazy("上架状态"))
 
 
 class ToolListAllResponseSerializer(serializers.ModelSerializer):
