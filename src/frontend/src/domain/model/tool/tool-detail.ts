@@ -53,10 +53,6 @@ export default class ToolDetail {
   tags: Array<string>;
   created_at: string;
   created_by: string;
-  permission:{
-    use_tool: boolean;
-    manage_tool: boolean;
-  };
   strategies: Array<string>;
   updated_at: string;
   updated_by: string;
@@ -121,7 +117,6 @@ export default class ToolDetail {
     this.tags = payload.tags;
     this.data_search_config_type = payload.data_search_config_type;
     this.config = payload.config;
-    this.permission = payload.permission;
     this.strategies = payload.strategies;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;

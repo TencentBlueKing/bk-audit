@@ -61,6 +61,7 @@
         <!-- 新增工具按钮 -->
         <add-tool-popover
           v-if="toolList.length > 0"
+          :scope-params="props.scopeParams"
           :tags-enums="tagsEnums"
           :tool-list="toolList"
           @add-tool="(tool) => emit('addTool', tool)" />
@@ -174,6 +175,11 @@
     toolList: ToolInfo[];
     activeUid: string;
     tagsEnums: TagItem[];
+    // eslint-disable-next-line vue/no-unused-properties
+    scopeParams?: {
+      scope_type?: string;
+      scope_id?: string;
+    };
   }
 
   const props = defineProps<Props>();
@@ -380,7 +386,6 @@
       namespace: '',
       is_bkvision: false,
       favorite: false,
-      permission: { use_tool: true, manage_tool: false },
       strategies: [],
       tags: [],
       created_by: '',

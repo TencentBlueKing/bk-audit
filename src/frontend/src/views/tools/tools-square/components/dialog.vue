@@ -99,8 +99,7 @@
         <scroll-faker>
           <template
             v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
-            <!-- 有权限时 -->
-            <div v-if="toolDetails?.permission.use_tool">
+            <div>
               <div class="top-search">
                 <div class="top-search-title">
                   {{ t('查询输入') }}
@@ -183,29 +182,6 @@
                 </div>
               </div>
             </div>
-            <!-- 无权限时 -->
-            <div
-              v-else
-              class="default-permission">
-              <div class="no-permission">
-                <img
-                  class="no-permission-img"
-                  src="@images/no-permission.svg">
-                <div class="no-permission-desc">
-                  <p class="no-permission-title">
-                    {{ t('无使用权限') }}
-                  </p>
-                  <p class="no-permission-text">
-                    {{ t('你没有该工具的使用权限，请前往申请权限') }}
-                  </p>
-                  <p
-                    class="no-permission-btn"
-                    @click.stop="handleIamApply">
-                    {{ t('申请权限') }}
-                  </p>
-                </div>
-              </div>
-            </div>
           </template>
 
           <!-- bkVision工具 -->
@@ -245,10 +221,8 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
-  import IamManageService from '@service/iam-manage';
   import ToolManageService from '@service/tool-manage';
 
-  import IamApplyDataModel from '@model/iam/apply-data';
   // import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
 
@@ -407,14 +381,6 @@
     onSuccess: (data) => {
       uid.value = data.uid;
 
-      // 权限
-      if (!data?.permission.use_tool) {
-        getApplyData({
-          action_ids: 'use_tool',
-          resources: data.uid,
-        });
-      }
-
       if (data.tool_type !== 'bk_vision') {
         // 创建弹框form
         createDialogContent(data);
@@ -441,19 +407,6 @@
           });
       }, 0);
     },
-  });
-
-  const handleIamApply = () => {
-    if (applyData.value?.apply_url) {
-      window.open(applyData.value.apply_url, '_blank');
-    }
-  };
-
-  const {
-    data: applyData,
-    run: getApplyData,
-  } = useRequest(IamManageService.getApplyData, {
-    defaultValue: new IamApplyDataModel(),
   });
 
   // 点击头部标签(切换工具)
@@ -1058,48 +1011,6 @@
 
   .list-data {
     margin-top: 10px;
-  }
-}
-
-.default-permission {
-  position: relative;
-  height: 70vh;
-
-  .no-permission {
-    position: absolute;
-    top: 30%;
-    left: 50%;
-    text-align: center;
-    transform: translate(-50%, -30%);
-
-    .no-permission-img {
-      width: 200px;
-      height: 200px;
-      margin: 0 auto;
-    }
-
-    .no-permission-desc {
-      margin-top: 16px;
-
-      .no-permission-title {
-        margin-bottom: 8px;
-        font-size: 16px;
-        font-weight: bold;
-        color: #4d4f56;
-      }
-
-      .no-permission-text {
-        margin-bottom: 12px;
-        font-size: 14px;
-        color: #63656e;
-      }
-
-      .no-permission-btn {
-        font-size: 14px;
-        color: #3a84ff;
-        cursor: pointer;
-      }
-    }
   }
 }
 

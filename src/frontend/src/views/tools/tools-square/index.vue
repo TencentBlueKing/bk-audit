@@ -82,6 +82,7 @@
           ref="ContentCardRef"
           :my-created="tagId === '-4'"
           :recent-used="tagId === '-5'"
+          :scope-params="scopeParams"
           :tag-id="tagId"
           :tags-enums="tagsEnums"
           @change="handleChange"
@@ -89,6 +90,7 @@
         <tool-info-panel
           v-else
           :active-uid="activeToolUid"
+          :scope-params="scopeParams"
           :tags-enums="tagsEnums"
           :tool-list="openedTools"
           @add-tool="handleAddToolFromPopover"
@@ -102,7 +104,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -115,6 +117,7 @@
   import ContentCard from './square-content/concent-card.vue';
   import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import ellipsisIcon from '@/images/ellipsis.svg';
@@ -151,10 +154,29 @@
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
 
+  // 将选择器值转换为 scope 参数
+  const scopeParams = computed(() => {
+    const item = selectedScene.value;
+    // 未选择场景时，默认使用跨场景类型（scope_type 为后端必填字段）
+    if (!item) return { scope_type: 'cross_scene' };
+    if (item.type === 'aggregate') {
+      return {
+        scope_type: item.id === 'allSecen' ? 'cross_scene' : 'cross_system',
+      };
+    }
+    return {
+      scope_type: item.type, // 'scene' | 'system'
+      scope_id: item.id,
+    };
+  });
+
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {
-    console.log('场景切换:', value);
-    // TODO: 根据选择的场景/系统重新加载工具列表
+    selectedScene.value = value;
+    // 切换场景/系统时重新拉取标签和工具列表
+    refreshTagsList();
+    if (hasOpenedTools.value) return;
+    ContentCardRef.value?.getToolsList(tagId.value);
   };
 
   const {
@@ -179,7 +201,7 @@
   };
 
   const handleChange = () => {
-    fetchToolsTagsList();
+    refreshTagsList();
   };
 
   const {
@@ -202,9 +224,18 @@
       }));
 
       tagsEnums.value = strategyLabelList.value;
-      renderLabelRef.value?.resetAll([]);
+      // 初始化阶段（tagId 为空）：通过 resetAll 触发 handleChecked 来加载工具列表
+      // 场景切换阶段（tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
+      if (!tagId.value) {
+        renderLabelRef.value?.resetAll([]);
+      }
     },
   });
+
+  // 刷新标签列表（带 scope 参数）
+  const refreshTagsList = () => {
+    fetchToolsTagsList(scopeParams.value);
+  };
 
   const handleOpenTool = (tool: ToolInfo) => {
     openTool(tool);
@@ -266,8 +297,26 @@
     }
   });
 
+  // 监听场景切换事件
+  const { on: onEvent, off } = useEventBus();
+
+  // 刷新所有数据（场景切换时调用）
+  const refreshAllData = () => {
+    refreshTagsList();
+    if (hasOpenedTools.value) return;
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
+
   onMounted(() => {
-    fetchToolsTagsList();
+    refreshTagsList();
+    // 监听场景切换事件
+    onEvent('scene:change', () => {
+      refreshAllData();
+    });
+  });
+
+  onUnmounted(() => {
+    off('scene:change');
   });
 </script>
 
