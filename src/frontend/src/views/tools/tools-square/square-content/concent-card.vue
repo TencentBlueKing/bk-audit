@@ -31,7 +31,7 @@
         :loading="loading"
         :z-index="10000">
         <div
-          v-if="dataList.filter(item => item.permission.manage_tool || item.permission.use_tool).length > 0 || true"
+          v-if="dataList.length > 0 || true"
           ref="cardListRef"
           class="card-list"
           @scroll="handleScroll">
@@ -99,7 +99,7 @@
               </div>
             </div>
             <div
-              v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
+              v-for="(item, index) in dataList"
               :key="index"
               class="card-list-item"
               @click="handleClickTool(item)"
@@ -150,15 +150,6 @@
                       theme="danger"
                       type="filled">
                       {{ t('待更新') }}
-                    </bk-tag>
-                    <bk-tag
-                      v-if="!item.permission.use_tool"
-                      v-bk-tooltips="{ content: t('申请权限可用') }"
-                      class="title-tag"
-                      size="small"
-                      theme="warning"
-                      type="filled">
-                      {{ t('申请可使用') }}
                     </bk-tag>
                   </div>
                   <div class="top-right-desc">
@@ -314,6 +305,10 @@
     myCreated: boolean,
     recentUsed: boolean,
     tagId: string,
+    scopeParams: {
+      scope_type?: string,
+      scope_id?: string,
+    },
   }
 
 
@@ -335,6 +330,12 @@
   const auditProfileHover = ref(false);
   const dataList = ref<ToolInfo[]>([]);
 
+  // 判断 tagId 是否为有效的后端标签（排除空值和以 - 开头的内置特殊标签）
+  const getValidTagsParam = (id: string) => {
+    if (!id || id.startsWith('-')) return {};
+    return { tags: [id] };
+  };
+
   // 固定的审计用户画像工具数据
   const auditProfileTool = new ToolInfo({
     uid: 'audit_user_profile',
@@ -345,7 +346,6 @@
     namespace: '',
     is_bkvision: false,
     favorite: false,
-    permission: { use_tool: true, manage_tool: false },
     strategies: [],
     tags: [],
     created_by: 'ivonye',
@@ -483,7 +483,9 @@
         my_created: props.myCreated,
         recent_used: props.recentUsed,
         keyword: searchValue.value,
-        tags: [props.tagId],
+        status: 'published',
+        ...getValidTagsParam(props.tagId),
+        ...props.scopeParams,
       }).then((data) => {
         dataList.value = data.results;
         total.value = data.total;
@@ -617,7 +619,9 @@
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
-      tags: [props.tagId],
+      status: 'published',
+      ...getValidTagsParam(props.tagId),
+      ...props.scopeParams,
     }).then((data) => {
       // 非拼接模式，重新赋值
       dataList.value = data.results;
@@ -650,7 +654,9 @@
         keyword: searchValue.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
-        tags: [props.tagId],
+        status: 'published',
+        ...getValidTagsParam(props.tagId),
+        ...props.scopeParams,
       })
         .then((data) => {
           // 拼接模式，追加数据
@@ -674,7 +680,9 @@
           keyword: searchValue.value,
           my_created: props.myCreated,
           recent_used: props.recentUsed,
-          tags: [id],
+          status: 'published',
+          ...getValidTagsParam(id),
+          ...props.scopeParams,
         }).then((data) => {
           // 非拼接模式，重新赋值
           dataList.value = data.results;
