@@ -271,13 +271,13 @@
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span
         class="scene-name-cell"
-        style="color: #3A84FF;">
-        {row.name}
+        style="color: #3A84FF;cursor: pointer;">
+        <span  onClick={() => handleShowSceneDetail(row)}>{row.name}</span>
         <audit-icon
           v-bk-tooltips={t('跳转至「场景信息」查看')}
           class="ml8 jump-link hover-show-icon"
           type="jump-link"
-          onClick={() => handleShowSceneDetail(row)} />
+         />
       </span>
     ),
     },
@@ -345,9 +345,9 @@
       width: 100,
       sortType: 'all',
       sorter: true,
-      cell: () => (
+      cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="strategy-count-cell">
-        3
+        {row.strategy_ids.length}
         <audit-icon
           v-bk-tooltips={t('跳转至「审计策略」查看')}
           class="ml8 jump-link hover-show-icon"
@@ -361,9 +361,9 @@
       width: 100,
       sortType: 'all',
       sorter: true,
-      cell: () => (
+      cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="risk-count-cell">
-        3
+        {row.risk_count}
         <audit-icon
           v-bk-tooltips={t('跳转至「风险」查看')}
           class="ml8 jump-link hover-show-icon"
