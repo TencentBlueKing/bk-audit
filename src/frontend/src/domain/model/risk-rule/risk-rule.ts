@@ -35,6 +35,7 @@ export default class RiskRule {
   auto_close_risk: boolean;
   priority_index: number;// 优先指数
   is_enabled: boolean;
+  scene_id: string | number;
 
   constructor(payload = {} as RiskRule) {
     this.id = payload.id;
@@ -53,5 +54,6 @@ export default class RiskRule {
     this.auto_close_risk = payload.auto_close_risk;
     this.priority_index = payload.priority_index;
     this.is_enabled = payload.is_enabled;
+    this.scene_id = payload.scene_id;
   }
 }
