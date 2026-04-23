@@ -4,11 +4,15 @@ import abc
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy
+from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta.handlers.iam_group import IAMGroupManager
+from apps.meta.models import System
+from apps.permission.handlers.actions import ActionEnum
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
+from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.exceptions import SceneHasRelatedResources, SceneNotExist
 from services.web.scene.models import Scene, SceneDataTable, SceneSystem
 from services.web.scene.serializers import (
@@ -403,3 +407,67 @@ class UpdateSceneInfo(SceneResource):
         self._sync_iam_group_members(scene, validated_request_data)
 
         return scene
+
+
+class GetScenePermissionSystems(SceneResource):
+    """获取场景下有权限的系统列表"""
+
+    name = gettext_lazy("获取场景下有权限的系统列表")
+    audit_action = ActionEnum.VIEW_SCENE
+    many_response_data = True
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+        system_name = serializers.CharField(label=gettext_lazy("系统名称"))
+
+    def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+
+        # 先判断场景是否配置了 is_all_systems=True（不限制系统）
+        scene_systems = SceneSystem.objects.filter(scene_id=scene_id)
+        if scene_systems.filter(is_all_systems=True).exists():
+            # 不限制，返回所有系统
+            systems = System.objects.all()
+        else:
+            # 获取场景关联的系统ID白名单
+            system_ids = list(scene_systems.values_list("system_id", flat=True))
+            if not system_ids:
+                # 没有配置任何系统，没有权限
+                return []
+            systems = System.objects.filter(system_id__in=system_ids)
+
+        return [
+            {
+                "system_id": system.system_id,
+                "system_name": system.name,
+            }
+            for system in systems
+        ]
+
+
+class GetScenePermissionTables(SceneResource):
+    """获取场景下有权限的数据表"""
+
+    name = gettext_lazy("获取场景下有权限的数据表")
+    audit_action = ActionEnum.VIEW_SCENE
+    many_response_data = True
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        table_id = serializers.CharField(label=gettext_lazy("表ID"))
+
+    def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+
+        # 直接获取场景关联的数据表ID列表
+        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+        if not scene_table_ids:
+            # 场景没有配置任何数据表，没有权限，直接返回空
+            return []
+
+        return [{"table_id": table_id} for table_id in scene_table_ids]
