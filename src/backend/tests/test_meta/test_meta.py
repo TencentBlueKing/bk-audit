@@ -15,7 +15,11 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from types import SimpleNamespace
 from unittest import mock
+
+from django.conf import settings
+from rest_framework.test import APIRequestFactory
 
 from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
@@ -28,6 +32,8 @@ from apps.meta.models import (
     SystemFavorite,
     SystemRole,
 )
+from apps.meta.serializers import SystemListRequestSerializer
+from apps.meta.views.system_views import SystemsViewSet
 from core.testing import assert_dict_contains, assert_list_contains
 from core.utils.data import ordered_dict_to_json, trans_object_local
 from services.web.databus.models import Snapshot
@@ -100,6 +106,16 @@ from tests.test_meta.constants import (
 )
 
 
+def mock_system_permissions(systems, *args, **kwargs):
+    permission_map = {
+        f"{settings.BK_IAM_SYSTEM_ID}test": {"view_system": True, "edit_system": False},
+        settings.BK_IAM_SYSTEM_ID: {"view_system": False, "edit_system": True},
+    }
+    for system in systems:
+        system["permission"] = permission_map.get(system["system_id"], {"view_system": False, "edit_system": False})
+    return systems
+
+
 class MetaTest(TestCase):
     def setUp(self) -> None:
         System.objects.bulk_create(SYSTEM_BULK_DATA)
@@ -134,6 +150,69 @@ class MetaTest(TestCase):
         """SystemListResource"""
         result = self.resource.meta.system_list(**SYSTEM_LIST_OF_NOT_SYSTEMS_PARAMS)
         self.assertEqual(result, [])
+
+    def test_system_list_filter_actions_serializer_validates_known_actions(self):
+        """SystemListResource filter_actions serializer"""
+        serializer = SystemListRequestSerializer(
+            data={"namespace": "default", "filter_actions": "view_system,edit_system"}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["filter_actions"], ["view_system", "edit_system"])
+
+    def test_system_list_filter_actions_serializer_rejects_unknown_actions(self):
+        """SystemListResource filter_actions serializer"""
+        serializer = SystemListRequestSerializer(data={"namespace": "default", "filter_actions": "delete_system"})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("filter_actions", serializer.errors)
+
+    @mock.patch(
+        "meta.resources.resource.databus.collector.bulk_system_collectors_status",
+        mock.Mock(return_value=BULK_SYSTEM_COLLECTORS_STATUS_API_RESP),
+    )
+    @mock.patch("meta.resources.wrapper_permission_field", mock_system_permissions)
+    def test_system_list_filter_actions_by_view_system(self):
+        """SystemListResource filter_actions"""
+        result = self.resource.meta.system_list(namespace="default", filter_actions="view_system")
+
+        self.assertEqual([system["system_id"] for system in result], [f"{settings.BK_IAM_SYSTEM_ID}test"])
+
+    @mock.patch(
+        "meta.resources.resource.databus.collector.bulk_system_collectors_status",
+        mock.Mock(return_value=BULK_SYSTEM_COLLECTORS_STATUS_API_RESP),
+    )
+    @mock.patch("meta.resources.wrapper_permission_field", mock_system_permissions)
+    def test_system_list_filter_actions_uses_any_action(self):
+        """SystemListResource filter_actions"""
+        result = self.resource.meta.system_list(namespace="default", filter_actions="view_system,edit_system")
+
+        self.assertEqual(
+            {system["system_id"] for system in result},
+            {f"{settings.BK_IAM_SYSTEM_ID}test", settings.BK_IAM_SYSTEM_ID},
+        )
+
+    @mock.patch("apps.permission.handlers.drf.IAMPermission.has_permission", mock.Mock(return_value=True))
+    @mock.patch("meta.resources.get_request_username", mock.Mock(return_value="admin"))
+    @mock.patch(
+        "meta.resources.resource.databus.collector.bulk_system_collectors_status",
+        mock.Mock(return_value=BULK_SYSTEM_COLLECTORS_STATUS_API_RESP),
+    )
+    @mock.patch("meta.resources.wrapper_permission_field", mock_system_permissions)
+    def test_system_list_filter_actions_before_view_pagination(self):
+        """SystemListResource filter_actions pagination"""
+        request = APIRequestFactory().get(
+            "/api/v1/meta/namespaces/default/systems/",
+            {"filter_actions": "view_system", "page": 1, "page_size": 1},
+        )
+        request.user = SimpleNamespace(username="admin", is_authenticated=True, is_active=True)
+        view = SystemsViewSet.as_view({"get": "list"})
+
+        response = view(request, namespace="default")
+
+        self.assertEqual(response.data["total"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["system_id"], f"{settings.BK_IAM_SYSTEM_ID}test")
 
     @mock.patch(
         "meta.resources.resource.databus.collector.bulk_system_collectors_status",

@@ -182,12 +182,7 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         elif panel.scenario == Scenario.TOOL.value:
             # 工具场景除了meta无需鉴权
             return []
-        return [
-            ScopeInstancePermission(
-                resource_type=BindingResourceType.PANEL,
-                get_instance_id=self.get_instance_id,
-            )
-        ]
+        return [UsePanelPermission(get_instance_id=self.get_instance_id)]
 
     def get_instance_id(self):
         instance_id: str = self.request.query_params.get("share_uid") or self.request.data.get("share_uid")

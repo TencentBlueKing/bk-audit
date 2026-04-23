@@ -92,5 +92,8 @@ class SceneToolType(TextChoices):
     SMART_PAGE = "smart_page", gettext_lazy("智能页面")
 
 
+# 保留场景名称（迁移与运行时初始化共用）
+DEFAULT_SCENE_NAME = "system_default"
+
 # 场景ID自增起始值
 SCENE_ID_START = 100001

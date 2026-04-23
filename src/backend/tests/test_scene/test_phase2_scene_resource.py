@@ -1062,8 +1062,8 @@ class TestCompositeScopeFilter:
         assert qs.first().group_name == "全系统平台组"
 
     @pytest.mark.django_db
-    def test_filter_scene_id_returns_all_systems_resources_only_for_system_scenes(self, scene, another_scene):
-        """测试 all_systems 仅对有关联系统的场景可见"""
+    def test_filter_scene_id_does_not_return_all_systems_resources(self, scene, another_scene):
+        """测试 all_systems 不应按 scene_id 直接命中"""
         ng = NoticeGroup.objects.create(group_name="全系统平台组", group_member=["admin"], notice_config=[])
         ResourceBinding.objects.create(
             resource_id=str(ng.group_id),
@@ -1073,7 +1073,7 @@ class TestCompositeScopeFilter:
         )
         SceneSystem.objects.create(scene=scene, system_id="bk_job")
 
-        visible_qs = CompositeScopeFilter.filter_queryset(
+        scene_qs = CompositeScopeFilter.filter_queryset(
             queryset=NoticeGroup.objects.all(),
             binding_type=None,
             scene_id=scene.scene_id,
@@ -1088,8 +1088,7 @@ class TestCompositeScopeFilter:
             pk_field="group_id",
         )
 
-        assert visible_qs.count() == 1
-        assert visible_qs.first().group_name == "全系统平台组"
+        assert scene_qs.count() == 0
         assert hidden_qs.count() == 0
 
 

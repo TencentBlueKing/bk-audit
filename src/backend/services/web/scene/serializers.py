@@ -264,6 +264,24 @@ class SceneStatusFilterSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
 
 
+class MyRolePermissionSerializer(serializers.Serializer):
+    """当前用户角色相关权限。
+
+    返回 action 级布尔值，由前端按既定规则映射角色：
+    - `manage_platform` -> SaaS 管理员
+    - `manage_scene` / `view_scene` -> 场景管理员 / 场景查看者
+    - `edit_system` / `view_system` -> 系统管理员 / 系统查看者
+    """
+
+    manage_platform = serializers.BooleanField(help_text="是否具备平台管理权限，对应 IAM action: manage_platform。")
+    manage_scene = serializers.BooleanField(help_text="是否具备任一场景的管理权限，对应 IAM action: manage_scene。")
+    view_scene = serializers.BooleanField(help_text="是否具备任一场景的查看权限，对应 IAM action: view_scene。")
+    edit_system = serializers.BooleanField(help_text="是否具备任一系统的编辑权限；判定口径为本地系统管理员关系或 IAM action: edit_system。")
+    view_system = serializers.BooleanField(
+        help_text="是否具备任一系统的查看权限；判定口径为本地系统管理员关系或 IAM action: view_system/edit_system。"
+    )
+
+
 # ==================== 场景选择器 ====================
 
 

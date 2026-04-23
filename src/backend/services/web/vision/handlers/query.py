@@ -31,6 +31,7 @@ from services.web.vision.handlers.filter import (
     ScenarioViewFilter,
     SingleSystemDiagnosisFilter,
     SystemDiagnosisFilter,
+    SystemScopeFilter,
     TagFilter,
 )
 
@@ -153,7 +154,9 @@ class CommonVisionHandler(VisionHandler):
                 # 标签
                 case KeyVariable.TAG:
                     modify_panel_meta(TagFilter(params), chart_config, vision_data, uid)
-                # TODO：系统
+                # 系统
+                case KeyVariable.SYSTEM_ID:
+                    modify_panel_meta(SystemScopeFilter(params), chart_config, vision_data, uid)
         return vision_data
 
     def query_dataset(self, params: dict) -> dict:
@@ -168,6 +171,9 @@ class CommonVisionHandler(VisionHandler):
                 # 标签
                 case KeyVariable.TAG:
                     variable_config["value"] = TagFilter(params).check_data(variable_config["value"])
+                # 系统
+                case KeyVariable.SYSTEM_ID:
+                    variable_config["value"] = SystemScopeFilter(params).check_data(variable_config["value"])
         return api.bk_vision.query_dataset(**params)
 
 

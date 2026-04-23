@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.test import RequestFactory
 
+from apps.meta.models import System
 from apps.permission.handlers.actions.action import ActionEnum
 from core.exceptions import PermissionException, ValidationError
 from services.web.common.constants import (
@@ -942,6 +943,12 @@ class TestCheckResourcePermissionSystem(TestCase):
             visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
         )
         ResourceBindingSystem.objects.create(binding=self.binding_sys, system_id="bk_monitor")
+        self.binding_all_systems = ResourceBinding.objects.create(
+            resource_type=BindingResourceType.TOOL,
+            resource_id="tool_2",
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SYSTEMS,
+        )
 
     @patch("services.web.common.scope_permission.Permission")
     def test_specific_systems_matches(self, mock_perm_cls):
@@ -970,6 +977,52 @@ class TestCheckResourcePermissionSystem(TestCase):
             system_ids=["bk_other"],
         )
         assert result is False
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_all_systems_matches(self, mock_perm_cls):
+        """all_systems 绑定用户有任意系统权限时可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.TOOL,
+            "tool_2",
+            scene_ids=[],
+            system_ids=["bk_monitor"],
+        )
+        assert result is True
+
+
+@pytest.mark.django_db
+class TestGetSystemIdsForScope(TestCase):
+    """测试 get_system_ids_for_scope 的场景视角系统展开语义"""
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_scope_with_all_systems_returns_all_system_ids(self, mock_perm_cls):
+        mock_perm_cls.return_value = MagicMock()
+        scene = Scene.objects.create(name="全系统场景", status="enabled", managers=["admin"], users=["user1"])
+        SceneSystem.objects.create(scene=scene, system_id="", is_all_systems=True)
+        System.objects.create(system_id="bk_monitor", namespace="bklog", name="监控", instance_id="bk_monitor")
+        System.objects.create(system_id="bk_iam", namespace="bklog", name="权限", instance_id="bk_iam")
+
+        sp = ScopePermission("admin")
+        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [scene.scene_id]
+
+        result = sp.get_system_ids_for_scope(ScopeContext(ScopeType.CROSS_SCENE))
+        assert set(result) == {"bk_monitor", "bk_iam"}
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_scope_filters_blank_system_ids(self, mock_perm_cls):
+        mock_perm_cls.return_value = MagicMock()
+        scene = Scene.objects.create(name="普通场景", status="enabled", managers=["admin"], users=["user1"])
+        SceneSystem.objects.create(scene=scene, system_id="bk_monitor", is_all_systems=False)
+        SceneSystem.objects.create(scene=scene, system_id="", is_all_systems=False)
+
+        sp = ScopePermission("admin")
+        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [scene.scene_id]
+
+        result = sp.get_system_ids_for_scope(ScopeContext(ScopeType.CROSS_SCENE))
+        assert result == ["bk_monitor"]
 
 
 # ==================== get_resource_ids 拆分方法 Tests ====================
@@ -1250,7 +1303,7 @@ class TestGetResourceIdsBindingType(TestCase):
             BindingResourceType.PANEL,
             binding_type=BindingType.PLATFORM_BINDING,
         )
-        assert result == {"platform_panel", "all_systems_panel"}
+        assert result == {"platform_panel"}
 
     @patch("services.web.common.scope_permission.Permission")
     def test_scene_scope_none_binding_type_returns_all_resources(self, mock_perm_cls):
@@ -1265,7 +1318,7 @@ class TestGetResourceIdsBindingType(TestCase):
             BindingResourceType.PANEL,
             binding_type=None,
         )
-        assert result == {"scene_panel", "platform_panel", "all_systems_panel"}
+        assert result == {"scene_panel", "platform_panel"}
 
     @patch("services.web.common.scope_permission.Permission")
     def test_system_scope_scene_binding_raises_value_error(self, mock_perm_cls):
@@ -1295,7 +1348,7 @@ class TestGetResourceIdsBindingType(TestCase):
             BindingResourceType.PANEL,
             binding_type=cast(BindingType, cast(object, "invalid_binding_type")),
         )
-        assert result == {"platform_panel", "all_systems_panel"}
+        assert result == {"platform_panel"}
 
 
 # ==================== System Model 便捷方法 Tests ====================

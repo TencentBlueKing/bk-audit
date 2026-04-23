@@ -274,6 +274,8 @@ class ToolFavoriteTestCase(TestCase):
         self.assertIsNotNone(tool_2_data)
         self.assertTrue(tool_1_data["favorite"])
         self.assertFalse(tool_2_data["favorite"])
+        self.assertEqual(tool_1_data["binding_type"], BindingType.PLATFORM_BINDING)
+        self.assertEqual(tool_2_data["binding_type"], BindingType.SCENE_BINDING)
 
     def test_list_tool_favorite_first_ordering(self):
         """测试工具列表收藏优先排序"""
@@ -427,3 +429,5 @@ class ToolFavoriteTestCase(TestCase):
         self.assertIsNotNone(tool_2_data)
         self.assertTrue(tool_1_data["favorite"])
         self.assertFalse(tool_2_data["favorite"])
+        self.assertEqual(tool_1_data["binding_type"], BindingType.PLATFORM_BINDING)
+        self.assertEqual(tool_2_data["binding_type"], BindingType.SCENE_BINDING)
