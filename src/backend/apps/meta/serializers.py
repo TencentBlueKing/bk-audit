@@ -41,6 +41,7 @@ from apps.meta.constants import (
     SensitiveResourceTypeEnum,
     SpaceType,
     SystemAuditStatusEnum,
+    SystemListFilterActionEnum,
     SystemPermissionTypeEnum,
     SystemSortFieldEnum,
     SystemStageEnum,
@@ -161,6 +162,13 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text=SystemAuditStatusEnum.choices,
     )
+    filter_actions = serializers.CharField(
+        label=gettext_lazy("系统权限筛选动作"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("按系统权限过滤返回结果，多个动作使用逗号分隔，命中任一动作权限即可返回该系统。" "可选值：view_system,edit_system"),
+    )
 
     class Meta:
         model = System
@@ -173,6 +181,7 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
             "source_type",
             "audit_status",
             "system_status",
+            "filter_actions",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -194,6 +203,15 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
 
     def validate_audit_status(self, audit_status: str) -> list:
         return [i for i in audit_status.split(",") if i]
+
+    def validate_filter_actions(self, filter_actions: str) -> list[str]:
+        actions = [action.strip() for action in filter_actions.split(",") if action.strip()]
+        invalid_actions = set(actions) - set(SystemListFilterActionEnum.values)
+        if invalid_actions:
+            raise serializers.ValidationError(
+                gettext("不支持的权限筛选动作: %(actions)s") % {"actions": ",".join(sorted(invalid_actions))}
+            )
+        return actions
 
 
 class SystemListAllRequestSerializer(serializers.ModelSerializer):

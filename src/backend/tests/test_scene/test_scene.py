@@ -23,7 +23,12 @@ from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
+from apps.meta.models import System
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.permission import Permission
 from services.web.risk.models import Risk
 from services.web.scene.constants import (
     BindingType,
@@ -45,7 +50,6 @@ from services.web.scene.models import (
     SceneDataTable,
     SceneSystem,
 )
-from services.web.scene.permissions import check_scene_permission
 from services.web.scene.views import SceneViewSet
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
@@ -574,21 +578,6 @@ class TestParseListValue:
         assert _parse_list_value("") == []
 
 
-# ==================== 权限校验测试 ====================
-
-
-class TestCheckScenePermission:
-    """权限校验占位函数测试"""
-
-    def test_check_scene_permission_pass(self, rf):
-        """测试权限校验占位函数不抛异常（空实现）"""
-        request = rf.get("/")
-        request.user = MockUser("admin")
-        check_scene_permission(request, 100001, require_role="user")
-        check_scene_permission(request, 100001, require_role="manager")
-        check_scene_permission(request, 100001, require_role="admin")
-
-
 # ==================== 场景 ViewSet 测试 ====================
 
 
@@ -865,6 +854,12 @@ class TestSceneViewSetPermission(TestCase):
 
         self.assertEqual(view.get_permissions(), [])
 
+    def test_my_role_permissions_no_permission(self):
+        view = SceneViewSet()
+        view.action = "my_role_permissions"
+
+        self.assertEqual(view.get_permissions(), [])
+
     def test_info_get_requires_view_scene(self):
         from apps.permission.handlers.actions import ActionEnum
         from apps.permission.handlers.drf import InstanceActionPermission
@@ -896,6 +891,60 @@ class TestSceneViewSetPermission(TestCase):
     def test_resource_routes_have_unique_endpoints(self):
         endpoints = [(route.endpoint, route.pk_field) for route in SceneViewSet.resource_routes if route.endpoint]
         self.assertEqual(len(endpoints), len(set(endpoints)))
+
+
+class TestGetMyRolePermissions(TestCase):
+    def _make_drf_request(self, username="admin"):
+        factory = APIRequestFactory()
+        django_request = factory.get("/api/v1/scenes/my_role_permissions/")
+        django_request.user = MockUser(username)
+        return Request(django_request)
+
+    def test_returns_iam_permissions(self):
+        drf_request = self._make_drf_request()
+
+        with mock.patch.object(System, "get_managed_system_ids", return_value=[]), mock.patch.object(
+            Permission,
+            "has_action_any_permission",
+            side_effect=lambda action: {
+                ActionEnum.MANAGE_PLATFORM: True,
+                ActionEnum.MANAGE_SCENE: False,
+                ActionEnum.VIEW_SCENE: True,
+                ActionEnum.EDIT_SYSTEM: False,
+                ActionEnum.VIEW_SYSTEM: True,
+            }[action],
+        ):
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(
+            result,
+            {
+                "manage_platform": True,
+                "manage_scene": False,
+                "view_scene": True,
+                "edit_system": False,
+                "view_system": True,
+            },
+        )
+
+    def test_local_system_manager_grants_system_permissions(self):
+        drf_request = self._make_drf_request()
+
+        with mock.patch.object(System, "get_managed_system_ids", return_value=["bk_test"]), mock.patch.object(
+            Permission,
+            "has_action_any_permission",
+            side_effect=lambda action: {
+                ActionEnum.MANAGE_PLATFORM: False,
+                ActionEnum.MANAGE_SCENE: False,
+                ActionEnum.VIEW_SCENE: False,
+                ActionEnum.EDIT_SYSTEM: False,
+                ActionEnum.VIEW_SYSTEM: False,
+            }[action],
+        ):
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["edit_system"], True)
+        self.assertEqual(result["view_system"], True)
 
 
 class TestPanelResources(TestCase):

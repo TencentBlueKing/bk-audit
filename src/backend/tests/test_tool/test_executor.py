@@ -5,6 +5,7 @@ from unittest import TestCase, mock
 from unittest.mock import MagicMock, patch
 
 import requests
+from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase
 from django.test import TestCase as DjangoTestCase
 
@@ -24,6 +25,7 @@ from services.web.tool.constants import (
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import (
+    BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
     InvalidVariableFormatError,
@@ -595,7 +597,7 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_return_datasource_metadata(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
             mock_bulk.return_value = [{"list": [{"id": 1}]}]
             result = executor.execute(
                 {
@@ -650,6 +652,38 @@ class TestSmartPageExecutor(SimpleTestCase):
             self.assertEqual(result.result.results, [{"via": "dummy"}])
         finally:
             SmartPageExecutor.DATA_SOURCE_EXECUTOR_MAPPING = original_mapping
+
+    def test_execute_should_flatten_sql_in_bkbase_error_message(self):
+        executor = SmartPageExecutor(self.config_dict)
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
+            mock_bulk.side_effect = APIRequestError("bkbase error")
+
+            with self.assertRaises(BkbaseApiRequestError) as ctx:
+                executor.execute(
+                    {
+                        "data_source_name": "risk_event_source",
+                        "params": {"kw": "risk"},
+                    }
+                )
+
+        self.assertNotIn("\n", str(ctx.exception))
+        self.assertIn("SELECT id FROM risk_event WHERE 1=1", str(ctx.exception))
+        self.assertIn("AND name = 'risk'", str(ctx.exception))
+
+    def test_execute_should_use_debug_query_sync(self):
+        executor = SmartPageExecutor(self.config_dict)
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_debug_bulk:
+            with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+                mock_debug_bulk.return_value = [{"list": [{"id": 1}]}]
+                executor.execute(
+                    {
+                        "data_source_name": "risk_event_source",
+                        "params": {"kw": "risk"},
+                    }
+                )
+
+        mock_debug_bulk.assert_called_once()
+        mock_bulk.assert_not_called()
 
 
 class TestVariableParserPersonSelect(TestCase):

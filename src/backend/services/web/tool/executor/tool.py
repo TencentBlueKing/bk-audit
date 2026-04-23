@@ -100,7 +100,7 @@ class SmartPageSqlTemplateExecutor(BaseSmartPageDataSourceExecutor):
 
         logger.info(f"[{cls.__name__}] Execute SQL: {rendered_sql}")
         try:
-            bulk_resp = api.bk_base.query_sync.bulk_request([{"sql": rendered_sql}])
+            bulk_resp = api.bk_base.debug_query_sync.bulk_request([{"sql": rendered_sql}])
         except APIRequestError as e:
             logger.error(f"[{cls.__name__}] Request BKBASE Error: {e}")
             raise BkbaseApiRequestError(sql=rendered_sql)

@@ -295,7 +295,7 @@ class SmartPageAPITestCase(TestCase):
             create_resource(create_data)
 
     def test_execute_smart_page_tool(self):
-        with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
             mock_bulk.return_value = [{"list": [{"col": "val"}]}]
             execute_resource = ExecuteTool()
             execute_resp = execute_resource(

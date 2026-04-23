@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True,
                 default='published',
-                help_text='仅平台级工具需要，published/unpublished',
+                help_text='published/unpublished',
                 max_length=32,
                 verbose_name='上架状态',
                 # 存量工具默认已发布，新建工具的默认值以 Model 定义为准（unpublished）

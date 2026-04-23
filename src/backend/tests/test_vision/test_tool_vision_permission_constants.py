@@ -4,9 +4,13 @@ from unittest import mock
 
 from django.test import TestCase
 
-from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.constants import (
+    BindingType,
+    PanelStatus,
+    ResourceVisibilityType,
+)
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
-from services.web.vision.models import SceneReportGroup, VisionPanel
+from services.web.vision.models import Scenario, SceneReportGroup, VisionPanel
 
 
 class DummyUser:
@@ -141,6 +145,27 @@ class TestToolVisionPermissionConstants(TestCase):
 
 
 class TestSceneManageViewSetPermission(TestCase):
+    def test_bkvision_instance_viewset_uses_panel_permission_for_non_tool_panel(self):
+        from services.web.vision.views import (
+            BKVisionInstanceViewSet,
+            UsePanelPermission,
+        )
+
+        panel = VisionPanel.objects.create(
+            id="panel_permission_case",
+            name="权限报表",
+            scenario=Scenario.DEFAULT,
+            status=PanelStatus.PUBLISHED,
+        )
+
+        view = BKVisionInstanceViewSet()
+        view.request = mock.MagicMock(query_params={"share_uid": panel.id}, data={})
+
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], UsePanelPermission)
+
     def test_scene_panel_manage_permissions_uses_instance_action_permission(self):
         from apps.permission.handlers.actions import ActionEnum
         from apps.permission.handlers.drf import InstanceActionPermission

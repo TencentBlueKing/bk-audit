@@ -150,7 +150,7 @@ from services.web.risk.tasks import (
     sync_auto_result,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -336,6 +336,11 @@ class ListRisk(RiskMeta):
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
+            BindingMetadataHelper.attach_scene_id_via_binding_resource(
+                paged_risks,
+                binding_resource_type=ResourceVisibilityType.STRATEGY,
+                binding_resource_id_attr="strategy_id",
+            )
             return BkBaseResponseAssembler(self, ListRiskResponseSerializer).build_response(
                 paged_risks, page, sql_statements
             )
@@ -347,6 +352,11 @@ class ListRisk(RiskMeta):
         experiences = self._fetch_experiences(risk_ids)
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
+        BindingMetadataHelper.attach_scene_id_via_binding_resource(
+            paged_risks,
+            binding_resource_type=ResourceVisibilityType.STRATEGY,
+            binding_resource_id_attr="strategy_id",
+        )
 
         response = page.get_paginated_response(
             data=ListRiskResponseSerializer(instance=paged_risks, many=True).data

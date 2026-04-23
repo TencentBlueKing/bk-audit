@@ -55,7 +55,7 @@ from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import BindingType, ResourceVisibilityType
 from services.web.scene.data_filter import SceneDataFilter
-from services.web.scene.filters import CompositeScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
 from services.web.scene.models import ResourceBinding
 from services.web.strategy_v2.models import StrategyTool
 from services.web.strategy_v2.serializers import (
@@ -411,6 +411,11 @@ class ListTool(ToolBase):
         for tool in paged_tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
+        BindingMetadataHelper.attach_binding_metadata(
+            paged_tools,
+            resource_type=ResourceVisibilityType.TOOL,
+            id_attr="uid",
+        )
 
         serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
         return page.get_paginated_response(data=serialized_data)
@@ -987,8 +992,9 @@ class ListToolAll(ToolBase):
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
         tool_qs = self.filter_queryset_by_scope(tool_qs, validated_request_data, current_user).order_by("name")
+        tools = list(tool_qs)
 
-        tool_uids = [tool.uid for tool in tool_qs]
+        tool_uids = [tool.uid for tool in tools]
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
 
         tag_map = defaultdict(list)
@@ -999,10 +1005,15 @@ class ListToolAll(ToolBase):
         for row in rows:
             strategy_map[row["tool_uid"]].append(row["strategy_id"])
 
-        for tool in tool_qs:
+        for tool in tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
-        serialized_data = self.ResponseSerializer(tool_qs, many=True).data
+        BindingMetadataHelper.attach_binding_metadata(
+            tools,
+            resource_type=ResourceVisibilityType.TOOL,
+            id_attr="uid",
+        )
+        serialized_data = self.ResponseSerializer(tools, many=True).data
         return serialized_data
 
 

@@ -13,6 +13,7 @@ from services.web.vision.handlers.filter import (
     DeptFilter,
     SingleSystemDiagnosisFilter,
     SystemDiagnosisFilter,
+    SystemScopeFilter,
 )
 from tests.base import TestCase
 
@@ -110,3 +111,29 @@ class TestVisionFilters(TestCase):
         )
         data = filter_instance.get_data()
         self.assertEqual(data, [{"label": "Alpha", "value": "bk_a"}])
+
+    def test_system_scope_filter_requires_scope_constants(self):
+        filter_instance = SystemScopeFilter(vision_handler_params={"constants": {}})
+        with self.assertRaises(SingleSystemDiagnosisSystemParamsError):
+            filter_instance.get_data()
+
+    @mock.patch("services.web.vision.handlers.filter.ScopePermission")
+    @mock.patch("services.web.vision.handlers.filter.get_local_request")
+    def test_system_scope_filter_get_data_from_scope(self, mock_get_request, mock_scope_perm_cls):
+        mock_request = mock.Mock()
+        mock_request.user.username = "tester"
+        mock_get_request.return_value = mock_request
+        mock_scope_perm_cls.return_value.get_system_ids_for_scope.return_value = ["bk_b", "bk_a"]
+
+        filter_instance = SystemScopeFilter(
+            vision_handler_params={"constants": {"scope_type": "system", "scope_id": "bk_a"}}
+        )
+        data = filter_instance.get_data()
+        self.assertEqual(data, [{"label": "Alpha", "value": "bk_a"}, {"label": "Beta", "value": "bk_b"}])
+
+    @mock.patch("services.web.vision.handlers.filter.Permission")
+    @mock.patch.object(SystemScopeFilter, "get_data", return_value=[{"label": "Alpha", "value": "bk_a"}])
+    def test_system_scope_filter_check_data_raises_for_unknown_system(self, _, mock_permission):
+        mock_permission.return_value.get_apply_data.return_value = ({"apply": True}, "url")
+        with self.assertRaises(PermissionException):
+            SystemScopeFilter().check_data(["bk_unknown"])

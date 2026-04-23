@@ -19,7 +19,11 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
-from api.bk_base.constants import AuthType
+from api.bk_base.constants import AuthType, UserAuthActionEnum
+
+
+def get_default_bkbase_project_id():
+    return int(settings.BKBASE_PROJECT_ID)
 
 
 class QuerySyncRequestSerializer(serializers.Serializer):
@@ -69,3 +73,34 @@ class UserAuthCheckRespSerializer(serializers.Serializer):
     result = serializers.BooleanField(label=gettext_lazy("是否有权限"))
     user_id = serializers.CharField(label=gettext_lazy("用户ID"))
     object_id = serializers.CharField(label=gettext_lazy("对象ID"))
+
+
+class ProjectDataBatchCheckReqSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(label=gettext_lazy("项目ID"), default=get_default_bkbase_project_id)
+    action_id = serializers.ChoiceField(
+        label=gettext_lazy("动作ID"), choices=UserAuthActionEnum.choices, default=UserAuthActionEnum.RT_QUERY
+    )
+    object_ids = serializers.ListField(label=gettext_lazy("对象ID列表"), child=serializers.CharField(), allow_empty=False)
+
+
+class ProjectDataBatchCheckRespSerializer(serializers.Serializer):
+    permissions = serializers.ListField(label=gettext_lazy("有权限对象ID列表"), child=serializers.CharField())
+    no_permissions = serializers.ListField(label=gettext_lazy("无权限对象ID列表"), child=serializers.CharField())
+
+
+class ProjectDataBatchAddReqSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField(label=gettext_lazy("项目ID"), default=get_default_bkbase_project_id)
+    bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), default=settings.DEFAULT_BK_BIZ_ID)
+    object_ids = serializers.ListField(label=gettext_lazy("对象ID列表"), child=serializers.CharField(), allow_empty=False)
+
+
+class ProjectDataBatchAddRespSerializer(serializers.Serializer):
+    data = serializers.CharField(label=gettext_lazy("响应结果"))
+
+
+class GetMineResultTablesReqSerializer(serializers.Serializer):
+    bk_username = serializers.CharField(label=gettext_lazy("用户名"))
+    action_id = serializers.ChoiceField(
+        label=gettext_lazy("动作ID"), choices=UserAuthActionEnum.choices, default=UserAuthActionEnum.RT_QUERY
+    )
+    bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), default=settings.DEFAULT_BK_BIZ_ID)

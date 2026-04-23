@@ -264,6 +264,13 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        label=gettext_lazy("绑定类型"),
+        help_text=gettext_lazy("资源绑定类型：platform_binding 表示平台级绑定，scene_binding 表示场景级绑定"),
+    )
 
     class Meta:
         model = Tool
@@ -277,6 +284,7 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
             "tags",
             "strategies",
             "favorite",
+            "binding_type",
         ]
 
 
@@ -291,6 +299,13 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        label=gettext_lazy("绑定类型"),
+        help_text=gettext_lazy("资源绑定类型：platform_binding 表示平台级绑定，scene_binding 表示场景级绑定"),
+    )
 
     class Meta:
         model = Tool
@@ -311,6 +326,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "is_bkvision",
             "favorite",
             "status",
+            "binding_type",
         ]
 
 

@@ -103,6 +103,7 @@ class TestPanelManagementFeatures(TestCase):
                 "id": panel.id,
                 "vision_id": "platform_vision_001",
                 "updated_by": panel.updated_by,
+                "binding_type": "platform_binding",
                 "visibility_type": VisibilityScope.SPECIFIC_SCENES,
                 "scene_ids": [self.scene1.scene_id],
             },
@@ -334,6 +335,7 @@ class TestPanelManagementFeatures(TestCase):
         data = ListPanels().request({"scope_type": ScopeType.CROSS_SYSTEM})
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["group_ids"], [])
+        self.assertEqual(data[0]["binding_type"], "platform_binding")
 
     @patch("services.web.vision.resources.get_request_username", return_value="tester")
     @patch("services.web.vision.resources.ScopePermission.get_scene_ids")
@@ -364,6 +366,7 @@ class TestPanelManagementFeatures(TestCase):
         self.assertEqual(data[0]["vision_id"], "square_vision_001")
         self.assertEqual(data[0]["updated_by"], panel.updated_by)
         self.assertIsNotNone(data[0]["updated_at"])
+        self.assertEqual(data[0]["binding_type"], "platform_binding")
 
     def test_group_order_updates_with_scene_isolation(self):
         group2 = SceneReportGroup.objects.create(

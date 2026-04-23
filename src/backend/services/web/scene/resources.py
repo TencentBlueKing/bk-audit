@@ -10,6 +10,8 @@ from apps.audit.resources import AuditMixinResource
 from apps.meta.handlers.iam_group import IAMGroupManager
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.permission import Permission
+from core.models import get_request_username
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
 from services.web.scene.data_filter import SceneDataFilter
@@ -17,6 +19,7 @@ from services.web.scene.exceptions import SceneHasRelatedResources, SceneNotExis
 from services.web.scene.models import Scene, SceneDataTable, SceneSystem
 from services.web.scene.serializers import (
     CreateSceneSerializer,
+    MyRolePermissionSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
     SceneInfoUpdateSerializer,
@@ -103,6 +106,28 @@ class ListAllScene(SceneResource):
         if "status" in validated_request_data:
             queryset = queryset.filter(status=validated_request_data["status"])
         return queryset
+
+
+class GetMyRolePermissions(SceneResource):
+    """获取当前用户角色相关权限"""
+
+    name = gettext_lazy("获取当前用户角色相关权限")
+    ResponseSerializer = MyRolePermissionSerializer
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        permission = Permission(username=username)
+        has_local_system_manage_permission = bool(System.get_managed_system_ids(username))
+
+        edit_system = has_local_system_manage_permission or permission.has_action_any_permission(ActionEnum.EDIT_SYSTEM)
+
+        return {
+            "manage_platform": permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM),
+            "manage_scene": permission.has_action_any_permission(ActionEnum.MANAGE_SCENE),
+            "view_scene": permission.has_action_any_permission(ActionEnum.VIEW_SCENE),
+            "edit_system": edit_system,
+            "view_system": edit_system or permission.has_action_any_permission(ActionEnum.VIEW_SYSTEM),
+        }
 
 
 class CreateScene(SceneResource):

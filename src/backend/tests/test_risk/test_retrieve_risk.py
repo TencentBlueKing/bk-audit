@@ -171,6 +171,7 @@ class TestListRiskResource(TestCase):
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        self.assertEqual(results[0]["scene_id"], self.scene_id)
         self.assertEqual(data["sql"], [])
 
     def test_list_risk_via_db_event_end_time_ceils_microseconds(self):
@@ -254,6 +255,7 @@ class TestListRiskResource(TestCase):
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        self.assertEqual(results[0]["scene_id"], self.scene_id)
         self.assertEqual(len(sql_log), 2)  # count + data
 
         risk_table = f"{self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
