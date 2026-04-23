@@ -114,19 +114,19 @@ class PanelManage extends ModuleBase {
     panel_id: string,
     is_favorite: boolean,
   }) {
-    return Request.post(`bkvision${this.module}/panel_preference/favorites/`, {
+    return Request.post(`bkvision${this.module}/panels/favorite/`, {
       params,
     });
   }
   // 获取Panel用户偏好
   fetchPanelPreference() {
-    return Request.get<{ config: string }>(`bkvision${this.module}/panel_preference/`);
+    return Request.get<{ config: string }>(`bkvision${this.module}/panels/get_panel_preference/`);
   }
   // 更新Panel用户偏好
   updatePanelPreference(params: {
     config: string,
   }) {
-    return Request.post(`bkvision${this.module}/panel_preference/`, {
+    return Request.put(`bkvision${this.module}/panels/update_panel_preference/`, {
       params,
     });
   }

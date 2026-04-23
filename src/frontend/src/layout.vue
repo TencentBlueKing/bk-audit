@@ -438,6 +438,9 @@
   interface MenuDataType {
     id: string;
     name: string;
+    group_ids: number[];
+    priority_index?: number;
+    favorite_created_at?: string | null;
   }
   // interface Props {
   //   configData: ConfigModel,

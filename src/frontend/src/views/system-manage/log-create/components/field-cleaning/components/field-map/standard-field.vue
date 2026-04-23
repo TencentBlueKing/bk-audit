@@ -167,33 +167,6 @@
     emits('change', result);
     emits('update:modelValue', result);
   };
-  // const handlerowDrop = () => {
-  //   // 此时找到的元素是要拖拽元素的父容器
-  //   const tbody = document.querySelector('.render-standard-field') as HTMLElement;
-  //   sortble(tbody);
-  // };
-  // 调试字段拖动排序
-  // const sortble = (el: any) => {
-  //   console.log(el);
-  //   sortable.create(el, {
-  //     //  指定父元素下可被拖拽的子元素
-  //     draggable: '.render-standard-field .field-row',
-  //     animation: 100,
-  //     onEnd(evt: any) {
-  //       const { oldIndex } = evt;
-  //       const { newIndex } = evt;
-  //       console.log(oldIndex, newIndex);
-  //       // if (oldIndex !== newIndex) {
-  //       //   const list = Array.from(evt.to.rows).map((item:any) => item.className.split(' ')[0]);
-  //       //   const data = [] as FieldModel[]; // 排序之后的数据
-  //       //   formData.value.normal_fields.forEach((item) => {
-  //       //     const index = list.indexOf(item.key);
-  //       //     data[index] = item;
-  //       //   });
-  //       // }
-  //     },
-  //   });
-  // };
 
   // 编辑设置默认选中调试字段
   const handleDefaultFieldSelect = (data: Record<string, string>) => {
