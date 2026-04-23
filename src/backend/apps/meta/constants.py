@@ -233,6 +233,15 @@ class SystemSortFieldEnum(TextChoices):
     NAME = "name", gettext_lazy("名称")
 
 
+class SystemListFilterActionEnum(TextChoices):
+    """
+    系统列表权限筛选动作
+    """
+
+    VIEW_SYSTEM = "view_system", gettext_lazy("系统查看")
+    EDIT_SYSTEM = "edit_system", gettext_lazy("系统编辑")
+
+
 # 系统授权token长度
 SYSTEM_AUTH_TOKEN_LENGTH = 32
 

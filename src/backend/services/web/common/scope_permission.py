@@ -326,6 +326,9 @@ class ScopePermission:
         if binding.visibility_type == VisibilityScope.ALL_SCENES:
             return bool(scene_ids)  # 用户有任意场景权限即可
 
+        if binding.visibility_type == VisibilityScope.ALL_SYSTEMS:
+            return bool(system_ids)
+
         if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
             bound_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
             return bool(set(scene_ids) & bound_scene_ids)
@@ -470,9 +473,10 @@ class ScopePermission:
             scene_ids = self.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
             if not scene_ids:
                 return []
-            return list(
-                SceneSystem.objects.filter(scene_id__in=scene_ids).values_list("system_id", flat=True).distinct()
-            )
+            scene_systems = SceneSystem.objects.filter(scene_id__in=scene_ids)
+            if scene_systems.filter(is_all_systems=True).exists():
+                return list(System.objects.exclude(system_id="").values_list("system_id", flat=True).distinct())
+            return list(scene_systems.exclude(system_id="").values_list("system_id", flat=True).distinct())
         else:
             return self.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
 
@@ -561,16 +565,6 @@ class ScopePermission:
             ).values_list("binding__resource_id", flat=True)
         )
         visible_ids |= specific_scene_ids
-
-        if SceneSystem.objects.filter(scene_id__in=scene_ids).exists():
-            all_systems_ids = set(
-                ResourceBinding.objects.filter(
-                    resource_type=resource_type,
-                    binding_type=BindingType.PLATFORM_BINDING,
-                    visibility_type=VisibilityScope.ALL_SYSTEMS,
-                ).values_list("resource_id", flat=True)
-            )
-            visible_ids |= all_systems_ids
 
         scene_system_ids = set(
             SceneSystem.objects.filter(scene_id__in=scene_ids).exclude(system_id="").values_list("system_id", flat=True)

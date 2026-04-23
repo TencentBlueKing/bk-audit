@@ -39,7 +39,7 @@ from services.web.scene.constants import (
     ResourceVisibilityType,
     VisibilityScope,
 )
-from services.web.scene.filters import CompositeScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -76,6 +76,7 @@ from services.web.vision.serializers import (
     PlatformPanelListItemSerializer,
     PlatformPanelListQuerySerializer,
     PlatformPanelOperateRequestSerializer,
+    QueryDataReqSerializer,
     QueryMetaReqSerializer,
     QueryShareDetailSerializer,
     ScenePanelListItemSerializer,
@@ -158,15 +159,11 @@ class BKVision(AuditMixinResource, abc.ABC):
 
     @classmethod
     def _get_binding_map(cls, panel_ids: List[str]) -> Dict[str, ResourceBinding]:
-        return {
-            binding.resource_id: binding
-            for binding in ResourceBinding.objects.filter(
-                resource_type=ResourceVisibilityType.PANEL,
-                resource_id__in=panel_ids,
-            )
-            .prefetch_related("binding_scenes", "binding_systems")
-            .all()
-        }
+        return BindingMetadataHelper.get_binding_map(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_ids=panel_ids,
+            prefetch_related=("binding_scenes", "binding_systems"),
+        )
 
     @staticmethod
     def _upsert_single_scene_group_item(scene_id: int, panel: VisionPanel, target_group: SceneReportGroup) -> None:
@@ -222,6 +219,10 @@ class ListPanels(BKVision):
 
         panels = list(queryset)
         panel_ids = [str(panel.id) for panel in panels]
+        binding_metadata_map = BindingMetadataHelper.get_binding_metadata_map(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_ids=panel_ids,
+        )
         group_map = defaultdict(list)
         group_items = (
             SceneReportGroupItem.objects.filter(panel_id__in=panel_ids, group__scene_id__in=scene_ids)
@@ -251,6 +252,7 @@ class ListPanels(BKVision):
                     "description": panel.description,
                     "updated_by": panel.updated_by,
                     "updated_at": panel.updated_at,
+                    "binding_type": binding_metadata_map.get(panel_id, {}).get("binding_type"),
                     "group_ids": group_map.get(panel_id, []),
                     "favorite_created_at": favorite_map.get(panel_id),
                 }
@@ -324,6 +326,10 @@ class QueryMeta(QueryMixIn, BKVision):
 
 class QueryDataset(QueryMixIn, BKVision):
     name = gettext_lazy("获取面板视图数据")
+    # 兼容历史 dataset 请求体的透传入口：
+    # 1. 交给 ExtraDataSerializerMixin 解析 constants[scope_type]/constants[scope_id]
+    # 2. 暂不在资源层强约束 query/option 等字段，避免影响存量调用方
+    RequestSerializer = QueryDataReqSerializer
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
     query_method = 'query_dataset'
@@ -755,6 +761,7 @@ class ListPlatformPanels(BKVision):
                     "description": panel.description,
                     "updated_by": panel.updated_by,
                     "updated_at": panel.updated_at,
+                    "binding_type": binding.binding_type,
                     "visibility_type": binding.visibility_type,
                     "scene_ids": list(binding.binding_scenes.values_list("scene_id", flat=True)),
                     "system_ids": list(binding.binding_systems.values_list("system_id", flat=True)),
@@ -814,7 +821,7 @@ class ListScenePanels(BKVision):
                     "group_id": item.group_id if item else None,
                     "group_name": item.group.name if item else "",
                     "group_type": item.group.group_type if item else "",
-                    "binding_type": binding.binding_type if binding else "",
+                    "binding_type": binding.binding_type if binding else None,
                 }
             )
         return data

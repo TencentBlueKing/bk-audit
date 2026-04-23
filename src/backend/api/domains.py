@@ -41,6 +41,7 @@ USER_MANAGE_URL = get_endpoint(settings.USERMANAGE_ESB_NAME, APIProvider.ESB)
 
 # BkBase
 BK_BASE_API_URL = settings.BK_BASE_API_URL or get_endpoint(settings.BK_BASE_APIGW_NAME, stag="test")
+BK_BASE_DEBUG_API_URL = settings.BK_BASE_DEBUG_API_URL or BK_BASE_API_URL
 
 # BkMonitor
 BK_MONITOR_API_URL = (

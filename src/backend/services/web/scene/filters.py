@@ -50,6 +50,8 @@
             return queryset
 """
 
+from typing import Any, Iterable, Sequence
+
 from django.db.models import Count, QuerySet
 
 from services.web.scene.binding_validation import assert_binding_relation_integrity
@@ -59,6 +61,151 @@ from services.web.scene.constants import (
     VisibilityScope,
 )
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, SceneSystem
+
+
+class BindingMetadataHelper:
+    """统一装配 ResourceBinding 元数据，避免业务模块各自查表。"""
+
+    @staticmethod
+    def _normalize_resource_ids(resource_ids: Iterable[Any]) -> list[str]:
+        """将资源 ID 统一标准化为字符串列表，便于匹配 `ResourceBinding.resource_id`。"""
+        normalized_ids = []
+        for resource_id in resource_ids:
+            if resource_id is None:
+                continue
+            normalized_ids.append(str(resource_id))
+        return normalized_ids
+
+    @classmethod
+    def get_binding_map(
+        cls,
+        resource_type: str,
+        resource_ids: Iterable[Any],
+        prefetch_related: Sequence[str] = (),
+    ) -> dict[str, ResourceBinding]:
+        """批量读取资源绑定对象。
+
+        Args:
+            resource_type: `ResourceVisibilityType` 枚举值。
+            resource_ids: 待查询的资源 ID 集合。
+            prefetch_related: 需要预取的关联字段名。
+
+        Returns:
+            以字符串 `resource_id` 为 key 的绑定对象映射。
+        """
+        normalized_ids = cls._normalize_resource_ids(resource_ids)
+        if not normalized_ids:
+            return {}
+
+        queryset = ResourceBinding.objects.filter(
+            resource_type=resource_type,
+            resource_id__in=normalized_ids,
+        )
+        if prefetch_related:
+            queryset = queryset.prefetch_related(*prefetch_related)
+
+        return {binding.resource_id: binding for binding in queryset}
+
+    @classmethod
+    def get_binding_metadata_map(
+        cls,
+        resource_type: str,
+        resource_ids: Iterable[Any],
+        fields: Sequence[str] = ("binding_type",),
+    ) -> dict[str, dict[str, Any]]:
+        """批量读取资源绑定元数据。
+
+        Args:
+            resource_type: `ResourceVisibilityType` 枚举值。
+            resource_ids: 待查询的资源 ID 集合。
+            fields: 需要暴露的 `ResourceBinding` 字段名。
+
+        Returns:
+            结构为 `resource_id -> {field: value}` 的字典。
+        """
+        binding_map = cls.get_binding_map(resource_type=resource_type, resource_ids=resource_ids)
+        metadata_map = {}
+        for resource_id in cls._normalize_resource_ids(resource_ids):
+            binding = binding_map.get(resource_id)
+            metadata_map[resource_id] = {
+                field: getattr(binding, field, None) if binding is not None else None for field in fields
+            }
+        return metadata_map
+
+    @classmethod
+    def attach_binding_metadata(
+        cls,
+        objects: Iterable[Any],
+        resource_type: str,
+        id_attr: str = "id",
+        fields: Sequence[str] = ("binding_type",),
+    ) -> None:
+        """将绑定元数据直接回填到对象属性上。
+
+        Args:
+            objects: 需要回填的对象集合。
+            resource_type: `ResourceVisibilityType` 枚举值。
+            id_attr: 对象上的资源 ID 属性名。
+            fields: 需要回填的 `ResourceBinding` 字段名。
+        """
+        object_list = list(objects)
+        if not object_list:
+            return
+
+        resource_ids = [getattr(obj, id_attr, None) for obj in object_list]
+        metadata_map = cls.get_binding_metadata_map(
+            resource_type=resource_type,
+            resource_ids=resource_ids,
+            fields=fields,
+        )
+        for obj in object_list:
+            metadata = metadata_map.get(str(getattr(obj, id_attr, None)), {})
+            for field in fields:
+                setattr(obj, field, metadata.get(field))
+
+    @classmethod
+    def attach_scene_id_via_binding_resource(
+        cls,
+        objects: Iterable[Any],
+        *,
+        binding_resource_type: str,
+        binding_resource_id_attr: str,
+        target_attr: str = "scene_id",
+    ) -> None:
+        """通过资源绑定关系回填单个 `scene_id`。
+
+        适用于“业务对象本身不直接绑定场景，而是经由另一类资源间接绑定场景”的场景。
+        当前风险列表即通过 `strategy_id -> strategy binding -> scene_id` 回填。
+
+        Args:
+            objects: 需要回填的对象集合。
+            binding_resource_type: 绑定资源类型，如 `ResourceVisibilityType.STRATEGY`。
+            binding_resource_id_attr: 对象上用于匹配 `ResourceBinding.resource_id` 的属性名。
+            target_attr: 回填到对象上的目标属性名，默认 `scene_id`。
+        """
+        object_list = list(objects)
+        if not object_list:
+            return
+
+        binding_resource_ids = [
+            getattr(obj, binding_resource_id_attr, None)
+            for obj in object_list
+            if getattr(obj, binding_resource_id_attr, None) is not None
+        ]
+        if not binding_resource_ids:
+            return
+
+        # 风险/策略等链路当前都是“一资源只绑定一个场景”，这里取首个 scene_id 即可。
+        scene_id_map = {
+            resource_id: scene_id
+            for resource_id, scene_id in ResourceBindingScene.objects.filter(
+                binding__resource_type=binding_resource_type,
+                binding__resource_id__in=cls._normalize_resource_ids(binding_resource_ids),
+            ).values_list("binding__resource_id", "scene_id")
+        }
+        for obj in object_list:
+            binding_resource_id = getattr(obj, binding_resource_id_attr, None)
+            setattr(obj, target_attr, scene_id_map.get(str(binding_resource_id)))
 
 
 def _normalize_scope_values(value) -> list:
@@ -277,10 +424,8 @@ class CompositeScopeFilter:
                 visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.ALL_SYSTEMS:
-                # 全系统可见：按 system_id 过滤时直接可见；按 scene_id 过滤时仅对有关联系统的场景可见
+                # 全系统可见：仅按 system_id 过滤时直接可见
                 if system_ids:
-                    visible_ids.add(binding.resource_id)
-                elif scene_ids and SceneSystem.objects.filter(scene_id__in=scene_ids).exists():
                     visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
@@ -354,8 +499,12 @@ class CompositeScopeFilter:
                 )
                 return queryset.filter(**{f"{pk_field}__in": visible_ids})
             else:
-                # 未指定场景/系统，不返回任何资源
-                return queryset.none()
+                # 未指定场景/系统时，返回全部平台级绑定资源
+                platform_resource_ids = ResourceBinding.objects.filter(
+                    resource_type=resource_type,
+                    binding_type=BindingType.PLATFORM_BINDING,
+                ).values_list("resource_id", flat=True)
+                return queryset.filter(**{f"{pk_field}__in": platform_resource_ids})
 
         if binding_type == BindingType.SCENE_BINDING:
             # 场景级资源仅可关联一个场景，不支持通过 system_id 过滤

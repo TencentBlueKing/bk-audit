@@ -218,6 +218,9 @@ class ToolResourceTestCase(TestCase):
         data_empty = {"keyword": "", "page": 1, "page_size": 10}
         all_result = self._call_resource_with_request(ListTool, data_empty)
         self.assertGreaterEqual(len(all_result), 2)
+        binding_type_map = {item["name"]: item["binding_type"] for item in all_result}
+        self.assertEqual(binding_type_map["SQL Tool"], BindingType.PLATFORM_BINDING)
+        self.assertEqual(binding_type_map["BK Vision Tool"], BindingType.SCENE_BINDING)
 
         data_paged = {"keyword": "", "page": 1, "page_size": 2}
         paged_result = self._call_resource_with_request(ListTool, data_paged)

@@ -37,6 +37,8 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
+from services.web.scene.constants import DEFAULT_SCENE_NAME
+from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -200,6 +202,7 @@ class SystemInitRuleAuditTests(TestCase):
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
     def test_init_system_rule_audit_create(self, mock_get, mock_set, mock_create):
         mock_get.return_value = False
+        default_scene = Scene.objects.get(name=DEFAULT_SCENE_NAME)
         snapshot = Snapshot.objects.create(
             system_id=ResourceEnum.MANUAL_EVENT.system_id,
             resource_type_id=ResourceEnum.MANUAL_EVENT.id,
@@ -212,6 +215,7 @@ class SystemInitRuleAuditTests(TestCase):
 
         mock_create.assert_called_once()
         params = mock_create.call_args.kwargs
+        self.assertEqual(params["scene_id"], default_scene.scene_id)
         self.assertEqual(params["configs"]["data_source"]["rt_id"], snapshot.bkbase_table_id)
         self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
 

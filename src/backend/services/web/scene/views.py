@@ -32,6 +32,8 @@ class SceneViewSet(ResourceViewSet):
         return self.kwargs.get("scene_id")
 
     def get_permissions(self):
+        if self.action == "my_role_permissions":
+            return []
         if self.action in ["list", "create", "retrieve", "update", "destroy", "disable", "enable"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
         if self.action in ["get_scene_info", "update_scene_info"]:
@@ -70,6 +72,7 @@ class SceneViewSet(ResourceViewSet):
                 )
             ],
         ),
+        ResourceRoute("GET", resource.scene.get_my_role_permissions, endpoint="my_role_permissions"),
         ResourceRoute("POST", resource.scene.create_scene),
         ResourceRoute("GET", resource.scene.retrieve_scene, pk_field="scene_id"),
         ResourceRoute("PUT", resource.scene.update_scene, pk_field="scene_id"),

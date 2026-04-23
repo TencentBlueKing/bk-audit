@@ -37,7 +37,7 @@ class Tool(SoftDeleteModel):
         max_length=32,
         default=PanelStatus.UNPUBLISHED,
         blank=True,
-        help_text="仅平台级工具需要，published/unpublished",
+        help_text="published/unpublished",
         # 新建工具默认未发布；存量工具通过 migration 0011 默认设为 published
     )
 

@@ -234,6 +234,15 @@ class SystemListResource(SystemAbstractResource, CacheResource):
                 _systems.append(system)
         return _systems
 
+    def filter_by_actions(self, systems: list[dict], filter_actions: list[str]) -> list[dict]:
+        if not filter_actions:
+            return systems
+        return [
+            system
+            for system in systems
+            if any(system.get("permission", {}).get(action_id, False) for action_id in filter_actions)
+        ]
+
     def perform_request(self, validated_request_data: dict) -> any:
         # 添加聚合注释
         queryset = System.objects.with_action_resource_type_count()
@@ -263,6 +272,7 @@ class SystemListResource(SystemAbstractResource, CacheResource):
             id_field=lambda x: x["system_id"],
             always_allowed=lambda sys, action_id: username in system_managers.get(sys["system_id"]),
         )
+        systems = self.filter_by_actions(systems, validated_request_data.get("filter_actions", []))
         systems.sort(key=PermissionSorter.sort_key)
         if not systems:
             return systems
