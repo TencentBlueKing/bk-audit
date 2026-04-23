@@ -19,6 +19,7 @@
     <!-- 场景系统选择器 -->
     <div class="scene-selector-wrapper">
       <scene-system-selector
+        ref="sceneSystemSelectorRef"
         v-model="selectedScene"
         dark
         :list-scope="['system', 'scene']"
@@ -26,7 +27,7 @@
         scene-permission="view_scene"
         system-permission="view_system"
         width="100%"
-        @change="handleSceneChange" />
+        @change="(val: any) => handleSceneChange(val as SceneItem)" />
     </div>
 
     <!-- 我的收藏分组 -->
@@ -84,69 +85,88 @@
     </div>
     <!-- 分组列表 -->
     <div
-      v-for="group in sideRoutes"
-      :key="group.id"
-      class="side-group">
-      <!-- 分组标题 -->
+      v-for="side in allSideRoutes"
+      :key="side.id">
       <div
-        class="side-group-header"
-        @click="toggleGroup(group.id)">
-        <img
-          class="side-pentagram-title"
-          src="@images/folder.svg">
-        <span class="side-group-name">{{ group.name }}</span>
-        <audit-icon
-          class="side-group-arrow"
-          :class="{ expanded: expandedGroups.includes(group.id) }"
-          type="angle-line-down" />
-      </div>
-      <!-- 子表项 -->
-      <div
-        v-show="expandedGroups.includes(group.id)"
-        class="side-group-children"
-        @click="handleMenuClick('group')">
-        <audit-menu-item
-          v-for="child in group.children"
-          :key="child.id"
-          class="menu-item-with-favorite"
-          :class="[(child.id === route.params.id && clickFavorite) ? 'active-weak' :
-            ((child.id === route.params.id && !clickFavorite) ? 'active' : '')]"
-          :index="child.id"
-          @mouseenter="hoveredItemId = child.id"
-          @mouseleave="hoveredItemId = null">
-          <span class="side-child-dot" />
-          <!-- {{ child.name }} -->
+        v-if="sceneChangeItem.type === 'aggregate'"
+        class="side-scene-header">
+        <bk-tag
+          class="type-tag"
+          :class="[`type-${side.type}`]">
+          {{ side.type === 'scene' ? t('场景') : t('系统') }}
+        </bk-tag>
+        <span class="side-scene-name">
           <tool-tip-text
-            :data="child.name"
+            :data="`${side.name}(${side.id})`"
             :line="1"
             style="display: inline-block;max-width: 130px; vertical-align: middle;"
             theme="light" />
-          <img
-            v-if="!collapsed && child.is_favorite"
-            v-show="hoveredItemId === child.id || child.id === route.params.id"
-            class="side-pentagram-fill"
-            src="@images/pentagram-fill.svg"
-            @click.stop="handleToggleFavorite(child, false)">
-          <img
-            v-else-if="!collapsed"
-            v-show="hoveredItemId === child.id || child.id === route.params.id"
-            class="side-pentagram"
-            src="@images/pentagram.svg"
-            @click.stop="handleToggleFavorite(child, true)">
-        </audit-menu-item>
+        </span>
       </div>
-    </div>
-    <!-- 暂无数据 -->
-    <div
-      v-if="showEmpty"
-      class="side-empty">
-      {{ t('暂无数据') }}
+      <div
+        v-for="group in side.children"
+        :key="group.id"
+        class="side-group">
+        <!-- 分组标题 -->
+        <div
+          class="side-group-header"
+          @click="toggleGroup(group.id)">
+          <img
+            class="side-pentagram-title"
+            src="@images/folder.svg">
+          <span class="side-group-name">{{ group.name }}</span>
+          <audit-icon
+            class="side-group-arrow"
+            :class="{ expanded: expandedGroups.includes(group.id) }"
+            type="angle-line-down" />
+        </div>
+        <!-- 子表项 -->
+        <div
+          v-show="expandedGroups.includes(group.id)"
+          class="side-group-children"
+          @click="handleMenuClick('group')">
+          <audit-menu-item
+            v-for="child in group.children"
+            :key="child.id"
+            class="menu-item-with-favorite"
+            :class="[(child.id === route.params.id && clickFavorite) ? 'active-weak' :
+              ((child.id === route.params.id && !clickFavorite) ? 'active' : '')]"
+            :index="child.id"
+            @mouseenter="hoveredItemId = child.id"
+            @mouseleave="hoveredItemId = null">
+            <span class="side-child-dot" />
+            <tool-tip-text
+              :data="child.name"
+              :line="1"
+              style="display: inline-block;max-width: 130px; vertical-align: middle;"
+              theme="light" />
+            <img
+              v-if="!collapsed && child.favorite_created_at"
+              v-show="hoveredItemId === child.id || child.id === route.params.id"
+              class="side-pentagram-fill"
+              src="@images/pentagram-fill.svg"
+              @click.stop="handleToggleFavorite(child, false)">
+            <img
+              v-else-if="!collapsed"
+              v-show="hoveredItemId === child.id || child.id === route.params.id"
+              class="side-pentagram"
+              src="@images/pentagram.svg"
+              @click.stop="handleToggleFavorite(child, true)">
+          </audit-menu-item>
+        </div>
+      </div>
+      <!-- 暂无数据 -->
+      <div
+        v-if="showEmpty"
+        class="side-empty">
+        {{ t('暂无数据') }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+  import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -166,13 +186,14 @@
     name: string;
     group_ids: number[];
     priority_index?: number;
-    is_favorite?: boolean;
+    favorite_created_at?: string | null;
   }
 
   interface SideRouteItem {
     id: number;
     name: string;
     priority_index: number;
+    scene_id?: number;
     children: MenuDataType[];
   }
 
@@ -197,14 +218,18 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-
+  const sceneChangeItem = ref();
+  const sceneSystemSelectorRef = ref();
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
-
+  const sceneSystemSelectorList = ref<SceneSystemSelectorLists>({} as SceneSystemSelectorLists);
   // 场景切换
-  const handleSceneChange = () => {
-    emit('refresh-menu');
+  const handleSceneChange = (val: SceneItem) => {
+    sceneSystemSelectorList.value = sceneSystemSelectorRef.value.getLists();
+    sceneChangeItem.value = val;
 
+    emit('refresh-menu');
+    fetchPanelPreference();
     fetchGroups({
       scope_id: getSceneSystemParams().scope_id,
       scope_type: getSceneSystemParams().scope_type,
@@ -215,10 +240,13 @@
 
   // 场景切换后默认选中第一个子菜单项
   const navigateToFirstChild = () => {
-    const firstGroup = sideRoutes.value[0];
-    if (firstGroup?.children?.length > 0) {
-      const firstChild = firstGroup.children[0];
-      router.replace({ params: { id: firstChild.id } });
+    const firstScene = allSideRoutes.value[0];
+    if (firstScene?.children?.length > 0) {
+      const firstGroup = firstScene.children[0];
+      if (firstGroup?.children?.length > 0) {
+        const firstChild = firstGroup.children[0];
+        router.replace({ params: { id: firstChild.id } });
+      }
     }
   };
 
@@ -266,7 +294,7 @@
   const isFavoritesExpanded = ref(true);
 
   // 获取收藏的菜单项
-  const favoriteItems = computed(() => props.menuData.filter(item => item.is_favorite));
+  const favoriteItems = computed(() => props.menuData.filter(item => item.favorite_created_at !== null));
   const handleMenuClick = (type: 'favorite' | 'group') => {
     clickFavorite.value = type === 'favorite';
   };
@@ -302,7 +330,7 @@
   const handleToggleFavorite = (item: MenuDataType, isFavorite: boolean) => {
     updateFavorite({
       panel_id: item.id,
-      is_favorite: isFavorite,
+      favorite: isFavorite,
     });
   };
 
@@ -313,29 +341,29 @@
   }
   const userPreference = ref<PanelPreference>({});
 
-  // // 获取用户偏好
-  // const {
-  //   run: fetchPanelPreference,
-  // } = useRequest(PanelModelService.fetchPanelPreference, {
-  //   defaultValue: null,
-  //   onSuccess: (data: { config: string } | null) => {
-  //     if (data && data.config) {
-  //       try {
-  //         userPreference.value = JSON.parse(data.config);
-  //       } catch (e) {
-  //         userPreference.value = {};
-  //       }
-  //     } else {
-  //       // 返回空对象，默认展开全部
-  //       userPreference.value = {};
-  //     }
-  //     // 获取用户偏好后，再获取分组数据
-  //     fetchGroups({
-  //       scope_id: getSceneSystemParams().scope_id,
-  //       scope_type: getSceneSystemParams().scope_type,
-  //     });
-  //   },
-  // });
+  // 获取用户偏好
+  const {
+    run: fetchPanelPreference,
+  } = useRequest(PanelModelService.fetchPanelPreference, {
+    defaultValue: null,
+    onSuccess: (data: { config: string } | null) => {
+      if (data && data.config) {
+        try {
+          userPreference.value = JSON.parse(data.config);
+        } catch (e) {
+          userPreference.value = {};
+        }
+      } else {
+        // 返回空对象，默认展开全部
+        userPreference.value = {};
+      }
+      // 获取用户偏好后，再获取分组数据
+      fetchGroups({
+        scope_id: getSceneSystemParams().scope_id,
+        scope_type: getSceneSystemParams().scope_type,
+      });
+    },
+  });
 
   // 更新用户偏好
   const {
@@ -354,7 +382,18 @@
       config: JSON.stringify(preference),
     });
   };
-
+  // sceneSystemSelector 返回的列表数据结构
+  interface SceneSystemSelectorLists {
+    sceneList: SceneItem[];
+    systemList: SceneItem[];
+  }
+  const allSideRoutes = ref<Array<{
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+    scene_id: string;
+    children: SideRouteItem[];
+  }>>([]);
   // 获取分组
   const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
   const {
@@ -362,14 +401,12 @@
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
     onSuccess: (
-      data: Array<{ id: number; name: string; priority_index: number }>,
+      data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>,
       params?: Record<string, unknown>,
     ) => {
-      console.log('data>>>', data);
-      console.log('props.menuData', props.menuData);
-
       groups.value = data;
       sideRoutes.value =  data.map(item => ({
+        scene_id: item.scene_id,
         id: item.id,
         name: item.name,
         priority_index: item.priority_index,
@@ -381,8 +418,28 @@
         .sort((a, b) => b.priority_index - a.priority_index)
         .filter(group => group.children.length > 0);
 
-      console.log(' sideRoutes.value>>>',  sideRoutes.value);
-
+      if (sceneChangeItem.value.type === 'aggregate') {
+        const selectType = sceneChangeItem.value.id === 'allSecen' ? sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen')
+          : sceneSystemSelectorList.value.systemList.filter(i => i.id !== 'allSystem');
+        allSideRoutes.value = selectType.map((scene: SceneItem) => {
+          const children = sideRoutes.value.filter(side => side.scene_id === Number(scene.id));
+          return {
+            id: scene.id,
+            name: scene.name,
+            type: scene.type,
+            scene_id: scene.id,
+            children,
+          } as { id: string; name: string; type: 'aggregate' | 'scene' | 'system'; scene_id: string; children: SideRouteItem[] };
+        }).filter(i => i.children.length > 0);
+      } else {
+        allSideRoutes.value = [{
+          scene_id: sceneChangeItem.value.id,
+          id: sceneChangeItem.value.id,
+          name: sceneChangeItem.value.name,
+          type: sceneChangeItem.value.type,
+          children: sideRoutes.value,
+        } as { id: string; name: string; type: 'aggregate' | 'scene' | 'system'; scene_id: string; children: SideRouteItem[] }].filter(i => i.children.length > 0);
+      }
       // 场景切换后默认选中第一个子菜单项
       if (params?.isSceneChange) {
         navigateToFirstChild();
@@ -408,7 +465,7 @@
     // 初始化侧边栏宽度监听
     initResizeObserver();
     // 组件挂载时先获取用户偏好，再获取分组数据
-    // fetchPanelPreference();
+    fetchPanelPreference();
   });
 
   onBeforeUnmount(() => {
@@ -419,15 +476,6 @@
     }
   });
 
-  // 监听menuData变化，重新处理分组
-  watch(() => props.menuData, (newMenuData) => {
-    if (newMenuData && newMenuData.length > 0) {
-      fetchGroups({
-        scope_id: getSceneSystemParams().scope_id,
-        scope_type: getSceneSystemParams().scope_type,
-      });
-    }
-  });
 </script>
 
 <style lang="postcss" scoped>
@@ -579,5 +627,44 @@
     height: 80px;
     font-size: 12px;
     color: #63656e;
+  }
+
+  .side-scene-header {
+    display: flex;
+    padding: 10px 18px;
+    font-size: 13px;
+    border-top: 2px solid #39404e;
+    align-items: center;
+  }
+
+  .side-scene-name {
+    overflow: hidden;
+    color: #d3d9e4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .type-tag {
+    flex-shrink: 0;
+    height: 22px;
+    padding: 0 8px;
+    margin-right: 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+
+    &.type-aggregate {
+      background-color: #ba69f4;
+    }
+
+    &.type-scene {
+      background-color: #699df4;
+    }
+
+    &.type-system {
+      background-color: #f8b64f;
+    }
   }
 </style>
