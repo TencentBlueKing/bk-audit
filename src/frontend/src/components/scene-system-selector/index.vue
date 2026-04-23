@@ -168,10 +168,10 @@
   const isPopoverShow = ref(false);
   const selectedItem = ref<SelectorItem | null>(props.modelValue);
 
-  // 假数据 - 审计场景列表
+  //  审计场景列表
   const sceneList = ref<SelectorItem[]>([]);
 
-  // 假数据 - 接入系统列表
+  // 接入系统列表
   const systemList = ref<SelectorItem[]>([]);
 
   // 显示文本
@@ -301,16 +301,21 @@
     }, 0);
   };
 
+  // 获取场景和系统列表的方法（暴露给子组件/外部调用）
+  const getLists = () => ({
+    sceneList: sceneList.value,
+    systemList: systemList.value,
+  });
+
+  // 暴露方法和属性给父组件/子组件
+  defineExpose({
+    getLists,
+    sceneList,
+    systemList,
+  });
+
   onMounted(() => {
     fetchData();
-
-    // 监听路由变化，当路由变化时重新获取数据
-    // router.afterEach((to, from) => {
-    //   // 只有当路由真正发生变化时才重新获取数据
-    //   if (to.fullPath !== from.fullPath) {
-    //     fetchData();
-    //   }
-    // });
   });
 
   onUnmounted(() => {

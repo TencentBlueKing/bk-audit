@@ -93,7 +93,6 @@
     },
     defaultValue: [],
     onSuccess: (menuData) => {
-      console.log('menuData 获取成功:', menuData);
       currentMenuData.value = menuData;
       emit('statement-menuData', menuData);
       // 菜单为空时，清空路由参数并显示空状态
@@ -113,7 +112,6 @@
 
   // 监听子组件的刷新菜单事件
   on('refresh-menu', () => {
-    console.log('收到 refresh-menu 事件，重新获取 menuData');
     fetchMenuListRun();
   });
 </script>
