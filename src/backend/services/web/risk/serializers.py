@@ -670,6 +670,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
 
     status = serializers.CharField(source="display_status", read_only=True)
     experiences = serializers.IntegerField(required=False)
+    scene_id = serializers.IntegerField(required=False, allow_null=True)
     event_data = serializers.SerializerMethodField()
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
@@ -737,6 +738,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "risk_id",
             "event_content",
             "strategy_id",
+            "scene_id",
             "event_time",
             "event_end_time",
             "operator",

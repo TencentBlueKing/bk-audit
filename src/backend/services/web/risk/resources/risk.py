@@ -151,6 +151,7 @@ from services.web.risk.tasks import (
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -336,6 +337,7 @@ class ListRisk(RiskMeta):
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
+            self._attach_scene_id_for_risks(paged_risks)
             return BkBaseResponseAssembler(self, ListRiskResponseSerializer).build_response(
                 paged_risks, page, sql_statements
             )
@@ -347,6 +349,7 @@ class ListRisk(RiskMeta):
         experiences = self._fetch_experiences(risk_ids)
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
+        self._attach_scene_id_for_risks(paged_risks)
 
         response = page.get_paginated_response(
             data=ListRiskResponseSerializer(instance=paged_risks, many=True).data
@@ -382,6 +385,26 @@ class ListRisk(RiskMeta):
         paged_risks = list(paged_queryset)
         risk_ids = [risk.risk_id for risk in paged_risks]
         return paged_risks, page, risk_ids
+
+    def _attach_scene_id_for_risks(self, risks: Sequence[Risk]) -> None:
+        if not risks:
+            return
+
+        strategy_ids = sorted({risk.strategy_id for risk in risks if getattr(risk, "strategy_id", None) is not None})
+        if not strategy_ids:
+            return
+
+        strategy_scene_map = {
+            int(resource_id): scene_id
+            for resource_id, scene_id in ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id__in=[str(strategy_id) for strategy_id in strategy_ids],
+            ).values_list("binding__resource_id", "scene_id")
+            if str(resource_id).isdigit()
+        }
+
+        for risk in risks:
+            setattr(risk, "scene_id", strategy_scene_map.get(risk.strategy_id))
 
     def _fetch_experiences(self, risk_ids: List[str]) -> Dict[str, int]:
         if not risk_ids:
