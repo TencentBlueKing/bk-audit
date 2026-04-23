@@ -76,6 +76,7 @@ from services.web.vision.serializers import (
     PlatformPanelListItemSerializer,
     PlatformPanelListQuerySerializer,
     PlatformPanelOperateRequestSerializer,
+    QueryDataReqSerializer,
     QueryMetaReqSerializer,
     QueryShareDetailSerializer,
     ScenePanelListItemSerializer,
@@ -325,6 +326,10 @@ class QueryMeta(QueryMixIn, BKVision):
 
 class QueryDataset(QueryMixIn, BKVision):
     name = gettext_lazy("获取面板视图数据")
+    # 兼容历史 dataset 请求体的透传入口：
+    # 1. 交给 ExtraDataSerializerMixin 解析 constants[scope_type]/constants[scope_id]
+    # 2. 暂不在资源层强约束 query/option 等字段，避免影响存量调用方
+    RequestSerializer = QueryDataReqSerializer
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
     query_method = 'query_dataset'

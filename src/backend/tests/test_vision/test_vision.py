@@ -75,6 +75,58 @@ class TestVision(TestCase):
         mock_cache_get.assert_called_once()
 
     @mock.patch(
+        "services.web.vision.handlers.query.api.bk_vision.query_dataset",
+        mock.Mock(return_value=DATASET_QUERY_RESPONSE['data']),
+    )
+    @mock.patch("services.web.vision.handlers.query.SystemScopeFilter")
+    def test_dataset_query_normalizes_flat_constants(self, mock_scope_filter_cls):
+        VisionPanel.objects.filter(id="just_test").update(handler="CommonVisionHandler")
+        mock_scope_filter_cls.return_value.check_data.return_value = CHECK_DATA
+        result = self.resource.vision.query_dataset(
+            **DATASET_QUERY_PARAMS,
+            **{"constants[scope_type]": "system", "constants[scope_id]": "bk_a"},
+        )
+        self.assertTrue(result['result'])
+        self.assertEqual(
+            mock_scope_filter_cls.call_args.args[0]["constants"],
+            {"scope_type": "system", "scope_id": "bk_a"},
+        )
+
+    @mock.patch(
+        "services.web.vision.handlers.query.api.bk_vision.query_meta",
+        mock.Mock(return_value=META_QUERY_RESPONSE['data']),
+    )
+    @mock.patch(
+        "services.web.vision.handlers.filter.SystemScopeFilter.get_data",
+        mock.Mock(return_value=GET_DATA),
+    )
+    def test_common_handler_meta_query_with_system_scope(self):
+        VisionPanel.objects.filter(id="just_test").update(handler="CommonVisionHandler")
+        result = self.resource.vision.query_meta(
+            **META_QUERY_PARAMS,
+            **{"constants[scope_type]": "system", "constants[scope_id]": "bk_a"},
+        )
+        for item in result['data']['panels']:
+            if item['mode'] == 'action' and item['chartConfig']["flag"] == "system_id":
+                self.assertEqual(item['chartConfig']['json'], GET_DATA)
+
+    @mock.patch(
+        "services.web.vision.handlers.filter.SystemScopeFilter.check_data",
+        mock.Mock(return_value=CHECK_DATA),
+    )
+    @mock.patch(
+        "services.web.vision.handlers.query.api.bk_vision.query_dataset",
+        mock.Mock(return_value=DATASET_QUERY_RESPONSE['data']),
+    )
+    def test_common_handler_dataset_query_with_system_scope(self):
+        VisionPanel.objects.filter(id="just_test").update(handler="CommonVisionHandler")
+        result = self.resource.vision.query_dataset(
+            **DATASET_QUERY_PARAMS,
+            **{"constants[scope_type]": "system", "constants[scope_id]": "bk_a"},
+        )
+        self.assertTrue(result['result'])
+
+    @mock.patch(
         "api.bk_vision.default.QueryTestVariable.perform_request",
         mock.Mock(return_value=TEST_VARIABLE_RESPONSE['data']),
     )

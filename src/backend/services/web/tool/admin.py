@@ -12,11 +12,6 @@ class ToolAdmin(admin.ModelAdmin):
     list_filter = ["tool_type", "namespace"]
     readonly_fields = ["created_at", "updated_at"]
 
-    def get_readonly_fields(self, request, obj=None):
-        if obj:
-            return self.readonly_fields + ["uid", "tool_type", "version"]
-        return self.readonly_fields
-
 
 @admin.register(ToolFavorite)
 class ToolFavoriteAdmin(admin.ModelAdmin):

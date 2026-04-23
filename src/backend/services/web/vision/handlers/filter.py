@@ -32,6 +32,7 @@ from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.vision.exceptions import (
     SingleSystemDiagnosisSystemParamsError,
     VisionPermissionInvalid,
@@ -309,3 +310,29 @@ class SingleSystemDiagnosisFilter(SystemDiagnosisFilter):
             limit_systems = [] if internal else [system_id]
             return super().get_data(limit_systems=limit_systems)
         raise SingleSystemDiagnosisSystemParamsError()
+
+
+class SystemScopeFilter(SystemDiagnosisFilter):
+    """
+    获取当前 scope 下可见的系统列表
+    """
+
+    def _build_scope(self) -> ScopeContext:
+        constants = self.vision_handler_params.get("constants", {})
+        scope_type = constants.get("scope_type")
+        scope_id = constants.get("scope_id")
+        if not scope_type:
+            raise SingleSystemDiagnosisSystemParamsError()
+        return ScopeContext(scope_type=scope_type, scope_id=scope_id)
+
+    def get_data(self, limit_systems: List[str] = None, internal=False) -> List[Dict[str, str]]:
+        scope = self._build_scope()
+        username = self.get_request_username()
+        system_ids = ScopePermission(username).get_system_ids_for_scope(scope)
+        systems: QuerySet[System] = System.objects.filter(system_id__in=system_ids).distinct().only("system_id", "name")
+        data = [
+            {"label": system.name, "value": system.system_id}
+            for system in systems
+            if not limit_systems or system.system_id in limit_systems
+        ]
+        return sorted(data, key=lambda item: item["label"])

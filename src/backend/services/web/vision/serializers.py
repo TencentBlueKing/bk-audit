@@ -95,11 +95,17 @@ class QueryMetaReqSerializer(ExtraDataSerializerMixin):
     type = serializers.CharField()
 
 
-class QueryDataReqSerializer(serializers.Serializer):
-    share_uid = serializers.CharField()
-    panel_uid = serializers.CharField()
-    queries = serializers.ListField(child=serializers.JSONField())
-    option = serializers.JSONField()
+class QueryDataReqSerializer(ExtraDataSerializerMixin):
+    """Dataset 查询透传序列化器。
+
+    当前历史调用方的 payload 形态尚未完全收敛，已有请求中存在
+    `query` / 其他额外字段并存的情况，因此这里先保持“全量透传 +
+    解析嵌套 constants[...]”的兼容策略，不在此处增加强字段约束。
+
+    当调用协议稳定后，再收敛为显式字段定义。
+    """
+
+    pass
 
 
 class QueryShareDetailSerializer(ExtraDataSerializerMixin):
