@@ -23,6 +23,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
     ActionPermission,
     AnyOfPermissions,
+    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
@@ -171,6 +172,17 @@ class StrategyFieldsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.list_strategy_fields),
         ResourceRoute("GET", resource.strategy_v2.get_strategy_field_value, endpoint="value"),
         ResourceRoute("GET", resource.strategy_v2.get_event_fields_config, endpoint="fields_config"),
+    ]
+
+
+class PlatformTableViewSet(ResourceViewSet):
+    """平台级数据表列表 ViewSet（平台管理员）"""
+
+    def get_permissions(self):
+        return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
+
+    resource_routes = [
+        ResourceRoute("GET", resource.strategy_v2.list_tables),
     ]
 
 
