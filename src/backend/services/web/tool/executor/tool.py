@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from api.bk_base.constants import UserAuthActionEnum
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.scene.data_filter import SceneDataFilter
 from services.web.tool.constants import (
     ApiToolConfig,
     ApiVariablePosition,
@@ -194,9 +195,24 @@ class SqlDataSearchExecutor(
     def validate_permission(self, params: DataSearchToolExecuteParams):
         """
         校验权限: 校验工具更新人 or 当前请求用户有表查询条件
+        支持场景表权限校验：当存在 scene_id 时，先校验场景数据表白名单，再校验 BK-Base 权限
         """
         user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
         parsed_def = self.analyzer.get_parsed_def()
+
+        # 场景表权限校验：有 scene_id 时，必须通过表白名单校验
+        scene_id = getattr(params, 'scene_id', None)
+        if scene_id and parsed_def.referenced_tables:
+            scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+            if not scene_table_ids:
+                # 场景没有配置数据表白名单，没有表权限
+                raise DataSearchTablePermission(user_id, ",".join(t.table_name for t in parsed_def.referenced_tables))
+            # 校验所有引用表是否在白名单内
+            scene_table_id_set = set(scene_table_ids)
+            for table in parsed_def.referenced_tables:
+                if table.table_name not in scene_table_id_set:
+                    raise DataSearchTablePermission(user_id, table.table_name)
+
         permissions = [
             {
                 "user_id": user_id,

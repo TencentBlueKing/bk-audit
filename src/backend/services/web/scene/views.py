@@ -78,4 +78,14 @@ class SceneViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.scene.enable_scene, endpoint="enable", pk_field="scene_id"),
         ResourceRoute("GET", resource.scene.get_scene_info, endpoint="get_scene_info", pk_field="scene_id"),
         ResourceRoute("PATCH", resource.scene.update_scene_info, endpoint="update_scene_info", pk_field="scene_id"),
+        ResourceRoute(
+            "GET",
+            resource.scene.get_scene_permission_systems,
+            endpoint="scene_permission_systems",
+        ),
+        ResourceRoute(
+            "GET",
+            resource.scene.get_scene_permission_tables,
+            endpoint="scene_permission_tables",
+        ),
     ]

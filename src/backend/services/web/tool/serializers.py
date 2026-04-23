@@ -419,6 +419,7 @@ class SqlAnalyseRequestSerializer(serializers.Serializer):
     sql = serializers.CharField(label=gettext_lazy("SQL"))
     dialect = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='hive')
     with_permission = serializers.BooleanField(required=False, default=False)
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
 
 
 class SqlAnalyseWithToolRequestSerializer(SqlAnalyseRequestSerializer):
