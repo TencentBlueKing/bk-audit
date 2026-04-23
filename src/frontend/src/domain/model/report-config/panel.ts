@@ -28,6 +28,7 @@ export default class PanelModel {
   updated_at: string;
   category: string;
   status: 'published' | 'unpublished';
+  is_enabled?: boolean;
 
   constructor(payload: PanelModel) {
     this.id = payload.id;
@@ -43,5 +44,6 @@ export default class PanelModel {
     this.updated_at = payload.updated_at;
     this.category = payload.category;
     this.status = payload.status;
+    this.is_enabled = payload.is_enabled;
   }
 }
