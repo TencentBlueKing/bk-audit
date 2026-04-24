@@ -17,13 +17,62 @@
 
 /**
  * @desc 获取场景系统参数
- *
+ * 优先级：sessionStorage > URL参数(scene_id/scope_id) > 默认空值
  */
 export const getSceneSystemParams = ()  => {
   const scopeInfo = JSON.parse(sessionStorage.getItem('scene-system-selector:selected') || '{}');
 
-  // 空值 返回空
-  if (!scopeInfo.id) {
+  // 如果 sessionStorage 没有有效值，尝试从 URL 参数获取（防止初始化竞态）
+  if (!scopeInfo?.id) {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlSceneId = urlParams.get('scene_id');
+      const urlScopeId = urlParams.get('scope_id');
+      const urlScopeType = urlParams.get('scope_type') || '';
+      // ⚠️ scene_id 优先级最高（直接从链接进入的场景ID），但要结合 scope_type 判断类型
+      if (urlSceneId) {
+        if (urlSceneId === 'allSecen') {
+          return { scope_id: '', scope_type: 'cross_scene' };
+        }
+        if (urlSceneId === 'allSystem') {
+          return { scope_id: '', scope_type: 'cross_system' };
+        }
+        // 有明确的 scope_type 时用它，否则默认为 scene
+        const finalType = urlScopeType || 'scene';
+        return {
+          scope_id: urlSceneId,
+          scope_type: finalType,
+        };
+      }
+      if (urlScopeId && urlScopeType === 'scene') {
+        return {
+          scope_id: urlScopeId,
+          scope_type: 'scene',
+        };
+      }
+      if (urlScopeId && urlScopeType === 'system') {
+        return {
+          scope_id: urlScopeId,
+          scope_type: 'system',
+        };
+      }
+      // cross_scene / cross_system（无具体 scope_id）
+      if (!urlScopeId && urlScopeType === 'cross_scene') {
+        return {
+          scope_id: '',
+          scope_type: 'cross_scene',
+        };
+      }
+      if (!urlScopeId && urlScopeType === 'cross_system') {
+        return {
+          scope_id: '',
+          scope_type: 'cross_system',
+        };
+      }
+    } catch (e) {
+      // URL 解析失败，忽略
+    }
+    // 空值 返回空
     return {
       scope_id: '',
       scope_type: '',
