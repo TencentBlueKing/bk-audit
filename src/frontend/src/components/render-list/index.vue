@@ -162,6 +162,7 @@
     paginationValidator: undefined,
     settings: undefined,
     cc: false,
+    isNeedSceneParams: false,
     isNeedSceneId: false,
     sceneIdKey: 'scope_id',
   }) ;
@@ -258,6 +259,8 @@
       order_type: orderType,
       sort,
     } = getSearchParams();
+    console.log('!!!!!', getSearchParams());
+
     const pageValue = isUnload.value ? 1 : page;
     if (pageValue && pageSize) {
       pagination.current = ~~pageValue;
@@ -370,6 +373,8 @@
   };
   onMounted(() => {
     parseURL();
+    console.log('parseUR加载！！！！');
+
     calcTableHeight();
   });
 

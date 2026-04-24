@@ -105,6 +105,7 @@
           params: {
             id: menuData[0].id,
           },
+          query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
         });
       }
     },

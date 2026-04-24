@@ -572,6 +572,7 @@
         params: {
           id: routerName,
         },
+        query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
       });
       titleRef.value = menuData.value.find(item => item.id === routerName)?.name || '';
       return;
