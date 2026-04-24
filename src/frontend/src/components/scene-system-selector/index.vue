@@ -117,6 +117,7 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import sceneManageService from '@service/scene-manage';
@@ -163,6 +164,13 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const route = useRoute();
+  const router = useRouter();
+
+  // ⚡ 立即缓存初始路由参数（同步），防止后续被 replaceSearchParams 覆写后丢失
+  const initialRouteSceneId = route.query.scene_id as string;
+  const initialRouteScopeId = route.query.scope_id as string;
+  const initialRouteScopeType = route.query.scope_type as string;
 
   const popoverRef = ref();
   const isPopoverShow = ref(false);
@@ -201,6 +209,78 @@
 
   const STORAGE_KEY = 'scene-system-selector:selected';
 
+  // 标记是否已执行过默认选中逻辑
+  let hasInitializedSelection = false;
+
+  // 从初始路由参数匹配选中项（两个异步请求共享）
+  const trySelectFromRoute = () => {
+    if (hasInitializedSelection || selectedItem.value) return;
+    const currentSceneList = sceneList.value.filter(item => item.type !== 'aggregate');
+    const currentSystemList = systemList.value.filter(item => item.type !== 'aggregate');
+
+    // 判断需要的列表是否已加载完成
+    // ⚠️ scope_type 明确指定时以它为准（不受 scene_id 影响）
+    const isSystemType = initialRouteScopeType === 'system' || initialRouteScopeType === 'cross_system';
+    const isSceneType = initialRouteScopeType === 'scene' || initialRouteScopeType === 'cross_scene'
+      || (!initialRouteScopeType && !initialRouteSceneId);
+    const needsSystemMatch = isSystemType;
+    const needsSceneMatch = (initialRouteSceneId && !isSystemType)
+      || (initialRouteScopeId && initialRouteScopeType !== 'system')
+      || isSceneType;
+
+    // 如果需要场景列表但还没加载完，等下次回调再试
+    if (needsSceneMatch && currentSceneList.length === 0) return;
+    // 如果需要系统列表但还没加载完，等下次回调再试
+    if (needsSystemMatch && currentSystemList.length === 0) return;
+
+    let targetItem = null;
+
+    // ⚡ 当 scope_type 明确指定时，以它为准（不受 scene_id 影响）
+    if (initialRouteScopeType === 'system') {
+      // 3. scope_id + scope_type=system 匹配
+      if (initialRouteScopeId) {
+        targetItem = currentSystemList.find((item: SelectorItem) => item.id === initialRouteScopeId) || null;
+      }
+      // cross_system（无 scope_id 时的所有系统）
+      if (!targetItem) {
+        targetItem = { id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' };
+      }
+    } else if (initialRouteScopeType === 'scene' || !initialRouteScopeType) {
+      // 2. scene_id 或 scope_id + scope_type=scene 匹配具体场景
+      const matchId = initialRouteSceneId || initialRouteScopeId;
+      if (matchId) {
+        targetItem = currentSceneList.find((item: SelectorItem) => item.id === matchId) || null;
+      }
+      // cross_scene（无 scope_id 时的所有场景）
+      if (!targetItem && initialRouteScopeType === 'cross_scene') {
+        targetItem = { id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' };
+      }
+    }
+    // 5. fallback：isDefaultSelectFirst > sessionStorage > 第一个非聚合场景
+    if (!targetItem && props.isDefaultSelectFirst) {
+      [targetItem] = currentSceneList;
+    } else if (!targetItem) {
+      const storedValue = sessionStorage.getItem(STORAGE_KEY);
+      if (storedValue) {
+        try {
+          targetItem = JSON.parse(storedValue);
+        } catch (e) {
+          [targetItem] = currentSceneList;
+        }
+      } else {
+        [targetItem] = currentSceneList;
+      }
+    }
+    // 设置选中项
+    hasInitializedSelection = true;
+    selectedItem.value = targetItem;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
+    emits('update:modelValue', targetItem);
+    emits('change', targetItem);
+    // 同步 scene_id 到路由参数
+    syncSceneIdToRoute(targetItem);
+  };
+
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
     selectedItem.value = item;
@@ -208,6 +288,52 @@
     emits('update:modelValue', item);
     emits('change', item);
     isPopoverShow.value = false;
+    // 同步 scene_id 到路由参数
+    syncSceneIdToRoute(item);
+  };
+
+  // 同步场景参数到路由 query 参数
+  const syncSceneIdToRoute = (item: SelectorItem | null) => {
+    const currentQuery = { ...route.query };
+    if (!item || !item.id) {
+      // 清空所有场景相关参数
+      const newQuery = { ...currentQuery };
+      delete newQuery.scene_id;
+      delete newQuery.scope_id;
+      delete newQuery.scope_type;
+      router.replace({ query: newQuery });
+      return;
+    }
+    if (item.type === 'scene') {
+      // 具体场景 → scene_id=具体ID
+      if (currentQuery.scene_id !== item.id || currentQuery.scope_id !== item.id) {
+        router.replace({
+          query: { ...currentQuery, scene_id: item.id, scope_id: item.id, scope_type: 'scene' },
+        });
+      }
+    } else if (item.type === 'system') {
+      // 具体系统 → scene_id=具体ID
+      if (currentQuery.scene_id !== item.id || currentQuery.scope_id !== item.id) {
+        router.replace({
+          query: { ...currentQuery, scene_id: item.id, scope_id: item.id, scope_type: 'system' },
+        });
+      }
+    } else if (item.type === 'aggregate') {
+      // 聚合项
+      if (item.id === 'allSecen') {
+        if (currentQuery.scene_id !== 'allSecen' || currentQuery.scope_type !== 'cross_scene') {
+          router.replace({
+            query: { ...currentQuery, scene_id: 'allSecen', scope_id: '', scope_type: 'cross_scene' },
+          });
+        }
+      } else if (item.id === 'allSystem') {
+        if (currentQuery.scene_id !== 'allSystem' || currentQuery.scope_type !== 'cross_system') {
+          router.replace({
+            query: { ...currentQuery, scene_id: 'allSystem', scope_id: '', scope_type: 'cross_system' },
+          });
+        }
+      }
+    }
   };
 
   // 弹出层显示
@@ -234,6 +360,8 @@
           type: 'system' as const,
         }));
       systemList.value = props.isAllSystem ? [{ id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' }, ...list] : list;
+      // 尝试从路由参数选中（system 类型需要系统列表就绪）
+      trySelectFromRoute();
     },
   });
   // 获取场景列表
@@ -250,36 +378,51 @@
           type: 'scene' as const,
         }));
       sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
-      // 默认选中逻辑：isDefaultSelectFirst 为 true 时优先选中第一个非聚合场景，否则有存储值则用存储值，没有则默认选中第一个非聚合的场景
-      if (!selectedItem.value && list.length > 0) {
-        // 先尝试从sessionStorage获取存储的值
-        const storedValue = sessionStorage.getItem(STORAGE_KEY);
-        let targetItem = null;
-        if (props.isDefaultSelectFirst) {
-          // isDefaultSelectFirst 为 true 时，优先选中第一个非聚合的场景
-          [targetItem] = list;
-        } else if (storedValue) {
-          try {
-            targetItem = JSON.parse(storedValue);
-          } catch (e) {
-            // 解析失败，使用第一个非聚合的场景
-            [targetItem] = list;
-          }
-        } else {
-          // 没有存储值，使用第一个非聚合的场景
-          [targetItem] = list;
-        }
-        // 设置选中项并触发事件
-        selectedItem.value = targetItem;
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
-        emits('update:modelValue', targetItem);
-        emits('change', targetItem);
-      }
+      // 尝试从路由参数选中（场景列表已就绪）
+      trySelectFromRoute();
     },
   });
   // 监听外部值变化
   watch(() => props.modelValue, (newVal) => {
     selectedItem.value = newVal;
+    // 外部设置选中项时也同步 URL
+    if (newVal) {
+      syncSceneIdToRoute(newVal);
+    }
+  });
+
+  // ⚡ 持续守护：确保 URL 中始终包含正确的场景参数
+  // （防止其他组件的路由跳转丢失 query 参数）
+  watch(selectedItem, (newVal) => {
+    if (!newVal || !newVal.id) return;
+    const checkAndFixUrl = () => {
+      const q = route.query;
+      const needsFix = (
+        (q.scene_id !== newVal.id)
+        || (newVal.type === 'aggregate' && newVal.id === 'allSecen' && q.scope_type !== 'cross_scene')
+        || (newVal.type === 'aggregate' && newVal.id === 'allSystem' && q.scope_type !== 'cross_system')
+      );
+      if (needsFix) {
+        syncSceneIdToRoute(newVal);
+      }
+    };
+    setTimeout(checkAndFixUrl, 100);
+  });
+
+  // ⚡ 路由级守护：当路由变化但丢失场景参数时自动恢复
+  // （覆盖 router.replace/push 等操作丢失 query 的情况）
+  watch(() => route.query, () => {
+    const item = selectedItem.value;
+    if (!item || !item.id) return;
+    const q = route.query;
+    const needsFix = (
+      (q.scene_id !== item.id)
+      || (item.type === 'aggregate' && item.id === 'allSecen' && q.scope_type !== 'cross_scene')
+      || (item.type === 'aggregate' && item.id === 'allSystem' && q.scope_type !== 'cross_system')
+    );
+    if (needsFix) {
+      setTimeout(() => syncSceneIdToRoute(item), 50);
+    }
   });
 
   // 获取数据的方法
@@ -297,7 +440,6 @@
       fetchSceneAll({
         status: 'enabled',
       });
-      emits('change', selectedItem.value);
     }, 0);
   };
 

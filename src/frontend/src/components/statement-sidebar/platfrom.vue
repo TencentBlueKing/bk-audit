@@ -121,7 +121,7 @@
 
   // 菜单点击处理
   const handleMenuClick = (routeName: string) => {
-    router.push({ name: routeName });
+    router.push({ name: routeName, query: route.query });
   };
 
   // 路由与分组的映射关系

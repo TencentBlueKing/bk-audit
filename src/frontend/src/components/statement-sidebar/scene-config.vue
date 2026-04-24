@@ -198,7 +198,7 @@
 
   // 菜单点击处理
   const handleMenuClick = (routeName: string) => {
-    router.push({ name: routeName });
+    router.push({ name: routeName, query: route.query });
   };
 
   // 监听路由变化，自动展开对应分组

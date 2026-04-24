@@ -225,6 +225,9 @@
     /** 搜索参数（含 event_filters 等），排序时合并以保留其他参数 */
     searchParams?: Record<string, any>;
     isNeedSceneParams?: boolean;
+    // 是否需要场景ID
+    isNeedSceneId?: boolean,
+    sceneIdKey?: string,
   }
 
   interface Emits {
@@ -257,7 +260,9 @@
     rowKey: 'id',
     tableMaxHeight: undefined,
     searchParams: undefined,
-    isNeedSceneParams: false, // 是否需要场景参数
+    isNeedSceneParams: false,
+    isNeedSceneId: false,
+    sceneIdKey: 'scope_id',
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -486,13 +491,15 @@
         if (result) {
           // 确保使用当前的 pagination.limit 值
           const currentLimit = pagination.limit;
-          const { isNeedSceneParams } = props;
+          const { isNeedSceneParams, isNeedSceneId } = props;
 
           const params: Record<string, any> = {
             ...paramsMemo,
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
             ...(isNeedSceneParams ? getSceneSystemParams() : {}),
+            ...(isNeedSceneId ? { [props.sceneIdKey]: getSceneSystemParams().scope_id } : {}),
+
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
@@ -538,6 +545,8 @@
       order_field: orderField,
       order_type: orderType,
     } = getSearchParams();
+    console.log('!!!!!》》》》》》》', getSearchParams());
+
     const pageValue = isUnload.value ? 1 : page;
     // 非首次加载时，才从 URL 读取 page_size
     if (pageValue && pageSize) {
@@ -662,6 +671,8 @@
   };
   onMounted(() => {
     parseURL();
+    console.log('parseUR加载！！！！');
+
     calcTableHeight();
     window.addEventListener('resize', handleWindowResize);
     // 初始化时加载数据

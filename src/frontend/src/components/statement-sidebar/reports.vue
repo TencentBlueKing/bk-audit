@@ -245,7 +245,10 @@
       const firstGroup = firstScene.children[0];
       if (firstGroup?.children?.length > 0) {
         const firstChild = firstGroup.children[0];
-        router.replace({ params: { id: firstChild.id } });
+        router.replace({
+          params: { id: firstChild.id },
+          query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
+        });
       }
     }
   };
