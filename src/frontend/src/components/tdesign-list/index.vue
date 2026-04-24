@@ -493,12 +493,21 @@
           const currentLimit = pagination.limit;
           const { isNeedSceneParams, isNeedSceneId } = props;
 
+          const needSceneParams = isNeedSceneParams || isNeedSceneId;
+          const sceneParams: Record<string, string> = needSceneParams ? getSceneSystemParams() : {};
+
+          // 场景参数为空时跳过请求（避免首次加载时 scope_id/scope_type 为空导致报错）
+          if (needSceneParams && !sceneParams.scope_id && !sceneParams.scope_type) {
+            console.warn('[tdesign-list] 场景参数为空，跳过本次请求，等待 scene-change 事件');
+            return;
+          }
+
           const params: Record<string, any> = {
             ...paramsMemo,
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
-            ...(isNeedSceneParams ? getSceneSystemParams() : {}),
-            ...(isNeedSceneId ? { [props.sceneIdKey]: getSceneSystemParams().scope_id } : {}),
+            ...(isNeedSceneParams ? sceneParams : {}),
+            ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
 
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
