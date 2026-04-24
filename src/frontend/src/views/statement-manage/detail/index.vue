@@ -33,6 +33,7 @@
   import useMessage from '@hooks/use-message';
 
   import useEventBus from '@/hooks/use-event-bus';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Error {
     data: Record<string, any>,
@@ -90,6 +91,10 @@
             { type: 'tool', id: 'refresh', build_in: true },
             { type: 'menu', id: 'excel', build_in: true },
           ],
+          constants: {
+            scope_type: getSceneSystemParams().scope_type,
+            scope_id: getSceneSystemParams().scope_id,
+          },
           handleError,
         },
       );
