@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="tsx">
-  import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { computed, onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -112,19 +112,20 @@
     activeRiskCount: sceneInfoData.value.risk_count || 0,
   }));
 
-  // 关联系统表格数据（通过系统详情接口获取完整信息）
+  // 关联系统表格数据（通过新接口获取有权限的系统列表，再获取详情）
   const systemDetailList = ref<Array<Record<string, any>>>([]);
   const systemDetailLoading = ref(false);
 
-  // 监听场景信息变化，获取每个关联系统的详情
-  watch(() => sceneInfoData.value.systems, async (systems) => {
-    if (!systems || systems.length === 0) {
-      systemDetailList.value = [];
-      return;
-    }
+  // 获取场景下有权限的系统列表，再逐个获取系统详情
+  const fetchPermissionSystems = async () => {
     systemDetailLoading.value = true;
     try {
-      const detailPromises = systems.map((sys: Record<string, any>) => MetaManageService
+      const systems = await SceneManageService.fetchScenePermissionSystems(sceneId.value);
+      if (!systems || systems.length === 0) {
+        systemDetailList.value = [];
+        return;
+      }
+      const detailPromises = systems.map((sys: { system_id: string; system_name: string }) => MetaManageService
         .fetchSystemInfo({ id: sys.system_id })
         .catch(() => null));
       const details = await Promise.all(detailPromises);
@@ -146,23 +147,24 @@
     } finally {
       systemDetailLoading.value = false;
     }
-  }, { immediate: true });
+  };
 
   const systemTableData = computed(() => systemDetailList.value);
 
-  // 关联数据报表表格数据（通过 rt_meta 接口获取完整信息）
+  // 关联数据报表表格数据（通过新接口获取有权限的数据表列表，再获取详情）
   const dataTableDetailList = ref<Array<Record<string, any>>>([]);
   const dataTableDetailLoading = ref(false);
 
-  // 监听场景信息变化，获取每个关联数据表的详情
-  watch(() => sceneInfoData.value.tables, async (tables) => {
-    if (!tables || tables.length === 0) {
-      dataTableDetailList.value = [];
-      return;
-    }
+  // 获取场景下有权限的数据表列表，再逐个获取数据表详情
+  const fetchPermissionTables = async () => {
     dataTableDetailLoading.value = true;
     try {
-      const detailPromises = tables.map((table: Record<string, any>) => StrategyManageService
+      const tables = await SceneManageService.fetchScenePermissionTables(sceneId.value);
+      if (!tables || tables.length === 0) {
+        dataTableDetailList.value = [];
+        return;
+      }
+      const detailPromises = tables.map((table: { table_id: string }) => StrategyManageService
         .fetchTableRtMeta({ table_id: table.table_id })
         .catch(() => null));
       const details = await Promise.all(detailPromises);
@@ -183,7 +185,7 @@
     } finally {
       dataTableDetailLoading.value = false;
     }
-  }, { immediate: true });
+  };
 
   const dataTableData = computed(() => dataTableDetailList.value);
 
@@ -275,9 +277,14 @@
     systemDetailList.value = [];
     dataTableDetailList.value = [];
     fetchSceneInfo(sceneId.value);
+    fetchPermissionSystems();
+    fetchPermissionTables();
   };
 
   onMounted(() => {
+    // 初始加载关联系统和关联数据报表
+    fetchPermissionSystems();
+    fetchPermissionTables();
     setTimeout(() => {
       onEvent('scene:change', handleSceneChange);
     }, 1000);

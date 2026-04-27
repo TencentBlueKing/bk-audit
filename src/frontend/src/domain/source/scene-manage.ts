@@ -122,6 +122,22 @@ class SceneManage extends ModuleBase {
     return Request.delete(`${this.module}/${id}/`, { payload });
   }
 
+  // 获取场景下有权限的系统列表
+  getScenePermissionSystems(sceneId: string | number, payload = {} as IRequestPayload) {
+    return Request.get<Array<{ system_id: string; system_name: string }>>(
+      `${this.module}/${sceneId}/scene_permission_systems/`,
+      { params: { scene_id: sceneId }, payload },
+    );
+  }
+
+  // 获取场景下有权限的数据表列表
+  getScenePermissionTables(sceneId: string | number, payload = {} as IRequestPayload) {
+    return Request.get<Array<{ table_id: string }>>(
+      `${this.module}/${sceneId}/scene_permission_tables/`,
+      { params: { scene_id: sceneId }, payload },
+    );
+  }
+
   // 场景精简列表
   getSceneAll(params: { status?: 'enabled' | 'disabled' } = {}, payload = {} as IRequestPayload) {
     return Request.get<Array<{
