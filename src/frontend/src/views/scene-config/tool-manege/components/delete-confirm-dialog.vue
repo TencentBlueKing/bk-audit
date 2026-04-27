@@ -17,6 +17,7 @@
 <template>
   <bk-dialog
     v-model:is-show="isShow"
+    ext-cls="delete-confirm-dialog"
     footer-align="center"
     :show-head="false"
     width="480">
@@ -44,14 +45,16 @@
     </div>
     <template #footer>
       <bk-button
-        class="mr8"
+        class="mr8 delete-action-btn"
         :disabled="confirmInput !== deleteTarget?.name"
         :loading="deleteLoading"
         theme="danger"
         @click="handleConfirmDelete">
         {{ t('删除') }}
       </bk-button>
-      <bk-button @click="handleCancel">
+      <bk-button
+        class="delete-action-btn"
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -144,12 +147,29 @@
 </script>
 
 <style lang="postcss">
+  /* 删除弹窗公共样式 - 去掉 footer 分割线和背景色，按钮加宽 */
+  .delete-confirm-dialog {
+    .bk-dialog-footer {
+      padding: 0 24px 24px !important;
+      background: #fff !important;
+      border-top: none !important;
+    }
+
+    .bk-dialog-body {
+      padding-bottom: 8px !important;
+    }
+
+    .delete-action-btn {
+      min-width: 120px;
+    }
+  }
+
   /* 删除确认弹窗样式 */
   .delete-dialog-content {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 0 8px;
+    padding: 24px 0 16px;
 
     .tip-icon {
       position: absolute;
@@ -164,6 +184,7 @@
     .delete-title {
       margin-bottom: 24px;
       font-size: 20px;
+      font-weight: 700;
       color: #313238;
     }
 

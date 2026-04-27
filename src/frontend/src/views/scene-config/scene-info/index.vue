@@ -58,49 +58,104 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import SceneManageService from '@service/scene-manage';
+
+  import SceneModel from '@model/scene/scene';
+
+  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
+
   import BaseInfo from './components/base-info.vue';
   import SampleDialog from './components/sample-dialog.vue';
   import SceneTable from './components/scene-table.vue';
   import StatCards from './components/stat-cards.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   const router = useRouter();
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
 
-  // 模拟场景基础数据
-  const sceneData = ref({
-    id: 100001,
-    name: '主机安全审计',
-    description: '覆盖主机登录、文件变更、进程启停、权限变更等操作的安全审计，结合CMDB业务拓扑进行关联分析，识别异常运维行为和潜在入侵风险。',
-    manager: '赵明辉（zhaominghui）',
-    managerCount: 2,
-    users: '张三（zhangsan）、李四（lisi）、王五（wangwu）',
-    updatedBy: '赵明辉（zhaominghui）',
-    updatedAt: '2026-03-04 16:22:37',
-    systemCount: 3,
-    dataTableCount: 5,
-    strategyCount: 18,
-    activeRiskCount: 127,
+  // 从 sessionStorage 获取当前场景 ID
+  const scopeParams = getSceneSystemParams();
+  const sceneId = scopeParams.scope_id;
+
+  // 调用接口获取场景信息
+  const {
+    data: sceneInfoData,
+    run: fetchSceneInfo,
+  } = useRequest(SceneManageService.fetchSceneInfo, {
+    defaultValue: new SceneModel(),
+    defaultParams: sceneId,
+    manual: true,
   });
 
-  // 统计卡片数据（从 sceneData 中提取）
-  const statCardsData = computed(() => ({
-    systemCount: sceneData.value.systemCount,
-    dataTableCount: sceneData.value.dataTableCount,
-    strategyCount: sceneData.value.strategyCount,
-    activeRiskCount: sceneData.value.activeRiskCount,
+  // 调用接口更新场景基础信息（场景管理员）
+  const {
+    run: fetchUpdateSceneInfo,
+  } = useRequest(SceneManageService.updateSceneInfo, {
+    defaultValue: new SceneModel(),
+    onSuccess: () => {
+      messageSuccess(t('保存成功'));
+      // 刷新场景信息
+      fetchSceneInfo(sceneId);
+    },
+  });
+
+  // 场景基础数据（从接口返回数据中映射）
+  const sceneData = computed(() => ({
+    id: sceneInfoData.value.scene_id,
+    name: sceneInfoData.value.name,
+    description: sceneInfoData.value.description,
+    manager: sceneInfoData.value.managers || [],
+    users: sceneInfoData.value.users || [],
+    updatedBy: sceneInfoData.value.updated_by || '--',
+    updatedAt: sceneInfoData.value.updated_at || '--',
   }));
+
+  // 统计卡片数据（从接口返回数据中提取）
+  const statCardsData = computed(() => ({
+    systemCount: sceneInfoData.value.systems?.length || 0,
+    dataTableCount: sceneInfoData.value.tables?.length || 0,
+    strategyCount: sceneInfoData.value.strategy_ids?.length || 0,
+    activeRiskCount: sceneInfoData.value.risk_count || 0,
+  }));
+
+  // 关联系统表格数据（从接口返回数据中提取，后端暂时返回空数组）
+  const systemTableData = computed(() => sceneInfoData.value.systems || []);
+
+  // 关联数据报表表格数据（从接口返回数据中提取，后端暂时返回空数组）
+  const dataTableData = computed(() => sceneInfoData.value.tables || []);
 
   // 更新场景数据（来自基础信息组件的行内编辑）
   const handleUpdateSceneData = (newData: any) => {
-    sceneData.value = {
-      ...sceneData.value,
-      ...newData,
+    // 构建更新参数，将前端字段映射回后端字段
+    const updateParams: Record<string, any> = {
+      sceneId: sceneInfoData.value.scene_id,
     };
+    // 检查哪些字段发生了变化并只提交变化的字段
+    if (newData.manager !== undefined) {
+      updateParams.managers = newData.manager;
+    }
+    if (newData.users !== undefined) {
+      updateParams.users = newData.users;
+    }
+    if (newData.name !== undefined) {
+      updateParams.name = newData.name;
+    }
+    if (newData.description !== undefined) {
+      updateParams.description = newData.description;
+    }
+    fetchUpdateSceneInfo(updateParams);
   };
 
-  // 跳转到审计策略列表页
+  // 跳转到审计策略列表页（携带 strategy_ids）
   const handleGoStrategy = () => {
-    router.push({ name: 'strategyList' });
+    const strategyIds = sceneInfoData.value.strategy_ids || [];
+    router.push({
+      name: 'strategyList',
+      query: strategyIds.length ? { strategy_id: strategyIds.join(',') } : {},
+    });
   };
 
   // 新开标签页跳转到风险列表页
@@ -196,16 +251,16 @@
 
   // 渲染近 7 天数据量列
   const renderRecentDataCountCell = (_h: any, { row }: { row: any }) => (
-    <span>{row.recentDataCount.toLocaleString()}</span>
+    <span>{row.recentDataCount != null ? row.recentDataCount.toLocaleString() : '--'}</span>
   );
 
   // 渲染最近数据时间列
   const renderRecentDataTimeCell = (_h: any, { row }: { row: any }) => (
     <span>
       <span class={['time-label', getTimeLabelClass(row.recentDataTimeLabelTheme)]}>
-        {row.recentDataTimeLabel}
+        {row.recentDataTimeLabel || '--'}
       </span>
-      <span class="ml8">{row.recentDataTime}</span>
+      <span class="ml8">{row.recentDataTime || '--'}</span>
     </span>
   );
 
@@ -334,129 +389,6 @@
       width: 120,
       resizable: true,
       cell: renderActionCell,
-    },
-  ];
-
-  // ==================== 关联系统模拟数据 ====================
-  const systemTableData = ref([
-    {
-      id: 1,
-      name: '蓝鲸权限中心',
-      admin: '李梓发',
-      domain: 'http://xima.ec/jzlf',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 67440,
-      recentDataTimeLabel: '2分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-03-30 02:12:55',
-    },
-    {
-      id: 2,
-      name: '蓝鲸配置平台',
-      admin: '吴令',
-      domain: 'http://vcqmomib.np/dhdxtup',
-      dataScope: '全部数据',
-      fieldCount: '10 个',
-      recentDataCount: 94922,
-      recentDataTimeLabel: '2分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-03-24 13:37:24',
-    },
-    {
-      id: 3,
-      name: '蓝鲸作业平台',
-      admin: '李金泽',
-      domain: 'http://pefgffci.bj/jshvg',
-      dataScope: '全部数据',
-      fieldCount: '10 个',
-      recentDataCount: 10595,
-      recentDataTimeLabel: '3小时前',
-      recentDataTimeLabelTheme: 'warning',
-      recentDataTime: '2026-01-29 08:34:04',
-    },
-    {
-      id: 4,
-      name: '蓝鲸容器管理平台',
-      admin: '孙书贤',
-      domain: 'http://hrndkdpi.cn/pnhw',
-      dataScope: '全部数据',
-      fieldCount: '10 个',
-      recentDataCount: 88410,
-      recentDataTimeLabel: '10小时前',
-      recentDataTimeLabelTheme: 'warning',
-      recentDataTime: '2026-01-27 20:35:20',
-    },
-    {
-      id: 5,
-      name: '蓝鲸监控平台',
-      admin: '郑清予',
-      domain: 'http://wvqlq.lt/vbptc',
-      dataScope: '全部数据',
-      fieldCount: '10 个',
-      recentDataCount: 91933,
-      recentDataTimeLabel: '1 天前',
-      recentDataTimeLabelTheme: 'danger',
-      recentDataTime: '2026-01-07 01:59:52',
-    },
-  ]);
-
-  // ==================== 关联数据报表模拟数据 ====================
-  const dataTableData = [
-    {
-      id: 1,
-      name: '审计事件总表（bk_audit_event）',
-      admin: '李辉煌',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 67440,
-      recentDataTimeLabel: '2分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-03-30 02:12:55',
-    },
-    {
-      id: 2,
-      name: '审计事件总表（bk_audit_event）',
-      admin: '王艳娇',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 94922,
-      recentDataTimeLabel: '2分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-03-24 13:37:24',
-    },
-    {
-      id: 3,
-      name: '审计事件总表（bk_audit_event）',
-      admin: '李孜斌',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 10595,
-      recentDataTimeLabel: '3分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-01-29 08:34:04',
-    },
-    {
-      id: 4,
-      name: '审计事件总表（bk_audit_event）',
-      admin: '钱洲西',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 88410,
-      recentDataTimeLabel: '5分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-01-27 20:35:20',
-    },
-    {
-      id: 5,
-      name: '审计事件总表（bk_audit_event）',
-      admin: '孙恒香',
-      dataScope: '部分数据',
-      fieldCount: '10 个',
-      recentDataCount: 91933,
-      recentDataTimeLabel: '15 分钟前',
-      recentDataTimeLabelTheme: 'success',
-      recentDataTime: '2026-01-07 01:59:52',
     },
   ];
 </script>

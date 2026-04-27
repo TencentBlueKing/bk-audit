@@ -15,15 +15,15 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <!-- 删除模式：保留 bk-dialog（含输入框验证） -->
   <bk-dialog
+    v-if="actionType === 'delete'"
     v-model:is-show="isShow"
+    ext-cls="confirm-action-dialog"
     footer-align="center"
     :show-head="false"
-    :width="isDelete ? 480 : 400">
-    <!-- 删除模式 -->
-    <div
-      v-if="isDelete"
-      class="delete-dialog-content">
+    :width="480">
+    <div class="delete-dialog-content">
       <img
         class="tip-icon"
         src="@images/tip-icon.svg">
@@ -45,27 +45,18 @@
         v-model="confirmInput"
         :placeholder="t('请输入工具名称')" />
     </div>
-    <!-- 启用/停用模式 -->
-    <div
-      v-else
-      class="toggle-status-dialog-content">
-      <div class="toggle-status-title">
-        {{ isEnabling ? t('确认启用该工具？') : t('确认停用该工具？') }}
-      </div>
-      <div class="toggle-status-tip">
-        {{ isEnabling ? t('启用后，该工具将在「工具广场」中展示') : t('停用后，该工具将从「工具广场」中隐藏') }}
-      </div>
-    </div>
     <template #footer>
       <bk-button
-        class="mr8"
-        :disabled="isDelete && confirmInput !== target?.name"
-        :loading="loading"
-        :theme="confirmTheme"
-        @click="handleConfirm">
-        {{ confirmText }}
+        class="mr8 confirm-action-btn"
+        :disabled="confirmInput !== target?.name"
+        :loading="deleteLoading"
+        theme="danger"
+        @click="handleDeleteConfirm">
+        {{ t('删除') }}
       </bk-button>
-      <bk-button @click="handleCancel">
+      <bk-button
+        class="confirm-action-btn"
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -73,7 +64,8 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -109,25 +101,44 @@
   const isShow = defineModel<boolean>('isShow', { default: false });
   const confirmInput = ref('');
 
-  const isDelete = computed(() => props.actionType === 'delete');
-  const isEnabling = computed(() => props.actionType === 'enable');
-
-  const confirmTheme = computed(() => {
-    if (isDelete.value || props.actionType === 'disable') return 'danger';
-    return 'primary';
-  });
-
-  const confirmText = computed(() => {
-    if (isDelete.value) return t('删除');
-    return isEnabling.value ? t('启用') : t('停用');
-  });
-
-  // 监听弹窗显示状态，重置输入
+  // 监听弹窗显示状态：启用/停用时拦截，改用 InfoBox
+  // 使用 flush: 'sync' 确保在 DOM 更新前拦截，避免删除弹窗闪现
   watch(isShow, (val) => {
     if (val) {
-      confirmInput.value = '';
+      if (props.actionType !== 'delete') {
+        // 立即关闭 bk-dialog，改用 InfoBox
+        isShow.value = false;
+        showToggleStatusInfoBox();
+      } else {
+        confirmInput.value = '';
+      }
     }
-  });
+  }, { flush: 'sync' });
+
+  // 启用/停用 — 使用全局 InfoBox
+  const showToggleStatusInfoBox = () => {
+    if (!props.target) return;
+    const isEnabling = props.actionType === 'enable';
+    InfoBox({
+      title: isEnabling ? t('确认启用该工具？') : t('确认停用该工具？'),
+      subTitle: isEnabling
+        ? t('启用后，该工具将在「工具广场」中展示')
+        : t('停用后，该工具将从「工具广场」中隐藏'),
+      confirmText: isEnabling ? t('启用') : t('停用'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      confirmButtonTheme: isEnabling ? 'primary' : 'danger',
+      onConfirm() {
+        const scopeParams = getSceneSystemParams();
+        return publishPlatformTool({
+          uid: props.target!.uid,
+          scene_id: Number(scopeParams.scope_id) || 0,
+        });
+      },
+    });
+  };
 
   // 删除接口
   const {
@@ -144,34 +155,24 @@
 
   // 启用/停用接口
   const {
-    loading: toggleLoading,
     run: publishPlatformTool,
   } = useRequest(ToolManageService.publishPlatformTool, {
     defaultValue: null,
     onSuccess: () => {
-      messageSuccess(isEnabling.value ? t('启用成功') : t('停用成功'));
-      close();
+      const isEnabling = props.actionType === 'enable';
+      messageSuccess(isEnabling ? t('启用成功') : t('停用成功'));
       emit('success');
     },
   });
 
-  const loading = computed(() => deleteLoading.value || toggleLoading.value);
-
-  const handleConfirm = () => {
-    if (!props.target) return;
+  // 删除确认
+  const handleDeleteConfirm = () => {
+    if (!props.target || confirmInput.value !== props.target.name) return;
     const scopeParams = getSceneSystemParams();
-    if (isDelete.value) {
-      if (confirmInput.value !== props.target.name) return;
-      runDeleteSceneTool({
-        uid: props.target.uid,
-        scene_id: Number(scopeParams.scope_id) || 0,
-      });
-    } else {
-      publishPlatformTool({
-        uid: props.target.uid,
-        scene_id: Number(scopeParams.scope_id) || 0,
-      });
-    }
+    runDeleteSceneTool({
+      uid: props.target.uid,
+      scene_id: Number(scopeParams.scope_id) || 0,
+    });
   };
 
   const close = () => {
@@ -198,6 +199,17 @@
 </script>
 
 <style lang="postcss">
+  .confirm-action-dialog {
+    .bk-dialog-footer {
+      background: none !important;
+      border-top: none !important;
+    }
+
+    .confirm-action-btn {
+      min-width: 120px;
+    }
+  }
+
   /* 删除确认弹窗样式 */
   .delete-dialog-content {
     display: flex;
@@ -218,6 +230,7 @@
     .delete-title {
       margin-bottom: 24px;
       font-size: 20px;
+      font-weight: 700;
       color: #313238;
     }
 
@@ -228,7 +241,6 @@
       font-size: 14px;
       color: #63656e;
       text-align: center;
-      background: #f5f7fa;
       border-radius: 2px;
     }
 
@@ -252,26 +264,6 @@
 
     .bk-input {
       width: 100%;
-    }
-  }
-
-  /* 启用/停用弹窗样式 */
-  .toggle-status-dialog-content {
-    padding: 16px 0;
-    text-align: center;
-
-    .toggle-status-title {
-      margin-bottom: 8px;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 32px;
-      color: #313238;
-    }
-
-    .toggle-status-tip {
-      font-size: 14px;
-      line-height: 22px;
-      color: #63656e;
     }
   }
 </style>

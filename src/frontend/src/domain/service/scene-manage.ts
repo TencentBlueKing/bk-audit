@@ -72,11 +72,35 @@ export default {
   },
 
   /**
+   * @desc 编辑场景基础信息（场景管理员）
+   * @param { Object } params
+   */
+  updateSceneInfo(params: {
+    sceneId: string | number;
+    name?: string;
+    description?: string;
+    managers?: string[];
+    users?: string[];
+  }) {
+    return SceneManageSource.updateSceneInfo(params)
+      .then(({ data }) => new SceneModel(data));
+  },
+
+  /**
    * @desc 获取场景详情
    * @param { String|Number } id - 场景 ID
    */
   fetchSceneDetail(id: string | number) {
     return SceneManageSource.getSceneDetail(id)
+      .then(({ data }) => new SceneModel(data));
+  },
+
+  /**
+   * @desc 获取场景信息（场景管理员可查看）
+   * @param { String|Number } id - 场景 ID
+   */
+  fetchSceneInfo(id: string | number) {
+    return SceneManageSource.getSceneInfo(id)
       .then(({ data }) => new SceneModel(data));
   },
 
