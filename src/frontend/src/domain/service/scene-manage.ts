@@ -131,6 +131,24 @@ export default {
   },
 
   /**
+   * @desc 获取场景下有权限的系统列表
+   * @param { String|Number } sceneId - 场景 ID
+   */
+  fetchScenePermissionSystems(sceneId: string | number) {
+    return SceneManageSource.getScenePermissionSystems(sceneId)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 获取场景下有权限的数据表列表
+   * @param { String|Number } sceneId - 场景 ID
+   */
+  fetchScenePermissionTables(sceneId: string | number) {
+    return SceneManageSource.getScenePermissionTables(sceneId)
+      .then(({ data }) => data);
+  },
+
+  /**
    * @desc 场景精简列表
    * @param { Object } params
    */
