@@ -135,6 +135,8 @@ class AddGroupMembers(IAMBaseResource):
 class DeleteGroupMembers(IAMBaseResource):
     """
     删除用户组成员
+
+    IAM 删除成员接口要求 type 和 ids 作为 query 参数传递（而非 JSON body）
     """
 
     name = gettext_lazy("删除用户组成员")
@@ -143,10 +145,16 @@ class DeleteGroupMembers(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        """构建请求数据，提取 type 和 ids 作为请求体，保留 url_keys 参数供 build_url 使用"""
-        return {
-            "system_id": validated_request_data.get("system_id"),
-            "id": validated_request_data.get("id"),
-            "type": validated_request_data.pop("type", ""),
-            "ids": validated_request_data.pop("ids", []),
-        }
+        # 提取 DELETE 需要的 query 参数
+        member_type = validated_request_data.pop("type", "")
+        member_ids = validated_request_data.pop("ids", [])
+        if isinstance(member_ids, list):
+            member_ids = ",".join(member_ids)
+        self._delete_params = {"type": member_type, "ids": member_ids}
+        return validated_request_data
+
+    def before_request(self, kwargs: dict) -> dict:
+        # 将 type/ids 作为 query 参数注入
+        kwargs.pop("json", None)
+        kwargs["params"] = self._delete_params
+        return kwargs
