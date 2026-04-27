@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from api.bk_base.constants import UserAuthActionEnum
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.tool.constants import (
     ApiToolConfig,
@@ -192,40 +193,71 @@ class SqlDataSearchExecutor(
     def _parse_params(self, params):
         return DataSearchToolExecuteParams.model_validate(params)
 
-    def validate_permission(self, params: DataSearchToolExecuteParams):
+    @staticmethod
+    def _get_tool_scene_id(tool_uid: str) -> Optional[int]:
         """
-        校验权限: 校验工具更新人 or 当前请求用户有表查询条件
-        支持场景表权限校验：当存在 scene_id 时，先校验场景数据表白名单，再校验 BK-Base 权限
+        获取工具关联的场景ID
         """
-        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
-        parsed_def = self.analyzer.get_parsed_def()
+        from services.web.scene.models import ResourceBindingScene
 
-        # 场景表权限校验：有 scene_id 时，必须通过表白名单校验
-        scene_id = getattr(params, 'scene_id', None)
-        if scene_id and parsed_def.referenced_tables:
-            scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
-            if not scene_table_ids:
-                # 场景没有配置数据表白名单，没有表权限
-                raise DataSearchTablePermission(user_id, ",".join(t.table_name for t in parsed_def.referenced_tables))
-            # 校验所有引用表是否在白名单内
-            scene_table_id_set = set(scene_table_ids)
-            for table in parsed_def.referenced_tables:
-                if table.table_name not in scene_table_id_set:
-                    raise DataSearchTablePermission(user_id, table.table_name)
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.TOOL,
+                binding__resource_id=tool_uid,
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
 
+    @staticmethod
+    def check_table_permission(referenced_tables: list, scene_authorized_tables: set, user_id: str):
+        """
+        公共表权限校验：场景授权的表 OR 用户个人有权限的表
+        """
+        if not referenced_tables:
+            return
+
+        # 筛选出未被场景授权的表，需要进一步校验用户个人权限
+        tables_need_user_check = [
+            table for table in referenced_tables if table.table_name not in scene_authorized_tables
+        ]
+
+        # 如果所有表都在场景授权范围内，直接通过
+        if not tables_need_user_check:
+            return
+
+        # 对未被场景授权的表，校验用户个人权限
         permissions = [
             {
                 "user_id": user_id,
                 "action_id": UserAuthActionEnum.RT_QUERY.value,
                 "object_id": table.table_name,
             }
-            for table in parsed_def.referenced_tables
+            for table in tables_need_user_check
         ]
         bulk_resp = api.bk_base.user_auth_batch_check({"permissions": permissions})
         for rt in bulk_resp:
             if rt.get("result"):
                 continue
             raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
+
+    def validate_permission(self, params: DataSearchToolExecuteParams):
+        """
+        校验权限: 校验工具引用的表是否有权限
+        """
+        parsed_def = self.analyzer.get_parsed_def()
+        referenced_tables = parsed_def.referenced_tables
+        if not referenced_tables:
+            return
+
+        # 获取工具关联的场景授权表
+        scene_authorized_tables = set()
+        if self.tool:
+            scene_id = self._get_tool_scene_id(self.tool.uid)
+            if scene_id is not None:
+                scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
+
+        self.check_table_permission(referenced_tables, scene_authorized_tables, get_request_username())
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
         """

@@ -4,17 +4,17 @@ from django.test import TestCase
 
 from core.sql.model import Table
 from core.sql.parser.model import ParsedSQLInfo
-from services.web.scene.data_filter import SceneDataFilter
 from services.web.tool.exceptions import DataSearchTablePermission
 from services.web.tool.executor.tool import SqlDataSearchExecutor
 
 
 class TestSceneTablePermissionValidation(TestCase):
-    """测试场景表权限校验功能"""
+    """测试数据查询工具权限校验功能"""
 
     def setUp(self):
         # 创建模拟的工具对象
         self.mock_tool = MagicMock()
+        self.mock_tool.uid = 'test_tool_uid'
         self.mock_tool.get_permission_owner.return_value = 'test_user'
 
         # mock 掉 __init__，避免触发真实的配置解析和分析器初始化
@@ -27,167 +27,283 @@ class TestSceneTablePermissionValidation(TestCase):
         self.mock_analyzer = MagicMock()
         self.executor.analyzer = self.mock_analyzer
 
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_with_table_whitelist_valid(self, mock_get_table_ids):
-        """测试场景表白名单校验通过的情况"""
-        # 模拟场景配置了数据表白名单
-        mock_get_table_ids.return_value = ['table1', 'table2']
-
-        # 模拟SQL解析结果
-        mock_table1 = Table(table_name='table1')
-        mock_table2 = Table(table_name='table2')
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1, table2',
-            referenced_tables=[mock_table1, mock_table2],
+    def _make_parsed_def(self, table_names, sql=None):
+        """辅助方法：构造 ParsedSQLInfo"""
+        tables = [Table(table_name=name) for name in table_names]
+        return ParsedSQLInfo(
+            original_sql=sql or f'SELECT * FROM {", ".join(table_names)}',
+            referenced_tables=tables,
             sql_variables=[],
             result_fields=[],
         )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
 
-        # 模拟BK-Base权限校验通过
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check:
+    def test_validate_permission_all_tables_authorized_by_user(self):
+        """测试所有表都有用户个人权限时校验通过（无场景授权）"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
             mock_auth_check.return_value = [
                 {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
                 {'user_id': 'test_user', 'object_id': 'table2', 'result': True},
             ]
 
-            # 执行权限校验（应不抛出异常）
             params = MagicMock()
-            params.scene_id = 1
+            params.tool_variables = []
+
+            self.executor.validate_permission(params)
+            mock_auth_check.assert_called_once()
+
+    def test_validate_permission_table_denied(self):
+        """测试某个表没有权限时抛出 DataSearchTablePermission 异常"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
+                {'user_id': 'test_user', 'object_id': 'table2', 'result': False},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            with self.assertRaises(DataSearchTablePermission):
+                self.executor.validate_permission(params)
+
+    def test_validate_permission_single_table_authorized(self):
+        """测试单表有权限时校验通过"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            self.executor.validate_permission(params)
+            mock_auth_check.assert_called_once()
+
+    def test_validate_permission_all_tables_denied(self):
+        """测试所有表都没有权限时抛出 DataSearchTablePermission 异常"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table1', 'result': False},
+                {'user_id': 'test_user', 'object_id': 'table2', 'result': False},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            with self.assertRaises(DataSearchTablePermission):
+                self.executor.validate_permission(params)
+
+    def test_validate_permission_uses_request_username(self):
+        """测试权限校验使用 get_request_username 返回的用户名"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
+            ]
+
+            params = MagicMock()
             params.tool_variables = []
 
             self.executor.validate_permission(params)
 
-            # 验证场景权限校验被调用
-            mock_get_table_ids.assert_called_once_with(1)
+            # 验证传给 BK-Base 的 user_id 是 get_request_username() 返回的值
+            call_args = mock_auth_check.call_args
+            permissions = call_args[0][0]['permissions'] if call_args[0] else call_args[1]['permissions']
+            self.assertEqual(permissions[0]['user_id'], 'test_user')
 
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_with_table_whitelist_denied(self, mock_get_table_ids):
-        """测试场景表白名单校验不通过时抛出 DataSearchTablePermission 异常"""
-        # 模拟场景配置了数据表白名单
-        mock_get_table_ids.return_value = ['table1']  # 只授权了table1
+    def test_validate_permission_without_tool(self):
+        """测试没有 tool 对象时不查询场景授权表，直接校验用户个人权限"""
+        self.executor.tool = None
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
 
-        # 模拟SQL解析结果（引用了未授权的表）
-        mock_table1 = Table(table_name='table1')
-        mock_table2 = Table(table_name='table2')  # 未授权的表
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1, table2',
-            referenced_tables=[mock_table1, mock_table2],
-            sql_variables=[],
-            result_fields=[],
-        )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+            'services.web.tool.executor.tool.get_request_username', return_value='request_user'
+        ):
+            mock_auth_check.return_value = [
+                {'user_id': 'request_user', 'object_id': 'table1', 'result': True},
+            ]
 
-        # 执行权限校验（应抛出 DataSearchTablePermission 异常）
-        params = MagicMock()
-        params.scene_id = 1
-        params.tool_variables = []
-
-        with self.assertRaises(DataSearchTablePermission):
-            self.executor.validate_permission(params)
-        mock_get_table_ids.assert_called_once_with(1)
-
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_without_table_whitelist(self, mock_get_table_ids):
-        """测试场景没有配置数据表白名单时抛出 DataSearchTablePermission 异常"""
-        # 模拟场景没有配置数据表白名单
-        mock_get_table_ids.return_value = []
-
-        # 模拟SQL解析结果
-        mock_table1 = Table(table_name='table1')
-        mock_table2 = Table(table_name='table2')
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1, table2',
-            referenced_tables=[mock_table1, mock_table2],
-            sql_variables=[],
-            result_fields=[],
-        )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
-
-        # 执行权限校验（应抛出 DataSearchTablePermission 异常，因为没有表白名单）
-        params = MagicMock()
-        params.scene_id = 1
-        params.tool_variables = []
-
-        with self.assertRaises(DataSearchTablePermission):
-            self.executor.validate_permission(params)
-        mock_get_table_ids.assert_called_once_with(1)
-
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_partial_whitelist_denied(self, mock_get_table_ids):
-        """测试引用了白名单之外的表时抛出 DataSearchTablePermission 异常"""
-        # 模拟场景只授权了部分表
-        mock_get_table_ids.return_value = ['table1']  # 只授权了table1
-
-        # 模拟SQL解析结果（引用了未授权的表）
-        mock_table1 = Table(table_name='table1')
-        mock_table3 = Table(table_name='table3')  # 未授权的表
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1, table3',
-            referenced_tables=[mock_table1, mock_table3],
-            sql_variables=[],
-            result_fields=[],
-        )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
-
-        # 执行权限校验（应抛出 DataSearchTablePermission 异常）
-        params = MagicMock()
-        params.scene_id = 1
-        params.tool_variables = []
-
-        with self.assertRaises(DataSearchTablePermission):
-            self.executor.validate_permission(params)
-        mock_get_table_ids.assert_called_once_with(1)
-
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_without_scene_id(self, mock_get_table_ids):
-        """测试没有场景ID时的正常BK-Base权限校验"""
-        # 模拟SQL解析结果
-        mock_table1 = Table(table_name='table1')
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1',
-            referenced_tables=[mock_table1],
-            sql_variables=[],
-            result_fields=[],
-        )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
-
-        # 模拟BK-Base权限校验通过
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check:
-            mock_auth_check.return_value = [{'user_id': 'test_user', 'object_id': 'table1', 'result': True}]
-
-            # 执行权限校验（没有scene_id）
             params = MagicMock()
-            params.scene_id = None
             params.tool_variables = []
 
             self.executor.validate_permission(params)
 
-            # 验证场景权限校验没有被调用
-            mock_get_table_ids.assert_not_called()
+            call_args = mock_auth_check.call_args
+            permissions = call_args[0][0]['permissions'] if call_args[0] else call_args[1]['permissions']
+            self.assertEqual(permissions[0]['user_id'], 'request_user')
 
-    @patch.object(SceneDataFilter, 'get_table_ids')
-    def test_scene_table_permission_empty_whitelist_denied(self, mock_get_table_ids):
-        """测试场景没有配置任何表白名单时抛出 DataSearchTablePermission 异常"""
-        # 模拟场景没有配置任何数据表白名单
-        mock_get_table_ids.return_value = []
-
-        # 模拟SQL解析结果
-        mock_table1 = Table(table_name='table1')
-        mock_table2 = Table(table_name='table2')
-        mock_parsed_def = ParsedSQLInfo(
-            original_sql='SELECT * FROM table1, table2',
-            referenced_tables=[mock_table1, mock_table2],
+    def test_validate_permission_no_referenced_tables(self):
+        """测试没有引用表时直接通过"""
+        self.mock_analyzer.get_parsed_def.return_value = ParsedSQLInfo(
+            original_sql='SELECT 1',
+            referenced_tables=[],
             sql_variables=[],
             result_fields=[],
         )
-        self.mock_analyzer.get_parsed_def.return_value = mock_parsed_def
 
-        # 执行权限校验（应抛出 DataSearchTablePermission 异常，因为没有表白名单）
         params = MagicMock()
-        params.scene_id = 1
         params.tool_variables = []
 
-        with self.assertRaises(DataSearchTablePermission):
+        # 不应抛出异常
+        self.executor.validate_permission(params)
+
+    # ========== 场景授权表相关测试 ==========
+
+    def test_validate_permission_all_tables_authorized_by_scene(self):
+        """测试所有表都在场景授权范围内时，不调用用户个人权限校验"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1', 'table2']
+        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+            'services.web.tool.executor.tool.get_request_username', return_value='test_user'
+        ):
+
+            params = MagicMock()
+            params.tool_variables = []
+
             self.executor.validate_permission(params)
-        mock_get_table_ids.assert_called_once_with(1)
+
+            # 所有表都在场景授权范围内，不应调用用户权限校验
+            mock_auth_check.assert_not_called()
+
+    def test_validate_permission_partial_scene_authorization(self):
+        """测试部分表在场景授权范围内，未授权的表需要校验用户个人权限"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2', 'table3'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1']
+        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+            'services.web.tool.executor.tool.get_request_username', return_value='test_user'
+        ):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table2', 'result': True},
+                {'user_id': 'test_user', 'object_id': 'table3', 'result': True},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            self.executor.validate_permission(params)
+
+            # 只对未被场景授权的 table2、table3 校验用户权限
+            mock_auth_check.assert_called_once()
+            call_args = mock_auth_check.call_args
+            permissions = call_args[0][0]['permissions'] if call_args[0] else call_args[1]['permissions']
+            checked_tables = {p['object_id'] for p in permissions}
+            self.assertEqual(checked_tables, {'table2', 'table3'})
+
+    def test_validate_permission_partial_scene_auth_user_denied(self):
+        """测试部分表在场景授权范围内，但未授权的表用户也没有权限时抛出异常"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1', 'table2'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['table1']
+        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth_check, patch(
+            'services.web.tool.executor.tool.get_request_username', return_value='test_user'
+        ):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table2', 'result': False},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            with self.assertRaises(DataSearchTablePermission):
+                self.executor.validate_permission(params)
+
+    def test_validate_permission_scene_id_none(self):
+        """测试工具未关联场景时，所有表都需要校验用户个人权限"""
+        self.mock_analyzer.get_parsed_def.return_value = self._make_parsed_def(['table1'])
+
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=None), patch(
+            'services.web.tool.executor.tool.api.bk_base.user_auth_batch_check'
+        ) as mock_auth_check, patch('services.web.tool.executor.tool.get_request_username', return_value='test_user'):
+            mock_auth_check.return_value = [
+                {'user_id': 'test_user', 'object_id': 'table1', 'result': True},
+            ]
+
+            params = MagicMock()
+            params.tool_variables = []
+
+            self.executor.validate_permission(params)
+            mock_auth_check.assert_called_once()
+
+
+class TestCheckTablePermission(TestCase):
+    """测试 check_table_permission 静态方法"""
+
+    def test_empty_referenced_tables(self):
+        """测试引用表为空时直接通过"""
+        SqlDataSearchExecutor.check_table_permission([], set(), 'test_user')
+
+    def test_all_tables_in_scene(self):
+        """测试所有表都在场景授权范围内时直接通过，不调用 API"""
+        tables = [Table(table_name='t1'), Table(table_name='t2')]
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            SqlDataSearchExecutor.check_table_permission(tables, {'t1', 't2'}, 'test_user')
+            mock_auth.assert_not_called()
+
+    def test_no_scene_tables_user_authorized(self):
+        """测试无场景授权表，用户个人有权限时通过"""
+        tables = [Table(table_name='t1')]
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            mock_auth.return_value = [
+                {'user_id': 'test_user', 'object_id': 't1', 'result': True},
+            ]
+            SqlDataSearchExecutor.check_table_permission(tables, set(), 'test_user')
+            mock_auth.assert_called_once()
+
+    def test_no_scene_tables_user_denied(self):
+        """测试无场景授权表，用户个人也没有权限时抛出异常"""
+        tables = [Table(table_name='t1')]
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            mock_auth.return_value = [
+                {'user_id': 'test_user', 'object_id': 't1', 'result': False},
+            ]
+            with self.assertRaises(DataSearchTablePermission):
+                SqlDataSearchExecutor.check_table_permission(tables, set(), 'test_user')
+
+    def test_partial_scene_auth_remaining_user_authorized(self):
+        """测试部分场景授权，剩余表用户有权限时通过"""
+        tables = [Table(table_name='t1'), Table(table_name='t2'), Table(table_name='t3')]
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            mock_auth.return_value = [
+                {'user_id': 'user1', 'object_id': 't2', 'result': True},
+                {'user_id': 'user1', 'object_id': 't3', 'result': True},
+            ]
+            SqlDataSearchExecutor.check_table_permission(tables, {'t1'}, 'user1')
+
+            # 只校验 t2 和 t3
+            call_args = mock_auth.call_args
+            permissions = call_args[0][0]['permissions'] if call_args[0] else call_args[1]['permissions']
+            checked_tables = {p['object_id'] for p in permissions}
+            self.assertEqual(checked_tables, {'t2', 't3'})
+
+    def test_partial_scene_auth_remaining_user_denied(self):
+        """测试部分场景授权，剩余表用户没有权限时抛出异常"""
+        tables = [Table(table_name='t1'), Table(table_name='t2')]
+        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            mock_auth.return_value = [
+                {'user_id': 'user1', 'object_id': 't2', 'result': False},
+            ]
+            with self.assertRaises(DataSearchTablePermission):
+                SqlDataSearchExecutor.check_table_permission(tables, {'t1'}, 'user1')
