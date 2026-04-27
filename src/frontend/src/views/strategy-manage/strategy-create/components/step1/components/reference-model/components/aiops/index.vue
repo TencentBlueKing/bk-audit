@@ -168,6 +168,8 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
   interface Props {
@@ -258,6 +260,7 @@
         formData.value.configs.config_type = data.table_type[0].value;
         fetchTable({
           table_type: formData.value.configs.config_type,
+          scene_id: getSceneSystemParams().scope_id,
         });
       }
       sourceTypeMap.value = commonData.value.table_type.reduce((
@@ -283,6 +286,7 @@
   const handleDataSourceType = (item: boolean | string | number) => {
     fetchTable({
       table_type: item,
+      scene_id: getSceneSystemParams().scope_id,
     });
     if (isInit) {
       emits('updateDataSource', formData.value.configs.data_source);
@@ -339,6 +343,7 @@
 
       fetchTable({
         table_type: formData.value.configs.config_type,
+        scene_id: getSceneSystemParams().scope_id,
       }).then(() => {
         comRef.value.setConfigs(configs);
       });

@@ -155,6 +155,7 @@
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Emits {
     (e: 'refreshLinkData'): void;
@@ -189,6 +190,7 @@
     for (const type of uniqueTableTypes.value) {
       StrategyManageService.fetchTable({
         table_type: type,
+        scene_id: getSceneSystemParams().scope_id,
       }).then((data) => {
         tableTypeData.value[type] = data;
       });

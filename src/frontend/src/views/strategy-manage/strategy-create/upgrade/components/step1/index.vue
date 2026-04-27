@@ -135,6 +135,8 @@
 
   import Card from './components/card.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface ControlType {
     control_type_id: string;
     control_id: string;
@@ -410,6 +412,7 @@
         // 解析resulttableid
         fetchTable({
           table_type: formData.value.configs.config_type,
+          scene_id: getSceneSystemParams().scope_id,
         });
       }
     },
