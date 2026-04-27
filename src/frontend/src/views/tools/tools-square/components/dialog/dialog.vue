@@ -52,7 +52,13 @@
             @click="() => isFullScreen = !isFullScreen" />
         </div>
         <div class="top-right">
+          <img
+            v-if="toolDetails?.tool_type === 'smart_page'"
+            alt="smart_page"
+            class="top-left-icon"
+            :src="userProfileIcon">
           <audit-icon
+            v-else
             class="top-left-icon"
             svg
             :type="toolDetails ? toolIconMap[toolDetails.tool_type] || '' : ''" />
@@ -234,6 +240,7 @@
   import DialogHeader from './dialog-header.vue';
 
   import useRequest from '@/hooks/use-request';
+  import userProfileIcon from '@/images/user.svg';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface TagItem {
@@ -319,6 +326,7 @@
     data_search: 'sqlxiao',
     bk_vision: 'bkvisonxiao',
     api: 'apixiao',
+    smart_page: 'user',
   };
 
   const dialogHeaderRef = ref();

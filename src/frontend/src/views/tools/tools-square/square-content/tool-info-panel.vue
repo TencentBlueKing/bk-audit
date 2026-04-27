@@ -45,7 +45,13 @@
           class="panel-tab-item"
           :class="{ active: activeUid === item.uid }"
           @click="handleTabClick(item.uid)">
+          <img
+            v-if="item.tool_type === 'smart_page'"
+            alt="smart_page"
+            class="tab-tool-icon"
+            :src="userProfileIcon">
           <audit-icon
+            v-else
             class="tab-tool-icon"
             svg
             :type="itemIcon(item)" />
@@ -69,10 +75,16 @@
     </div>
     <div class="panel-content">
       <div
-        v-show="!activeUid.startsWith('game_detail_') && activeUid !== 'audit_user_profile'"
+        v-show="!activeUid.startsWith('game_detail_') && !isSmartPageTool(activeUid)"
         class="content-header">
         <div class="top-right">
+          <img
+            v-if="activeTool?.tool_type === 'smart_page'"
+            alt="smart_page"
+            class="top-left-icon"
+            :src="userProfileIcon">
           <audit-icon
+            v-else
             class="top-left-icon"
             svg
             :type="activeTool ? itemIcon(activeTool) : ''" />
@@ -106,10 +118,12 @@
       <template
         v-for="tool in toolList"
         :key="tool.uid">
-        <!-- 审计用户画像工具 -->
+        <!-- smart_page 类型工具（如审计用户画像） -->
         <audit-user-profile
-          v-if="tool.uid === 'audit_user_profile'"
+          v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
+          :tool-config="toolDetailMap[tool.uid]?.config"
+          :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail" />
         <!-- 游戏数据详情 -->
         <game-detail
@@ -141,13 +155,14 @@
   import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
 
-  import AuditUserProfile from '../components/audit-user-profile.vue';
-  import GameDetail from '../components/game-detail.vue';
+  import AuditUserProfile from '../components/audit-profile/audit-user-profile.vue';
+  import GameDetail from '../components/game/game-detail.vue';
   import ToolContent from '../components/tool-content.vue';
 
   import AddToolPopover from './add-tool-popover.vue';
 
   import useRequest from '@/hooks/use-request';
+  import userProfileIcon from '@/images/user.svg';
 
   interface SearchItem {
     value: any;
@@ -269,8 +284,8 @@
       return 'bkvisonxiao';
     case 'api':
       return 'apixiao';
-    case 'audit_profile':
-      return 'user-shape';
+    case 'smart_page':
+      return 'user';
     case 'game_detail':
       return 'apixiao';
     default:
@@ -316,9 +331,19 @@
     },
   });
 
+  // 判断指定 uid 的工具是否为 smart_page 类型
+  const isSmartPageTool = (uid: string): boolean => {
+    const tool = props.toolList.find(t => t.uid === uid);
+    return tool?.tool_type === 'smart_page';
+  };
+
   // 应用工具详情到视图（初始化搜索列表和表单）
   const applyToolDetail = (data: ToolDetailModel) => {
     const { uid } = data;
+    // smart_page 类型工具不需要初始化搜索列表和表单，由其自身组件处理
+    if (data.tool_type === 'smart_page') {
+      return;
+    }
     if (data.tool_type !== 'bk_vision') {
       // 仅在该工具尚未初始化搜索列表时才设置（避免切换 tab 时覆盖已有数据）
       if (!searchListMap.value[uid]) {
@@ -405,7 +430,6 @@
       if (!newUid) return;
       // 如果该工具详情尚未加载，则请求（跳过审计用户画像和游戏详情等固定工具）
       if (!toolDetailMap.value[newUid]
-        && newUid !== 'audit_user_profile'
         && !newUid.startsWith('game_detail_')) {
         fetchToolDetail({ uid: newUid });
       }
