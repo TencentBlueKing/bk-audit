@@ -560,14 +560,12 @@
   };
 
   const handleJumpToSceneInfo = (row: SceneModel) => {
-    // 将场景信息写入 sessionStorage，供场景信息页面的选择器读取
-    const selectorData = {
-      id: String(row.scene_id),
-      name: row.name,
-      type: 'scene',
-    };
-    sessionStorage.setItem('scene-system-selector:selected', JSON.stringify(selectorData));
-    const routeData = router.resolve({ name: 'sceneInfo' });
+    const routeData = router.resolve({
+      name: 'sceneInfo',
+      query: {
+        scene_id: String(row.scene_id),
+      },
+    });
     window.open(routeData.href, '_blank');
   };
 
