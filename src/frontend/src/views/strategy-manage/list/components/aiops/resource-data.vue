@@ -93,6 +93,9 @@
   import RenderField from './render-field.vue';
   import RenderParameter from './render-parameter.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+
   interface Props{
     data: StrategyModel,
     commonData: CommonDataModel
@@ -174,6 +177,7 @@
     if (data) {
       fetchTable({
         table_type: data.configs.config_type,
+        scene_id: getSceneSystemParams().scope_id,
       });
       fetchTableRtFields({
         table_id: data.configs.data_source?.result_table_id,

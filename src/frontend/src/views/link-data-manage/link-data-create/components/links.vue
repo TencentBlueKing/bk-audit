@@ -189,6 +189,7 @@
   import TableField from './components/table-field.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Exposes{
     getValue: () => Promise<any>;
@@ -342,6 +343,7 @@
     const requests = linkTableTableTypeList.value.map(item => async () => {
       const data = await fetchTable({
         table_type: item.value,
+        scene_id: getSceneSystemParams().scope_id,
       });
       return [{
         ...item,

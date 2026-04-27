@@ -223,6 +223,8 @@
   import RenderInfoBlock from './render-info-block.vue';
   import RenderInfoItem from './render-info-item.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Props {
     data: StrategyModel,
     strategyMap: Record<string, string>
@@ -347,6 +349,7 @@
     if (data.configs.config_type !== 'LinkTable') {
       fetchTable({
         table_type: data.configs.config_type,
+        scene_id: getSceneSystemParams().scope_id,
       });
     } else {
       fetchLinkDataSheetDetail({
