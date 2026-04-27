@@ -288,6 +288,7 @@
               {t('预览')}
             </bk-button>
             <bk-popover
+              extCls="tool-more-action-popover"
               placement="bottom-start"
               theme="light"
               trigger="click">
@@ -391,6 +392,10 @@
 </style>
 
 <style lang="postcss">
+  .tool-more-action-popover.bk-popover.bk-pop2-content {
+    padding: 0;
+  }
+
   .more-action-menu {
     display: flex;
     flex-direction: column;
@@ -399,7 +404,7 @@
     .mr8 {
       display: block;
       width: 100%;
-      padding: 3px 2px;
+      padding: 8px 15px;
       font-size: 12px;
       color: #63656e;
 

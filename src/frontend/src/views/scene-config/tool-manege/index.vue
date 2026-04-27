@@ -28,8 +28,8 @@
             theme="primary"
             @click="handleCreateReport">
             <audit-icon
-              class="mr4"
-              type="plus-circle" />
+              class="mr8"
+              type="add" />
             {{ t('新建工具') }}
           </bk-button>
         </div>
@@ -292,5 +292,9 @@
 
   .report-config-content {
     min-height: 400px;
+
+    :deep(.audit-tdesign-list) {
+      border: none;
+    }
   }
 </style>
