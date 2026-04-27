@@ -26,6 +26,15 @@ export default {
   },
   children: [
     {
+      path: 'landing-page',
+      component: () => import('@views/scene-config/landing-page/index.vue'),
+      name: 'landingPage',
+      meta: {
+        title: '引导页',
+        nodeSideContent: true,
+      },
+    },
+    {
       path: 'scene-info',
       component: () => import('@views/scene-config/scene-info/index.vue'),
       name: 'sceneInfo',
