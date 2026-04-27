@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from blueapps.utils.request_provider import get_local_request
+from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
@@ -152,6 +153,7 @@ class DeleteRiskRule(RiskRuleMeta):
     name = gettext_lazy("删除风险处理规则")
     audit_action = ActionEnum.DELETE_RULE
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         if Risk.objects.filter(rule_id=validated_request_data["rule_id"]).exclude(status=RiskStatus.CLOSED).exists():
             raise RiskRuleInUse()
@@ -160,6 +162,12 @@ class DeleteRiskRule(RiskRuleMeta):
             return
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instances.first()))
         instances.delete()
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=validated_request_data["rule_id"],
+            resource_type=ResourceVisibilityType.RISK_RULE,
+        )
 
 
 class ListRiskByRule(RiskRuleMeta):

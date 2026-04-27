@@ -1408,6 +1408,7 @@ class DeletePlatformSceneTool(DeleteTool):
 
     name = gettext_lazy("删除平台级场景工具")
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import (
             BindingType,
@@ -1436,8 +1437,13 @@ class DeletePlatformSceneTool(DeleteTool):
         if tool and tool.status == PanelStatus.PUBLISHED:
             raise SceneToolCannotDelete()
 
+        from services.web.scene.filters import SceneScopeFilter
+
         # 删除绑定关系（级联删除关联的场景和系统）
-        binding.delete()
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=uid,
+            resource_type=ResourceVisibilityType.TOOL,
+        )
 
         # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
         return super().perform_request(validated_request_data)
@@ -1546,6 +1552,7 @@ class DeleteSceneScopeTool(DeleteTool):
     name = gettext_lazy("删除场景级工具")
     RequestSerializer = SceneScopeToolDeleteRequestSerializer
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding
@@ -1567,8 +1574,13 @@ class DeleteSceneScopeTool(DeleteTool):
         if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
             raise SceneToolNotExist()
 
+        from services.web.scene.filters import SceneScopeFilter
+
         # 删除绑定关系（级联删除关联的场景）
-        binding.delete()
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=uid,
+            resource_type=ResourceVisibilityType.TOOL,
+        )
 
         # 复用父类 DeleteTool 的核心删除逻辑（包含 enum mapping 清理）
         return super().perform_request(validated_request_data)

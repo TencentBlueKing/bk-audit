@@ -351,6 +351,21 @@ class SceneScopeFilter:
         assert_binding_relation_integrity(binding)
         return binding
 
+    @staticmethod
+    def delete_resource_binding(resource_id: str, resource_type: str) -> int:
+        """
+        删除资源的 ResourceBinding 关联（依赖 FK 级联清理 scenes/systems）
+
+        :param resource_id: 资源 ID
+        :param resource_type: ResourceVisibilityType 枚举值
+        :return: 删除的 ResourceBinding 数量
+        """
+        deleted_count, _ = ResourceBinding.objects.filter(
+            resource_type=resource_type,
+            resource_id=str(resource_id),
+        ).delete()
+        return deleted_count
+
 
 class CompositeScopeFilter:
     """组合场景过滤器
