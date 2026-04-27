@@ -82,9 +82,29 @@ class SceneManage extends ModuleBase {
     });
   }
 
+  // 编辑场景基础信息（场景管理员）
+  updateSceneInfo(params: {
+    sceneId: string | number;
+    name?: string;
+    description?: string;
+    managers?: string[];
+    users?: string[];
+  }, payload = {} as IRequestPayload) {
+    const { sceneId, ...rest } = params;
+    return Request.patch<SceneModel>(`${this.module}/${sceneId}/update_scene_info/`, {
+      params: rest,
+      payload,
+    });
+  }
+
   // 场景详情
   getSceneDetail(id: string | number, payload = {} as IRequestPayload) {
     return Request.get<SceneModel>(`${this.module}/${id}/`, { payload });
+  }
+
+  // 获取场景信息（场景管理员可查看）
+  getSceneInfo(id: string | number, payload = {} as IRequestPayload) {
+    return Request.get<SceneModel>(`${this.module}/${id}/get_scene_info/`, { payload });
   }
 
   // 启用场景

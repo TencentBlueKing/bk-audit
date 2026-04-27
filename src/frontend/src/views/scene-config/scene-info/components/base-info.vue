@@ -41,9 +41,31 @@
             </template>
           </td>
           <td class="info-value">
+            <!-- 人员选择字段：编辑态 -->
+            <template v-if="row.type === 'user-selector'">
+              <template v-if="editingField === row.key">
+                <audit-user-selector
+                  v-model="editUserValue"
+                  allow-create
+                  multiple
+                  @blur="handleUserSave(row.key)" />
+              </template>
+              <!-- 人员选择字段：查看态 -->
+              <span
+                v-else
+                class="user-info">
+                <edit-tag
+                  :data="row.rawValue"
+                  :max="5" />
+                <audit-icon
+                  class="edit-icon"
+                  type="edit-fill"
+                  @click="handleUserEdit(row.key, row.rawValue)" />
+              </span>
+            </template>
             <!-- 可编辑字段：编辑态 -->
             <bk-input
-              v-if="row.editable && editingField === row.key"
+              v-else-if="row.editable && editingField === row.key"
               :ref="(el: any) => setInputRef(row.key, el)"
               v-model="editValue"
               class="inline-edit-input"
@@ -78,12 +100,14 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import EditTag from '@components/edit-box/tag.vue';
+
   interface SceneData {
     id: number;
     name: string;
     description: string;
-    manager: string;
-    users: string;
+    manager: string[];
+    users: string[];
     updatedBy: string;
     updatedAt: string;
   }
@@ -116,16 +140,18 @@
     {
       key: 'manager',
       label: t('场景管理员'),
-      value: props.sceneData.manager,
+      value: props.sceneData.manager?.join('、') || '--',
+      rawValue: props.sceneData.manager || [],
       tooltip: t('拥有场景的完整管理权限，包括策略配置、数据源管理、成员管理等'),
-      editable: true,
+      type: 'user-selector',
     },
     {
       key: 'users',
       label: t('场景使用者'),
-      value: props.sceneData.users,
+      value: props.sceneData.users?.join('、') || '--',
+      rawValue: props.sceneData.users || [],
       tooltip: t('拥有场景下资源的只读使用权限（检索、报表、工具），无法更改场景配置'),
-      editable: true,
+      type: 'user-selector',
     },
     {
       key: 'updatedBy',
@@ -140,6 +166,7 @@
   ]);
   const editingField = ref('');
   const editValue = ref('');
+  const editUserValue = ref<string[]>([]);
   const inputRefs: Record<string, any> = {};
 
   const setInputRef = (key: string, el: any) => {
@@ -148,6 +175,7 @@
     }
   };
 
+  // 普通文本字段编辑
   const handleEdit = (key: string, value: any) => {
     editValue.value = String(value);
     editingField.value = key;
@@ -156,10 +184,26 @@
     });
   };
 
+  // 普通文本字段保存
   const handleSave = (key: string) => {
     emit('update:sceneData', {
       ...props.sceneData,
       [key]: editValue.value,
+    });
+    editingField.value = '';
+  };
+
+  // 人员选择字段编辑
+  const handleUserEdit = (key: string, value: string[]) => {
+    editUserValue.value = [...value];
+    editingField.value = key;
+  };
+
+  // 人员选择字段保存
+  const handleUserSave = (key: string) => {
+    emit('update:sceneData', {
+      ...props.sceneData,
+      [key]: editUserValue.value,
     });
     editingField.value = '';
   };
@@ -196,6 +240,10 @@
     font-size: 14px;
     color: #4d4f56;
     cursor: pointer;
+
+    &:hover {
+      color: #3a84ff;
+    }
   }
 
   .inline-edit-input {

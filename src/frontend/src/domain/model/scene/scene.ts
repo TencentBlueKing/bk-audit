@@ -23,6 +23,7 @@ export default class Scene {
   status: 'enabled' | 'disabled';
   managers: string[];
   users: string[];
+  strategy_ids: number[];
   strategy_count: number;
   risk_count: number;
   created_by: string;
@@ -46,6 +47,7 @@ export default class Scene {
     this.status = payload.status;
     this.managers = payload.managers || [];
     this.users = payload.users || [];
+    this.strategy_ids = payload.strategy_ids || [];
     this.strategy_count = payload.strategy_count || 0;
     this.risk_count = payload.risk_count || 0;
     this.created_by = payload.created_by;
