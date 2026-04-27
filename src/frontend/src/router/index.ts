@@ -25,25 +25,25 @@ import IamManageService from '@service/iam-manage';
 import type ConfigModel from '@model/root/config';
 
 import NotFound from '@views/404.vue';
-import AnalysisManage from '@views/analysis-manage/routes';
-import AttentionManage from '@views/attention-manege/routes';
-import EventManage from '@views/event-manage/routes';
-import HandleManage from '@views/handle-manage/routes';
-import LinkDataManage from '@views/link-data-manage/routes';
-import NewSystemManage from '@views/new-system-manage/routes';
-import NoticeGroup from '@views/notice-group/routes';
-import PlatformManage from '@views/platform-manage/routes';
-import ApplicationManage from '@views/process-application-manage/routes';
-import ProcessedManage from '@views/processed-manage/routes';
-import RiskManage from '@views/risk-manage/routes';
-import RuleManage from '@views/rule-manage/routes';
-import SceneResources from '@views/scene-config/routes';
-import SceneRiskManage from '@views/scene-risk-manage/routes';
-import StatementManage from '@views/statement-manage/routes';
-import StorageManage from '@views/storage-manage/routes';
-import StrategyManage from '@views/strategy-manage/routes';
-import SystemManage from '@views/system-manage/routes';
-import Tools from '@views/tools/routes';
+import AnalysisManage from '@views/analysis-manage/routes'; // 检索
+import AttentionManage from '@views/attention-manege/routes'; // 我的关注
+import EventManage from '@views/event-manage/routes'; // 审计风险
+import HandleManage from '@views/handle-manage/routes'; // 待我处理
+import LinkDataManage from '@views/link-data-manage/routes'; // 联表管理
+import NewSystemManage from '@views/new-system-manage/routes'; // 系统接入
+import NoticeGroup from '@views/notice-group/routes'; // 通知组
+import PlatformManage from '@views/platform-manage/routes'; // 平台管理
+import ApplicationManage from '@views/process-application-manage/routes'; // 处理套餐
+import ProcessedManage from '@views/processed-manage/routes'; // 处理历史
+import RiskManage from '@views/risk-manage/routes'; // 所有风险
+import RuleManage from '@views/rule-manage/routes'; // 处理规则
+import SceneResources from '@views/scene-config/routes'; // 场景配置
+import SceneRiskManage from '@views/scene-risk-manage/routes'; // 场景风险
+import StatementManage from '@views/statement-manage/routes'; // 报表
+import StorageManage from '@views/storage-manage/routes'; // 数据存储
+import StrategyManage from '@views/strategy-manage/routes'; // 审计策略
+import SystemManage from '@views/system-manage/routes'; // 系统列表
+import Tools from '@views/tools/routes'; // 工具广场
 
 import { changeConfirm } from '@utils/assist';
 

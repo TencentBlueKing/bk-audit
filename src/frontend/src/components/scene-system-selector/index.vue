@@ -52,7 +52,9 @@
         :class="{ 'is-dark': dark }">
         <!-- 审计场景分组 -->
         <div
-          v-if="listScope.includes('scene')"
+          v-if="listScope.includes('scene') && (
+            userRole.includes('scene_admin') || userRole.includes('scene_user') || userRole.includes('saas_admin')
+          )"
           class="dropdown-group">
           <div class="group-title">
             {{ t('审计场景') }}
@@ -79,7 +81,7 @@
 
         <!-- 接入系统分组 -->
         <div
-          v-if="listScope.includes('system')"
+          v-if="listScope.includes('system') &&( userRole.includes('system_admin') || userRole.includes('saas_admin'))"
           class="dropdown-group">
           <div class="group-title">
             {{ t('接入系统') }}
@@ -142,7 +144,6 @@
     scenePermission: 'manage_scene' | 'view_scene';
     isAllSystem?: boolean; // 是否展示全部接入系统
     isAllSecen?: boolean; // 是否展示全部审计场景
-    isDefaultSelectFirst?: boolean; // 是否默认选中第一个场景（优先级低于外部传入的值和sessionStorage存储的值）
   }
 
   interface Emits {
@@ -158,7 +159,6 @@
     listScope: () => ['scene', 'system'],
     isAllSecen: true,
     isAllSystem: true,
-    isDefaultSelectFirst: false,
   });
 
   const emits = defineEmits<Emits>();
@@ -167,10 +167,11 @@
   const route = useRoute();
   const router = useRouter();
 
+  const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["scene_admin"]') as string[];
+
   // ⚡ 立即缓存初始路由参数（同步），防止后续被 replaceSearchParams 覆写后丢失
   const initialRouteSceneId = route.query.scene_id as string;
   const initialRouteScopeId = route.query.scope_id as string;
-  const initialRouteScopeType = route.query.scope_type as string;
 
   const popoverRef = ref();
   const isPopoverShow = ref(false);
@@ -212,72 +213,74 @@
   // 标记是否已执行过默认选中逻辑
   let hasInitializedSelection = false;
 
-  // 从初始路由参数匹配选中项（两个异步请求共享）
+  /** 根据角色确定可用列表范围 */
+  const getRoleScope = () => ({
+    hasSceneAccess: userRole.includes('scene_admin') || userRole.includes('scene_user') || userRole.includes('saas_admin'),
+    hasSystemAccess: userRole.includes('system_admin') || userRole.includes('saas_admin'),
+  });
+
+  /**
+   * 基于角色的默认选中逻辑：
+   * 1. 角色决定可见列表：scene_admin/scene_user→场景; system_admin→系统; saas_admin→两者
+   * 2. URL有ID时在对应列表中匹配，找不到则默认选第一个非聚合项
+   * 3. URL无ID时直接选对应列表第一个非聚合项
+   */
   const trySelectFromRoute = () => {
     if (hasInitializedSelection || selectedItem.value) return;
-    const currentSceneList = sceneList.value.filter(item => item.type !== 'aggregate');
-    const currentSystemList = systemList.value.filter(item => item.type !== 'aggregate');
 
-    // 判断需要的列表是否已加载完成
-    // ⚠️ scope_type 明确指定时以它为准（不受 scene_id 影响）
-    const isSystemType = initialRouteScopeType === 'system' || initialRouteScopeType === 'cross_system';
-    const isSceneType = initialRouteScopeType === 'scene' || initialRouteScopeType === 'cross_scene'
-      || (!initialRouteScopeType && !initialRouteSceneId);
-    const needsSystemMatch = isSystemType;
-    const needsSceneMatch = (initialRouteSceneId && !isSystemType)
-      || (initialRouteScopeId && initialRouteScopeType !== 'system')
-      || isSceneType;
+    const { hasSceneAccess, hasSystemAccess } = getRoleScope();
+    const sceneItems = sceneList.value.filter(item => item.type !== 'aggregate');
+    const systemItems = systemList.value.filter(item => item.type !== 'aggregate');
+    const urlMatchId = initialRouteSceneId || initialRouteScopeId;
 
-    // 如果需要场景列表但还没加载完，等下次回调再试
-    if (needsSceneMatch && currentSceneList.length === 0) return;
-    // 如果需要系统列表但还没加载完，等下次回调再试
-    if (needsSystemMatch && currentSystemList.length === 0) return;
+    // 检查当前角色所需列表是否已加载完毕
+    if (hasSceneAccess && sceneItems.length === 0) return;
+    if (hasSystemAccess && systemItems.length === 0) return;
 
-    let targetItem = null;
+    let targetItem: SelectorItem | null = null;
 
-    // ⚡ 当 scope_type 明确指定时，以它为准（不受 scene_id 影响）
-    if (initialRouteScopeType === 'system') {
-      // 3. scope_id + scope_type=system 匹配
-      if (initialRouteScopeId) {
-        targetItem = currentSystemList.find((item: SelectorItem) => item.id === initialRouteScopeId) || null;
-      }
-      // cross_system（无 scope_id 时的所有系统）
-      if (!targetItem) {
-        targetItem = { id: 'allSystem', name: t('我的所有系统'), type: 'aggregate' };
-      }
-    } else if (initialRouteScopeType === 'scene' || !initialRouteScopeType) {
-      // 2. scene_id 或 scope_id + scope_type=scene 匹配具体场景
-      const matchId = initialRouteSceneId || initialRouteScopeId;
-      if (matchId) {
-        targetItem = currentSceneList.find((item: SelectorItem) => item.id === matchId) || null;
-      }
-      // cross_scene（无 scope_id 时的所有场景）
-      if (!targetItem && initialRouteScopeType === 'cross_scene') {
-        targetItem = { id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' };
-      }
-    }
-    // 5. fallback：isDefaultSelectFirst > sessionStorage > 第一个非聚合场景
-    if (!targetItem && props.isDefaultSelectFirst) {
-      [targetItem] = currentSceneList;
-    } else if (!targetItem) {
-      const storedValue = sessionStorage.getItem(STORAGE_KEY);
-      if (storedValue) {
-        try {
-          targetItem = JSON.parse(storedValue);
-        } catch (e) {
-          [targetItem] = currentSceneList;
-        }
+    // ── 阶段2：URL中有ID时尝试精确匹配 ──
+    if (urlMatchId) {
+      if (hasSceneAccess && !hasSystemAccess) {
+        // scene_admin / scene_user：只在场景列表中找
+        targetItem = sceneItems.find(item => item.id === urlMatchId) || null;
+      } else if (!hasSceneAccess && hasSystemAccess) {
+        // system_admin：只在系统列表中找
+        targetItem = systemItems.find(item => item.id === urlMatchId) || null;
       } else {
-        [targetItem] = currentSceneList;
+        // saas_admin：两个列表都找，优先场景
+        targetItem = sceneItems.find(item => item.id === urlMatchId)
+          || systemItems.find(item => item.id === urlMatchId)
+          || null;
       }
     }
+
+    // ── 阶段3：URL无ID 或 匹配失败时的兜底默认选择 ──
+    if (!targetItem) {
+      if (hasSceneAccess && !hasSystemAccess) {
+        // 场景角色：默认选第一个非聚合场景
+        [targetItem] = sceneItems;
+      } else if (!hasSceneAccess && hasSystemAccess) {
+        // 系统角色：默认选第一个非聚合系统
+        [targetItem] = systemItems;
+      } else {
+        // saas_admin：默认选第一个非聚合场景
+        [targetItem] = sceneItems;
+        // 场景列表为空时退而求其次选系统
+        if (!targetItem) {
+          [targetItem] = systemItems;
+        }
+      }
+
+      // isDefaultSelectFirst 已包含在上面逻辑中，无需额外处理
+    }
+
     // 设置选中项
     hasInitializedSelection = true;
     selectedItem.value = targetItem;
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
     emits('update:modelValue', targetItem);
     emits('change', targetItem);
-    // 同步 scene_id 到路由参数
     syncSceneIdToRoute(targetItem);
   };
 
@@ -425,21 +428,26 @@
     }
   });
 
-  // 获取数据的方法
+  // 获取数据的方法（按角色按需请求）
   const fetchData = () => {
+    const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     setTimeout(() => {
-      fetchSystemWithAction({
-        action_ids: 'view_system,edit_system',
-        audit_status__in: 'accessed',
-        namespace: 'default',
-        order_type: 'asc',
-        sort_keys: 'name',
-        with_favorite: false,
-        with_system_status: false,
-      });
-      fetchSceneAll({
-        status: 'enabled',
-      });
+      if (hasSystemAccess) {
+        fetchSystemWithAction({
+          action_ids: 'view_system,edit_system',
+          audit_status__in: 'accessed',
+          namespace: 'default',
+          order_type: 'asc',
+          sort_keys: 'name',
+          with_favorite: false,
+          with_system_status: false,
+        });
+      }
+      if (hasSceneAccess) {
+        fetchSceneAll({
+          status: 'enabled',
+        });
+      }
     }, 0);
   };
 

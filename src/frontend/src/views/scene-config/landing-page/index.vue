@@ -1,4 +1,4 @@
-/*
+<!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,40 +13,7 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
-*/
-import type ConfigModel from '@model/root/config';
-
-import Request, {
-  type IRequestPayload,
-} from '@utils/request';
-
-import ModuleBase from './module-base';
-
-class Root extends ModuleBase {
-  constructor() {
-    super();
-    this.module = '/';
-  }
-
-  config(params = {}, payload = {} as IRequestPayload) {
-    return Request.get<ConfigModel>(`${this.module}`, {
-      params,
-      payload,
-    });
-  }
-
-  language(params: { id: string }, payload = {} as IRequestPayload) {
-    return Request.get(`/i18n/${params.id}/`, {
-      params,
-      payload,
-    });
-  }
-
-  getUserPermission(payload = {} as IRequestPayload) {
-    return Request.get('/api/v1/scene/my_role_permissions/', {
-      payload,
-    });
-  }
-}
-
-export default new Root();
+-->
+<template>
+  <div>c场景引导页</div>
+</template>
