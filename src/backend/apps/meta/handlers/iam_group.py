@@ -292,7 +292,7 @@ class IAMGroupManager:
         scene_name: str,
         manager_members: list = None,
         viewer_members: list = None,
-        expired_at: int = 0,
+        expired_at: int = None,
         system_id: str = None,
     ) -> dict:
         """
@@ -454,7 +454,7 @@ class IAMGroupManager:
         cls,
         group_id: Union[int, str],
         members: list,
-        expired_at: int = 0,
+        expired_at: int = None,
         system_id: str = None,
     ) -> None:
         """
