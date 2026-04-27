@@ -298,6 +298,7 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Where {
     connector: 'and' | 'or'
@@ -501,6 +502,7 @@
       return async () => {
         const data = await fetchTable({
           table_type: item.value,
+          scene_id: getSceneSystemParams().scope_id,
         });
         return [{
           ...item,

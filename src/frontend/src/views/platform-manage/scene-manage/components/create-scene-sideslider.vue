@@ -385,7 +385,7 @@
       // eslint-disable-next-line max-len
       const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable');
       const requests = targetTypes.map((item: ConfigTypeItem) => {
-        const req = fetchTable({ table_type: item.value });
+        const req = fetchTable({ table_type: item.value, scene_id: isEditMode.value ? props.sceneId : '' });
         return req.then((tableData: any[]) => ({
           label: item.label,
           value: item.value,

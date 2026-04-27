@@ -157,6 +157,7 @@ export default {
    */
   fetchTable(params: {
     table_type: string;
+    scene_id?: string;
   }) {
     return StrategySource.getTable(params)
       .then(({ data }) => data);
