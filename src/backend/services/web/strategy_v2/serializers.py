@@ -874,7 +874,6 @@ class ListTablesRequestSerializer(serializers.Serializer):
 
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
 
 
 class GetRTFieldsRequestSerializer(serializers.Serializer):
