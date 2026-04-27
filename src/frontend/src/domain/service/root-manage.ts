@@ -15,8 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 */
 import ConfigModel from '@model/root/config';
+import userPermissionConfig from '@model/root/user-permission';
 
 import RootManageSource from '../source/root-manage';
+
 
 export default {
   /**
@@ -37,5 +39,44 @@ export default {
       cache: true,
     })
       .then(data => data);
+  },
+  /**
+   *  @desc 获取身份权限
+   */
+  getUserPermission() {
+    return RootManageSource.getUserPermission()
+      .then(({ data }) => {
+        sessionStorage.setItem('userScenePermission', JSON.stringify(data));
+
+        /**
+         * 根据四个权限字段确定5种身份角色
+         * 权限优先级（高→低）：manage_platform > manage_scene > edit_system > view_system
+         */
+        let userRole = [] as string[];
+        if (data.manage_platform) {
+          userRole = ['saas_admin']; // SaaS管理员：全部权限含平台管理
+          sessionStorage.setItem('userRole', JSON.stringify(userRole));
+          return data as userPermissionConfig;
+        }
+
+        if (!data.manage_platform && !data.manage_scene && !data.edit_system && !data.view_system && !data.view_scene) {
+          userRole = ['risk_handler']; // 风险处理者：仅处理风险
+          sessionStorage.setItem('userRole', JSON.stringify(userRole));
+
+          return data as userPermissionConfig;
+        }
+        if (data.manage_scene) {
+          userRole.push('scene_admin'); // 场景管理员：可管理场景配置
+        }
+        if (data.edit_system || data.view_system) {
+          userRole.push('system_admin'); // 系统管理员：可编辑/导入系统  系统使用者：可在系统内查看数据
+        }
+        if (data.view_scene) {
+          userRole.push('scene_user'); // 场景使用者：可在场景内查看数据
+        }
+        sessionStorage.setItem('userRole', JSON.stringify(userRole));
+
+        return data as userPermissionConfig;
+      });
   },
 };

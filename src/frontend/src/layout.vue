@@ -44,6 +44,7 @@
           {{ t('审计风险') }}
         </router-link>
         <router-link
+          v-if="!userRole.includes('risk_handler')"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditConfigurationManage'
@@ -52,7 +53,7 @@
           {{ t('检索') }}
         </router-link>
         <router-link
-          v-if="hasBkvision.enabled"
+          v-if="hasBkvision.enabled && !userRole.includes('risk_handler')"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
@@ -61,6 +62,7 @@
           {{ t('审计报表') }}
         </router-link>
         <router-link
+          v-if="!userRole.includes('risk_handler')"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'toolsSquare'
@@ -68,12 +70,14 @@
           :to="{ name:'toolsSquare', query: {} }">
           {{ t('工具广场') }}
         </router-link>
+        <!-- 风险使用者、系统管理员要跳转到应到页 -->
         <router-link
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'sceneConfiguration'
           }"
-          :to="{ name:'sceneInfo', query: {} }">
+          :to="{ name: (userRole.includes('saas_admin') || userRole.includes('scene_admin'))
+            ? 'sceneInfo' :'landingPage' , query: {} }">
           {{ t('场景配置') }}
         </router-link>
         <router-link
@@ -81,18 +85,19 @@
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name:'nweSystemManage', params: {
+          :to="{ name: (projectList.length > 0 &&( userRole.includes('saas_admin') || userRole.includes('system_admin'))
+          )? 'nweSystemManage' : 'systemLandingPage', params: {
             id: systemId
           } }">
           {{ t('系统接入') }}
         </router-link>
         <router-link
-          v-if="hasPlatformManagePermission"
+          v-if="userRole.includes('saas_admin')"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'platformManage'
           }"
-          :to="{ name:'platformManage', params: {} }">
+          :to="{ name:'platformManage' }">
           {{ t('平台管理') }}
         </router-link>
       </div>
@@ -109,95 +114,6 @@
         @change="handleRouterChange">
         <template v-if="curNavName === 'sceneConfiguration'">
           <scene-config-sidebar />
-          <!-- <audit-menu-item-group>
-            <template #title>
-              <div> {{ t('分析') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('分析') }}</div>
-            </template>
-            <audit-menu-item index="analysisManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="search" />
-              {{ t('检索') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('跟踪') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('跟踪') }}</div>
-            </template>
-            <audit-menu-item index="strategyManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="celve" />
-              {{ t('审计策略') }}
-            </audit-menu-item>
-            <audit-menu-item index="linkDataManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="lianbiao" />
-              {{ t('联表管理') }}
-            </audit-menu-item>
-            <audit-menu-item index="noticeGroup">
-              <audit-icon
-                class="menu-item-icon"
-                type="tongzhizu" />
-              {{ t('通知组') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('风险') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('风险') }}</div>
-            </template>
-            <audit-menu-item index="ruleManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="insert" />
-              {{ t('处理规则') }}
-            </audit-menu-item>
-            <audit-menu-item index="applicationManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="taocanchulizhong" />
-              {{ t('处理套餐') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('接入') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('接入') }}</div>
-            </template>
-            <audit-menu-item index="systemManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="insert" />
-              {{ t('系统列表') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group v-if="configData.super_manager">
-            <template #title>
-              <div>{{ t('管理') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('管理') }}</div>
-            </template>
-            <audit-menu-item index="storageManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="data-storage" />
-              {{ t('数据存储') }}
-            </audit-menu-item>
-          </audit-menu-item-group> -->
         </template>
         <template v-else-if="curNavName === 'toolsSquare'">
           <audit-menu-item-group>
@@ -243,7 +159,7 @@
             {{ t('所有风险') }}
           </audit-menu-item>
           <audit-menu-item
-            v-if="hasAllRiskPermission"
+            v-if="hasAllRiskPermission &&( userRole.includes('saas_admin') || userRole.includes('scene_admin'))"
             index="sceneRiskManage">
             <audit-icon
               class="menu-item-icon"
@@ -454,6 +370,8 @@
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
 
+  const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
+
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
 
@@ -516,18 +434,18 @@
     },
   });
 
-  // 检查平台管理权限
-  const hasPlatformManagePermission = ref(false);
-  useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'manage_platform',
-    },
-    defaultValue: {},
-    manual: true,
-    onSuccess: (data) => {
-      hasPlatformManagePermission.value = data.manage_platform || false;
-    },
-  });
+  // // 检查平台管理权限
+  // const hasPlatformManagePermission = ref(false);
+  // useRequest(IamManageService.check, {
+  //   defaultParams: {
+  //     action_ids: 'manage_platform',
+  //   },
+  //   defaultValue: {},
+  //   manual: true,
+  //   onSuccess: (data) => {
+  //     hasPlatformManagePermission.value = data.manage_platform || false;
+  //   },
+  // });
 
   const {
     run: fetchSystemWithAction,
