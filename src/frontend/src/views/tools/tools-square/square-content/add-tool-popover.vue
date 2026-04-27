@@ -68,7 +68,13 @@
                     class="tool-group-item"
                     :class="{ 'is-added': isToolOpened(tool.uid) }"
                     @click="handleAddTool(tool)">
+                    <img
+                      v-if="tool.tool_type === 'smart_page'"
+                      alt="smart_page"
+                      class="tool-group-item-icon"
+                      :src="userProfileIcon">
                     <audit-icon
+                      v-else
                       class="tool-group-item-icon"
                       svg
                       :type="itemIcon(tool)" />
@@ -119,7 +125,13 @@
                   class="tool-group-item"
                   :class="{ 'is-added': isToolOpened(tool.uid) }"
                   @click="handleAddTool(tool)">
+                  <img
+                    v-if="tool.tool_type === 'smart_page'"
+                    alt="smart_page"
+                    class="tool-group-item-icon"
+                    :src="userProfileIcon">
                   <audit-icon
+                    v-else
                     class="tool-group-item-icon"
                     svg
                     :type="itemIcon(tool)" />
@@ -142,7 +154,13 @@
                   class="tool-group-item"
                   :class="{ 'is-added': isToolOpened(tool.uid) }"
                   @click="handleAddTool(tool)">
+                  <img
+                    v-if="tool.tool_type === 'smart_page'"
+                    alt="smart_page"
+                    class="tool-group-item-icon"
+                    :src="userProfileIcon">
                   <audit-icon
+                    v-else
                     class="tool-group-item-icon"
                     svg
                     :type="itemIcon(tool)" />
@@ -174,6 +192,7 @@
   import ToolInfo from '@model/tool/tool-info';
 
   import useRequest from '@/hooks/use-request';
+  import userProfileIcon from '@/images/user.svg';
 
   interface TagItem {
     tag_id: string;
@@ -218,6 +237,8 @@
       return 'bkvisonxiao';
     case 'api':
       return 'apixiao';
+    case 'smart_page':
+      return 'user';
     default:
       return 'apixiao';
     }

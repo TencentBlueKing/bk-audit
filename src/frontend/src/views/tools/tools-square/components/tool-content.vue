@@ -126,9 +126,9 @@
 
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import ApiSearchResult from './api-search-result.vue';
-  import BkVisionResult from './bk-vision-result.vue';
-  import DataSearchResult from './data-search-result.vue';
+  import ApiSearchResult from './dialog/api-search-result.vue';
+  import BkVisionResult from './dialog/bk-vision-result.vue';
+  import DataSearchResult from './dialog/data-search-result.vue';
 
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 

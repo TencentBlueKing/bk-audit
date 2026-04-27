@@ -44,11 +44,9 @@
               @mouseleave="auditProfileHover = false">
               <div class="item-top">
                 <div class="item-top-left">
-                  <div class="audit-profile-avatar">
-                    <audit-icon
-                      style="font-size: 32px; color: #979ba5;"
-                      type="user-shape" />
-                  </div>
+                  <img
+                    class="audit-profile-avatar"
+                    :src="userProfileIcon">
                 </div>
                 <div class="item-top-right">
                   <div class="top-right-title">
@@ -123,7 +121,12 @@
 
               <div class="item-top">
                 <div class="item-top-left">
+                  <img
+                    v-if="item.tool_type === 'smart_page'"
+                    class="top-left-icon-img"
+                    :src="userProfileIcon">
                   <audit-icon
+                    v-else
                     class="top-left-icon"
                     svg
                     :type="itemIcon(item)" />
@@ -269,10 +272,11 @@
 
   import pentagramIcon from '@images/pentagram.svg';
   import pentagramFillIcon from '@images/pentagram-fill.svg';
+  import userProfileIcon from '@images/user.svg';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
-  import DialogVue from '../components/dialog.vue';
+  import DialogVue from '../components/dialog/dialog.vue';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -771,15 +775,19 @@
             }
 
             .audit-profile-avatar {
-              display: flex;
-              align-items: center;
-              justify-content: center;
               width: 48px;
               height: 48px;
               margin-top: 20px;
               margin-left: 20px;
-              background: #f0f1f5;
-              border-radius: 50%;
+              border-radius: 8px;
+            }
+
+            .top-left-icon-img {
+              width: 48px;
+              height: 48px;
+              margin-top: 20px;
+              margin-left: 20px;
+              border-radius: 8px;
             }
           }
 

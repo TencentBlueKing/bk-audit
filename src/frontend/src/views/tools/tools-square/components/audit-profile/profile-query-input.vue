@@ -78,23 +78,23 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  // 账号类型选项
+  // 账号类型选项（与接口文档对齐：ctx=企业微信, openid, wx_iuin=微信, qq_iuin=QQ）
   const accountTypes = [
-    { label: t('企业微信'), value: 'wecom' },
+    { label: t('企业微信'), value: 'ctx' },
     { label: 'openid', value: 'openid' },
-    { label: t('微信'), value: 'wechat' },
-    { label: 'QQ', value: 'qq' },
+    { label: t('微信'), value: 'wx_iuin' },
+    { label: 'QQ', value: 'qq_iuin' },
   ];
 
-  const selectedAccountType = ref('wecom');
+  const selectedAccountType = ref('ctx');
   const accountId = ref('');
 
   // 根据选择的账号类型动态生成 placeholder
   const placeholderMap: Record<string, string> = {
-    wecom: '请输入企业微信账号，如 frodomei',
+    ctx: '请输入企业微信账号，如 frodomei',
     openid: '请输入 openid，如 47B1fC4b-dc0c-86dB-4f7D-d0FF16EDCe19',
-    wechat: '请输入微信号',
-    qq: '请输入QQ号',
+    wx_iuin: '请输入微信号',
+    qq_iuin: '请输入QQ号',
   };
 
   const accountPlaceholder = computed(() => t(placeholderMap[selectedAccountType.value] || '请输入'));
@@ -107,14 +107,14 @@
   // 重置
   const handleReset = () => {
     accountId.value = '';
-    selectedAccountType.value = 'wecom';
+    selectedAccountType.value = 'ctx';
     emit('reset');
   };
 
   // 重置表单（供父组件调用）
   const resetForm = () => {
     accountId.value = '';
-    selectedAccountType.value = 'wecom';
+    selectedAccountType.value = 'ctx';
   };
 
   defineExpose<Exposes>({
