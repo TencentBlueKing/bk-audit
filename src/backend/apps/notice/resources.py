@@ -20,6 +20,7 @@ import abc
 
 from bk_resource import api
 from blueapps.utils.request_provider import get_request_username
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
@@ -195,12 +196,20 @@ class DeleteNoticeGroup(NoticeMeta):
     RequestSerializer = DeleteNoticeGroupRequestSerializer
     audit_action = ActionEnum.DELETE_NOTICE_GROUP_V2
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         # 获取实例
         notice_group = get_object_or_404(NoticeGroup, group_id=validated_request_data.pop("group_id"))
         # 删除
         self.add_audit_instance_to_context(instance=notice_group.audit_instance)
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
         notice_group.delete()
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=notice_group.group_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+        )
 
 
 class SendNotice(NoticeMeta):

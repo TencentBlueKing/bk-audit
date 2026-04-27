@@ -580,14 +580,14 @@ class DeleteStrategy(StrategyV2Base):
             raise err
         # delete strategy
         from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.models import ResourceBinding
+        from services.web.scene.filters import SceneScopeFilter
 
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
-        ResourceBinding.objects.filter(
-            resource_type=ResourceVisibilityType.STRATEGY,
+        SceneScopeFilter.delete_resource_binding(
             resource_id=str(strategy.strategy_id),
-        ).delete()
+            resource_type=ResourceVisibilityType.STRATEGY,
+        )
         self.delete_enum_mappings(strategy_id=strategy.strategy_id)
 
 
@@ -1580,6 +1580,13 @@ class DeleteLinkTable(LinkTableBase):
         # 删除联表
         LinkTableTag.objects.filter(link_table_uid=uid).delete()
         LinkTable.objects.filter(uid=uid).delete()
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import SceneScopeFilter
+
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=uid,
+            resource_type=ResourceVisibilityType.LINK_TABLE,
+        )
 
 
 class ListLinkTable(LinkTableBase):

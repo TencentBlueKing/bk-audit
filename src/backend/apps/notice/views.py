@@ -25,7 +25,7 @@ from apps.permission.handlers.drf import (
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.utils.data import get_value_by_request
+from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
 
@@ -50,7 +50,9 @@ class NoticeGroupsViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_scene_id_by_notice_group(self):
-        group_id = get_value_by_request(self.request, "group_id") or get_value_by_request(self.request, "pk")
+        group_id = get_value_by_request_or_path(self.request, "group_id") or get_value_by_request_or_path(
+            self.request, "pk"
+        )
         if not group_id:
             return None
         return (
