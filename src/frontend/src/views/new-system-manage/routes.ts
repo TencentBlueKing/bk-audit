@@ -54,6 +54,18 @@ export default {
     sideMenus,
   },
   children: [
+    // 引导页
+    {
+      path: 'system-landing-page',
+      component: () => import('@views/new-system-manage/landing-page/index.vue'),
+      name: 'systemLandingPage',
+      meta: {
+        title: '系统引导',
+        skeleton: 'system-landing-page',
+        headerTips: 'systemLandingPage',
+        nodeSideContent: true,
+      },
+    },
     {
       path: 'system-info/:id?',
       component: () => import('@views/new-system-manage/system-info/index.vue'),

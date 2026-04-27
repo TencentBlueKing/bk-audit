@@ -73,7 +73,7 @@ import('@blueking/date-picker/vue3/vue3.css');
 
 window.changeConfirm = false;
 
-Promise.all([RootManageService.config(), EntryManageService.watermark()])
+Promise.all([RootManageService.config(), EntryManageService.watermark(), RootManageService.getUserPermission()])
   .then(([config, data]) => {
     const BKApp = createApp(App);
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
