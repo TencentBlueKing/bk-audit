@@ -100,6 +100,14 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
         )
         self.mock_auth_api = self.patcher_auth.start()
 
+        # Mock 场景授权表查询（默认无场景关联）
+        self.patcher_scene_id = mock.patch.object(
+            SqlDataSearchExecutor,
+            '_get_tool_scene_id',
+            return_value=None,
+        )
+        self.patcher_scene_id.start()
+
     def tearDown(self):
         mock.patch.stopall()
 

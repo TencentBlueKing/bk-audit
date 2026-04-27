@@ -52,6 +52,14 @@ class SceneViewSet(ResourceViewSet):
                     get_instance_id=self.get_scene_id,
                 )
             ]
+        if self.action in ["scene_permission_systems", "scene_permission_tables"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.MANAGE_SCENE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                )
+            ]
         return []
 
     resource_routes = [
@@ -85,10 +93,12 @@ class SceneViewSet(ResourceViewSet):
             "GET",
             resource.scene.get_scene_permission_systems,
             endpoint="scene_permission_systems",
+            pk_field="scene_id",
         ),
         ResourceRoute(
             "GET",
             resource.scene.get_scene_permission_tables,
             endpoint="scene_permission_tables",
+            pk_field="scene_id",
         ),
     ]

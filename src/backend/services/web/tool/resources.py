@@ -70,11 +70,7 @@ from services.web.tool.constants import (
     ToolTagsEnum,
     ToolTypeEnum,
 )
-from services.web.tool.exceptions import (
-    ToolDoesNotExist,
-    ToolException,
-    ToolTypeNotSupport,
-)
+from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
@@ -906,12 +902,6 @@ class ExecuteTool(ToolBase):
             )
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
 
-        # 传递场景ID
-        caller_resource_type = validated_request_data.get("caller_resource_type")
-        caller_resource_id = validated_request_data.get("caller_resource_id")
-        if caller_resource_type == "scene" and caller_resource_id:
-            params["scene_id"] = int(caller_resource_id)
-
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
 
@@ -938,12 +928,6 @@ class ExecuteToolAPIGW(ExecuteTool):
                 f"Err: {e}; Detail: {traceback.format_exc()}"
             )
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
-
-        # 传递场景ID给执行器
-        caller_resource_type = validated_request_data.get("caller_resource_type")
-        caller_resource_id = validated_request_data.get("caller_resource_id")
-        if caller_resource_type == "scene" and caller_resource_id:
-            params["scene_id"] = int(caller_resource_id)
 
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
@@ -1154,12 +1138,10 @@ class SqlAnalyseResource(ToolBase, Resource):
         parsed_def = analyser.get_parsed_def()
         result = parsed_def.model_dump()
 
-        # 场景表权限校验
+        # 场景表权限校验：场景授权的表 OR 管理员个人有权限的表
         scene_id = validated_request_data.get("scene_id")
         if scene_id and result['referenced_tables']:
-            has_permission = self._validate_scene_table_permission(scene_id, result['referenced_tables'])
-            if not has_permission:
-                raise ToolException(message="SQL 引用的表不在当前场景的授权范围内")
+            self._validate_scene_table_permission(scene_id, result['referenced_tables'])
 
         # 检查用户对引用表的查询权限
         if validated_request_data["with_permission"] and result['referenced_tables']:
@@ -1174,22 +1156,24 @@ class SqlAnalyseResource(ToolBase, Resource):
                 table['permission'] = auth_results[table['table_name']]
         return result
 
-    def _validate_scene_table_permission(self, scene_id: int, referenced_tables: list) -> bool:
-        """校验SQL中引用的表是否在场景授权范围内"""
-        # 获取场景下有权限的表ID列表
-        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+    def _validate_scene_table_permission(self, scene_id: int, referenced_tables: list):
+        """
+        校验SQL中引用的表权限：场景授权的表 OR 管理员个人有权限的表
+        """
+        from services.web.tool.executor.tool import SqlDataSearchExecutor
 
-        # 如果场景没有配置数据表白名单，说明没有权限，直接拒绝
-        if not scene_table_ids:
-            return False
+        # 获取场景授权的表
+        scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
 
-        # 检查所有引用表是否都在白名单内
-        scene_table_id_set = set(scene_table_ids)
-        for table in referenced_tables:
-            table_name = table['table_name']
-            if table_name not in scene_table_id_set:
-                return False
-        return True
+        # 构造带 table_name 属性的对象列表，以复用 check_table_permission
+        table_objs = [type('Table', (), {'table_name': t['table_name']})() for t in referenced_tables]
+
+        # 场景授权 OR 个人权限，满足其一即可
+        SqlDataSearchExecutor.check_table_permission(
+            referenced_tables=table_objs,
+            scene_authorized_tables=scene_authorized_tables,
+            user_id=get_request_username(),
+        )
 
 
 class SqlAnalyseWithToolResource(SqlAnalyseResource):
