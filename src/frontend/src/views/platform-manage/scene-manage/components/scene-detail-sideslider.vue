@@ -165,6 +165,7 @@
   import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
     isShow: boolean;
@@ -216,7 +217,7 @@
       // eslint-disable-next-line max-len
       const targetTypes = (data.rule_audit_config_type as ConfigTypeItem[]).filter(item => item.value !== 'EventLog' && item.value !== 'LinkTable');
       const requests = targetTypes.map((typeItem: ConfigTypeItem) => {
-        const req = fetchTable({ table_type: typeItem.value });
+        const req = fetchTable({ table_type: typeItem.value, scene_id: getSceneSystemParams().scope_id });
         return req.then((tableData: any[]) => {
           const flat: FlatTableItem[] = [];
           tableData.forEach((group: any) => {
