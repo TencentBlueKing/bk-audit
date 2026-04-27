@@ -83,6 +83,7 @@ class MetaManage extends ModuleBase {
       page_size: number,
       audit_status: 'accessed'
       keyword?: string,
+      filter_actions?: string,
     },
     payload = {} as IRequestPayload,
   ) {
