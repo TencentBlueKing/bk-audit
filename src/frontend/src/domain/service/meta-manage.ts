@@ -100,8 +100,34 @@ export default {
       page_size: number,
       keyword?: string
       audit_status: 'accessed'
+      filter_actions?: string
     }) {
-    return MetaManageSource.getAllSysetem(params, {
+    const finalParams = { ...params };
+    if (!finalParams.filter_actions) {
+      try {
+        const permissionStr = sessionStorage.getItem('userScenePermission');
+        if (permissionStr) {
+          const permission = JSON.parse(permissionStr);
+          if (permission.manage_platform) {
+            finalParams.filter_actions = 'view_system,edit_system';
+          } else {
+            const actions: string[] = [];
+            if (permission.view_system) {
+              actions.push('view_system');
+            }
+            if (permission.edit_system) {
+              actions.push('edit_system');
+            }
+            if (actions.length > 0) {
+              finalParams.filter_actions = actions.join(',');
+            }
+          }
+        }
+      } catch (e) {
+        // 解析失败，不传 filter_actions
+      }
+    }
+    return MetaManageSource.getAllSysetem(finalParams, {
       permission: 'page',
     }).then(({ data }) => ({
       ...data,
