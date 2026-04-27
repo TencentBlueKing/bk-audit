@@ -29,6 +29,30 @@ class TestNoticeGroupViewPermissions(TestCase):
         self.assertIsInstance(permissions[0], InstanceActionPermission)
         self.assertEqual(permissions[0].actions, [ActionEnum.LIST_NOTICE_GROUP])
 
+    def test_get_scene_id_by_notice_group_supports_path_group_id(self):
+        scene = Scene.objects.create(
+            name="notice-scene-detail",
+            description="scene detail",
+            managers=["admin"],
+            users=["admin"],
+        )
+        notice_group = NoticeGroup.objects.create(
+            group_name="notice-group-detail",
+            group_member=["admin"],
+            notice_config=[],
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(notice_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            scene_id=scene.scene_id,
+        )
+
+        request = self.factory.get(f"/notice_group/{notice_group.group_id}/")
+        request.parser_context = {"kwargs": {"group_id": str(notice_group.group_id)}}
+        self.view.request = request
+
+        self.assertEqual(self.view.get_scene_id_by_notice_group(), scene.scene_id)
+
 
 class TestListAllNoticeGroup(TestCase):
     def setUp(self):

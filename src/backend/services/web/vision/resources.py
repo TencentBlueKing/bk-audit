@@ -484,6 +484,7 @@ class DeletePlatformPanel(BKVision):
     name = gettext_lazy("删除平台级报表")
     RequestSerializer = PlatformPanelOperateRequestSerializer
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         from services.web.scene.constants import PanelStatus
         from services.web.vision.exceptions import (
@@ -511,8 +512,13 @@ class DeletePlatformPanel(BKVision):
         if panel.status == PanelStatus.PUBLISHED:
             raise ScenePanelCannotDelete()
 
+        from services.web.scene.filters import SceneScopeFilter
+
         # 删除绑定关系（级联删除关联的场景和系统）
-        binding.delete()
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=panel_id,
+            resource_type=ResourceVisibilityType.PANEL,
+        )
         panel.delete()
         return {"message": "success"}
 
@@ -642,8 +648,13 @@ class DeleteScenePanel(BKVision):
     name = gettext_lazy("删除场景级报表")
     RequestSerializer = DeleteScenePanelRequestSerializer
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
-        from services.web.vision.exceptions import ScenePanelNotExist
+        from services.web.scene.constants import PanelStatus
+        from services.web.vision.exceptions import (
+            ScenePanelCannotDelete,
+            ScenePanelNotExist,
+        )
 
         scene_id = validated_request_data.get("scene_id")
         panel_id = validated_request_data.get("panel_id")
@@ -667,8 +678,16 @@ class DeleteScenePanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
+        if panel.status == PanelStatus.PUBLISHED:
+            raise ScenePanelCannotDelete()
+
+        from services.web.scene.filters import SceneScopeFilter
+
         # 删除绑定关系（级联删除关联的场景）
-        binding.delete()
+        SceneScopeFilter.delete_resource_binding(
+            resource_id=panel_id,
+            resource_type=ResourceVisibilityType.PANEL,
+        )
         panel.delete()
         return {"message": "success"}
 
@@ -833,6 +852,8 @@ class CreateSceneReportGroup(BKVision):
     ResponseSerializer = SceneReportGroupSerializer
 
     def perform_request(self, validated_request_data):
+        if validated_request_data["name"] == PLATFORM_REPORT_GROUP_NAME:
+            raise drf_serializers.ValidationError({"name": "平台报表为保留分组名称"})
         try:
             group = SceneReportGroup.objects.create(
                 scene_id=validated_request_data["scene_id"],
@@ -858,6 +879,8 @@ class UpdateSceneReportGroup(BKVision):
         )
         if group.group_type == ReportGroupType.PLATFORM and "name" in validated_request_data:
             raise drf_serializers.ValidationError({"name": "平台报表分组不支持重命名"})
+        if validated_request_data.get("name") == PLATFORM_REPORT_GROUP_NAME:
+            raise drf_serializers.ValidationError({"name": "平台报表为保留分组名称"})
         if "name" in validated_request_data:
             group.name = validated_request_data["name"]
         if "priority_index" in validated_request_data:

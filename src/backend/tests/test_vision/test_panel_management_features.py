@@ -20,6 +20,7 @@ from services.web.vision.resources import (
     CreatePlatformPanel,
     CreateScenePanel,
     CreateSceneReportGroup,
+    DeleteScenePanel,
     DeleteSceneReportGroup,
     ListPanels,
     ListPlatformPanels,
@@ -64,6 +65,10 @@ class TestPanelManagementFeatures(TestCase):
         with self.assertRaisesMessage(Exception, "同一场景下分组名称已存在"):
             CreateSceneReportGroup().request({"scene_id": self.scene1.scene_id, "name": self.scene_group.name})
 
+    def test_create_scene_group_reserved_name_returns_validation_error(self):
+        with self.assertRaisesMessage(Exception, "平台报表为保留分组名称"):
+            CreateSceneReportGroup().request({"scene_id": self.scene1.scene_id, "name": "平台报表"})
+
     def test_update_scene_group_duplicate_name_returns_validation_error(self):
         another_group = SceneReportGroup.objects.create(
             scene=self.scene1,
@@ -78,6 +83,16 @@ class TestPanelManagementFeatures(TestCase):
                     "scene_id": self.scene1.scene_id,
                     "group_id": another_group.id,
                     "name": self.scene_group.name,
+                }
+            )
+
+    def test_update_scene_group_reserved_name_returns_validation_error(self):
+        with self.assertRaisesMessage(Exception, "平台报表为保留分组名称"):
+            UpdateSceneReportGroup().request(
+                {
+                    "scene_id": self.scene1.scene_id,
+                    "group_id": self.scene_group.id,
+                    "name": "平台报表",
                 }
             )
 
@@ -316,6 +331,18 @@ class TestPanelManagementFeatures(TestCase):
         )
         panel.refresh_from_db()
         self.assertEqual(panel.status, "unpublished")
+
+    def test_delete_published_scene_panel_should_fail(self):
+        scene_panel = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "已上架场景报表"}
+        )
+        panel = VisionPanel.objects.get(id=scene_panel["id"])
+        PublishScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
+
+        with self.assertRaisesMessage(Exception, "已上架的报表不可删除"):
+            DeleteScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
+
+        self.assertTrue(VisionPanel.objects.filter(id=panel.id).exists())
 
     @patch("services.web.vision.resources.get_request_username", return_value="tester")
     @patch("services.web.vision.resources.ScopePermission.get_scene_ids", return_value=[])

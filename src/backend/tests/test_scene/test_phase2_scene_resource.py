@@ -393,6 +393,26 @@ class TestLinkTableSceneId:
         )
         assert not ResourceBindingScene.objects.filter(binding=binding).exists()
 
+    @pytest.mark.django_db
+    def test_delete_link_table_cleans_resource_binding(self, scene):
+        """测试删除联表会同步清理绑定关系"""
+        from services.web.strategy_v2.models import LinkTable
+        from services.web.strategy_v2.resources import DeleteLinkTable
+
+        link_table = LinkTable.objects.create(
+            namespace="default",
+            uid="lt_delete_001",
+            version=1,
+            name="待删除联表",
+            config={},
+        )
+        binding = _bind_resource_to_scene(link_table.uid, ResourceVisibilityType.LINK_TABLE, scene.scene_id)
+
+        DeleteLinkTable().request({"uid": link_table.uid})
+
+        assert not LinkTable.objects.filter(uid=link_table.uid).exists()
+        assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
+
 
 # ==================== Serializer 层测试 ====================
 
@@ -587,6 +607,23 @@ class TestNoticeGroupSceneFilter:
         assert qs.first().group_name == "场景1通知组"
 
     @pytest.mark.django_db
+    def test_delete_notice_group_cleans_resource_binding(self, scene):
+        """测试删除通知组会同步清理绑定关系"""
+        from apps.notice.resources import DeleteNoticeGroup
+
+        notice_group = NoticeGroup.objects.create(
+            group_name="待删除通知组",
+            group_member=["admin"],
+            notice_config=[],
+        )
+        binding = _bind_resource_to_scene(notice_group.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
+
+        DeleteNoticeGroup().request({"group_id": notice_group.group_id})
+
+        assert not NoticeGroup.objects.filter(group_id=notice_group.group_id).exists()
+        assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
+
+    @pytest.mark.django_db
     def test_filter_notice_groups_no_scene_returns_none(self, scene):
         """测试不传 scene_id 和 system_id 时返回空结果"""
         NoticeGroup.objects.all().delete()
@@ -707,6 +744,19 @@ class TestRiskRuleSceneFilter:
 
         assert len(result) == 1
         assert result[0]["id"] == rule1.rule_id
+
+    @pytest.mark.django_db
+    def test_delete_risk_rule_cleans_resource_binding(self, scene):
+        """测试删除处理规则会同步清理绑定关系"""
+        from services.web.risk.resources.rule import DeleteRiskRule
+
+        rule = RiskRule.objects.create(name="待删除规则", scope=[], version=1, rule_id=92001)
+        binding = _bind_resource_to_scene(rule.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+
+        DeleteRiskRule().request({"rule_id": rule.rule_id})
+
+        assert not RiskRule.objects.filter(rule_id=rule.rule_id).exists()
+        assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
 
 
 class TestRiskSceneFilter:
@@ -1196,6 +1246,31 @@ class TestCreateResourceBinding:
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=None,
             )
+
+
+class TestDeleteResourceBinding:
+    """SceneScopeFilter.delete_resource_binding 方法测试"""
+
+    @pytest.mark.django_db
+    def test_delete_binding_cascades_related_records(self, scene):
+        binding = ResourceBinding.objects.create(
+            resource_id="test_delete_001",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SCENES,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
+        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_audit")
+
+        deleted_count = SceneScopeFilter.delete_resource_binding(
+            resource_id="test_delete_001",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+        )
+
+        assert deleted_count == 3
+        assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
+        assert not ResourceBindingScene.objects.filter(binding_id=binding.id).exists()
+        assert not ResourceBindingSystem.objects.filter(binding_id=binding.id).exists()
 
 
 # ==================== 迁移文件测试 ====================
