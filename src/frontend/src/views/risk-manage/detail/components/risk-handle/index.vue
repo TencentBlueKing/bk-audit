@@ -204,9 +204,13 @@
   // 获取处理套餐列表
   const {
     data: processApplicationList,
+    run: fetchApplicationsAll,
   } = useRequest(ProcessApplicationManageService.fetchApplicationsAll, {
     defaultValue: [],
-    manual: true,
+    defaultParams: {
+      scene_id: props.data.scene_id,
+    },
+    // manual: true,
     onSuccess() {
       // 查询所有套餐详情参数
       handleFetchParamsDetail();
@@ -346,6 +350,11 @@
           needScrollToContent.value = false;
           removeSearchParam('scrollToContent');
         }
+      });
+    }
+    if (data.scene_id) {
+      fetchApplicationsAll({
+        scene_id: data.scene_id,
       });
     }
   }, {

@@ -24,6 +24,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class RiskManage extends ModuleBase {
   api: string;
   constructor() {
@@ -119,11 +121,19 @@ class RiskManage extends ModuleBase {
   }
   // 获取风险标签
   getRiskTags(params: Record<string, any>) {
+    const sceneParams = getSceneSystemParams();
+    const requestParams = {
+      ...params,
+      scope_id: params.scope_id ?? sceneParams.scope_id,
+      scope_type: params.scope_type ?? sceneParams.scope_type,
+    };
     return Request.get<Array<{
       id: string,
       name: string,
+      scope_id?: string | number,
+      scope_type?: string
     }>>(`${this.module}/tags/`, {
-      params,
+      params: requestParams,
     });
   }
   // 获取风险详情
