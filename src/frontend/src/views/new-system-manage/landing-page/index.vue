@@ -207,6 +207,9 @@
   import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import useRequest from '@/hooks/use-request';
   import landingImg from '@/images/access-system.png';
@@ -228,6 +231,13 @@
   const activeItemId = ref<string>('');
   const isShowSelect = ref(false);
   const selectInput = ref('');
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 
   // 全局数据（来源类型）
   const {
@@ -310,11 +320,11 @@
   });
 
   const handleLearnMore = () => {
-    // TODO: 跳转到更多说明页面
+    window.open(configData.value.help_info.bkaudit_wiki, '_blank');
   };
 
   const contactHelper = () => {
-    window.open('wxwork://message?uin=8444251086320680', '_blank');
+    window.open(`wxwork://message?uin=${configData.value.iegsec_helper}`, '_blank');
   };
 
   const handleAccessNewSystem = () => {

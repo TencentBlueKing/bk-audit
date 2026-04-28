@@ -44,8 +44,7 @@
               class="action-row"
               @click="handleOpenWiki">
               <span
-                class="link-text"
-                @click="handleLearnMore">
+                class="link-text">
                 {{ t('了解更多') }}
               </span>
               <audit-icon
@@ -78,21 +77,29 @@
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
+
+  import useRequest from '@hooks/use-request';
+
   import landingImg from '@/images/landing.png';
 
   const { t } = useI18n();
 
-  const handleLearnMore = () => {
-    // TODO: 跳转到更多说明页面
-  };
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 
   const handleOpenWiki = () => {
-    window.open('', '_blank');
+    window.open(configData.value.help_info.bkaudit_wiki, '_blank');
   };
 
   const contactHelper = () => {
-    // TODO: 打开企业微信联系人
-    window.open('wxwork://message?uin=8444251086320680', '_blank');
+    window.open(`wxwork://message?uin=${configData.value.iegsec_helper}`, '_blank');
   };
 </script>
 

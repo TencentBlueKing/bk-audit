@@ -65,7 +65,7 @@ class NoticeGroup extends ModuleBase {
     return Request.get<Array<{
       id: string;
       name: string
-    }>>(`${this.module}/all/`);
+    }>>(`${this.module}/all/?scene_id=${getSceneSystemParams().scope_id}`);
   }
 
   // 获取通知组详情
