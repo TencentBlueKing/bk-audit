@@ -1079,6 +1079,8 @@
         risk_id: data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     });
   };
@@ -1099,6 +1101,8 @@
         risk_id: props.data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     }
   };
@@ -1223,6 +1227,8 @@
         risk_id: props.data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     });
   };
@@ -1243,6 +1249,8 @@
           risk_id: data.risk_id,
           page: currentPage.value,
           page_size: 50,
+          scope_id: props.data.scene_id,
+          scope_type: 'scene',
         });
       }, 100); // 100ms 防抖延迟
     }
