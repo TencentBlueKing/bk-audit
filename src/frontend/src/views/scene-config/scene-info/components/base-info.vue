@@ -126,16 +126,19 @@
       key: 'id',
       label: t('场景ID'),
       value: props.sceneData.id,
+      editable: false,
     },
     {
       key: 'name',
       label: t('场景名称'),
       value: props.sceneData.name,
+      editable: false,
     },
     {
       key: 'description',
       label: t('场景描述'),
       value: props.sceneData.description,
+      editable: false,
     },
     {
       key: 'manager',
@@ -157,11 +160,13 @@
       key: 'updatedBy',
       label: t('更新人'),
       value: props.sceneData.updatedBy,
+      editable: false,
     },
     {
       key: 'updatedAt',
       label: t('更新时间'),
       value: props.sceneData.updatedAt,
+      editable: false,
     },
   ]);
   const editingField = ref('');

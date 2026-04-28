@@ -92,7 +92,7 @@
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   // import ToolDetailModel from '@model/tool/tool-detail';
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import TableRow from './table-raw.vue';
 

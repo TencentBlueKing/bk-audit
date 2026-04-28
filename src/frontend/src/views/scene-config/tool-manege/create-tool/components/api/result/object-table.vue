@@ -240,7 +240,7 @@
 
   import resultDataModel from '@model/tool/api';
 
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import FieldReference from '../../data-search/components/field-reference/index.vue';
 
