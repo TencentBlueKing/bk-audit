@@ -168,7 +168,7 @@
   </div>
 </template>
 <script setup lang='ts'>
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
@@ -324,26 +324,39 @@
   };
 
   // 获取标签列表
-  useRequest(RiskManageService.fetchRiskTags, {
+  const {
+    run: fetchRiskTags,
+  } = useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
       page: 1,
       page_size: 1,
     },
     defaultValue: [],
-    manual: true,
     onSuccess: (data) => {
       data.forEach((item) => {
         strategyTagMap.value[item.id] = item.name;
       });
     },
   });
-
   // 获取所有处理规则
   const {
     data: riskRuleList,
+    run: fetchRuleAll,
   } = useRequest(RiskRuleManageService.fetchRuleAll, {
     defaultValue: [],
-    manual: true,
+    defaultParams: {
+    },
+  });
+  watch(() => props.data, (val) => {
+    if (val.scene_id) {
+      fetchRuleAll({
+        scene_id: val.scene_id,
+      });
+      fetchRiskTags({
+        scope_id: val.scene_id,
+        scope_type: 'scene',
+      });
+    }
   });
 </script>
 <style lang="postcss" scoped>

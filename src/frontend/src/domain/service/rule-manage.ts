@@ -49,8 +49,10 @@ export default {
   /**
    * @desc 获取风险处理规则下拉列表
    */
-  fetchRuleAll() {
-    return RiskRuleManageSource.getRuleAll()
+  fetchRuleAll(params:{
+    scene_id: string
+  }) {
+    return RiskRuleManageSource.getRuleAll(params)
       .then(({ data }) => data);
   },
   /**
