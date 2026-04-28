@@ -527,7 +527,7 @@
   import ConfigModel from '@model/root/config';
   import type ParseSqlModel from '@model/tool/parse-sql';
 
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   // import ToolDetailModel from '@model/tool/tool-detail';
   import { execCopy } from '@utils/assist';
