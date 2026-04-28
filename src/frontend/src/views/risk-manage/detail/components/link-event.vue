@@ -643,7 +643,7 @@
 
   // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import { execCopy } from '@utils/assist';
 
