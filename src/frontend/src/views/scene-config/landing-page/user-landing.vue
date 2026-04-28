@@ -116,9 +116,13 @@
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
   import SceneManageService from '@service/scene-manage';
 
-  import useRequest from '@/hooks/use-request';
+  import ConfigModel from '@model/root/config';
+
+  import useRequest from '@hooks/use-request';
+
   import landingImg from '@/images/landing.png';
 
   interface SceneItem {
@@ -138,6 +142,12 @@
   const sceneList = ref<SceneItem[]>([]);
 
   const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+  const {
     run: fetchSceneList,
   } = useRequest(SceneManageService.fetchSceneList, {
     defaultValue: { results: [] as any[], page: 0, num_pages: 0, total: 0 },
@@ -154,12 +164,12 @@
   });
 
   const handleLearnMore = () => {
-    // TODO: 跳转到更多说明页面
+    window.open(configData.value.help_info.bkaudit_wiki, '_blank');
   };
 
 
   const contactHelper = () => {
-    window.open('wxwork://message?uin=8444251086320680', '_blank');
+    window.open(`wxwork://message?uin=${configData.value.iegsec_helper}`, '_blank');
   };
 </script>
 
