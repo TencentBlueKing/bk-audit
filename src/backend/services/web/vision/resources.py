@@ -185,6 +185,11 @@ class BKVision(AuditMixinResource, abc.ABC):
         if len(items) > 1:
             SceneReportGroupItem.objects.filter(id__in=[item.id for item in items[1:]]).delete()
 
+    @staticmethod
+    def _cleanup_panel_relations(panel_id: str) -> None:
+        SceneReportGroupItem.objects.filter(panel_id=panel_id).delete()
+        UserPanelFavorite.objects.filter(panel_id=panel_id).delete()
+
 
 class ListPanels(BKVision):
     name = gettext_lazy("报告广场报表列表")
@@ -519,6 +524,7 @@ class DeletePlatformPanel(BKVision):
             resource_id=panel_id,
             resource_type=ResourceVisibilityType.PANEL,
         )
+        self._cleanup_panel_relations(panel_id)
         panel.delete()
         return {"message": "success"}
 
@@ -688,6 +694,7 @@ class DeleteScenePanel(BKVision):
             resource_id=panel_id,
             resource_type=ResourceVisibilityType.PANEL,
         )
+        self._cleanup_panel_relations(panel_id)
         panel.delete()
         return {"message": "success"}
 

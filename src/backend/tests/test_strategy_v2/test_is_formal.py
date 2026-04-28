@@ -9,7 +9,11 @@ from unittest import mock
 from bk_resource import resource
 from django.conf import settings
 
+from apps.notice.models import NoticeGroup
 from services.web.analyze.models import Control, ControlVersion
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -27,16 +31,18 @@ class TestStrategyIsFormal(TestCase):
         self.control_version = ControlVersion.objects.create(
             **{**BKM_CONTROL_VERSION_DATA, "control_id": self.control.control_id}
         )
-        # 创建场景用于 ResourceBinding
-        from services.web.scene.models import Scene
-
         self.scene = Scene.objects.create(name="test_scene_formal", description="test")
         self.scene_id = self.scene.scene_id
+        self.notice_group = NoticeGroup.objects.create(
+            group_name="test_notice_group_formal", group_member=[], notice_config=[]
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.notice_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            scene_id=self.scene_id,
+        )
 
     def _bind_strategy_to_scene(self, strategy_id: int):
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
@@ -56,7 +62,7 @@ class TestStrategyIsFormal(TestCase):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
             }
         )
         created = resource.strategy_v2.create_strategy(**params)

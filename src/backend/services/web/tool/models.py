@@ -44,7 +44,7 @@ class Tool(SoftDeleteModel):
     class Meta:
         verbose_name = gettext_lazy("Tool")
         verbose_name_plural = verbose_name
-        unique_together = [("uid", "version", "name")]
+        unique_together = [("uid", "version")]
         ordering = ["namespace", "-updated_at"]
 
     @classmethod

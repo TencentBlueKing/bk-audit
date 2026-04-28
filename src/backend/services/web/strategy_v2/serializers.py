@@ -28,6 +28,7 @@ from apps.meta.serializers import (
     EnumMappingByCollectionKeysSerializer,
     EnumMappingByCollectionSerializer,
 )
+from apps.notice.models import NoticeGroup
 from core.serializers import ChoiceListSerializer, OrderSerializer
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -41,6 +42,9 @@ from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.risk.report_config import ReportConfig
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import CompositeScopeFilter
+from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
@@ -71,6 +75,7 @@ from services.web.strategy_v2.exceptions import (
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
 from services.web.tool.constants import DrillConfig
+from services.web.tool.models import Tool
 
 # 从 Pydantic BaseModel 生成的 DRF 序列化器类
 ReportConfigSerializer = type(ReportConfig.drf_serializer())
@@ -171,6 +176,140 @@ class StrategySerializer(serializers.Serializer):
     strategy_type = serializers.ChoiceField(
         label=gettext_lazy("Storage Type"), choices=StrategyType.choices, default=StrategyType.MODEL.value
     )
+
+    @staticmethod
+    def _get_strategy_scene_id(strategy_id: int) -> int | None:
+        if not strategy_id:
+            return None
+        return (
+            ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id=str(strategy_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
+    def get_scene_id(self, validated_request_data: dict) -> int | None:
+        return validated_request_data.get("scene_id") or self._get_strategy_scene_id(
+            validated_request_data.get("strategy_id")
+        )
+
+    @staticmethod
+    def _raise_missing_resource_error(field_name: str, resource_label: str, resource_ids: List[str]) -> None:
+        raise serializers.ValidationError(
+            {field_name: gettext("%s不存在: %s") % (resource_label, ",".join(sorted(resource_ids)))}
+        )
+
+    @staticmethod
+    def _raise_scene_mismatch_error(
+        field_name: str, resource_label: str, resource_ids: List[str], scene_id: int
+    ) -> None:
+        raise serializers.ValidationError(
+            {field_name: gettext("%s[%s]不属于场景[%s]") % (resource_label, ",".join(sorted(resource_ids)), scene_id)}
+        )
+
+    def _validate_notice_groups(self, field_name: str, group_ids: List[int], scene_id: int | None) -> None:
+        if scene_id is None or not group_ids:
+            return
+
+        expected_ids = {str(group_id) for group_id in group_ids}
+        existing_ids = {
+            str(group_id)
+            for group_id in NoticeGroup.objects.filter(group_id__in=group_ids).values_list("group_id", flat=True)
+        }
+        missing_ids = expected_ids - existing_ids
+        if missing_ids:
+            self._raise_missing_resource_error(field_name, gettext("通知组"), list(missing_ids))
+
+        bound_ids = {
+            resource_id
+            for resource_id in ResourceBindingScene.objects.filter(
+                scene_id=scene_id,
+                binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                binding__resource_id__in=expected_ids,
+            ).values_list("binding__resource_id", flat=True)
+        }
+        invalid_ids = expected_ids - bound_ids
+        if invalid_ids:
+            self._raise_scene_mismatch_error(field_name, gettext("通知组"), list(invalid_ids), scene_id)
+
+    @staticmethod
+    def _iter_drill_tools(validated_request_data: dict):
+        for field_configs in (
+            validated_request_data["event_basic_field_configs"],
+            validated_request_data["event_data_field_configs"],
+            validated_request_data["event_evidence_field_configs"],
+            validated_request_data["risk_meta_field_config"],
+        ):
+            for field_config in field_configs:
+                for drill in field_config.get("drill_config") or []:
+                    tool = drill.get("tool") or {}
+                    if tool.get("uid") and tool.get("version") is not None:
+                        yield str(tool["uid"]), int(tool["version"])
+
+    def _validate_drill_tools(self, validated_request_data: dict, scene_id: int | None) -> None:
+        if scene_id is None:
+            return
+
+        requested_pairs = set(self._iter_drill_tools(validated_request_data))
+        if not requested_pairs:
+            return
+
+        expected_uids = {uid for uid, _ in requested_pairs}
+        existing_pairs = {
+            (str(uid), int(version))
+            for uid, version in Tool.objects.filter(uid__in=expected_uids).values_list("uid", "version")
+        }
+        missing_pairs = requested_pairs - existing_pairs
+        if missing_pairs:
+            missing_ids = [f"{uid}:{version}" for uid, version in sorted(missing_pairs)]
+            self._raise_missing_resource_error("tool", gettext("工具"), missing_ids)
+
+        visible_uids = {
+            str(uid)
+            for uid in CompositeScopeFilter.filter_queryset(
+                queryset=Tool.all_latest_tools().filter(uid__in=expected_uids),
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.TOOL,
+                pk_field="uid",
+            ).values_list("uid", flat=True)
+        }
+        invalid_uids = expected_uids - visible_uids
+        if invalid_uids:
+            self._raise_scene_mismatch_error("tool", gettext("工具"), list(invalid_uids), scene_id)
+
+    def _validate_link_table(self, validated_request_data: dict, scene_id: int | None) -> None:
+        if scene_id is None or validated_request_data.get("strategy_type") != StrategyType.RULE.value:
+            return
+        if validated_request_data["configs"]["config_type"] != RuleAuditConfigType.LINK_TABLE.value:
+            return
+
+        link_table = validated_request_data["configs"]["data_source"]["link_table"]
+        link_table_uid = str(link_table["uid"])
+        link_table_version = link_table.get("version")
+        if not link_table_uid or link_table_version is None:
+            return
+
+        if not LinkTable.objects.filter(uid=link_table_uid, version=link_table_version).exists():
+            self._raise_missing_resource_error("link_table", gettext("联表"), [f"{link_table_uid}:{link_table_version}"])
+
+        is_bound = ResourceBindingScene.objects.filter(
+            scene_id=scene_id,
+            binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+            binding__resource_id=link_table_uid,
+        ).exists()
+        if not is_bound:
+            self._raise_scene_mismatch_error("link_table", gettext("联表"), [link_table_uid], scene_id)
+
+    def _validate_scene_resources(self, validated_request_data: dict) -> None:
+        # 这里依赖 DRF 字段校验后的结构：新建策略直接取 scene_id，更新策略按 strategy_id 反查绑定场景。
+        # 子资源只允许引用同场景资源，避免跨场景复用通知组、联表或下钻工具。
+        scene_id = self.get_scene_id(validated_request_data)
+        self._validate_notice_groups("notice_groups", validated_request_data.get("notice_groups", []), scene_id)
+        self._validate_notice_groups("processor_groups", validated_request_data["processor_groups"], scene_id)
+        self._validate_drill_tools(validated_request_data, scene_id)
+        self._validate_link_table(validated_request_data, scene_id)
 
     def _validate_strategy_type(self, validated_request_data: dict):
         """
@@ -338,6 +477,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
         # check configs
         self._validate_configs(data)
+        # check scene resources
+        self._validate_scene_resources(data)
         # check event_basic_field_configs
         self._validate_event_basic_field_configs(data)
         # check report_config
@@ -427,6 +568,9 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "report_config",
         ]
 
+    def get_scene_id(self, validated_request_data: dict) -> int | None:
+        return self._get_strategy_scene_id(validated_request_data.get("strategy_id"))
+
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
         # check type
@@ -440,6 +584,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
         # check configs
         self._validate_configs(data)
+        # check scene resources
+        self._validate_scene_resources(data)
         # check event_basic_field_configs
         self._validate_event_basic_field_configs(data)
         # check report_config
@@ -1121,7 +1267,6 @@ class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
         attrs = super().validate(attrs)
         namespace = attrs.get('namespace')
         name = attrs.get('name')
-
         # 联合唯一校验
         if LinkTable.objects.filter(namespace=namespace, name=name).exists():
             raise LinkTableNameExist()

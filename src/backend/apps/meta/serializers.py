@@ -68,6 +68,7 @@ from apps.meta.models import (
 from apps.meta.utils.format import format_resource_permission
 from apps.meta.utils.system import wrapper_system_status
 from core.models import get_request_username
+from services.web.common.serializers import OptionalScopeQuerySerializer
 
 
 class SensitiveObjSerializer(serializers.ModelSerializer):
@@ -214,7 +215,7 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
         return actions
 
 
-class SystemListAllRequestSerializer(serializers.ModelSerializer):
+class SystemListAllRequestSerializer(OptionalScopeQuerySerializer, serializers.ModelSerializer):
     action_ids = serializers.CharField(
         label=gettext_lazy("权限"), allow_blank=True, allow_null=True, required=False, help_text="view_system,edit_system"
     )
@@ -263,6 +264,8 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
             "with_system_status",
             "sort_keys",
             "order_type",
+            "scope_type",
+            "scope_id",
         ]
 
 

@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.db import transaction
 from django.db.models import Q
@@ -49,6 +50,8 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.utils.data import choices_to_dict
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 
 
 class NoticeMeta(AuditMixinResource, abc.ABC):
@@ -82,9 +85,6 @@ class ListNoticeGroup(NoticeMeta):
         # 获取所有数据
         notice_groups = NoticeGroup.objects.all()
         # 按场景过滤（通过 ResourceBinding）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         notice_groups = SceneScopeFilter.filter_queryset(
             queryset=notice_groups,
             scene_id=scene_id,
@@ -117,9 +117,6 @@ class ListAllNoticeGroup(NoticeMeta):
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
         queryset = NoticeGroup.objects.all()
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         queryset = SceneScopeFilter.filter_queryset(
             queryset=queryset,
             scene_id=scene_id,
@@ -147,25 +144,45 @@ class CreateNoticeGroup(NoticeMeta):
     ResponseSerializer = CreateNoticeGroupResponseSerializer
     audit_action = ActionEnum.CREATE_NOTICE_GROUP
 
-    def perform_request(self, validated_request_data):
+    @transaction.atomic
+    def _create_local(self, validated_request_data):
         # 场景权限校验
         scene_id = validated_request_data.pop("scene_id", None)
         # 存入数据库
         notice_group = NoticeGroup.objects.create(**validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene_id,
         )
+        return notice_group
+
+    def _grant_creator(self, notice_group):
         # 授权
         username = get_request_username()
         if username:
             resource_instance = ResourceEnum.NOTICE_GROUP.create_instance(notice_group.group_id)
             Permission(username).grant_creator_action(resource_instance)
+
+    def _compensate_create_failure(self, notice_group):
+        with transaction.atomic():
+            SceneScopeFilter.delete_resource_binding(
+                resource_id=notice_group.group_id,
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            )
+            notice_group.delete()
+
+    def perform_request(self, validated_request_data):
+        notice_group = self._create_local(validated_request_data)
+        try:
+            self._grant_creator(notice_group)
+        except Exception:
+            try:
+                self._compensate_create_failure(notice_group)
+            except Exception as error:  # best-effort compensation should not mask the original auth error
+                logger.exception("[CreateNoticeGroup] compensate create failure failed: %s", error)
+            raise
         # 响应
         self.add_audit_instance_to_context(instance=notice_group.audit_instance)
         return notice_group
@@ -202,8 +219,6 @@ class DeleteNoticeGroup(NoticeMeta):
         notice_group = get_object_or_404(NoticeGroup, group_id=validated_request_data.pop("group_id"))
         # 删除
         self.add_audit_instance_to_context(instance=notice_group.audit_instance)
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
 
         notice_group.delete()
         SceneScopeFilter.delete_resource_binding(

@@ -227,6 +227,7 @@ class AIProvider(Provider):
                 return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
             return result or ""
         except Exception as e:
+            logger.error("[AIProvider] AI执行失败:risk_id=%s,error=%s", self.context.get("risk_id", "unknown"), e)
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"
 
     def _check_and_report_result_quality(self, result: str) -> None:

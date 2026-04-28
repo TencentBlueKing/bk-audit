@@ -69,9 +69,23 @@ class SceneDataTableSerializer(serializers.ModelSerializer):
 
 
 class SceneSystemInputSerializer(serializers.Serializer):
-    system_id = serializers.CharField(max_length=64)
+    system_id = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
     is_all_systems = serializers.BooleanField(required=False, default=False)
     filter_rules = serializers.ListField(child=serializers.DictField(), required=False, default=list)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        system_id = attrs.get("system_id", "")
+        is_all_systems = attrs.get("is_all_systems", False)
+
+        if is_all_systems:
+            attrs["system_id"] = ""
+            return attrs
+
+        if not system_id:
+            raise serializers.ValidationError({"system_id": "该字段是必填项。"})
+
+        return attrs
 
 
 class SceneTableInputSerializer(serializers.Serializer):

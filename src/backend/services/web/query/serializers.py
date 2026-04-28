@@ -65,7 +65,10 @@ from services.web.query.constants import (
 from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
 from services.web.query.utils.search_config import QueryConditionOperator
-from services.web.risk.constants import ES_SEARCH_ORIGIN_FIELDS
+from services.web.risk.constants import (
+    ES_SEARCH_ORIGIN_FIELDS,
+    IGNORE_SEARCH_ALL_FILTER_FIELDS,
+)
 
 
 class QueryScopeQuerySerializer(ScopeQuerySerializer):
@@ -98,7 +101,7 @@ class FieldMapRequestSerializer(serializers.Serializer):
         return [field for field in value.split(",") if field]
 
 
-class EsQuerySearchAttrSerializer(QueryScopeQuerySerializer):
+class EsQuerySearchAllAttrSerializer(serializers.Serializer):
     namespace = serializers.CharField()
     start_time = serializers.CharField()
     end_time = serializers.CharField()
@@ -177,7 +180,7 @@ class EsQuerySearchAttrSerializer(QueryScopeQuerySerializer):
         validated_data["filter"] = []
         for key, val in data.items():
             # 屏蔽内置字段
-            if key in self.fields.fields.keys():
+            if key in self.fields.fields.keys() or key in IGNORE_SEARCH_ALL_FILTER_FIELDS:
                 continue
             # 提前解析(原始字段保留)
             if key in ES_SEARCH_ORIGIN_FIELDS:
@@ -233,6 +236,10 @@ class EsQuerySearchAttrSerializer(QueryScopeQuerySerializer):
             ]
         )
         return filters
+
+
+class EsQuerySearchAttrSerializer(EsQuerySearchAllAttrSerializer, QueryScopeQuerySerializer):
+    pass
 
 
 class QuerySearchResponseSerializer(serializers.Serializer):

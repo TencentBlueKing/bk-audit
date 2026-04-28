@@ -42,6 +42,7 @@ from services.web.risk.serializers import (
     UpdateRiskRuleReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 from services.web.scene.models import ResourceBindingScene
 
 
@@ -69,8 +70,6 @@ class ListRiskRule(RiskRuleMeta):
                 _q |= Q(**{key: item})
             q &= _q
         # 按场景过滤（通过 ResourceBinding）
-        from services.web.scene.filters import SceneScopeFilter
-
         # 筛选（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回空结果）
         rules = SceneScopeFilter.filter_queryset(
             queryset=RiskRule.load_latest_rules().filter(q),
@@ -92,8 +91,6 @@ class ListAllRiskRule(RiskRuleMeta):
             return []
         scene_id = validated_request_data["scene_id"]
         rules = RiskRule.objects.all()
-        from services.web.scene.filters import SceneScopeFilter
-
         rules = SceneScopeFilter.filter_queryset(
             queryset=rules,
             scene_id=scene_id,
@@ -109,6 +106,7 @@ class CreateRiskRule(RiskRuleMeta):
     ResponseSerializer = RiskRuleInfoSerializer
     audit_action = ActionEnum.CREATE_RULE
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data.pop("scene_id", None)
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
@@ -116,8 +114,6 @@ class CreateRiskRule(RiskRuleMeta):
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
         instance.save(update_fields=["rule_id", "priority_index"])
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(instance.rule_id),
             resource_type=ResourceVisibilityType.RISK_RULE,
@@ -162,8 +158,6 @@ class DeleteRiskRule(RiskRuleMeta):
             return
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instances.first()))
         instances.delete()
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.delete_resource_binding(
             resource_id=validated_request_data["rule_id"],
             resource_type=ResourceVisibilityType.RISK_RULE,
@@ -226,10 +220,15 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
             ).values("binding__resource_id", "scene_id")
         }
 
-        for config in validated_request_data["config"]:
-            rule_id = str(config["rule_id"])
-            if binding_scene_map.get(rule_id) != scene_id:
-                raise ValidationError(gettext_lazy("规则[%s]不属于场景[%s]") % (rule_id, scene_id))
+        invalid_rule_ids = [rule_id for rule_id in rule_ids if binding_scene_map.get(rule_id) != scene_id]
+        if invalid_rule_ids:
+            raise ValidationError(gettext_lazy("规则[%s]不属于场景[%s]") % (",".join(sorted(invalid_rule_ids)), scene_id))
+
+        self._update_rules(validated_request_data["config"])
+
+    @transaction.atomic
+    def _update_rules(self, configs):
+        for config in configs:
             rule = RiskRule.objects.filter(rule_id=config["rule_id"]).order_by("-version").first()
             if not rule:
                 continue

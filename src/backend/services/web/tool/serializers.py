@@ -81,6 +81,14 @@ class ToolConfigField(serializers.DictField):
     pass
 
 
+def validate_latest_tool_name_unique(name: str, exclude_uid: Optional[str] = None) -> None:
+    queryset = Tool.all_latest_tools().filter(name=name)
+    if exclude_uid:
+        queryset = queryset.exclude(uid=exclude_uid)
+    if queryset.exists():
+        raise serializers.ValidationError({"name": gettext_lazy("工具名称已存在")})
+
+
 # 针对 params 字段的多态 Schema 定义
 @extend_schema_field(
     PolymorphicProxySerializer(
@@ -158,6 +166,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
+        validate_latest_tool_name_unique(attrs["name"])
         return attrs
 
 
@@ -195,6 +204,8 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
             attrs["config"] = validated_config
+        if "name" in attrs:
+            validate_latest_tool_name_unique(attrs["name"], exclude_uid=uid)
         return attrs
 
 

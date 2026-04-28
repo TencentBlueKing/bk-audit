@@ -263,6 +263,101 @@ class ToolResourceTestCase(TestCase):
         )
         self.assertEqual(tool.status, PanelStatus.UNPUBLISHED)
 
+    def test_tool_unique_together_is_uid_version(self):
+        unique_together = {tuple(item) for item in Tool._meta.unique_together}
+
+        self.assertIn(("uid", "version"), unique_together)
+        self.assertNotIn(("uid", "version", "name"), unique_together)
+
+    def test_create_tool_rejects_duplicate_latest_name(self):
+        data = {
+            "name": "duplicate-latest-name",
+            "namespace": "default_ns",
+            "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+            "config": {
+                "sql": "select * from test",
+                "referenced_tables": [],
+                "input_variable": [],
+                "output_fields": [],
+            },
+            "description": "desc",
+            "tags": [],
+        }
+        first = CreateTool().request(data)
+
+        with self.assertRaises(Exception):
+            CreateTool().request(deepcopy(data))
+
+        self.assertEqual(Tool.last_version_tool(first["uid"]).name, "duplicate-latest-name")
+
+    def test_create_tool_allows_name_that_only_exists_on_history_version(self):
+        historical_uid = str(uuid.uuid4())
+        Tool.objects.create(
+            uid=historical_uid,
+            version=1,
+            name="historical-tool-name",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            config={},
+            is_deleted=False,
+            description="historical version",
+            updated_at=timezone.now(),
+        )
+        Tool.objects.create(
+            uid=historical_uid,
+            version=2,
+            name="latest-tool-name",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            config={},
+            is_deleted=False,
+            description="latest version",
+            updated_at=timezone.now(),
+        )
+
+        created = CreateTool().request(
+            {
+                "name": "historical-tool-name",
+                "namespace": "default_ns",
+                "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+                "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+                "config": {
+                    "sql": "select * from test",
+                    "referenced_tables": [],
+                    "input_variable": [],
+                    "output_fields": [],
+                },
+                "description": "desc",
+                "tags": [],
+            }
+        )
+
+        self.assertEqual(Tool.last_version_tool(created["uid"]).name, "historical-tool-name")
+
+    def test_update_tool_allows_same_name_for_same_uid(self):
+        updated = UpdateTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "description": "same name is allowed on same uid",
+                "tags": [],
+            }
+        )
+
+        self.assertEqual(updated["uid"], self.sql_tool.uid)
+
+    def test_update_tool_rejects_duplicate_latest_name_from_other_uid(self):
+        with self.assertRaises(Exception):
+            UpdateTool().request(
+                {
+                    "uid": self.sql_tool.uid,
+                    "name": self.bk_tool.name,
+                    "description": "duplicate name is not allowed",
+                    "tags": [],
+                }
+            )
+
     def test_create_tool_sql(self):
         resource = CreateTool()
         data = {

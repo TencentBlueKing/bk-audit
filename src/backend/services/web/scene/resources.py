@@ -153,6 +153,8 @@ class CreateScene(SceneResource):
         # 自动创建"场景管理员通知组"
         self._create_scene_manager_notice_group(scene)
         # 创建 IAM 用户组、授权并添加成员
+        # TODO: 当前外部 IAM 调用保留在事务内；若本地事务回滚，IAM 侧可能残留孤儿用户组。
+        # 后续可迁移到 transaction.on_commit 或增加补偿删除。
         self._create_iam_groups(scene)
         # 新场景补齐全可见平台报表的分组映射
         self._sync_all_visible_platform_panels(scene)
