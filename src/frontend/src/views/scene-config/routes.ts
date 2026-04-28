@@ -35,6 +35,15 @@ export default {
       },
     },
     {
+      path: 'user-landing-page',
+      component: () => import('@views/scene-config/landing-page/user-landing.vue'),
+      name: 'userLandingPage',
+      meta: {
+        title: '引导页',
+        nodeSideContent: true,
+      },
+    },
+    {
       path: 'scene-info',
       component: () => import('@views/scene-config/scene-info/index.vue'),
       name: 'sceneInfo',

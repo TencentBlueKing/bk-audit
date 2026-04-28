@@ -76,8 +76,7 @@
           :class="{
             active: curNavName === 'sceneConfiguration'
           }"
-          :to="{ name: (userRole.includes('saas_admin') || userRole.includes('scene_admin'))
-            ? 'sceneInfo' :'landingPage' , query: {} }">
+          :to="{ name: sceneConfigRouterName, query: {} }">
           {{ t('场景配置') }}
         </router-link>
         <router-link
@@ -309,6 +308,7 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     onBeforeUnmount,
     onMounted,
     type Ref,
@@ -409,6 +409,19 @@
   const handleSelectToggle = (val: boolean) => {
     isSelectOpen.value = val;
   };
+  // 计算属性根据 userRole 计算sceneConfigRouterName
+  const sceneConfigRouterName = computed(() => {
+    if (userRole.includes('saas_admin') || userRole.includes('scene_admin')) { // 管理员 和 场景管理员
+      return 'sceneInfo';
+    }
+    if (userRole.includes('risk_handler')) {  // 风险处理人
+      return 'landingPage';
+    }
+    if (userRole.includes('system_admin') || userRole.includes('scene_user')) { //  系统管理员 场景使用者
+      return 'userLandingPage';
+    }
+    return 'landingPage';
+  });
   // 获取新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
