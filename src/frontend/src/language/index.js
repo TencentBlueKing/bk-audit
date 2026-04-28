@@ -23,6 +23,8 @@ import eventEn from '@views/event-manage/language/en.js';
 import eventZh from '@views/event-manage/language/zh.js';
 import linkEn from '@views/link-data-manage/language/en.js';
 import linkZh from '@views/link-data-manage/language/zh.js';
+import newSystemManageEn from '@views/new-system-manage/language/en.js';
+import newSystemManageZh from '@views/new-system-manage/language/zh.js';
 import noticeEn from '@views/notice-group/language/en.js';
 import noticeZh from '@views/notice-group/language/zh.js';
 import platformEn from '@views/platform-manage/language/en.js';
@@ -33,6 +35,8 @@ import riskEn from '@views/risk-manage/language/en.js';
 import riskZh from '@views/risk-manage/language/zh.js';
 import ruleEn from '@views/rule-manage/language/en.js';
 import ruleZh from '@views/rule-manage/language/zh.js';
+import sceneConfigEn from '@views/scene-config/language/en.js';
+import sceneConfigZh from '@views/scene-config/language/zh.js';
 import storageEn from '@views/storage-manage/language/en.js';
 import storageZh from '@views/storage-manage/language/zh.js';
 import strategyEn from '@views/strategy-manage/language/en.js';
@@ -69,6 +73,10 @@ const i18n = createI18n({
       ...linkZh.linkDataManage,
       ...toolsZh.toolsManage,
       ...platformZh.platformManage,
+      ...sceneConfigZh.platformManage,
+      ...sceneConfigZh.landing,
+      ...sceneConfigZh.userLanding,
+      ...newSystemManageZh.systemAccess,
       ...allZh,
     },
     'en-US': {
@@ -84,6 +92,11 @@ const i18n = createI18n({
       ...applicationEn.applicationManage,
       ...linkEn.linkDataManage,
       ...toolsEn.toolsManage,
+      ...platformEn.platformManage,
+      ...sceneConfigEn.platformManage,
+      ...sceneConfigEn.landing,
+      ...sceneConfigEn.userLanding,
+      ...newSystemManageEn.systemAccess,
       ...allEn,
     },
   },
