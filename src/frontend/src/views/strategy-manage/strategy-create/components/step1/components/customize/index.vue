@@ -518,7 +518,7 @@
     Promise.all(requests.map(fn => fn()))
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
-        allConfigTypeTable.value = flattenedResults;
+        allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
         typeTableLoading.value = false;
       });
   };
