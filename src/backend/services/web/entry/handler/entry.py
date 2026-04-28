@@ -85,11 +85,14 @@ class EntryHandler(object):
             "feature_toggle": feature_toggle,
             # TAM
             "aegis_id": settings.AEGIS_ID,
+            # 申请场景权限企业微信uin
+            "iegsec_helper": settings.BKAPP_IEGSEC_HELPER,
             # 页面信息
             "help_info": {
                 "query_string": cls.get_query_help(),
                 "schema": cls.get_schema_help(),
                 "ai_practices": GlobalMetaConfig.get(AI_PRACTICES_KEY, default=DEFAULT_AI_PRACTICES),
+                "bkaudit_wiki": settings.BKAPP_BKAUDIT_WIKI,
             },
             # 语言
             "language": {
