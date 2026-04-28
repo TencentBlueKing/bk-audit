@@ -54,6 +54,33 @@ class EsQueryTest(TestCase):
         result = self.resource.query.search(**SEARCH_PARAMS)
         self.assertEqual(result, SEARCH_DATA)
 
+    @mock.patch("query.resources.resource.query.es_query", mock.Mock(return_value=ES_QUERY_SEARCH_API_RESP))
+    def test_search_all_without_scope(self):
+        """SearchAllResource 不要求 scope 参数"""
+        params = deepcopy(SEARCH_PARAMS)
+        params.pop("scope_type")
+
+        result = self.resource.query.search_all(**params)
+
+        self.assertEqual(result, SEARCH_DATA)
+
+    def test_search_all_ignores_scope_params(self):
+        """SearchAllResource 收到 scope 参数时不应拼到 ES 过滤条件"""
+        params = deepcopy(SEARCH_PARAMS)
+        params["scope_id"] = "1"
+
+        with mock.patch(
+            "query.resources.resource.query.es_query", return_value=ES_QUERY_SEARCH_API_RESP
+        ) as mock_es_query:
+            self.resource.query.search_all(**params)
+
+        request_data = mock_es_query.call_args.kwargs
+        self.assertNotIn("scope_type", request_data)
+        self.assertNotIn("scope_id", request_data)
+        self.assertFalse(
+            any(filter_item["field"] in {"scope_type", "scope_id"} for filter_item in request_data["filter"])
+        )
+
     @mock.patch(
         "query.resources.SearchLogPermission.get_scope_auth_systems",
         mock.Mock(side_effect=PermissionException(action_name="", apply_url="", permission={})),

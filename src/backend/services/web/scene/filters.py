@@ -467,15 +467,6 @@ class CompositeScopeFilter:
                     # 直接判断目标系统列表是否与可见系统列表有交集
                     if set(system_ids) & binding_system_ids:
                         visible_ids.add(binding.resource_id)
-                elif scene_ids:
-                    # 按场景过滤时，检查这些场景关联的系统是否在可见系统列表中
-                    scene_system_ids = set(
-                        SceneSystem.objects.filter(
-                            scene_id__in=scene_ids,
-                        ).values_list("system_id", flat=True)
-                    )
-                    if scene_system_ids & binding_system_ids:
-                        visible_ids.add(binding.resource_id)
 
         return visible_ids
 

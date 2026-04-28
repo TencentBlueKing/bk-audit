@@ -26,8 +26,12 @@ from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from apps.notice.models import NoticeGroup
 from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import ResourceBinding, Scene
 from services.web.strategy_v2.constants import (
     RiskLevel,
     RuleAuditConfigType,
@@ -39,6 +43,8 @@ from services.web.strategy_v2.constants import (
 )
 from services.web.strategy_v2.models import Strategy, StrategyTool
 from services.web.strategy_v2.resources import CreateStrategy, UpdateStrategy
+from services.web.tool.constants import ToolTypeEnum
+from services.web.tool.models import Tool
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.test_collector_plugin import (
     CollectorPluginTest,
@@ -58,6 +64,33 @@ from tests.test_strategy_v2.constants import (
 )
 
 
+def create_bound_notice_group(scene_id: int, group_name: str) -> NoticeGroup:
+    notice_group = NoticeGroup.objects.create(group_name=group_name, group_member=[], notice_config=[])
+    SceneScopeFilter.create_resource_binding(
+        resource_id=str(notice_group.group_id),
+        resource_type=ResourceVisibilityType.NOTICE_GROUP,
+        scene_id=scene_id,
+    )
+    return notice_group
+
+
+def create_bound_tool(scene_id: int) -> Tool:
+    tool = Tool.objects.create(
+        namespace=settings.DEFAULT_NAMESPACE,
+        uid="fake_tool_uid",
+        version=1,
+        name="fake_tool",
+        tool_type=ToolTypeEnum.API.value,
+        permission_owner="admin",
+    )
+    SceneScopeFilter.create_resource_binding(
+        resource_id=tool.uid,
+        resource_type=ResourceVisibilityType.TOOL,
+        scene_id=scene_id,
+    )
+    return tool
+
+
 class StrategyTest(TestCase):
     def setUp(self) -> None:  # NOCC:invalid-name(单元测试)
         CollectorPluginTest().setUp()
@@ -69,16 +102,12 @@ class StrategyTest(TestCase):
         )
         self.c = Control.objects.create(**BKM_CONTROL_DATA)
         self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
-        # 创建场景用于 ResourceBinding
-        from services.web.scene.models import Scene
-
         self.scene = Scene.objects.create(name="test_scene", description="test")
         self.scene_id = self.scene.scene_id
+        self.notice_group = create_bound_notice_group(self.scene_id, "test_notice_group")
+        self.tool = create_bound_tool(self.scene_id)
 
     def _bind_strategy_to_scene(self, strategy_id: int):
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
@@ -137,7 +166,7 @@ class StrategyTest(TestCase):
             "risk_hazard": "",
             "risk_guidance": "",
             "risk_title": "risk title",
-            "processor_groups": ["123"],
+            "processor_groups": [self.notice_group.group_id],
             # 满足规则策略对基础字段映射的校验要求
             "event_basic_field_configs": [
                 {
@@ -231,7 +260,7 @@ class StrategyTest(TestCase):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
             }
         )
         return resource.strategy_v2.create_strategy(**params)
@@ -256,7 +285,7 @@ class StrategyTest(TestCase):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk_title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
             }
         )
         data = resource.strategy_v2.update_strategy(**params)
@@ -417,9 +446,6 @@ class StrategyTest(TestCase):
 
     @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
     def test_delete_strategy_cleans_scene_binding(self):
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.models import ResourceBinding
-
         data = self._create_rule_strategy(name_suffix="delete_binding")
         strategy_id = data["strategy_id"]
         self.assertTrue(
@@ -590,7 +616,7 @@ class StrategyEnumMappingTest(StrategyTest):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
                 "event_basic_field_configs": [
                     {
                         "field_name": "username",
@@ -652,7 +678,7 @@ class StrategyEnumMappingTest(StrategyTest):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk_title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
                 "event_basic_field_configs": [
                     {
                         "field_name": "username",
@@ -681,11 +707,10 @@ class StrategyEnumMappingResourceTest(TestCase):
         )
         self.c = Control.objects.create(**BKM_CONTROL_DATA)
         self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
-        # 创建场景用于 ResourceBinding
-        from services.web.scene.models import Scene
-
         self.scene = Scene.objects.create(name="test_scene_enum", description="test")
         self.scene_id = self.scene.scene_id
+        self.notice_group = create_bound_notice_group(self.scene_id, "test_notice_group_enum")
+        self.tool = create_bound_tool(self.scene_id)
 
     def _create_bkm_strategy_with_enum(self, enum_mappings: dict) -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
@@ -698,7 +723,7 @@ class StrategyEnumMappingResourceTest(TestCase):
                 "risk_hazard": "",
                 "risk_guidance": "",
                 "risk_title": "risk title",
-                "processor_groups": ["123"],
+                "processor_groups": [self.notice_group.group_id],
                 "event_basic_field_configs": [
                     {
                         "field_name": "username",

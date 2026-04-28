@@ -53,7 +53,11 @@ from services.web.common.caller_permission import (
 )
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
-from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.constants import (
+    BindingType,
+    PanelStatus,
+    ResourceVisibilityType,
+)
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
 from services.web.scene.models import ResourceBinding
@@ -70,7 +74,11 @@ from services.web.tool.constants import (
     ToolTagsEnum,
     ToolTypeEnum,
 )
-from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
+from services.web.tool.exceptions import (
+    ToolDoesNotExist,
+    ToolNotPublished,
+    ToolTypeNotSupport,
+)
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
@@ -918,6 +926,8 @@ class ExecuteToolAPIGW(ExecuteTool):
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise ToolDoesNotExist()
+        if tool.status != PanelStatus.PUBLISHED:
+            raise ToolNotPublished()
 
         current_user = "admin"
         try:
@@ -1298,6 +1308,8 @@ class GetToolDetailByNameAPIGW(ToolBase):
         tool = Tool.all_latest_tools().filter(name=tool_name).first()
         if not tool:
             raise ToolDoesNotExist()
+        if tool.status != PanelStatus.PUBLISHED:
+            raise ToolNotPublished()
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data

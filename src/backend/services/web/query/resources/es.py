@@ -27,6 +27,7 @@ from apps.permission.handlers.actions import ActionEnum
 from services.web.databus.constants import DEFAULT_STORAGE_CONFIG_KEY
 from services.web.query.serializers import (
     EsQueryAttrSerializer,
+    EsQuerySearchAllAttrSerializer,
     EsQuerySearchAttrSerializer,
     FieldMapRequestSerializer,
     QuerySearchResponseSerializer,
@@ -66,7 +67,7 @@ class EsQueryResource(QueryBaseResource):
 
 class SearchAllResource(QueryBaseResource, SearchDataParser):
     name = gettext_lazy("搜索(All)")
-    RequestSerializer = EsQuerySearchAttrSerializer
+    RequestSerializer = EsQuerySearchAllAttrSerializer
     serializer_class = QuerySearchResponseSerializer
 
     def perform_request(self, validated_request_data):

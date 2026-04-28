@@ -20,6 +20,7 @@ from services.web.vision.resources import (
     CreatePlatformPanel,
     CreateScenePanel,
     CreateSceneReportGroup,
+    DeletePlatformPanel,
     DeleteScenePanel,
     DeleteSceneReportGroup,
     ListPanels,
@@ -343,6 +344,42 @@ class TestPanelManagementFeatures(TestCase):
             DeleteScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
 
         self.assertTrue(VisionPanel.objects.filter(id=panel.id).exists())
+
+    def test_delete_scene_panel_clears_group_items_and_favorites(self):
+        panel_resp = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "待删除场景报表"}
+        )
+        panel = VisionPanel.objects.get(id=panel_resp["id"])
+        UserPanelFavorite.objects.create(username="u1", panel=panel)
+
+        DeleteScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
+
+        self.assertFalse(SceneReportGroupItem.objects.filter(panel_id=panel.id).exists())
+        self.assertFalse(UserPanelFavorite.objects.filter(panel_id=panel.id).exists())
+        self.assertFalse(VisionPanel.objects.filter(id=panel.id).exists())
+        self.assertTrue(VisionPanel.objects.filter(id=panel.id, is_deleted=True).exists())
+
+    def test_delete_platform_panel_clears_group_items_and_favorites(self):
+        panel_resp = CreatePlatformPanel().request(
+            {
+                "name": "待删除平台报表",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        panel = VisionPanel.objects.get(id=panel_resp["id"])
+        UserPanelFavorite.objects.create(username="u1", panel=panel)
+        self.assertTrue(SceneReportGroupItem.objects.filter(panel_id=panel.id).exists())
+
+        DeletePlatformPanel().request({"panel_id": panel.id})
+
+        self.assertFalse(SceneReportGroupItem.objects.filter(panel_id=panel.id).exists())
+        self.assertFalse(UserPanelFavorite.objects.filter(panel_id=panel.id).exists())
+        self.assertFalse(VisionPanel.objects.filter(id=panel.id).exists())
+        self.assertTrue(VisionPanel.objects.filter(id=panel.id, is_deleted=True).exists())
 
     @patch("services.web.vision.resources.get_request_username", return_value="tester")
     @patch("services.web.vision.resources.ScopePermission.get_scene_ids", return_value=[])

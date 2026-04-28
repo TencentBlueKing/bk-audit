@@ -32,7 +32,8 @@ from services.web.scene.models import (
     Scene,
     SceneSystem,
 )
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import LinkTable, Strategy
+from services.web.tool.models import Tool
 
 # ==================== Fixtures ====================
 
@@ -295,6 +296,32 @@ class TestRiskRuleSceneId:
         assert not ResourceBindingScene.objects.filter(binding=binding).exists()
 
 
+class TestToolSceneId:
+    """Tool 通过 ResourceBinding 关联场景测试"""
+
+    @pytest.mark.django_db
+    def test_tool_binding_uses_uid_not_model_id(self, scene):
+        """测试工具绑定使用跨版本稳定的 uid，而不是物理 id"""
+        tool = Tool.objects.create(
+            namespace="default",
+            uid="tool-binding-uid-001",
+            version=1,
+            name="工具绑定 UID 测试",
+            tool_type="data_search",
+            config={},
+            permission_owner="admin",
+        )
+
+        binding = SceneScopeFilter.create_resource_binding(
+            resource_id=str(tool.uid),
+            resource_type=ResourceVisibilityType.TOOL,
+            scene_id=scene.scene_id,
+        )
+
+        assert binding.resource_id == str(tool.uid)
+        assert binding.resource_id != str(tool.id)
+
+
 class TestNoticeGroupSceneId:
     """NoticeGroup 通过 ResourceBinding 关联场景测试"""
 
@@ -396,7 +423,6 @@ class TestLinkTableSceneId:
     @pytest.mark.django_db
     def test_delete_link_table_cleans_resource_binding(self, scene):
         """测试删除联表会同步清理绑定关系"""
-        from services.web.strategy_v2.models import LinkTable
         from services.web.strategy_v2.resources import DeleteLinkTable
 
         link_table = LinkTable.objects.create(
@@ -412,6 +438,95 @@ class TestLinkTableSceneId:
 
         assert not LinkTable.objects.filter(uid=link_table.uid).exists()
         assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
+
+    @pytest.mark.django_db
+    def test_create_link_table_rolls_back_when_binding_fails(self, scene):
+        """测试联表绑定创建失败时回滚业务对象"""
+        from services.web.strategy_v2.resources import CreateLinkTable
+
+        before = LinkTable.objects.count()
+        with mock.patch(
+            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            side_effect=RuntimeError("binding failed"),
+        ):
+            with pytest.raises(RuntimeError, match="binding failed"):
+                CreateLinkTable().request(
+                    {
+                        "scene_id": scene.scene_id,
+                        "namespace": "default",
+                        "name": "rollback-link-table",
+                        "description": "",
+                        "tags": [],
+                        "config": {
+                            "links": [
+                                {
+                                    "join_type": "inner_join",
+                                    "left_table": {
+                                        "rt_id": "rt_rollback_a",
+                                        "table_type": "BuildIn",
+                                    },
+                                    "right_table": {
+                                        "rt_id": "rt_rollback_b",
+                                        "table_type": "BuildIn",
+                                    },
+                                    "link_fields": [
+                                        {
+                                            "left_field": {"field_name": "id"},
+                                            "right_field": {"field_name": "id"},
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                    }
+                )
+
+        assert LinkTable.objects.count() == before
+
+    @pytest.mark.django_db
+    def test_create_link_table_compensates_when_grant_fails(self, scene):
+        """测试联表创建后授权失败会清理业务对象和绑定关系"""
+        from services.web.strategy_v2.resources import CreateLinkTable
+
+        before_binding_count = ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.LINK_TABLE).count()
+        with (
+            mock.patch("services.web.strategy_v2.resources.get_request_username", return_value="admin"),
+            mock.patch(
+                "services.web.strategy_v2.resources.Permission.grant_creator_action",
+                side_effect=RuntimeError("grant failed"),
+            ),
+            pytest.raises(RuntimeError, match="grant failed"),
+        ):
+            CreateLinkTable().request(
+                {
+                    "scene_id": scene.scene_id,
+                    "namespace": "default",
+                    "name": "grant-failed-link-table",
+                    "description": "",
+                    "tags": [],
+                    "config": {
+                        "links": [
+                            {
+                                "join_type": "inner_join",
+                                "left_table": {"rt_id": "rt_grant_a", "table_type": "BuildIn"},
+                                "right_table": {"rt_id": "rt_grant_b", "table_type": "BuildIn"},
+                                "link_fields": [
+                                    {
+                                        "left_field": {"field_name": "id"},
+                                        "right_field": {"field_name": "id"},
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            )
+
+        assert not LinkTable.objects.filter(name="grant-failed-link-table").exists()
+        assert (
+            ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.LINK_TABLE).count()
+            == before_binding_count
+        )
 
 
 # ==================== Serializer 层测试 ====================
@@ -624,6 +739,59 @@ class TestNoticeGroupSceneFilter:
         assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
 
     @pytest.mark.django_db
+    def test_create_notice_group_rolls_back_when_binding_fails(self, scene):
+        """测试通知组绑定创建失败时回滚业务对象"""
+        from apps.notice.resources import CreateNoticeGroup
+
+        before = NoticeGroup.objects.count()
+        with mock.patch(
+            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            side_effect=RuntimeError("binding failed"),
+        ):
+            with pytest.raises(RuntimeError, match="binding failed"):
+                CreateNoticeGroup().request(
+                    {
+                        "scene_id": scene.scene_id,
+                        "group_name": "rollback-notice-group",
+                        "group_member": ["admin"],
+                        "notice_config": [{"msg_type": "mail"}],
+                        "description": "",
+                    }
+                )
+
+        assert NoticeGroup.objects.count() == before
+
+    @pytest.mark.django_db
+    def test_create_notice_group_compensates_when_grant_fails(self, scene):
+        """测试通知组创建后授权失败会清理业务对象和绑定关系"""
+        from apps.notice.resources import CreateNoticeGroup
+
+        before_binding_count = ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.NOTICE_GROUP).count()
+        with (
+            mock.patch("apps.notice.resources.get_request_username", return_value="admin"),
+            mock.patch(
+                "apps.notice.resources.Permission.grant_creator_action",
+                side_effect=RuntimeError("grant failed"),
+            ),
+            pytest.raises(RuntimeError, match="grant failed"),
+        ):
+            CreateNoticeGroup().request(
+                {
+                    "scene_id": scene.scene_id,
+                    "group_name": "grant-failed-notice-group",
+                    "group_member": ["admin"],
+                    "notice_config": [{"msg_type": "mail"}],
+                    "description": "",
+                }
+            )
+
+        assert not NoticeGroup.objects.filter(group_name="grant-failed-notice-group").exists()
+        assert (
+            ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.NOTICE_GROUP).count()
+            == before_binding_count
+        )
+
+    @pytest.mark.django_db
     def test_filter_notice_groups_no_scene_returns_none(self, scene):
         """测试不传 scene_id 和 system_id 时返回空结果"""
         NoticeGroup.objects.all().delete()
@@ -694,6 +862,33 @@ class TestProcessApplicationSceneFilter:
         assert len(result) == 1
         assert result[0]["id"] == pa1.id
 
+    @pytest.mark.django_db
+    def test_create_process_application_rolls_back_when_binding_fails(self, scene):
+        """测试处理套餐绑定创建失败时回滚业务对象"""
+        from services.web.risk.resources.process_application import (
+            CreateProcessApplication,
+        )
+
+        before = ProcessApplication.objects.count()
+        with mock.patch(
+            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            side_effect=RuntimeError("binding failed"),
+        ):
+            with pytest.raises(RuntimeError, match="binding failed"):
+                CreateProcessApplication().request(
+                    {
+                        "scene_id": scene.scene_id,
+                        "name": "rollback-pa",
+                        "sops_template_id": 10001,
+                        "need_approve": False,
+                        "approve_service_id": None,
+                        "approve_config": {},
+                        "description": "",
+                    }
+                )
+
+        assert ProcessApplication.objects.count() == before
+
 
 class TestRiskRuleSceneFilter:
     """处理规则场景过滤测试（使用 SceneScopeFilter）"""
@@ -757,6 +952,69 @@ class TestRiskRuleSceneFilter:
 
         assert not RiskRule.objects.filter(rule_id=rule.rule_id).exists()
         assert not ResourceBinding.objects.filter(pk=binding.pk).exists()
+
+    @pytest.mark.django_db
+    def test_create_risk_rule_rolls_back_when_binding_fails(self, scene):
+        """测试处理规则绑定创建失败时回滚业务对象"""
+        from services.web.risk.resources.rule import CreateRiskRule
+
+        before = RiskRule.objects.count()
+        with mock.patch(
+            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            side_effect=RuntimeError("binding failed"),
+        ):
+            with pytest.raises(RuntimeError, match="binding failed"):
+                CreateRiskRule().request(
+                    {
+                        "scene_id": scene.scene_id,
+                        "name": "rollback-risk-rule",
+                        "scope": [],
+                        "pa_id": None,
+                        "pa_params": {},
+                        "auto_close_risk": True,
+                    }
+                )
+
+        assert RiskRule.objects.count() == before
+
+    @pytest.mark.django_db
+    def test_batch_update_risk_rule_rejects_cross_scene_without_partial_update(self, scene, another_scene):
+        """测试批量调整规则时先完成场景校验，避免部分更新"""
+        from services.web.risk.resources.rule import BatchUpdateRiskRulePriorityIndex
+
+        rule_in = RiskRule.objects.create(
+            name="批量更新场景内规则",
+            scope=[],
+            version=1,
+            rule_id=93001,
+            priority_index=1,
+            is_enabled=True,
+        )
+        rule_out = RiskRule.objects.create(
+            name="批量更新其他场景规则",
+            scope=[],
+            version=1,
+            rule_id=93002,
+            priority_index=2,
+            is_enabled=True,
+        )
+        _bind_resource_to_scene(rule_in.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
+        _bind_resource_to_scene(rule_out.rule_id, ResourceVisibilityType.RISK_RULE, another_scene.scene_id)
+
+        with pytest.raises(Exception):
+            BatchUpdateRiskRulePriorityIndex().request(
+                {
+                    "scene_id": scene.scene_id,
+                    "config": [
+                        {"rule_id": rule_in.rule_id, "priority_index": 100, "is_enabled": False},
+                        {"rule_id": rule_out.rule_id, "priority_index": 200, "is_enabled": False},
+                    ],
+                }
+            )
+
+        rule_in.refresh_from_db()
+        assert rule_in.priority_index == 1
+        assert rule_in.is_enabled is True
 
 
 class TestRiskSceneFilter:
