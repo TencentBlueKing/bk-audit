@@ -17,6 +17,7 @@
 
 export default class Event {
   risk_id: number;
+  scene_id: number | string;
   event_content: string;
   raw_event_id: string;
   strategy_id: number;
@@ -104,6 +105,7 @@ export default class Event {
   event_basic_field_configs: Array<Record<string, any>>;
 
   constructor(payload = {} as Event) {
+    this.scene_id = payload.scene_id;
     this.risk_id = payload.risk_id;
     this.updated_at = payload.updated_at;
     this.updated_by = payload.updated_by;

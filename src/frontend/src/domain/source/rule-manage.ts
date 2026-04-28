@@ -47,12 +47,16 @@ class RuleManage extends ModuleBase {
     });
   }
   // 获取风险处理规则列表
-  getRuleAll() {
+  getRuleAll(params:{
+    scene_id: string
+  }) {
     return Request.get<Array<{
       id: string,
       name: string,
       version: number,
-    }>>(`${this.module}/all/`);
+    }>>(`${this.module}/all/`, {
+      params,
+    });
   }
   // 获取风险处理规则匹配方式
   getRiskRuleOprators() {

@@ -50,8 +50,10 @@ export default {
   /**
    * @desc 获取处理套餐列表(下拉列表)
    */
-  fetchApplicationsAll() {
-    return ProcessApplicationManageSource.getApplicationsAll()
+  fetchApplicationsAll(params:{
+    scene_id?: string
+  }) {
+    return ProcessApplicationManageSource.getApplicationsAll(params)
       .then(({ data }) => data);
   },
   /**

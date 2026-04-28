@@ -19,7 +19,9 @@
     ref="listRef"
     :columns="tableColumn"
     :data-source="dataSource"
-    is-need-hide-clear-search-tip />
+    is-need-hide-clear-search-tip
+    is-need-scene-id
+    scene-id-key="scene_id" />
 </template>
 
 <script setup lang='tsx'>
