@@ -33,7 +33,6 @@ export default class Scene {
   iam_manager_group_id: string | null;
   iam_viewer_group_id: string | null;
   tables: Record<string, any>[];
-  strategy_ids: number[];
   system_count: number;
   table_count: number;
 
@@ -56,7 +55,6 @@ export default class Scene {
     this.systems = payload.systems || [];
     this.iam_manager_group_id = payload.iam_manager_group_id;
     this.iam_viewer_group_id = payload.iam_viewer_group_id;
-    this.strategy_ids = payload.strategy_ids || [];
     this.system_count = payload.system_count || 0;
     this.table_count = payload.table_count || 0;
     this.tables = payload.tables || [];

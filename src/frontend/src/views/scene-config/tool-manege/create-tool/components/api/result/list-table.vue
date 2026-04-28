@@ -364,7 +364,7 @@
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import FieldReference from '../../data-search/components/field-reference/index.vue';
 
