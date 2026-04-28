@@ -360,7 +360,11 @@
         <audit-icon
           v-bk-tooltips={t('跳转至「审计策略」查看')}
           class="ml8 jump-link hover-show-icon"
-          type="jump-link" />
+          type="jump-link"
+          onClick={(e: Event) => {
+            e.stopPropagation();
+            handleJumpToStrategy(row);
+          }} />
       </span>
     ),
     },
@@ -376,7 +380,11 @@
         <audit-icon
           v-bk-tooltips={t('跳转至「风险」查看')}
           class="ml8 jump-link hover-show-icon"
-          type="jump-link" />
+          type="jump-link"
+          onClick={(e: Event) => {
+            e.stopPropagation();
+            handleJumpToRisk();
+          }} />
       </span>
     ),
     },
@@ -565,6 +573,30 @@
       query: {
         scene_id: String(row.scene_id),
       },
+    });
+    window.open(routeData.href, '_blank');
+  };
+
+  // 新开标签页跳转到审计策略列表页
+  const handleJumpToStrategy = (row: SceneModel) => {
+    const strategyIds = row.strategy_ids || [];
+    const query: Record<string, string> = {
+      scene_id: String(row.scene_id),
+    };
+    if (strategyIds.length) {
+      query.strategy_id = strategyIds.join(',');
+    }
+    const routeData = router.resolve({
+      name: 'strategyList',
+      query,
+    });
+    window.open(routeData.href, '_blank');
+  };
+
+  // 新开标签页跳转到风险列表页
+  const handleJumpToRisk = () => {
+    const routeData = router.resolve({
+      name: 'riskManageList',
     });
     window.open(routeData.href, '_blank');
   };
