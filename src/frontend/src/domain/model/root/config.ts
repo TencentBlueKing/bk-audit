@@ -27,6 +27,7 @@ export default class Config {
   static_version: string;
   super_manager: boolean;
   system_manager: boolean;
+  iegsec_helper: string;
   username: string;
   title: string;
   footer: Array<{
@@ -49,6 +50,7 @@ export default class Config {
   help_info:{
     schema: string;
     query_string: string;
+    bkaudit_wiki: string
     ai_practices: {
       ai_summary: string;
     };
@@ -94,6 +96,7 @@ export default class Config {
     this.version = payload.version;
     this.site_title = payload.site_title;
     this.help_info = payload.help_info;
+    this.iegsec_helper = payload.iegsec_helper;
     this.language = payload.language;
     this.bk_biz_id = payload.bk_biz_id;
     this.shared_res_url = payload.shared_res_url;
@@ -111,6 +114,7 @@ export default class Config {
       return {
         schema: '',
         query_string: '',
+        bkaudit_wiki: '',
         ai_practices: {
           ai_summary: '',
         },

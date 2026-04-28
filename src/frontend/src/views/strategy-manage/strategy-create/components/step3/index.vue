@@ -52,9 +52,10 @@
                   <auth-option
                     v-for="(item, index) in groupList"
                     :key="index"
-                    action-id="list_notice_group"
+                    action-id="list_notice_group_v2"
                     :label="item.name"
-                    :permission="checkResultMap.list_notice_group"
+                    :permission="checkResultMap.list_notice_group_v2"
+                    resource-is-scene
                     :value="item.id" />
                   <template #extension>
                     <div class="create-notice-group">
@@ -116,9 +117,10 @@
                   <auth-option
                     v-for="(item, index) in groupList"
                     :key="index"
-                    action-id="list_notice_group"
+                    action-id="list_notice_group_v2"
                     :label="item.name"
-                    :permission="checkResultMap.list_notice_group"
+                    :permission="checkResultMap.list_notice_group_v2"
+                    resource-is-scene
                     :value="item.id" />
                   <template #extension>
                     <div class="create-notice-group">
@@ -192,6 +194,7 @@
   import CardPartVue from '../step1/components/card-part.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface IFormData {
     processor_groups: Array<any>,
@@ -240,7 +243,8 @@
     data: checkResultMap,
   } = useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'list_notice_group',
+      action_ids: 'list_notice_group_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
@@ -259,6 +263,10 @@
     run: fetchGroupList,
   } = useRequest(NoticeManageService.fetchGroupSelectList, {
     defaultValue: [],
+    defaultParams: {
+      page_size: 1000,
+      page: 1,
+    },
     manual: true,
   });
 
