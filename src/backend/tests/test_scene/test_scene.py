@@ -695,16 +695,20 @@ class TestSceneResource(TestCase):
         self.assertEqual(result["strategy_ids"], [strategy.strategy_id])
         self.assertEqual(result["risk_count"], 1)
 
-    def test_create_scene_validate_systems_schema(self):
-        """测试创建场景时 systems 子序列化器校验生效"""
-        with self.assertRaises(ValidateException):
+    def test_create_scene_all_systems_without_system_id(self):
+        """创建场景选择全系统时允许不传 system_id"""
+        with mock.patch(
+            "services.web.scene.resources.IAMGroupManager.create_scene_groups_with_members",
+            return_value={"iam_manager_group_id": 1, "iam_viewer_group_id": 2},
+        ):
             self.resource.scene.create_scene(
-                {
-                    "name": "systems-校验",
-                    "managers": ["admin"],
-                    "systems": [{"is_all_systems": True}],
-                }
+                {"name": "systems-全系统", "managers": ["admin"], "systems": [{"is_all_systems": True}]}
             )
+
+        scene = Scene.objects.get(name="systems-全系统")
+        scene_system = SceneSystem.objects.get(scene=scene)
+        self.assertEqual(scene_system.system_id, "")
+        self.assertTrue(scene_system.is_all_systems)
 
     def test_create_scene_validate_tables_schema(self):
         """测试创建场景时 tables 子序列化器校验生效"""
@@ -769,15 +773,13 @@ class TestSceneResource(TestCase):
             self.assertEqual(result["managers"], ["scene_admin"])
             self.assertEqual(result["users"], ["scene_user1", "scene_user2"])
 
-    def test_update_scene_validate_systems_schema(self):
-        """测试更新场景时 systems 子序列化器校验生效"""
-        with self.assertRaises(ValidateException):
-            self.resource.scene.update_scene(
-                {
-                    "scene_id": self.scene.scene_id,
-                    "systems": [{"is_all_systems": True}],
-                }
-            )
+    def test_update_scene_all_systems_without_system_id(self):
+        """更新场景选择全系统时允许不传 system_id"""
+        self.resource.scene.update_scene({"scene_id": self.scene.scene_id, "systems": [{"is_all_systems": True}]})
+
+        scene_system = SceneSystem.objects.get(scene=self.scene)
+        self.assertEqual(scene_system.system_id, "")
+        self.assertTrue(scene_system.is_all_systems)
 
     def test_update_scene_validate_tables_schema(self):
         """测试更新场景时 tables 子序列化器校验生效"""
@@ -1089,6 +1091,20 @@ class TestPanelResources(TestCase):
         names = [item["name"] for item in result]
         self.assertIn("安全总览报表", names)
         self.assertIn("场景报表", names)
+
+    def test_panel_list_scene_scope_excludes_specific_system_panel(self):
+        """测试 scene scope 不应通过场景系统关系返回指定系统可见的平台报表"""
+        SceneSystem.objects.create(scene=self.scene, system_id="bk_job")
+
+        result = self._call_list_panels(
+            {
+                "scope_type": "scene",
+                "scope_id": str(self.scene.scene_id),
+            }
+        )
+
+        names = {item["name"] for item in result}
+        self.assertNotIn("系统报表", names)
 
     def test_panel_list_filter_multiple_scenes(self):
         """测试报表列表支持多场景筛选"""
@@ -1506,6 +1522,17 @@ class TestToolResources(TestCase):
         self.assertIn("查询工具", tool_names)  # 平台级
         self.assertIn("场景工具", tool_names)  # 场景级
         self.assertEqual(len(result), 2)
+
+    def test_tool_list_scene_scope_excludes_specific_system_tool(self):
+        """测试 scene scope 不应通过场景系统关系返回指定系统可见的平台工具"""
+        SceneSystem.objects.create(scene=self.scene, system_id="bk_job")
+
+        result = self._call_list_tool(
+            {"scope_type": "scene", "scope_id": str(self.scene.scene_id), "page": 1, "page_size": 10}
+        )
+
+        names = {item["name"] for item in result}
+        self.assertNotIn("系统工具", names)
 
     def test_tool_list_filter_multiple_scenes(self):
         """测试跨场景视角按场景级过滤"""

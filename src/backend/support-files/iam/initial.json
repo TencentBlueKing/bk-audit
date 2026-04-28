@@ -122,49 +122,9 @@
       }
     },
     {
-      "operation": "upsert_resource_type",
-      "data": {
-        "id": "process_application",
-        "name": "处理套餐",
-        "name_en": "Process Application",
-        "description": "",
-        "description_en": "",
-        "parents": [
-          {
-            "system_id": "bk-audit",
-            "id": "scene"
-          }
-        ],
-        "provider_config": {
-          "path": "/api/v1/iam/resources/"
-        },
-        "version": 1
-      }
-    },
-    {
       "operation": "delete_resource_type",
       "data": {
         "id": "risk_rule"
-      }
-    },
-    {
-      "operation": "upsert_resource_type",
-      "data": {
-        "id": "rule",
-        "name": "处理规则",
-        "name_en": "Rule",
-        "description": "",
-        "description_en": "",
-        "parents": [
-          {
-            "system_id": "bk-audit",
-            "id": "scene"
-          }
-        ],
-        "provider_config": {
-          "path": "/api/v1/iam/resources/"
-        },
-        "version": 1
       }
     },
     {
@@ -496,42 +456,6 @@
           {
             "system_id": "bk-audit",
             "id": "tool"
-          }
-        ]
-      }
-    },
-    {
-      "operation": "upsert_instance_selection",
-      "data": {
-        "id": "process_application_list",
-        "name": "处理套餐列表",
-        "name_en": "Process Application List",
-        "resource_type_chain": [
-          {
-            "system_id": "bk-audit",
-            "id": "scene"
-          },
-          {
-            "system_id": "bk-audit",
-            "id": "process_application"
-          }
-        ]
-      }
-    },
-    {
-      "operation": "upsert_instance_selection",
-      "data": {
-        "id": "rule_list",
-        "name": "规则列表",
-        "name_en": "Rule List",
-        "resource_type_chain": [
-          {
-            "system_id": "bk-audit",
-            "id": "scene"
-          },
-          {
-            "system_id": "bk-audit",
-            "id": "rule"
           }
         ]
       }

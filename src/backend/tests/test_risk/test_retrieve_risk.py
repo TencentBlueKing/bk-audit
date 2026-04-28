@@ -1381,6 +1381,16 @@ class TestRetrieveRiskDetail(TestCase):
         unsynced_ids = [item["manual_event_id"] for item in data.get("unsynced_events", [])]
         self.assertEqual(unsynced_ids, [in_range.manual_event_id])
 
+    def test_retrieve_risk_returns_strategy_scene_id(self):
+        from services.web.scene.models import Scene
+
+        scene = Scene.objects.create(name="risk-detail-scene")
+        bind_strategy_to_scene(self.strategy.strategy_id, scene.scene_id)
+
+        data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
+
+        self.assertEqual(data["scene_id"], scene.scene_id)
+
     def test_retrieve_risk_without_end_time_returns_later_manual_events(self):
         open_risk = Risk.objects.create(
             risk_id="risk-open",

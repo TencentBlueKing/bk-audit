@@ -36,6 +36,7 @@ from apps.meta.serializers import SystemListRequestSerializer
 from apps.meta.views.system_views import SystemsViewSet
 from core.testing import assert_dict_contains, assert_list_contains
 from core.utils.data import ordered_dict_to_json, trans_object_local
+from services.web.common.constants import ScopeType
 from services.web.databus.models import Snapshot
 from tests.base import TestCase
 from tests.test_meta.constants import (
@@ -255,6 +256,22 @@ class MetaTest(TestCase):
         """SystemListAllResource"""
         result = self.resource.meta.system_list_all(**SYSTEM_LIST_ALL_PARAMS)
         self.assertEqual(result, SYSTEM_LIST_ALL_DATA)
+
+    @mock.patch("meta.resources.ScopePermission.get_system_ids_for_scope")
+    @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
+    def test_system_list_all_filter_by_scope(self, mock_get_system_ids_for_scope):
+        """SystemListAllResource 传 scope 时按 scope 可见系统过滤"""
+        mock_get_system_ids_for_scope.return_value = [settings.BK_IAM_SYSTEM_ID]
+
+        result = self.resource.meta.system_list_all(
+            **{
+                **SYSTEM_LIST_ALL_OF_ACTION_IDS_PARAMS,
+                "scope_type": ScopeType.CROSS_SYSTEM,
+            }
+        )
+
+        self.assertEqual([system["system_id"] for system in result], [settings.BK_IAM_SYSTEM_ID])
+        mock_get_system_ids_for_scope.assert_called_once()
 
     @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
     def test_system_list_all_of_not_action_ids(self):

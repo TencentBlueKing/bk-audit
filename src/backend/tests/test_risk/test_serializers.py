@@ -8,14 +8,19 @@ from types import SimpleNamespace
 from django.conf import settings
 from django.utils import timezone
 
-from services.web.risk.models import Risk, RiskReport
+from services.web.risk.models import ProcessApplication, Risk, RiskReport, RiskRule
 from services.web.risk.serializers import (
+    CreateRiskRuleReqSerializer,
     CreateRiskSerializer,
     ListEventResponseSerializer,
     ListRiskResponseSerializer,
     RiskInfoSerializer,
     RiskProviderSerializer,
+    UpdateRiskRuleReqSerializer,
 )
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -174,3 +179,72 @@ class TestSyncRiskHasReportSignal(HasReportSerializerTestBase):
         self.report.save()
 
         self.assertTrue(Risk.objects.get(risk_id=self.risk_with_report.risk_id).has_report)
+
+
+class RiskRuleSerializersTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.scene = Scene.objects.create(name="risk-rule-scene", description="test")
+        self.another_scene = Scene.objects.create(name="risk-rule-another-scene", description="test")
+        self.process_application = self._create_process_application("same-scene-pa", self.scene.scene_id)
+        self.another_process_application = self._create_process_application(
+            "another-scene-pa", self.another_scene.scene_id
+        )
+
+    def _create_process_application(self, name, scene_id):
+        process_application = ProcessApplication.objects.create(
+            name=name,
+            sops_template_id=1,
+            need_approve=False,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(process_application.id),
+            resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+            scene_id=scene_id,
+        )
+        return process_application
+
+    def test_create_risk_rule_serializer_rejects_cross_scene_process_application(self):
+        serializer = CreateRiskRuleReqSerializer(
+            data={
+                "name": "rule-create",
+                "scope": [],
+                "pa_id": self.another_process_application.id,
+                "pa_params": {},
+                "auto_close_risk": True,
+                "scene_id": self.scene.scene_id,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("pa_id", str(serializer.errors))
+
+    def test_update_risk_rule_serializer_rejects_cross_scene_process_application(self):
+        rule = RiskRule.objects.create(
+            rule_id=1,
+            version=1,
+            name="rule-update",
+            scope=[],
+            pa_id=self.process_application.id,
+            pa_params={},
+            auto_close_risk=True,
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(rule.rule_id),
+            resource_type=ResourceVisibilityType.RISK_RULE,
+            scene_id=self.scene.scene_id,
+        )
+
+        serializer = UpdateRiskRuleReqSerializer(
+            data={
+                "rule_id": rule.rule_id,
+                "name": "rule-update",
+                "scope": [],
+                "pa_id": self.another_process_application.id,
+                "pa_params": {},
+                "auto_close_risk": True,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("pa_id", str(serializer.errors))

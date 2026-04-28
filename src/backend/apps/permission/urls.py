@@ -72,16 +72,6 @@ try:
 except (RuntimeError, ImportError):
     SceneResourceProvider = None
 
-try:
-    from services.web.risk.provider import ProcessApplicationResourceProvider
-except (RuntimeError, ImportError):
-    ProcessApplicationResourceProvider = None
-
-try:
-    from services.web.risk.provider import RuleResourceProvider
-except (RuntimeError, ImportError):
-    RuleResourceProvider = None
-
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register(ResourceEnum.SYSTEM.id, SystemResourceProvider())
 resources_dispatcher.register(ResourceEnum.TAG.id, TagResourceProvider())
@@ -120,12 +110,6 @@ if StrategyTagResourceProvider is not None:
 
 if SceneResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.SCENE.id, SceneResourceProvider())
-
-if ProcessApplicationResourceProvider is not None:
-    resources_dispatcher.register(ResourceEnum.PROCESS_APPLICATION.id, ProcessApplicationResourceProvider())
-
-if RuleResourceProvider is not None:
-    resources_dispatcher.register(ResourceEnum.RULE.id, RuleResourceProvider())
 
 router = ResourceRouter()
 router.register_module(views)

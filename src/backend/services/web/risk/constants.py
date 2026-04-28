@@ -33,6 +33,7 @@ from apps.meta.utils.fields import (
 from core.choices import TextChoices, register_choices
 from core.exporter.constants import ExportField
 from core.sql.constants import AggregateType, FieldType
+from services.web.common.constants import ScopeQueryField
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
 BKM_ALERT_SYNC_HOURS = int(os.getenv("BKAPP_BKM_ALERT_SYNC_HOURS", 3))
@@ -723,6 +724,9 @@ EVENT_BASIC_MAP_FIELDS = [
 ES_SEARCH_ORIGIN_FIELDS = [
     EventMappingFields.RAW_EVENT_ID.field_name,
 ]
+
+# search_all 兼容场景上下文参数，但不能把 scope 当作 ES 字段过滤
+IGNORE_SEARCH_ALL_FILTER_FIELDS = {ScopeQueryField.SCOPE_TYPE, ScopeQueryField.SCOPE_ID}
 
 
 class RiskExportField(TextChoices):

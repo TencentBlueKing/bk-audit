@@ -365,46 +365,43 @@ class CreateStrategy(StrategyV2Base):
     ResponseSerializer = CreateStrategyResponseSerializer
     audit_action = ActionEnum.CREATE_STRATEGY
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
         scene_id = validated_request_data.pop("scene_id", None)
         self._check_source_type(validated_request_data)
-        with transaction.atomic():
-            # pop tag
-            tag_names = validated_request_data.pop("tags", [])
-            # save strategy
-            strategy: Strategy = Strategy.objects.create(**validated_request_data)
-            # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-            from services.web.scene.constants import ResourceVisibilityType
-            from services.web.scene.filters import SceneScopeFilter
-
-            SceneScopeFilter.create_resource_binding(
-                resource_id=str(strategy.strategy_id),
-                resource_type=ResourceVisibilityType.STRATEGY,
-                scene_id=scene_id,
-            )
-            # save strategy tag
-            self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
-            self._save_strategy_tools(strategy, validated_request_data)
-            if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
-                strategy.sql = self.build_rule_audit_sql(strategy)
-                strategy.save(update_fields=["sql"])
-            # 更新enum
-            for field_category in [
-                'event_basic_field_configs',
-                'event_data_field_configs',
-                'event_evidence_field_configs',
-                'risk_meta_field_config',
-            ]:
-                for field_config in validated_request_data.get(field_category, []):
-                    enum_mappings = field_config.get('enum_mappings')
-                    if enum_mappings:
-                        self.update_enum_mappings(
-                            enum_mappings,
-                            strategy.strategy_id,
-                            field_config.get('field_name'),
-                            field_category,
-                        )
+        # pop tag
+        tag_names = validated_request_data.pop("tags", [])
+        # save strategy
+        strategy: Strategy = Strategy.objects.create(**validated_request_data)
+        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene_id,
+        )
+        # save strategy tag
+        self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+        self._save_strategy_tools(strategy, validated_request_data)
+        if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
+            strategy.sql = self.build_rule_audit_sql(strategy)
+            strategy.save(update_fields=["sql"])
+        # 更新enum
+        for field_category in [
+            'event_basic_field_configs',
+            'event_data_field_configs',
+            'event_evidence_field_configs',
+            'risk_meta_field_config',
+        ]:
+            for field_config in validated_request_data.get(field_category, []):
+                enum_mappings = field_config.get('enum_mappings')
+                if enum_mappings:
+                    self.update_enum_mappings(
+                        enum_mappings,
+                        strategy.strategy_id,
+                        field_config.get('field_name'),
+                        field_category,
+                    )
         # create
         try:
             call_controller(
@@ -565,7 +562,6 @@ class DeleteStrategy(StrategyV2Base):
         # delete tags
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
         StrategyTool.objects.filter(strategy=strategy).delete()
-
         # delete
         try:
             call_controller(
@@ -579,9 +575,6 @@ class DeleteStrategy(StrategyV2Base):
             strategy.save(update_fields=["status", "status_msg"])
             raise err
         # delete strategy
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
         SceneScopeFilter.delete_resource_binding(
@@ -623,9 +616,6 @@ class ListStrategy(StrategyV2Base):
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # 按场景过滤（通过 ResourceBinding）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         queryset = SceneScopeFilter.filter_queryset(
             queryset=queryset,
             scene_id=scene_id,
@@ -1490,25 +1480,45 @@ class CreateLinkTable(LinkTableBase):
         self._save_tags(link_table_uid=link_table.uid, tag_names=tag_names)
         return link_table
 
-    def perform_request(self, validated_request_data):
+    @transaction.atomic
+    def _create_local(self, validated_request_data):
         scene_id = validated_request_data.pop("scene_id", None)
         link_table = self.create_link_table(validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(link_table.uid),
             resource_type=ResourceVisibilityType.LINK_TABLE,
             scene_id=scene_id,
         )
-        # audit
-        self.add_audit_instance_to_context(link_table)
-        # auth
+        return link_table
+
+    def _grant_creator(self, link_table):
         username = get_request_username()
         if username:
             resource_instance = ResourceEnum.LINK_TABLE.create_instance(link_table.uid)
             Permission(username).grant_creator_action(resource_instance)
+
+    def _compensate_create_failure(self, link_table):
+        with transaction.atomic():
+            SceneScopeFilter.delete_resource_binding(
+                resource_id=link_table.uid,
+                resource_type=ResourceVisibilityType.LINK_TABLE,
+            )
+            LinkTableTag.objects.filter(link_table_uid=link_table.uid).delete()
+            LinkTable.objects.filter(uid=link_table.uid).delete()
+
+    def perform_request(self, validated_request_data):
+        link_table = self._create_local(validated_request_data)
+        try:
+            self._grant_creator(link_table)
+        except Exception:
+            try:
+                self._compensate_create_failure(link_table)
+            except Exception as error:  # best-effort compensation should not mask the original auth error
+                logger.exception("[CreateLinkTable] compensate create failure failed: %s", error)
+            raise
+        # audit
+        self.add_audit_instance_to_context(link_table)
         return link_table
 
 
@@ -1580,9 +1590,6 @@ class DeleteLinkTable(LinkTableBase):
         # 删除联表
         LinkTableTag.objects.filter(link_table_uid=uid).delete()
         LinkTable.objects.filter(uid=uid).delete()
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.delete_resource_binding(
             resource_id=uid,
             resource_type=ResourceVisibilityType.LINK_TABLE,
@@ -1605,9 +1612,6 @@ class ListLinkTable(LinkTableBase):
         # 获取最新版本的联表
         link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
         # 按场景过滤（通过 ResourceBinding）
-        from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.filters import SceneScopeFilter
-
         link_tables = SceneScopeFilter.filter_queryset(
             queryset=link_tables,
             scene_id=scene_id,

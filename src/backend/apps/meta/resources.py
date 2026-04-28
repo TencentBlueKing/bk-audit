@@ -158,6 +158,7 @@ from core.constants import OrderTypeChoices
 from core.models import get_request_username
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 
 
 class Meta:
@@ -361,6 +362,13 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
     @property
     def queryset(self):
         qs = super().queryset
+        if self.validated_data.get("scope_type"):
+            scope = ScopeContext(
+                scope_type=self.validated_data["scope_type"],
+                scope_id=self.validated_data.get("scope_id"),
+            )
+            system_ids = ScopePermission(get_request_username()).get_system_ids_for_scope(scope)
+            qs = qs.filter(system_id__in=system_ids)
         if self.validated_data.get("with_favorite"):
             qs = self.build_favorite_queryset(qs)
         return qs

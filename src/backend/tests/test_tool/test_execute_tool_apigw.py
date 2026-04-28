@@ -2,7 +2,9 @@
 from unittest import mock
 
 from core.exceptions import AppPermissionDenied
+from services.web.scene.constants import PanelStatus
 from services.web.tool.constants import ToolTypeEnum
+from services.web.tool.exceptions import ToolNotPublished
 from services.web.tool.models import Tool
 
 from ..base import TestCase
@@ -18,6 +20,7 @@ class TestExecuteToolAPIGWResource(TestCase):
             tool_type=ToolTypeEnum.BK_VISION.value,
             config={"uid": "vision_uid"},
             permission_owner="owner",
+            status=PanelStatus.PUBLISHED,
         )
         mock_executor = mock.Mock()
         mock_executor.execute.return_value = mock.Mock(model_dump=mock.Mock(return_value={"ok": True}))
@@ -45,6 +48,28 @@ class TestExecuteToolAPIGWResource(TestCase):
         ):
             with self.assertRaises(AppPermissionDenied):
                 self.resource.tool.execute_tool_apigw({"uid": "tool_uid", "params": {}})
+        mock_record_usage.assert_not_called()
+
+    def test_execute_tool_apigw_denies_unpublished_tool(self):
+        Tool.objects.create(
+            namespace="ns",
+            name="draft_apigw_tool",
+            uid="draft_tool_uid",
+            version=1,
+            tool_type=ToolTypeEnum.BK_VISION.value,
+            config={"uid": "vision_uid"},
+            permission_owner="owner",
+            status=PanelStatus.UNPUBLISHED,
+        )
+
+        with (
+            mock.patch("tool.resources.get_app_info"),
+            mock.patch("tool.resources.ToolExecutorFactory.create_from_tool") as mock_create_executor,
+            mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
+        ):
+            with self.assertRaises(ToolNotPublished):
+                self.resource.tool.execute_tool_apigw({"uid": "draft_tool_uid", "params": {}})
+        mock_create_executor.assert_not_called()
         mock_record_usage.assert_not_called()
 
 
@@ -130,6 +155,7 @@ class TestGetToolDetailByNameAPIGWResource(TestCase):
                 "referenced_tables": [{"table_name": "test_table"}],
             },
             description="测试工具描述",
+            status=PanelStatus.PUBLISHED,
         )
 
     def test_get_tool_detail_by_name_lite_mode_true(self):
@@ -207,3 +233,15 @@ class TestGetToolDetailByNameAPIGWResource(TestCase):
                         "lite_mode": True,
                     }
                 )
+
+    def test_get_tool_detail_by_name_apigw_denies_unpublished_tool(self):
+        self.tool.status = PanelStatus.UNPUBLISHED
+        self.tool.save(update_fields=["status"])
+
+        with (
+            mock.patch("core.utils.tools.get_app_info"),
+            mock.patch("tool.resources.GetToolDetailByNameAPIGWResponseSerializer") as mock_serializer,
+        ):
+            with self.assertRaises(ToolNotPublished):
+                self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})
+        mock_serializer.assert_not_called()

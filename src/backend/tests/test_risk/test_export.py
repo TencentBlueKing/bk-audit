@@ -249,3 +249,23 @@ class TestRiskExport(TestCase):
         )
 
         self.assertEqual(raw_config["description"], str(RAW_EVENT_ID_REMARK))
+
+    def test_retrieve_strategy_serializer_returns_scene_id(self):
+        strategy = Strategy.objects.create(
+            strategy_name="Strategy Scene Serializer",
+            risk_level=RiskLevel.LOW,
+            event_basic_field_configs=[],
+            event_data_field_configs=[],
+            event_evidence_field_configs=[],
+            risk_meta_field_config=[],
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene.scene_id,
+        )
+
+        serializer = RetrieveRiskStrategyInfoResponseSerializer(instance=strategy)
+        data = serializer.data
+
+        self.assertEqual(data["scene_id"], self.scene.scene_id)

@@ -24,6 +24,9 @@ from django.conf import settings
 from services.web.risk.constants import RiskStatus
 from services.web.risk.models import Risk
 from services.web.risk.resources.risk import RetrieveRiskStrategyInfoAPIGW
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -36,6 +39,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
 
     def setUp(self):
         super().setUp()
+        self.scene = Scene.objects.create(name="test_strategy_info_scene")
         # 创建策略，包含 enum_mappings 和 drill_config 配置
         self.strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
@@ -88,6 +92,11 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
             event_evidence_field_configs=[],
             risk_meta_field_config=[],
         )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(self.strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene.scene_id,
+        )
 
         # 创建风险
         self.risk = Risk.objects.create(
@@ -117,6 +126,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
         self.assertEqual(result["risk_level"], RiskLevel.HIGH.value)
         self.assertEqual(result["risk_hazard"], "测试风险危害")
         self.assertEqual(result["risk_guidance"], "测试处理指引")
+        self.assertEqual(result["scene_id"], self.scene.scene_id)
         self.assertIn("event_basic_field_configs", result)
         self.assertIn("event_data_field_configs", result)
 

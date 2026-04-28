@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from blueapps.utils.request_provider import get_local_request, get_request_username
+from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
@@ -47,6 +48,7 @@ from services.web.risk.serializers import (
     UpdateProcessApplicationsReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
@@ -72,8 +74,6 @@ class ListProcessApplications(ProcessApplicationMeta):
                 _q |= Q(**{key: item})
             q &= _q
         # 场景过滤
-        from services.web.scene.filters import SceneScopeFilter
-
         # 筛选数据（SceneScopeFilter 会处理 scene_id 过滤，未指定时返回全部）
         process_applications = SceneScopeFilter.filter_queryset(
             queryset=ProcessApplication.objects.filter(q),
@@ -117,8 +117,6 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             return []
         scene_id = validated_request_data["scene_id"]
         process_applications = ProcessApplication.objects.all()
-        from services.web.scene.filters import SceneScopeFilter
-
         process_applications = SceneScopeFilter.filter_queryset(
             queryset=process_applications,
             scene_id=scene_id,
@@ -137,12 +135,11 @@ class CreateProcessApplication(ProcessApplicationMeta):
     ResponseSerializer = ProcessApplicationsInfoSerializer
     audit_action = ActionEnum.CREATE_PA
 
+    @transaction.atomic
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data.pop("scene_id", None)
         pa = ProcessApplication.objects.create(**validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        from services.web.scene.filters import SceneScopeFilter
-
         SceneScopeFilter.create_resource_binding(
             resource_id=str(pa.id),
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
