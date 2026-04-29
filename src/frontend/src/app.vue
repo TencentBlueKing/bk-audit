@@ -36,7 +36,7 @@
           class="ml24">
           <scene-system-selector
             v-model="selectedScene"
-            :list-scope="['system', 'scene']"
+            :list-scope="['scene']"
             :popover-width="280"
             scene-permission="view_scene"
             system-permission="view_system"

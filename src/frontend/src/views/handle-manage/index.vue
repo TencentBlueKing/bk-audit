@@ -344,30 +344,6 @@
     defaultValue: new AccountModel(),
     manual: true,
   });
-  // const {
-  //   run: fetchRiskList,
-  // } = useRequest(RiskManageService.fetchTodoRiskList, {
-  //   defaultValue: {
-  //     total: 0,
-  //     results: [],
-  //     page: 1,
-  //     num_pages: 1,
-  //   },
-  //   onSuccess(data) {
-  //     const { results } = data;
-  //     if (results && results.length) {
-  //       results.forEach((item) => {
-  //         const tmpItem = pollingDataMap.value[item.risk_id];
-  //         if (!tmpItem) return;
-  //         tmpItem.status = item.status;
-  //         tmpItem.current_operator = item.current_operator;
-  //         tmpItem.risk_label = item.risk_label;
-  //         tmpItem.last_operate_time = item.last_operate_time;
-  //       });
-  //       startPolling(results);
-  //     }
-  //   },
-  // });
 
 
   const {
@@ -384,25 +360,7 @@
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
   };
-  // // 开始轮训
-  // const startPolling = (results: Array<RiskManageModel>) => {
-  //   clearTimeout(timeout);
-  //   pollingDataMap.value = {};
-  //   results.forEach((item) => {
-  //     if (item.status !== 'closed') {
-  //       pollingDataMap.value[item.risk_id] = item;
-  //     }
-  //   });
-  //   if (!Object.keys(pollingDataMap.value).length) return;
-  //   timeout = setTimeout(() => {
-  //     const params = getSearchParamsPost('event_filters');
-  //     fetchRiskList({
-  //       ...params,
-  //       risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
-  //         .join(','),
-  //     });
-  //   }, 60 * 1000);
-  // };
+
 
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-handle-risk-list-setting', JSON.stringify(setting));
