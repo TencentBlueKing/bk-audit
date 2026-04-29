@@ -31,6 +31,7 @@ export interface RiskColumnDeps {
   strategyTagMap: Ref<Record<string, string>>;
   strategyList: Ref<Array<{ value: number; label: string }>>;
   riskStatusCommon: Ref<Array<{ id: string; name: string }>>;
+  sceneList: Ref<Array<{ scene_id: number; name: string }>>;
   handleToDetail: (row: RiskManageModel, needToRiskContent?: boolean) => void;
 }
 
@@ -67,7 +68,7 @@ export const createRiskIdColumn = (routeName: string) => {
 export const createBaseRiskColumns = (deps: RiskColumnDeps) => {
   const { t } = useI18n();
   const statusToMap = RISK_STATUS_TAG_MAP;
-  const { levelData, strategyTagMap, strategyList, riskStatusCommon, handleToDetail } = deps;
+  const { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail } = deps;
 
   return [
     // 多选列
@@ -79,6 +80,16 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps) => {
     },
     createTextColumn(t('风险标题'), 'title'),
     createTextColumn(t('风险描述'), 'event_content'),
+    {
+      title: t('所属场景'),
+      colKey: 'scene_id',
+      width: 140,
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: RiskManageModel }) => {
+        const sceneName = sceneList.value.find((item: any) => item.scene_id === row.scene_id)?.name;
+        return h('span', `${sceneName}(${row.scene_id})`);
+      },
+    },
     {
       title: t('风险等级'),
       colKey: 'risk_level',
