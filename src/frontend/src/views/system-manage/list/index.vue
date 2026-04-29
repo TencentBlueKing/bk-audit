@@ -48,8 +48,7 @@
         @clear-search="handleClearSearch"
         @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess"
-        @row-click="handleRowClick" />
+        @request-success="handleRequestSuccess" />
     </div>
   </skeleton-loading>
 </template>
@@ -211,6 +210,48 @@
       }</>,
     },
     {
+      label: () => t('系统状态'),
+      sort: 'custom',
+      width: '200px',
+      filter: {
+        list: [
+          {
+            text: t('待接入'),
+            value: 'pending',
+          },
+          {
+            text: t('待完善'),
+            value: 'incomplete',
+          },
+          {
+            text: t('数据异常'),
+            value: 'abnormal',
+          },
+          {
+            text: t('正常'),
+            value: 'normal',
+          },
+        ],
+        filterScope: SortScope.ALL,
+        match: FullEnum.FUZZY,
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
+      field: () => 'system_status',
+      render: ({ data }: {data: SyetemModel}) => {
+        if (!data.system_status) {
+          return '--';
+        }
+        return (
+           <bk-tag
+              theme={systemStatusThemeMap(data.system_status)}
+             >
+             { systemStatusMap(data.system_status)}
+            </bk-tag>
+        );
+      },
+    },
+    {
       label: () => t('数据上报状态'),
       sort: 'custom',
       width: '200px',
@@ -279,6 +320,20 @@
       width: 140,
       render: ({ data }: {data: SyetemModel}) => data.created_by || '--',
     },
+    // 操作列 文字按钮
+    {
+      label: () => t('操作'),
+      width: 140,
+      render: ({ data }: {data: SyetemModel}) => (
+          <bk-button
+            theme="primary"
+            text
+            onClick={() => handleRowClick(data)}
+            size="small">
+            { t('管理') }
+          </bk-button>
+        ),
+    },
   ] as Column[];
 
   const listRef = ref();
@@ -288,7 +343,24 @@
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
   const permissionCheckData = ref();
-
+  const systemStatusMap = (status: string) => {
+    const map: Record<string, string> = {
+      pending: t('待接入'),
+      incomplete: t('待完善'),
+      abnormal: t('数据异常'),
+      normal: t('正常'),
+    };
+    return map[status] || status;
+  };
+  const systemStatusThemeMap = (status: string) => {
+    const map: Record<string, string> = {
+      pending: 'info',
+      incomplete: 'warning',
+      abnormal: 'danger',
+      normal: 'success',
+    };
+    return map[status] || 'default';
+  };
   const disabledMap: Record<string, string> = {
     name: 'name',
     instance_id: 'instance_id',
@@ -313,7 +385,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['name', 'instance_id', 'managers', 'resource_type_count', 'status', 'last_time'],
+    checked: ['name', 'instance_id', 'managers', 'resource_type_count', 'status', 'last_time', 'system_status'],
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
   });
@@ -386,8 +458,16 @@
   };
 
   // 点击整行
-  const handleRowClick = (event: Event, row: any) => {
-    (document.querySelector(`#systemDetailLink${row.system_id}`) as HTMLElement)?.click();
+  const handleRowClick = (row: any) => {
+    router.push({
+      name: 'systemInfo',
+      params: {
+        id: row.system_id,
+      },
+      query: {
+        type: row.permission_type,
+      },
+    });
   };
   // 清空搜索
   const handleClearSearch = () => {

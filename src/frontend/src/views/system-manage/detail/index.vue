@@ -21,6 +21,7 @@
     :name="skeletonLoadingName">
     <div class="system-manage-detail-header">
       <system-info
+        :id="route.params.id as string"
         ref="appRef"
         :data="data" />
     </div>
@@ -52,7 +53,7 @@
                   {{ item.label }}
                 </h3>
                 <span
-                  v-if="item.name !== 'basicInfo'"
+                  v-if="item.name !== 'basicInfo' && item.name !== 'systemDiagnosis'"
                   v-bk-tooltips="{
                     content: item.name === 'accessModel'
                       ? t('资源与操作数据', {
@@ -100,6 +101,7 @@
   import AccessModel from './components/access-model/index.vue';
   import BasicInfo from './components/basic-info/index.vue';
   import DataReport from './components/data-report/index.vue';
+  import SystemDiagnosis from './components/system-diagnosis/index.vue';
   import SystemInfo from './components/system-info/index.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -113,6 +115,7 @@
     basicInfo: BasicInfo,
     accessModel: AccessModel,
     dataReport: DataReport,
+    systemDiagnosis: SystemDiagnosis,
   };
   const panels = [
     {
@@ -129,8 +132,13 @@
       name: 'dataReport',
       label: t('日志上报'),
       describe: t('研发通过SDK上报日志数据'),
-
     },
+    {
+      name: 'systemDiagnosis',
+      label: t('系统诊断'),
+      describe: t('诊断系统接入状态与数据质量'),
+    },
+    // 系统诊断
   ];
 
   const contentType = ref<keyof typeof contentComponentMap>('basicInfo');
