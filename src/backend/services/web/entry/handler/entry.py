@@ -92,7 +92,6 @@ class EntryHandler(object):
                 "query_string": cls.get_query_help(),
                 "schema": cls.get_schema_help(),
                 "ai_practices": GlobalMetaConfig.get(AI_PRACTICES_KEY, default=DEFAULT_AI_PRACTICES),
-                "bkaudit_wiki": settings.BKAPP_BKAUDIT_WIKI,
             },
             # 语言
             "language": {
@@ -125,6 +124,7 @@ class EntryHandler(object):
             "third_doc_url": {
                 "search_rule_iwiki_url": GlobalMetaConfig.get(SEARCH_RULE_IWIKI_URL_KEY, default=""),
                 "permission_model_iwiki_url": GlobalMetaConfig.get(PERMISSION_MODEL_IWIKI_URL_KEY, default=""),
+                "scene_iwiki_url": settings.BKAPP_SCENE_IWIKI_URL,
             },
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
