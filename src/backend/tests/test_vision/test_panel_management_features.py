@@ -671,6 +671,28 @@ class TestVisionIdFeature(TestCase):
         panel = VisionPanel.objects.get(id=resp["id"])
         self.assertEqual(panel.vision_id, "")
 
+    def test_update_platform_panel_without_vision_id_keeps_existing_value(self):
+        """更新平台报表时不传 vision_id，应保留原值"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "保留vision_id的平台报表",
+                "vision_id": "keep_platform_vision",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        UpdatePlatformPanel().request(
+            {
+                "panel_id": resp["id"],
+                "name": "仅更新名称",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "keep_platform_vision")
+
     def test_create_scene_panel_with_vision_id(self):
         """创建场景报表时传入 vision_id，应正确持久化"""
         resp = CreateScenePanel().request(
@@ -729,3 +751,24 @@ class TestVisionIdFeature(TestCase):
         )
         panel = VisionPanel.objects.get(id=resp["id"])
         self.assertEqual(panel.vision_id, "new_scene_vision")
+
+    def test_update_scene_panel_without_vision_id_keeps_existing_value(self):
+        """更新场景报表时不传 vision_id，应保留原值"""
+        resp = CreateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "保留vision_id的场景报表",
+                "vision_id": "keep_scene_vision",
+            }
+        )
+        UpdateScenePanel().request(
+            {
+                "scene_id": self.scene1.scene_id,
+                "group_id": self.scene_group.id,
+                "panel_id": resp["id"],
+                "name": "仅更新名称",
+            }
+        )
+        panel = VisionPanel.objects.get(id=resp["id"])
+        self.assertEqual(panel.vision_id, "keep_scene_vision")

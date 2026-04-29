@@ -42,6 +42,7 @@ from services.web.scene.constants import (
     VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter, _parse_list_value
+from services.web.scene.exceptions import SceneHasRelatedResources
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -805,6 +806,33 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
         self.assertEqual(result["message"], "success")
         self.assertFalse(Scene.objects.filter(scene_id=self.scene.scene_id).exists())
+
+    def test_delete_scene_reports_related_resource_details(self):
+        """测试删除场景存在关联资源时提示资源类型和 ID"""
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            resource_id="1001",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+
+        with self.assertRaises(SceneHasRelatedResources) as ctx:
+            self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
+
+        self.assertIn("通知组", ctx.exception.message)
+        self.assertIn("1001", ctx.exception.message)
+        self.assertEqual(
+            ctx.exception.data,
+            {
+                "related_resources": [
+                    {
+                        "resource_type": ResourceVisibilityType.NOTICE_GROUP,
+                        "resource_type_name": "通知组",
+                        "resource_id": "1001",
+                    }
+                ]
+            },
+        )
 
     def test_scene_disable(self):
         """测试停用场景"""
