@@ -98,9 +98,9 @@ export default {
     {
       page:number,
       page_size: number,
-      keyword?: string
-      audit_status: 'accessed'
-      filter_actions?: string
+      keyword?: string,
+      audit_status: string,
+      filter_actions?: string,
     }) {
     const finalParams = { ...params };
     if (!finalParams.filter_actions) {
