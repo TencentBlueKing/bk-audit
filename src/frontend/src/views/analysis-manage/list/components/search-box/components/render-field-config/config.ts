@@ -41,11 +41,14 @@ export default () => ({
     type: 'system-id',
     required: false,
     operator: 'include',
-    service: () => MetaManageService.fetchSystemWithAction({
-      action_ids: 'search_regular_event',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-    }),
+    service: () => {
+      const params = getSceneSystemParams();
+      return MetaManageService.fetchSystemWithAction({
+        action_ids: 'search_regular_event',
+        scope_id: params.scope_id || '',
+        scope_type: params.scope_type || '',
+      });
+    },
   },
   action_id: {
     label: '操作事件名',
