@@ -15,7 +15,11 @@ from core.models import get_request_username
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
 from services.web.scene.data_filter import SceneDataFilter
-from services.web.scene.exceptions import SceneHasRelatedResources, SceneNotExist
+from services.web.scene.exceptions import (
+    RelatedResourceDetail,
+    SceneHasRelatedResources,
+    SceneNotExist,
+)
 from services.web.scene.models import Scene, SceneDataTable, SceneSystem
 from services.web.scene.serializers import (
     CreateSceneSerializer,
@@ -331,6 +335,26 @@ class DeleteScene(SceneResource):
 
     name = gettext_lazy("删除场景")
 
+    @staticmethod
+    def _get_related_resource_details(scene_id: int) -> list[RelatedResourceDetail]:
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.models import ResourceBindingScene
+
+        resource_type_labels = {value: str(label) for value, label in ResourceVisibilityType.choices}
+        related_resources: list[RelatedResourceDetail] = []
+        binding_scenes = ResourceBindingScene.objects.filter(scene_id=scene_id).select_related("binding")
+        for binding_scene in binding_scenes:
+            binding = binding_scene.binding
+            resource_type = binding.resource_type
+            related_resources.append(
+                {
+                    "resource_type": resource_type,
+                    "resource_type_name": resource_type_labels.get(resource_type, resource_type),
+                    "resource_id": binding.resource_id,
+                }
+            )
+        return related_resources
+
     @transaction.atomic
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
@@ -341,7 +365,7 @@ class DeleteScene(SceneResource):
 
         # 检查是否有关联资源
         from services.web.scene.constants import ResourceVisibilityType
-        from services.web.scene.models import ResourceBinding, ResourceBindingScene
+        from services.web.scene.models import ResourceBinding
         from services.web.strategy_v2.models import Strategy
 
         valid_strategy_ids = Strategy.objects.filter(is_deleted=False).values_list("strategy_id", flat=True)
@@ -351,9 +375,9 @@ class DeleteScene(SceneResource):
         ).exclude(resource_id__in=[str(strategy_id) for strategy_id in valid_strategy_ids]).delete()
 
         # 通过 ResourceBindingScene 检查是否有绑定到该场景的资源
-        has_resources = ResourceBindingScene.objects.filter(scene_id=scene.scene_id).exists()
-        if has_resources:
-            raise SceneHasRelatedResources()
+        related_resources = self._get_related_resource_details(scene.scene_id)
+        if related_resources:
+            raise SceneHasRelatedResources(related_resources=related_resources)
 
         # 删除关联数据
         SceneSystem.objects.filter(scene=scene).delete()
