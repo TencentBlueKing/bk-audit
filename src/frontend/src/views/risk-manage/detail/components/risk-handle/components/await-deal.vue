@@ -377,6 +377,9 @@
     loading: applicationLoading,
   } = useRequest(ProcessApplicationManageService.fetchApplicationsAll, {
     defaultValue: [],
+    defaultParams: {
+      scene_id: props.detailData.scene_id,
+    },
     manual: true,
   });
   // 获取处理套餐详情
