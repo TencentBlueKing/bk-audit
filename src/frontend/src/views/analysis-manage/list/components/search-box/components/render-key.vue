@@ -21,7 +21,7 @@
       :style="boxRowStyle">
       <template
         v-for="(fieldItem, fieldName) in defaultFieldList"
-        :key="fieldName">
+        :key="`${fieldName}-${fieldConfigVersion}`">
         <render-field-config
           ref="fieldConfigRef"
           :base-config="localFiledConfig"
@@ -49,7 +49,7 @@
         :style="boxRowStyle">
         <template
           v-for="(fieldItem, fieldName) in moreFieldList"
-          :key="fieldName">
+          :key="`${fieldName}-${fieldConfigVersion}`">
           <render-field-config
             ref="fieldConfigRef"
             :base-config="localFiledConfig"
@@ -66,7 +66,7 @@
         class="box-row">
         <render-field-config
           v-for="(fieldItem, fieldName) in queryStringField"
-          :key="fieldName"
+          :key="`${fieldName}-${fieldConfigVersion}`"
           ref="fieldConfigRef"
           :base-config="localFiledConfig"
           :model="localSearchModel"
@@ -217,6 +217,10 @@
     (e: 'update:modelValue', value: Record<string, any>): void,
     (e: 'submit'): void,
   }
+  interface Exposes {
+    clearValue: () => void;
+    resetFieldConfig: () => void;
+  }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -237,7 +241,10 @@
 
   const deleteFieldName = ref('');
 
-  const localFiledConfig = ref(filedConfig);
+  // 字段配置版本号，切换场景时递增以强制子组件重新挂载、重新请求接口数据
+  const fieldConfigVersion = ref(0);
+
+  const localFiledConfig = ref(filedConfig());
   // eslint-disable-next-line max-len
   const allFieldNameList = computed(() => Object.keys(localFiledConfig.value) as Array<keyof typeof localFiledConfig.value>);
   const defaultFieldList = computed(() => allFieldNameList.value.slice(0, 7).reduce((result, fieldName) => ({
@@ -538,6 +545,26 @@
       ],
     };
   };
+
+  // 重置字段配置到初始状态（清除自定义字段、收藏字段等）
+  const resetFieldConfig = () => {
+    localFiledConfig.value = _.cloneDeep(filedConfig());
+    fieldConfigVersion.value += 1;  // 递增版本号，强制子组件重新挂载
+  };
+
+  // 清空搜索值和字段配置（场景切换时调用）
+  const clearValue = () => {
+    handleReset();
+    resetFieldConfig();
+    isShowMore.value = false;
+    emits('update:modelValue', localSearchModel.value);
+    emits('submit');
+  };
+
+  defineExpose<Exposes>({
+    clearValue,
+    resetFieldConfig,
+  });
 
   const boxRowStyle = ref({
     'grid-template-columns': 'repeat(4, 1fr)',

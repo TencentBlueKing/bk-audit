@@ -19,6 +19,7 @@
     <keep-alive>
       <component
         :is="renderComponent"
+        ref="renderComRef"
         v-model="searchModel"
         @submit="handleSubmit" />
     </keep-alive>
@@ -75,6 +76,7 @@
   }
 
   const renderComponent = computed(() => comMap[renderType.value]);
+  const renderComRef = ref();
 
   const searchModel = ref<Record<string, any>>({
     datetime: [
@@ -106,7 +108,7 @@
   };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
-    const config = FieldConfig[searchFieldName as keyof typeof FieldConfig];
+    const config = FieldConfig()[searchFieldName as keyof ReturnType<typeof FieldConfig>];
     if (!config) {
       return;
     }
@@ -168,6 +170,7 @@
 
   defineExpose<Exposes>({
     clearValue() {
+      // 重置搜索模型
       searchModel.value = {
         // 用于查询的date参数
         datetime: [
@@ -180,6 +183,8 @@
           'now',
         ],
       };
+      // 同时重置子组件的字段配置（清除自定义字段、收藏字段等）
+      renderComRef.value?.clearValue?.();
       handleSubmit();
     },
   });
