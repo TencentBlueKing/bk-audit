@@ -18,6 +18,7 @@ export default class PanelModel {
   id: string;
   name: string;
   description: string;
+  binding_type: string;
   vision_id: string;
   priority_index: number;
   group_id: number;
@@ -34,6 +35,7 @@ export default class PanelModel {
     this.id = payload.id;
     this.name = payload.name;
     this.description = payload.description;
+    this.binding_type = payload.binding_type;
     this.vision_id = payload.vision_id;
     this.priority_index = payload.priority_index;
     this.group_id = payload.group_id;
