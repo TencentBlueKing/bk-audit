@@ -559,10 +559,10 @@ BKAPP_AUDIT_ACCESS_GUIDE = os.getenv("BKAPP_AUDIT_ACCESS_GUIDE", "")
 BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS = os.getenv("BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS", "")
 
 # 申请场景权限企业微信UIN
-BKAPP_IEGSEC_HELPER = os.getenv("BKAPP_IEGSEC_HELPER", "8444251086320680")
+BKAPP_IEGSEC_HELPER = os.getenv("BKAPP_IEGSEC_HELPER", "")
 
-# 审计中心的iwiki链接
-BKAPP_BKAUDIT_WIKI = os.getenv("BKAPP_BKAUDIT_WIKI", "https://iwiki.woa.com/space/bkaudit")
+# 审计中心场景的iwiki链接
+BKAPP_SCENE_IWIKI_URL = os.getenv("BKAPP_SCENE_IWIKI_URL", "")
 
 """
 以下为框架代码 请勿修改
