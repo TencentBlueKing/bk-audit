@@ -67,6 +67,8 @@
                 name: 'strategyList',
                 query: {
                   strategy_id: data.strategy_id,
+                  scope_id: data.scene_id,
+                  scope_type: 'scene',
                 },
               }">
               {{ strategyName }}

@@ -60,6 +60,7 @@
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
+  import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type RiskManageModel from '@model/risk/risk';
@@ -101,7 +102,7 @@
   const tableColumns = computed(() => {
     if (!initTableColumns.length) {
       const baseColumns = useRiskColumns({
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, handleToDetail },
+        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
         detailRouteName: 'attentionManageDetail',
       });
       const columnMap = new Map(baseColumns.map((col: any) => [col.colKey || col.type, col]));
@@ -218,6 +219,13 @@
   //   },
   // });
 
+
+  const {
+    data: sceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    manual: true,
+    defaultValue: [],
+  });
 
   const {
     data: levelData,
