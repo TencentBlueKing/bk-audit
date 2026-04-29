@@ -403,6 +403,8 @@ class CreateStrategy(StrategyV2Base):
                         field_category,
                     )
         # create
+        # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
+        # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
         try:
             call_controller(
                 BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)

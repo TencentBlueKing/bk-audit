@@ -2,9 +2,8 @@
 
 from django.db import migrations
 
-from services.web.vision.constants import DEFAULT_SCENE_REPORT_GROUP_NAME
-
 DEFAULT_SCENE_NAME = "system_default"
+DEFAULT_SCENE_REPORT_GROUP_NAME = "默认分组"
 DEFAULT_SCENE_REPORT_GROUP_PRIORITY = 0
 
 RESOURCE_TYPE_PANEL = "panel"

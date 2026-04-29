@@ -123,7 +123,7 @@ class CreatePlatformPanelRequestSerializer(serializers.Serializer):
 
 class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
     panel_id = serializers.CharField(required=True)
-    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
@@ -150,7 +150,7 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     group_id = serializers.IntegerField(required=True)
     panel_id = serializers.CharField(required=True)
-    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    vision_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     name = serializers.CharField(required=False, max_length=255)
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
