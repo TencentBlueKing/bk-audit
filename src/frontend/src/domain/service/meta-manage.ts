@@ -146,6 +146,8 @@ export default {
     sort_keys?: string;
     with_favorite?: boolean;
     with_system_status?: boolean;
+    scope_id?: string;
+    scope_type?: string;
   }) {
     return MetaManageSource.getAllSysetemByActionId(params, {
       permission: 'page',

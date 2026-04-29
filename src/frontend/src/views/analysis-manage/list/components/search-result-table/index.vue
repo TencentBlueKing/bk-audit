@@ -308,7 +308,7 @@
     };
     // 将查询参数添加到 conditions 数组中
     Object.entries(filter).forEach(([k, v]) => {
-      const config = filedConfig[k];
+      const config = filedConfig()[k];
       if (config && config.operator) {
         let value: Array<string> = [];
         if (config.service || config.type === 'select' || config.type === 'user-selector') {
