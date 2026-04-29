@@ -175,7 +175,7 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps) => {
         const RouterLink = resolveComponent('router-link');
         const to = {
           name: 'strategyList',
-          query: { strategy_id: row.strategy_id },
+          query: { strategy_id: row.strategy_id, scope_id: row.scene_id, scope_type: 'scene' },
         };
         const strategyName = strategyList.value
           .find((item: any) => item.value === row.strategy_id)?.label;
