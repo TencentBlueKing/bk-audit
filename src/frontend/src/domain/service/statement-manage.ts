@@ -23,7 +23,12 @@ export default {
    * @desc 获取左侧菜单
    */
   fetchMenuList(params: { scenario: 'perapp' | 'default'; status?: string; scope_id?: string; scope_type?: string }) {
-    return StatementManageSource.getMenuList({ ...params, status: 'published', scope_id: getSceneSystemParams().scope_id, scope_type: getSceneSystemParams().scope_type }, {
+    return StatementManageSource.getMenuList({
+      ...params,
+      status: 'published',
+      scope_id: params.scope_id ?? getSceneSystemParams().scope_id,
+      scope_type: params.scope_type ?? getSceneSystemParams().scope_type,
+    }, {
       permission: 'page',
     })
       .then(({ data }) => data);

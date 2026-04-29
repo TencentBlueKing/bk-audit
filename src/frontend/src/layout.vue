@@ -84,9 +84,8 @@
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name: (projectList.length > 0 &&( userRole.includes('saas_admin') || userRole.includes('system_admin'))
-          )? 'nweSystemManage' : 'systemLandingPage', params: {
-            id: systemId
+          :to="{ name:( userRole.includes('saas_admin') || userRole.includes('system_admin')
+          )? 'systemList' : 'systemLandingPage', params: {
           } }">
           {{ t('系统接入') }}
         </router-link>
@@ -170,7 +169,8 @@
           <reports-sidebar :menu-data="menuData" />
         </template>
         <template v-else-if="curNavName === 'nweSystemManage'">
-          <div class="system-select">
+          <system-manage-sidebar />
+          <!-- <div class="system-select">
             <bk-select
               v-model="systemId"
               auto-focus
@@ -291,7 +291,7 @@
                 {{ t(item.title) }}
               </audit-menu-item>
             </div>
-          </template>
+          </template> -->
         </template>
         <template v-else-if="curNavName === 'platformManage'">
           <platform-sidebar />
@@ -314,13 +314,12 @@
     type Ref,
     ref,
     watch  } from 'vue';
-
-  interface SideMenuItem {
-    pathName: string;
-    icon: string;
-    title: string;
-    groupName: string
-  }
+  // interface SideMenuItem {
+  //   pathName: string;
+  //   icon: string;
+  //   title: string;
+  //   groupName: string
+  // }
   import { useI18n } from 'vue-i18n';
   import {
     useRoute,
@@ -328,8 +327,8 @@
   } from 'vue-router';
 
   import IamManageService from '@service/iam-manage';
-  import MetaManageService from '@service/meta-manage';
 
+  // import MetaManageService from '@service/meta-manage';
   // import ConfigModel from '@model/root/config';
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
@@ -339,13 +338,14 @@
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
-  import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  // import Tooltips from '@components/show-tooltips-text/index.vue';
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
   import PlatformSidebar from '@/components/statement-sidebar/platfrom.vue';
   import ReportsSidebar from '@/components/statement-sidebar/reports.vue';
   import SceneConfigSidebar from '@/components/statement-sidebar/scene-config.vue';
+  import SystemManageSidebar from '@/components/statement-sidebar/system-manage.vue';
   import useRequest from '@/hooks/use-request';
 
   interface Exposes {
@@ -379,36 +379,36 @@
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref<string | null>(null);
+  // const systemId = ref<string | null>(null);
   // 项目列表
-  interface SystemItem {
-    id: string;
-    name: string;
-    permission: {
-      view_system: boolean;
-    };
-    permission_type: 'simple' | 'complex';
-    system_status: 'pending' | 'incomplete' | 'abnormal' | 'normal';
-    system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
-    favorite: boolean;
-  }
+  // interface SystemItem {
+  //   id: string;
+  //   name: string;
+  //   permission: {
+  //     view_system: boolean;
+  //   };
+  //   permission_type: 'simple' | 'complex';
+  //   system_status: 'pending' | 'incomplete' | 'abnormal' | 'normal';
+  //   system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
+  //   favorite: boolean;
+  // }
 
-  const projectList = ref<SystemItem[]>([]);
+  // const projectList = ref<SystemItem[]>([]);
   const permissionCreateSystem = ref(false);
 
-  const contentText = (stage: string | undefined) => {
-    if (stage === 'permission_model') {
-      return t('系统尚未完成确实模型配置，请继续设置');
-    } if (stage === 'collector') {
-      return t('系统尚未完成日志数据上报，请继续上报');
-    }
-    return '';
-  };
-  const isSelectOpen = ref(false);
+  // const contentText = (stage: string | undefined) => {
+  //   if (stage === 'permission_model') {
+  //     return t('系统尚未完成确实模型配置，请继续设置');
+  //   } if (stage === 'collector') {
+  //     return t('系统尚未完成日志数据上报，请继续上报');
+  //   }
+  //   return '';
+  // };
+  // const isSelectOpen = ref(false);
 
-  const handleSelectToggle = (val: boolean) => {
-    isSelectOpen.value = val;
-  };
+  // const handleSelectToggle = (val: boolean) => {
+  //   isSelectOpen.value = val;
+  // };
   // 计算属性根据 userRole 计算sceneConfigRouterName
   const sceneConfigRouterName = computed(() => {
     if (userRole.includes('saas_admin') || userRole.includes('scene_admin')) { // 管理员 和 场景管理员
@@ -460,27 +460,27 @@
   //   },
   // });
 
-  const {
-    run: fetchSystemWithAction,
-  } = useRequest(MetaManageService.fetchSystemWithAction, {
-    defaultValue: [],
-    onSuccess: (data: any[]) => {
-      projectList.value = data;
-      if (route.params.id) {
-        systemId.value = route.params.id as string;
-      } else {
-        systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
-        if (route.name === 'systemInfo') {
-          router.push({
-            name: 'systemInfo',
-            params: {
-              id: systemId.value,
-            },
-          });
-        }
-      }
-    },
-  });
+  // const {
+  //   run: fetchSystemWithAction,
+  // } = useRequest(MetaManageService.fetchSystemWithAction, {
+  //   defaultValue: [],
+  //   onSuccess: (data: any[]) => {
+  //     projectList.value = data;
+  //     if (route.params.id) {
+  //       systemId.value = route.params.id as string;
+  //     } else {
+  //       systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+  //       if (route.name === 'systemInfo') {
+  //         router.push({
+  //           name: 'systemInfo',
+  //           params: {
+  //             id: systemId.value,
+  //           },
+  //         });
+  //       }
+  //     }
+  //   },
+  // });
 
   on('statement-menuData', (data) => {
     menuData.value = data as Array<MenuDataType>;
@@ -509,7 +509,7 @@
       return;
     }
     if (routerName === 'systemAccess') {
-      sessionStorage.setItem('systemProjectId', systemId.value || '');
+      // sessionStorage.setItem('systemProjectId', systemId.value || '');
       const routePath = router.resolve({ name: routerName }).href;
       window.open(routePath, '_blank');
       return;
@@ -519,57 +519,57 @@
     });
   };
 
-  // 系统切换
-  const handleSystemChange = (value: string) => {
-    // 找到对应选中item
-    const project = projectList.value.find(item => item.id === value);
-    if (!project) {
-      return;
-    }
-    // 在route.meta中添加systemId
-    sessionStorage.setItem('systemProjectId', value);
-    router.push({
-      name: 'systemInfo',
-      params: {
-        id: value,
-      },
-      query: {
-        type: project.permission_type,
-      },
-    });
-  };
+  // // 系统切换
+  // const handleSystemChange = (value: string) => {
+  //   // 找到对应选中item
+  //   const project = projectList.value.find(item => item.id === value);
+  //   if (!project) {
+  //     return;
+  //   }
+  //   // 在route.meta中添加systemId
+  //   sessionStorage.setItem('systemProjectId', value);
+  //   router.push({
+  //     name: 'systemInfo',
+  //     params: {
+  //       id: value,
+  //     },
+  //     query: {
+  //       type: project.permission_type,
+  //     },
+  //   });
+  // };
 
-  // 更新系统收藏
-  const {
-    run: fetchSystemAuditFavoriteUpdate,
-  } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
-    defaultValue: {},
-  });
-  const selfRouterChange = (item: SideMenuItem) => {
-    router.push({
-      name: item.pathName,
-      params: {
-        id: systemId.value,
-      },
-    });
-  };
-  // 系统收藏
-  const handlerFavorite = (item: Record<string, any>, val: boolean) => {
-    fetchSystemAuditFavoriteUpdate({
-      system_id: item.id,
-      favorite: val,
-    }).then(() => {
-      projectList.value = projectList.value.map((i) => {
-        if (i.id === item.id) {
-          return {
-            ...i,
-            favorite: val,
-          };
-        }
-        return i;
-      });
-    });
-  };
+  // // 更新系统收藏
+  // const {
+  //   run: fetchSystemAuditFavoriteUpdate,
+  // } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
+  //   defaultValue: {},
+  // });
+  // const selfRouterChange = (item: SideMenuItem) => {
+  //   router.push({
+  //     name: item.pathName,
+  //     params: {
+  //       id: systemId.value,
+  //     },
+  //   });
+  // };
+  // // 系统收藏
+  // const handlerFavorite = (item: Record<string, any>, val: boolean) => {
+  //   fetchSystemAuditFavoriteUpdate({
+  //     system_id: item.id,
+  //     favorite: val,
+  //   }).then(() => {
+  //     projectList.value = projectList.value.map((i) => {
+  //       if (i.id === item.id) {
+  //         return {
+  //           ...i,
+  //           favorite: val,
+  //         };
+  //       }
+  //       return i;
+  //     });
+  //   });
+  // };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
   }, {
@@ -579,13 +579,13 @@
 
 
   onMounted(() => {
-    fetchSystemWithAction({
-      sort_keys: 'favorite,permission',
-      action_ids: 'view_system',
-      with_favorite: true,
-      with_system_status: true,
-      audit_status__in: 'accessed',
-    });
+    // fetchSystemWithAction({
+    //   sort_keys: 'favorite,permission',
+    //   action_ids: 'view_system',
+    //   with_favorite: true,
+    //   with_system_status: true,
+    //   audit_status__in: 'accessed',
+    // });
   }),
   onBeforeUnmount(() => {
     off('statement-menuData');

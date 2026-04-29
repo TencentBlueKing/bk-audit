@@ -19,7 +19,14 @@
     <div
       v-if="status === 'normal' && !loading"
       style="width: 100%;height: 100%;">
-      <div id="panel" />
+      <div
+        v-if="menuData.length > 0"
+        id="panel" />
+      <bk-exception
+        v-else
+        :description="t('暂无数据')"
+        style="padding-top: 80px;"
+        type="empty" />
     </div>
     <div
       v-if="status !== 'normal' && !loading"
@@ -227,7 +234,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -264,6 +271,7 @@
     script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
     document.head.appendChild(script);
   });
+
 
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (err.data.code === '9900403') {
@@ -311,6 +319,7 @@
 
   const {
     loading,
+    run: fetchSystemStatus,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
       id: route.params.id,
@@ -324,15 +333,25 @@
 
   const {
     data: configData,
-  } =  useRequest(RootManageService.config, {
+    run: fetchConfig,
+  } = useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
     manual: true,
   });
 
+  // 组件挂载时主动请求数据
+  onMounted(() => {
+    fetchSystemStatus({ id: route.params.id });
+    fetchConfig();
+  });
+
   watch(() => status.value, (data) => {
     if (data === 'normal') {
+      console.log('oute.params.id', route.params.id);
       fetchMenuList({
-        scenario: 'per_app',
+        // scenario: 'per_app',
+        scope_id: route.params.id,
+        scope_type: 'system',
       });
     }
   }, {

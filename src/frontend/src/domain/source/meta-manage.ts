@@ -33,7 +33,7 @@ import Request, {
 
 import ModuleBase from './module-base';
 
-import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+// import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
 class MetaManage extends ModuleBase {
   constructor() {
@@ -83,7 +83,7 @@ class MetaManage extends ModuleBase {
     params: {
       page:number,
       page_size: number,
-      audit_status: 'accessed'
+      audit_status: string,
       keyword?: string,
       filter_actions?: string,
     },
@@ -92,7 +92,6 @@ class MetaManage extends ModuleBase {
     return Request.get<IRequestResponsePaginationData<SystemModel>>(`${this.path}/systems/`, {
       params: {
         ...params,
-        audit_status: params.audit_status || 'accessed',
       },
       payload,
     });
@@ -109,19 +108,19 @@ class MetaManage extends ModuleBase {
     scope_id?: string;
     scope_type?: string;
   }, payload = {} as IRequestPayload) {
-    const finalParams = { ...params };
-    // 如果没有传入scope_id和scope_type，则从getSceneSystemParams获取
-    if (!finalParams.scope_id || !finalParams.scope_type) {
-      const sceneParams = getSceneSystemParams();
-      if (!finalParams.scope_id) {
-        finalParams.scope_id = sceneParams.scope_id;
-      }
-      if (!finalParams.scope_type) {
-        finalParams.scope_type = sceneParams.scope_type;
-      }
-    }
+    // const finalParams = { ...params };
+    // // 如果没有传入scope_id和scope_type，则从getSceneSystemParams获取
+    // if (!finalParams.scope_id || !finalParams.scope_type) {
+    //   const sceneParams = getSceneSystemParams();
+    //   if (!finalParams.scope_id) {
+    //     finalParams.scope_id = sceneParams.scope_id;
+    //   }
+    //   if (!finalParams.scope_type) {
+    //     finalParams.scope_type = sceneParams.scope_type;
+    //   }
+    // }
     return Request.get<Array<EventSourceAppModel>>(`${this.path}/systems/all/`, {
-      params: finalParams,
+      params,
       payload,
     });
   }
