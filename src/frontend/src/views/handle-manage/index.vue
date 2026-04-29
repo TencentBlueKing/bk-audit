@@ -96,6 +96,7 @@
 
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
+  import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
@@ -192,7 +193,7 @@
   const tableColumns = computed(() => {
     if (!initTableColumns.length) {
       initTableColumns = useRiskColumns({
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, handleToDetail },
+        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
         detailRouteName: 'handleManageDetail',
         appendColumns: [actionColumn],
       });
@@ -346,6 +347,12 @@
   });
 
 
+  const {
+    data: sceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    manual: true,
+    defaultValue: [],
+  });
   const {
     data: levelData,
     run: fetchRiskLevel,
