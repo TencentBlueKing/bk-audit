@@ -115,6 +115,8 @@
   // 场景切换
   const handleSceneChange = () => {
     resultRef.value?.handleUpdateField();
+    // 清空搜索
+    searchBoxRef.value.clearValue();
   };
 
   // 搜索
