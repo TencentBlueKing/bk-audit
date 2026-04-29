@@ -188,6 +188,7 @@
                         <div class="action-column">
                           <bk-button
                             class="mr8"
+                            :disabled="report.binding_type === 'platform_binding'"
                             text
                             theme="primary"
                             @click="handleEdit(report)">
@@ -443,6 +444,7 @@
     id: string;
     name: string;
     description: string;
+    binding_type: string;
     vision_id: string;
     bkvisionReport?: string;
     bkvisionReportName?: string;

@@ -291,6 +291,7 @@
             .filter((panel: PanelModel) => panel.group_id === group.id)
             .map((panel: PanelModel) => ({
               id: panel.id,
+              binding_type: panel.binding_type,
               name: panel.name,
               description: panel.description || '--',
               vision_id: panel.vision_id,
