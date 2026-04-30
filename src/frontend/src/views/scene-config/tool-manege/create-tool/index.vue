@@ -307,6 +307,11 @@
   const handleCancel = () => {
     router.push({
       name: backRouteName,
+      query: {
+        scene_id: route.query?.scene_id,
+        scope_id: route.query?.scope_id,
+        scope_type: route.query?.scope_type,
+      },
     });
   };
 
