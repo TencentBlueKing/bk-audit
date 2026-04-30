@@ -60,8 +60,10 @@
                   <template #extension>
                     <div class="create-notice-group">
                       <auth-router-link
-                        action-id="create_notice_group"
-                        class="create_notice_group"
+                        action-id="create_notice_group_v2"
+                        class="create_notice_group_v2"
+                        :permission="checkResultMap.create_notice_group_v2"
+                        resource-is-scene
                         target="_blank"
                         :to="{
                           name: 'noticeGroupList',
@@ -125,8 +127,10 @@
                   <template #extension>
                     <div class="create-notice-group">
                       <auth-router-link
-                        action-id="create_notice_group"
-                        class="create_notice_group"
+                        action-id="create_notice_group_v2"
+                        class="create_notice_group_v2"
+                        :permission="checkResultMap.create_notice_group_v2"
+                        resource-is-scene
                         target="_blank"
                         :to="{
                           name: 'noticeGroupList',
@@ -243,7 +247,7 @@
     data: checkResultMap,
   } = useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'list_notice_group_v2',
+      action_ids: 'list_notice_group_v2,create_notice_group_v2',
       resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
