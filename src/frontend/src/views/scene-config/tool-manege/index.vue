@@ -71,6 +71,7 @@
 
   <!-- 确认操作弹窗（删除/启用/停用） -->
   <confirm-action-dialog
+    ref="confirmDialogRef"
     v-model:is-show="confirmDialogVisible"
     :action-type="confirmActionType"
     :target="confirmTarget"
@@ -161,10 +162,12 @@
   };
 
   // 显示启用/停用确认弹窗
+  const confirmDialogRef = ref();
   const handleToggleStatus = (row: ToolItem) => {
     confirmTarget.value = row;
-    confirmActionType.value = row.status === 'published' ? 'disable' : 'enable';
-    confirmDialogVisible.value = true;
+    const actionType = row.status === 'published' ? 'disable' : 'enable';
+    confirmActionType.value = actionType;
+    confirmDialogRef.value?.showToggleStatusInfoBox(row, actionType);
   };
 
   // 操作成功后刷新列表
