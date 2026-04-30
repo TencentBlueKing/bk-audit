@@ -55,6 +55,7 @@ from services.web.tool.resources import (
     GetToolDetail,
     ListTool,
     ListToolAll,
+    ListToolTags,
 )
 
 
@@ -166,7 +167,7 @@ class ToolFavoriteTestCase(TestCase):
 
         resource = resource_cls()
         request_data = dict(data)
-        if resource_cls in [ListTool, ListToolAll]:
+        if resource_cls in [ListTool, ListToolAll, ListToolTags]:
             request_data.setdefault("scope_type", "scene")
             request_data.setdefault("scope_id", str(self.scene_id))
             with (
@@ -444,3 +445,13 @@ class ToolFavoriteTestCase(TestCase):
 
         self.assertEqual([tool["uid"] for tool in result], [self.tool_1.uid])
         self.assertEqual(result[0]["status"], PanelStatus.PUBLISHED)
+
+    def test_list_tool_tags_filter_by_status(self):
+        """测试工具标签统计支持按上架状态过滤"""
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            result = self._call_resource_with_request(ListToolTags, {"status": PanelStatus.PUBLISHED})
+
+        tag_counts = {item["tag_id"]: item["tool_count"] for item in result}
+        self.assertEqual(tag_counts[ToolTagsEnum.ALL_TOOLS.value], 0)
+        self.assertNotIn(str(self.tag1.tag_id), tag_counts)

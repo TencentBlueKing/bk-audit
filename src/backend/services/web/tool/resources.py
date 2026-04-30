@@ -88,6 +88,7 @@ from services.web.tool.serializers import (
     GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
     ListToolAllRequestSerializer,
+    ListToolTagsRequestSerializer,
     ListToolTagsResponseSerializer,
     PlatformSceneToolCreateRequestSerializer,
     PlatformSceneToolPublishRequestSerializer,
@@ -96,7 +97,6 @@ from services.web.tool.serializers import (
     SceneScopeToolDeleteRequestSerializer,
     SceneScopeToolPublishRequestSerializer,
     SceneScopeToolUpdateRequestSerializer,
-    ScopeBindingRequestSerializer,
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
@@ -227,13 +227,16 @@ class ToolBase(AuditMixinResource, abc.ABC):
 
 class ListToolTags(ToolBase):
     name = gettext_lazy("列出工具标签")
-    RequestSerializer = ScopeBindingRequestSerializer
+    RequestSerializer = ListToolTagsRequestSerializer
     ResponseSerializer = ListToolTagsResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         current_user = get_request_username()
         scoped_tools = self.filter_queryset_by_scope(Tool.all_latest_tools(), validated_request_data, current_user)
+        status = validated_request_data.get("status")
+        if status:
+            scoped_tools = scoped_tools.filter(status=status)
 
         tag_count = list(
             ToolTag.objects.filter(tool_uid__in=scoped_tools.values_list("uid", flat=True))

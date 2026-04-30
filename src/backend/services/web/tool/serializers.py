@@ -405,6 +405,16 @@ class ScopeBindingRequestSerializer(ScopeQuerySerializer):
         return attrs
 
 
+class ListToolTagsRequestSerializer(ScopeBindingRequestSerializer):
+    status = serializers.ChoiceField(
+        choices=PanelStatus.choices,
+        required=False,
+        allow_null=True,
+        default=None,
+        label=gettext_lazy("上架状态"),
+    )
+
+
 class ListToolAllRequestSerializer(ScopeBindingRequestSerializer):
     status = serializers.ChoiceField(
         choices=PanelStatus.choices,
