@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="card">
-    <div class="card-search">
+    <div
+      v-if="dataList.length > 0 || searchValue"
+      class="card-search">
       <bk-input
         v-model="searchValue"
         class="search-input"
@@ -31,71 +33,11 @@
         :loading="loading"
         :z-index="10000">
         <div
-          v-if="dataList.length > 0 || true"
+          v-if="dataList.length > 0"
           ref="cardListRef"
           class="card-list"
           @scroll="handleScroll">
           <div class="card-list-box">
-            <!-- 固定的审计用户画像卡片 -->
-            <div
-              class="card-list-item"
-              @click="handleClickAuditProfile"
-              @mouseenter="auditProfileHover = true"
-              @mouseleave="auditProfileHover = false">
-              <div class="item-top">
-                <div class="item-top-left">
-                  <img
-                    class="audit-profile-avatar"
-                    :src="userProfileIcon">
-                </div>
-                <div class="item-top-right">
-                  <div class="top-right-title">
-                    <span class="title-text">{{ t('审计用户画像') }}</span>
-                    <bk-tag
-                      class="title-tag"
-                      size="small"
-                      theme="success"
-                      type="filled">
-                      {{ t('系统') }}
-                    </bk-tag>
-                  </div>
-                  <div class="top-right-desc">
-                    <bk-tag
-                      class="desc-tag"
-                      size="small">
-                      {{ t('安全审计') }}
-                    </bk-tag>
-                    <bk-tag
-                      class="desc-tag"
-                      size="small">
-                      {{ t('数据查询') }}
-                    </bk-tag>
-                    <bk-tag
-                      class="desc-tag"
-                      size="small">
-                      {{ t('合规检查') }}
-                    </bk-tag>
-                    <bk-tag
-                      class="desc-tag tag-cursor"
-                      size="small"
-                      theme="info">
-                      {{ t('运用在') }} 0 {{ t('个策略中') }}
-                    </bk-tag>
-                  </div>
-                </div>
-              </div>
-              <div class="item-middle">
-                {{ t('基于企业微信/QQ等身份标识，一站式查询账号用户信息及关联游戏资产信息') }}
-              </div>
-              <div class="item-footer">
-                <div>
-                  <span>ivonye</span>
-                  <span class="line" />
-                  <span>frodomei</span>
-                </div>
-                <span>2015-03-20 15:22:00</span>
-              </div>
-            </div>
             <div
               v-for="(item, index) in dataList"
               :key="index"
@@ -235,13 +177,12 @@
 
         <div
           v-else
-          class="card-emptyt">
-          <img
-            class="empty-img"
-            src="@images/empty.svg">
-          <div class="empty-text">
-            {{ t('暂无数据') }}
-          </div>
+          class="card-empty">
+          <bk-exception
+            class="empty-exception"
+            :description="t('暂无数据')"
+            scene="part"
+            type="empty" />
         </div>
       </bk-loading>
     </scroll-faker>
@@ -331,7 +272,6 @@
 
   const searchValue = ref<string>('');
   const itemMouseenter = ref(null);
-  const auditProfileHover = ref(false);
   const dataList = ref<ToolInfo[]>([]);
 
   // 判断 tagId 是否为有效的后端标签（排除空值和以 - 开头的内置特殊标签）
@@ -339,24 +279,6 @@
     if (!id || id.startsWith('-')) return {};
     return { tags: [id] };
   };
-
-  // 固定的审计用户画像工具数据
-  const auditProfileTool = new ToolInfo({
-    uid: 'audit_user_profile',
-    name: '审计用户画像',
-    version: 1,
-    tool_type: 'audit_profile',
-    description: '基于企业微信/QQ等身份标识，一站式查询账号用户信息及关联游戏资产信息',
-    namespace: '',
-    is_bkvision: false,
-    favorite: false,
-    strategies: [],
-    tags: [],
-    created_by: 'ivonye',
-    created_at: '2015-03-20 15:22:00',
-    updated_by: 'frodomei',
-    updated_at: '2015-03-20 15:22:00',
-  } as any);
 
   const currentPage = ref(1);
   const currentPagSize = ref(50);
@@ -583,11 +505,6 @@
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
    */
-  // 点击审计用户画像卡片
-  const handleClickAuditProfile = () => {
-    emits('openTool', auditProfileTool);
-  };
-
   const handleClickTool = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
@@ -774,14 +691,6 @@
               font-size: 48px;
             }
 
-            .audit-profile-avatar {
-              width: 48px;
-              height: 48px;
-              margin-top: 20px;
-              margin-left: 20px;
-              border-radius: 8px;
-            }
-
             .top-left-icon-img {
               width: 48px;
               height: 48px;
@@ -930,25 +839,15 @@
     }
   }
 
-  .card-emptyt {
-    position: relative;
-    height: calc(100vh - 300px);
+  .card-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: calc(100vh - 300px);
 
-    .empty-img {
-      position: absolute;
-      top: 30%;
-      left: 50%;
-      width: 500px;
-      transform: translate(-50%, -30%);
-    }
-
-    .empty-text {
-      position: absolute;
-      top: 45%;
-      left: 50%;
-      font-size: 18px;
-      color: #979ba5;
-      transform: translate(-50%, -45%);
+    .empty-exception {
+      font-size: 20px;
     }
   }
 }

@@ -127,6 +127,7 @@
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
           :tool-config="toolDetailMap[tool.uid]?.config"
+          :tool-name="tool.name"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail" />
         <!-- 游戏数据详情 -->
@@ -134,7 +135,9 @@
           v-else-if="tool.uid.startsWith('game_detail_')"
           v-show="activeUid === tool.uid"
           :game-data="gameDetailDataMap[tool.uid]"
-          :initial-tab="gameDetailInitialTabMap[tool.uid]" />
+          :initial-tab="gameDetailInitialTabMap[tool.uid]"
+          :tool-name="tool.name"
+          :tool-uid="gameDetailToolUidMap[tool.uid]" />
         <!-- 普通工具 -->
         <tool-content
           v-else-if="toolDetailMap[tool.uid]"
@@ -492,26 +495,34 @@
   const gameDetailDataMap = ref<Record<string, any>>({});
   // 游戏详情初始 tab 缓存
   const gameDetailInitialTabMap = ref<Record<string, string>>({});
+  // 游戏详情对应的 smart_page 工具 uid 缓存
+  const gameDetailToolUidMap = ref<Record<string, string>>({});
 
   // 打开游戏数据详情
   const handleOpenGameDetail = (gameData: Record<string, any>, initialTab?: string) => {
-    const gameUid = `game_detail_${gameData.name}`;
-    // 缓存游戏数据
+    const gameUid = `game_detail_${gameData.openid || ''}_${gameData.name}`;
+    // 缓存游戏数据（保留 gameid 用于子接口查询）
     gameDetailDataMap.value[gameUid] = {
       name: gameData.name,
-      openid: gameData.openid || 'wx_oABCd1234567890',
-      wechat: 'm******4',
-      coinBalance: gameData.coinBalance || 350,
-      totalRecharge: gameData.totalRecharge || 3200,
+      openid: gameData.openid || '',
+      gameid: gameData.gameid || '',
+      wechat: gameData.wechat || '',
+      coinBalance: gameData.coinBalance || 0,
+      totalRecharge: gameData.totalRecharge || 0,
       totalGift: gameData.totalGift || 0,
-      totalIssue: gameData.totalIssue || 6978,
+      totalIssue: gameData.totalIssue || 0,
     };
+    // 找到 smart_page 工具的 uid，传递给 game-detail 用于接口调用
+    const smartPageTool = props.toolList.find(t => t.tool_type === 'smart_page');
+    if (smartPageTool) {
+      gameDetailToolUidMap.value[gameUid] = smartPageTool.uid;
+    }
     // 缓存初始 tab
     gameDetailInitialTabMap.value[gameUid] = initialTab || 'overview';
     // 构造一个 ToolInfo 实例用于 tab 展示
     const gameTool = new ToolInfo({
       uid: gameUid,
-      name: `frodomei - ${gameData.name}`,
+      name: `${gameData.ctx || ''} - ${gameData.name}`,
       version: 1,
       tool_type: 'game_detail',
       description: '',

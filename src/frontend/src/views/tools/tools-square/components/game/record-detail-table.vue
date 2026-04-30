@@ -35,7 +35,99 @@
         @change="handleDateChange" />
       <!-- 额外筛选控件插槽 -->
       <slot name="extra-filter" />
+      <!-- 搜索框：点击弹出三段式筛选浮层 -->
+      <div
+        v-if="searchFields.length > 0"
+        ref="searchBoxRef"
+        class="search-condition-box"
+        @click="handleBoxClick">
+        <!-- 已生成的条件 tag -->
+        <div
+          v-for="(tag, index) in conditionTags"
+          :key="index"
+          v-bk-tooltips="{
+            content: t('点击可编辑'),
+            placement: 'top',
+          }"
+          class="condition-tag"
+          @click.stop="handleEditTag(index)">
+          <span class="tag-field">{{ tag.fieldName }}</span>
+          <span class="tag-operator">{{ tag.operatorName }}</span>
+          <span class="tag-value">{{ tag.value }}</span>
+          <span
+            class="tag-close"
+            @click.stop="handleRemoveTag(index)">×</span>
+        </div>
+        <!-- placeholder -->
+        <span
+          v-if="conditionTags.length === 0"
+          class="search-placeholder">
+          {{ searchBoxPlaceholder }}
+        </span>
+        <!-- 搜索图标 -->
+        <i class="bk-icon icon-search search-icon" />
+        <!-- 三段式筛选浮层 -->
+        <div
+          v-if="showPopover"
+          class="condition-popover"
+          @click.stop>
+          <bk-select
+            v-model="selectedFieldId"
+            class="field-select"
+            :clearable="false"
+            filterable
+            :placeholder="t('请选择')"
+            @change="handleFieldChange">
+            <bk-option
+              v-for="field in availableSearchFields"
+              :id="field.id"
+              :key="field.id"
+              :name="field.name" />
+          </bk-select>
+          <bk-select
+            v-model="selectedOperator"
+            class="operator-select"
+            :clearable="false"
+            :placeholder="t('操作符')">
+            <bk-option
+              v-for="op in currentOperators"
+              :id="op.id"
+              :key="op.id"
+              :name="op.name" />
+          </bk-select>
+          <!-- 枚举类型使用下拉选择 -->
+          <bk-select
+            v-if="currentFieldHasChildren"
+            v-model="inputValue"
+            class="value-input"
+            :clearable="false"
+            filterable
+            :placeholder="t('多个值之间用逗号分隔')"
+            @change="handleValueSelectChange">
+            <bk-option
+              v-for="child in currentFieldChildren"
+              :id="child.id"
+              :key="child.id"
+              :name="child.name" />
+          </bk-select>
+          <!-- 普通文本输入 -->
+          <bk-input
+            v-else
+            v-model="inputValue"
+            class="value-input"
+            :placeholder="t('多个值之间用逗号分隔')"
+            @enter="handleConfirm" />
+          <bk-button
+            class="confirm-btn"
+            theme="primary"
+            @click="handleConfirm">
+            {{ t('确定') }}
+          </bk-button>
+        </div>
+      </div>
+      <!-- 无 searchFields 时降级为普通搜索框 -->
       <bk-input
+        v-else
         v-model="localKeyword"
         class="search-input"
         :placeholder="searchPlaceholder"
@@ -55,29 +147,54 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import {
+    computed, onBeforeUnmount, onMounted, ref, watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  // 搜索字段配置接口
+  interface SearchFieldItem {
+    name: string;       // 显示名称，如"登录地点"
+    id: string;         // 字段标识，如"登录地点"
+    placeholder?: string; // 输入提示
+    children?: Array<{ id: string; name: string }>; // 枚举值子选项
+    onlyRecommendChildren?: boolean; // 是否仅推荐子选项
+    multiple?: boolean; // 是否多选
+    conditions?: Array<{ id: string; name: string }>; // 字段级别操作符配置
+  }
+
+  // 条件 tag 数据结构
+  interface ConditionTag {
+    fieldId: string;      // 字段ID
+    fieldName: string;    // 字段显示名
+    operator: string;     // 操作符ID
+    operatorName: string; // 操作符显示名
+    value: string;        // 值
+  }
+
   interface Props {
-    title?: string;                   // 标题，如"登录明细"、"赠送明细"
-    columns: Array<Record<string, any>>;  // 表格列配置
-    data: Array<Record<string, any>>;     // 表格数据
-    pagination?: {                    // 分页配置（simple 模式下不需要）
+    title?: string;
+    columns: Array<Record<string, any>>;
+    data: Array<Record<string, any>>;
+    pagination?: {
       count: number;
       current: number;
       limit: number;
     };
-    searchPlaceholder?: string;       // 搜索框 placeholder
-    showDatePicker?: boolean;         // 是否显示日期选择器，默认 true
-    simple?: boolean;                 // 简洁模式：无标题、无搜索、无分页（概览页面使用）
+    searchPlaceholder?: string;
+    showDatePicker?: boolean;
+    simple?: boolean;
+    initialDateRange?: [string, string];
+    searchFields?: SearchFieldItem[];
   }
-
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     title: '',
     pagination: undefined,
     searchPlaceholder: '',
     showDatePicker: true,
     simple: false,
+    initialDateRange: () => ['', ''],
+    searchFields: () => [],
   });
 
   const emit = defineEmits<{
@@ -85,12 +202,188 @@
     'page-limit-change': [limit: number];
     'search': [keyword: string];
     'date-change': [range: [string, string]];
+    'search-condition-change': [conditions: ConditionTag[]];
   }>();
 
   const { t } = useI18n();
 
-  const localDateRange = ref<[string, string]>(['', '']);
+  // 默认操作符（文本类型）
+  const defaultConditions = [
+    { id: 'like', name: t('包含') },
+    { id: 'eq', name: t('等于') },
+    { id: 'neq', name: t('不等于') },
+    { id: 'in', name: 'IN' },
+    { id: 'not_in', name: 'NOT IN' },
+  ];
+
+  const localDateRange = ref<[string, string]>(props.initialDateRange || ['', '']);
   const localKeyword = ref('');
+
+  // 三段式搜索状态
+  const searchBoxRef = ref<HTMLElement | null>(null);
+  const showPopover = ref(false);
+  const selectedFieldId = ref('');
+  const selectedOperator = ref('');
+  const inputValue = ref('');
+  const conditionTags = ref<ConditionTag[]>([]);
+  const editingIndex = ref(-1); // -1 表示新增模式
+
+  // 搜索框 placeholder（显示所有可搜索字段名）
+  const searchBoxPlaceholder = computed(() => {
+    const names = props.searchFields.map(f => f.name).join('、');
+    return `${t('搜索')} ${names}`;
+  });
+
+  // 可用的搜索字段（剔除已选条件中的字段，编辑模式下保留当前编辑的字段）
+  const availableSearchFields = computed(() => {
+    const usedFieldIds = conditionTags.value
+      .filter((_, idx) => idx !== editingIndex.value) // 编辑模式下排除当前编辑的 tag
+      .map(tag => tag.fieldId);
+    return props.searchFields.filter(f => !usedFieldIds.includes(f.id));
+  });
+
+  // 当前选中字段的配置
+  const currentField = computed(() => props.searchFields.find(f => f.id === selectedFieldId.value));
+
+  // 当前字段的操作符列表
+  const currentOperators = computed(() => {
+    if (currentField.value?.conditions?.length) {
+      return currentField.value.conditions;
+    }
+    return defaultConditions;
+  });
+
+  // 当前字段是否有枚举子选项
+  const currentFieldHasChildren = computed(() => !!(currentField.value?.children?.length
+    && currentField.value?.onlyRecommendChildren));
+
+  // 当前字段的子选项
+  const currentFieldChildren = computed(() => currentField.value?.children || []);
+
+  // 初始化默认选中第一个字段
+  watch(() => props.searchFields, (fields) => {
+    if (fields.length > 0 && !selectedFieldId.value) {
+      selectedFieldId.value = fields[0].id;
+    }
+  }, { immediate: true });
+
+  // 字段变化时，重置操作符为该字段的默认操作符
+  const handleFieldChange = () => {
+    const operators = currentOperators.value;
+    if (operators.length > 0) {
+      selectedOperator.value = operators[0].id;
+    }
+    inputValue.value = '';
+  };
+
+  // 初始化默认操作符
+  watch(currentOperators, (ops) => {
+    if (ops.length > 0 && !selectedOperator.value) {
+      selectedOperator.value = ops[0].id;
+    }
+  }, { immediate: true });
+
+  // 点击搜索框，显示浮层
+  const handleBoxClick = () => {
+    if (!showPopover.value) {
+      showPopover.value = true;
+      editingIndex.value = -1;
+      // 自动选中第一个可用字段
+      if (availableSearchFields.value.length > 0) {
+        const currentAvailable = availableSearchFields.value.find(f => f.id === selectedFieldId.value);
+        if (!currentAvailable) {
+          selectedFieldId.value = availableSearchFields.value[0].id;
+          handleFieldChange();
+        }
+      }
+    }
+  };
+
+  // 点击外部关闭浮层
+  const handleClickOutside = (e: MouseEvent) => {
+    if (
+      searchBoxRef.value
+      && !searchBoxRef.value.contains(e.target as Node)
+    ) {
+      showPopover.value = false;
+      editingIndex.value = -1;
+    }
+  };
+
+  onMounted(() => {
+    document.addEventListener('click', handleClickOutside);
+  });
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutside);
+  });
+
+  // 枚举值选择变化
+  const handleValueSelectChange = () => {
+    // 选择后不自动确认，等用户点击确定
+  };
+
+  // 确定按钮
+  const handleConfirm = () => {
+    if (
+      !selectedFieldId.value
+      || !selectedOperator.value
+      || !inputValue.value
+    ) {
+      return;
+    }
+    const field = currentField.value;
+    const operator = currentOperators.value.find(op => op.id === selectedOperator.value);
+    if (!field || !operator) return;
+
+    const tag: ConditionTag = {
+      fieldId: field.id,
+      fieldName: field.name,
+      operator: operator.id,
+      operatorName: operator.name,
+      value: inputValue.value,
+    };
+
+    if (editingIndex.value >= 0) {
+      // 编辑模式：替换已有 tag
+      conditionTags.value[editingIndex.value] = tag;
+      editingIndex.value = -1;
+    } else {
+      // 新增模式
+      conditionTags.value.push(tag);
+    }
+
+    // 重置输入并关闭浮层
+    inputValue.value = '';
+    showPopover.value = false;
+    emitConditions();
+  };
+
+  // 删除 tag
+  const handleRemoveTag = (index: number) => {
+    conditionTags.value.splice(index, 1);
+    if (editingIndex.value === index) {
+      editingIndex.value = -1;
+    }
+    emitConditions();
+  };
+
+  // 点击 tag 进入编辑模式
+  const handleEditTag = (index: number) => {
+    const tag = conditionTags.value[index];
+    selectedFieldId.value = tag.fieldId;
+    showPopover.value = true;
+    // 等字段变化后再设置操作符和值
+    setTimeout(() => {
+      selectedOperator.value = tag.operator;
+      inputValue.value = tag.value;
+      editingIndex.value = index;
+    });
+  };
+
+  // 触发条件变化事件
+  const emitConditions = () => {
+    emit('search-condition-change', [...conditionTags.value]);
+  };
 
   const handlePageChange = (page: number) => {
     emit('page-change', page);
@@ -134,6 +427,120 @@
 
     .search-input {
       flex: 1;
+    }
+  }
+
+  .search-condition-box {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    height: 32px;
+    padding: 0 32px 0 10px;
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #c4c6cc;
+    border-radius: 2px;
+
+    &:hover {
+      border-color: #979ba5;
+    }
+
+    .search-placeholder {
+      overflow: hidden;
+      font-size: 12px;
+      color: #c4c6cc;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .search-icon {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      font-size: 14px;
+      color: #979ba5;
+      transform: translateY(-50%);
+    }
+
+    .condition-tag {
+      display: inline-flex;
+      gap: 2px;
+      align-items: center;
+      height: 22px;
+      padding: 0 4px;
+      font-size: 12px;
+      line-height: 22px;
+      cursor: pointer;
+      background: #f0f1f5;
+      border-radius: 2px;
+
+      &:hover {
+        background: #e1ecff;
+      }
+
+      .tag-field {
+        color: #3a84ff;
+      }
+
+      .tag-operator {
+        color: #ff9c01;
+      }
+
+      .tag-value {
+        color: #3a84ff;
+      }
+
+      .tag-close {
+        margin-left: 4px;
+        font-size: 14px;
+        font-style: normal;
+        line-height: 1;
+        color: #979ba5;
+        cursor: pointer;
+
+        &:hover {
+          color: #3a84ff;
+        }
+      }
+    }
+
+    .condition-popover {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 999;
+      display: flex;
+      gap: 0;
+      align-items: center;
+      padding: 8px;
+      background: #fff;
+      border-radius: 2px;
+      box-shadow: 0 2px 6px 0 rgb(0 0 0 / 10%);
+
+      .field-select {
+        width: 140px;
+        flex-shrink: 0;
+      }
+
+      .operator-select {
+        width: 100px;
+        flex-shrink: 0;
+        margin-left: 8px;
+      }
+
+      .value-input {
+        width: 200px;
+        flex-shrink: 0;
+        margin-left: 8px;
+      }
+
+      .confirm-btn {
+        flex-shrink: 0;
+        margin-left: 8px;
+      }
     }
   }
 

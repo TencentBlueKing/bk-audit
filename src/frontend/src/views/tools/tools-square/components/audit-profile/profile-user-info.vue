@@ -22,6 +22,7 @@
     <div class="user-info-content">
       <div class="user-info-left">
         <div class="user-detail">
+          <!-- 第1行：企业微信 | 用户名 -->
           <div class="detail-row">
             <div
               class="detail-group"
@@ -40,6 +41,7 @@
               <span class="detail-value">{{ userInfo.username }}</span>
             </div>
           </div>
+          <!-- 第2行：微信（脱敏） | QQ（脱敏） -->
           <div class="detail-row">
             <div
               class="detail-group"
@@ -74,6 +76,7 @@
                 @click="handleCopy(userInfo.qq)" />
             </div>
           </div>
+          <!-- 第3行：在职状态 | 部门 -->
           <div class="detail-row">
             <div class="detail-group">
               <span class="detail-label">{{ t('在职状态') }}：</span>
