@@ -691,12 +691,14 @@ class ListStrategyAll(StrategyV2Base):
         ).has_permission(request=get_local_request(), view=self):
             return []
         strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
-        strategies = SceneScopeFilter.filter_queryset(
-            queryset=strategies,
-            scene_id=validated_request_data["scene_id"],
-            resource_type=ResourceVisibilityType.STRATEGY,
-            pk_field="strategy_id",
-        )
+        scene_id = validated_request_data.get("scene_id")
+        if scene_id:
+            strategies = SceneScopeFilter.filter_queryset(
+                queryset=strategies,
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.STRATEGY,
+                pk_field="strategy_id",
+            )
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data
