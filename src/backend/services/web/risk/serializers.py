@@ -858,7 +858,7 @@ class RuleScopeValidator(serializers.Serializer):
             return
 
         if not ProcessApplication.objects.filter(id=pa_id).exists():
-            raise serializers.ValidationError({"pa_id": gettext("处理套餐不存在")})
+            raise serializers.ValidationError(gettext("处理套餐不存在"))
 
         is_bound = ResourceBindingScene.objects.filter(
             scene_id=scene_id,
@@ -866,7 +866,7 @@ class RuleScopeValidator(serializers.Serializer):
             binding__resource_id=str(pa_id),
         ).exists()
         if not is_bound:
-            raise serializers.ValidationError({"pa_id": gettext("处理套餐[%s]不属于场景[%s]") % (pa_id, scene_id)})
+            raise serializers.ValidationError(gettext("处理套餐[%s]不属于场景[%s]") % (pa_id, scene_id))
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
