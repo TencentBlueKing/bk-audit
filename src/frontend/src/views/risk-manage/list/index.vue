@@ -16,19 +16,14 @@
 -->
 <template>
   <div class="risk-manage-list-page-wrap">
-    <nl-search-box
+    <search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
+      @change-table-height="handleChangeTableHeight"
       @export="handleExport"
-      @model-value-watch="handleModelValueWatch"
-      @parsing="handleParsing" />
-    <ai-analyzes
-      ref="aiAnalyzesRef"
-      :condition-tags="conditionTags"
-      :search-params="searchModel"
-      :total="totalCount" />
+      @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <div class="add-button">
         <bk-button
@@ -89,6 +84,7 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
+  import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
@@ -96,10 +92,8 @@
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
   import addRisk from './add-risk/index.vue';
-  import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
-  import NlSearchBox from './components/nl-search-box/index.vue';
 
   const dataSource = RiskManageService.fetchRiskList;
 
@@ -115,7 +109,6 @@
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const route = useRoute();
-  const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
   let timeout: number | undefined = undefined;
   const statusToMap = RISK_STATUS_TAG_MAP;
 
@@ -310,8 +303,6 @@
   const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
-  const totalCount = ref(0);
-  const conditionTags = ref<any[]>([]);
 
   // 导出数据
   const handleExport = () => {
@@ -393,10 +384,8 @@
     },
   });
 
-  const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
-    aiAnalyzesRef.value?.changeIsSearch();
+  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
     window.changeConfirm = false;
-    totalCount.value = total || 0;
 
     // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
     searchBoxRef.value?.notifySearchComplete();
@@ -488,22 +477,13 @@
     };
     listRef.value?.initTableHeight();
     fetchList();
-    // 更新conditionTags
-    updateConditionTags();
   };
 
-  // 更新conditionTags
-  const updateConditionTags = () => {
-    if (searchBoxRef.value?.getConditionTags) {
-      conditionTags.value = searchBoxRef.value.getConditionTags();
-    }
-  };
-
-  // NL 解析状态变化时，给列表设置 loading
-  const handleParsing = (isParsing: boolean) => {
-    if (listRef.value) {
-      listRef.value.loading = isParsing;
-    }
+  // 表格高度变化时重新计算
+  const handleChangeTableHeight = () => {
+    nextTick(() => {
+      listRef.value?.initTableHeight?.();
+    });
   };
 
   const handleClearSearch = () => {
@@ -552,8 +532,6 @@
     nextTick(() => {
       getEventFields();
       sessionStorage.removeItem('addEventRiskIds');
-      // 初始获取conditionTags
-      updateConditionTags();
     });
   });
 
