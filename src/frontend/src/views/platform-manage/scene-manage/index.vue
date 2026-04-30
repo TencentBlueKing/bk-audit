@@ -479,13 +479,20 @@
   // 模拟数据源 - 实际应替换为真实API
   const dataSource = SceneManageService.fetchSceneList;
 
+  // 获取全局状态统计（不受筛选条件影响）
+  const fetchStatusCounts = () => {
+    SceneManageService.fetchSceneAll().then((allScenes) => {
+      statusCounts.all = allScenes.length;
+      statusCounts.enabled = allScenes.filter((item: { status: string }) => item.status === 'enabled').length;
+      statusCounts.disabled = allScenes.filter((item: { status: string }) => item.status === 'disabled').length;
+    });
+  };
+
   // 处理请求成功
-  const handleRequestSuccess = (data: { results: SceneModel[]; total: number }) => {
+  const handleRequestSuccess = () => {
     isLoading.value = false;
-    // 更新状态统计 - 实际应从后端获取
-    statusCounts.all = data.total;
-    statusCounts.enabled = data.results.filter(item => item.status === 'enabled').length;
-    statusCounts.disabled = data.results.filter(item => item.status === 'disabled').length;
+    // 每次列表请求成功后，单独获取全局状态统计
+    fetchStatusCounts();
   };
 
   // 搜索（回车或点击搜索按钮时触发）
