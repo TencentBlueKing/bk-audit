@@ -15,36 +15,39 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="scene-info-page">
-    <!-- 顶部统计卡片 -->
-    <stat-cards
-      :scene-data="statCardsData"
-      @go-risk="handleGoRisk"
-      @go-strategy="handleGoStrategy" />
+  <bk-loading
+    :loading="pageLoading">
+    <div class="scene-info-page">
+      <!-- 顶部统计卡片 -->
+      <stat-cards
+        :scene-data="statCardsData"
+        @go-risk="handleGoRisk"
+        @go-strategy="handleGoStrategy" />
 
-    <!-- 基础信息 -->
-    <base-info
-      :scene-data="sceneData"
-      @update:scene-data="handleUpdateSceneData" />
+      <!-- 基础信息 -->
+      <base-info
+        :scene-data="sceneData"
+        @update:scene-data="handleUpdateSceneData" />
 
-    <!-- 关联系统 -->
-    <scene-table
-      :columns="systemColumns"
-      :data="systemTableData"
-      resizable
-      stripe
-      :title="t('关联系统')"
-      :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员')" />
+      <!-- 关联系统 -->
+      <scene-table
+        :columns="systemColumns"
+        :data="systemTableData"
+        resizable
+        stripe
+        :title="t('关联系统')"
+        :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员')" />
 
-    <!-- 关联数据报表 -->
-    <scene-table
-      :columns="dataTableColumns"
-      :data="dataTableData"
-      resizable
-      stripe
-      :title="t('关联数据报表')"
-      :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员')" />
-  </div>
+      <!-- 关联数据报表 -->
+      <scene-table
+        :columns="dataTableColumns"
+        :data="dataTableData"
+        resizable
+        stripe
+        :title="t('关联数据报表')"
+        :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员')" />
+    </div>
+  </bk-loading>
 </template>
 
 <script setup lang="tsx">
@@ -73,6 +76,8 @@
   const { messageSuccess } = useMessage();
   const { on: onEvent, off } = useEventBus();
   const sceneId = ref(getSceneSystemParams().scope_id);
+  // 页面整体 loading 状态（切换场景时）
+  const pageLoading = ref(false);
 
   const {
     data: sceneInfoData,
@@ -118,6 +123,7 @@
 
   // 获取场景下有权限的系统列表，再逐个获取系统详情
   const fetchPermissionSystems = async () => {
+    if (!sceneId.value) return;
     systemDetailLoading.value = true;
     try {
       const systems = await SceneManageService.fetchScenePermissionSystems(sceneId.value);
@@ -157,6 +163,7 @@
 
   // 获取场景下有权限的数据表列表，再逐个获取数据表详情
   const fetchPermissionTables = async () => {
+    if (!sceneId.value) return;
     dataTableDetailLoading.value = true;
     try {
       const tables = await SceneManageService.fetchScenePermissionTables(sceneId.value);
@@ -272,19 +279,33 @@
     window.open(routeData.href, '_blank');
   };
 
-  const handleSceneChange = () => {
+  const handleSceneChange = async () => {
     sceneId.value = getSceneSystemParams().scope_id;
     systemDetailList.value = [];
     dataTableDetailList.value = [];
-    fetchSceneInfo(sceneId.value);
-    fetchPermissionSystems();
-    fetchPermissionTables();
+    // 如果 sceneId 为空（如选择了聚合项），不发起请求
+    if (!sceneId.value) {
+      return;
+    }
+    pageLoading.value = true;
+    try {
+      await Promise.all([
+        fetchSceneInfo(sceneId.value).catch(() => null),
+        fetchPermissionSystems(),
+        fetchPermissionTables(),
+      ]);
+    } finally {
+      pageLoading.value = false;
+    }
   };
 
   onMounted(() => {
-    // 初始加载关联系统和关联数据报表
-    fetchPermissionSystems();
-    fetchPermissionTables();
+    // 初始加载：仅当 sceneId 有值时才发起请求
+    if (sceneId.value) {
+      fetchSceneInfo(sceneId.value);
+      fetchPermissionSystems();
+      fetchPermissionTables();
+    }
     setTimeout(() => {
       onEvent('scene:change', handleSceneChange);
     }, 1000);
