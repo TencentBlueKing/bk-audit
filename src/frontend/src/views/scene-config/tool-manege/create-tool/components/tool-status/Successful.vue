@@ -43,7 +43,7 @@
 </template>
 <script setup lang='ts'>
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   interface Props {
     isEditMode: boolean;
@@ -53,11 +53,17 @@
   defineProps<Props>();
   const { t } = useI18n();
   const router = useRouter();
+  const route = useRoute();
 
   const handleStrategy = () => {
     window.changeConfirm = false;
     router.push({
       name: 'strategyList',
+      query: {
+        scene_id: route.query.scene_id,
+        scope_id: route.query.scope_id,
+        scope_type: route.query.scope_type,
+      },
     });
   };
 
@@ -65,6 +71,11 @@
     window.changeConfirm = false;
     router.push({
       name: 'sceneToolManege',
+      query: {
+        scene_id: route.query.scene_id,
+        scope_id: route.query.scope_id,
+        scope_type: route.query.scope_type,
+      },
     });
   };
 </script>

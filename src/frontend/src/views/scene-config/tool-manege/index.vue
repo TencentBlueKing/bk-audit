@@ -81,7 +81,7 @@
 <script setup lang='ts'>
   import { onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
   import ToolManageService from '@service/tool-manage';
@@ -115,7 +115,7 @@
 
   const { t } = useI18n();
   const router = useRouter();
-
+  const route = useRoute();
   const isLoading = ref(true);
   const searchKeyword = ref('');
   const toolListRef = ref();
@@ -137,7 +137,11 @@
 
   // 新建工具
   const handleCreateReport = () => {
-    router.push({ name: 'sceneToolCreate' });
+    router.push({ name: 'sceneToolCreate', query: {
+      scene_id: route.query.scene_id,
+      scope_id: route.query.scope_id,
+      scope_type: route.query.scope_type,
+    } });
   };
 
   // 编辑工具
@@ -145,6 +149,11 @@
     router.push({
       name: 'sceneToolEdit',
       params: { id: row.uid },
+      query: {
+        scene_id: route.query.scene_id,
+        scope_id: route.query.scope_id,
+        scope_type: route.query.scope_type,
+      },
     });
   };
 
