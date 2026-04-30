@@ -99,9 +99,6 @@ class SmartPageSqlTemplateExecutor(BaseSmartPageDataSourceExecutor):
     ) -> SmartPageExecuteResult:
         rendered_sql = render_sql_template(data_source.config.sql_template, params.params)
 
-        # 在执行 SQL 之前进行权限检查
-        cls._validate_permission(executor, rendered_sql)
-
         logger.info(f"[{cls.__name__}] Execute SQL: {rendered_sql}")
         try:
             bulk_resp = api.bk_base.debug_query_sync.bulk_request([{"sql": rendered_sql}])
@@ -115,26 +112,6 @@ class SmartPageSqlTemplateExecutor(BaseSmartPageDataSourceExecutor):
                 results=bulk_resp[0].get("list", []),
                 rendered_sql=rendered_sql,
             ),
-        )
-
-    @classmethod
-    def _validate_permission(cls, executor: "SmartPageExecutor", rendered_sql: str):
-        """校验 SQL 中引用的表是否有权限"""
-        referenced_tables = SqlQueryAnalysis(sql=rendered_sql).get_parsed_def().referenced_tables
-        if not referenced_tables:
-            return
-
-        scene_authorized_tables = set()
-        if executor.tool:
-            scene_id = SqlDataSearchExecutor._get_tool_scene_id(executor.tool.uid)
-            if scene_id is not None:
-                scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
-
-        SqlDataSearchExecutor.check_table_permission(
-            [t.table_name for t in referenced_tables],
-            scene_authorized_tables,
-            get_request_username(),
-            tool=executor.tool,
         )
 
 
@@ -235,94 +212,49 @@ class SqlDataSearchExecutor(
         )
 
     @staticmethod
-    def check_table_permission(referenced_tables: List[str], scene_authorized_tables: set, user_id: str, tool=None):
+    def check_table_permission(referenced_tables: List[str], tool=None) -> List[str]:
         """
-        表权限校验：
-        1. 场景授权的表：直接通过
-        2. 场景未授权的表（场景工具）：校验工具责任人权限 AND 当前用户权限
+        场景工具表权限过滤：场景授权的表直接通过，返回未授权需要检查的表
+        平台工具直接返回全部表
         """
+        if not referenced_tables:
+            return []
+
+        scene_id = SqlDataSearchExecutor._get_tool_scene_id(tool.uid) if tool else None
+
+        if scene_id is not None:
+            # 场景授权的表无需检查，只检查未授权的部分
+            authorized = set(SceneDataFilter.get_table_ids(scene_id))
+            return [t for t in referenced_tables if t not in authorized]
+
+        return referenced_tables
+
+    def validate_permission(self, params: DataSearchToolExecuteParams):
+        """
+        校验权限: 校验工具更新人 or 当前请求用户有表查询条件
+        """
+        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
+        referenced_tables = self.analyzer.get_parsed_def().referenced_tables
         if not referenced_tables:
             return
 
-        # 获取工具责任人
-        tool_owner = None
-        if tool:
-            try:
-                tool_owner = tool.get_permission_owner()
-            except AttributeError:
-                # 如果没有 get_permission_owner 方法，使用 permission_owner 属性
-                if hasattr(tool, 'permission_owner'):
-                    tool_owner = tool.permission_owner
-                elif hasattr(tool, 'created_by'):
-                    tool_owner = tool.created_by
-
-        # 筛选出未被场景授权的表，需要进一步校验权限
-        tables_need_check = [
-            table_name for table_name in referenced_tables if table_name not in scene_authorized_tables
-        ]
-
-        # 如果所有表都在场景授权范围内，直接通过
-        if not tables_need_check:
+        tables_to_check = self.check_table_permission([t.table_name for t in referenced_tables], self.tool)
+        if not tables_to_check:
             return
 
-        if tool:
-            scene_id = SqlDataSearchExecutor._get_tool_scene_id(tool.uid)
-
-            # 如果是场景工具，先检查工具责任人权限，再检查当前用户权限
-            if scene_id is not None:
-                # 检查工具责任人权限
-                if tool_owner:
-                    owner_permissions = [
-                        {
-                            "user_id": tool_owner,
-                            "action_id": UserAuthActionEnum.RT_QUERY.value,
-                            "object_id": table_name,
-                        }
-                        for table_name in tables_need_check
-                    ]
-                    bulk_resp = api.bk_base.user_auth_batch_check({"permissions": owner_permissions})
-
-                    # 检查工具责任人权限结果
-                    for i, rt in enumerate(bulk_resp):
-                        if not rt.get("result"):
-                            # 工具责任人没有权限的表，立即抛出异常
-                            raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
-                    # 责任人权限全部通过，继续检查当前用户权限
-
-        # 对需要检查的表，校验当前用户个人权限
         permissions = [
             {
                 "user_id": user_id,
                 "action_id": UserAuthActionEnum.RT_QUERY.value,
-                "object_id": table_name,
+                "object_id": table,
             }
-            for table_name in tables_need_check
+            for table in tables_to_check
         ]
         bulk_resp = api.bk_base.user_auth_batch_check({"permissions": permissions})
         for rt in bulk_resp:
             if rt.get("result"):
                 continue
             raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
-
-    def validate_permission(self, params: DataSearchToolExecuteParams):
-        """
-        校验权限: 校验工具引用的表是否有权限
-        """
-        parsed_def = self.analyzer.get_parsed_def()
-        referenced_tables = parsed_def.referenced_tables
-        if not referenced_tables:
-            return
-
-        # 获取工具关联的场景授权表
-        scene_authorized_tables = set()
-        if self.tool:
-            scene_id = self._get_tool_scene_id(self.tool.uid)
-            if scene_id is not None:
-                scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
-
-        self.check_table_permission(
-            [t.table_name for t in referenced_tables], scene_authorized_tables, get_request_username(), self.tool
-        )
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
         """

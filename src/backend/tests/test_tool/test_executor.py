@@ -605,15 +605,14 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_return_datasource_metadata(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.SmartPageSqlTemplateExecutor._validate_permission"):
-            with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
-                mock_bulk.return_value = [{"list": [{"id": 1}]}]
-                result = executor.execute(
-                    {
-                        "data_source_name": "risk_event_source",
-                        "params": {"kw": "risk"},
-                    }
-                )
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
+            mock_bulk.return_value = [{"list": [{"id": 1}]}]
+            result = executor.execute(
+                {
+                    "data_source_name": "risk_event_source",
+                    "params": {"kw": "risk"},
+                }
+            )
 
         self.assertEqual(
             result.model_dump(),
@@ -664,17 +663,16 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_flatten_sql_in_bkbase_error_message(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.SmartPageSqlTemplateExecutor._validate_permission"):
-            with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
-                mock_bulk.side_effect = APIRequestError("bkbase error")
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk:
+            mock_bulk.side_effect = APIRequestError("bkbase error")
 
-                with self.assertRaises(BkbaseApiRequestError) as ctx:
-                    executor.execute(
-                        {
-                            "data_source_name": "risk_event_source",
-                            "params": {"kw": "risk"},
-                        }
-                    )
+            with self.assertRaises(BkbaseApiRequestError) as ctx:
+                executor.execute(
+                    {
+                        "data_source_name": "risk_event_source",
+                        "params": {"kw": "risk"},
+                    }
+                )
 
         self.assertNotIn("\n", str(ctx.exception))
         self.assertIn("SELECT id FROM risk_event WHERE 1=1", str(ctx.exception))
@@ -682,16 +680,15 @@ class TestSmartPageExecutor(SimpleTestCase):
 
     def test_execute_should_use_debug_query_sync(self):
         executor = SmartPageExecutor(self.config_dict)
-        with patch("services.web.tool.executor.tool.SmartPageSqlTemplateExecutor._validate_permission"):
-            with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_debug_bulk:
-                with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
-                    mock_debug_bulk.return_value = [{"list": [{"id": 1}]}]
-                    executor.execute(
-                        {
-                            "data_source_name": "risk_event_source",
-                            "params": {"kw": "risk"},
-                        }
-                    )
+        with patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_debug_bulk:
+            with patch("services.web.tool.executor.tool.api.bk_base.query_sync.bulk_request") as mock_bulk:
+                mock_debug_bulk.return_value = [{"list": [{"id": 1}]}]
+                executor.execute(
+                    {
+                        "data_source_name": "risk_event_source",
+                        "params": {"kw": "risk"},
+                    }
+                )
 
         mock_debug_bulk.assert_called_once()
         mock_bulk.assert_not_called()

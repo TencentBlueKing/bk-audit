@@ -191,21 +191,19 @@ class StrategyTableViewSet(ResourceViewSet):
     # 表元数据入口当前只做 any-instance 策略动作权限，未按场景/表范围过滤。
 
     def get_permissions(self):
-        base_permissions = [
-            ActionPermission(
-                actions=[
-                    ActionEnum.CREATE_STRATEGY,
-                    ActionEnum.LIST_STRATEGY,
-                    ActionEnum.EDIT_STRATEGY,
-                    ActionEnum.DELETE_STRATEGY,
-                ]
+        return [
+            AnyOfPermissions(
+                IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                ActionPermission(
+                    actions=[
+                        ActionEnum.CREATE_STRATEGY,
+                        ActionEnum.LIST_STRATEGY,
+                        ActionEnum.EDIT_STRATEGY,
+                        ActionEnum.DELETE_STRATEGY,
+                    ]
+                ),
             )
         ]
-
-        if self.action == "list":
-            return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])] + base_permissions
-        else:
-            return base_permissions
 
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),

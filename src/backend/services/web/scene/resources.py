@@ -7,7 +7,11 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
-from apps.meta.handlers.iam_group import IAMGroupManager
+from apps.meta.handlers.iam_group import (
+    SCENE_MANAGER_GROUP_ACTIONS,
+    SCENE_VIEWER_GROUP_ACTIONS,
+    IAMGroupManager,
+)
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
@@ -57,31 +61,38 @@ class SceneResource(AuditMixinResource, abc.ABC):
     def _sync_iam_group_members(scene, validated_request_data):
         """当 managers 或 users 变更时，同步到对应的 IAM 用户组；若用户组尚未创建则先创建"""
 
-        # 用户组不存在则先创建
-        if not scene.iam_manager_group_id or not scene.iam_viewer_group_id:
-            manager_members = [{"type": "user", "id": m} for m in (scene.managers or [])]
-            viewer_members = [{"type": "user", "id": u} for u in (scene.users or [])]
-            group_result = IAMGroupManager.create_scene_groups_with_members(
+        update_fields = []
+
+        if "managers" in validated_request_data:
+            new_group_id = IAMGroupManager.sync_group_members(
+                group_id=scene.iam_manager_group_id,
+                members=scene.managers,
+                group_name=f"{scene.name}-管理用户组",
+                group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
                 scene_id=str(scene.scene_id),
                 scene_name=scene.name,
-                manager_members=manager_members,
-                viewer_members=viewer_members,
             )
-            scene.iam_manager_group_id = group_result["iam_manager_group_id"]
-            scene.iam_viewer_group_id = group_result["iam_viewer_group_id"]
-            scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
-            return
+            if new_group_id is not None:
+                scene.iam_manager_group_id = new_group_id
+                update_fields.append("iam_manager_group_id")
 
-        if "managers" in validated_request_data and scene.iam_manager_group_id:
-            IAMGroupManager.sync_group_members(
-                group_id=scene.iam_manager_group_id,
-                members=[{"type": "user", "id": m} for m in scene.managers],
-            )
-        if "users" in validated_request_data and scene.iam_viewer_group_id:
-            IAMGroupManager.sync_group_members(
+        if "users" in validated_request_data:
+            new_group_id = IAMGroupManager.sync_group_members(
                 group_id=scene.iam_viewer_group_id,
-                members=[{"type": "user", "id": u} for u in scene.users],
+                members=scene.users,
+                group_name=f"{scene.name}-使用用户组",
+                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
             )
+            if new_group_id is not None:
+                scene.iam_viewer_group_id = new_group_id
+                update_fields.append("iam_viewer_group_id")
+
+        if update_fields:
+            scene.save(update_fields=update_fields)
 
 
 # ==================== 场景管理 ====================
@@ -157,7 +168,7 @@ class CreateScene(SceneResource):
         scene = Scene.objects.create(
             name=validated_request_data["name"],
             description=validated_request_data.get("description", ""),
-            managers=validated_request_data.get("managers", []),
+            managers=validated_request_data["managers"],
             users=validated_request_data.get("users", []),
         )
 
@@ -167,17 +178,23 @@ class CreateScene(SceneResource):
         self._save_tables(scene, validated_request_data.get("tables", []))
         # 自动创建"场景管理员通知组"
         self._create_scene_manager_notice_group(scene)
-        # 创建 IAM 用户组、授权并添加成员
-        manager_members = [{"type": "user", "id": m} for m in validated_request_data.get("managers", [])]
-        viewer_members = [{"type": "user", "id": u} for u in validated_request_data.get("users", [])]
-        group_result = IAMGroupManager.create_scene_groups_with_members(
+        # 创建 IAM 用户组、授权并添加成员（分别创建管理用户组和使用用户组）
+        scene.iam_manager_group_id = IAMGroupManager.create_single_group_with_members(
+            group_name=f"{scene.name}-管理用户组",
+            group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+            group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+            members=validated_request_data["managers"],
             scene_id=str(scene.scene_id),
             scene_name=scene.name,
-            manager_members=manager_members,
-            viewer_members=viewer_members,
         )
-        scene.iam_manager_group_id = group_result["iam_manager_group_id"]
-        scene.iam_viewer_group_id = group_result["iam_viewer_group_id"]
+        scene.iam_viewer_group_id = IAMGroupManager.create_single_group_with_members(
+            group_name=f"{scene.name}-使用用户组",
+            group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+            group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+            members=validated_request_data.get("users", []),
+            scene_id=str(scene.scene_id),
+            scene_name=scene.name,
+        )
         scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
         # 新场景补齐全可见平台报表的分组映射
         self._sync_all_visible_platform_panels(scene)
@@ -459,17 +476,13 @@ class GetScenePermissionSystems(SceneResource):
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
 
-        # 先判断场景是否配置了 is_all_systems=True（不限制系统）
-        scene_systems = SceneSystem.objects.filter(scene_id=scene_id)
-        if scene_systems.filter(is_all_systems=True).exists():
-            # 不限制，返回所有系统
+        # 复用 SceneDataFilter.get_system_ids 获取场景关联的系统ID
+        system_ids = SceneDataFilter.get_system_ids(scene_id)
+
+        if not system_ids:
+            # 空列表表示不限制（is_all_systems=True），返回所有系统
             systems = System.objects.all()
         else:
-            # 获取场景关联的系统ID白名单
-            system_ids = list(scene_systems.values_list("system_id", flat=True))
-            if not system_ids:
-                # 没有配置任何系统，没有权限
-                return []
             systems = System.objects.filter(system_id__in=system_ids)
 
         return [
