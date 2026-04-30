@@ -94,8 +94,11 @@ export default  {
   /**
    * @desc 获取全部工具
    */
-  fetchAllTools() {
-    return ToolManageSources.getAllTools()
+  fetchAllTools(params?: {
+    scope_type?: string,
+    scope_id?: string,
+  }) {
+    return ToolManageSources.getAllTools(params)
       .then(({ data }) => data);
   },
   /**

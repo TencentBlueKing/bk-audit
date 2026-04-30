@@ -935,17 +935,21 @@
   // 获取所有工具
   const {
     data: allToolsData,
+    run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    manual: true,
+    defaultParams: {
+      scope_type: 'scene',
+      scope_id: props.data.scene_id,
+    },
   });
 
   // 获取标签列表
   const {
     data: tagData,
+    run: fetchToolTags,
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
-    manual: true,
   });
 
   const getToolNameAndType = (uid: string) => {
@@ -1264,7 +1268,18 @@
     immediate: true,
     deep: true,
   });
-
+  watch(() => props.data, (data) => {
+    if (data) {
+      fetchAllTools({
+        scope_id: data.scene_id,
+        scope_type: 'scene',
+      });
+      fetchToolTags({
+        scope_id: data.scene_id,
+        scope_type: 'scene',
+      });
+    }
+  });
   onMounted(() => {
     loading.value = true;
     const observer = new MutationObserver(() => {
