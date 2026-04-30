@@ -331,7 +331,7 @@
     display: flex;
     width: 220px;
     font-size: 14px;
-    background: #2c354d;
+    background: #242b3b;
     transition: all .3s;
     flex-direction: column;
 
