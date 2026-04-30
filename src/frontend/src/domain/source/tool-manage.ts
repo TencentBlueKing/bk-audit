@@ -103,8 +103,14 @@ class ToolManage extends ModuleBase {
     });
   }
   // 获取全部工具
-  getAllTools() {
-    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?scope_id=${getSceneSystemParams().scope_id}&scope_type=${getSceneSystemParams().scope_type}`);
+  getAllTools(params?: {
+    scope_type?: string,
+    scope_id?: string,
+  }) {
+    const sceneParams = getSceneSystemParams();
+    const scopeType = params?.scope_type ?? sceneParams.scope_type;
+    const scopeId = params?.scope_id ?? sceneParams.scope_id;
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?scope_id=${scopeId}&scope_type=${scopeType}`);
   }
   // 工具执行
   getToolsExecute(params: {
