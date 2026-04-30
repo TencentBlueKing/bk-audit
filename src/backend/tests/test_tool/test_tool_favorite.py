@@ -32,6 +32,7 @@ from apps.meta.models import Tag
 from apps.permission.handlers.permission import Permission
 from services.web.scene.constants import (
     BindingType,
+    PanelStatus,
     ResourceVisibilityType,
     VisibilityScope,
 )
@@ -431,3 +432,14 @@ class ToolFavoriteTestCase(TestCase):
         self.assertFalse(tool_2_data["favorite"])
         self.assertEqual(tool_1_data["binding_type"], BindingType.PLATFORM_BINDING)
         self.assertEqual(tool_2_data["binding_type"], BindingType.SCENE_BINDING)
+
+    def test_list_tool_all_filter_by_status(self):
+        """测试全量工具列表支持按上架状态过滤"""
+
+        self.tool_1.status = PanelStatus.PUBLISHED
+        self.tool_1.save(update_fields=["status"])
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            result = self._call_resource_with_request(ListToolAll, {"status": PanelStatus.PUBLISHED})
+
+        self.assertEqual([tool["uid"] for tool in result], [self.tool_1.uid])

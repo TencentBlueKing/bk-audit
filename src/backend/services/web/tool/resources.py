@@ -87,6 +87,7 @@ from services.web.tool.serializers import (
     GetToolDetailByNameAPIGWRequestSerializer,
     GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
+    ListToolAllRequestSerializer,
     ListToolTagsResponseSerializer,
     PlatformSceneToolCreateRequestSerializer,
     PlatformSceneToolPublishRequestSerializer,
@@ -972,7 +973,7 @@ class ToolExecuteDebug(ToolBase):
 
 class ListToolAll(ToolBase):
     name = gettext_lazy("工具列表(all)")
-    RequestSerializer = ScopeBindingRequestSerializer
+    RequestSerializer = ListToolAllRequestSerializer
     many_response_data = True
     ResponseSerializer = ToolListAllResponseSerializer
 
@@ -986,6 +987,9 @@ class ListToolAll(ToolBase):
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
         tool_qs = self.filter_queryset_by_scope(tool_qs, validated_request_data, current_user).order_by("name")
+        status = validated_request_data.get("status")
+        if status:
+            tool_qs = tool_qs.filter(status=status)
         tools = list(tool_qs)
 
         tool_uids = [tool.uid for tool in tools]

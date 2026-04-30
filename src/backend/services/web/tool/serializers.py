@@ -404,6 +404,16 @@ class ScopeBindingRequestSerializer(ScopeQuerySerializer):
         return attrs
 
 
+class ListToolAllRequestSerializer(ScopeBindingRequestSerializer):
+    status = serializers.ChoiceField(
+        choices=PanelStatus.choices,
+        required=False,
+        allow_null=True,
+        default=None,
+        label=gettext_lazy("上架状态"),
+    )
+
+
 class OptionalScopeBindingRequestSerializer(ScopeBindingRequestSerializer):
     """工具列表可选 scope 参数。"""
 
