@@ -50,6 +50,52 @@ import { changeConfirm } from '@utils/assist';
 
 let lastRouterHrefCache = '/';
 
+/** 单条访问限制规则 */
+interface AccessRule {
+  /** 受限路径前缀列表 */
+  paths: string[];
+  /** 拦截后重定向的路由 name */
+  redirect: string;
+  /** 当前路由 name 与此值相等时不拦截（用于 landing 页自身） */
+  excludeName?: string;
+}
+
+/** 角色 -> 访问限制规则表（按优先级排列） */
+const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
+  risk_handler: [
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'landingPage', excludeName: 'landingPage' },
+    { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
+    { paths: ['/analysis-manage', '/statement-manage', '/tools', '/platform'], redirect: '404' },
+  ],
+  scene_user: [
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
+    { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
+  ],
+  scene_admin: [
+    { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
+  ],
+  system_admin: [
+    { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
+  ],
+};
+
+/**
+ * 根据规则检查目标路径是否被拦截
+ * @returns 需重定向的路由 name，null 表示放行
+ */
+function checkAccessRedirect(
+  toPath: string,
+  toName: string | symbol | undefined | null,
+  rules: AccessRule[],
+): string | null {
+  for (const rule of rules) {
+    const matched = rule.paths.some(p => toPath.startsWith(p));
+    const excluded = rule.excludeName ? toName === rule.excludeName : false;
+    if (matched && !excluded) return rule.redirect;
+  }
+  return null;
+}
+
 export default (config: ConfigModel) => {
   const routes: Array<RouteRecordRaw> = [
     {
@@ -97,13 +143,25 @@ export default (config: ConfigModel) => {
   // 全局前置守卫（统一处理所有路由跳转）
   router.beforeEach(async (to, from, next) => {
     try {
+      const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
+
+      // 基于角色策略表进行访问控制
+      for (const role of userRole) {
+        const rules = ROLE_ACCESS_MAP[role];
+        if (!rules) continue;
+        const redirect = checkAccessRedirect(to.path, to.name, rules);
+        if (redirect) {
+          next({ name: redirect });
+          return;
+        }
+      }
+
       // 检查权限：如果路由需要权限且用户没有权限，则重定向到首页
       if (to.meta?.permission) {
         const permission = to.meta.permission as string;
         const hasPermission = await IamManageService.checkAny({ action_ids: permission });
 
         if (!hasPermission[permission]) {
-          // 没有权限，重定向到首页
           next({ name: 'handleManage' });
           return;
         }
@@ -114,6 +172,8 @@ export default (config: ConfigModel) => {
       if (confirmed) {
         lastRouterHrefCache = to.fullPath;
         next();
+      } else {
+        next(false);
       }
     } catch (error) {
       next(false);
@@ -128,5 +188,3 @@ export default (config: ConfigModel) => {
 
   return router;
 };
-
-
