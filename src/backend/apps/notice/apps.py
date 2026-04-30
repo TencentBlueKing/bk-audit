@@ -37,7 +37,10 @@ class NoticeConfig(AppConfig):
         初始化系统管理员的通知组
         """
 
-        from apps.notice.constants import ADMIN_NOTICE_GROUP_NAME
+        from apps.notice.constants import (
+            ADMIN_NOTICE_GROUP_NAME,
+            get_default_notice_config,
+        )
         from apps.notice.models import NoticeGroup
 
         NoticeGroup.objects.get_or_create(
@@ -45,6 +48,6 @@ class NoticeConfig(AppConfig):
             defaults={
                 "group_name": ADMIN_NOTICE_GROUP_NAME,
                 "group_member": [u for u in get_env_or_raise("BKAPP_ADMIN_USERNAMES").split(",") if u],
-                "notice_config": [{"msg_type": "mail"}, {"msg_type": "rtx"}],
+                "notice_config": get_default_notice_config(),
             },
         )

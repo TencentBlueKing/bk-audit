@@ -14,11 +14,13 @@ class RelatedResourceDetail(TypedDict):
 
 class SceneException(CoreException):
     MODULE_CODE = "08"
+    STATUS_CODE = 400
 
 
 class SceneNotExist(SceneException):
     MESSAGE = gettext_lazy("场景不存在")
     ERROR_CODE = "001"
+    STATUS_CODE = 404
 
 
 class SceneDisabled(SceneException):
@@ -56,6 +58,7 @@ class SceneHasRelatedResources(SceneException):
 class PanelNotExist(SceneException):
     MESSAGE = gettext_lazy("报表不存在")
     ERROR_CODE = "004"
+    STATUS_CODE = 404
 
 
 class PanelCannotDelete(SceneException):
@@ -66,6 +69,7 @@ class PanelCannotDelete(SceneException):
 class ToolNotExist(SceneException):
     MESSAGE = gettext_lazy("工具不存在")
     ERROR_CODE = "006"
+    STATUS_CODE = 404
 
 
 class ToolCannotDelete(SceneException):

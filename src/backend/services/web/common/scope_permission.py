@@ -360,7 +360,7 @@ class ScopePermission:
 
         结果缓存在请求级 _scene_ids_cache 中。
 
-        :raise_exception: 当 scope_type=scene 时，校验用户是否有 action 权限，无权限则抛出 PermissionException
+        无权限时返回空列表；需要抛出权限申请异常的入口应调用 check_scope_entry。
         """
         # 方向不匹配 → 空返回
         if not scope.is_scene_scope:
@@ -388,13 +388,6 @@ class ScopePermission:
             resource = ResourceEnum.SCENE.create_instance(scope.scope_id)
             if self.permission.is_allowed(action, [resource], raise_exception=False):
                 result = [int(scope.scope_id)]
-            else:
-                apply_data, apply_url = self.permission.get_apply_data([action], [resource])
-                raise PermissionException(
-                    action_name=action.name,
-                    apply_url=apply_url,
-                    permission=apply_data,
-                )
 
         self._scene_ids_cache[cache_key] = result
         return result
@@ -415,7 +408,7 @@ class ScopePermission:
 
         结果缓存在请求级 _system_ids_cache 中。
 
-        :raise_exception: 当 scope_type=system 时，校验用户是否有 action 权限，无权限则抛出 PermissionException
+        无权限时返回空列表；需要抛出权限申请异常的入口应调用 check_scope_entry。
         """
         # 方向不匹配 → 空返回
         if not scope.is_system_scope:
@@ -448,13 +441,6 @@ class ScopePermission:
 
             if iam_result or local_result:
                 result_set.add(scope.scope_id)
-            else:
-                apply_data, apply_url = self.permission.get_apply_data([action], [resource])
-                raise PermissionException(
-                    action_name=action.name,
-                    apply_url=apply_url,
-                    permission=apply_data,
-                )
 
         result = list(result_set)
         self._system_ids_cache[cache_key] = result

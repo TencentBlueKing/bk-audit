@@ -53,6 +53,10 @@ class MsgType(TextChoices):
     SMS = "sms", gettext_lazy("短信")
 
 
+def get_default_notice_config():
+    return [{"msg_type": MsgType.MAIL.value}, {"msg_type": MsgType.RTX.value}]
+
+
 class RelateType(TextChoices):
     """
     通知关联类型
