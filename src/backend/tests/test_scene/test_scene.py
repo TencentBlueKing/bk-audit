@@ -27,6 +27,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.meta.models import System
+from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from services.web.risk.models import Risk
@@ -710,6 +711,17 @@ class TestSceneResource(TestCase):
         scene_system = SceneSystem.objects.get(scene=scene)
         self.assertEqual(scene_system.system_id, "")
         self.assertTrue(scene_system.is_all_systems)
+
+    def test_create_scene_manager_notice_group_uses_default_notice_config(self):
+        """创建场景时自动创建的场景管理员通知组使用默认通知配置"""
+        with mock.patch(
+            "services.web.scene.resources.IAMGroupManager.create_scene_groups_with_members",
+            return_value={"iam_manager_group_id": 1, "iam_viewer_group_id": 2},
+        ):
+            self.resource.scene.create_scene({"name": "notice-config-scene", "managers": ["admin"]})
+
+        notice_group = NoticeGroup.objects.get(group_name="notice-config-scene-场景管理员通知组")
+        self.assertEqual(notice_group.notice_config, [{"msg_type": "mail"}, {"msg_type": "rtx"}])
 
     def test_create_scene_validate_tables_schema(self):
         """测试创建场景时 tables 子序列化器校验生效"""

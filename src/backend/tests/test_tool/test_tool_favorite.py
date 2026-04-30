@@ -443,3 +443,4 @@ class ToolFavoriteTestCase(TestCase):
             result = self._call_resource_with_request(ListToolAll, {"status": PanelStatus.PUBLISHED})
 
         self.assertEqual([tool["uid"] for tool in result], [self.tool_1.uid])
+        self.assertEqual(result[0]["status"], PanelStatus.PUBLISHED)

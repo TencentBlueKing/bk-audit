@@ -657,6 +657,12 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         return data
 
 
+class ListStrategyAllRequestSerializer(serializers.Serializer):
+    """策略 all 接口请求参数（按场景过滤）"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+
 class StrategyToolSerializer(serializers.ModelSerializer):
     class Meta:
         model = StrategyTool

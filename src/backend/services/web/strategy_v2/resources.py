@@ -168,6 +168,7 @@ from services.web.strategy_v2.serializers import (
     ListLinkTableResponseSerializer,
     ListLinkTableTagsRequestSerializer,
     ListLinkTableTagsResponseSerializer,
+    ListStrategyAllRequestSerializer,
     ListStrategyFieldsRequestSerializer,
     ListStrategyFieldsResponseSerializer,
     ListStrategyRequestSerializer,
@@ -682,13 +683,20 @@ class ListStrategy(StrategyV2Base):
 
 class ListStrategyAll(StrategyV2Base):
     name = gettext_lazy("List All Strategy")
+    RequestSerializer = ListStrategyAllRequestSerializer
 
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
+        strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
+        strategies = SceneScopeFilter.filter_queryset(
+            queryset=strategies,
+            scene_id=validated_request_data["scene_id"],
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data

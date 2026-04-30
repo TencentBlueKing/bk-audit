@@ -27,6 +27,7 @@ from services.web.strategy_v2.constants import (
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
 from services.web.strategy_v2.resources import ListStrategyFields, ListTables
+from services.web.strategy_v2.serializers import ListStrategyAllRequestSerializer
 from tests.base import TestCase
 
 
@@ -70,6 +71,35 @@ class StrategyResourcesTest(TestCase):
 
         self.assertEqual([item["uid"] for item in scene_1_result], [link_table.uid])
         self.assertEqual(list(scene_2_result), [])
+
+    def test_list_strategy_all_request_serializer_requires_scene_id(self):
+        serializer = ListStrategyAllRequestSerializer()
+
+        self.assertIn("scene_id", serializer.fields)
+        self.assertTrue(serializer.fields["scene_id"].required)
+
+    @mock.patch("services.web.strategy_v2.resources.ActionPermission.has_permission", return_value=True)
+    def test_list_strategy_all_filters_by_scene(self, _):
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+        strategy_2 = Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="other-scene-strategy",
+            strategy_type=StrategyType.MODEL.value,
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(self.strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=self.scene.scene_id)
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy_2.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=scene_2.scene_id)
+
+        result = self.resource.strategy_v2.list_strategy_all(scene_id=self.scene.scene_id)
+
+        self.assertEqual(result, [{"label": self.strategy.strategy_name, "value": self.strategy.strategy_id}])
 
     @mock.patch("services.web.strategy_v2.resources.get_local_request")
     @mock.patch("services.web.strategy_v2.resources.ActionPermission")

@@ -292,6 +292,7 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
             "tool_type",
             "version",
             "namespace",
+            "status",
             "tags",
             "strategies",
             "favorite",
