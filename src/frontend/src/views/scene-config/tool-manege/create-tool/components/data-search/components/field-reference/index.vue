@@ -89,6 +89,11 @@
                     target="_blank"
                     :to="{
                       name: 'sceneToolCreate',
+                      query: {
+                        scene_id: route.query.scene_id,
+                        scope_id: route.query.scope_id,
+                        scope_type: route.query.scope_type,
+                      },
                     }">
                     <audit-icon
                       style="font-size: 14px;color: #3a84ff;"
@@ -306,6 +311,7 @@
   import _ from 'lodash';
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
   import ToolManageService from '@service/tool-manage';
@@ -398,6 +404,7 @@
 
   const activeFieldName = ref<string>('');
 
+  const route = useRoute();
   const toolTypeMap = ref<Record<string, string>>({
     data_search: 'SQL',
     api: 'API',
