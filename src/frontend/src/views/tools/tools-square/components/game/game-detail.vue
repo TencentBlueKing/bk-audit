@@ -59,12 +59,68 @@
           <span class="info-value">¥ {{ gameData.totalIssue }}</span>
         </div>
       </div>
-      <bk-button class="export-btn">
-        <audit-icon
-          style="margin-right: 4px;"
-          type="download" />
-        {{ t('导出') }}
-      </bk-button>
+      <bk-popover
+        ref="exportPopoverRef"
+        :is-show="isExportPopoverShow"
+        placement="bottom-end"
+        theme="light"
+        trigger="click"
+        :width="340"
+        @after-hidden="isExportPopoverShow = false">
+        <bk-button
+          class="export-btn"
+          @click="isExportPopoverShow = !isExportPopoverShow">
+          <audit-icon
+            style="margin-right: 4px;"
+            type="download" />
+          {{ t('导出') }}
+        </bk-button>
+        <template #content>
+          <div class="export-popover-content">
+            <div class="export-popover-title">
+              {{ t('导出游戏审计数据') }}
+            </div>
+            <div class="export-form-item">
+              <div class="export-form-label">
+                {{ t('时间范围') }}
+                <span class="required-star">*</span>
+              </div>
+              <bk-date-picker
+                v-model="exportDateRange"
+                :placeholder="t('选择时间范围')"
+                style="width: 100%"
+                type="daterange" />
+            </div>
+            <div class="export-form-item">
+              <div class="export-form-label">
+                {{ t('导出内容') }}
+                <span class="required-star">*</span>
+              </div>
+              <bk-checkbox-group v-model="exportContentChecked">
+                <div class="export-checkbox-grid">
+                  <bk-checkbox
+                    v-for="item in exportContentOptions"
+                    :key="item.id"
+                    :label="item.id">
+                    {{ item.name }}
+                  </bk-checkbox>
+                </div>
+              </bk-checkbox-group>
+            </div>
+            <div class="export-popover-footer">
+              <bk-button
+                :loading="isExporting"
+                theme="primary"
+                @click="handleExport">
+                {{ t('导出') }}
+              </bk-button>
+              <bk-button @click="isExportPopoverShow = false">
+                {{ t('取消') }}
+              </bk-button>
+            </div>
+          </div>
+        </template>
+      </bk-popover>
     </div>
 
     <!-- Tab 标签页 -->
@@ -129,13 +185,16 @@
           :name="tab.key">
           <game-record-tab
             :chart-rows="tab.chartRows"
+            :search-fields="tab.searchFields"
             :search-placeholder="tab.searchPlaceholder"
             :table-columns="tab.table.columns"
             :table-data="tab.table.data"
             :table-pagination="tab.table.pagination"
             :table-title="tab.table.title"
+            @date-change="handleTabDateChange(tab.key, $event)"
             @page-change="handleTabPageChange(tab.key, $event)"
-            @page-limit-change="handleTabPageLimitChange(tab.key, $event)">
+            @page-limit-change="handleTabPageLimitChange(tab.key, $event)"
+            @search-condition-change="handleTabSearchConditionChange(tab.key, $event)">
             <!-- 插槽控制 -->
             <template
               v-if="tab.extraFilter === 'chatViolation'"
@@ -156,8 +215,17 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import * as XLSX from 'xlsx';
+
+  import ToolManageService from '@service/tool-manage';
+
+  import useExportExcel from '@hooks/use_export_excel';
+
+  import { execCopy } from '@utils/assist';
 
   import GameRecordTab from './game-record-tab.vue';
+  import { type SearchFieldItem, useGameSearchFields } from './game-search-fields';
+  import { useGameTableColumns } from './game-table-columns';
   import RecordDetailTable from './record-detail-table.vue';
 
   // Tab 配置接口
@@ -173,6 +241,7 @@
     label: string;
     chartRows: ChartConfig[][];
     searchPlaceholder: string;
+    searchFields: SearchFieldItem[];
     table: {
       columns: Array<Record<string, any>>;
       data: Array<Record<string, any>>;
@@ -185,6 +254,7 @@
   interface GameData {
     name: string;
     openid: string;
+    gameid: string | number;
     wechat: string;
     coinBalance: number;
     totalRecharge: number;
@@ -195,452 +265,489 @@
   interface Props {
     gameData?: GameData;
     initialTab?: string;
+    toolUid?: string;
+    toolName?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     gameData: () => ({
-      name: '王者荣耀',
-      openid: 'wx_oABCd1234567890',
-      wechat: 'm******4',
-      coinBalance: 350,
-      totalRecharge: 3200,
+      name: '',
+      openid: '',
+      gameid: '',
+      wechat: '',
+      coinBalance: 0,
+      totalRecharge: 0,
       totalGift: 0,
-      totalIssue: 6978,
+      totalIssue: 0,
     }),
     initialTab: '',
+    toolUid: '',
+    toolName: '',
   });
 
   const { t } = useI18n();
   const activeTab = ref(props.initialTab || 'overview');
 
-  // 当 initialTab 变化时（如同一游戏从不同入口再次打开），同步切换 tab
+  // 当 initialTab 变化时同步切换 tab
   watch(() => props.initialTab, (newTab) => {
     if (newTab) {
       activeTab.value = newTab;
     }
   });
 
-  // 复制
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+  // ========== 日期工具函数 ==========
+  const formatYmd = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}${m}${day}`;
   };
 
-  // 角色总览假数据
-  const roleList = ref([
-    { roleName: '无名剑客', roleId: 'R100070001', platform: 'QQ', zone: '电信区', loginPlaceMonth: 14, loginPlaceYear: 88, loginCountMonth: 561, loginCountYear: 561, tradeObjMonth: 561, tradeObjYear: 561 },
-    { roleName: '破晓', roleId: 'R100070001', platform: 'IOS', zone: '5区', loginPlaceMonth: 7, loginPlaceYear: 85, loginCountMonth: 450, loginCountYear: 450, tradeObjMonth: 450, tradeObjYear: 450 },
-    { roleName: '****', roleId: 'R100070001', platform: 'Android', zone: '10区', loginPlaceMonth: 17, loginPlaceYear: 34, loginCountMonth: 859, loginCountYear: 859, tradeObjMonth: 859, tradeObjYear: 859 },
-    { roleName: '妲己', roleId: 'R100070001', platform: '微信', zone: '移动区', loginPlaceMonth: 3, loginPlaceYear: 32, loginCountMonth: 565, loginCountYear: 565, tradeObjMonth: 565, tradeObjYear: 0 },
-  ]);
+  const formatYmdDashed = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
-  const roleColumns = [
-    { label: () => t('角色名称'), field: 'roleName' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('平台'), field: 'platform' },
-    { label: () => t('小区'), field: 'zone' },
-    { label: () => `${t('登录地点数')}/${t('月')}`, field: 'loginPlaceMonth', sort: true },
-    { label: () => `${t('登录地点数')}/${t('年')}`, field: 'loginPlaceYear', sort: true },
-    { label: () => `${t('登录次数')}/${t('月')}`, field: 'loginCountMonth', sort: true },
-    { label: () => `${t('登录次数')}/${t('年')}`, field: 'loginCountYear', sort: true },
-    { label: () => `${t('交易对象数')}/${t('月')}`, field: 'tradeObjMonth', sort: true },
-    { label: () => `${t('交易对象数')}/${t('年')}`, field: 'tradeObjYear', sort: true },
-  ];
+  const getDateParams = () => {
+    const now = new Date();
+    const oneMonthAgo = new Date(now);
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const oneWeekAgo = new Date(now);
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const twoWeekAgo = new Date(now);
+    twoWeekAgo.setDate(twoWeekAgo.getDate() - 14);
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-  const loginStatList = ref([
-    { period: '最近7天', loginCount: 561, loginPlaceCount: 561, loginDeviceCount: 561, loginIpCount: 561 },
-    { period: '最近14天', loginCount: 450, loginPlaceCount: 450, loginDeviceCount: 450, loginIpCount: 450 },
-    { period: '最近1个月', loginCount: 859, loginPlaceCount: 859, loginDeviceCount: 859, loginIpCount: 859 },
-  ]);
+    return {
+      one_month_ago_Ymd: formatYmd(oneMonthAgo),
+      one_month_ago_Ymd_dashed: formatYmdDashed(oneMonthAgo),
+      one_week_ago_Ymd_dashed: formatYmdDashed(oneWeekAgo),
+      two_week_ago_Ymd_dashed: formatYmdDashed(twoWeekAgo),
+      one_year_ago_Ymd: formatYmd(oneYearAgo),
+      last_record_thedate_Ymd: formatYmd(oneMonthAgo),
+      today_Ymd: formatYmd(now),
+    };
+  };
 
-  const loginStatColumns = [
-    { label: () => t('统计频率'), field: 'period' },
-    { label: () => t('登录次数'), field: 'loginCount', sort: true },
-    { label: () => t('登录地点数'), field: 'loginPlaceCount', sort: true },
-    { label: () => t('登录设备数'), field: 'loginDeviceCount', sort: true },
-    { label: () => `${t('登录IP')} ${t('数')}`, field: 'loginIpCount', sort: true },
-  ];
+  // 明细 Tab 的日期范围（默认最近一个月）
+  const detailDateRange = ref<Record<string, { start: string; end: string }>>({
+    login: { start: '', end: '' },
+    gift: { start: '', end: '' },
+    trade: { start: '', end: '' },
+    coin: { start: '', end: '' },
+    chat: { start: '', end: '' },
+  });
 
-  // ========== 概览页面各 section 配置 ==========
+  const initDateRange = () => {
+    const dp = getDateParams();
+    const defaultRange = { start: dp.one_month_ago_Ymd, end: dp.today_Ymd };
+    detailDateRange.value = {
+      login: { ...defaultRange },
+      gift: { ...defaultRange },
+      trade: { ...defaultRange },
+      coin: { ...defaultRange },
+      chat: { ...defaultRange },
+    };
+  };
+  initDateRange();
+
+  // 提取接口返回的 results 数组
+  const extractResults = (data: any): any[] => {
+    const results = data?.data?.result?.results
+      || data?.result?.results || data?.data?.results || data?.results;
+    return Array.isArray(results) ? results : [];
+  };
+
+  // 通用接口调用封装
+  const executeDataSource = (dataSourceName: string, params: Record<string, any>) => {
+    if (!props.toolUid) return Promise.resolve(null);
+    return ToolManageService.fetchToolsExecute({
+      uid: props.toolUid,
+      params: {
+        data_source_name: dataSourceName,
+        params,
+      },
+    });
+  };
+
+  // 复制
+  const handleCopy = (text: string) => {
+    execCopy(text, t('复制成功'));
+  };
+
+  // ========== 列配置和搜索字段（从外部文件导入） ==========
+  const {
+    roleColumns, loginStatColumns, loginDetailColumns,
+    giveDetailColumns, dealDetailColumns, sapDetailColumns, chatDetailColumns,
+  } = useGameTableColumns();
+  const {
+    loginSearchFields, giftSearchFields, tradeSearchFields,
+    coinSearchFields, chatSearchFields,
+  } = useGameSearchFields();
+
+  // ========== 概览 - 角色总览 ==========
+  const roleList = ref<Array<Record<string, any>>>([]);
+
+  // 合并三个角色统计接口的数据（按角色ID合并）
+  const mergeRoleStats = (loginData: any[], chatData: any[], dealData: any[]) => {
+    const roleMap = new Map<string, Record<string, any>>();
+    // 先用 login 数据建立基础
+    loginData.forEach((row) => {
+      const id = row['角色ID'] || row.roleId || '';
+      roleMap.set(id, { ...row });
+    });
+    // 合并 chat 数据
+    chatData.forEach((row) => {
+      const id = row['角色ID'] || row.roleId || '';
+      const existing = roleMap.get(id) || { 角色ID: id };
+      roleMap.set(id, {
+        ...existing,
+        '聊天对象（月）': row['聊天对象（月）'] ?? 0,
+        '聊天对象（年）': row['聊天对象（年）'] ?? 0,
+        '聊天数量（月）': row['聊天数量（月）'] ?? 0,
+        '聊天数量（年）': row['聊天数量（年）'] ?? 0,
+      });
+    });
+    // 合并 deal 数据
+    dealData.forEach((row) => {
+      const id = row['角色ID'] || row.roleId || '';
+      const existing = roleMap.get(id) || { 角色ID: id };
+      roleMap.set(id, {
+        ...existing,
+        '交易对象（月）': row['交易对象（月）'] ?? 0,
+        '交易对象（年）': row['交易对象（年）'] ?? 0,
+        '交易数量（月）': row['交易数量（月）'] ?? 0,
+        '交易数量（年）': row['交易数量（年）'] ?? 0,
+      });
+    });
+    return Array.from(roleMap.values());
+  };
+
+  // ========== 概览 - 登录统计 ==========
+  const loginStatList = ref<Array<Record<string, any>>>([]);
+
+  // ========== 概览 - 最近记录 ==========
+  const lastLoginRecord = ref<Record<string, any>>({});
+  const lastGiveRecord = ref<Record<string, any>>({});
+  const lastDealRecord = ref<Record<string, any>>({});
+  const lastSapRecord = ref<Record<string, any>>({});
+  const lastChatRecord = ref<Record<string, any>>({});
+
+  // ========== 概览 sections 配置 ==========
   interface OverviewSectionConfig {
     key: string;
     title: string;
-    tabKey?: string;                  // 点击"查看详情"跳转的 tab key
-    lastRecordItems?: Array<{         // 最近一次记录的 label-value 列表
-      label: string;
-      value: string | number;
-    }>;
-    table?: {                         // simple 模式表格
+    tabKey?: string;
+    lastRecordItems?: Array<{ label: string; value: string | number }>;
+    table?: {
       columns: Array<Record<string, any>>;
       data: Array<Record<string, any>>;
     };
   }
 
   const overviewSections = computed<OverviewSectionConfig[]>(() => [
-    // 关联的游戏角色总览
     {
       key: 'role',
-      title: t('关联的游戏角色总览'),
+      title: t('角色行为概览'),
       table: { columns: roleColumns, data: roleList.value },
     },
-    // 登录记录
     {
       key: 'login',
       title: t('登录记录'),
       tabKey: 'login',
       lastRecordItems: [
-        { label: t('最近一次登录时间'), value: '2026-04-09 15:19:06' },
-        { label: t('登录地点'), value: '广州' },
-        { label: t('登录IP'), value: '10.20.30.40' },
-        { label: t('登录设备'), value: 'iPhone' },
+        { label: t('最近一次登录时间'), value: lastLoginRecord.value.登录时间 || '--' },
+        { label: t('登录地点'), value: lastLoginRecord.value.登录地点 || '--' },
+        { label: t('登录IP'), value: lastLoginRecord.value.登录IP || '--' },
+        { label: t('登录设备'), value: lastLoginRecord.value.登录设备 || '--' },
       ],
       table: { columns: loginStatColumns, data: loginStatList.value },
     },
-    // 赠送记录
     {
       key: 'gift',
       title: t('赠送记录'),
       tabKey: 'gift',
       lastRecordItems: [
-        { label: t('最近一次赠送时间'), value: '2026-04-09 15:19:06' },
-        { label: t('赠送账号'), value: 'owanIsu7xMVj-6a6uwtygudODUxg' },
-        { label: t('道具名称'), value: '英雄碎片' },
-        { label: t('赠送总额'), value: '992 元' },
+        { label: t('最近一次赠送时间'), value: lastGiveRecord.value.赠送时间 || '--' },
+        { label: t('赠送账号'), value: lastGiveRecord.value.赠送对象 || lastGiveRecord.value.对方openid || '--' },
+        { label: t('道具名称'), value: lastGiveRecord.value.道具名称 || '--' },
+        { label: t('赠送总额'), value: lastGiveRecord.value.赠送金额 ? `${lastGiveRecord.value.赠送金额} 元` : '--' },
       ],
     },
-    // 交易记录
     {
       key: 'trade',
       title: t('交易记录'),
       tabKey: 'trade',
       lastRecordItems: [
-        { label: t('最近一次交易时间'), value: '2026-04-09 15:19:06' },
-        { label: t('交易对象'), value: 'owanIsu7xMVj-6a6uwtygudODUxg' },
-        { label: t('道具名称'), value: '英雄碎片' },
-        { label: t('赠送总额'), value: '992 元' },
+        { label: t('最近一次交易时间'), value: lastDealRecord.value.交易时间 || '--' },
+        { label: t('交易对象'), value: lastDealRecord.value.交易对象 || '--' },
+        { label: t('道具名称'), value: lastDealRecord.value.道具名称 || '--' },
+        { label: t('赠送总额'), value: lastDealRecord.value.交易金额 ? `${lastDealRecord.value.交易金额} 元` : '--' },
       ],
     },
-    // 代币发放记录
     {
       key: 'coin',
       title: t('代币发放记录'),
       tabKey: 'coin',
       lastRecordItems: [
-        { label: t('最近一次发放时间'), value: '2026-04-09 15:19:06' },
-        { label: t('发放人'), value: 'yimohe' },
-        { label: t('发放数量'), value: '代 2481' },
-        { label: t('发放金额'), value: '992 元' },
+        { label: t('最近一次发放时间'), value: lastSapRecord.value.发放时间 || '--' },
+        { label: t('发放人'), value: lastSapRecord.value.发放人 || '--' },
+        { label: t('发放数量'), value: lastSapRecord.value.发放数量 ? `代 ${lastSapRecord.value.发放数量}` : '--' },
+        { label: t('发放金额'), value: (lastSapRecord.value.发放金额 ?? lastSapRecord.value['发放金额（元）']) ? `${lastSapRecord.value.发放金额 ?? lastSapRecord.value['发放金额（元）']} 元` : '--' },
       ],
     },
-    // 聊天记录
     {
       key: 'chat',
       title: t('聊天记录'),
       tabKey: 'chat',
       lastRecordItems: [
-        { label: t('最近一次聊天时间'), value: '2026-04-09 15:19:06' },
-        { label: t('发起人'), value: 'frodomei' },
-        { label: t('大区ID'), value: '2011' },
-        { label: t('聊天内容'), value: '资源号便宜出，私聊聊' },
+        { label: t('最近一次聊天时间'), value: lastChatRecord.value.聊天时间 || '--' },
+        { label: t('发起人'), value: lastChatRecord.value.聊天对象 || lastChatRecord.value.发起人 || '--' },
+        { label: t('大区ID'), value: lastChatRecord.value.大区ID || '--' },
+        { label: t('聊天内容'), value: lastChatRecord.value.聊天内容 || '--' },
       ],
     },
   ]);
 
-  // ========== 登录记录 tab 数据 ==========
-  // 设备分布数据
-  const loginDeviceData = [
-    { name: 'iPhone', value: 528 },
-    { name: 'Android', value: 308 },
-    { name: 'Windows', value: 196 },
-    { name: 'iPad', value: 113 },
-    { name: 'Mac', value: 86 },
-  ];
-  // 地点分布数据
-  const loginLocationData = [
-    { name: '深圳', value: 528 },
-    { name: '广州', value: 308 },
-    { name: '北京', value: 196 },
-    { name: '成都', value: 113 },
-    { name: '上海', value: 86 },
-    { name: '杭州', value: 44 },
-  ];
-  // 时段分布数据
-  const loginTimeData = [
-    { name: '18:00-20:59', value: 528 },
-    { name: '09:00-11:59', value: 308 },
-    { name: '12:00-14:59', value: 196 },
-    { name: '21:00-23:59', value: 113 },
-    { name: '15:00-17:59', value: 86 },
-    { name: '06:00-08:59', value: 44 },
-    { name: '03:00-05:59', value: 34 },
-    { name: '00:00-02:59', value: 15 },
-  ];
-  const loginDetailList = ref([
-    { time: '2026-04-09 09:07:35', location: '湖南省', ip: '94.37.229.177', region: 9603, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-04-07 02:20:42', location: '江苏省', ip: '206.202.132.36', region: 4367, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-03-31 23:07:22', location: '澳门特别行政区', ip: '29.203.230.134', region: 4294, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-03-15 13:20:14', location: '上海', ip: '241.211.167.63', region: 1136, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-03-10 00:19:54', location: '河北省', ip: '46.38.239.201', region: 890, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-03-07 12:16:18', location: '山西省', ip: '23.138.206.34', region: 5311, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-02-06 22:13:35', location: '福建省', ip: '238.121.252.150', region: 6770, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-01-25 13:35:18', location: '广西壮族自治区', ip: '134.106.193.35', region: 1654, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-01-23 02:40:10', location: '青海省', ip: '73.125.206.107', region: 1829, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-    { time: '2026-01-18 13:09:41', location: '黑龙江省', ip: '151.197.149.120', region: 8536, roleId: 'R100070001', roleName: '王者用户0001', level: 'Lv.24', device: 'iPhone', model: 'iPhone 14' },
-  ]);
-  const loginDetailColumns = [
-    { label: () => t('登录时间'), field: 'time', sort: true },
-    { label: () => t('登录地点'), field: 'location', filter: true },
-    { label: () => t('登录IP'), field: 'ip' },
-    { label: () => t('大区'), field: 'region' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('角色名称'), field: 'roleName' },
-    { label: () => t('等级'), field: 'level' },
-    { label: () => t('登录设备'), field: 'device', filter: true },
-    { label: () => t('机型'), field: 'model', filter: true },
-  ];
-  const loginPagination = ref({ count: 198, current: 1, limit: 10 });
+  // ========== 登录记录 tab ==========
+  const loginGroupStats = ref<Array<Record<string, any>>>([]);
+  const loginDetailList = ref<Array<Record<string, any>>>([]);
+  const loginPagination = ref({ count: 0, current: 1, limit: 10 });
 
-  // ========== 赠送记录 tab 数据 ==========
-  // 赠送对象分布（按金额）
-  const giftTargetAmountData = [
-    { name: 'owanIsu7xMVj', value: 420 },
-    { name: 'wx_user_001', value: 280 },
-    { name: 'wx_user_002', value: 160 },
-    { name: 'wx_user_003', value: 82 },
-    { name: t('其他'), value: 50 },
-  ];
-  // 赠送对象分布（按次数）
-  const giftTargetCountData = [
-    { name: 'owanIsu7xMVj', value: 35 },
-    { name: 'wx_user_001', value: 22 },
-    { name: 'wx_user_002', value: 15 },
-    { name: 'wx_user_003', value: 8 },
-    { name: t('其他'), value: 5 },
-  ];
-  // 赠送道具分布（按金额）
-  const giftItemAmountData = [
-    { name: '英雄碎片', value: 450 },
-    { name: '铭文碎片', value: 300 },
-    { name: '皮肤碎片', value: 150 },
-    { name: t('其他'), value: 92 },
-  ];
-  // 赠送道具分布（按次数）
-  const giftItemCountData = [
-    { name: '英雄碎片', value: 40 },
-    { name: '铭文碎片', value: 25 },
-    { name: '皮肤碎片', value: 12 },
-    { name: t('其他'), value: 8 },
-  ];
-  const giftDetailList = ref([
-    { time: '2026-04-09 09:07:35', account: 'owanIsu7xMVj-6a6uwtygudODUxg', itemName: '英雄碎片', amount: 120, region: 9603, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-04-07 02:20:42', account: 'wx_user_001', itemName: '铭文碎片', amount: 80, region: 4367, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-03-31 23:07:22', account: 'wx_user_002', itemName: '皮肤碎片', amount: 200, region: 4294, roleId: 'R100070001', roleName: '王者用户0001' },
-  ]);
-  const giftDetailColumns = [
-    { label: () => t('赠送时间'), field: 'time', sort: true },
-    { label: () => t('赠送账号'), field: 'account' },
-    { label: () => t('道具名称'), field: 'itemName', filter: true },
-    { label: () => t('赠送金额'), field: 'amount', sort: true },
-    { label: () => t('大区'), field: 'region' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('角色名称'), field: 'roleName' },
-  ];
-  const giftPagination = ref({ count: 85, current: 1, limit: 10 });
+  // 将 groupdim_stats 数据按"分组"拆分为饼图数据
+  const buildChartFromGroupStats = (data: any[], groupName: string, valueField: string) => data
+    .filter(row => row.分组 === groupName)
+    .map(row => ({ name: row.维度 || '', value: Number(row[valueField]) || 0 }));
 
-  // ========== 交易记录 tab 数据 ==========
-  // 交易对象分布（按金额）
-  const tradeTargetAmountData = [
-    { name: 'owanIsu7xMVj', value: 420 },
-    { name: 'wx_user_001', value: 280 },
-    { name: 'wx_user_002', value: 160 },
-    { name: 'wx_user_003', value: 82 },
-    { name: t('其他'), value: 50 },
-  ];
-  // 交易对象分布（按次数）
-  const tradeTargetCountData = [
-    { name: 'owanIsu7xMVj', value: 35 },
-    { name: 'wx_user_001', value: 22 },
-    { name: 'wx_user_002', value: 15 },
-    { name: 'wx_user_003', value: 8 },
-    { name: t('其他'), value: 5 },
-  ];
-  // 交易道具分布（按金额）
-  const tradeItemAmountData = [
-    { name: '英雄碎片', value: 450 },
-    { name: '铭文碎片', value: 300 },
-    { name: '皮肤碎片', value: 150 },
-    { name: t('其他'), value: 92 },
-  ];
-  // 交易道具分布（按次数）
-  const tradeItemCountData = [
-    { name: '英雄碎片', value: 40 },
-    { name: '铭文碎片', value: 25 },
-    { name: '皮肤碎片', value: 12 },
-    { name: t('其他'), value: 8 },
-  ];
-  const tradeDetailList = ref([
-    { time: '2026-04-09 09:07:35', target: 'owanIsu7xMVj-6a6uwtygudODUxg', itemName: '英雄碎片', amount: 120, region: 9603, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-04-07 02:20:42', target: 'wx_user_001', itemName: '铭文碎片', amount: 80, region: 4367, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-03-31 23:07:22', target: 'wx_user_002', itemName: '皮肤碎片', amount: 200, region: 4294, roleId: 'R100070001', roleName: '王者用户0001' },
-  ]);
-  const tradeDetailColumns = [
-    { label: () => t('交易时间'), field: 'time', sort: true },
-    { label: () => t('交易对象'), field: 'target' },
-    { label: () => t('道具名称'), field: 'itemName', filter: true },
-    { label: () => t('交易金额'), field: 'amount', sort: true },
-    { label: () => t('大区'), field: 'region' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('角色名称'), field: 'roleName' },
-  ];
-  const tradePagination = ref({ count: 85, current: 1, limit: 10 });
+  const loginChartRows = computed<ChartConfig[][]>(() => {
+    const stats = loginGroupStats.value;
+    if (stats.length === 0) return [];
+    const deviceData = buildChartFromGroupStats(stats, '登录设备', '登录总数');
+    const locationData = buildChartFromGroupStats(stats, '登录地点', '登录总数');
+    const timeData = buildChartFromGroupStats(stats, '登录时段', '登录总数');
+    const total = stats.reduce((sum, row) => sum + (Number(row.登录总数) || 0), 0);
+    const charts: ChartConfig[] = [];
+    if (deviceData.length > 0) charts.push({ title: t('登录设备分布'), data: deviceData, total, centerLabel: t('登录总数') });
+    if (locationData.length > 0) charts.push({ title: t('登录地点分布'), data: locationData, total, centerLabel: t('登录总数') });
+    if (timeData.length > 0) charts.push({ title: t('登录时段分布'), data: timeData, total, centerLabel: t('登录总数') });
+    return charts.length > 0 ? [charts] : [];
+  });
 
-  // ========== 代币发放记录 tab 数据 ==========
-  // 需求类型分布
-  const coinDemandTypeData = [
-    { name: '活动奖励', value: 1200 },
-    { name: '补偿发放', value: 800 },
-    { name: '运营活动', value: 481 },
-  ];
-  // 发放人分布
-  const coinIssuerData = [
-    { name: 'yimohe', value: 1500 },
-    { name: 'admin01', value: 600 },
-    { name: 'admin02', value: 381 },
-  ];
-  // 需求来源分布
-  const coinSourceData = [
-    { name: '客服工单', value: 1000 },
-    { name: '运营后台', value: 900 },
-    { name: '自动发放', value: 581 },
-  ];
-  const coinDetailList = ref([
-    { time: '2026-04-09 09:07:35', issuer: 'yimohe', demandType: '活动奖励', quantity: 500, amount: 200, source: '客服工单', region: 9603, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-04-07 02:20:42', issuer: 'admin01', demandType: '补偿发放', quantity: 300, amount: 120, source: '运营后台', region: 4367, roleId: 'R100070001', roleName: '王者用户0001' },
-    { time: '2026-03-31 23:07:22', issuer: 'yimohe', demandType: '运营活动', quantity: 200, amount: 80, source: '自动发放', region: 4294, roleId: 'R100070001', roleName: '王者用户0001' },
-  ]);
-  const coinDetailColumns = [
-    { label: () => t('发放时间'), field: 'time', sort: true },
-    { label: () => t('发放人'), field: 'issuer' },
-    { label: () => t('需求类型'), field: 'demandType', filter: true },
-    { label: () => t('发放数量'), field: 'quantity', sort: true },
-    { label: () => t('发放金额'), field: 'amount', sort: true },
-    { label: () => t('需求来源'), field: 'source', filter: true },
-    { label: () => t('大区'), field: 'region' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('角色名称'), field: 'roleName' },
-  ];
-  const coinPagination = ref({ count: 56, current: 1, limit: 10 });
+  // ========== 赠送记录 tab ==========
+  const giveGroupStats = ref<Array<Record<string, any>>>([]);
+  const giveDetailList = ref<Array<Record<string, any>>>([]);
+  const giftPagination = ref({ count: 0, current: 1, limit: 10 });
 
-  // ========== 聊天记录 tab 数据 ==========
+  const giveChartRows = computed<ChartConfig[][]>(() => {
+    const stats = giveGroupStats.value;
+    if (stats.length === 0) return [];
+    // 赠送分布：按金额和次数
+    const targetAmountData = buildChartFromGroupStats(stats, '赠送对象', '赠送金额（元）');
+    const targetCountData = buildChartFromGroupStats(stats, '赠送对象', '次数');
+    const itemAmountData = buildChartFromGroupStats(stats, '赠送道具', '赠送金额（元）');
+    const itemCountData = buildChartFromGroupStats(stats, '赠送道具', '次数');
+    const rows: ChartConfig[][] = [];
+    const row1: ChartConfig[] = [];
+    if (targetAmountData.length > 0) {
+      const total = targetAmountData.reduce((s, d) => s + d.value, 0);
+      row1.push({ title: t('赠送对象分布（按金额）'), data: targetAmountData, total, centerLabel: t('总额（元）') });
+    }
+    if (targetCountData.length > 0) {
+      const total = targetCountData.reduce((s, d) => s + d.value, 0);
+      row1.push({ title: t('赠送对象分布（按次数）'), data: targetCountData, total, centerLabel: t('总次数') });
+    }
+    if (row1.length > 0) rows.push(row1);
+    const row2: ChartConfig[] = [];
+    if (itemAmountData.length > 0) {
+      const total = itemAmountData.reduce((s, d) => s + d.value, 0);
+      row2.push({ title: t('赠送道具分布（按金额）'), data: itemAmountData, total, centerLabel: t('总额（元）') });
+    }
+    if (itemCountData.length > 0) {
+      const total = itemCountData.reduce((s, d) => s + d.value, 0);
+      row2.push({ title: t('赠送道具分布（按次数）'), data: itemCountData, total, centerLabel: t('总次数') });
+    }
+    if (row2.length > 0) rows.push(row2);
+    return rows;
+  });
+
+  // ========== 交易记录 tab ==========
+  const dealGroupStats = ref<Array<Record<string, any>>>([]);
+  const dealDetailList = ref<Array<Record<string, any>>>([]);
+  const tradePagination = ref({ count: 0, current: 1, limit: 10 });
+
+  const dealChartRows = computed<ChartConfig[][]>(() => {
+    const stats = dealGroupStats.value;
+    if (stats.length === 0) return [];
+    const targetAmountData = buildChartFromGroupStats(stats, '交易对象', '发放金额（元）');
+    const targetCountData = buildChartFromGroupStats(stats, '交易对象', '次数');
+    const itemAmountData = buildChartFromGroupStats(stats, '交易道具', '发放金额（元）');
+    const itemCountData = buildChartFromGroupStats(stats, '交易道具', '次数');
+    const rows: ChartConfig[][] = [];
+    const row1: ChartConfig[] = [];
+    if (targetAmountData.length > 0) {
+      const total = targetAmountData.reduce((s, d) => s + d.value, 0);
+      row1.push({ title: t('交易对象分布（按金额）'), data: targetAmountData, total, centerLabel: t('总额（元）') });
+    }
+    if (targetCountData.length > 0) {
+      const total = targetCountData.reduce((s, d) => s + d.value, 0);
+      row1.push({ title: t('交易对象分布（按次数）'), data: targetCountData, total, centerLabel: t('总次数') });
+    }
+    if (row1.length > 0) rows.push(row1);
+    const row2: ChartConfig[] = [];
+    if (itemAmountData.length > 0) {
+      const total = itemAmountData.reduce((s, d) => s + d.value, 0);
+      row2.push({ title: t('交易道具分布（按金额）'), data: itemAmountData, total, centerLabel: t('总额（元）') });
+    }
+    if (itemCountData.length > 0) {
+      const total = itemCountData.reduce((s, d) => s + d.value, 0);
+      row2.push({ title: t('交易道具分布（按次数）'), data: itemCountData, total, centerLabel: t('总次数') });
+    }
+    if (row2.length > 0) rows.push(row2);
+    return rows;
+  });
+
+  // ========== 发放记录 tab ==========
+  const sapGroupStats = ref<Array<Record<string, any>>>([]);
+  const sapDetailList = ref<Array<Record<string, any>>>([]);
+  const coinPagination = ref({ count: 0, current: 1, limit: 10 });
+
+  const sapChartRows = computed<ChartConfig[][]>(() => {
+    const stats = sapGroupStats.value;
+    if (stats.length === 0) return [];
+    const demandTypeData = buildChartFromGroupStats(stats, '需求类型', '发放金额（元）');
+    const issuerData = buildChartFromGroupStats(stats, '发放人', '发放金额（元）');
+    const sourceData = buildChartFromGroupStats(stats, '需求来源', '发放金额（元）');
+    const total = stats.reduce((sum, row) => sum + (Number(row['发放金额（元）']) || 0), 0);
+    const charts: ChartConfig[] = [];
+    if (demandTypeData.length > 0) charts.push({ title: t('需求类型分布'), data: demandTypeData, total, centerLabel: t('总金额（元）') });
+    if (issuerData.length > 0) charts.push({ title: t('发放人分布'), data: issuerData, total, centerLabel: t('总金额（元）') });
+    if (sourceData.length > 0) charts.push({ title: t('需求来源分布'), data: sourceData, total, centerLabel: t('总金额（元）') });
+    return charts.length > 0 ? [charts] : [];
+  });
+
+  // ========== 聊天记录 tab ==========
   const chatSuspectedViolation = ref(false);
-  const chatDetailList = ref([
-    { time: '2026-04-09 09:07:35', sender: 'frodomei', content: '资源号便宜出，私聊聊', region: 2011, roleId: 'R100070001', roleName: '王者用户0001', channel: '世界频道' },
-    { time: '2026-04-07 02:20:42', sender: 'frodomei', content: '组队打排位，来人', region: 2011, roleId: 'R100070001', roleName: '王者用户0001', channel: '组队频道' },
-    { time: '2026-03-31 23:07:22', sender: 'frodomei', content: '这个英雄怎么出装', region: 2011, roleId: 'R100070001', roleName: '王者用户0001', channel: '公会频道' },
-  ]);
-  const chatDetailColumns = [
-    { label: () => t('聊天时间'), field: 'time', sort: true },
-    { label: () => t('发起人'), field: 'sender' },
-    { label: () => t('聊天内容'), field: 'content' },
-    { label: () => t('大区'), field: 'region' },
-    { label: () => t('角色ID'), field: 'roleId' },
-    { label: () => t('角色名称'), field: 'roleName' },
-    { label: () => t('频道'), field: 'channel', filter: true },
-  ];
-  const chatPagination = ref({ count: 120, current: 1, limit: 10 });
+  const chatDetailList = ref<Array<Record<string, any>>>([]);
+  const chatPagination = ref({ count: 0, current: 1, limit: 10 });
+
+  // ========== 各 Tab 搜索条件缓存 ==========
+  const tabSearchConditions = ref<Record<string, any[]>>({
+    login: [],
+    gift: [],
+    trade: [],
+    coin: [],
+    chat: [],
+  });
+
+  // 根据搜索条件过滤表格数据（支持操作符）
+  // ConditionTag 结构：{ fieldId, fieldName, operator, operatorName, value }
+  const filterDataByConditions = (
+    data: Array<Record<string, any>>,
+    conditions: any[],
+  ): Array<Record<string, any>> => {
+    if (!conditions || conditions.length === 0) return data;
+    return data.filter(row => conditions.every((condition) => {
+      const { fieldId } = condition;
+      const operator = condition.operator || 'like'; // 默认操作符为"包含"
+      const searchValue = String(condition.value || '');
+      if (!searchValue) return true;
+      const cellValue = String(row[fieldId] ?? '');
+      const cellValueLower = cellValue.toLowerCase();
+
+      // 支持逗号分隔多值（中英文逗号均支持）
+      const searchValues = searchValue.split(/[,，]/).map((s: string) => s.trim())
+        .filter(Boolean);
+
+      switch (operator) {
+      case 'eq': // 等于（多值时任一匹配即可）
+        return searchValues.some((sv: string) => cellValue === sv);
+      case 'neq': // 不等于（多值时全部不等才通过）
+        return searchValues.every((sv: string) => cellValue !== sv);
+      case 'gt': // 大于
+        return Number(cellValue) > Number(searchValue);
+      case 'lt': // 小于
+        return Number(cellValue) < Number(searchValue);
+      case 'gte': // 大于等于
+        return Number(cellValue) >= Number(searchValue);
+      case 'lte': // 小于等于
+        return Number(cellValue) <= Number(searchValue);
+      case 'in': // IN（逗号分隔多值）
+        return searchValues.some((sv: string) => sv.toLowerCase() === cellValueLower);
+      case 'not_in': // NOT IN（逗号分隔多值）
+        return searchValues.every((sv: string) => sv.toLowerCase() !== cellValueLower);
+      case 'like': // 包含（默认，多值时任一包含即可）
+      default:
+        return searchValues.some((sv: string) => cellValueLower.includes(sv.toLowerCase()));
+      }
+    }));
+  };
 
   // ========== 统一 Tab 配置 ==========
   const recordTabs = computed<GameRecordTabConfig[]>(() => [
-    // 登录记录
     {
       key: 'login',
       label: t('登录记录'),
-      chartRows: [
-        [
-          { title: t('登录设备分布'), data: loginDeviceData, total: 967, centerLabel: t('登录总数') },
-          { title: t('登录地点分布'), data: loginLocationData, total: 967, centerLabel: t('登录总数') },
-          { title: t('登录时段分布'), data: loginTimeData, total: 967, centerLabel: t('登录总数') },
-        ],
-      ],
+      chartRows: loginChartRows.value,
       searchPlaceholder: t('搜索 登录地点、登录IP、大区ID、角色ID、角色名、等级、登录设备、机型'),
+      searchFields: loginSearchFields,
       table: {
         columns: loginDetailColumns,
-        data: loginDetailList.value,
+        data: filterDataByConditions(loginDetailList.value, tabSearchConditions.value.login),
         pagination: loginPagination.value,
         title: t('登录明细'),
       },
     },
-    // 赠送记录
     {
       key: 'gift',
       label: t('赠送记录'),
-      chartRows: [
-        [
-          { title: t('赠送对象分布（按金额）'), data: giftTargetAmountData, total: 992, centerLabel: t('总额（元）') },
-          { title: t('赠送对象分布（按次数）'), data: giftTargetCountData, total: 85, centerLabel: t('总次数') },
-        ],
-        [
-          { title: t('赠送道具分布（按金额）'), data: giftItemAmountData, total: 992, centerLabel: t('总额（元）') },
-          { title: t('赠送道具分布（按次数）'), data: giftItemCountData, total: 85, centerLabel: t('总次数') },
-        ],
-      ],
-      searchPlaceholder: t('搜索 赠送账号、道具名称、大区ID、角色ID、角色名'),
+      chartRows: giveChartRows.value,
+      searchPlaceholder: t('搜索 赠送对象、昵称、是否员工、大区、道具ID、道具名称、赠送总额、赠送单价、赠送数量、赠送次数'),
+      searchFields: giftSearchFields,
       table: {
-        columns: giftDetailColumns,
-        data: giftDetailList.value,
+        columns: giveDetailColumns,
+        data: filterDataByConditions(giveDetailList.value, tabSearchConditions.value.gift),
         pagination: giftPagination.value,
         title: t('赠送明细'),
       },
     },
-    // 交易记录
     {
       key: 'trade',
       label: t('交易记录'),
-      chartRows: [
-        [
-          { title: t('交易对象分布（按金额）'), data: tradeTargetAmountData, total: 992, centerLabel: t('总额（元）') },
-          { title: t('交易对象分布（按次数）'), data: tradeTargetCountData, total: 85, centerLabel: t('总次数') },
-        ],
-        [
-          { title: t('交易道具分布（按金额）'), data: tradeItemAmountData, total: 992, centerLabel: t('总额（元）') },
-          { title: t('交易道具分布（按次数）'), data: tradeItemCountData, total: 85, centerLabel: t('总次数') },
-        ],
-      ],
-      searchPlaceholder: t('搜索 交易对象、道具名称、大区ID、角色ID、角色名'),
+      chartRows: dealChartRows.value,
+      searchPlaceholder: t('搜索 交易对象、昵称、是否员工、大区、道具ID、道具名称、交易总额、交易单价、交易数量、交易次数'),
+      searchFields: tradeSearchFields,
       table: {
-        columns: tradeDetailColumns,
-        data: tradeDetailList.value,
+        columns: dealDetailColumns,
+        data: filterDataByConditions(dealDetailList.value, tabSearchConditions.value.trade),
         pagination: tradePagination.value,
         title: t('交易明细'),
       },
     },
-    // 代币发放记录
     {
       key: 'coin',
       label: t('代币发放记录'),
-      chartRows: [
-        [
-          { title: t('需求类型分布'), data: coinDemandTypeData, total: 2481, centerLabel: t('总数量') },
-          { title: t('发放人分布'), data: coinIssuerData, total: 2481, centerLabel: t('总数量') },
-          { title: t('需求来源分布'), data: coinSourceData, total: 2481, centerLabel: t('总数量') },
-        ],
-      ],
-      searchPlaceholder: t('搜索 发放人、需求来源、大区ID、角色ID、角色名'),
+      chartRows: sapChartRows.value,
+      searchPlaceholder: t('搜索 发放人、大区、发放数量、发放金额、操作原因、需求类型、需求来源'),
+      searchFields: coinSearchFields,
       table: {
-        columns: coinDetailColumns,
-        data: coinDetailList.value,
+        columns: sapDetailColumns,
+        data: filterDataByConditions(sapDetailList.value, tabSearchConditions.value.coin),
         pagination: coinPagination.value,
         title: t('发放明细'),
       },
     },
-    // 聊天记录
     {
       key: 'chat',
       label: t('聊天记录'),
       chartRows: [],
-      searchPlaceholder: t('搜索 聊天内容、大区ID、角色ID、角色名'),
+      searchPlaceholder: t('搜索 发起方、接收方openid、接收方昵称、聊天内容、大区、是否员工、信息类型'),
+      searchFields: chatSearchFields,
       table: {
         columns: chatDetailColumns,
-        data: chatDetailList.value,
+        data: filterDataByConditions(chatDetailList.value, tabSearchConditions.value.chat),
         pagination: chatPagination.value,
         title: t('聊天明细'),
       },
@@ -648,8 +755,210 @@
     },
   ]);
 
+  // ========== 接口调用逻辑 ==========
+  // 概览接口：加载角色总览（合并3个接口）
+  const fetchOverviewRoleStats = async () => {
+    const dp = getDateParams();
+    const baseParams = {
+      one_month_ago_Ymd_dashed: dp.one_month_ago_Ymd_dashed,
+      one_year_ago_Ymd: dp.one_year_ago_Ymd,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+    const [loginRes, chatRes, dealRes] = await Promise.all([
+      executeDataSource('overview_rolelogin_stats', baseParams),
+      executeDataSource('overview_rolechat_stats', baseParams),
+      executeDataSource('overview_roledeal_stats', baseParams),
+    ]);
+    const loginData = extractResults(loginRes);
+    const chatData = extractResults(chatRes);
+    const dealData = extractResults(dealRes);
+    roleList.value = mergeRoleStats(loginData, chatData, dealData);
+  };
+
+  // 概览接口：加载登录统计
+  const fetchOverviewLoginStats = async () => {
+    const dp = getDateParams();
+    const res = await executeDataSource('overview_login_stats', {
+      one_month_ago_Ymd: dp.one_month_ago_Ymd,
+      one_week_ago_Ymd_dashed: dp.one_week_ago_Ymd_dashed,
+      two_week_ago_Ymd_dashed: dp.two_week_ago_Ymd_dashed,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    });
+    loginStatList.value = extractResults(res);
+  };
+
+  // 概览接口：加载最近记录（5个接口并行）
+  const fetchOverviewLastRecords = async () => {
+    const dp = getDateParams();
+    const baseParams = {
+      last_record_thedate_Ymd: dp.last_record_thedate_Ymd,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+    const [loginRes, giveRes, dealRes, sapRes, chatRes] = await Promise.all([
+      executeDataSource('overview_login_last', baseParams),
+      executeDataSource('overview_give_last', baseParams),
+      executeDataSource('overview_deal_last', baseParams),
+      executeDataSource('overview_sap_last', baseParams),
+      executeDataSource('overview_chat_last', baseParams),
+    ]);
+    const loginResults = extractResults(loginRes);
+    const giveResults = extractResults(giveRes);
+    const dealResults = extractResults(dealRes);
+    const sapResults = extractResults(sapRes);
+    const chatResults = extractResults(chatRes);
+    lastLoginRecord.value = loginResults[0] || {};
+    lastGiveRecord.value = giveResults[0] || {};
+    lastDealRecord.value = dealResults[0] || {};
+    lastSapRecord.value = sapResults[0] || {};
+    lastChatRecord.value = chatResults[0] || {};
+  };
+
+  // 加载所有概览数据
+  const fetchOverviewData = () => {
+    if (!props.toolUid || !props.gameData.openid) return;
+    fetchOverviewRoleStats();
+    fetchOverviewLoginStats();
+    fetchOverviewLastRecords();
+  };
+
+  // ========== 明细 Tab 接口调用 ==========
+  // 登录记录
+  const fetchLoginData = async () => {
+    const range = detailDateRange.value.login;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+    const [groupRes, detailRes] = await Promise.all([
+      executeDataSource('login_groupdim_stats', baseParams),
+      executeDataSource('login_detail_list', baseParams),
+    ]);
+    loginGroupStats.value = extractResults(groupRes);
+    loginDetailList.value = extractResults(detailRes);
+    loginPagination.value.count = loginDetailList.value.length;
+  };
+
+  // 赠送记录
+  const fetchGiveData = async () => {
+    const dp = getDateParams();
+    const range = detailDateRange.value.gift;
+    const [groupRes, detailRes] = await Promise.all([
+      executeDataSource('give_groupdim_stats', {
+        detail_startdate_Ymd: range.start,
+        detail_enddate_Ymd: range.end,
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      }),
+      executeDataSource('give_detail_list', {
+        one_year_ago_Ymd: dp.one_year_ago_Ymd,
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      }),
+    ]);
+    giveGroupStats.value = extractResults(groupRes);
+    giveDetailList.value = extractResults(detailRes);
+    giftPagination.value.count = giveDetailList.value.length;
+  };
+
+  // 交易记录
+  const fetchDealData = async () => {
+    const range = detailDateRange.value.trade;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+    const [groupRes, detailRes] = await Promise.all([
+      executeDataSource('deal_groupdim_stats', baseParams),
+      executeDataSource('deal_detail_list', baseParams),
+    ]);
+    dealGroupStats.value = extractResults(groupRes);
+    dealDetailList.value = extractResults(detailRes);
+    tradePagination.value.count = dealDetailList.value.length;
+  };
+
+  // 发放记录
+  const fetchSapData = async () => {
+    const range = detailDateRange.value.coin;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+    const [groupRes, detailRes] = await Promise.all([
+      executeDataSource('sap_groupdim_stats', baseParams),
+      executeDataSource('sap_detail_list', baseParams),
+    ]);
+    sapGroupStats.value = extractResults(groupRes);
+    sapDetailList.value = extractResults(detailRes);
+    coinPagination.value.count = sapDetailList.value.length;
+  };
+
+  // 聊天记录
+  const fetchChatData = async () => {
+    const range = detailDateRange.value.chat;
+    const res = await executeDataSource('chat_detail_list', {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      is_sensitive: chatSuspectedViolation.value ? ['1'] : ['0', '1'],
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    });
+    chatDetailList.value = extractResults(res);
+    chatPagination.value.count = chatDetailList.value.length;
+  };
+
+  // Tab 切换时按需加载数据
+  const tabDataLoaded = ref<Record<string, boolean>>({});
+
+  const loadTabData = (tabKey: string) => {
+    if (tabDataLoaded.value[tabKey]) return;
+    tabDataLoaded.value[tabKey] = true;
+    switch (tabKey) {
+    case 'login':
+      fetchLoginData();
+      break;
+    case 'gift':
+      fetchGiveData();
+      break;
+    case 'trade':
+      fetchDealData();
+      break;
+    case 'coin':
+      fetchSapData();
+      break;
+    case 'chat':
+      fetchChatData();
+      break;
+    default:
+      break;
+    }
+  };
+
+  // 监听 tab 切换
+  watch(activeTab, (newTab) => {
+    if (newTab !== 'overview') {
+      loadTabData(newTab);
+    }
+  });
+
+  // 监听疑似违规 checkbox 变化，重新查询聊天数据
+  watch(chatSuspectedViolation, () => {
+    tabDataLoaded.value.chat = false;
+    fetchChatData().then(() => {
+      tabDataLoaded.value.chat = true;
+    });
+  });
+
   // 分页映射表
-  const paginationMap: Record<string, typeof giftPagination> = {
+  const paginationMap: Record<string, typeof loginPagination> = {
     login: loginPagination,
     gift: giftPagination,
     trade: tradePagination,
@@ -666,7 +975,222 @@
     paginationMap[tabKey].value.current = 1;
   };
 
+  // 搜索条件变化处理
+  const handleTabSearchConditionChange = (tabKey: string, conditions: any[]) => {
+    tabSearchConditions.value[tabKey] = conditions;
+  };
 
+  // 日期范围变化时重新加载对应 tab 数据
+  const handleTabDateChange = (tabKey: string, range: [string, string]) => {
+    if (range[0] && range[1]) {
+      const start = range[0].replace(/-/g, '');
+      const end = range[1].replace(/-/g, '');
+      detailDateRange.value[tabKey] = { start, end };
+      tabDataLoaded.value[tabKey] = false;
+      loadTabData(tabKey);
+    }
+  };
+
+  // 初始化：加载概览数据
+  watch(
+    () => [props.toolUid, props.gameData.openid],
+    ([uid, openid]) => {
+      if (uid && openid) {
+        // 重置已加载标记
+        tabDataLoaded.value = {};
+        fetchOverviewData();
+        // 如果初始 tab 不是概览，也加载对应 tab 数据
+        if (activeTab.value !== 'overview') {
+          loadTabData(activeTab.value);
+        }
+      }
+    },
+    { immediate: true },
+  );
+
+  // ========== 导出功能 ==========
+  const exportPopoverRef = ref();
+  const isExportPopoverShow = ref(false);
+  const isExporting = ref(false);
+
+  // 默认时间范围：最近半年
+  const getDefaultExportDateRange = (): [Date, Date] => {
+    const now = new Date();
+    const halfYearAgo = new Date(now);
+    halfYearAgo.setMonth(halfYearAgo.getMonth() - 6);
+    return [halfYearAgo, now];
+  };
+  const exportDateRange = ref<[Date, Date]>(getDefaultExportDateRange());
+
+  // 导出内容选项
+  const exportContentOptions = [
+    { id: 'userInfo', name: t('用户信息') },
+    { id: 'gameRole', name: t('游戏角色') },
+    { id: 'login', name: t('登录记录') },
+    { id: 'gift', name: t('赠送记录') },
+    { id: 'trade', name: t('交易记录') },
+    { id: 'coin', name: t('代币发放记录') },
+    { id: 'chat', name: t('聊天记录') },
+  ];
+  // 默认全选
+  const exportContentChecked = ref<string[]>(exportContentOptions.map(item => item.id));
+
+  // 导出逻辑
+  const handleExport = async () => {
+    if (!exportDateRange.value || exportDateRange.value.length < 2) return;
+    if (exportContentChecked.value.length === 0) return;
+
+    isExporting.value = true;
+    try {
+      const [startDate, endDate] = exportDateRange.value as [Date, Date];
+      const startYmd = formatYmd(new Date(startDate as unknown as string | number | Date));
+      const endYmd = formatYmd(new Date(endDate as unknown as string | number | Date));
+
+      const baseParams = {
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      };
+
+      const wb = XLSX.utils.book_new();
+
+      // 用户信息 sheet
+      if (exportContentChecked.value.includes('userInfo')) {
+        const userInfoData = [{
+          游戏名称: props.gameData.name,
+          openid: props.gameData.openid,
+          微信: props.gameData.wechat,
+          代币存量: props.gameData.coinBalance,
+          累计充值: props.gameData.totalRecharge,
+          累计赠送: props.gameData.totalGift,
+          累计发放: props.gameData.totalIssue,
+        }];
+        const userHeaders = ['游戏名称', 'openid', '微信', '代币存量', '累计充值', '累计赠送', '累计发放'];
+        useExportExcel.exportExcelSheet(wb, userInfoData, t('用户信息'), userHeaders, userHeaders);
+      }
+
+      // 游戏角色 sheet
+      if (exportContentChecked.value.includes('gameRole')) {
+        const dp = getDateParams();
+        const roleParams = {
+          one_month_ago_Ymd_dashed: dp.one_month_ago_Ymd_dashed,
+          one_year_ago_Ymd: dp.one_year_ago_Ymd,
+          ...baseParams,
+        };
+        const [loginRes, chatRes, dealRes] = await Promise.all([
+          executeDataSource('overview_rolelogin_stats', roleParams),
+          executeDataSource('overview_rolechat_stats', roleParams),
+          executeDataSource('overview_roledeal_stats', roleParams),
+        ]);
+        const roleData = mergeRoleStats(extractResults(loginRes), extractResults(chatRes), extractResults(dealRes));
+        const roleHeaders = roleColumns.map((col) => {
+          const label = col.label();
+          return label;
+        });
+        const roleKeys = roleColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, roleData, t('游戏角色'), roleHeaders, roleKeys);
+      }
+
+      // 登录记录 sheet
+      if (exportContentChecked.value.includes('login')) {
+        const res = await executeDataSource('login_detail_list', {
+          detail_startdate_Ymd: startYmd,
+          detail_enddate_Ymd: endYmd,
+          ...baseParams,
+        });
+        const data = extractResults(res);
+        const headers = loginDetailColumns.map(col => col.label());
+        const keys = loginDetailColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, data, t('登录记录'), headers, keys);
+      }
+
+      // 赠送记录 sheet
+      if (exportContentChecked.value.includes('gift')) {
+        const dp = getDateParams();
+        const res = await executeDataSource('give_detail_list', {
+          one_year_ago_Ymd: dp.one_year_ago_Ymd,
+          ...baseParams,
+        });
+        const data = extractResults(res);
+        const headers = giveDetailColumns.map(col => col.label());
+        const keys = giveDetailColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, data, t('赠送记录'), headers, keys);
+      }
+
+      // 交易记录 sheet
+      if (exportContentChecked.value.includes('trade')) {
+        const res = await executeDataSource('deal_detail_list', {
+          detail_startdate_Ymd: startYmd,
+          detail_enddate_Ymd: endYmd,
+          ...baseParams,
+        });
+        const data = extractResults(res);
+        const headers = dealDetailColumns.map(col => col.label());
+        const keys = dealDetailColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, data, t('交易记录'), headers, keys);
+      }
+
+      // 代币发放记录 sheet
+      if (exportContentChecked.value.includes('coin')) {
+        const res = await executeDataSource('sap_detail_list', {
+          detail_startdate_Ymd: startYmd,
+          detail_enddate_Ymd: endYmd,
+          ...baseParams,
+        });
+        const data = extractResults(res);
+        const headers = sapDetailColumns.map(col => col.label());
+        const keys = sapDetailColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, data, t('代币发放记录'), headers, keys);
+      }
+
+      // 聊天记录 sheet
+      if (exportContentChecked.value.includes('chat')) {
+        const res = await executeDataSource('chat_detail_list', {
+          detail_startdate_Ymd: startYmd,
+          detail_enddate_Ymd: endYmd,
+          is_sensitive: ['0', '1'],
+          ...baseParams,
+        });
+        const data = extractResults(res);
+        const headers = chatDetailColumns.map(col => col.label());
+        const keys = chatDetailColumns.map(col => col.field);
+        useExportExcel.exportExcelSheet(wb, data, t('聊天记录'), headers, keys);
+      }
+
+      // 设置列宽自适应 & 表头自动筛选
+      wb.SheetNames.forEach((sheetName: string) => {
+        const ws = wb.Sheets[sheetName];
+        if (!ws || !ws['!ref']) return;
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        // 自动列宽
+        const colWidths: Array<{ wch: number }> = [];
+        for (let { c } = range.s; c <= range.e.c; c++) {
+          let maxLen = 10;
+          for (let { r } = range.s; r <= range.e.r; r++) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c })];
+            if (cell && cell.v !== null && cell.v !== undefined) {
+              const len = String(cell.v).length;
+              // 中文字符按2倍宽度计算
+              const cnLen = (String(cell.v).match(/[\u4e00-\u9fa5]/g) || []).length;
+              const totalLen = len + cnLen;
+              if (totalLen > maxLen) maxLen = totalLen;
+            }
+          }
+          colWidths.push({ wch: Math.min(maxLen + 2, 50) });
+        }
+        ws['!cols'] = colWidths;
+        // 表头自动筛选
+        ws['!autofilter'] = { ref: ws['!ref'] };
+      });
+
+      // 导出文件，文件名为工具名
+      const fileName = props.toolName || props.gameData.name || t('游戏审计数据');
+      XLSX.writeFile(wb, `${fileName}.xlsx`);
+
+      isExportPopoverShow.value = false;
+    } finally {
+      isExporting.value = false;
+    }
+  };
 </script>
 
 <style scoped lang="postcss">
@@ -676,7 +1200,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px 16px;
+  padding: 16px 24px;
+  background: #f0f5ff;
+  border: 1px solid #d4e4ff;
   border-radius: 2px;
 
   .game-info-row {
@@ -719,6 +1245,47 @@
 
   .export-btn {
     flex-shrink: 0;
+  }
+}
+
+/* 导出弹窗样式 */
+.export-popover-content {
+  padding: 4px 0;
+
+  .export-popover-title {
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 24px;
+    color: #313238;
+  }
+
+  .export-form-item {
+    margin-bottom: 16px;
+
+    .export-form-label {
+      margin-bottom: 8px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #63656e;
+
+      .required-star {
+        color: #ea3636;
+      }
+    }
+  }
+
+  .export-checkbox-grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 12px 24px;
+  }
+
+  .export-popover-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding-top: 8px;
   }
 }
 

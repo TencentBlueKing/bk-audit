@@ -37,13 +37,15 @@
       :columns="tableColumns"
       :data="tableData"
       :pagination="tablePagination"
+      :search-fields="searchFields"
       :search-placeholder="searchPlaceholder"
       :show-date-picker="showDatePicker"
       :title="tableTitle"
       @date-change="handleDateChange"
       @page-change="handlePageChange"
       @page-limit-change="handlePageLimitChange"
-      @search="handleSearch">
+      @search="handleSearch"
+      @search-condition-change="handleSearchConditionChange">
       <!-- 透传额外筛选插槽 -->
       <template
         v-if="$slots['extra-filter']"
@@ -65,6 +67,16 @@
     centerLabel: string;                              // 中心文字
   }
 
+  // 搜索字段配置接口
+  interface SearchFieldItem {
+    name: string;
+    id: string;
+    placeholder?: string;
+    children?: Array<{ id: string; name: string }>;
+    onlyRecommendChildren?: boolean;
+    multiple?: boolean;
+  }
+
   interface Props {
     chartRows?: ChartConfig[][];                      // 图表行配置，每个子数组代表一行
     tableTitle: string;                               // 表格标题
@@ -77,11 +89,13 @@
     };
     searchPlaceholder: string;                        // 搜索框 placeholder
     showDatePicker?: boolean;                         // 是否显示日期选择器
+    searchFields?: SearchFieldItem[];                 // 搜索字段配置
   }
 
   withDefaults(defineProps<Props>(), {
     chartRows: () => [],
     showDatePicker: true,
+    searchFields: () => [],
   });
 
   const emit = defineEmits<{
@@ -89,6 +103,7 @@
     'page-limit-change': [limit: number];
     'search': [keyword: string];
     'date-change': [range: [string, string]];
+    'search-condition-change': [conditions: any[]];
   }>();
 
   const handlePageChange = (page: number) => {
@@ -105,6 +120,10 @@
 
   const handleDateChange = (range: [string, string]) => {
     emit('date-change', range);
+  };
+
+  const handleSearchConditionChange = (conditions: any[]) => {
+    emit('search-condition-change', conditions);
   };
 </script>
 
