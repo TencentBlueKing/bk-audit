@@ -32,6 +32,7 @@ from apps.meta.models import Tag
 from apps.permission.handlers.permission import Permission
 from services.web.scene.constants import (
     BindingType,
+    PanelStatus,
     ResourceVisibilityType,
     VisibilityScope,
 )
@@ -54,6 +55,7 @@ from services.web.tool.resources import (
     GetToolDetail,
     ListTool,
     ListToolAll,
+    ListToolTags,
 )
 
 
@@ -165,7 +167,7 @@ class ToolFavoriteTestCase(TestCase):
 
         resource = resource_cls()
         request_data = dict(data)
-        if resource_cls in [ListTool, ListToolAll]:
+        if resource_cls in [ListTool, ListToolAll, ListToolTags]:
             request_data.setdefault("scope_type", "scene")
             request_data.setdefault("scope_id", str(self.scene_id))
             with (
@@ -431,3 +433,83 @@ class ToolFavoriteTestCase(TestCase):
         self.assertFalse(tool_2_data["favorite"])
         self.assertEqual(tool_1_data["binding_type"], BindingType.PLATFORM_BINDING)
         self.assertEqual(tool_2_data["binding_type"], BindingType.SCENE_BINDING)
+
+    def test_list_tool_all_filter_by_status(self):
+        """测试全量工具列表支持按上架状态过滤"""
+
+        self.tool_1.status = PanelStatus.PUBLISHED
+        self.tool_1.save(update_fields=["status"])
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            result = self._call_resource_with_request(ListToolAll, {"status": PanelStatus.PUBLISHED})
+
+        self.assertEqual([tool["uid"] for tool in result], [self.tool_1.uid])
+        self.assertEqual(result[0]["status"], PanelStatus.PUBLISHED)
+
+    def test_list_tool_all_filters_by_scope_relation_without_permission(self):
+        """全量工具列表按 scope 关联关系过滤，不依赖当前用户权限"""
+
+        other_scene = Scene.objects.create(name="other-list-tool-all-scene")
+        other_tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Tool Gamma",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            created_by=self.test_user,
+            config=SQLDataSearchConfig(
+                sql="select f3 from test_table_3",
+                referenced_tables=[Table(table_name="test_table_3")],
+                input_variable=[],
+                output_fields=[SQLDataSearchOutputField(raw_name="field3", display_name="字段3")],
+            ).model_dump(),
+            is_deleted=False,
+            description="Tool 3 Desc",
+            updated_at=timezone.now(),
+        )
+        DataSearchToolConfig.objects.create(
+            tool=other_tool,
+            data_search_config_type=DataSearchConfigTypeEnum.SQL,
+            sql="select 3",
+        )
+        other_scene_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=other_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=other_scene_binding, scene_id=other_scene.scene_id)
+
+        factory = APIRequestFactory()
+        django_request = factory.post('/fake-url/', {}, format='json')
+        drf_request = Request(django_request)
+
+        with (
+            patch("services.web.tool.resources.get_request_username", return_value=self.test_user),
+            patch(
+                "services.web.tool.resources.ScopePermission.get_scene_ids",
+                side_effect=AssertionError("ListToolAll should not check scene permission"),
+            ),
+            patch(
+                "services.web.tool.resources.ScopePermission.get_system_ids",
+                side_effect=AssertionError("ListToolAll should not check system permission"),
+            ),
+        ):
+            result = ListToolAll().request(
+                {"scope_type": "scene", "scope_id": str(self.scene_id)},
+                _request=drf_request,
+            )
+
+        tool_uids = {tool["uid"] for tool in result}
+        self.assertIn(self.tool_1.uid, tool_uids)
+        self.assertIn(self.tool_2.uid, tool_uids)
+        self.assertNotIn(other_tool.uid, tool_uids)
+
+    def test_list_tool_tags_filter_by_status(self):
+        """测试工具标签统计支持按上架状态过滤"""
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            result = self._call_resource_with_request(ListToolTags, {"status": PanelStatus.PUBLISHED})
+
+        tag_counts = {item["tag_id"]: item["tool_count"] for item in result}
+        self.assertEqual(tag_counts[ToolTagsEnum.ALL_TOOLS.value], 0)
+        self.assertNotIn(str(self.tag1.tag_id), tag_counts)

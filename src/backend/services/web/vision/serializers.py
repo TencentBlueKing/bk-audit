@@ -198,6 +198,20 @@ class SceneReportGroupPanelOrderRequestSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     items = SceneReportGroupPanelOrderItemSerializer(many=True)
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        panel_ids = set()
+        duplicate_panel_ids = set()
+        for item in attrs["items"]:
+            panel_id = item["panel_id"]
+            if panel_id in panel_ids:
+                duplicate_panel_ids.add(panel_id)
+                continue
+            panel_ids.add(panel_id)
+        if duplicate_panel_ids:
+            raise serializers.ValidationError({"items": f"duplicate panel_id: {sorted(duplicate_panel_ids)}"})
+        return attrs
+
 
 class DeleteSceneReportGroupRequestSerializer(serializers.Serializer):
     group_id = serializers.IntegerField(required=True)

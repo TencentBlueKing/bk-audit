@@ -41,6 +41,19 @@ class TestSceneReportGroupSerializers(TestCase):
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_group_panel_order_serializer_rejects_duplicate_panel_id(self):
+        serializer = SceneReportGroupPanelOrderRequestSerializer(
+            data={
+                "scene_id": 100001,
+                "items": [
+                    {"panel_id": "p1", "group_id": 1, "priority_index": 9},
+                    {"panel_id": "p1", "group_id": 2, "priority_index": 8},
+                ],
+            }
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("items", serializer.errors)
+
     def test_delete_group_serializer(self):
         serializer = DeleteSceneReportGroupRequestSerializer(data={"group_id": 1})
         self.assertTrue(serializer.is_valid(), serializer.errors)

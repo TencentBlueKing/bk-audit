@@ -187,6 +187,7 @@ class CreateScene(SceneResource):
     @staticmethod
     def _create_scene_manager_notice_group(scene):
         """创建场景时自动创建场景管理员通知组"""
+        from apps.notice.constants import get_default_notice_config
         from apps.notice.models import NoticeGroup
         from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding, ResourceBindingScene
@@ -194,7 +195,7 @@ class CreateScene(SceneResource):
         notice_group = NoticeGroup.objects.create(
             group_name=f"{scene.name}-场景管理员通知组",
             group_member=scene.managers,
-            notice_config=[],
+            notice_config=get_default_notice_config(),
             description=f"场景「{scene.name}」的管理员通知组（系统自动创建）",
         )
         # 创建 ResourceBinding 关联

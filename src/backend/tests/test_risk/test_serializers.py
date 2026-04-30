@@ -217,7 +217,8 @@ class RiskRuleSerializersTest(TestCase):
         )
 
         self.assertFalse(serializer.is_valid())
-        self.assertIn("pa_id", str(serializer.errors))
+        self.assertIn("params_error", serializer.errors)
+        self.assertIn("处理套餐", str(serializer.errors))
 
     def test_update_risk_rule_serializer_rejects_cross_scene_process_application(self):
         rule = RiskRule.objects.create(
@@ -247,4 +248,5 @@ class RiskRuleSerializersTest(TestCase):
         )
 
         self.assertFalse(serializer.is_valid())
-        self.assertIn("pa_id", str(serializer.errors))
+        self.assertIn("params_error", serializer.errors)
+        self.assertIn("处理套餐", str(serializer.errors))

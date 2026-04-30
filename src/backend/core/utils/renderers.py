@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from rest_framework import status
 from rest_framework.renderers import JSONRenderer
+from rest_framework.settings import api_settings
 from rest_framework.status import is_success
 
 
@@ -59,8 +60,10 @@ class APIRenderer(JSONRenderer):
         errors = response.data
         if isinstance(response.data, dict) and "code" in response.data:
             code = response.data["code"]
-            message = self.pretty_dict(response.data["message"])
+            message = self.format_error_message(response.data["message"])
             errors = response.data["data"]
+        else:
+            message = self.format_error_message(message)
 
         # 错误输出
         res_data.update({"result": False, "code": code, "message": message})
@@ -71,7 +74,21 @@ class APIRenderer(JSONRenderer):
 
         return super(APIRenderer, self).render(res_data, accepted_media_type, renderer_context)
 
-    def pretty_dict(self, dict_data):  # pylint: disable=no-self-use
+    def format_error_message(self, error):  # pylint: disable=no-self-use
+        """
+        将 DRF 校验错误统一转为前端可直接展示的字符串。
+        """
+        if isinstance(error, dict):
+            if set(error.keys()) == {api_settings.NON_FIELD_ERRORS_KEY}:
+                return self.format_error_message(error[api_settings.NON_FIELD_ERRORS_KEY])
+            return self.pretty_dict(error)
+        if isinstance(error, (list, tuple)):
+            return "; ".join(self.format_error_message(item) for item in error)
+        if error is None:
+            return error
+        return str(error)
+
+    def pretty_dict(self, dict_data):
         """
         将字典转为字符串返回
         格式: {key}: {value}
@@ -80,7 +97,7 @@ class APIRenderer(JSONRenderer):
             return dict_data
         res = []
         for key, value in dict_data.items():
-            res.append(f"{key}: {value}")
+            res.append(f"{key}: {self.format_error_message(value)}")
         return "; ".join(res)
 
 
