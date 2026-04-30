@@ -101,24 +101,19 @@
   const isShow = defineModel<boolean>('isShow', { default: false });
   const confirmInput = ref('');
 
-  // 监听弹窗显示状态：启用/停用时拦截，改用 InfoBox
-  // 使用 flush: 'sync' 确保在 DOM 更新前拦截，避免删除弹窗闪现
+  // 监听弹窗显示状态：删除时清空输入
   watch(isShow, (val) => {
-    if (val) {
-      if (props.actionType !== 'delete') {
-        // 立即关闭 bk-dialog，改用 InfoBox
-        isShow.value = false;
-        showToggleStatusInfoBox();
-      } else {
-        confirmInput.value = '';
-      }
+    if (val && props.actionType === 'delete') {
+      confirmInput.value = '';
     }
-  }, { flush: 'sync' });
+  });
 
   // 启用/停用 — 使用全局 InfoBox
-  const showToggleStatusInfoBox = () => {
-    if (!props.target) return;
-    const isEnabling = props.actionType === 'enable';
+  const showToggleStatusInfoBox = (target?: ToolItem | null, actionType?: ActionType) => {
+    const currentTarget = target || props.target;
+    const currentActionType = actionType || props.actionType;
+    if (!currentTarget) return;
+    const isEnabling = currentActionType === 'enable';
     InfoBox({
       title: isEnabling ? t('确认启用该工具？') : t('确认停用该工具？'),
       subTitle: isEnabling
@@ -133,7 +128,7 @@
       onConfirm() {
         const scopeParams = getSceneSystemParams();
         return publishPlatformTool({
-          uid: props.target!.uid,
+          uid: currentTarget.uid,
           scene_id: Number(scopeParams.scope_id) || 0,
         });
       },
@@ -183,6 +178,10 @@
   const handleCancel = () => {
     close();
   };
+
+  defineExpose({
+    showToggleStatusInfoBox,
+  });
 
   // 复制工具名称到剪贴板
   const handleCopyToolName = () => {
