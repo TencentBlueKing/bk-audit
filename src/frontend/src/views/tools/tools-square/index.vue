@@ -40,7 +40,7 @@
         <div class="scene-selector-wrapper">
           <scene-system-selector
             v-model="selectedScene"
-            :list-scope="['system', 'scene']"
+            :list-scope="['scene']"
             :popover-width="250"
             scene-permission="view_scene"
             system-permission="view_system"
