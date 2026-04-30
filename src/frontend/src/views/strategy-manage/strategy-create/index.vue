@@ -102,6 +102,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
 
   interface IFormData {
@@ -437,7 +438,10 @@
     const params = normalizeSubmitParams(formData.value);
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
-    saveStrategy(params);
+    saveStrategy({
+      ...params,
+      scene_id: getSceneSystemParams().scope_id,
+    });
   };
 
   // 提交
