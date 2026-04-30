@@ -36,6 +36,7 @@
       class="side-group">
       <div
         class="side-group-header"
+        style="background-color: #1b2132;"
         @click="toggleFavoritesGroup">
         <img
           class="side-pentagram-title"
@@ -83,9 +84,20 @@
         </audit-menu-item>
       </div>
     </div>
+    <!-- 搜索框 -->
+    <div
+      v-if="allSideRoutes.length > 0"
+      class="search-wrapper">
+      <bk-input
+        v-model="searchKeyword"
+        class="search-input"
+        clearable
+        :placeholder="t('搜索 报表名称')"
+        type="search" />
+    </div>
     <!-- 分组列表 -->
     <div
-      v-for="side in allSideRoutes"
+      v-for="side in filteredSideRoutes"
       :key="side.id">
       <div
         v-if="sceneChangeItem.type === 'aggregate'"
@@ -278,6 +290,9 @@
     }
   };
 
+  // 搜索关键词
+  const searchKeyword = ref('');
+
   const clickFavorite = ref(false);
   // 鼠标悬停的菜单项ID
   const hoveredItemId = ref<string | null>(null);
@@ -286,6 +301,25 @@
 
   // 侧边路由数组变量，与reportGroups类型相同
   const sideRoutes = ref<SideRouteItem[]>([]);
+
+  // 根据搜索关键词过滤后的侧边路由
+  const filteredSideRoutes = computed(() => {
+    const keyword = searchKeyword.value.trim().toLowerCase();
+    if (!keyword) {
+      return allSideRoutes.value;
+    }
+    return allSideRoutes.value
+      .map(side => ({
+        ...side,
+        children: side.children
+          .map(group => ({
+            ...group,
+            children: group.children.filter(child => child.name.toLowerCase().includes(keyword)),
+          }))
+          .filter(group => group.children.length > 0),
+      }))
+      .filter(side => side.children.length > 0);
+  });
 
   // 是否显示暂无数据
   const showEmpty = computed(() => sideRoutes.value.length === 0 && favoriteItems.value.length === 0);
@@ -491,6 +525,64 @@
     margin: 10px auto 16px;
   }
 
+  .search-wrapper {
+    width: 84%;
+    margin: 8px auto 12px;
+
+    :deep(.bk-input) {
+      background-color: #31394f !important;
+      border: 1px solid #31394f !important;
+      border-radius: 2px;
+
+      &.is-focused,
+      &.is-focused:not(.is-readonly),
+      &:focus,
+      &:active,
+      &:focus-within {
+        border: 1px solid #31394f !important;
+        border-color: #31394f !important;
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    }
+
+    :deep(.bk-input--text) {
+      color: #c4c6cc !important;
+      background-color: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+
+      &::placeholder {
+        color: #63656e;
+      }
+
+      &:focus,
+      &:active {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    }
+
+    :deep(.bk-input--suffix-icon) {
+      color: #979ba5 !important;
+      background-color: transparent !important;
+    }
+
+    :deep(.search-input) {
+      .bk-input {
+        background-color: #31394f !important;
+        border: 1px solid #31394f !important;
+
+        &.is-focused {
+          border-color: #31394f !important;
+          box-shadow: none !important;
+        }
+      }
+    }
+  }
+
   .side-group {
     margin-bottom: 2px;
   }
@@ -605,6 +697,41 @@
       align-items: center;
       width: 100%;
     }
+  }
+
+  /* 我的收藏 - 激活/悬停背景色 */
+  :deep(.audit-menu-item.favorite-item) {
+    color: #acb9d1;
+    background: #1b2132;
+  }
+
+  :deep(.audit-menu-item.favorite-item.active) {
+    color: #fff;
+    background: #3a84ff;
+  }
+
+  :deep(.audit-menu-item.favorite-item.active-weak) {
+    color: #acb9d1;
+    background: #3a84ff4d;
+  }
+
+  :deep(.audit-menu-item.favorite-item:hover) {
+    background: #253047;
+  }
+
+  /* 其他分组 - 激活/悬停背景色 */
+  :deep(.audit-menu-item.menu-item-with-favorite.active) {
+    color: #fff;
+    background: #3a84ff;
+  }
+
+  :deep(.audit-menu-item.menu-item-with-favorite.active-weak) {
+    color: #acb9d1;
+    background: #3a84ff4d;
+  }
+
+  :deep(.audit-menu-item.menu-item-with-favorite:hover) {
+    background: #253047;
   }
 
   .side-child-dot {
