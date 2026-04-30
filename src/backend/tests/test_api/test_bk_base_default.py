@@ -6,7 +6,13 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 from api.bk_base.constants import UserAuthActionEnum
-from api.bk_base.default import ProjectDataBatchAdd, ProjectDataBatchCheck
+from api.bk_base.default import (
+    CreateFlowNode,
+    DeleteFlowNode,
+    ProjectDataBatchAdd,
+    ProjectDataBatchCheck,
+    UpdateFlowNode,
+)
 from api.bk_base.serializers import (
     GetMineResultTablesReqSerializer,
     ProjectDataBatchAddReqSerializer,
@@ -175,3 +181,10 @@ class TestGetMineResultTablesResource(SimpleTestCase):
         self.assertEqual(kwargs["params"]["action_id"], UserAuthActionEnum.RT_QUERY)
         self.assertEqual(kwargs["params"]["bk_biz_id"], settings.DEFAULT_BK_BIZ_ID)
         self.assertTrue(resource.session.get.call_args.args[0].endswith("/v3/meta/result_tables/mine/"))
+
+
+class TestFlowNodeResource(SimpleTestCase):
+    def test_flow_node_write_resources_timeout(self):
+        for resource_cls in [CreateFlowNode, UpdateFlowNode, DeleteFlowNode]:
+            with self.subTest(resource_cls=resource_cls.__name__):
+                self.assertEqual(resource_cls.TIMEOUT, 5 * 60)

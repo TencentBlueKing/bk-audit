@@ -1070,6 +1070,18 @@ class TestListRiskResource(TestCase):
         self.assertIn(self.strategy.strategy_id, strategy_ids)
         self.assertNotIn(other_strategy.strategy_id, strategy_ids)
 
+    def test_list_risk_strategy_without_view_type_returns_all_strategies(self):
+        """未传 risk_view_type 时返回全量策略"""
+        from services.web.risk.resources.risk import ListRiskStrategy
+
+        unused_strategy = Strategy.objects.create(strategy_name="unused-strategy", risk_level=RiskLevel.LOW.value)
+
+        result = ListRiskStrategy().perform_request({})
+
+        strategy_ids = {s.strategy_id if hasattr(s, "strategy_id") else s["strategy_id"] for s in result}
+        self.assertIn(self.strategy.strategy_id, strategy_ids)
+        self.assertIn(unused_strategy.strategy_id, strategy_ids)
+
 
 class TestListMineAndNoticingRisk(TestCase):
     def setUp(self):

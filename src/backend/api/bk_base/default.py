@@ -251,6 +251,7 @@ class CreateFlowNode(AiopsBaseResource):
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/"
     url_keys = ["flow_id"]
     method = "POST"
+    TIMEOUT = 5 * 60
 
 
 class UpdateFlowNode(AiopsBaseResource):
@@ -258,6 +259,7 @@ class UpdateFlowNode(AiopsBaseResource):
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
     method = "PUT"
+    TIMEOUT = 5 * 60
 
 
 class DeleteFlowNode(AiopsBaseResource):
@@ -265,6 +267,7 @@ class DeleteFlowNode(AiopsBaseResource):
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
     method = "DELETE"
+    TIMEOUT = 5 * 60
 
 
 class GetRtFields(AiopsBaseResource):

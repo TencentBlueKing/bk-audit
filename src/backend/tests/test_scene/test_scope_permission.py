@@ -556,6 +556,18 @@ class TestScopePermissionCache(TestCase):
         # 只调用一次 get_policies_for_action
         assert mock_instance.get_policies_for_action.call_count == 1
 
+    @patch("services.web.common.scope_permission.Permission")
+    def test_get_scene_ids_with_single_scene_denied_returns_empty(self, mock_perm_cls):
+        """get_scene_ids 只负责回收过滤范围，单场景无权限返回空列表"""
+        mock_instance = MagicMock()
+        mock_instance.is_allowed.return_value = False
+        mock_perm_cls.return_value = mock_instance
+
+        sp = ScopePermission("admin")
+        result = sp.get_scene_ids(ScopeContext(ScopeType.SCENE, "1"), ActionEnum.VIEW_SCENE)
+
+        assert result == []
+
     @patch("services.web.common.scope_permission.System.get_managed_system_ids", return_value=[])
     @patch("services.web.common.scope_permission.Permission")
     def test_get_system_ids_cache(self, mock_perm_cls, mock_managed):
@@ -572,6 +584,19 @@ class TestScopePermissionCache(TestCase):
 
         assert result1 == result2
         assert mock_instance.get_policies_for_action.call_count == 1
+
+    @patch("services.web.common.scope_permission.System.is_manager", return_value=False)
+    @patch("services.web.common.scope_permission.Permission")
+    def test_get_system_ids_with_single_system_denied_returns_empty(self, mock_perm_cls, mock_is_manager):
+        """get_system_ids 只负责回收过滤范围，单系统无权限返回空列表"""
+        mock_instance = MagicMock()
+        mock_instance.is_allowed.return_value = False
+        mock_perm_cls.return_value = mock_instance
+
+        sp = ScopePermission("admin")
+        result = sp.get_system_ids(ScopeContext(ScopeType.SYSTEM, "bk_monitor"), ActionEnum.VIEW_SYSTEM)
+
+        assert result == []
 
     @patch("services.web.common.scope_permission.Permission")
     def test_direction_mismatch_not_cached(self, mock_perm_cls):

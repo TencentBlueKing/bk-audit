@@ -36,7 +36,7 @@ from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
-from apps.meta.models import EnumMappingRelatedType, Tag
+from apps.meta.models import EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
@@ -51,6 +51,7 @@ from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
 )
+from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
@@ -60,7 +61,7 @@ from services.web.scene.constants import (
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
-from services.web.scene.models import ResourceBinding
+from services.web.scene.models import ResourceBinding, Scene
 from services.web.strategy_v2.models import StrategyTool
 from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionKeysWithCallerSerializer,
@@ -983,13 +984,49 @@ class ListToolAll(ToolBase):
     def validate_response_data(self, response_data):
         return response_data
 
+    def filter_queryset_by_scope_relation(self, queryset, validated_request_data: dict):
+        """按 scope 关联关系过滤全量工具，不校验当前用户权限。"""
+        scope_type = validated_request_data.get("scope_type")
+        binding_type = validated_request_data.get("binding_type")
+        if not scope_type:
+            binding_filter = binding_type or BindingType.PLATFORM_BINDING
+            tool_uids = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                binding_type=binding_filter,
+            ).values_list("resource_id", flat=True)
+            return queryset.filter(uid__in=tool_uids)
+
+        scope = ScopeContext(
+            scope_type=scope_type,
+            scope_id=validated_request_data.get("scope_id"),
+        )
+        scene_ids: List[int] = []
+        system_ids: List[str] = []
+        if scope.scope_type == ScopeType.SCENE:
+            scene_ids = [int(scope.scope_id)]
+        elif scope.scope_type == ScopeType.CROSS_SCENE:
+            scene_ids = list(Scene.objects.values_list("scene_id", flat=True))
+        elif scope.scope_type == ScopeType.SYSTEM:
+            system_ids = [str(scope.scope_id)]
+        elif scope.scope_type == ScopeType.CROSS_SYSTEM:
+            system_ids = list(System.objects.values_list("system_id", flat=True))
+
+        return CompositeScopeFilter.filter_queryset(
+            queryset=queryset,
+            binding_type=binding_type,
+            scene_id=scene_ids,
+            system_id=system_ids,
+            resource_type=ResourceVisibilityType.TOOL,
+            pk_field="uid",
+        )
+
     def perform_request(self, validated_request_data):
         current_user = get_request_username()
 
         # 构建收藏状态子查询（使用 tool_uid 关联，确保版本更新后收藏状态正确）
         favorite_subquery = ToolFavorite.objects.filter(tool_uid=OuterRef("uid"), username=current_user)
         tool_qs = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
-        tool_qs = self.filter_queryset_by_scope(tool_qs, validated_request_data, current_user).order_by("name")
+        tool_qs = self.filter_queryset_by_scope_relation(tool_qs, validated_request_data).order_by("name")
         status = validated_request_data.get("status")
         if status:
             tool_qs = tool_qs.filter(status=status)

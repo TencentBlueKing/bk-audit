@@ -366,43 +366,44 @@ class CreateStrategy(StrategyV2Base):
     ResponseSerializer = CreateStrategyResponseSerializer
     audit_action = ActionEnum.CREATE_STRATEGY
 
-    @transaction.atomic
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
         scene_id = validated_request_data.pop("scene_id", None)
         self._check_source_type(validated_request_data)
-        # pop tag
-        tag_names = validated_request_data.pop("tags", [])
-        # save strategy
-        strategy: Strategy = Strategy.objects.create(**validated_request_data)
-        # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        SceneScopeFilter.create_resource_binding(
-            resource_id=str(strategy.strategy_id),
-            resource_type=ResourceVisibilityType.STRATEGY,
-            scene_id=scene_id,
-        )
-        # save strategy tag
-        self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
-        self._save_strategy_tools(strategy, validated_request_data)
-        if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
-            strategy.sql = self.build_rule_audit_sql(strategy)
-            strategy.save(update_fields=["sql"])
-        # 更新enum
-        for field_category in [
-            'event_basic_field_configs',
-            'event_data_field_configs',
-            'event_evidence_field_configs',
-            'risk_meta_field_config',
-        ]:
-            for field_config in validated_request_data.get(field_category, []):
-                enum_mappings = field_config.get('enum_mappings')
-                if enum_mappings:
-                    self.update_enum_mappings(
-                        enum_mappings,
-                        strategy.strategy_id,
-                        field_config.get('field_name'),
-                        field_category,
-                    )
+        with transaction.atomic():
+            # pop tag
+            tag_names = validated_request_data.pop("tags", [])
+            # save strategy
+            strategy: Strategy = Strategy.objects.create(**validated_request_data)
+            # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
+
+            SceneScopeFilter.create_resource_binding(
+                resource_id=str(strategy.strategy_id),
+                resource_type=ResourceVisibilityType.STRATEGY,
+                scene_id=scene_id,
+            )
+            # save strategy tag
+            self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+            self._save_strategy_tools(strategy, validated_request_data)
+            if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
+                strategy.sql = self.build_rule_audit_sql(strategy)
+                strategy.save(update_fields=["sql"])
+            # 更新enum
+            for field_category in [
+                'event_basic_field_configs',
+                'event_data_field_configs',
+                'event_evidence_field_configs',
+                'risk_meta_field_config',
+            ]:
+                for field_config in validated_request_data.get(field_category, []):
+                    enum_mappings = field_config.get('enum_mappings')
+                    if enum_mappings:
+                        self.update_enum_mappings(
+                            enum_mappings,
+                            strategy.strategy_id,
+                            field_config.get('field_name'),
+                            field_category,
+                        )
         # create
         # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
         # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
