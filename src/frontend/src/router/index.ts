@@ -70,12 +70,15 @@ const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
   scene_user: [
     { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
+    { paths: ['/tools', '/platform'], redirect: '404' },
   ],
   scene_admin: [
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
+    { paths: ['/tools', '/platform'], redirect: '404' },
   ],
   system_admin: [
     { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
+    { paths: ['/statement-manage', '/tools', '/platform'], redirect: '404' },
   ],
 };
 
