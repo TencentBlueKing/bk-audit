@@ -155,6 +155,7 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import SceneManageService from '@service/scene-manage';
@@ -184,6 +185,7 @@
   const emits = defineEmits<Emits>();
   const isLoading = ref(false);
   const { t } = useI18n();
+  const router = useRouter();
 
   const detailData = ref<SceneModel>(new SceneModel());
   const sliderTitle = computed(() => t('场景详情'));
@@ -269,6 +271,13 @@
 
   // 跳转到场景
   const handleJumpToScene = () => {
+    const routeData = router.resolve({
+      name: 'sceneInfo',
+      query: {
+        scene_id: String(detailData.value.scene_id),
+      },
+    });
+    window.open(routeData.href, '_blank');
   };
 
   // 关闭
