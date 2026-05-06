@@ -57,6 +57,6 @@ class NoticeGroup(ResourceTypeMeta):
         resource.attribute = {
             "id": str(instance_id),
             "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/notice_group,{instance_id}/",
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
         }
         return resource

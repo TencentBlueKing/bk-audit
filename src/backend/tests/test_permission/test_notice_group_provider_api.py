@@ -97,7 +97,7 @@ class TestNoticeGroupResourceProviderAPI:
 
         assert resource.attribute["id"] == str(ng.group_id)
         assert resource.attribute["name"] == ng.group_name
-        assert resource.attribute[KEYWORD_BK_IAM_PATH] == f"/scene,/notice_group,{ng.group_id}/"
+        assert resource.attribute[KEYWORD_BK_IAM_PATH] == "/scene,/"
 
     def test_create_instance_with_scene_binding(self):
         """绑定到场景后，iam_path 应包含正确的 scene_id"""
@@ -107,7 +107,7 @@ class TestNoticeGroupResourceProviderAPI:
 
         resource = ResourceEnum.NOTICE_GROUP.create_instance(str(ng.group_id))
 
-        expected_path = f"/scene,{scene.scene_id}/notice_group,{ng.group_id}/"
+        expected_path = f"/scene,{scene.scene_id}/"
         assert resource.attribute[KEYWORD_BK_IAM_PATH] == expected_path
         assert resource.attribute["name"] == ng.group_name
 

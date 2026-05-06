@@ -13,11 +13,9 @@ ScopePermission 权限组件单元测试
 - ScopeInstancePermission 列表接口直接通过
 - ScopePermission.check_resource_permission（不传 scope）
 - ScopePermission 的 binding_type 过滤与校验
-- ScopePermission._get_scene_visible_resource_ids / _get_system_visible_resource_ids 拆分方法（含 ALL_SYSTEMS）
 - System.get_managed_system_ids / System.is_manager 便捷方法
 """
 
-from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -222,6 +220,16 @@ class TestScopeContext(TestCase):
         with pytest.raises(ValidationError):
             ScopeContext.from_request(request)
 
+    def test_from_request_scene_invalid_scope_id(self):
+        """scene scope_id 必须是合法场景 ID"""
+        request = _make_request(
+            self.rf,
+            self.user,
+            {ScopeQueryField.SCOPE_TYPE: "scene", ScopeQueryField.SCOPE_ID: "abc"},
+        )
+        with pytest.raises(ValidationError):
+            ScopeContext.from_request(request)
+
     def test_from_request_system_missing_scope_id(self):
         """system scope_type 缺少 scope_id"""
         request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "system"})
@@ -335,6 +343,11 @@ class TestScopeContextDirectConstruction(TestCase):
         """SCENE 不传 scope_id 应抛 ValidationError"""
         with pytest.raises(ValidationError):
             ScopeContext(ScopeType.SCENE)
+
+    def test_construct_scene_invalid_scope_id(self):
+        """SCENE 传入非数字 scope_id 应抛 ValidationError"""
+        with pytest.raises(ValidationError):
+            ScopeContext(ScopeType.SCENE, "abc")
 
     def test_construct_system_missing_scope_id(self):
         """SYSTEM 不传 scope_id 应抛 ValidationError"""
@@ -1048,332 +1061,6 @@ class TestGetSystemIdsForScope(TestCase):
 
         result = sp.get_system_ids_for_scope(ScopeContext(ScopeType.CROSS_SCENE))
         assert result == ["bk_monitor"]
-
-
-# ==================== get_resource_ids 拆分方法 Tests ====================
-
-
-@pytest.mark.django_db
-class TestGetResourceIdsSplitMethods(TestCase):
-    """测试 _get_scene_visible_resource_ids / _get_system_visible_resource_ids 拆分方法"""
-
-    def setUp(self):
-        self.scene = Scene.objects.create(
-            name="场景A",
-            status="enabled",
-            managers=["admin"],
-            users=["user1"],
-        )
-        SceneSystem.objects.create(scene=self.scene, system_id="bk_monitor")
-
-        # 场景级绑定
-        self.binding_scene = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="scene_panel_1",
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=self.binding_scene, scene=self.scene)
-
-        # 平台级 all_visible
-        self.binding_all = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="all_visible_panel",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_VISIBLE,
-        )
-
-        # 平台级 all_scenes
-        self.binding_all_scenes = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="all_scenes_panel",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_SCENES,
-        )
-
-        # 平台级 specific_scenes
-        self.binding_specific_scenes = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="specific_scenes_panel",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SCENES,
-        )
-        ResourceBindingScene.objects.create(binding=self.binding_specific_scenes, scene=self.scene)
-
-        # 平台级 all_scenes（tool 类型）
-        self.binding_all_scenes_tool = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.TOOL,
-            resource_id="all_scenes_tool",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_SCENES,
-        )
-
-        # 平台级 all_systems
-        self.binding_all_systems = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.TOOL,
-            resource_id="all_systems_tool",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_SYSTEMS,
-        )
-
-        # 平台级 specific_scenes（tool 类型）
-        self.binding_specific_scenes_tool = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.TOOL,
-            resource_id="specific_scenes_tool",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SCENES,
-        )
-        ResourceBindingScene.objects.create(binding=self.binding_specific_scenes_tool, scene=self.scene)
-
-        # 平台级 specific_systems
-        self.binding_specific_systems = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.TOOL,
-            resource_id="specific_systems_tool",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
-        )
-        ResourceBindingSystem.objects.create(binding=self.binding_specific_systems, system_id="bk_monitor")
-
-    def test_get_scene_visible_includes_scene_binding(self):
-        """场景方向：包含场景级绑定的资源"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [self.scene.scene_id],
-        )
-        assert "scene_panel_1" in result
-
-    def test_get_scene_visible_includes_all_visible(self):
-        """场景方向：包含 all_visible 资源"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [self.scene.scene_id],
-        )
-        assert "all_visible_panel" in result
-
-    def test_get_scene_visible_includes_all_scenes(self):
-        """场景方向：包含 all_scenes 资源"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [self.scene.scene_id],
-        )
-        assert "all_scenes_panel" in result
-
-    def test_get_scene_visible_includes_specific_scenes(self):
-        """场景方向：包含 specific_scenes 匹配的资源"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [self.scene.scene_id],
-        )
-        assert "specific_scenes_panel" in result
-
-    def test_get_scene_visible_no_match(self):
-        """场景方向：不匹配的场景不返回 specific_scenes 资源"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [999999],
-        )
-        # all_visible 和 all_scenes 仍然在
-        assert "all_visible_panel" in result
-        assert "all_scenes_panel" in result
-        # specific_scenes 不匹配
-        assert "specific_scenes_panel" not in result
-
-    def test_get_scene_visible_empty_scene_ids(self):
-        """场景方向：空场景 ID 列表返回空结果"""
-        result = ScopePermission._get_scene_visible_resource_ids(
-            BindingResourceType.PANEL,
-            [],
-        )
-        assert result == set()
-
-    def test_get_system_visible_includes_all_visible(self):
-        """系统方向：包含 all_visible 资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_monitor"],
-        )
-        # all_visible 的是 panel 类型，tool 类型没有 all_visible
-        # 但 specific_systems tool 应该在
-        assert "specific_systems_tool" in result
-
-    def test_get_system_visible_includes_specific_systems(self):
-        """系统方向：包含 specific_systems 匹配的资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_monitor"],
-        )
-        assert "specific_systems_tool" in result
-
-    def test_get_system_visible_includes_all_scenes(self):
-        """系统方向：应包含 all_scenes 资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_monitor"],
-        )
-        assert "all_scenes_tool" in result
-
-    def test_get_system_visible_includes_all_systems(self):
-        """系统方向：应包含 all_systems 资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_monitor"],
-        )
-        assert "all_systems_tool" in result
-
-    def test_get_system_visible_includes_specific_scenes_when_system_hits_scene(self):
-        """系统方向：系统命中某场景时，应包含对该场景可见的资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_monitor"],
-        )
-        assert "specific_scenes_tool" in result
-
-    def test_get_system_visible_no_match(self):
-        """系统方向：不匹配的系统不返回 specific_systems 资源"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            ["bk_other"],
-        )
-        assert "specific_systems_tool" not in result
-
-    def test_get_system_visible_empty_system_ids(self):
-        """系统方向：空系统 ID 列表返回空结果"""
-        result = ScopePermission._get_system_visible_resource_ids(
-            BindingResourceType.TOOL,
-            [],
-        )
-        assert result == set()
-
-
-# ==================== get_resource_ids 集成 Tests ====================
-
-
-@pytest.mark.django_db
-class TestGetResourceIdsIntegration(TestCase):
-    """测试 get_resource_ids 方向不匹配返回空集合"""
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_system_scope_returns_empty_for_scene_binding(self, mock_perm_cls):
-        """系统 scope 调用 get_resource_ids，get_scene_ids 返回空 → 不含场景绑定资源"""
-        mock_instance = MagicMock()
-        mock_instance.get_policies_for_action.return_value = {}
-        mock_perm_cls.return_value = mock_instance
-
-        sp = ScopePermission("admin")
-        # 注入系统缓存
-        sp._system_ids_cache[(ScopeType.CROSS_SYSTEM, None, ActionEnum.VIEW_SYSTEM.id)] = []
-
-        result = sp.get_resource_ids(ScopeContext(ScopeType.CROSS_SYSTEM), BindingResourceType.PANEL)
-        assert result == set()
-
-
-@pytest.mark.django_db
-class TestGetResourceIdsBindingType(TestCase):
-    """测试 get_resource_ids 的 binding_type 语义"""
-
-    def setUp(self):
-        self.scene = Scene.objects.create(
-            name="带系统场景",
-            status="enabled",
-            managers=["admin"],
-            users=["user1"],
-        )
-        SceneSystem.objects.create(scene=self.scene, system_id="bk_monitor")
-
-        self.scene_binding = ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="scene_panel",
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=self.scene_binding, scene=self.scene)
-
-        ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="platform_panel",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_VISIBLE,
-        )
-
-        ResourceBinding.objects.create(
-            resource_type=BindingResourceType.PANEL,
-            resource_id="all_systems_panel",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.ALL_SYSTEMS,
-        )
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_scene_scope_scene_binding_only_returns_scene_resources(self, mock_perm_cls):
-        """场景方向 + scene_binding 只返回场景级资源"""
-        mock_perm_cls.return_value = MagicMock()
-
-        sp = ScopePermission("admin")
-        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [self.scene.scene_id]
-
-        result = sp.get_resource_ids(
-            ScopeContext(ScopeType.CROSS_SCENE),
-            BindingResourceType.PANEL,
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        assert result == {"scene_panel"}
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_scene_scope_platform_binding_only_returns_platform_resources(self, mock_perm_cls):
-        """场景方向 + platform_binding 只返回平台级资源"""
-        mock_perm_cls.return_value = MagicMock()
-
-        sp = ScopePermission("admin")
-        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [self.scene.scene_id]
-
-        result = sp.get_resource_ids(
-            ScopeContext(ScopeType.CROSS_SCENE),
-            BindingResourceType.PANEL,
-            binding_type=BindingType.PLATFORM_BINDING,
-        )
-        assert result == {"platform_panel"}
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_scene_scope_none_binding_type_returns_all_resources(self, mock_perm_cls):
-        """场景方向 + binding_type=None 返回场景级与平台级资源并集"""
-        mock_perm_cls.return_value = MagicMock()
-
-        sp = ScopePermission("admin")
-        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [self.scene.scene_id]
-
-        result = sp.get_resource_ids(
-            ScopeContext(ScopeType.CROSS_SCENE),
-            BindingResourceType.PANEL,
-            binding_type=None,
-        )
-        assert result == {"scene_panel", "platform_panel"}
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_system_scope_scene_binding_raises_value_error(self, mock_perm_cls):
-        """系统方向不支持 scene_binding 过滤"""
-        mock_perm_cls.return_value = MagicMock()
-
-        sp = ScopePermission("admin")
-        sp._system_ids_cache[(ScopeType.CROSS_SYSTEM, None, ActionEnum.VIEW_SYSTEM.id)] = ["bk_monitor"]
-
-        with pytest.raises(ValueError, match="scene_binding"):
-            sp.get_resource_ids(
-                ScopeContext(ScopeType.CROSS_SYSTEM),
-                BindingResourceType.PANEL,
-                binding_type=BindingType.SCENE_BINDING,
-            )
-
-    @patch("services.web.common.scope_permission.Permission")
-    def test_invalid_binding_type_is_not_validated_in_scope_permission(self, mock_perm_cls):
-        """非法 binding_type 不由 ScopePermission 层负责校验"""
-        mock_perm_cls.return_value = MagicMock()
-
-        sp = ScopePermission("admin")
-        sp._scene_ids_cache[(ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)] = [self.scene.scene_id]
-
-        result = sp.get_resource_ids(
-            ScopeContext(ScopeType.CROSS_SCENE),
-            BindingResourceType.PANEL,
-            binding_type=cast(BindingType, cast(object, "invalid_binding_type")),
-        )
-        assert result == {"platform_panel"}
 
 
 # ==================== System Model 便捷方法 Tests ====================

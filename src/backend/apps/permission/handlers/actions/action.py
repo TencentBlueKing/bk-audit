@@ -441,7 +441,7 @@ class ActionEnum:
         name_en="View Audit Report by Department",
         type="view",
         related_resource_types=[ResourceEnum.DEPT_BK_USERMGR],
-        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        related_actions=[LIST_BASE_PANEL],
         version=1,
     )
     VIEW_TAG_PANEL = ActionMeta(
@@ -450,7 +450,7 @@ class ActionEnum:
         name_en="View Audit Report by Tag",
         type="view",
         related_resource_types=[ResourceEnum.TAG],
-        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        related_actions=[LIST_BASE_PANEL],
         version=1,
     )
 
@@ -462,7 +462,7 @@ class ActionEnum:
         name_en="View System Diagnosis Panel",
         type="view",
         related_resource_types=[ResourceEnum.SYSTEM],
-        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        related_actions=[LIST_BASE_PANEL],
         version=1,
     )
     # 查看场景视图
@@ -473,7 +473,7 @@ class ActionEnum:
         name_en="View Scenario Panel",
         type="view",
         related_resource_types=[ResourceEnum.TAG],
-        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        related_actions=[LIST_BASE_PANEL],
         version=1,
     )
 

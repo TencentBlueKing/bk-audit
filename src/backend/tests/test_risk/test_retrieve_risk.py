@@ -1136,6 +1136,46 @@ class TestListMineAndNoticingRisk(TestCase):
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
         )
+        self.risk_owned_without_permission = Risk.objects.create(
+            risk_id="risk-owned-without-permission",
+            raw_event_id="raw-owned-without-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[self.username],
+            notice_users=[],
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+        self.risk_noticed_without_permission = Risk.objects.create(
+            risk_id="risk-noticed-without-permission",
+            raw_event_id="raw-noticed-without-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[],
+            notice_users=[self.username],
+            event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
+        )
+        self.risk_operator_permission_but_not_current = Risk.objects.create(
+            risk_id="risk-operator-permission-but-not-current",
+            raw_event_id="raw-operator-permission-but-not-current",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=["other_user"],
+            notice_users=[],
+            event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
+        )
+        self.risk_notice_permission_but_not_noticed = Risk.objects.create(
+            risk_id="risk-notice-permission-but-not-noticed",
+            raw_event_id="raw-notice-permission-but-not-noticed",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[],
+            notice_users=["other_user"],
+            event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+        )
 
         TicketPermission.objects.bulk_create(
             [
@@ -1147,6 +1187,18 @@ class TestListMineAndNoticingRisk(TestCase):
                 ),
                 TicketPermission(
                     risk_id=self.risk_noticed.risk_id,
+                    action=ActionEnum.LIST_RISK.id,
+                    user=self.username,
+                    user_type=UserType.NOTICE_USER,
+                ),
+                TicketPermission(
+                    risk_id=self.risk_operator_permission_but_not_current.risk_id,
+                    action=ActionEnum.LIST_RISK.id,
+                    user=self.username,
+                    user_type=UserType.OPERATOR,
+                ),
+                TicketPermission(
+                    risk_id=self.risk_notice_permission_but_not_noticed.risk_id,
                     action=ActionEnum.LIST_RISK.id,
                     user=self.username,
                     user_type=UserType.NOTICE_USER,
@@ -1207,24 +1259,30 @@ class TestListMineAndNoticingRisk(TestCase):
         assert_hive_sql(self, sql_log)
 
     def test_list_mine_risk_no_perm_check(self):
-        """ListMineRisk 不依赖 load_authed_risks，直接按 current_operator 查询"""
+        """ListMineRisk 不依赖 load_authed_risks，按本地工单权限查询"""
         request = self._make_request()
-        response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
+        with mock.patch.object(Risk, "load_authed_risks", side_effect=AssertionError("should not check IAM")):
+            response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_owned.risk_id, risk_ids)
         self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
+        self.assertNotIn(self.risk_owned_without_permission.risk_id, risk_ids)
+        self.assertNotIn(self.risk_operator_permission_but_not_current.risk_id, risk_ids)
 
     def test_list_noticing_risk_no_perm_check(self):
-        """ListNoticingRisk 不依赖 load_authed_risks，直接按 notice_users 查询"""
+        """ListNoticingRisk 不依赖 load_authed_risks，按本地工单权限查询"""
         from services.web.risk.resources.risk import ListNoticingRisk
 
         request = self._make_request()
-        response = ListNoticingRisk().request(self._payload(page=1, page_size=10), _request=request)
+        with mock.patch.object(Risk, "load_authed_risks", side_effect=AssertionError("should not check IAM")):
+            response = ListNoticingRisk().request(self._payload(page=1, page_size=10), _request=request)
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
+        self.assertNotIn(self.risk_noticed_without_permission.risk_id, risk_ids)
+        self.assertNotIn(self.risk_notice_permission_but_not_noticed.risk_id, risk_ids)
 
     def test_list_mine_risk_without_scope(self):
         """个人视图不传 scope 时也应可查询。"""
@@ -1264,6 +1322,12 @@ class TestListMineAndNoticingRisk(TestCase):
             action=ActionEnum.LIST_RISK.id,
             user=self.username,
             user_type=UserType.OPERATOR,
+        )
+        TicketPermission.objects.create(
+            risk_id=risk_owned_low.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.NOTICE_USER,
         )
         return risk_owned_low
 
@@ -1700,6 +1764,12 @@ class TestRiskPermissionFilters(TestCase):
         self.assertIn("R-LOCAL", risk_ids)
         self.assertNotIn("R-IAM", risk_ids)
         self.assertNotIn("R-NONE", risk_ids)
+
+    def test_ticket_permission_has_user_query_index(self):
+        """TicketPermission 应具备按用户查询风险的联合索引"""
+        index_fields = [index.fields for index in TicketPermission._meta.indexes]
+
+        self.assertIn(["user", "action", "user_type", "risk_id"], index_fields)
 
     @mock.patch("services.web.risk.models.Permission")
     def test_iam_risk_filter_no_policies_returns_empty(self, mock_perm_cls):

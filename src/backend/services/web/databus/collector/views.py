@@ -46,17 +46,15 @@ class CollectorsViewSet(ResourceViewSet):
             return []
         if self.action in ["api_push", "create_api_push", "api_push_tail_log"]:
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.EDIT_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
+                SystemPermissionHandler.generate_permission(
+                    [ActionEnum.EDIT_SYSTEM], get_instance_id=self.get_system_id
                 )
             ]
         if self.action in ["join_data"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])]
         if self.action == "get_collector_info":
             return [
-                SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id),
+                *SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id),
                 InstanceActionPermission(
                     actions=[ActionEnum.VIEW_COLLECTION_BK_LOG],
                     resource_meta=ResourceEnum.COLLECTION_BK_LOG,
@@ -66,7 +64,9 @@ class CollectorsViewSet(ResourceViewSet):
 
         if self.action in ["update_collector", "delete_collector"]:
             return [
-                SystemPermissionHandler.system_edit_permissions(get_instance_id=self.get_system_id),
+                SystemPermissionHandler.generate_permission(
+                    [ActionEnum.EDIT_SYSTEM], get_instance_id=self.get_system_id
+                ),
                 InstanceActionPermission(
                     actions=[
                         ActionEnum.VIEW_COLLECTION_BK_LOG,
@@ -196,10 +196,8 @@ class DataIdsViewSet(DataIdBase, ResourceViewSet):
             return SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id)
         if self.action in ["tail", "destroy"]:
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.EDIT_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
+                SystemPermissionHandler.generate_permission(
+                    [ActionEnum.EDIT_SYSTEM], get_instance_id=self.get_system_id
                 )
             ]
         return []
@@ -218,10 +216,8 @@ class DataIdEtlViewSet(DataIdBase, ResourceViewSet):
     def get_permissions(self):
         if self.action in ["create", "field_history"]:
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.EDIT_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
+                SystemPermissionHandler.generate_permission(
+                    [ActionEnum.EDIT_SYSTEM], get_instance_id=self.get_system_id
                 )
             ]
         return []
