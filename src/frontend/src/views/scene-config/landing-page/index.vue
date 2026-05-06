@@ -95,7 +95,7 @@
   });
 
   const handleOpenWiki = () => {
-    window.open(configData.value.help_info.bkaudit_wiki, '_blank');
+    window.open(configData.value.third_doc_url.scene_iwiki_url, '_blank');
   };
 
   const contactHelper = () => {

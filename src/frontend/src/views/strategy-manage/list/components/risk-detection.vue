@@ -357,7 +357,11 @@
       });
     }
     if (data.configs.config_type === 'EventLog') {
-      fetchSystemWithAction();
+      fetchSystemWithAction({
+        scope_id: getSceneSystemParams().scope_id,
+        action_ids: 'view_system',
+        scope_type: 'scene',
+      });
     }
     if (data.configs.having && data.configs.having.conditions.length > 0) {
       // 将having条件合并到where条件中, conditions根据item.index进行排序合并

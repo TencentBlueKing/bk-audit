@@ -570,7 +570,9 @@
       if (isEditMode || isCloneMode) {
         formData.value.scope.forEach(({ field }:{field: string}) => {
           if (field === 'strategy_id' && !strategyList.value.length) {
-            fetchAllStrategyList();
+            fetchAllStrategyList({
+              scene_id: getSceneSystemParams().scope_id,
+            });
           }
         });
         if (!isPaIdChange.value) {
@@ -653,7 +655,9 @@
 
   const handleValueDicts = (val: string) => {
     if (val === 'strategy_id' && !strategyList.value.length) {
-      fetchAllStrategyList();
+      fetchAllStrategyList({
+        scene_id: getSceneSystemParams().scope_id,
+      });
     }
   };
   const handleFetchDetail = () => {

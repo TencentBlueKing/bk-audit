@@ -96,6 +96,8 @@
 
   import TableComponent from '../components/render-table.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Props{
     loading: boolean;
     tableData: Array<{
@@ -164,6 +166,11 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     manual: true,
+    defaultParams: {
+      action_ids: 'view_system',
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: 'scene',
+    },
     onSuccess(data) {
       const ids = data.map(item => item.id).join(',');
       fetchBatchSystemCollectorStatusList({
