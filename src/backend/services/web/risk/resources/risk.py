@@ -830,7 +830,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         加载指定风险视图下有权限的风险
         """
 
-        risk_cls = cls.risk_cls_map.get(risk_view_type or RiskViewType.ALL.value)
+        risk_cls = cls.risk_cls_map.get(risk_view_type)
         if not risk_cls:
             return Risk.objects.none()
         risks = risk_cls().load_risks(filter_dict)
@@ -858,6 +858,8 @@ class ListRiskTags(ListRiskMetaBase):
     def perform_request(self, validated_request_data):
         tags = Tag.objects.all().only("tag_id", "tag_name")
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
+        if not risk_view_type:
+            return tags
         scope_type = validated_request_data.pop("scope_type", None)
         scope_id = validated_request_data.pop("scope_id", None)
         scene_ids = None
@@ -883,6 +885,8 @@ class ListRiskStrategy(ListRiskMetaBase):
     def perform_request(self, validated_request_data):
         strategies: QuerySet[Strategy] = Strategy.objects.all().only("strategy_id", "strategy_name")
         risk_view_type: str = validated_request_data.pop("risk_view_type", None)
+        if not risk_view_type:
+            return strategies
         scope_type = validated_request_data.pop("scope_type", None)
         scope_id = validated_request_data.pop("scope_id", None)
         scene_ids = None
