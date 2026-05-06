@@ -145,16 +145,17 @@ class DeleteGroupMembers(IAMBaseResource):
     url_keys = ["system_id", "id"]
 
     def build_request_data(self, validated_request_data: dict) -> dict:
-        # 提取 DELETE 需要的 query 参数
-        member_type = validated_request_data.pop("type", "")
+        # 提取 DELETE 需要的 query 参数，保留 url_keys 供 build_url 使用
         member_ids = validated_request_data.pop("ids", [])
         if isinstance(member_ids, list):
             member_ids = ",".join(member_ids)
-        self._delete_params = {"type": member_type, "ids": member_ids}
+        validated_request_data["ids"] = member_ids
         return validated_request_data
 
     def before_request(self, kwargs: dict) -> dict:
-        # 将 type/ids 作为 query 参数注入
-        kwargs.pop("json", None)
-        kwargs["params"] = self._delete_params
+        # type/ids 作为 query 参数，直接将 json body 转为 params
+        params = kwargs.pop("json", {})
+        for key in self.url_keys:
+            params.pop(key, None)
+        kwargs["params"] = params
         return kwargs
