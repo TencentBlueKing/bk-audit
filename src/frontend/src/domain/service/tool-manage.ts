@@ -97,6 +97,7 @@ export default  {
   fetchAllTools(params?: {
     scope_type?: string,
     scope_id?: string,
+    status?: string,
   }) {
     return ToolManageSources.getAllTools(params)
       .then(({ data }) => data);
