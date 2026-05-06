@@ -104,6 +104,7 @@
     useSlots,
     watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
@@ -174,6 +175,7 @@
   const tableRef = ref();
   const rootRef = ref();
   const { t } = useI18n();
+  const route = useRoute();
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
@@ -234,12 +236,22 @@
             delete cleanedParams.order_type;
           }
           const pageSize = Math.max(pagination.limit, 10);
+          // 优先使用 URL query 中的场景参数，避免 sessionStorage 中 UUID 导致类型错误
+          const sceneParams = isNeedSceneParams ? {
+            scope_id: (route.query.scope_id as string) || getSceneSystemParams().scope_id,
+            scope_type: (route.query.scope_type as string) || getSceneSystemParams().scope_type,
+          } : {};
+          const sceneIdParam = isNeedSceneId ? {
+            [props.sceneIdKey]: (route.query[props.sceneIdKey] as string)
+              || (route.query.scope_id as string)
+              || getSceneSystemParams().scope_id,
+          } : {};
           const params = {
             ...cleanedParams,
             page: isUnload.value ? 1 : pagination.current,
             page_size: pageSize,
-            ...(isNeedSceneParams ? getSceneSystemParams() : {}),
-            ...(isNeedSceneId ? { [props.sceneIdKey]: getSceneSystemParams().scope_id } : {}),
+            ...sceneParams,
+            ...sceneIdParam,
           };
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
