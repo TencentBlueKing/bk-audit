@@ -68,7 +68,7 @@ class Risk(ResourceTypeMeta):
             resource.attribute = {
                 "id": str(resource.id),
                 "name": instance_name,
-                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/risk,{instance_id}/",
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
             }
             resources.append([resource])
         return resources

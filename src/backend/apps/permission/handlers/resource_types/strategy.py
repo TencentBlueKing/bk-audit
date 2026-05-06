@@ -58,7 +58,7 @@ class Strategy(ResourceTypeMeta):
         resource.attribute = {
             "id": str(instance_id),
             "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/strategy,{instance_id}/",
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
         }
         return resource
 
@@ -93,7 +93,7 @@ class LinkTable(ResourceTypeMeta):
         resource.attribute = {
             "id": str(instance_id),
             "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/link_table,{instance_id}/",
+            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
         }
         return resource
 
