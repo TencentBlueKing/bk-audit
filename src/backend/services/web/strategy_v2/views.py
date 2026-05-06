@@ -191,13 +191,16 @@ class StrategyTableViewSet(ResourceViewSet):
 
     def get_permissions(self):
         return [
-            ActionPermission(
-                actions=[
-                    ActionEnum.CREATE_STRATEGY,
-                    ActionEnum.LIST_STRATEGY,
-                    ActionEnum.EDIT_STRATEGY,
-                    ActionEnum.DELETE_STRATEGY,
-                ]
+            AnyOfPermissions(
+                IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                ActionPermission(
+                    actions=[
+                        ActionEnum.CREATE_STRATEGY,
+                        ActionEnum.LIST_STRATEGY,
+                        ActionEnum.EDIT_STRATEGY,
+                        ActionEnum.DELETE_STRATEGY,
+                    ]
+                ),
             )
         ]
 
