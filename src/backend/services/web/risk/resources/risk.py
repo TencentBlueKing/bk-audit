@@ -112,6 +112,7 @@ from services.web.risk.models import (
     RiskExperience,
     TicketNode,
     TicketPermission,
+    UserType,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -716,11 +717,11 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return (
-            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-            .filter(q, current_operator__contains=get_request_username())
-            .distinct()
-        )
+        return Risk.objects.filter(
+            q,
+            Risk.local_risk_filter(user_types=[UserType.OPERATOR]),
+            current_operator__contains=get_request_username(),
+        ).distinct()
 
 
 class ListNoticingRisk(ListRisk):
@@ -728,11 +729,11 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
-        return (
-            Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-            .filter(q, notice_users__contains=get_request_username())
-            .distinct()
-        )
+        return Risk.objects.filter(
+            q,
+            Risk.local_risk_filter(user_types=[UserType.NOTICE_USER]),
+            notice_users__contains=get_request_username(),
+        ).distinct()
 
 
 class ListProcessedRisk(ListRisk):
