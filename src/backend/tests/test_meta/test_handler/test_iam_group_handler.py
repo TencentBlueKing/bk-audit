@@ -27,7 +27,12 @@ from api.bk_iam.default import (
     GetGroupMembers,
     GrantGroupPolicies,
 )
-from apps.meta.handlers.iam_group import IAMGroupManager
+from apps.meta.handlers.iam_group import (
+    SCENE_MANAGER_GROUP_ACTIONS,
+    SCENE_VIEWER_GROUP_ACTIONS,
+    IAMGroupManager,
+)
+from apps.permission.exceptions import ActionNotExistError
 
 
 def _make_mock_action(action_id):
@@ -66,7 +71,6 @@ class TestBuildPermissions(SimpleTestCase):
             ("view_link_table", "link_table"),
             ("edit_notice_group_v2", "notice_group"),
             ("list_pa_v2", "scene"),
-            ("unknown_action", "scene"),  # 未知动作默认 scene
         ]
         for action_id, expected_type in cases:
             with self.subTest(action_id=action_id):
@@ -77,6 +81,16 @@ class TestBuildPermissions(SimpleTestCase):
                     scene_name="n",
                 )
                 self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], expected_type)
+
+    def test_unknown_action_raises_error(self):
+        """测试未知动作抛出 ActionNotExistError"""
+        with self.assertRaises(ActionNotExistError):
+            IAMGroupManager.build_permissions(
+                actions=[_make_mock_action("unknown_action")],
+                system_id="test_system",
+                scene_id="s",
+                scene_name="n",
+            )
 
     def test_mixed_actions_produce_multi_permissions(self):
         """测试混合动作类型产生多资源类型权限结构"""
@@ -136,61 +150,78 @@ class TestGroupMembersCRUD(SimpleTestCase):
             mock_delete.assert_called_once()
 
 
-class TestCreateSceneGroupsWithMembers(SimpleTestCase):
-    """测试 IAMGroupManager.create_scene_groups_with_members"""
+class TestCreateSingleGroupWithMembers(SimpleTestCase):
+    """测试 IAMGroupManager.create_single_group_with_members"""
 
     def test_success_with_members(self):
         """测试完整流程：创建用户组 + 授权 + 添加成员"""
-        with mock.patch.object(
-            CreateGradeManagerGroups,
+        with mock.patch.object(CreateGradeManagerGroups, "perform_request", return_value=[1001],), mock.patch.object(
+            GrantGroupPolicies,
             "perform_request",
-            return_value=[1001, 1002],
-        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            return_value={},
+        ), mock.patch.object(
             AddGroupMembers,
             "perform_request",
             return_value={},
         ) as mock_add:
-            result = IAMGroupManager.create_scene_groups_with_members(
+            result = IAMGroupManager.create_single_group_with_members(
+                group_name="测试场景-管理用户组",
+                group_description="测试场景 场景管理用户组",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                members=["admin"],
                 scene_id="s1",
                 scene_name="测试场景",
-                manager_members=[{"type": "user", "id": "admin"}],
-                viewer_members=[{"type": "user", "id": "viewer1"}],
             )
-            self.assertEqual(result["iam_manager_group_id"], 1001)
-            self.assertEqual(result["iam_viewer_group_id"], 1002)
-            self.assertEqual(mock_add.call_count, 2)
+            self.assertEqual(result, 1001)
+            mock_add.assert_called_once()
 
     def test_no_members_skips_add(self):
         """测试不传成员时不调用 add_group_members"""
-        with mock.patch.object(
-            CreateGradeManagerGroups,
+        with mock.patch.object(CreateGradeManagerGroups, "perform_request", return_value=[1001],), mock.patch.object(
+            GrantGroupPolicies,
             "perform_request",
-            return_value=[1001, 1002],
-        ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={},), mock.patch.object(
+            return_value={},
+        ), mock.patch.object(
             AddGroupMembers,
             "perform_request",
             return_value={},
         ) as mock_add:
-            IAMGroupManager.create_scene_groups_with_members(scene_id="s1", scene_name="测试场景")
+            IAMGroupManager.create_single_group_with_members(
+                group_name="测试场景-管理用户组",
+                group_description="测试场景 场景管理用户组",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                scene_id="s1",
+                scene_name="测试场景",
+            )
             mock_add.assert_not_called()
 
     def test_insufficient_group_ids_raises(self):
-        """测试返回的 group_id 不足 2 个时抛出 ValueError"""
-        for bad_return in ([], [1001]):
-            with self.subTest(return_value=bad_return):
-                with mock.patch.object(CreateGradeManagerGroups, "perform_request", return_value=bad_return):
-                    with self.assertRaises(ValueError):
-                        IAMGroupManager.create_scene_groups_with_members(scene_id="s1", scene_name="测试场景")
+        """测试返回的 group_id 不足 1 个时抛出 ValueError"""
+        with mock.patch.object(CreateGradeManagerGroups, "perform_request", return_value=[]):
+            with self.assertRaises(ValueError):
+                IAMGroupManager.create_single_group_with_members(
+                    group_name="测试场景-管理用户组",
+                    group_description="测试场景 场景管理用户组",
+                    group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                    scene_id="s1",
+                    scene_name="测试场景",
+                )
 
     def test_grant_failure_raises_with_group_ids(self):
         """测试授权失败时抛出 ValueError 并携带已创建的用户组 ID"""
         with mock.patch.object(
             CreateGradeManagerGroups,
             "perform_request",
-            return_value=[1001, 1002],
+            return_value=[1001],
         ), mock.patch.object(GrantGroupPolicies, "perform_request", side_effect=APIRequestError()):
             with self.assertRaises(ValueError) as ctx:
-                IAMGroupManager.create_scene_groups_with_members(scene_id="s1", scene_name="测试场景")
+                IAMGroupManager.create_single_group_with_members(
+                    group_name="测试场景-管理用户组",
+                    group_description="测试场景 场景管理用户组",
+                    group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                    scene_id="s1",
+                    scene_name="测试场景",
+                )
             self.assertIn("1001", str(ctx.exception))
 
 
@@ -248,29 +279,33 @@ class TestSyncGroupMembers(SimpleTestCase):
 
 
 class TestCreateIamGroupsIntegration(SimpleTestCase):
-    """集成测试：CreateScene._create_iam_groups"""
+    """集成测试：分别调用 create_single_group_with_members 创建管理组和使用组"""
 
     def test_create_iam_groups_success(self):
-        """测试成功创建用户组并回写 scene 字段"""
-        from services.web.scene.resources import CreateScene
-
-        scene = mock.MagicMock()
-        scene.scene_id = 1
-        scene.name = "测试场景"
-        scene.managers = ["admin"]
-        scene.users = ["viewer1"]
-        scene.iam_manager_group_id = None
-        scene.iam_viewer_group_id = None
-
+        """测试分别创建管理用户组和使用用户组并返回正确的 group id"""
         with mock.patch.object(
-            CreateGradeManagerGroups, "perform_request", return_value=[2001, 2002]
+            CreateGradeManagerGroups, "perform_request", side_effect=[[2001], [2002]]
         ), mock.patch.object(GrantGroupPolicies, "perform_request", return_value={}), mock.patch.object(
             AddGroupMembers, "perform_request", return_value={}
         ) as mock_add:
-            CreateScene._create_iam_groups(scene)
-            self.assertEqual(scene.iam_manager_group_id, 2001)
-            self.assertEqual(scene.iam_viewer_group_id, 2002)
-            scene.save.assert_called_once_with(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+            manager_group_id = IAMGroupManager.create_single_group_with_members(
+                group_name="测试场景-管理用户组",
+                group_description="测试场景 场景管理用户组",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                members=[{"type": "user", "id": "admin"}],
+                scene_id="1",
+                scene_name="测试场景",
+            )
+            viewer_group_id = IAMGroupManager.create_single_group_with_members(
+                group_name="测试场景-使用用户组",
+                group_description="测试场景 场景使用用户组",
+                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+                members=[{"type": "user", "id": "viewer1"}],
+                scene_id="1",
+                scene_name="测试场景",
+            )
+            self.assertEqual(manager_group_id, 2001)
+            self.assertEqual(viewer_group_id, 2002)
             self.assertEqual(mock_add.call_count, 2)
 
 

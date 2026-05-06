@@ -19,22 +19,20 @@ class TestGetScenePermissionTables(TestCase):
 
         result = self.resource.perform_request({'scene_id': 1})
 
-        self.assertEqual(
-            result,
-            [
-                {'table_id': 'table1'},
-                {'table_id': 'table2'},
-            ],
-        )
+        # 返回白名单内的 table_id 列表
+        self.assertEqual(len(result), 2)
+        table_ids = {item['table_id'] for item in result}
+        self.assertEqual(table_ids, {'table1', 'table2'})
         mock_get_table_ids.assert_called_once_with(1)
 
     @patch.object(SceneDataFilter, 'get_table_ids')
     def test_perform_request_no_tables(self, mock_get_table_ids):
-        """测试场景没有配置数据表的情况，应返回空列表"""
+        """测试场景没有配置数据表时，返回空列表"""
         mock_get_table_ids.return_value = []
 
         result = self.resource.perform_request({'scene_id': 1})
 
+        # 白名单为空，返回空列表
         self.assertEqual(result, [])
         mock_get_table_ids.assert_called_once_with(1)
 
@@ -44,12 +42,16 @@ class TestGetScenePermissionTables(TestCase):
         serializer = self.resource.RequestSerializer(data={'scene_id': 1})
         self.assertTrue(serializer.is_valid())
 
-        # 缺少必填字段
+        # 缺少必填字段 scene_id
         serializer = self.resource.RequestSerializer(data={})
         self.assertFalse(serializer.is_valid())
         self.assertIn('scene_id', serializer.errors)
 
     def test_response_serializer_structure(self):
-        """测试响应序列化器结构"""
-        serializer = self.resource.ResponseSerializer(data={'table_id': 'test_table'})
-        self.assertTrue(serializer.is_valid())
+        """测试响应序列化器结构：many_response_data=True 表示返回列表数据"""
+        # 验证资源类的基本属性配置正确
+        self.assertTrue(self.resource.many_response_data)
+
+        # 验证 ResponseSerializer 能正确序列化数据
+        response_serializer = self.resource.ResponseSerializer(data={'table_id': 'test_table'})
+        self.assertTrue(response_serializer.is_valid())
