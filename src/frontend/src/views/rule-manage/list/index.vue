@@ -781,7 +781,7 @@
   };
 
   const handleSceneChange = () => {
-    listRef.value.fetchData();
+    fetchList();
   };
 
   onMounted(() => {

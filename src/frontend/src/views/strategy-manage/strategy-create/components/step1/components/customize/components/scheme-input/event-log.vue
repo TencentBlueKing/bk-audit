@@ -63,6 +63,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Expose {
     resetFormData: () => void,
     setConfigs: (config: Array<string>) => void;
@@ -83,6 +85,11 @@
     data: systemList,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
+    defaultParams: {
+      action_ids: 'view_system',
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: 'scene',
+    },
     manual: true,
     onSuccess(data) {
       const ids = data.map(item => item.id).join(',');

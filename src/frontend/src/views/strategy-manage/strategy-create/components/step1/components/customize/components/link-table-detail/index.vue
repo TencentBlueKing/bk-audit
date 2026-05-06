@@ -307,7 +307,11 @@
     (newLinks: LinkDataDetailModel['config']['links']) => {
       if (newLinks) {
         // 获取系统
-        fetchSystemWithAction();
+        fetchSystemWithAction({
+          scope_id: getSceneSystemParams().scope_id,
+          action_ids: 'view_system',
+          scope_type: 'scene',
+        });
         uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
         fetchTableTypeData();
       }

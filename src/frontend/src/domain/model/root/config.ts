@@ -67,6 +67,7 @@ export default class Config {
   };
   third_doc_url: {
     search_rule_iwiki_url: string;
+    scene_iwiki_url: string;
   };
   metric: {
     metric_report_trace_url: string;

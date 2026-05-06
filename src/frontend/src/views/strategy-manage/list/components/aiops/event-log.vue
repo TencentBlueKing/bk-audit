@@ -126,6 +126,7 @@
     loading: isSystemListLoading,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
+    defaultParams: { action_ids: 'view_system' },
     manual: true,
     onSuccess(data) {
       data.forEach((item) => {

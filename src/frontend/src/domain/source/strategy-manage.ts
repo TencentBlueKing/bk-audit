@@ -67,11 +67,13 @@ class Strategy extends ModuleBase {
     });
   }
   // 获取所有策略下拉列表
-  getAllStrategyList() {
+  getAllStrategyList(params: {
+    scene_id?: string
+  }) {
     return Request.get<Array<{
       label: string,
       value: number
-    }>>(`${this.path}/strategy/all/`);
+    }>>(`${this.path}/strategy/all/`, { params });
   }
   // 获取权限下所有策略下拉列表
   getScopedStrategyList(params: Record<string, any>) {
