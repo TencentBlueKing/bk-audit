@@ -22,6 +22,7 @@ from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 
+from apps.permission.handlers.actions import get_action_by_id
 from apps.permission.handlers.actions.action import ActionEnum
 
 # 场景管理用户组拥有的操作列表
@@ -89,40 +90,11 @@ class IAMGroupManager:
         for action in actions:
             action_id = action["id"]
 
-            # 确定每个动作的资源类型
-            resource_type = "scene"  # 默认资源类型
-
-            # 场景相关动作使用 scene 资源类型
-            if action_id in ["view_scene", "manage_scene"]:
-                resource_type = "scene"
-            # 策略相关动作使用 scene 资源类型
-            elif action_id in [
-                "edit_strategy",
-                "delete_strategy",
-                "generate_strategy_risk",
-            ]:
-                resource_type = "strategy"
-            elif action_id in ["list_strategy_v2", "create_strategy_v2"]:
-                resource_type = "scene"
-            # 风险相关动作使用 risk 资源类型
-            elif action_id in ["list_risk_v2", "edit_risk_v2", "process_risk"]:
-                resource_type = "risk"
-            # 规则相关动作使用 scene 资源类型（根据动作定义）
-            elif action_id in ["list_rule_v2", "create_rule_v2", "edit_rule_v2", "delete_rule_v2"]:
-                resource_type = "scene"
-            # 联表相关动作根据动作定义使用不同的资源类型
-            elif action_id in ["list_link_table_v2", "create_link_table_v2"]:
-                resource_type = "scene"
-            elif action_id in ["view_link_table", "edit_link_table", "delete_link_table"]:
-                resource_type = "link_table"
-            # 通知组相关动作根据动作定义使用不同的资源类型
-            elif action_id in ["list_notice_group_v2", "create_notice_group_v2"]:
-                resource_type = "scene"
-            elif action_id in ["edit_notice_group_v2", "delete_notice_group_v2"]:
-                resource_type = "notice_group"
-            # 套餐相关动作使用 scene 资源类型（根据动作定义）
-            elif action_id in ["list_pa_v2", "create_pa_v2", "edit_pa_v2"]:
-                resource_type = "scene"
+            # 从 ActionEnum 定义中获取关联的资源类型
+            action_meta = get_action_by_id(action_id)
+            if not action_meta.related_resource_types:
+                raise ValueError(f"Action {action_id} 未定义 related_resource_types，无法构建权限")
+            resource_type = action_meta.related_resource_types[0].id
 
             # 按资源类型分组动作
             if resource_type not in action_groups:
@@ -237,15 +209,13 @@ class IAMGroupManager:
 
         if expired_at is None:
             expired_at = int(time.time()) + 31536000
-        """
-        添加用户组成员
-        """
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
+        formatted_members = [{"type": "user", "id": m} for m in members]
         try:
             api.bk_iam.add_group_members(
                 system_id=system_id,
                 id=group_id,
-                members=members,
+                members=formatted_members,
                 expired_at=expired_at,
             )
         except Exception as e:
@@ -286,181 +256,146 @@ class IAMGroupManager:
             raise
 
     @classmethod
-    def create_scene_groups_with_members(
+    def create_single_group_with_members(
         cls,
-        scene_id: str,
-        scene_name: str,
-        manager_members: list = None,
-        viewer_members: list = None,
+        group_name: str,
+        group_description: str,
+        group_actions: list,
+        members: list = None,
+        scene_id: str = None,
+        scene_name: str = None,
         expired_at: int = None,
         system_id: str = None,
-    ) -> dict:
+    ) -> int:
         """
-        创建场景用户组、授权并添加成员
-        """
-        # 参数验证
-        if scene_name is None:
-            raise TypeError("scene_name cannot be None")
+        创建单个用户组、授权并添加成员
 
+        :return: 创建的用户组 ID
+        """
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
         grade_manager_id = "-"
 
-        # 1. 构建需要创建的用户组列表
-        groups = [
-            {
-                "name": f"{scene_name}-管理用户组",
-                "description": f"{scene_name} 场景管理用户组，拥有查看和管理场景权限",
-            },
-            {
-                "name": f"{scene_name}-使用用户组",
-                "description": f"{scene_name} 场景使用用户组，拥有查看场景权限",
-            },
-        ]
-
-        # 2. 创建用户组
+        # 1. 创建用户组
+        group_def = [{"name": group_name, "description": group_description}]
         try:
             created_group_ids = api.bk_iam.create_grade_manager_groups(
                 system_id=system_id,
                 id=grade_manager_id,
-                groups=groups,
+                groups=group_def,
             )
         except Exception as e:
             logger.error(
-                "[create_scene_groups_with_members] 创建场景用户组失败, scene_name=%s, error=%s",
-                scene_name,
+                "[create_single_group_with_members] 创建用户组失败, group_name=%s, error=%s",
+                group_name,
                 e,
             )
             raise
 
+        if not created_group_ids or len(created_group_ids) < 1:
+            raise ValueError(f"创建用户组返回数据异常, 期望1个用户组ID, 实际返回: {created_group_ids}")
+
+        group_id = created_group_ids[0]
         logger.info(
-            "[create_scene_groups_with_members] 创建用户组成功, groups=%s, result=%s",
-            [g["name"] for g in groups],
-            created_group_ids,
+            "[create_single_group_with_members] 创建用户组成功, group_name=%s, group_id=%s",
+            group_name,
+            group_id,
         )
 
-        if not created_group_ids or len(created_group_ids) < 2:
-            raise ValueError(f"创建场景用户组返回数据异常, 期望2个用户组ID, 实际返回: {created_group_ids}")
+        # 2. 为用户组授权
+        permissions = cls.build_permissions(
+            actions=group_actions,
+            system_id=system_id,
+            scene_id=scene_id,
+            scene_name=scene_name,
+        )
 
-        iam_manager_group_id = created_group_ids[0]
-        iam_viewer_group_id = created_group_ids[1]
-
-        # 3. 为用户组授权
-        grant_configs = [
-            (iam_manager_group_id, SCENE_MANAGER_GROUP_ACTIONS, "管理用户组"),
-            (iam_viewer_group_id, SCENE_VIEWER_GROUP_ACTIONS, "使用用户组"),
-        ]
-        granted_group_ids = []
-        for group_id, group_actions, group_label in grant_configs:
-            permissions = cls.build_permissions(
-                actions=group_actions,
-                system_id=system_id,
-                scene_id=scene_id,
-                scene_name=scene_name,
-            )
-
-            # 处理多资源类型权限请求
-            if "_multi_permissions" in permissions:
-                # 多资源类型：为每个资源类型单独调用授权接口
-                for permission in permissions["_multi_permissions"]:
-                    try:
-                        api.bk_iam.grant_group_policies(
-                            system_id=system_id,
-                            id=group_id,
-                            actions=permission["actions"],
-                            resources=permission["resources"],
-                        )
-                    except Exception as e:
-                        logger.error(
-                            "[create_scene_groups_with_members] %s授权失败, group_id=%s, error=%s, "
-                            "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
-                            group_label,
-                            group_id,
-                            e,
-                            created_group_ids,
-                            granted_group_ids,
-                        )
-                        raise ValueError(
-                            f"授权失败: {group_label}(group_id={group_id}), "
-                            f"已创建的用户组IDs: {created_group_ids}, "
-                            f"已授权成功的用户组IDs: {granted_group_ids}, "
-                            f"错误: {e}"
-                        ) from e
-            else:
-                # 单资源类型：保持原有逻辑
+        if "_multi_permissions" in permissions:
+            # 多资源类型：为每个资源类型单独调用授权接口
+            for permission in permissions["_multi_permissions"]:
                 try:
                     api.bk_iam.grant_group_policies(
                         system_id=system_id,
                         id=group_id,
-                        actions=permissions["actions"],
-                        resources=permissions["resources"],
+                        actions=permission["actions"],
+                        resources=permission["resources"],
                     )
                 except Exception as e:
                     logger.error(
-                        "[create_scene_groups_with_members] %s授权失败, group_id=%s, error=%s, "
-                        "已创建的用户组IDs=%s, 已授权成功的用户组IDs=%s",
-                        group_label,
+                        "[create_single_group_with_members] %s授权失败, group_id=%s, error=%s",
+                        group_name,
                         group_id,
                         e,
-                        created_group_ids,
-                        granted_group_ids,
                     )
-                    raise ValueError(
-                        f"授权失败: {group_label}(group_id={group_id}), "
-                        f"已创建的用户组IDs: {created_group_ids}, "
-                        f"已授权成功的用户组IDs: {granted_group_ids}, "
-                        f"错误: {e}"
-                    ) from e
-
-            granted_group_ids.append(group_id)
-            logger.info(
-                "[create_scene_groups_with_members] %s授权成功, group_id=%s, 资源类型数量=%s",
-                group_label,
-                group_id,
-                len(permissions.get("_multi_permissions", [])) if "_multi_permissions" in permissions else 1,
-            )
-
-        # 4. 为管理用户组添加成员
-        if manager_members:
-            cls.add_group_members(
-                group_id=iam_manager_group_id,
-                members=manager_members,
-                expired_at=expired_at,
-                system_id=system_id,
-            )
-
-        # 5. 为使用用户组添加成员
-        if viewer_members:
-            cls.add_group_members(
-                group_id=iam_viewer_group_id,
-                members=viewer_members,
-                expired_at=expired_at,
-                system_id=system_id,
-            )
+                    raise ValueError(f"授权失败: {group_name}(group_id={group_id}), 错误: {e}") from e
+        else:
+            # 单资源类型：保持原有逻辑
+            try:
+                api.bk_iam.grant_group_policies(
+                    system_id=system_id,
+                    id=group_id,
+                    actions=permissions["actions"],
+                    resources=permissions["resources"],
+                )
+            except Exception as e:
+                logger.error(
+                    "[create_single_group_with_members] %s授权失败, group_id=%s, error=%s",
+                    group_name,
+                    group_id,
+                    e,
+                )
+                raise ValueError(f"授权失败: {group_name}(group_id={group_id}), 错误: {e}") from e
 
         logger.info(
-            "[create_scene_groups_with_members] 场景用户组创建完成, scene_id=%s, "
-            "iam_manager_group_id=%s, iam_viewer_group_id=%s",
-            scene_id,
-            iam_manager_group_id,
-            iam_viewer_group_id,
+            "[create_single_group_with_members] %s授权成功, group_id=%s, 资源类型数量=%s",
+            group_name,
+            group_id,
+            len(permissions.get("_multi_permissions", [])) if "_multi_permissions" in permissions else 1,
         )
-        return {
-            "iam_manager_group_id": iam_manager_group_id,
-            "iam_viewer_group_id": iam_viewer_group_id,
-        }
+
+        # 3. 添加成员
+        if members:
+            cls.add_group_members(
+                group_id=group_id,
+                members=members,
+                expired_at=expired_at,
+                system_id=system_id,
+            )
+
+        return group_id
 
     @classmethod
     def sync_group_members(
         cls,
-        group_id: Union[int, str],
+        group_id: Union[int, str, None],
         members: list,
         expired_at: int = None,
         system_id: str = None,
-    ) -> None:
+        # 以下参数仅在 group_id 为空（用户组尚未创建）时使用
+        group_name: str = None,
+        group_description: str = None,
+        group_actions: list = None,
+        scene_id: str = None,
+        scene_name: str = None,
+    ) -> Union[int, None]:
         """
-        同步用户组成员（先删除全部原有成员，再添加新成员）
+        同步用户组成员（先删除全部原有成员，再添加新成员）。
+        如果 group_id 为空，则先创建用户组并返回新的 group_id。
         """
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
+
+        # 用户组不存在，先创建
+        if not group_id:
+            new_group_id = cls.create_single_group_with_members(
+                group_name=group_name,
+                group_description=group_description,
+                group_actions=group_actions,
+                members=members,
+                scene_id=scene_id,
+                scene_name=scene_name,
+                expired_at=expired_at,
+                system_id=system_id,
+            )
+            return new_group_id
 
         # 1. 分页获取当前用户组全部成员
         current_members = cls.get_all_group_members(
@@ -499,3 +434,4 @@ class IAMGroupManager:
             group_id,
             len(members),
         )
+        return None

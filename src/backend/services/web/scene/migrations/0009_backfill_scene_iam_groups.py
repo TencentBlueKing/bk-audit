@@ -3,7 +3,7 @@
 为存量场景补建 IAM 用户组
 
 对所有 iam_manager_group_id 或 iam_viewer_group_id 为空的场景，
-调用 IAMGroupManager.create_scene_groups_with_members 创建用户组并回写 ID。
+调用 IAMGroupManager.create_single_group_with_members 分别创建管理和使用用户组并回写 ID。
 """
 import logging
 
@@ -16,7 +16,11 @@ def backfill_scene_iam_groups(apps, schema_editor):
     """为缺少 IAM 用户组 ID 的存量场景补建用户组"""
     from django.db.models import Q
 
-    from apps.meta.handlers.iam_group import IAMGroupManager
+    from apps.meta.handlers.iam_group import (
+        SCENE_MANAGER_GROUP_ACTIONS,
+        SCENE_VIEWER_GROUP_ACTIONS,
+        IAMGroupManager,
+    )
 
     Scene = apps.get_model("scene", "Scene")
     scenes = Scene.objects.filter(Q(iam_manager_group_id__isnull=True) | Q(iam_viewer_group_id__isnull=True))
@@ -32,14 +36,22 @@ def backfill_scene_iam_groups(apps, schema_editor):
 
     for scene in scenes:
         try:
-            group_ids = IAMGroupManager.create_scene_groups_with_members(
+            scene.iam_manager_group_id = IAMGroupManager.create_single_group_with_members(
+                group_name=f"{scene.name}-管理用户组",
+                group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                members=scene.managers or None,
                 scene_id=str(scene.scene_id),
                 scene_name=scene.name,
-                manager_members=([{"type": "user", "id": m} for m in scene.managers] if scene.managers else None),
-                viewer_members=([{"type": "user", "id": u} for u in scene.users] if scene.users else None),
             )
-            scene.iam_manager_group_id = group_ids["iam_manager_group_id"]
-            scene.iam_viewer_group_id = group_ids["iam_viewer_group_id"]
+            scene.iam_viewer_group_id = IAMGroupManager.create_single_group_with_members(
+                group_name=f"{scene.name}-使用用户组",
+                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+                members=scene.users or None,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
+            )
             scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
             success_count += 1
             logger.info(

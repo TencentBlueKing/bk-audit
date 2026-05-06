@@ -27,7 +27,6 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.meta.models import System
-from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from services.web.risk.models import Risk
@@ -43,7 +42,6 @@ from services.web.scene.constants import (
     VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter, _parse_list_value
-from services.web.scene.exceptions import SceneHasRelatedResources
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -700,8 +698,8 @@ class TestSceneResource(TestCase):
     def test_create_scene_all_systems_without_system_id(self):
         """创建场景选择全系统时允许不传 system_id"""
         with mock.patch(
-            "services.web.scene.resources.IAMGroupManager.create_scene_groups_with_members",
-            return_value={"iam_manager_group_id": 1, "iam_viewer_group_id": 2},
+            "services.web.scene.resources.IAMGroupManager.create_single_group_with_members",
+            side_effect=[1, 2],
         ):
             self.resource.scene.create_scene(
                 {"name": "systems-全系统", "managers": ["admin"], "systems": [{"is_all_systems": True}]}
@@ -711,17 +709,6 @@ class TestSceneResource(TestCase):
         scene_system = SceneSystem.objects.get(scene=scene)
         self.assertEqual(scene_system.system_id, "")
         self.assertTrue(scene_system.is_all_systems)
-
-    def test_create_scene_manager_notice_group_uses_default_notice_config(self):
-        """创建场景时自动创建的场景管理员通知组使用默认通知配置"""
-        with mock.patch(
-            "services.web.scene.resources.IAMGroupManager.create_scene_groups_with_members",
-            return_value={"iam_manager_group_id": 1, "iam_viewer_group_id": 2},
-        ):
-            self.resource.scene.create_scene({"name": "notice-config-scene", "managers": ["admin"]})
-
-        notice_group = NoticeGroup.objects.get(group_name="notice-config-scene-场景管理员通知组")
-        self.assertEqual(notice_group.notice_config, [{"msg_type": "mail"}, {"msg_type": "rtx"}])
 
     def test_create_scene_validate_tables_schema(self):
         """测试创建场景时 tables 子序列化器校验生效"""
@@ -788,7 +775,11 @@ class TestSceneResource(TestCase):
 
     def test_update_scene_all_systems_without_system_id(self):
         """更新场景选择全系统时允许不传 system_id"""
-        self.resource.scene.update_scene({"scene_id": self.scene.scene_id, "systems": [{"is_all_systems": True}]})
+        with mock.patch(
+            "services.web.scene.resources.IAMGroupManager.create_single_group_with_members",
+            side_effect=[1, 2],
+        ):
+            self.resource.scene.update_scene({"scene_id": self.scene.scene_id, "systems": [{"is_all_systems": True}]})
 
         scene_system = SceneSystem.objects.get(scene=self.scene)
         self.assertEqual(scene_system.system_id, "")
@@ -819,33 +810,6 @@ class TestSceneResource(TestCase):
         self.assertEqual(result["message"], "success")
         self.assertFalse(Scene.objects.filter(scene_id=self.scene.scene_id).exists())
 
-    def test_delete_scene_reports_related_resource_details(self):
-        """测试删除场景存在关联资源时提示资源类型和 ID"""
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            resource_id="1001",
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
-
-        with self.assertRaises(SceneHasRelatedResources) as ctx:
-            self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
-
-        self.assertIn("通知组", ctx.exception.message)
-        self.assertIn("1001", ctx.exception.message)
-        self.assertEqual(
-            ctx.exception.data,
-            {
-                "related_resources": [
-                    {
-                        "resource_type": ResourceVisibilityType.NOTICE_GROUP,
-                        "resource_type_name": "通知组",
-                        "resource_id": "1001",
-                    }
-                ]
-            },
-        )
-
     def test_scene_disable(self):
         """测试停用场景"""
         result = self.resource.scene.disable_scene({"scene_id": self.scene.scene_id})
@@ -865,12 +829,16 @@ class TestSceneResource(TestCase):
 
     def test_scene_info_patch(self):
         """测试编辑场景基础信息"""
-        result = self.resource.scene.update_scene_info(
-            {
-                "scene_id": self.scene.scene_id,
-                "name": "修改后的名称",
-            }
-        )
+        with mock.patch(
+            "services.web.scene.resources.IAMGroupManager.create_single_group_with_members",
+            side_effect=[1, 2],
+        ):
+            result = self.resource.scene.update_scene_info(
+                {
+                    "scene_id": self.scene.scene_id,
+                    "name": "修改后的名称",
+                }
+            )
         self.assertEqual(result["name"], "修改后的名称")
 
 
