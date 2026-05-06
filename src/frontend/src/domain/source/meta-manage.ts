@@ -108,17 +108,6 @@ class MetaManage extends ModuleBase {
     scope_id?: string;
     scope_type?: string;
   }, payload = {} as IRequestPayload) {
-    // const finalParams = { ...params };
-    // // 如果没有传入scope_id和scope_type，则从getSceneSystemParams获取
-    // if (!finalParams.scope_id || !finalParams.scope_type) {
-    //   const sceneParams = getSceneSystemParams();
-    //   if (!finalParams.scope_id) {
-    //     finalParams.scope_id = sceneParams.scope_id;
-    //   }
-    //   if (!finalParams.scope_type) {
-    //     finalParams.scope_type = sceneParams.scope_type;
-    //   }
-    // }
     return Request.get<Array<EventSourceAppModel>>(`${this.path}/systems/all/`, {
       params,
       payload,
