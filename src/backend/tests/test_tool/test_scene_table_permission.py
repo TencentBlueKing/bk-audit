@@ -253,57 +253,54 @@ class TestCheckTablePermission(TestCase):
 
     def test_empty_referenced_tables(self):
         """测试引用表为空时直接通过"""
-        SqlDataSearchExecutor.check_table_permission([], set(), 'test_user')
+        SqlDataSearchExecutor.check_table_permission([], tool=None)
 
     def test_all_tables_in_scene(self):
         """测试所有表都在场景授权范围内时直接通过，不调用 API"""
-        tables = [Table(table_name='t1'), Table(table_name='t2')]
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
-            SqlDataSearchExecutor.check_table_permission(tables, {'t1', 't2'}, 'test_user')
+        tables = ['t1', 't2']
+        mock_tool = MagicMock()
+        mock_tool.uid = 'test_tool_uid'
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['t1', 't2']
+        ), patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
+            SqlDataSearchExecutor.check_table_permission(tables, tool=mock_tool)
             mock_auth.assert_not_called()
 
     def test_no_scene_tables_user_authorized(self):
-        """测试无场景授权表，用户个人有权限时通过"""
-        tables = [Table(table_name='t1')]
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
-            mock_auth.return_value = [
-                {'user_id': 'test_user', 'object_id': 't1', 'result': True},
-            ]
-            SqlDataSearchExecutor.check_table_permission(tables, set(), 'test_user')
-            mock_auth.assert_called_once()
+        """测试无场景授权（tool=None）时，返回全部表供后续校验"""
+        tables = ['t1']
+        result = SqlDataSearchExecutor.check_table_permission(tables, tool=None)
+        # tool=None 时 scene_id 为 None，所有表都需要校验
+        self.assertEqual(result, ['t1'])
 
-    def test_no_scene_tables_user_denied(self):
-        """测试无场景授权表，用户个人也没有权限时抛出异常"""
-        tables = [Table(table_name='t1')]
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
-            mock_auth.return_value = [
-                {'user_id': 'test_user', 'object_id': 't1', 'result': False},
-            ]
-            with self.assertRaises(DataSearchTablePermission):
-                SqlDataSearchExecutor.check_table_permission(tables, set(), 'test_user')
+    def test_no_scene_tables_returns_all(self):
+        """测试无场景授权（tool=None）时，返回全部表"""
+        tables = ['t1', 't2']
+        result = SqlDataSearchExecutor.check_table_permission(tables, tool=None)
+        # tool=None 时所有表都需要后续校验
+        self.assertEqual(result, ['t1', 't2'])
 
     def test_partial_scene_auth_remaining_user_authorized(self):
-        """测试部分场景授权，剩余表用户有权限时通过"""
-        tables = [Table(table_name='t1'), Table(table_name='t2'), Table(table_name='t3')]
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
-            mock_auth.return_value = [
-                {'user_id': 'user1', 'object_id': 't2', 'result': True},
-                {'user_id': 'user1', 'object_id': 't3', 'result': True},
-            ]
-            SqlDataSearchExecutor.check_table_permission(tables, {'t1'}, 'user1')
+        """测试部分场景授权，返回未被场景授权的表"""
+        tables = ['t1', 't2', 't3']
+        mock_tool = MagicMock()
+        mock_tool.uid = 'test_tool_uid'
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['t1']
+        ):
+            result = SqlDataSearchExecutor.check_table_permission(tables, tool=mock_tool)
 
-            # 只校验 t2 和 t3
-            call_args = mock_auth.call_args
-            permissions = call_args[0][0]['permissions'] if call_args[0] else call_args[1]['permissions']
-            checked_tables = {p['object_id'] for p in permissions}
-            self.assertEqual(checked_tables, {'t2', 't3'})
+            # t1 被场景授权，只返回 t2 和 t3 供后续校验
+            self.assertEqual(set(result), {'t2', 't3'})
 
-    def test_partial_scene_auth_remaining_user_denied(self):
-        """测试部分场景授权，剩余表用户没有权限时抛出异常"""
-        tables = [Table(table_name='t1'), Table(table_name='t2')]
-        with patch('services.web.tool.executor.tool.api.bk_base.user_auth_batch_check') as mock_auth:
-            mock_auth.return_value = [
-                {'user_id': 'user1', 'object_id': 't2', 'result': False},
-            ]
-            with self.assertRaises(DataSearchTablePermission):
-                SqlDataSearchExecutor.check_table_permission(tables, {'t1'}, 'user1')
+    def test_partial_scene_auth_remaining_returned(self):
+        """测试部分场景授权，返回未被场景授权的表供后续校验"""
+        tables = ['t1', 't2']
+        mock_tool = MagicMock()
+        mock_tool.uid = 'test_tool_uid'
+        with patch.object(SqlDataSearchExecutor, '_get_tool_scene_id', return_value=1), patch(
+            'services.web.tool.executor.tool.SceneDataFilter.get_table_ids', return_value=['t1']
+        ):
+            result = SqlDataSearchExecutor.check_table_permission(tables, tool=mock_tool)
+            # t1 被场景授权，只返回 t2 供后续校验
+            self.assertEqual(result, ['t2'])

@@ -75,6 +75,7 @@ from services.web.tool.constants import (
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import (
+    DataSearchTablePermission,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
@@ -1155,10 +1156,21 @@ class SqlAnalyseResource(ToolBase, Resource):
         parsed_def = analyser.get_parsed_def()
         result = parsed_def.model_dump()
 
-        # 场景表权限校验：场景授权的表 OR 管理员个人有权限的表
+        # 场景表权限校验：场景授权的表 OR 工具责任人有权限的表
         scene_id = validated_request_data.get("scene_id")
         if scene_id and result['referenced_tables']:
-            self._validate_scene_table_permission(scene_id, result['referenced_tables'])
+            authorized = set(SceneDataFilter.get_table_ids(scene_id))
+            tables_need_check = [
+                t['table_name'] for t in result['referenced_tables'] if t['table_name'] not in authorized
+            ]
+            if tables_need_check:
+                user_id = self.get_permission_owner(validated_request_data, parsed_def)
+                bulk_resp = resource.tool.user_query_table_auth_check(
+                    {"tables": tables_need_check, "username": user_id}
+                )
+                for rt in bulk_resp:
+                    if not rt.get("result"):
+                        raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
 
         # 检查用户对引用表的查询权限
         if validated_request_data["with_permission"] and result['referenced_tables']:
@@ -1172,25 +1184,6 @@ class SqlAnalyseResource(ToolBase, Resource):
             for table in result['referenced_tables']:
                 table['permission'] = auth_results[table['table_name']]
         return result
-
-    def _validate_scene_table_permission(self, scene_id: int, referenced_tables: list):
-        """
-        校验SQL中引用的表权限：场景授权的表 OR 管理员个人有权限的表
-        """
-        from services.web.tool.executor.tool import SqlDataSearchExecutor
-
-        # 获取场景授权的表
-        scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
-
-        # 构造带 table_name 属性的对象列表，以复用 check_table_permission
-        table_objs = [type('Table', (), {'table_name': t['table_name']})() for t in referenced_tables]
-
-        # 场景授权 OR 个人权限，满足其一即可
-        SqlDataSearchExecutor.check_table_permission(
-            referenced_tables=table_objs,
-            scene_authorized_tables=scene_authorized_tables,
-            user_id=get_request_username(),
-        )
 
 
 class SqlAnalyseWithToolResource(SqlAnalyseResource):

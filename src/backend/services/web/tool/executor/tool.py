@@ -210,54 +210,49 @@ class SqlDataSearchExecutor(
         )
 
     @staticmethod
-    def check_table_permission(referenced_tables: list, scene_authorized_tables: set, user_id: str):
+    def check_table_permission(referenced_tables: List[str], tool=None) -> List[str]:
         """
-        公共表权限校验：场景授权的表 OR 用户个人有权限的表
+        场景工具表权限过滤：根据工具所属场景的授权范围，过滤出需要进一步校验用户权限的表。
+        - 场景工具（tool 不为 None）：通过 tool.uid 查找关联场景
         """
+        if not referenced_tables:
+            return []
+
+        scene_id = SqlDataSearchExecutor._get_tool_scene_id(tool.uid) if tool else None
+
+        if scene_id is not None:
+            # 场景授权的表无需检查，只检查未授权的部分
+            authorized = set(SceneDataFilter.get_table_ids(scene_id))
+            return [t for t in referenced_tables if t not in authorized]
+
+        return referenced_tables
+
+    def validate_permission(self, params: DataSearchToolExecuteParams):
+        """
+        校验权限: 校验工具更新人 or 当前请求用户有表查询条件
+        """
+        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
+        referenced_tables = self.analyzer.get_parsed_def().referenced_tables
         if not referenced_tables:
             return
 
-        # 筛选出未被场景授权的表，需要进一步校验用户个人权限
-        tables_need_user_check = [
-            table for table in referenced_tables if table.table_name not in scene_authorized_tables
-        ]
-
-        # 如果所有表都在场景授权范围内，直接通过
-        if not tables_need_user_check:
+        tables_to_check = self.check_table_permission([t.table_name for t in referenced_tables], self.tool)
+        if not tables_to_check:
             return
 
-        # 对未被场景授权的表，校验用户个人权限
         permissions = [
             {
                 "user_id": user_id,
                 "action_id": UserAuthActionEnum.RT_QUERY.value,
-                "object_id": table.table_name,
+                "object_id": table,
             }
-            for table in tables_need_user_check
+            for table in tables_to_check
         ]
         bulk_resp = api.bk_base.user_auth_batch_check({"permissions": permissions})
         for rt in bulk_resp:
             if rt.get("result"):
                 continue
             raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
-
-    def validate_permission(self, params: DataSearchToolExecuteParams):
-        """
-        校验权限: 校验工具引用的表是否有权限
-        """
-        parsed_def = self.analyzer.get_parsed_def()
-        referenced_tables = parsed_def.referenced_tables
-        if not referenced_tables:
-            return
-
-        # 获取工具关联的场景授权表
-        scene_authorized_tables = set()
-        if self.tool:
-            scene_id = self._get_tool_scene_id(self.tool.uid)
-            if scene_id is not None:
-                scene_authorized_tables = set(SceneDataFilter.get_table_ids(scene_id))
-
-        self.check_table_permission(referenced_tables, scene_authorized_tables, get_request_username())
 
     def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
         """
