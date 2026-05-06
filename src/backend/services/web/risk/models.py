@@ -223,14 +223,15 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         return Q(pk__in=[])
 
     @classmethod
-    def local_risk_filter(cls) -> Q:
+    def local_risk_filter(cls, user_types: Optional[List[UserType]] = None) -> Q:
         """
         本地权限：通过 TicketPermission 授权的风险（处理人/关注人）
         """
 
+        user_types = user_types or [UserType.NOTICE_USER, UserType.OPERATOR]
         return Q(
             risk_id__in=TicketPermission.objects.filter(
-                user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
+                user_type__in=user_types,
                 user=get_request_username(),
                 action=ActionEnum.LIST_RISK.id,
             ).values("risk_id")
@@ -551,6 +552,9 @@ class TicketPermission(models.Model):
         verbose_name_plural = verbose_name
         ordering = ["-id"]
         unique_together = [["risk_id", "action", "user", "user_type"]]
+        indexes = [
+            models.Index(fields=["user", "action", "user_type", "risk_id"], name="risk_tp_user_act_rid_idx"),
+        ]
 
 
 class RiskEventSubscription(SoftDeleteModel):

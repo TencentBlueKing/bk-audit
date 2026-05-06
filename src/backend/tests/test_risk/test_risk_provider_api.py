@@ -7,8 +7,11 @@ from django.db.models import Q
 from django.test import TestCase
 from django.utils import timezone
 from iam.collection import FancyDict
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 from iam.resource.utils import Page
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import ManualEvent, Risk
@@ -344,6 +347,43 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
 
     def _create_strategy(self, name: str) -> Strategy:
         return Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name=name)
+
+    def test_risk_create_instance_uses_scene_parent_path(self):
+        scene = Scene.objects.create(name="risk-parent-path-scene")
+        strategy = self._create_strategy("risk-parent-path-strategy")
+        _bind_strategy_to_scene(strategy.strategy_id, scene)
+        risk = Risk.objects.create(
+            risk_id="risk-parent-path",
+            raw_event_id="raw-parent-path",
+            strategy=strategy,
+            event_time=timezone.now(),
+        )
+
+        resource = ResourceEnum.RISK.create_instance(risk.risk_id)
+
+        self.assertEqual(resource.attribute["id"], risk.risk_id)
+        self.assertEqual(resource.attribute["name"], risk.risk_id)
+        self.assertEqual(resource.attribute[KEYWORD_BK_IAM_PATH], f"/scene,{scene.scene_id}/")
+
+    def test_process_risk_apply_data_has_single_risk_node(self):
+        scene = Scene.objects.create(name="risk-apply-data-scene")
+        strategy = self._create_strategy("risk-apply-data-strategy")
+        _bind_strategy_to_scene(strategy.strategy_id, scene)
+        risk = Risk.objects.create(
+            risk_id="risk-apply-data",
+            raw_event_id="raw-apply-data",
+            strategy=strategy,
+            event_time=timezone.now(),
+        )
+
+        resource = ResourceEnum.RISK.create_instance(risk.risk_id)
+        with patch.object(Permission, "get_apply_url", return_value="http://apply.example"):
+            apply_data, _ = Permission(username="admin").get_apply_data([ActionEnum.PROCESS_RISK], [resource])
+
+        instances = apply_data["actions"][0]["related_resource_types"][0]["instances"]
+        self.assertEqual(len(instances), 1)
+        self.assertEqual([node["type"] for node in instances[0]], [ResourceEnum.SCENE.id, ResourceEnum.RISK.id])
+        self.assertEqual([node["id"] for node in instances[0]], [str(scene.scene_id), risk.risk_id])
 
     def test_scene_path_converts_to_strategy_id_in(self):
         """/scene,{scene_id}/ 路径应转换为 strategy_id__in 查询"""

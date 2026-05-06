@@ -14,7 +14,7 @@ Scope 权限组件
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from rest_framework.permissions import BasePermission
 
@@ -34,13 +34,7 @@ from services.web.common.constants import (
 )
 from services.web.scene.constants import BindingType, SceneStatus, VisibilityScope
 from services.web.scene.converter import SceneDjangoQuerySetConverter
-from services.web.scene.models import (
-    ResourceBinding,
-    ResourceBindingScene,
-    ResourceBindingSystem,
-    Scene,
-    SceneSystem,
-)
+from services.web.scene.models import ResourceBinding, Scene, SceneSystem
 
 # IAM 资源类型 ID 常量（用于判断 action 关联的 resource_type）
 _SCENE_RESOURCE_TYPE_ID = ResourceEnum.SCENE.id  # "scene"
@@ -98,6 +92,11 @@ class ScopeContext:
         if self.scope_type in {ScopeType.SCENE, ScopeType.SYSTEM}:
             if not self.scope_id:
                 raise ValidationError(f"scope_type={self.scope_type} 时 scope_id 为必传参数")
+            if self.scope_type == ScopeType.SCENE:
+                try:
+                    int(self.scope_id)
+                except (TypeError, ValueError):
+                    raise ValidationError("scope_type=scene 时 scope_id 必须为合法的场景 ID")
         else:
             # cross_scene / cross_system 不需要 scope_id，归一化为 None
             object.__setattr__(self, "scope_id", None)
@@ -465,162 +464,6 @@ class ScopePermission:
             return list(scene_systems.exclude(system_id="").values_list("system_id", flat=True).distinct())
         else:
             return self.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
-
-    def get_resource_ids(
-        self,
-        scope: ScopeContext,
-        resource_type: BindingResourceType,
-        binding_type: Optional[BindingType] = None,
-    ) -> Set[str]:
-        """返回当前用户在指定 scope 下可消费的资源 ID 集合。
-
-        内部逻辑：
-        - scene/cross_scene: 按 VIEW_SCENE 场景范围过滤
-        - system/cross_system: 按 VIEW_SYSTEM 系统范围过滤，只返回该系统被授权的资源
-
-        业务侧常见使用场景：
-        - 面板、工具、处理套餐等资源列表，先算出当前 scope 可见的资源 ID，再去查业务表
-        - 业务侧需要自行拼接复杂查询条件时，先拿到资源 ID 集合，再与其他筛选条件做交集
-
-        注意：平台级绑定的可见性计算较复杂，此处仅处理直接匹配的情况。
-        如果业务侧有更复杂的筛选逻辑，建议在业务层调用 get_scene_ids / get_system_ids
-        自行组装查询条件。
-        """
-        self._validate_binding_type(scope, binding_type)
-        visible_ids: Set[str] = set()
-
-        if scope.is_scene_scope:
-            scene_ids = self.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
-            if not scene_ids:
-                return visible_ids
-            visible_ids |= self._get_scene_visible_resource_ids(resource_type, scene_ids, binding_type=binding_type)
-
-        elif scope.is_system_scope:
-            system_ids = self.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
-            if not system_ids:
-                return visible_ids
-            visible_ids |= self._get_system_visible_resource_ids(resource_type, system_ids, binding_type=binding_type)
-
-        return visible_ids
-
-    # ------------------------------------------------------------------
-    # get_resource_ids 内部拆分方法（便于业务侧按需组合或覆写）
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _get_scene_visible_resource_ids(
-        resource_type: BindingResourceType,
-        scene_ids: List[int],
-        binding_type: Optional[BindingType] = None,
-    ) -> Set[str]:
-        """场景方向：获取对指定场景可见的资源 ID 集合。"""
-        if not scene_ids:
-            return set()
-
-        visible_ids: Set[str] = set()
-
-        # 场景级绑定
-        if binding_type in {None, BindingType.SCENE_BINDING}:
-            scene_binding_ids = set(
-                ResourceBindingScene.objects.filter(
-                    scene_id__in=scene_ids,
-                    binding__resource_type=resource_type,
-                    binding__binding_type=BindingType.SCENE_BINDING,
-                ).values_list("binding__resource_id", flat=True)
-            )
-            visible_ids |= scene_binding_ids
-
-        if binding_type == BindingType.SCENE_BINDING:
-            return visible_ids
-
-        always_visible_ids = set(
-            ResourceBinding.objects.filter(
-                resource_type=resource_type,
-                binding_type=BindingType.PLATFORM_BINDING,
-                visibility_type__in=[VisibilityScope.ALL_VISIBLE, VisibilityScope.ALL_SCENES],
-            ).values_list("resource_id", flat=True)
-        )
-        visible_ids |= always_visible_ids
-
-        specific_scene_ids = set(
-            ResourceBindingScene.objects.filter(
-                scene_id__in=scene_ids,
-                binding__resource_type=resource_type,
-                binding__binding_type=BindingType.PLATFORM_BINDING,
-                binding__visibility_type=VisibilityScope.SPECIFIC_SCENES,
-            ).values_list("binding__resource_id", flat=True)
-        )
-        visible_ids |= specific_scene_ids
-
-        scene_system_ids = set(
-            SceneSystem.objects.filter(scene_id__in=scene_ids).exclude(system_id="").values_list("system_id", flat=True)
-        )
-        if scene_system_ids:
-            specific_system_ids = set(
-                ResourceBindingSystem.objects.filter(
-                    system_id__in=scene_system_ids,
-                    binding__resource_type=resource_type,
-                    binding__binding_type=BindingType.PLATFORM_BINDING,
-                    binding__visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
-                ).values_list("binding__resource_id", flat=True)
-            )
-            visible_ids |= specific_system_ids
-
-        return visible_ids
-
-    @staticmethod
-    def _get_system_visible_resource_ids(
-        resource_type: BindingResourceType,
-        system_ids: List[str],
-        binding_type: Optional[BindingType] = None,
-    ) -> Set[str]:
-        """系统方向：获取对指定系统可见的资源 ID 集合。"""
-        if binding_type == BindingType.SCENE_BINDING:
-            return set()
-
-        if not system_ids:
-            return set()
-
-        visible_ids: Set[str] = set(
-            ResourceBinding.objects.filter(
-                resource_type=resource_type,
-                binding_type=BindingType.PLATFORM_BINDING,
-                visibility_type=VisibilityScope.ALL_VISIBLE,
-            ).values_list("resource_id", flat=True)
-        )
-
-        common_platform_ids = set(
-            ResourceBinding.objects.filter(
-                resource_type=resource_type,
-                binding_type=BindingType.PLATFORM_BINDING,
-                visibility_type__in=[VisibilityScope.ALL_SCENES, VisibilityScope.ALL_SYSTEMS],
-            ).values_list("resource_id", flat=True)
-        )
-        visible_ids |= common_platform_ids
-
-        specific_system_ids = set(
-            ResourceBindingSystem.objects.filter(
-                system_id__in=system_ids,
-                binding__resource_type=resource_type,
-                binding__binding_type=BindingType.PLATFORM_BINDING,
-                binding__visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
-            ).values_list("binding__resource_id", flat=True)
-        )
-        visible_ids |= specific_system_ids
-
-        related_scene_ids = set(SceneSystem.objects.filter(system_id__in=system_ids).values_list("scene_id", flat=True))
-        if related_scene_ids:
-            specific_scene_ids = set(
-                ResourceBindingScene.objects.filter(
-                    scene_id__in=related_scene_ids,
-                    binding__resource_type=resource_type,
-                    binding__binding_type=BindingType.PLATFORM_BINDING,
-                    binding__visibility_type=VisibilityScope.SPECIFIC_SCENES,
-                ).values_list("binding__resource_id", flat=True)
-            )
-            visible_ids |= specific_scene_ids
-
-        return visible_ids
 
 
 # ---------------------------------------------------------------------------
