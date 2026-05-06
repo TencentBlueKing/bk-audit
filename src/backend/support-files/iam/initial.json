@@ -570,9 +570,7 @@
             ]
           }
         ],
-        "related_actions": [
-          "list_system"
-        ],
+        "related_actions": [],
         "description": "",
         "description_en": ""
       }
@@ -600,8 +598,7 @@
           }
         ],
         "related_actions": [
-          "view_system",
-          "list_system"
+          "view_system"
         ],
         "description": "",
         "description_en": ""
@@ -1916,9 +1913,6 @@
                   "id": "create_system"
                 },
                 {
-                  "id": "list_system"
-                },
-                {
                   "id": "view_system"
                 },
                 {
@@ -1993,6 +1987,9 @@
               "name": "废弃操作",
               "name_en": "Deprecated Actions",
               "actions": [
+                {
+                  "id": "list_system"
+                },
                 {
                   "id": "list_strategy"
                 },

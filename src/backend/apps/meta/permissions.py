@@ -127,7 +127,7 @@ class SystemEditPermission(InstancePermission):
 
 class SystemPermissionHandler:
     @classmethod
-    def _generate_permission(cls, action_enums, lookup_field=None, get_instance_id=None) -> BasePermission:
+    def generate_permission(cls, action_enums, lookup_field=None, get_instance_id=None) -> BasePermission:
         """
         通用的权限生成方法，接收一个动作类型（如 VIEW 或 EDIT），
         根据这个生成相应的权限
@@ -150,7 +150,7 @@ class SystemPermissionHandler:
         """
 
         return [
-            SystemPermissionHandler._generate_permission(
+            SystemPermissionHandler.generate_permission(
                 [ActionEnum.EDIT_SYSTEM], lookup_field=lookup_field, get_instance_id=get_instance_id
             ),
             SystemEditPermission(lookup_field=lookup_field, get_instance_id=get_instance_id),
@@ -163,7 +163,7 @@ class SystemPermissionHandler:
         """
 
         return [
-            SystemPermissionHandler._generate_permission(
+            SystemPermissionHandler.generate_permission(
                 [ActionEnum.VIEW_SYSTEM], lookup_field=lookup_field, get_instance_id=get_instance_id
             )
         ]
