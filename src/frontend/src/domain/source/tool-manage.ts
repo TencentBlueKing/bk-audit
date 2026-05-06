@@ -106,11 +106,15 @@ class ToolManage extends ModuleBase {
   getAllTools(params?: {
     scope_type?: string,
     scope_id?: string,
+    status?: string,
   }) {
     const sceneParams = getSceneSystemParams();
-    const scopeType = params?.scope_type ?? sceneParams.scope_type;
-    const scopeId = params?.scope_id ?? sceneParams.scope_id;
-    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?scope_id=${scopeId}&scope_type=${scopeType}`);
+    const mergedParams = {
+      scope_type: sceneParams.scope_type,
+      scope_id: sceneParams.scope_id,
+      ...params,
+    };
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?${processedParams(mergedParams).toString()}`);
   }
   // 工具执行
   getToolsExecute(params: {
