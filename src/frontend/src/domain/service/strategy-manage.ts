@@ -63,8 +63,10 @@ export default {
   /**
    * @desc 获取所有策略下拉列表
    */
-  fetchAllStrategyList() {
-    return StrategySource.getAllStrategyList()
+  fetchAllStrategyList(params: {
+    scene_id?: string
+  }) {
+    return StrategySource.getAllStrategyList(params)
       .then(({ data }) => data);
   },
   /**

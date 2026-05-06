@@ -381,6 +381,11 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     manual: true,
+    defaultParams: {
+      action_ids: 'view_system',
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: 'scene',
+    },
     onSuccess(data) {
       data.forEach((item) => {
         systemMap.value[item.id] = item.name;
