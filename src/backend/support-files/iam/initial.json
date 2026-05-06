@@ -570,9 +570,7 @@
             ]
           }
         ],
-        "related_actions": [
-          "list_system"
-        ],
+        "related_actions": [],
         "description": "",
         "description_en": ""
       }
@@ -600,8 +598,7 @@
           }
         ],
         "related_actions": [
-          "view_system",
-          "list_system"
+          "view_system"
         ],
         "description": "",
         "description_en": ""
@@ -1533,34 +1530,6 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "view_base_panel_v2",
-        "name": "查看报表(V2)",
-        "name_en": "View Audit Report V2",
-        "type": "view",
-        "version": 1,
-        "related_resource_types": [
-          {
-            "system_id": "bk-audit",
-            "id": "panel",
-            "selection_mode": "instance",
-            "related_instance_selections": [
-              {
-                "system_id": "bk-audit",
-                "id": "panel_list",
-                "ignore_iam_path": true
-              }
-            ]
-          }
-        ],
-        "related_actions": [
-        ],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
         "id": "view_tag_panel",
         "name": "查看报表(标签)",
         "name_en": "View Audit Report by Tag",
@@ -1579,9 +1548,7 @@
             ]
           }
         ],
-        "related_actions": [
-          "view_base_panel_v2"
-        ],
+        "related_actions": [],
         "description": "",
         "description_en": ""
       }
@@ -1916,9 +1883,6 @@
                   "id": "create_system"
                 },
                 {
-                  "id": "list_system"
-                },
-                {
                   "id": "view_system"
                 },
                 {
@@ -1993,6 +1957,9 @@
               "name": "废弃操作",
               "name_en": "Deprecated Actions",
               "actions": [
+                {
+                  "id": "list_system"
+                },
                 {
                   "id": "list_strategy"
                 },

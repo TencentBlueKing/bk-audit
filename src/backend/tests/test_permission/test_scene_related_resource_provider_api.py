@@ -9,7 +9,7 @@ from services.web.scene.constants import (
     VisibilityScope,
 )
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
-from services.web.strategy_v2.models import LinkTable
+from services.web.strategy_v2.models import LinkTable, Strategy
 
 
 def _create_scene(name: str = "test-scene") -> Scene:
@@ -28,6 +28,17 @@ def _bind_to_scene(resource_type: str, resource_id: str, scene: Scene) -> Resour
 
 @pytest.mark.django_db
 class TestSceneRelatedResourceProviderAPI:
+    def test_strategy_create_instance_uses_scene_parent_path(self):
+        scene = _create_scene("strategy-parent-path-scene")
+        strategy = Strategy.objects.create(namespace="default", strategy_name="strategy-parent-path")
+        _bind_to_scene(ResourceVisibilityType.STRATEGY, str(strategy.strategy_id), scene)
+
+        resource = ResourceEnum.STRATEGY.create_instance(str(strategy.strategy_id))
+
+        assert resource.attribute["id"] == str(strategy.strategy_id)
+        assert resource.attribute["name"] == strategy.strategy_name
+        assert resource.attribute[KEYWORD_BK_IAM_PATH] == f"/scene,{scene.scene_id}/"
+
     def test_link_table_create_instance_uses_uid_and_latest_version_name(self):
         scene = _create_scene("link-table-logical-id-scene")
         link_table_v1 = LinkTable.objects.create(
@@ -50,4 +61,4 @@ class TestSceneRelatedResourceProviderAPI:
 
         assert resource.attribute["id"] == str(link_table_v1.uid)
         assert resource.attribute["name"] == "new-link-table"
-        assert resource.attribute[KEYWORD_BK_IAM_PATH] == f"/scene,{scene.scene_id}/link_table,{link_table_v1.uid}/"
+        assert resource.attribute[KEYWORD_BK_IAM_PATH] == f"/scene,{scene.scene_id}/"
