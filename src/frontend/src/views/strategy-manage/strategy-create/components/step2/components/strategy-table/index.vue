@@ -184,6 +184,7 @@
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
+    defaultParams: { status: 'published' },
   });
 
 
@@ -194,7 +195,7 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      fetchAllTools();
+      fetchAllTools({ status: 'published' });
     },
   });
 

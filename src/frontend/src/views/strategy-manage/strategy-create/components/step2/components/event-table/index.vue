@@ -204,6 +204,7 @@
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
+    defaultParams: { status: 'published' },
   });
 
   // 获取标签列表
@@ -213,12 +214,16 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      fetchAllTools();
+      fetchAllTools({
+        status: 'published',
+      });
     },
   });
 
   const handleRefreshToolList = () => {
-    fetchAllTools();
+    fetchAllTools({
+      status: 'published',
+    });
   };
 
   const getHeaderClass = (valueKey: string | undefined) => ({

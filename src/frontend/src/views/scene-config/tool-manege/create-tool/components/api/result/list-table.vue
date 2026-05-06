@@ -544,6 +544,7 @@
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
+    defaultParams: { status: 'published' },
     onSuccess: (data) => {
       toolMaxVersionMap.value = data.reduce((res, item) => {
         res[item.uid] = item.version;
@@ -558,7 +559,7 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      fetchAllTools();
+      fetchAllTools({});
     },
   });
 
