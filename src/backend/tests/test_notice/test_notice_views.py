@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 from rest_framework.test import APIRequestFactory
 
 from apps.notice.models import NoticeGroup
 from apps.notice.views import NoticeGroupsViewSet
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import InstanceActionPermission
+from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import SceneScopeFilter
 from services.web.scene.models import Scene
@@ -52,6 +54,28 @@ class TestNoticeGroupViewPermissions(TestCase):
         self.view.request = request
 
         self.assertEqual(self.view.get_scene_id_by_notice_group(), scene.scene_id)
+
+    def test_notice_group_batch_create_instance_includes_iam_path(self):
+        scene = Scene.objects.create(
+            name="notice-scene-batch",
+            description="scene batch",
+            managers=["admin"],
+            users=["admin"],
+        )
+        notice_group = NoticeGroup.objects.create(
+            group_name="notice-group-batch",
+            group_member=["admin"],
+            notice_config=[],
+        )
+        SceneScopeFilter.create_resource_binding(
+            resource_id=str(notice_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            scene_id=scene.scene_id,
+        )
+
+        resources = ResourceEnum.NOTICE_GROUP.batch_create_instance([notice_group.group_id])
+
+        self.assertEqual(resources[0][0].attribute[KEYWORD_BK_IAM_PATH], f"/scene,{scene.scene_id}/")
 
 
 class TestListAllNoticeGroup(TestCase):

@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from typing import List
+
 from django.conf import settings
 from django.utils.translation import gettext
 from iam import Resource
@@ -36,27 +38,30 @@ class NoticeGroup(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        resource = cls.create_simple_instance(instance_id, attribute)
+        return cls.batch_create_instance([instance_id], attribute=attribute)[0][0]
 
-        instance_name = str(instance_id)
-        notice_group = NoticeGroupModel.objects.filter(group_id=instance_id).first()
-        if notice_group:
-            instance_name = notice_group.group_name
+    @classmethod
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
+        notice_groups = NoticeGroupModel.objects.filter(group_id__in=instance_ids).only("group_id", "group_name")
+        notice_group_map = {str(notice_group.group_id): notice_group for notice_group in notice_groups}
 
-        # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
-        scene_id = (
-            ResourceBindingScene.objects.filter(
-                binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
-                binding__resource_id=str(instance_id),
-            )
-            .values_list("scene_id", flat=True)
-            .first()
-        )
-        scene_id = str(scene_id) if scene_id else ""
+        scene_bindings = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
+        ).values_list("binding__resource_id", "scene_id")
+        notice_group_scene_map = {resource_id: str(scene_id) for resource_id, scene_id in scene_bindings}
 
-        resource.attribute = {
-            "id": str(instance_id),
-            "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
-        }
-        return resource
+        resources = []
+        for instance_id in instance_ids:
+            resource = cls.create_simple_instance(instance_id, attribute)
+            instance_key = str(instance_id)
+            notice_group = notice_group_map.get(instance_key)
+            instance_name = notice_group.group_name if notice_group else instance_key
+            scene_id = notice_group_scene_map.get(instance_key, "")
+            resource.attribute = {
+                "id": instance_key,
+                "name": instance_name,
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
+            }
+            resources.append([resource])
+        return resources
