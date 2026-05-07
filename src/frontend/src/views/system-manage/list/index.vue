@@ -211,14 +211,9 @@
     },
     {
       label: () => t('系统状态'),
-      sort: 'custom',
       width: '200px',
       filter: {
         list: [
-          {
-            text: t('待接入'),
-            value: 'pending',
-          },
           {
             text: t('待完善'),
             value: 'incomplete',
@@ -253,7 +248,6 @@
     },
     {
       label: () => t('数据上报状态'),
-      sort: 'custom',
       width: '200px',
       filter: {
         list: [
@@ -327,6 +321,7 @@
       render: ({ data }: {data: SyetemModel}) => (
           <bk-button
             theme="primary"
+            disabled={!data.permission.edit_system}
             text
             onClick={() => handleRowClick(data)}
             size="small">
@@ -337,7 +332,7 @@
   ] as Column[];
 
   const listRef = ref();
-  const dataSource = MetaManageService.fetchSystemList;
+  const dataSource = (params: any) => MetaManageService.fetchSystemList({ ...params, audit_status: 'accessed', filter_actions: 'edit_system,view_system' });
 
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
@@ -345,7 +340,6 @@
   const permissionCheckData = ref();
   const systemStatusMap = (status: string) => {
     const map: Record<string, string> = {
-      pending: t('待接入'),
       incomplete: t('待完善'),
       abnormal: t('数据异常'),
       normal: t('正常'),
@@ -354,7 +348,6 @@
   };
   const systemStatusThemeMap = (status: string) => {
     const map: Record<string, string> = {
-      pending: 'info',
       incomplete: 'warning',
       abnormal: 'danger',
       normal: 'success',
