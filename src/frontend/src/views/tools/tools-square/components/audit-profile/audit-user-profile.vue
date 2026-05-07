@@ -22,101 +22,113 @@
       @query="handleQuery"
       @reset="handleReset" />
 
-    <!-- 用户信息 -->
-    <bk-loading :loading="userInfoLoading">
-      <profile-user-info
-        v-if="hasQueried"
-        :user-info="userInfo"
-        @view-detail="handleViewDetail" />
-    </bk-loading>
-
-    <!-- 分割线 -->
-    <div
-      v-if="hasQueried"
-      class="section-divider" />
-
-    <!-- 关联游戏列表 -->
-    <bk-loading :loading="gameListLoading">
+    <!-- 用户信息 + 关联游戏列表统一 loading -->
+    <bk-loading
+      class="page-loading-wrapper"
+      :loading="pageLoading">
+      <!-- loading时的占位元素，撑开容器高度使loading居中 -->
       <div
-        v-if="hasQueried"
-        class="top-search game-list-section">
-        <div class="game-list-header">
-          <div class="top-search-title">
-            {{ t('关联游戏列表') }}
-          </div>
-          <div class="game-list-actions">
-            <bk-input
-              v-model="gameSearchKey"
-              class="game-search-input"
-              :placeholder="t('搜索 游戏名称、openid')"
-              type="search" />
-            <bk-popover
-              ref="exportPopoverRef"
-              :is-show="isExportPopoverShow"
-              placement="bottom-start"
-              theme="light"
-              trigger="click"
-              :width="420"
-              @after-hidden="isExportPopoverShow = false">
-              <bk-button
-                @click="isExportPopoverShow = !isExportPopoverShow">
-                <audit-icon
-                  style="margin-right: 4px;"
-                  type="download" />
-                {{ t('导出') }}
-              </bk-button>
-              <template #content>
-                <div class="export-popover-content">
-                  <div class="export-popover-title">
-                    {{ t('导出关联游戏列表') }}
-                  </div>
-                  <div class="export-form-item">
-                    <div class="export-form-label">
-                      {{ t('导出内容') }}
-                      <span class="required-star">*</span>
-                    </div>
-                    <bk-checkbox-group v-model="exportContentChecked">
-                      <div class="export-checkbox-grid">
-                        <bk-checkbox
-                          v-for="item in exportContentOptions"
-                          :key="item.id"
-                          :label="item.id">
-                          {{ item.name }}
-                        </bk-checkbox>
+        v-if="pageLoading"
+        class="loading-placeholder" />
+      <template v-if="hasQueried">
+        <!-- 暂无数据 -->
+        <bk-exception
+          v-if="!pageLoading && isPageEmpty"
+          class="page-empty"
+          type="empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
+
+        <template v-else-if="!pageLoading">
+          <!-- 用户信息 -->
+          <profile-user-info
+            :user-info="userInfo"
+            @view-detail="handleViewDetail" />
+
+          <!-- 分割线 -->
+          <div class="section-divider" />
+
+          <!-- 关联游戏列表 -->
+          <div class="top-search game-list-section">
+            <div class="game-list-header">
+              <div class="top-search-title">
+                {{ t('关联游戏列表') }}
+              </div>
+              <div class="game-list-actions">
+                <bk-input
+                  v-model="gameSearchKey"
+                  class="game-search-input"
+                  :placeholder="t('搜索 游戏名称、openid')"
+                  type="search" />
+                <bk-popover
+                  ref="exportPopoverRef"
+                  :is-show="isExportPopoverShow"
+                  placement="bottom-start"
+                  theme="light"
+                  trigger="click"
+                  :width="420"
+                  @after-hidden="isExportPopoverShow = false">
+                  <bk-button
+                    @click="isExportPopoverShow = !isExportPopoverShow">
+                    <audit-icon
+                      style="margin-right: 4px;"
+                      type="download" />
+                    {{ t('导出') }}
+                  </bk-button>
+                  <template #content>
+                    <div class="export-popover-content">
+                      <div class="export-popover-title">
+                        {{ t('导出关联游戏列表') }}
                       </div>
-                    </bk-checkbox-group>
-                  </div>
-                  <div class="export-popover-footer">
-                    <bk-button
-                      :loading="isExporting"
-                      theme="primary"
-                      @click="handleExportGameList">
-                      {{ t('导出') }}
-                    </bk-button>
-                    <bk-button @click="isExportPopoverShow = false">
-                      {{ t('取消') }}
-                    </bk-button>
-                  </div>
-                </div>
-              </template>
-            </bk-popover>
+                      <div class="export-form-item">
+                        <div class="export-form-label">
+                          {{ t('导出内容') }}
+                          <span class="required-star">*</span>
+                        </div>
+                        <bk-checkbox-group v-model="exportContentChecked">
+                          <div class="export-checkbox-grid">
+                            <bk-checkbox
+                              v-for="item in exportContentOptions"
+                              :key="item.id"
+                              :label="item.id">
+                              {{ item.name }}
+                            </bk-checkbox>
+                          </div>
+                        </bk-checkbox-group>
+                      </div>
+                      <div class="export-popover-footer">
+                        <bk-button
+                          :loading="isExporting"
+                          theme="primary"
+                          @click="handleExportGameList">
+                          {{ t('导出') }}
+                        </bk-button>
+                        <bk-button @click="isExportPopoverShow = false">
+                          {{ t('取消') }}
+                        </bk-button>
+                      </div>
+                    </div>
+                  </template>
+                </bk-popover>
+              </div>
+            </div>
+            <bk-table
+              :columns="gameColumns"
+              :data="paginatedGameList"
+              :pagination="frontendPagination"
+              remote-pagination
+              stripe
+              @page-limit-change="handlePageLimitChange"
+              @page-value-change="handlePageChange" />
           </div>
-        </div>
-        <bk-table
-          :columns="gameColumns"
-          :data="filteredGameList"
-          :pagination="pagination"
-          remote-pagination
-          stripe
-          @page-limit-change="handlePageLimitChange"
-          @page-value-change="handlePageChange" />
-      </div>
+        </template>
+      </template>
     </bk-loading>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, h, ref } from 'vue';
+  import { computed, h, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
   import * as XLSX from 'xlsx';
@@ -124,6 +136,8 @@
   import ToolManageService from '@service/tool-manage';
 
   import { execCopy } from '@utils/assist';
+
+  import { PROFILE_FIELDS } from '../game/game-field-keys';
 
   import ProfileQueryInput from './profile-query-input.vue';
   import ProfileUserInfo from './profile-user-info.vue';
@@ -151,7 +165,43 @@
   const hasQueried = ref(false);
   const gameSearchKey = ref('');
 
-  // ========== 日期参数计算工具函数 ==========
+  // ========== 状态持久化（sessionStorage）==========
+  const STORAGE_KEY_PROFILE_QUERY = 'tool_audit_profile_query';
+
+  // 保存查询状态到 sessionStorage
+  const saveQueryState = (accountType: string, accountId: string) => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_PROFILE_QUERY, JSON.stringify({
+        accountType,
+        accountId,
+        toolUid: props.toolUid,
+      }));
+    } catch {
+      // 静默处理
+    }
+  };
+
+  // 清除保存的查询状态
+  const clearQueryState = () => {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_PROFILE_QUERY);
+    } catch {
+      // 静默处理
+    }
+  };
+
+  // 从 sessionStorage 恢复查询状态
+  const loadQueryState = (): { accountType: string; accountId: string; toolUid: string } | null => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY_PROFILE_QUERY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const getResults = (data: any) => data?.data?.result?.results;
+
   // 获取近一年起始日期，格式 YYYYMMDD
   const getOneYearAgoYmd = (): string => {
     const d = new Date();
@@ -192,11 +242,39 @@
     let list = gameList.value;
     if (gameSearchKey.value) {
       const key = gameSearchKey.value.toLowerCase();
-      list = list.filter(item => (item.name || item.游戏名称 || '').toLowerCase().includes(key)
+      list = list.filter(item => (item.name || item[PROFILE_FIELDS.GAME_NAME] || '').toLowerCase().includes(key)
         || (item.openid || '').toLowerCase().includes(key));
     }
-    return [...list].sort((a, b) => (b.totalGift || b.总支出 || 0) - (a.totalGift || a.总支出 || 0));
+    return [...list].sort((a, b) => (b.totalGift || b[PROFILE_FIELDS.TOTAL_GIFT] || 0)
+      - (a.totalGift || a[PROFILE_FIELDS.TOTAL_GIFT] || 0));
   });
+
+  // 前端分页：根据当前页码和每页条数截取数据
+  const paginatedGameList = computed(() => {
+    const start = (pagination.value.current - 1) * pagination.value.limit;
+    const end = start + pagination.value.limit;
+    return filteredGameList.value.slice(start, end);
+  });
+
+  // 前端分页配置
+  const frontendPagination = computed(() => ({
+    count: filteredGameList.value.length,
+    current: pagination.value.current,
+    limit: pagination.value.limit,
+  }));
+
+  // 搜索关键词变化时重置分页到第一页
+  watch(gameSearchKey, () => {
+    pagination.value.current = 1;
+  });
+
+  // 统一 loading 状态（用户信息 + 游戏列表任一加载中即为 loading）
+  const pageLoading = computed(() => userInfoLoading.value || gameListLoading.value);
+
+  // 页面是否为空（用户信息无有效数据 且 游戏列表为空）
+  const isPageEmpty = computed(() => !userInfo.value.wecom
+    && !userInfo.value.username
+    && gameList.value.length === 0);
 
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
@@ -205,24 +283,22 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      // smart_page 工具返回结构: data.data.result.results
-      const results = data?.data?.result?.results
-        || data?.result?.results || data?.data?.results || data?.results;
+      const results = getResults(data);
       if (results && (Array.isArray(results) ? results.length > 0 : true)) {
         const userData = Array.isArray(results) ? results[0] : results;
         // 将接口返回的字段映射到 userInfo（按设计稿只取6个展示字段）
         userInfo.value = {
           ...userInfo.value,
-          avatar: userData.avatar || userData.头像 || '',
-          wecom: userData.企业微信 || userData.wecom || userData.wx_work_id || '',
-          username: userData.用户名 || userData.username || userData.display_name || '',
-          status: userData.在职状态 || userData.status || '',
-          department: userData.部门 || userData.department || '',
+          avatar: userData.avatar || userData[PROFILE_FIELDS.AVATAR] || '',
+          wecom: userData[PROFILE_FIELDS.WECOM] || userData.wecom || userData.wx_work_id || '',
+          username: userData[PROFILE_FIELDS.USERNAME] || userData.username || userData.display_name || '',
+          status: userData[PROFILE_FIELDS.STATUS] || userData.status || '',
+          department: userData[PROFILE_FIELDS.DEPARTMENT] || userData.department || '',
         };
 
         // 企业微信搜索成功后，获取到 username(企业微信)，
         // 用它作为 user_info_output_var_ctx 触发查询 main_qqwechat_list 和 main_auditrisk_stat
-        const ctx = userInfo.value.wecom || userData.企业微信 || '';
+        const ctx = userInfo.value.wecom || userData[PROFILE_FIELDS.WECOM] || '';
         if (ctx) {
           // 触发查询责任单数及风险系数
           fetchAuditRiskStat(ctx);
@@ -239,19 +315,20 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      // smart_page 工具返回结构: data.data.result.results
-      const results = data?.data?.result?.results
-        || data?.result?.results || data?.data?.results || data?.results;
+      const results = getResults(data);
       if (results) {
         const statData = Array.isArray(results) ? results[0] : results;
         if (statData) {
           userInfo.value.responsibilityCount = statData.count_tickets
-            ?? statData.责任单数 ?? statData.responsibility_count ?? 0;
-          // max_risk_level_num: 3=高, 2=中, 1=低, 0=无
+            ?? statData[PROFILE_FIELDS.RESPONSIBILITY_COUNT] ?? statData.responsibility_count ?? 0;
+          // max_risk_level_num: 3=高, 2=中, 1=低, null/0=低
           const riskNum = statData.max_risk_level_num
-            ?? statData.风险系数 ?? statData.risk_level ?? 0;
-          const riskMap: Record<number, string> = { 3: '高', 2: '中', 1: '低', 0: '无' };
-          userInfo.value.riskLevel = riskMap[Number(riskNum)] ?? String(riskNum);
+            ?? statData[PROFILE_FIELDS.RISK_LEVEL] ?? statData.risk_level;
+          const riskMap: Record<number, string> = { 3: '高', 2: '中', 1: '低', 0: '低' };
+          // 当 riskNum 为 null/undefined 时，默认展示"低"
+          userInfo.value.riskLevel = (riskNum === null || riskNum === undefined)
+            ? '低'
+            : (riskMap[Number(riskNum)] ?? String(riskNum));
         }
       }
     },
@@ -278,17 +355,15 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      // smart_page 工具返回结构: data.data.result.results
-      const results = data?.data?.result?.results
-        || data?.result?.results || data?.data?.results || data?.results;
+      const results = getResults(data);
       if (results) {
         const qqwechatData = Array.isArray(results) ? results : [results];
         // 从结果中提取微信和QQ账号
         const wechatAccounts: string[] = [];
         const qqAccounts: string[] = [];
         qqwechatData.forEach((item: any) => {
-          const accountType = item.账号类型 || item.account_type || '';
-          const accountList = item.账号列表 || item.account_list || '';
+          const accountType = item[PROFILE_FIELDS.ACCOUNT_TYPE] || item.account_type || '';
+          const accountList = item[PROFILE_FIELDS.ACCOUNT_LIST] || item.account_list || '';
           if (accountType === '微信' || accountType === 'wechat') {
             wechatAccounts.push(accountList);
           } else if (accountType === 'QQ' || accountType === 'qq') {
@@ -326,9 +401,7 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      // smart_page 工具返回结构: data.data.result.results
-      const results = data?.data?.result?.results
-        || data?.result?.results || data?.data?.results || data?.results;
+      const results = getResults(data);
       if (Array.isArray(results)) {
         gameList.value = results;
         pagination.value.count = data?.data?.result?.total
@@ -337,7 +410,7 @@
         // 从首条结果中提取 ctx 作为 openid_list_first_ctx
         if (results.length > 0) {
           const firstRow = results[0];
-          openidListFirstCtx.value = firstRow.ctx || firstRow.平台账号 || firstRow.企业微信 || '';
+          openidListFirstCtx.value = firstRow.ctx || firstRow[PROFILE_FIELDS.PLATFORM_ACCOUNT] || firstRow[PROFILE_FIELDS.WECOM] || '';
         }
 
         // 微信/QQ/openid 搜索时，游戏列表返回后需要级联查询用户信息
@@ -360,20 +433,20 @@
 
   // 映射游戏数据字段
   const mapGameData = (row: Record<string, any>) => ({
-    name: row.游戏名称 || row.name || '',
+    name: row[PROFILE_FIELDS.GAME_NAME] || row.name || '',
     openid: row.openid || '',
     gameid: row.gameid || '',
     ctx: userInfo.value.wecom || '',
     wechat: userInfo.value.wechat || '',
-    coinBalance: row.代币存量 || row['代币存量（代）'] || row.coinBalance || 0,
-    totalRecharge: row.累计充值 || row['累计充值（代）'] || row.totalRecharge || 0,
-    totalGift: row.总支出 || row.totalGift || 0,
-    totalIssue: row.总入账 || row.totalIssue || 0,
-    totalBalance: row.总余额 || row.totalBalance || 0,
-    totalTopup: row.总充值 || row.totalTopup || 0,
+    coinBalance: row[PROFILE_FIELDS.COIN_BALANCE_UNIT] || row.coinBalance || 0,
+    totalRecharge: row[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] || row.totalRecharge || 0,
+    totalGift: row[PROFILE_FIELDS.TOTAL_GIFT] || row.totalGift || 0,
+    totalIssue: row[PROFILE_FIELDS.TOTAL_ISSUE] || row.totalIssue || 0,
+    totalBalance: row[PROFILE_FIELDS.TOTAL_BALANCE] || row.totalBalance || 0,
+    totalTopup: row[PROFILE_FIELDS.TOTAL_TOPUP] || row.totalTopup || 0,
     source: row.source || '',
-    platformAccount: row.平台账号 || row.platformAccount || '',
-    exchangeRate: row.人民币代币兑换比 || row.exchangeRate || '',
+    platformAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
+    exchangeRate: row[PROFILE_FIELDS.EXCHANGE_RATE] || row.exchangeRate || '',
   });
 
   // 封装：通过 ctx（企业微信）查询用户信息（用于微信/QQ/openid搜索的级联查询）
@@ -431,14 +504,15 @@
     {
       label: () => t('游戏名称'),
       field: 'name',
-      width: 120,
+      width: 220,
+      showOverflowTooltip: true,
       render: ({ data }: { data: Record<string, any> }) => h(
         'span',
         {
           style: 'color: #3a84ff; cursor: pointer;',
           onClick: () => handleClickGame(data),
         },
-        data.游戏名称 || data.name,
+        data[PROFILE_FIELDS.GAME_NAME] || data.name || '--',
       ),
     },
     {
@@ -446,35 +520,41 @@
       field: 'openid',
       minWidth: 320,
       showOverflowTooltip: true,
-      render: ({ data }: { data: Record<string, any> }) => h(
-        'span',
-        {
-          class: 'openid-cell',
-          style: 'display: inline-flex; align-items: center; gap: 4px;',
-        },
-        [
-          h('span', {}, data.openid),
-          h('i', {
-            class: 'audit-icon audit-icon-copy hover-show-icon openid-copy-icon',
-            onClick: (e: Event) => {
-              e.stopPropagation();
-              handleCopyOpenid(data.openid);
-            },
-          }),
-        ],
-      ),
+      render: ({ data }: { data: Record<string, any> }) => {
+        if (data.openid === null || data.openid === undefined || data.openid === '') {
+          return h('span', {}, '--');
+        }
+        return h(
+          'span',
+          {
+            class: 'openid-cell',
+            style: 'display: inline-flex; align-items: center; gap: 4px;',
+          },
+          [
+            h('span', {}, data.openid),
+            h('i', {
+              class: 'audit-icon audit-icon-copy hover-show-icon openid-copy-icon',
+              onClick: (e: Event) => {
+                e.stopPropagation();
+                handleCopyOpenid(data.openid);
+              },
+            }),
+          ],
+        );
+      },
     },
-    { label: () => `${t('代币存量')} (${t('代')})`, field: '代币存量（代）', sort: true },
-    { label: () => `${t('累计充值')} (${t('代')})`, field: '累计充值（代）', sort: true },
-    { label: () => `${t('累计赠送')} (¥)`, field: '累计赠送（¥）', sort: true },
-    { label: () => `${t('累计发放')} (¥)`, field: '累计发放（¥）', sort: true },
-    { label: () => `${t('登录次数')} / ${t('月')}`, field: '登录次数/月', sort: true },
+    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
+    { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
+    { label: () => `${t('累计赠送')} (¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_YUAN] ?? '--') },
+    { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
+    { label: () => `${t('登录次数')} / ${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_MONTH] ?? '--') },
     {
       label: () => t('责任单数'),
-      field: '责任单数',
+      field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
       sort: true,
       render: ({ data }: { data: Record<string, any> }) => {
-        const count = data.责任单数 ?? data.responsibility_count ?? 0;
+        const count = data[PROFILE_FIELDS.RESPONSIBILITY_COUNT] ?? data.responsibility_count;
+        if (count === null || count === undefined) return h('span', {}, '--');
         const hasRisk = count > 0;
         return h(
           'span',
@@ -521,31 +601,19 @@
 
   const handlePageChange = (page: number) => {
     pagination.value.current = page;
-    if (lastQueryParams.value) {
-      executeDataSource('main_openid_list', {
-        ...lastQueryParams.value,
-        page: pagination.value.current,
-        page_size: pagination.value.limit,
-      }, fetchGameList);
-    }
   };
 
   const handlePageLimitChange = (limit: number) => {
     pagination.value.limit = limit;
     pagination.value.current = 1;
-    if (lastQueryParams.value) {
-      executeDataSource('main_openid_list', {
-        ...lastQueryParams.value,
-        page: pagination.value.current,
-        page_size: pagination.value.limit,
-      }, fetchGameList);
-    }
   };
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
     hasQueried.value = true;
     lastAccountType.value = accountType;
+    // 保存查询状态到 sessionStorage
+    saveQueryState(accountType, accountId);
 
     // 重置中间变量
     openidListFirstCtx.value = '';
@@ -599,6 +667,8 @@
     lastQueryParams.value = null;
     lastAccountType.value = '';
     openidListFirstCtx.value = '';
+    // 清除保存的查询状态
+    clearQueryState();
     // 重置用户信息
     userInfo.value = {
       avatar: '', wecom: '', username: '', wechat: '', qq: '',
@@ -628,14 +698,14 @@
 
   // 导出内容选项（对应表格列）
   const exportContentOptions = [
-    { id: 'gameName', name: t('游戏名称'), field: '游戏名称', fallbackField: 'name' },
+    { id: 'gameName', name: t('游戏名称'), field: PROFILE_FIELDS.GAME_NAME, fallbackField: 'name' },
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
-    { id: 'coinBalance', name: `${t('代币存量')}(${t('代')})`, field: '代币存量（代）', fallbackField: 'coinBalance' },
-    { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: '累计充值（代）', fallbackField: 'totalRecharge' },
-    { id: 'totalGift', name: `${t('累计赠送')}(¥)`, field: '累计赠送（¥）', fallbackField: 'totalGift' },
-    { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: '累计发放（¥）', fallbackField: 'totalIssue' },
-    { id: 'loginCount', name: `${t('登录次数')}/${t('月')}`, field: '登录次数/月', fallbackField: 'loginCount' },
-    { id: 'responsibilityCount', name: t('责任单数'), field: '责任单数', fallbackField: 'responsibility_count' },
+    { id: 'coinBalance', name: `${t('代币存量')}(${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
+    { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
+    { id: 'totalGift', name: `${t('累计赠送')}(¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, fallbackField: 'totalGift' },
+    { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
+    { id: 'loginCount', name: `${t('登录次数')}/${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, fallbackField: 'loginCount' },
+    { id: 'responsibilityCount', name: t('责任单数'), field: PROFILE_FIELDS.RESPONSIBILITY_COUNT, fallbackField: 'responsibility_count' },
   ];
   // 默认全选
   const exportContentChecked = ref<string[]>(exportContentOptions.map(item => item.id));
@@ -704,6 +774,20 @@
       isExporting.value = false;
     }
   };
+
+  // ========== 组件挂载时恢复查询状态 ==========
+  onMounted(() => {
+    const savedState = loadQueryState();
+    // 仅当保存的 toolUid 与当前一致时才恢复（避免不同工具实例间串数据）
+    if (savedState && savedState.toolUid === props.toolUid && savedState.accountId) {
+      nextTick(() => {
+        // 恢复表单输入
+        queryInputRef.value?.setForm(savedState.accountType, savedState.accountId);
+        // 重新执行查询
+        handleQuery(savedState.accountType, savedState.accountId);
+      });
+    }
+  });
 </script>
 
 <style scoped lang="postcss">
@@ -719,6 +803,24 @@
   .game-list-section {
     margin-bottom: 16px;
   }
+}
+
+/* loading 容器 */
+.page-loading-wrapper {
+  min-height: 400px;
+}
+
+/* loading 占位元素 */
+.loading-placeholder {
+  height: 400px;
+}
+
+/* 暂无数据 */
+.page-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
 }
 
 .top-search {
