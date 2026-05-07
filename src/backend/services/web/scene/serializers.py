@@ -199,7 +199,7 @@ class SceneSimpleListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Scene
-        fields = ["scene_id", "name", "status"]
+        fields = ["scene_id", "name", "description", "status"]
 
 
 class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
