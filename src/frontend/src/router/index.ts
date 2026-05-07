@@ -160,10 +160,15 @@ export default (config: ConfigModel) => {
         // 放行，继续后续检查
       } else {
         // 基于角色策略表进行访问控制
+        // saas_admin / scene_admin 角色不受 userLandingPage 重定向限制
+        const hasAdminPrivilege = userRole.includes('saas_admin') || userRole.includes('scene_admin');
         for (const role of userRole) {
-          const rules = ROLE_ACCESS_MAP[role];
-          console.log('rules', rules);
+          let rules = ROLE_ACCESS_MAP[role];
           if (!rules) continue;
+          if (hasAdminPrivilege) {
+            // 过滤掉 userLandingPage 重定向的规则
+            rules = rules.filter(r => r.redirect !== 'userLandingPage');
+          }
           const redirect = checkAccessRedirect(to.path, to.name, rules);
           if (redirect) {
             next({ name: redirect });
