@@ -19,7 +19,7 @@
     :is-show="isShow"
     :title="isEditMode ? t('编辑报表') : t('新建报表')"
     :width="640"
-    @closed="handleClose">
+    @closed="handleSliderClosed">
     <template #default>
       <div class="report-create-content">
         <bk-form
@@ -251,47 +251,60 @@
     return [];
   };
 
-  // 监听显示状态，重置表单
+  // 填充编辑数据的通用逻辑
+  const fillEditFormData = (data: ReportFormData) => {
+    formData.value = {
+      id: data.id,
+      bkvisionReport: data.bkvisionReport,
+      vision_id: [],
+      name: data.name,
+      groupId: data.groupId ?? null,
+      description: data.description || '--',
+      status: data.status || 'unpublished',
+      enabled: (data.status ?? 'unpublished') === 'published',
+    };
+    // 如果有 bkvisionReport，尝试设置级联选择器的值
+    if (data.bkvisionReport && chartLists.value.length > 0) {
+      formData.value.vision_id = findCascaderPath(data.bkvisionReport);
+    }
+  };
+
+  // 重置新建模式表单
+  const resetCreateFormData = () => {
+    let defaultGroupIdValue = props.defaultGroupId ?? null;
+    if (props.defaultGroupName) {
+      const matchedGroup = props.groupList.find(g => g.name === props.defaultGroupName);
+      if (matchedGroup) {
+        defaultGroupIdValue = matchedGroup.id;
+      }
+    }
+    formData.value = {
+      bkvisionReport: '',
+      vision_id: [],
+      name: '',
+      groupId: defaultGroupIdValue,
+      description: '',
+      enabled: false,
+    };
+  };
+
+  // 监听显示状态，重置/填充表单
   watch(() => props.isShow, (val) => {
     if (val) {
       if (props.editData) {
-        // 编辑模式，填充数据
-        const data = props.editData;
-        formData.value = {
-          id: data.id,
-          bkvisionReport: data.bkvisionReport,
-          vision_id: [],
-          name: data.name,
-          groupId: data.groupId ?? null,
-          description: data.description || '--',
-          status: data.status || 'unpublished',
-          enabled: (data.status ?? 'unpublished') === 'published',
-        };
-        // 如果有 bkvisionReport，尝试设置级联选择器的值
-        if (data.bkvisionReport && chartLists.value.length > 0) {
-          formData.value.vision_id = findCascaderPath(data.bkvisionReport);
-        }
+        fillEditFormData(props.editData);
       } else {
-        // 新建模式，重置表单
-        let defaultGroupIdValue = props.defaultGroupId ?? null;
-
-        // 如果提供了 defaultGroupName，优先从 groupList 中查找匹配的分组 ID
-        if (props.defaultGroupName) {
-          const matchedGroup = props.groupList.find(g => g.name === props.defaultGroupName);
-          if (matchedGroup) {
-            defaultGroupIdValue = matchedGroup.id;
-          }
-        }
-
-        formData.value = {
-          bkvisionReport: '',
-          vision_id: [],
-          name: '',
-          groupId: defaultGroupIdValue,
-          description: '',
-          enabled: false,
-        };
+        resetCreateFormData();
       }
+    }
+  });
+
+  // 监听 editData 变化（双重保障，解决 isShow 与 editData 更新时序竞态问题）
+  watch(() => props.editData, (data) => {
+    if (props.isShow && data) {
+      fillEditFormData(data);
+    } else if (props.isShow && !data) {
+      resetCreateFormData();
     }
   });
 
@@ -408,6 +421,7 @@
           scene_id: getSceneSystemParams().scope_id,
           group_id: typeof groupId === 'number' ? groupId : Number(groupId),
           panel_id: formData.value.id,
+          vision_id: visionId,
           name: formData.value.name,
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || undefined,
@@ -426,7 +440,12 @@
     });
   };
 
-  // 关闭
+  // 侧边栏关闭（箭头/遮罩点击），仅关闭弹窗
+  const handleSliderClosed = () => {
+    emit('update:isShow', false);
+  };
+
+  // 取消按钮关闭，同时通知父组件
   const handleClose = () => {
     emit('update:isShow', false);
     emit('cancel');
