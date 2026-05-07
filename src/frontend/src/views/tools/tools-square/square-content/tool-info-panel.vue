@@ -328,7 +328,24 @@
   };
 
   const toolContentRefs = ref<Record<string, any>>({});
-  const searchListMap = ref<Record<string, SearchItem[]>>({});
+  // 从 sessionStorage 恢复 searchListMap
+  const STORAGE_KEY_SEARCH_LIST = 'tool_tabs_search_list_map';
+  const loadSearchListMap = (): Record<string, SearchItem[]> => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY_SEARCH_LIST);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+  const searchListMap = ref<Record<string, SearchItem[]>>(loadSearchListMap());
+  const syncSearchListToStorage = () => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_SEARCH_LIST, JSON.stringify(searchListMap.value));
+    } catch {
+      // 静默处理
+    }
+  };
   const toolDetailMap = ref<Record<string, ToolDetailModel>>({});
   const {
     data: allToolsData,
@@ -346,6 +363,7 @@
   const getSearchList = (uid: string): SearchItem[] => searchListMap.value[uid] || [];
   const setSearchList = (uid: string, val: SearchItem[]) => {
     searchListMap.value[uid] = val;
+    syncSearchListToStorage();
   };
 
   // 获取工具详情
@@ -443,12 +461,14 @@
               : dynamicValue,
           };
         });
+        syncSearchListToStorage();
 
         // 清除下钻参数，避免重复使用
         clearDrillDownParams(uid);
       } else if (!searchListMap.value[uid]) {
         // 非下钻：仅在该工具尚未初始化搜索列表时才设置
         searchListMap.value[uid] = (data.config?.input_variable || []).map(createSearchItem);
+        syncSearchListToStorage();
       }
 
       nextTick(() => {
@@ -491,12 +511,34 @@
     };
   };
 
-  // 游戏详情数据缓存
-  const gameDetailDataMap = ref<Record<string, any>>({});
+  // 游戏详情数据缓存（从 sessionStorage 恢复）
+  const STORAGE_KEY_GAME_DETAIL = 'tool_tabs_game_detail_map';
+  const loadGameDetailCache = () => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY_GAME_DETAIL);
+      return raw ? JSON.parse(raw) : { data: {}, tab: {}, toolUid: {} };
+    } catch {
+      return { data: {}, tab: {}, toolUid: {} };
+    }
+  };
+  const savedGameCache = loadGameDetailCache();
+  const gameDetailDataMap = ref<Record<string, any>>(savedGameCache.data);
   // 游戏详情初始 tab 缓存
-  const gameDetailInitialTabMap = ref<Record<string, string>>({});
+  const gameDetailInitialTabMap = ref<Record<string, string>>(savedGameCache.tab);
   // 游戏详情对应的 smart_page 工具 uid 缓存
-  const gameDetailToolUidMap = ref<Record<string, string>>({});
+  const gameDetailToolUidMap = ref<Record<string, string>>(savedGameCache.toolUid);
+
+  const syncGameDetailToStorage = () => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_GAME_DETAIL, JSON.stringify({
+        data: gameDetailDataMap.value,
+        tab: gameDetailInitialTabMap.value,
+        toolUid: gameDetailToolUidMap.value,
+      }));
+    } catch {
+      // 静默处理
+    }
+  };
 
   // 打开游戏数据详情
   const handleOpenGameDetail = (gameData: Record<string, any>, initialTab?: string) => {
@@ -539,6 +581,8 @@
     emit('addTool', gameTool);
     // 切换到新 tab
     emit('switchTab', gameUid);
+    // 同步游戏详情缓存到 sessionStorage
+    syncGameDetailToStorage();
   };
 
   // 处理下钻事件：在新浏览器标签页中打开目标工具
@@ -596,6 +640,16 @@
           delete toolContentRefs.value[uid];
         }
       });
+      // 清理不在列表中的游戏详情缓存
+      Object.keys(gameDetailDataMap.value).forEach((uid) => {
+        if (!activeUids.has(uid)) {
+          delete gameDetailDataMap.value[uid];
+          delete gameDetailInitialTabMap.value[uid];
+          delete gameDetailToolUidMap.value[uid];
+        }
+      });
+      syncSearchListToStorage();
+      syncGameDetailToStorage();
     },
     { deep: true },
   );
