@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from typing import List
+
 from django.conf import settings
 from django.utils.translation import gettext
 from iam import Resource
@@ -37,30 +39,32 @@ class Strategy(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        resource = cls.create_simple_instance(instance_id, attribute)
+        return cls.batch_create_instance([instance_id], attribute=attribute)[0][0]
 
-        instance_name = str(instance_id)
-        strategy = StrategyModel.objects.filter(pk=instance_id).first()
-        if strategy:
-            instance_name = strategy.strategy_name
+    @classmethod
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
+        strategies = StrategyModel.objects.filter(strategy_id__in=instance_ids).only("strategy_id", "strategy_name")
+        strategy_map = {str(strategy.strategy_id): strategy for strategy in strategies}
+        scene_bindings = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
+        ).values_list("binding__resource_id", "scene_id")
+        strategy_scene_map = {resource_id: str(scene_id) for resource_id, scene_id in scene_bindings}
 
-        # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
-        scene_id = (
-            ResourceBindingScene.objects.filter(
-                binding__resource_type=ResourceVisibilityType.STRATEGY,
-                binding__resource_id=str(instance_id),
-            )
-            .values_list("scene_id", flat=True)
-            .first()
-        )
-        scene_id = str(scene_id) if scene_id else ""
-
-        resource.attribute = {
-            "id": str(instance_id),
-            "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
-        }
-        return resource
+        resources = []
+        for instance_id in instance_ids:
+            resource = cls.create_simple_instance(instance_id, attribute)
+            instance_key = str(instance_id)
+            strategy = strategy_map.get(instance_key)
+            instance_name = strategy.strategy_name if strategy else instance_key
+            scene_id = strategy_scene_map.get(instance_key, "")
+            resource.attribute = {
+                "id": instance_key,
+                "name": instance_name,
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
+            }
+            resources.append([resource])
+        return resources
 
 
 class LinkTable(ResourceTypeMeta):
@@ -72,30 +76,32 @@ class LinkTable(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
-        resource = cls.create_simple_instance(instance_id, attribute)
+        return cls.batch_create_instance([instance_id], attribute=attribute)[0][0]
 
-        instance_name = str(instance_id)
-        link_table = LinkTableModel.last_version_link_table(instance_id)
-        if link_table:
-            instance_name = link_table.name
+    @classmethod
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
+        link_tables = LinkTableModel.objects.filter(uid__in=instance_ids).only("uid", "name")
+        link_table_map = {link_table.uid: link_table for link_table in link_tables}
+        scene_bindings = ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+            binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
+        ).values_list("binding__resource_id", "scene_id")
+        link_table_scene_map = {resource_id: str(scene_id) for resource_id, scene_id in scene_bindings}
 
-        # 通过 ResourceBindingScene 反查 scene_id（业务模型已移除 scene_id 字段）
-        scene_id = (
-            ResourceBindingScene.objects.filter(
-                binding__resource_type=ResourceVisibilityType.LINK_TABLE,
-                binding__resource_id=str(instance_id),
-            )
-            .values_list("scene_id", flat=True)
-            .first()
-        )
-        scene_id = str(scene_id) if scene_id else ""
-
-        resource.attribute = {
-            "id": str(instance_id),
-            "name": instance_name,
-            KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
-        }
-        return resource
+        resources = []
+        for instance_id in instance_ids:
+            resource = cls.create_simple_instance(instance_id, attribute)
+            instance_key = str(instance_id)
+            link_table = link_table_map.get(instance_key)
+            instance_name = link_table.name if link_table else instance_key
+            scene_id = link_table_scene_map.get(instance_key, "")
+            resource.attribute = {
+                "id": instance_key,
+                "name": instance_name,
+                KEYWORD_BK_IAM_PATH: f"/scene,{scene_id}/",
+            }
+            resources.append([resource])
+        return resources
 
 
 class StrategyTag(ResourceTypeMeta):
