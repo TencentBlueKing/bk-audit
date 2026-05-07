@@ -119,6 +119,12 @@ class SystemDiagnosisPushHandler:
             system_diagnosis_config.push_status = SystemDiagnosisPushStatusEnum.FAILED.value
             system_diagnosis_config.push_error_message = str(e)
             is_ok = False
+        except Exception as e:
+            logger.error(f"[{self.__class__.__name__}] unexpected error: {e}")
+            system_diagnosis_config.push_result = None
+            system_diagnosis_config.push_status = SystemDiagnosisPushStatusEnum.FAILED.value
+            system_diagnosis_config.push_error_message = str(e)
+            is_ok = False
         finally:
             system_diagnosis_config.push_config = push_params
             system_diagnosis_config.save()
