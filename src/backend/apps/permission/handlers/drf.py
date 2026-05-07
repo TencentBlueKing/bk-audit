@@ -70,11 +70,26 @@ class AnyOfPermissions(permissions.BasePermission):
     def __init__(self, *ops: permissions.BasePermission):
         self.ops = ops
 
+    def _check_any(self, check):
+        first_exception = None
+        for op in self.ops:
+            try:
+                if check(op):
+                    return True
+            except Exception as err:
+                if first_exception is None:
+                    first_exception = err
+        if first_exception:
+            raise first_exception
+        return False
+
     def has_permission(self, request, view):
-        return any(op.has_permission(request, view) for op in self.ops)
+        return self._check_any(lambda op: op.has_permission(request, view))
 
     def has_object_permission(self, request, view, obj):
-        return any(op.has_permission(request, view) and op.has_object_permission(request, view, obj) for op in self.ops)
+        return self._check_any(
+            lambda op: op.has_permission(request, view) and op.has_object_permission(request, view, obj)
+        )
 
 
 class InstancePermission(permissions.BasePermission):
