@@ -73,6 +73,8 @@
 
   interface Exposes {
     resetForm: () => void;
+    setForm: (accountType: string, account: string) => void;
+    getFormValues: () => { accountType: string; accountId: string };
   }
 
   const emit = defineEmits<Emits>();
@@ -116,8 +118,22 @@
     selectedAccountType.value = 'ctx';
   };
 
+  // 设置表单值（供父组件恢复状态时调用）
+  const setForm = (accountType: string, account: string) => {
+    selectedAccountType.value = accountType;
+    accountId.value = account;
+  };
+
+  // 获取当前表单值（供父组件读取）
+  const getFormValues = () => ({
+    accountType: selectedAccountType.value,
+    accountId: accountId.value,
+  });
+
   defineExpose<Exposes>({
     resetForm,
+    setForm,
+    getFormValues,
   });
 </script>
 
