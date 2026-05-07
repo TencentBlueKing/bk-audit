@@ -217,13 +217,13 @@
           @click="handleNext">
           {{ t('下一步') }}
         </bk-button>
-        <bk-button
+        <!-- <bk-button
           v-if="isEditMode"
           class="ml8"
           theme="primary"
           @click="handleSaveCurrentStep">
           {{ t('提交') }}
-        </bk-button>
+        </bk-button> -->
         <bk-button
           class="ml8"
           @click="handleCancel">
@@ -675,16 +675,16 @@
   };
 
   // 提交（编辑态）：校验后提交，效果与「其他配置」的提交一致
-  const handleSaveCurrentStep = () => {
-    const tastQueue = [formRef.value.validate()];
-    if (formData.value.strategy_type) {
-      tastQueue.push(comRef.value.getValue?.());
-    }
-    Promise.all(tastQueue).then(() => {
-      const params = buildStepParams();
-      emits('saveCurrentStep', params);
-    });
-  };
+  // const handleSaveCurrentStep = () => {
+  //   const tastQueue = [formRef.value.validate()];
+  //   if (formData.value.strategy_type) {
+  //     tastQueue.push(comRef.value.getValue?.());
+  //   }
+  //   Promise.all(tastQueue).then(() => {
+  //     const params = buildStepParams();
+  //     emits('saveCurrentStep', params);
+  //   });
+  // };
 
   watch(() => props.editData, (data) => {
     if (isEditMode || isCloneMode) {
