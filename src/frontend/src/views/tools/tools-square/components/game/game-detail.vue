@@ -36,10 +36,11 @@
         <div class="info-item">
           <span class="info-label">{{ t('微信') }}</span>
           <span class="info-value">
-            {{ gameData.wechat }}
+            {{ isWechatVisible ? gameData.wechat : '******' }}
             <audit-icon
               class="eye-icon"
-              type="unview" />
+              :type="isWechatVisible ? 'view' : 'unview'"
+              @click="isWechatVisible = !isWechatVisible" />
           </span>
         </div>
         <div class="info-item">
@@ -132,50 +133,66 @@
           :label="t('概览')"
           name="overview">
           <!-- 概览内容 -->
-          <div class="overview-content">
+          <bk-loading
+            class="tab-loading-wrapper"
+            :loading="overviewLoading">
+            <!-- loading时的占位元素，擑开容器高度使loading居中 -->
             <div
-              v-for="section in overviewSections"
-              :key="section.key"
-              class="section">
-              <!-- 标题行 -->
+              v-if="overviewLoading"
+              class="loading-placeholder" />
+            <bk-exception
+              v-if="!overviewLoading && isOverviewEmpty"
+              class="tab-empty"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+            <div
+              v-else-if="!overviewLoading"
+              class="overview-content">
               <div
-                v-if="section.tabKey"
-                class="section-title-row">
-                <span class="section-title">{{ section.title }}</span>
-                <span
-                  class="view-detail-link"
-                  @click="activeTab = section.tabKey">
-                  {{ t('查看详情') }}
-                  <audit-icon type="jump-link" />
-                </span>
-              </div>
-              <div
-                v-else
-                class="section-title">
-                {{ section.title }}
-              </div>
+                v-for="section in overviewSections"
+                :key="section.key"
+                class="section">
+                <!-- 标题行 -->
+                <div
+                  v-if="section.tabKey"
+                  class="section-title-row">
+                  <span class="section-title">{{ section.title }}</span>
+                  <span
+                    class="view-detail-link"
+                    @click="activeTab = section.tabKey">
+                    {{ t('查看详情') }}
+                    <audit-icon type="jump-link" />
+                  </span>
+                </div>
+                <div
+                  v-else
+                  class="section-title">
+                  {{ section.title }}
+                </div>
 
-              <!-- 最近记录行 -->
-              <div
-                v-if="section.lastRecordItems?.length"
-                class="last-record-row">
-                <span
-                  v-for="item in section.lastRecordItems"
-                  :key="item.label"
-                  class="record-item">
-                  <span class="record-label">{{ item.label }}：</span>
-                  <span class="record-value">{{ item.value }}</span>
-                </span>
-              </div>
+                <!-- 最近记录行 -->
+                <div
+                  v-if="section.lastRecordItems?.length"
+                  class="last-record-row">
+                  <span
+                    v-for="item in section.lastRecordItems"
+                    :key="item.label"
+                    class="record-item">
+                    <span class="record-label">{{ item.label }}：</span>
+                    <span class="record-value">{{ item.value }}</span>
+                  </span>
+                </div>
 
-              <!-- 表格（simple 模式） -->
-              <record-detail-table
-                v-if="section.table"
-                :columns="section.table.columns"
-                :data="section.table.data"
-                simple />
+                <!-- 表格（simple 模式） -->
+                <record-detail-table
+                  v-if="section.table"
+                  :columns="section.table.columns"
+                  :data="section.table.data"
+                  simple />
+              </div>
             </div>
-          </div>
+          </bk-loading>
         </bk-tab-panel>
 
         <bk-tab-panel
@@ -183,29 +200,44 @@
           :key="tab.key"
           :label="tab.label"
           :name="tab.key">
-          <game-record-tab
-            :chart-rows="tab.chartRows"
-            :search-fields="tab.searchFields"
-            :search-placeholder="tab.searchPlaceholder"
-            :table-columns="tab.table.columns"
-            :table-data="tab.table.data"
-            :table-pagination="tab.table.pagination"
-            :table-title="tab.table.title"
-            @date-change="handleTabDateChange(tab.key, $event)"
-            @page-change="handleTabPageChange(tab.key, $event)"
-            @page-limit-change="handleTabPageLimitChange(tab.key, $event)"
-            @search-condition-change="handleTabSearchConditionChange(tab.key, $event)">
-            <!-- 插槽控制 -->
-            <template
-              v-if="tab.extraFilter === 'chatViolation'"
-              #extra-filter>
-              <bk-checkbox
-                v-model="chatSuspectedViolation"
-                class="suspected-violation-checkbox">
-                {{ t('疑似违规') }}
-              </bk-checkbox>
-            </template>
-          </game-record-tab>
+          <bk-loading
+            class="tab-loading-wrapper"
+            :loading="tabLoadingMap[tab.key]">
+            <!-- loading时的占位元素，擑开容器高度使loading居中 -->
+            <div
+              v-if="tabLoadingMap[tab.key]"
+              class="loading-placeholder" />
+            <bk-exception
+              v-if="!tabLoadingMap[tab.key] && isTabEmpty(tab.key)"
+              class="tab-empty"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+            <game-record-tab
+              v-else-if="!tabLoadingMap[tab.key]"
+              :chart-rows="tab.chartRows"
+              :search-fields="tab.searchFields"
+              :search-placeholder="tab.searchPlaceholder"
+              :table-columns="tab.table.columns"
+              :table-data="tab.table.data"
+              :table-pagination="tab.table.pagination"
+              :table-title="tab.table.title"
+              @date-change="handleTabDateChange(tab.key, $event)"
+              @page-change="handleTabPageChange(tab.key, $event)"
+              @page-limit-change="handleTabPageLimitChange(tab.key, $event)"
+              @search-condition-change="handleTabSearchConditionChange(tab.key, $event)">
+              <!-- 插槽控制 -->
+              <template
+                v-if="tab.extraFilter === 'chatViolation'"
+                #extra-filter>
+                <bk-checkbox
+                  v-model="chatSuspectedViolation"
+                  class="suspected-violation-checkbox">
+                  {{ t('疑似违规') }}
+                </bk-checkbox>
+              </template>
+            </game-record-tab>
+          </bk-loading>
         </bk-tab-panel>
       </bk-tab>
     </div>
@@ -223,6 +255,16 @@
 
   import { execCopy } from '@utils/assist';
 
+  import {
+    CHART_FIELDS,
+    CHAT_DETAIL_FIELDS,
+    COIN_DETAIL_FIELDS,
+    EXPORT_USER_FIELDS,
+    GIFT_DETAIL_FIELDS,
+    LOGIN_DETAIL_FIELDS,
+    ROLE_FIELDS,
+    TRADE_DETAIL_FIELDS,
+  } from './game-field-keys';
   import GameRecordTab from './game-record-tab.vue';
   import { type SearchFieldItem, useGameSearchFields } from './game-search-fields';
   import { useGameTableColumns } from './game-table-columns';
@@ -373,6 +415,9 @@
     });
   };
 
+  // 微信号显示/隐藏
+  const isWechatVisible = ref(false);
+
   // 复制
   const handleCopy = (text: string) => {
     execCopy(text, t('复制成功'));
@@ -396,31 +441,31 @@
     const roleMap = new Map<string, Record<string, any>>();
     // 先用 login 数据建立基础
     loginData.forEach((row) => {
-      const id = row['角色ID'] || row.roleId || '';
+      const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
       roleMap.set(id, { ...row });
     });
     // 合并 chat 数据
     chatData.forEach((row) => {
-      const id = row['角色ID'] || row.roleId || '';
-      const existing = roleMap.get(id) || { 角色ID: id };
+      const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
+      const existing = roleMap.get(id) || { [ROLE_FIELDS.ROLE_ID]: id };
       roleMap.set(id, {
         ...existing,
-        '聊天对象（月）': row['聊天对象（月）'] ?? 0,
-        '聊天对象（年）': row['聊天对象（年）'] ?? 0,
-        '聊天数量（月）': row['聊天数量（月）'] ?? 0,
-        '聊天数量（年）': row['聊天数量（年）'] ?? 0,
+        [ROLE_FIELDS.CHAT_TARGET_MONTH]: row[ROLE_FIELDS.CHAT_TARGET_MONTH] ?? 0,
+        [ROLE_FIELDS.CHAT_TARGET_YEAR]: row[ROLE_FIELDS.CHAT_TARGET_YEAR] ?? 0,
+        [ROLE_FIELDS.CHAT_COUNT_MONTH]: row[ROLE_FIELDS.CHAT_COUNT_MONTH] ?? 0,
+        [ROLE_FIELDS.CHAT_COUNT_YEAR]: row[ROLE_FIELDS.CHAT_COUNT_YEAR] ?? 0,
       });
     });
     // 合并 deal 数据
     dealData.forEach((row) => {
-      const id = row['角色ID'] || row.roleId || '';
-      const existing = roleMap.get(id) || { 角色ID: id };
+      const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
+      const existing = roleMap.get(id) || { [ROLE_FIELDS.ROLE_ID]: id };
       roleMap.set(id, {
         ...existing,
-        '交易对象（月）': row['交易对象（月）'] ?? 0,
-        '交易对象（年）': row['交易对象（年）'] ?? 0,
-        '交易数量（月）': row['交易数量（月）'] ?? 0,
-        '交易数量（年）': row['交易数量（年）'] ?? 0,
+        [ROLE_FIELDS.TRADE_TARGET_MONTH]: row[ROLE_FIELDS.TRADE_TARGET_MONTH] ?? 0,
+        [ROLE_FIELDS.TRADE_TARGET_YEAR]: row[ROLE_FIELDS.TRADE_TARGET_YEAR] ?? 0,
+        [ROLE_FIELDS.TRADE_COUNT_MONTH]: row[ROLE_FIELDS.TRADE_COUNT_MONTH] ?? 0,
+        [ROLE_FIELDS.TRADE_COUNT_YEAR]: row[ROLE_FIELDS.TRADE_COUNT_YEAR] ?? 0,
       });
     });
     return Array.from(roleMap.values());
@@ -459,10 +504,10 @@
       title: t('登录记录'),
       tabKey: 'login',
       lastRecordItems: [
-        { label: t('最近一次登录时间'), value: lastLoginRecord.value.登录时间 || '--' },
-        { label: t('登录地点'), value: lastLoginRecord.value.登录地点 || '--' },
-        { label: t('登录IP'), value: lastLoginRecord.value.登录IP || '--' },
-        { label: t('登录设备'), value: lastLoginRecord.value.登录设备 || '--' },
+        { label: t('最近一次登录时间'), value: lastLoginRecord.value[LOGIN_DETAIL_FIELDS.LOGIN_TIME] || '--' },
+        { label: t('登录地点'), value: lastLoginRecord.value[LOGIN_DETAIL_FIELDS.LOGIN_LOCATION] || '--' },
+        { label: t('登录IP'), value: lastLoginRecord.value[LOGIN_DETAIL_FIELDS.LOGIN_IP] || '--' },
+        { label: t('登录设备'), value: lastLoginRecord.value[LOGIN_DETAIL_FIELDS.LOGIN_DEVICE] || '--' },
       ],
       table: { columns: loginStatColumns, data: loginStatList.value },
     },
@@ -471,10 +516,10 @@
       title: t('赠送记录'),
       tabKey: 'gift',
       lastRecordItems: [
-        { label: t('最近一次赠送时间'), value: lastGiveRecord.value.赠送时间 || '--' },
-        { label: t('赠送账号'), value: lastGiveRecord.value.赠送对象 || lastGiveRecord.value.对方openid || '--' },
-        { label: t('道具名称'), value: lastGiveRecord.value.道具名称 || '--' },
-        { label: t('赠送总额'), value: lastGiveRecord.value.赠送金额 ? `${lastGiveRecord.value.赠送金额} 元` : '--' },
+        { label: t('最近一次赠送时间'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_TIME] || '--' },
+        { label: t('赠送账号'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_TARGET] || lastGiveRecord.value[GIFT_DETAIL_FIELDS.TARGET_OPENID] || '--' },
+        { label: t('道具名称'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.ITEM_NAME] || '--' },
+        { label: t('赠送总额'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_AMOUNT] ? `${lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_AMOUNT]} 元` : '--' },
       ],
     },
     {
@@ -482,10 +527,10 @@
       title: t('交易记录'),
       tabKey: 'trade',
       lastRecordItems: [
-        { label: t('最近一次交易时间'), value: lastDealRecord.value.交易时间 || '--' },
-        { label: t('交易对象'), value: lastDealRecord.value.交易对象 || '--' },
-        { label: t('道具名称'), value: lastDealRecord.value.道具名称 || '--' },
-        { label: t('赠送总额'), value: lastDealRecord.value.交易金额 ? `${lastDealRecord.value.交易金额} 元` : '--' },
+        { label: t('最近一次交易时间'), value: lastDealRecord.value[TRADE_DETAIL_FIELDS.TRADE_TIME] || '--' },
+        { label: t('交易对象'), value: lastDealRecord.value[TRADE_DETAIL_FIELDS.TRADE_TARGET] || '--' },
+        { label: t('道具名称'), value: lastDealRecord.value[TRADE_DETAIL_FIELDS.ITEM_NAME] || '--' },
+        { label: t('赠送总额'), value: lastDealRecord.value[TRADE_DETAIL_FIELDS.TRADE_TOTAL] ? `${lastDealRecord.value[TRADE_DETAIL_FIELDS.TRADE_TOTAL]} 元` : '--' },
       ],
     },
     {
@@ -493,10 +538,10 @@
       title: t('代币发放记录'),
       tabKey: 'coin',
       lastRecordItems: [
-        { label: t('最近一次发放时间'), value: lastSapRecord.value.发放时间 || '--' },
-        { label: t('发放人'), value: lastSapRecord.value.发放人 || '--' },
-        { label: t('发放数量'), value: lastSapRecord.value.发放数量 ? `代 ${lastSapRecord.value.发放数量}` : '--' },
-        { label: t('发放金额'), value: (lastSapRecord.value.发放金额 ?? lastSapRecord.value['发放金额（元）']) ? `${lastSapRecord.value.发放金额 ?? lastSapRecord.value['发放金额（元）']} 元` : '--' },
+        { label: t('最近一次发放时间'), value: lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_TIME] || '--' },
+        { label: t('发放人'), value: lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUER] || '--' },
+        { label: t('发放数量'), value: lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_COUNT] ? `代 ${lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_COUNT]}` : '--' },
+        { label: t('发放金额'), value: (lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_AMOUNT_SHORT] ?? lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_AMOUNT]) ? `${lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_AMOUNT_SHORT] ?? lastSapRecord.value[COIN_DETAIL_FIELDS.ISSUE_AMOUNT]} 元` : '--' },
       ],
     },
     {
@@ -504,10 +549,10 @@
       title: t('聊天记录'),
       tabKey: 'chat',
       lastRecordItems: [
-        { label: t('最近一次聊天时间'), value: lastChatRecord.value.聊天时间 || '--' },
-        { label: t('发起人'), value: lastChatRecord.value.聊天对象 || lastChatRecord.value.发起人 || '--' },
-        { label: t('大区ID'), value: lastChatRecord.value.大区ID || '--' },
-        { label: t('聊天内容'), value: lastChatRecord.value.聊天内容 || '--' },
+        { label: t('最近一次聊天时间'), value: lastChatRecord.value[CHAT_DETAIL_FIELDS.CHAT_TIME] || '--' },
+        { label: t('发起人'), value: lastChatRecord.value[CHAT_DETAIL_FIELDS.CHAT_TARGET] || lastChatRecord.value[CHAT_DETAIL_FIELDS.INITIATOR] || '--' },
+        { label: t('大区ID'), value: lastChatRecord.value[CHAT_DETAIL_FIELDS.ZONE_ID] || '--' },
+        { label: t('聊天内容'), value: lastChatRecord.value[CHAT_DETAIL_FIELDS.CHAT_CONTENT] || '--' },
       ],
     },
   ]);
@@ -519,16 +564,16 @@
 
   // 将 groupdim_stats 数据按"分组"拆分为饼图数据
   const buildChartFromGroupStats = (data: any[], groupName: string, valueField: string) => data
-    .filter(row => row.分组 === groupName)
-    .map(row => ({ name: row.维度 || '', value: Number(row[valueField]) || 0 }));
+    .filter(row => row[CHART_FIELDS.GROUP] === groupName)
+    .map(row => ({ name: row[CHART_FIELDS.DIMENSION] || '', value: Number(row[valueField]) || 0 }));
 
   const loginChartRows = computed<ChartConfig[][]>(() => {
     const stats = loginGroupStats.value;
     if (stats.length === 0) return [];
-    const deviceData = buildChartFromGroupStats(stats, '登录设备', '登录总数');
-    const locationData = buildChartFromGroupStats(stats, '登录地点', '登录总数');
-    const timeData = buildChartFromGroupStats(stats, '登录时段', '登录总数');
-    const total = stats.reduce((sum, row) => sum + (Number(row.登录总数) || 0), 0);
+    const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE, CHART_FIELDS.LOGIN_TOTAL);
+    const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION, CHART_FIELDS.LOGIN_TOTAL);
+    const timeData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_TIME_PERIOD, CHART_FIELDS.LOGIN_TOTAL);
+    const total = stats.reduce((sum, row) => sum + (Number(row[CHART_FIELDS.LOGIN_TOTAL]) || 0), 0);
     const charts: ChartConfig[] = [];
     if (deviceData.length > 0) charts.push({ title: t('登录设备分布'), data: deviceData, total, centerLabel: t('登录总数') });
     if (locationData.length > 0) charts.push({ title: t('登录地点分布'), data: locationData, total, centerLabel: t('登录总数') });
@@ -545,10 +590,10 @@
     const stats = giveGroupStats.value;
     if (stats.length === 0) return [];
     // 赠送分布：按金额和次数
-    const targetAmountData = buildChartFromGroupStats(stats, '赠送对象', '赠送金额（元）');
-    const targetCountData = buildChartFromGroupStats(stats, '赠送对象', '次数');
-    const itemAmountData = buildChartFromGroupStats(stats, '赠送道具', '赠送金额（元）');
-    const itemCountData = buildChartFromGroupStats(stats, '赠送道具', '次数');
+    const targetAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET, CHART_FIELDS.GIFT_AMOUNT_YUAN);
+    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET, CHART_FIELDS.TIMES);
+    const itemAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM, CHART_FIELDS.GIFT_AMOUNT_YUAN);
+    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM, CHART_FIELDS.TIMES);
     const rows: ChartConfig[][] = [];
     const row1: ChartConfig[] = [];
     if (targetAmountData.length > 0) {
@@ -581,10 +626,10 @@
   const dealChartRows = computed<ChartConfig[][]>(() => {
     const stats = dealGroupStats.value;
     if (stats.length === 0) return [];
-    const targetAmountData = buildChartFromGroupStats(stats, '交易对象', '发放金额（元）');
-    const targetCountData = buildChartFromGroupStats(stats, '交易对象', '次数');
-    const itemAmountData = buildChartFromGroupStats(stats, '交易道具', '发放金额（元）');
-    const itemCountData = buildChartFromGroupStats(stats, '交易道具', '次数');
+    const targetAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET, CHART_FIELDS.TIMES);
+    const itemAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM, CHART_FIELDS.TIMES);
     const rows: ChartConfig[][] = [];
     const row1: ChartConfig[] = [];
     if (targetAmountData.length > 0) {
@@ -617,10 +662,10 @@
   const sapChartRows = computed<ChartConfig[][]>(() => {
     const stats = sapGroupStats.value;
     if (stats.length === 0) return [];
-    const demandTypeData = buildChartFromGroupStats(stats, '需求类型', '发放金额（元）');
-    const issuerData = buildChartFromGroupStats(stats, '发放人', '发放金额（元）');
-    const sourceData = buildChartFromGroupStats(stats, '需求来源', '发放金额（元）');
-    const total = stats.reduce((sum, row) => sum + (Number(row['发放金额（元）']) || 0), 0);
+    const demandTypeData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_TYPE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const issuerData = buildChartFromGroupStats(stats, CHART_FIELDS.ISSUER, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const sourceData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_SOURCE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const total = stats.reduce((sum, row) => sum + (Number(row[CHART_FIELDS.ISSUE_AMOUNT_YUAN]) || 0), 0);
     const charts: ChartConfig[] = [];
     if (demandTypeData.length > 0) charts.push({ title: t('需求类型分布'), data: demandTypeData, total, centerLabel: t('总金额（元）') });
     if (issuerData.length > 0) charts.push({ title: t('发放人分布'), data: issuerData, total, centerLabel: t('总金额（元）') });
@@ -647,6 +692,7 @@
   const filterDataByConditions = (
     data: Array<Record<string, any>>,
     conditions: any[],
+    searchFields: SearchFieldItem[] = [],
   ): Array<Record<string, any>> => {
     if (!conditions || conditions.length === 0) return data;
     return data.filter(row => conditions.every((condition) => {
@@ -654,7 +700,10 @@
       const operator = condition.operator || 'like'; // 默认操作符为"包含"
       const searchValue = String(condition.value || '');
       if (!searchValue) return true;
-      const cellValue = String(row[fieldId] ?? '');
+      // 通过 fieldId 查找对应的 fieldKey（后端数据字段名），用于匹配行数据
+      const fieldConfig = searchFields.find(f => f.id === fieldId);
+      const dataKey = fieldConfig?.fieldKey || fieldId;
+      const cellValue = String(row[dataKey] ?? '');
       const cellValueLower = cellValue.toLowerCase();
 
       // 支持逗号分隔多值（中英文逗号均支持）
@@ -695,7 +744,7 @@
       searchFields: loginSearchFields,
       table: {
         columns: loginDetailColumns,
-        data: filterDataByConditions(loginDetailList.value, tabSearchConditions.value.login),
+        data: filterDataByConditions(loginDetailList.value, tabSearchConditions.value.login, loginSearchFields),
         pagination: loginPagination.value,
         title: t('登录明细'),
       },
@@ -708,7 +757,7 @@
       searchFields: giftSearchFields,
       table: {
         columns: giveDetailColumns,
-        data: filterDataByConditions(giveDetailList.value, tabSearchConditions.value.gift),
+        data: filterDataByConditions(giveDetailList.value, tabSearchConditions.value.gift, giftSearchFields),
         pagination: giftPagination.value,
         title: t('赠送明细'),
       },
@@ -721,7 +770,7 @@
       searchFields: tradeSearchFields,
       table: {
         columns: dealDetailColumns,
-        data: filterDataByConditions(dealDetailList.value, tabSearchConditions.value.trade),
+        data: filterDataByConditions(dealDetailList.value, tabSearchConditions.value.trade, tradeSearchFields),
         pagination: tradePagination.value,
         title: t('交易明细'),
       },
@@ -734,7 +783,7 @@
       searchFields: coinSearchFields,
       table: {
         columns: sapDetailColumns,
-        data: filterDataByConditions(sapDetailList.value, tabSearchConditions.value.coin),
+        data: filterDataByConditions(sapDetailList.value, tabSearchConditions.value.coin, coinSearchFields),
         pagination: coinPagination.value,
         title: t('发放明细'),
       },
@@ -747,7 +796,7 @@
       searchFields: chatSearchFields,
       table: {
         columns: chatDetailColumns,
-        data: filterDataByConditions(chatDetailList.value, tabSearchConditions.value.chat),
+        data: filterDataByConditions(chatDetailList.value, tabSearchConditions.value.chat, chatSearchFields),
         pagination: chatPagination.value,
         title: t('聊天明细'),
       },
@@ -816,103 +865,174 @@
     lastChatRecord.value = chatResults[0] || {};
   };
 
+  // 概览 loading 状态
+  const overviewLoading = ref(false);
+
+  // 概览是否为空（所有数据都没有）
+  const isOverviewEmpty = computed(() => roleList.value.length === 0
+    && loginStatList.value.length === 0
+    && Object.keys(lastLoginRecord.value).length === 0
+    && Object.keys(lastGiveRecord.value).length === 0
+    && Object.keys(lastDealRecord.value).length === 0
+    && Object.keys(lastSapRecord.value).length === 0
+    && Object.keys(lastChatRecord.value).length === 0);
+
+  // 各明细 Tab loading 状态
+  const tabLoadingMap = ref<Record<string, boolean>>({
+    login: false,
+    gift: false,
+    trade: false,
+    coin: false,
+    chat: false,
+  });
+
+  // 判断某个 Tab 是否为空
+  const isTabEmpty = (tabKey: string): boolean => {
+    switch (tabKey) {
+    case 'login':
+      return loginGroupStats.value.length === 0 && loginDetailList.value.length === 0;
+    case 'gift':
+      return giveGroupStats.value.length === 0 && giveDetailList.value.length === 0;
+    case 'trade':
+      return dealGroupStats.value.length === 0 && dealDetailList.value.length === 0;
+    case 'coin':
+      return sapGroupStats.value.length === 0 && sapDetailList.value.length === 0;
+    case 'chat':
+      return chatDetailList.value.length === 0;
+    default:
+      return false;
+    }
+  };
+
   // 加载所有概览数据
-  const fetchOverviewData = () => {
+  const fetchOverviewData = async () => {
     if (!props.toolUid || !props.gameData.openid) return;
-    fetchOverviewRoleStats();
-    fetchOverviewLoginStats();
-    fetchOverviewLastRecords();
+    overviewLoading.value = true;
+    try {
+      await Promise.all([
+        fetchOverviewRoleStats(),
+        fetchOverviewLoginStats(),
+        fetchOverviewLastRecords(),
+      ]);
+    } finally {
+      overviewLoading.value = false;
+    }
   };
 
   // ========== 明细 Tab 接口调用 ==========
   // 登录记录
   const fetchLoginData = async () => {
-    const range = detailDateRange.value.login;
-    const baseParams = {
-      detail_startdate_Ymd: range.start,
-      detail_enddate_Ymd: range.end,
-      selected_gameid: props.gameData.gameid,
-      selected_openid: props.gameData.openid,
-    };
-    const [groupRes, detailRes] = await Promise.all([
-      executeDataSource('login_groupdim_stats', baseParams),
-      executeDataSource('login_detail_list', baseParams),
-    ]);
-    loginGroupStats.value = extractResults(groupRes);
-    loginDetailList.value = extractResults(detailRes);
-    loginPagination.value.count = loginDetailList.value.length;
-  };
-
-  // 赠送记录
-  const fetchGiveData = async () => {
-    const dp = getDateParams();
-    const range = detailDateRange.value.gift;
-    const [groupRes, detailRes] = await Promise.all([
-      executeDataSource('give_groupdim_stats', {
+    tabLoadingMap.value.login = true;
+    try {
+      const range = detailDateRange.value.login;
+      const baseParams = {
         detail_startdate_Ymd: range.start,
         detail_enddate_Ymd: range.end,
         selected_gameid: props.gameData.gameid,
         selected_openid: props.gameData.openid,
-      }),
-      executeDataSource('give_detail_list', {
-        one_year_ago_Ymd: dp.one_year_ago_Ymd,
-        selected_gameid: props.gameData.gameid,
-        selected_openid: props.gameData.openid,
-      }),
-    ]);
-    giveGroupStats.value = extractResults(groupRes);
-    giveDetailList.value = extractResults(detailRes);
-    giftPagination.value.count = giveDetailList.value.length;
+      };
+      const [groupRes, detailRes] = await Promise.all([
+        executeDataSource('login_groupdim_stats', baseParams),
+        executeDataSource('login_detail_list', baseParams),
+      ]);
+      loginGroupStats.value = extractResults(groupRes);
+      loginDetailList.value = extractResults(detailRes);
+      loginPagination.value.count = loginDetailList.value.length;
+    } finally {
+      tabLoadingMap.value.login = false;
+    }
+  };
+
+  // 赠送记录
+  const fetchGiveData = async () => {
+    tabLoadingMap.value.gift = true;
+    try {
+      const dp = getDateParams();
+      const range = detailDateRange.value.gift;
+      const [groupRes, detailRes] = await Promise.all([
+        executeDataSource('give_groupdim_stats', {
+          detail_startdate_Ymd: range.start,
+          detail_enddate_Ymd: range.end,
+          selected_gameid: props.gameData.gameid,
+          selected_openid: props.gameData.openid,
+        }),
+        executeDataSource('give_detail_list', {
+          one_year_ago_Ymd: dp.one_year_ago_Ymd,
+          selected_gameid: props.gameData.gameid,
+          selected_openid: props.gameData.openid,
+        }),
+      ]);
+      giveGroupStats.value = extractResults(groupRes);
+      giveDetailList.value = extractResults(detailRes);
+      giftPagination.value.count = giveDetailList.value.length;
+    } finally {
+      tabLoadingMap.value.gift = false;
+    }
   };
 
   // 交易记录
   const fetchDealData = async () => {
-    const range = detailDateRange.value.trade;
-    const baseParams = {
-      detail_startdate_Ymd: range.start,
-      detail_enddate_Ymd: range.end,
-      selected_gameid: props.gameData.gameid,
-      selected_openid: props.gameData.openid,
-    };
-    const [groupRes, detailRes] = await Promise.all([
-      executeDataSource('deal_groupdim_stats', baseParams),
-      executeDataSource('deal_detail_list', baseParams),
-    ]);
-    dealGroupStats.value = extractResults(groupRes);
-    dealDetailList.value = extractResults(detailRes);
-    tradePagination.value.count = dealDetailList.value.length;
+    tabLoadingMap.value.trade = true;
+    try {
+      const range = detailDateRange.value.trade;
+      const baseParams = {
+        detail_startdate_Ymd: range.start,
+        detail_enddate_Ymd: range.end,
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      };
+      const [groupRes, detailRes] = await Promise.all([
+        executeDataSource('deal_groupdim_stats', baseParams),
+        executeDataSource('deal_detail_list', baseParams),
+      ]);
+      dealGroupStats.value = extractResults(groupRes);
+      dealDetailList.value = extractResults(detailRes);
+      tradePagination.value.count = dealDetailList.value.length;
+    } finally {
+      tabLoadingMap.value.trade = false;
+    }
   };
 
   // 发放记录
   const fetchSapData = async () => {
-    const range = detailDateRange.value.coin;
-    const baseParams = {
-      detail_startdate_Ymd: range.start,
-      detail_enddate_Ymd: range.end,
-      selected_gameid: props.gameData.gameid,
-      selected_openid: props.gameData.openid,
-    };
-    const [groupRes, detailRes] = await Promise.all([
-      executeDataSource('sap_groupdim_stats', baseParams),
-      executeDataSource('sap_detail_list', baseParams),
-    ]);
-    sapGroupStats.value = extractResults(groupRes);
-    sapDetailList.value = extractResults(detailRes);
-    coinPagination.value.count = sapDetailList.value.length;
+    tabLoadingMap.value.coin = true;
+    try {
+      const range = detailDateRange.value.coin;
+      const baseParams = {
+        detail_startdate_Ymd: range.start,
+        detail_enddate_Ymd: range.end,
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      };
+      const [groupRes, detailRes] = await Promise.all([
+        executeDataSource('sap_groupdim_stats', baseParams),
+        executeDataSource('sap_detail_list', baseParams),
+      ]);
+      sapGroupStats.value = extractResults(groupRes);
+      sapDetailList.value = extractResults(detailRes);
+      coinPagination.value.count = sapDetailList.value.length;
+    } finally {
+      tabLoadingMap.value.coin = false;
+    }
   };
 
   // 聊天记录
   const fetchChatData = async () => {
-    const range = detailDateRange.value.chat;
-    const res = await executeDataSource('chat_detail_list', {
-      detail_startdate_Ymd: range.start,
-      detail_enddate_Ymd: range.end,
-      is_sensitive: chatSuspectedViolation.value ? ['1'] : ['0', '1'],
-      selected_gameid: props.gameData.gameid,
-      selected_openid: props.gameData.openid,
-    });
-    chatDetailList.value = extractResults(res);
-    chatPagination.value.count = chatDetailList.value.length;
+    tabLoadingMap.value.chat = true;
+    try {
+      const range = detailDateRange.value.chat;
+      const res = await executeDataSource('chat_detail_list', {
+        detail_startdate_Ymd: range.start,
+        detail_enddate_Ymd: range.end,
+        is_sensitive: chatSuspectedViolation.value ? ['1'] : ['0', '1'],
+        selected_gameid: props.gameData.gameid,
+        selected_openid: props.gameData.openid,
+      });
+      chatDetailList.value = extractResults(res);
+      chatPagination.value.count = chatDetailList.value.length;
+    } finally {
+      tabLoadingMap.value.chat = false;
+    }
   };
 
   // Tab 切换时按需加载数据
@@ -1056,15 +1176,19 @@
       // 用户信息 sheet
       if (exportContentChecked.value.includes('userInfo')) {
         const userInfoData = [{
-          游戏名称: props.gameData.name,
-          openid: props.gameData.openid,
-          微信: props.gameData.wechat,
-          代币存量: props.gameData.coinBalance,
-          累计充值: props.gameData.totalRecharge,
-          累计赠送: props.gameData.totalGift,
-          累计发放: props.gameData.totalIssue,
+          [EXPORT_USER_FIELDS.GAME_NAME]: props.gameData.name,
+          [EXPORT_USER_FIELDS.OPENID]: props.gameData.openid,
+          [EXPORT_USER_FIELDS.WECHAT]: props.gameData.wechat,
+          [EXPORT_USER_FIELDS.COIN_BALANCE]: props.gameData.coinBalance,
+          [EXPORT_USER_FIELDS.TOTAL_RECHARGE]: props.gameData.totalRecharge,
+          [EXPORT_USER_FIELDS.TOTAL_GIFT]: props.gameData.totalGift,
+          [EXPORT_USER_FIELDS.TOTAL_ISSUE]: props.gameData.totalIssue,
         }];
-        const userHeaders = ['游戏名称', 'openid', '微信', '代币存量', '累计充值', '累计赠送', '累计发放'];
+        const userHeaders = [
+          EXPORT_USER_FIELDS.GAME_NAME, EXPORT_USER_FIELDS.OPENID, EXPORT_USER_FIELDS.WECHAT,
+          EXPORT_USER_FIELDS.COIN_BALANCE, EXPORT_USER_FIELDS.TOTAL_RECHARGE,
+          EXPORT_USER_FIELDS.TOTAL_GIFT, EXPORT_USER_FIELDS.TOTAL_ISSUE,
+        ];
         useExportExcel.exportExcelSheet(wb, userInfoData, t('用户信息'), userHeaders, userHeaders);
       }
 
@@ -1297,6 +1421,24 @@
 /* 概览内容 */
 .overview-content {
   padding-top: 16px;
+}
+
+/* Tab loading 容器 */
+.tab-loading-wrapper {
+  min-height: 400px;
+}
+
+/* loading 占位元素 */
+.loading-placeholder {
+  height: 400px;
+}
+
+/* Tab 暂无数据 */
+.tab-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
 }
 
 .section {
