@@ -138,6 +138,11 @@
                         <tool-tip-text
                           :data="report.id"
                           :line="1" />
+                        <bk-tag
+                          v-if="report.binding_type === 'platform_binding'"
+                          class="platform-binding-tag">
+                          {{ t('平台') }}
+                        </bk-tag>
                       </div>
                       <div class="custom-table-cell name-cell">
                         <tool-tip-text
@@ -212,8 +217,14 @@
                               <bk-dropdown-menu>
                                 <bk-dropdown-item>
                                   <div
+                                    v-bk-tooltips="{
+                                      content: t('平台绑定的报表不支持停用操作'),
+                                      disabled: report.binding_type !== 'platform_binding',
+                                    }"
                                     class="action-item"
-                                    @click="handleShowToggleStatusConfirm(report)">
+                                    :class="{ disableddel: report.binding_type === 'platform_binding' }"
+                                    @click="report.binding_type !== 'platform_binding'
+                                      && handleShowToggleStatusConfirm(report)">
                                     {{ report.status === 'published' ? t('停用') : t('启用') }}
                                   </div>
                                 </bk-dropdown-item>
