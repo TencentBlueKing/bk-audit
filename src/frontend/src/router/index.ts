@@ -150,7 +150,13 @@ export default (config: ConfigModel) => {
 
       // 场景角色（scene_user / scene_admin）可访问报表和工具，不受其他角色限制
       const hasSceneRole = userRole.some(r => r === 'scene_user' || r === 'scene_admin');
-      if (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p))) {
+      // 包含 system_admin 或 saas_admin 时可访问系统管理页面
+      const hasSystemOrSaasAdmin = userRole.includes('system_admin') || userRole.includes('saas_admin');
+
+      if (
+        (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p)))
+        || (hasSystemOrSaasAdmin && ['/nwe-system-manage', '/system-manage'].some(p => to.path.startsWith(p)))
+      ) {
         // 放行，继续后续检查
       } else {
         // 基于角色策略表进行访问控制
