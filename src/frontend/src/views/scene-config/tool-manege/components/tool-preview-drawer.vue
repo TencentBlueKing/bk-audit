@@ -424,15 +424,15 @@
 
 <style lang="postcss">
   /* 覆盖抽屉内容区域背景色，确保灰色铺满 */
-  .bk-sideslider .bk-modal-body {
+  .tool-preview-sideslider .bk-modal-body {
     background: #f5f7fa;
   }
 
-  .bk-sideslider .bk-modal-content {
+  .tool-preview-sideslider .bk-modal-content {
     height: 100%;
   }
 
-  .bk-sideslider .bk-sideslider-content {
+  .tool-preview-sideslider.bk-sideslider-content {
     height: 100%;
   }
 
