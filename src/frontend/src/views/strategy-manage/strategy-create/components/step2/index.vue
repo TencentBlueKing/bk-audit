@@ -121,13 +121,13 @@
         @click="handleNext">
         {{ t('下一步') }}
       </bk-button>
-      <bk-button
+      <!-- <bk-button
         v-if="isEditMode"
         class="ml8"
         theme="primary"
         @click="handleSaveCurrentStep">
         {{ t('提交') }}
-      </bk-button>
+      </bk-button> -->
       <bk-button
         class="ml8"
         @click="handleCancel">
@@ -293,11 +293,11 @@
   };
 
   // 提交（编辑态）：效果与「其他配置」的提交一致
-  const handleSaveCurrentStep = () => {
-    Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      emits('saveCurrentStep', buildStepParams());
-    });
-  };
+  // const handleSaveCurrentStep = () => {
+  //   Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
+  //     emits('saveCurrentStep', buildStepParams());
+  //   });
+  // };
 
   // 公共函数：清理配置中的无效drill_config
   const cleanDrillConfig = (item: IFormData['event_basic_field_configs'][0]) => {
