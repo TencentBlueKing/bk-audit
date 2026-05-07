@@ -80,7 +80,7 @@ class LinkTable(ResourceTypeMeta):
 
     @classmethod
     def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
-        link_tables = LinkTableModel.objects.filter(uid__in=instance_ids).only("uid", "name")
+        link_tables = LinkTableModel.list_max_version_link_table().filter(uid__in=instance_ids).only("uid", "name")
         link_table_map = {link_table.uid: link_table for link_table in link_tables}
         scene_bindings = ResourceBindingScene.objects.filter(
             binding__resource_type=ResourceVisibilityType.LINK_TABLE,
