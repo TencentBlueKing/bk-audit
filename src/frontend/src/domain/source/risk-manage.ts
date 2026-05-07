@@ -122,11 +122,14 @@ class RiskManage extends ModuleBase {
   // 获取风险标签
   getRiskTags(params: Record<string, any>) {
     const sceneParams = getSceneSystemParams();
-    const requestParams = {
-      ...params,
-      scope_id: params.scope_id ?? sceneParams.scope_id,
-      scope_type: params.scope_type ?? sceneParams.scope_type,
-    };
+    const { noNeedSceneParams, ...restParams } = params;  // 解构分离不需要的参数
+    const requestParams = noNeedSceneParams
+      ? { ...restParams }
+      : {
+        ...restParams,
+        scope_id: params.scope_id  ?? sceneParams.scope_id,
+        scope_type: params.scope_type  ?? sceneParams.scope_type,
+      };
     return Request.get<Array<{
       id: string,
       name: string,
