@@ -17,6 +17,7 @@
 <template>
   <div class="risk-manage-list-page-wrap">
     <search-box
+      :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
       is-export
@@ -80,6 +81,8 @@
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
   import FieldConfig from './components/config';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface ISettings {
     checked: Array<string>,
@@ -205,6 +208,7 @@
   const listRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
+  const fieldConfigKey = ref(0);
   const dataSource = RiskManageService.fetchRiskList;
   // 导出数据
   const handleExport = () => {
@@ -329,13 +333,11 @@
   });
 
   // 获取标签列表
-  useRequest(RiskManageService.fetchRiskTags, {
-    defaultParams: {
-      page: 1,
-      page_size: 1,
-    },
+  const {
+    run: getRiskTags,
+  } = useRequest(RiskManageService.fetchRiskTags, {
+    defaultParams: {},
     defaultValue: [],
-    manual: true,
     onSuccess: (data) => {
       data.forEach((item) => {
         strategyTagMap.value[item.id] = item.name;
@@ -377,16 +379,21 @@
 
   // 监听场景切换事件
   const { on, off } = useEventBus();
-
   onMounted(() => {
     getEventFields();
+    getRiskTags({
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    });
     on('scene-change', () => {
+      fieldConfigKey.value += 1;
       fetchList();
     });
   });
 
   onUnmounted(() => {
     off('scene-change');
+    fieldConfigKey.value = 0;
   });
 
 

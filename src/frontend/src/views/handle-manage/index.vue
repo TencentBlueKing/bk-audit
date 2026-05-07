@@ -315,8 +315,7 @@
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
-      page: 1,
-      page_size: 1,
+      noNeedSceneParams: true,
     },
     defaultValue: [],
     manual: true,
