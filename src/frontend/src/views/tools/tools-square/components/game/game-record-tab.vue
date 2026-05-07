@@ -57,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+  import type { SearchFieldItem } from './game-search-fields';
   import RecordDetailTable from './record-detail-table.vue';
   import RecordPieChart from './record-pie-chart.vue';
 
@@ -65,16 +66,6 @@
     data: Array<{ name: string; value: number }>;     // 饼图数据
     total: number;                                    // 总数
     centerLabel: string;                              // 中心文字
-  }
-
-  // 搜索字段配置接口
-  interface SearchFieldItem {
-    name: string;
-    id: string;
-    placeholder?: string;
-    children?: Array<{ id: string; name: string }>;
-    onlyRecommendChildren?: boolean;
-    multiple?: boolean;
   }
 
   interface Props {

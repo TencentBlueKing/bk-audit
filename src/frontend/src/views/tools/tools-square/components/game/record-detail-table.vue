@@ -152,16 +152,7 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  // 搜索字段配置接口
-  interface SearchFieldItem {
-    name: string;       // 显示名称，如"登录地点"
-    id: string;         // 字段标识，如"登录地点"
-    placeholder?: string; // 输入提示
-    children?: Array<{ id: string; name: string }>; // 枚举值子选项
-    onlyRecommendChildren?: boolean; // 是否仅推荐子选项
-    multiple?: boolean; // 是否多选
-    conditions?: Array<{ id: string; name: string }>; // 字段级别操作符配置
-  }
+  import type { SearchFieldItem } from './game-search-fields';
 
   // 条件 tag 数据结构
   interface ConditionTag {
