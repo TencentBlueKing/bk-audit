@@ -661,7 +661,9 @@ class TestSceneResource(TestCase):
         """测试场景精简列表返回字段"""
         result = self.resource.scene.list_all_scene({})
         self.assertGreaterEqual(len(result), 1)
-        self.assertSetEqual(set(result[0].keys()), {"scene_id", "name", "status"})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+        self.assertSetEqual(set(target.keys()), {"scene_id", "name", "description", "status"})
+        self.assertEqual(target["description"], self.scene.description)
 
     def test_scene_list_all_filter_by_status(self):
         """测试场景精简列表支持 status 过滤"""
