@@ -70,11 +70,11 @@ const ROLE_ACCESS_MAP: Record<string, AccessRule[]> = {
   scene_user: [
     { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
-    { paths: ['/tools', '/platform'], redirect: '404' },
+    { paths: ['/platform'], redirect: '404' },
   ],
   scene_admin: [
     { paths: ['/nwe-system-manage', '/system-manage'], redirect: 'systemLandingPage', excludeName: 'systemLandingPage' },
-    { paths: ['/tools', '/platform'], redirect: '404' },
+    { paths: ['/platform'], redirect: '404' },
   ],
   system_admin: [
     { paths: ['/strategy-manage', '/link-data-manage', '/scene-config', '/application-manage', '/rule-manage', '/notice-group'], redirect: 'userLandingPage', excludeName: 'userLandingPage' },
@@ -148,14 +148,21 @@ export default (config: ConfigModel) => {
     try {
       const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
 
-      // 基于角色策略表进行访问控制
-      for (const role of userRole) {
-        const rules = ROLE_ACCESS_MAP[role];
-        if (!rules) continue;
-        const redirect = checkAccessRedirect(to.path, to.name, rules);
-        if (redirect) {
-          next({ name: redirect });
-          return;
+      // 场景角色（scene_user / scene_admin）可访问报表和工具，不受其他角色限制
+      const hasSceneRole = userRole.some(r => r === 'scene_user' || r === 'scene_admin');
+      if (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p))) {
+        // 放行，继续后续检查
+      } else {
+        // 基于角色策略表进行访问控制
+        for (const role of userRole) {
+          const rules = ROLE_ACCESS_MAP[role];
+          console.log('rules', rules);
+          if (!rules) continue;
+          const redirect = checkAccessRedirect(to.path, to.name, rules);
+          if (redirect) {
+            next({ name: redirect });
+            return;
+          }
         }
       }
 

@@ -53,7 +53,8 @@
           {{ t('检索') }}
         </router-link>
         <router-link
-          v-if="hasBkvision.enabled && !userRole.includes('risk_handler') && !userRole.includes('system_admin')"
+          v-if="hasBkvision.enabled &&
+            (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
@@ -62,7 +63,8 @@
           {{ t('审计报表') }}
         </router-link>
         <router-link
-          v-if="!userRole.includes('risk_handler') && !userRole.includes('system_admin')"
+          v-if="!userRole.includes('risk_handler') &&
+            (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'toolsSquare'
