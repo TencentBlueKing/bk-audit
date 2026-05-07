@@ -112,7 +112,9 @@
               :src="danjvIcon">
           </div>
         </div>
-        <div class="stat-card risk">
+        <div
+          class="stat-card risk"
+          :class="riskLevelClass">
           <div class="stat-label">
             {{ t('风险系数') }}
           </div>
@@ -124,7 +126,7 @@
             </div>
             <img
               class="stat-icon"
-              :src="warningIcon">
+              :src="riskWarningIcon">
           </div>
         </div>
       </div>
@@ -137,7 +139,9 @@
   import { useI18n } from 'vue-i18n';
 
   import danjvIcon from '@images/danjv.svg';
-  import warningIcon from '@images/warning.svg';
+  import warningHighIcon from '@images/warning-high.svg';
+  import warningLowIcon from '@images/warning-low.svg';
+  import warningMediumIcon from '@images/warning-medium.svg';
 
   import { execCopy } from '@utils/assist';
 
@@ -189,6 +193,14 @@
     if (level === '高') return 'high';
     if (level === '中') return 'medium';
     return 'low';
+  });
+
+  // 根据风险等级选择对应的警告图标
+  const riskWarningIcon = computed(() => {
+    const level = props.userInfo.riskLevel;
+    if (level === '高') return warningHighIcon;
+    if (level === '中') return warningMediumIcon;
+    return warningLowIcon;
   });
 
   // 查看详情
@@ -304,12 +316,23 @@
 
   &.responsibility {
     background: #f0f5ff;
-    border: 1px solid #d4e4ff;
   }
 
   &.risk {
     background: #fff0f0;
-    border: 1px solid #ffe8c3;
+
+
+    &.high {
+      background: #fff0f0;
+    }
+
+    &.medium {
+      background: #fff8ed;
+    }
+
+    &.low {
+      background: #f5f7fa;
+    }
   }
 
   .stat-label {
@@ -360,9 +383,9 @@
   }
 
   .stat-icon {
-    width: 40px;
+    width: 52px;
     height: 56px;
-    opacity: 60%;
+    opacity: 80%;
   }
 }
 </style>
