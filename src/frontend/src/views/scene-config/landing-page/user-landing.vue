@@ -70,14 +70,14 @@
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
                 </div>
-                <div
+                <!-- <div
                   v-if="item._applyStatus === 'pending'"
                   class="apply-status">
                   <bk-icon
                     type="time" />
                   {{ t('申请中') }}·{{ t('查看 TSM 审批') }}
                   <span class="apply-count">[{{ item._applyCount || 0 }}]</span>
-                </div>
+                </div> -->
               </div>
             </div>
           </div>
@@ -126,15 +126,12 @@
   import landingImg from '@/images/landing.png';
 
   interface SceneItem {
-    uid: string;
     scene_id: number;
     name: string;
-    description: string;
-    status: string;
-    managers: string[];
-    users: string[];
-    _applyStatus?: string;
-    _applyCount?: number;
+    status: 'enabled' | 'disabled';
+    permission: Record<string, boolean>;
+    description?: string;
+    managers?: string[];
   }
 
   const { t } = useI18n();
@@ -148,16 +145,16 @@
     manual: true,
   });
   const {
-    run: fetchSceneList,
-  } = useRequest(SceneManageService.fetchSceneList, {
-    defaultValue: { results: [] as any[], page: 0, num_pages: 0, total: 0 },
+    run: fetchSceneAll,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
     onSuccess: (data) => {
-      sceneList.value = data.results;
+      sceneList.value = data;
     },
   });
 
   onMounted(() => {
-    fetchSceneList({
+    fetchSceneAll({
       page_size: 100,
       status: 'enabled',
     });

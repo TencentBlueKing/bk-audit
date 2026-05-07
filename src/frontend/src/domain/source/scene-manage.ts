@@ -145,6 +145,8 @@ class SceneManage extends ModuleBase {
       name: string;
       status: 'enabled' | 'disabled';
       permission: Record<string, boolean>;
+      description?: string;
+      managers?: string[];
     }>>(`${this.module}/all/`, { params, payload });
   }
 }
