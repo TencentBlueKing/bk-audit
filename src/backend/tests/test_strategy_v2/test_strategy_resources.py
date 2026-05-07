@@ -8,10 +8,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.test import override_settings
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.fields import EXTEND_DATA, SNAPSHOT_USER_INFO
+from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.scene.constants import (
@@ -72,6 +74,29 @@ class StrategyResourcesTest(TestCase):
 
         self.assertEqual([item["uid"] for item in scene_1_result], [link_table.uid])
         self.assertEqual(list(scene_2_result), [])
+
+    def test_strategy_batch_create_instance_includes_iam_path(self):
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(self.strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=self.scene.scene_id)
+
+        resources = ResourceEnum.STRATEGY.batch_create_instance([self.strategy.strategy_id])
+
+        self.assertEqual(resources[0][0].attribute[KEYWORD_BK_IAM_PATH], f"/scene,{self.scene.scene_id}/")
+
+    def test_link_table_batch_create_instance_includes_iam_path(self):
+        link_table = LinkTable.objects.create(namespace=self.namespace, uid="lt_1", version=1, name="LT-1", config={})
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.LINK_TABLE,
+            resource_id=link_table.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=self.scene.scene_id)
+
+        resources = ResourceEnum.LINK_TABLE.batch_create_instance([link_table.uid])
+
+        self.assertEqual(resources[0][0].attribute[KEYWORD_BK_IAM_PATH], f"/scene,{self.scene.scene_id}/")
 
     def test_list_strategy_all_request_serializer_accepts_optional_scene_id(self):
         serializer = ListStrategyAllRequestSerializer()
