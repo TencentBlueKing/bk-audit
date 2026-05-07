@@ -21,6 +21,8 @@ import StrategyManageService from '@service/strategy-manage';
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export default {
   risk_id: {
     label: '风险ID',
@@ -35,7 +37,8 @@ export default {
     labelName: 'label',
     valName: 'value',
     defaultParams: {
-      risk_view_type: 'processed',
+      risk_view_type: 'all',
+      isNeedSceneParams: true,
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -46,7 +49,9 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
-      risk_view_type: 'processed',
+      risk_view_type: 'all',
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },

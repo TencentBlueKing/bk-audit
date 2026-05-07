@@ -333,8 +333,8 @@
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
-      page: 1,
-      page_size: 1,
+      noNeedSceneParams: true,
+      risk_view_type: 'processed',
     },
     defaultValue: [],
     manual: true,

@@ -77,10 +77,18 @@ class Strategy extends ModuleBase {
   }
   // 获取权限下所有策略下拉列表
   getScopedStrategyList(params: Record<string, any>) {
+    const sceneParams = getSceneSystemParams();
+    const { isNeedSceneParams, ...restParams } = params;  // 解构分离不需要的参数
+    const requestParams = isNeedSceneParams
+      ?  {
+        ...restParams,
+        scope_id: params.scope_id  ?? sceneParams.scope_id,
+        scope_type: params.scope_type  ?? sceneParams.scope_type,
+      } : restParams;
     return Request.get<Array<{
       label: string,
       value: number
-    }>>(`${this.module}risks/strategies/`, { params });
+    }>>(`${this.module}risks/strategies/`, { params: requestParams });
   }
   // 获取告警常量
   getStrategyCommon(payload = {} as IRequestPayload) {

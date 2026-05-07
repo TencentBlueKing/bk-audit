@@ -47,6 +47,7 @@ export default {
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
       risk_view_type: 'processed',
+      noNeedSceneParams: true,
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
