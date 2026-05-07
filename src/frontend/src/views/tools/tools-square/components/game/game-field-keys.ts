@@ -153,3 +153,30 @@ export const EXPORT_USER_FIELDS = {
   TOTAL_GIFT: '累计赠送',
   TOTAL_ISSUE: '累计发放',
 } as const;
+
+// ========== 用户画像相关字段 ==========
+export const PROFILE_FIELDS = {
+  // 用户信息字段
+  AVATAR: '头像',
+  WECOM: '企业微信',
+  USERNAME: '用户名',
+  STATUS: '在职状态',
+  DEPARTMENT: '部门',
+  ACCOUNT_TYPE: '账号类型',
+  ACCOUNT_LIST: '账号列表',
+  RESPONSIBILITY_COUNT: '责任单数',
+  RISK_LEVEL: '风险系数',
+  // 游戏列表字段
+  GAME_NAME: '游戏名称',
+  COIN_BALANCE_UNIT: '代币存量（代）',
+  TOTAL_RECHARGE_UNIT: '累计充值（代）',
+  TOTAL_GIFT_YUAN: '累计赠送（¥）',
+  TOTAL_ISSUE_YUAN: '累计发放（¥）',
+  LOGIN_COUNT_MONTH: '登录次数/月',
+  TOTAL_GIFT: '总支出',
+  TOTAL_ISSUE: '总入账',
+  TOTAL_BALANCE: '总余额',
+  TOTAL_TOPUP: '总充值',
+  PLATFORM_ACCOUNT: '平台账号',
+  EXCHANGE_RATE: '人民币代币兑换比',
+} as const;
