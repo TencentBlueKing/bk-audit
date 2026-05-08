@@ -25,16 +25,6 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
-      <div class="add-button">
-        <bk-button
-          theme="primary"
-          @click="handleAddRisk">
-          <audit-icon
-            class="add-icon"
-            type="add" />
-          {{ t('新增风险') }}
-        </bk-button>
-      </div>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
@@ -49,9 +39,6 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
-  <add-risk
-    ref="addRiskRef"
-    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -91,7 +78,6 @@
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
-  import addRisk from './add-risk/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
 
@@ -300,7 +286,6 @@
   });
 
   const listRef = ref();
-  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
 
@@ -518,15 +503,6 @@
     listRef.value.fetchData(dataParams);
   };
 
-  // 新增风险
-  const handleAddRisk = () => {
-    addRiskRef.value.show();
-  };
-  // 新增风险成功
-  const handleAddRiskSuccess = () => {
-    searchBoxRef.value.clearValue();
-  };
-
   onMounted(() => {
     nextTick(() => {
       getEventFields();
@@ -587,15 +563,6 @@
     padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
-
-    .add-button {
-      padding-bottom: 5px;
-
-      .add-icon {
-        margin-right: 5px;
-        font-size: 12px;
-      }
-    }
   }
 }
 
