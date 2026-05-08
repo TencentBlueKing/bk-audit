@@ -597,13 +597,30 @@
     // 获取对应的 drill_config
     const drillConfig = drillDownItem.drill_config.find(c => c.tool.uid === targetUid)?.config || [];
 
-    // 构建路由
+    try {
+      Object.keys(sessionStorage)
+        .filter(key => key.startsWith('drill_'))
+        .forEach(key => sessionStorage.removeItem(key));
+    } catch {
+      // 静默处理
+    }
+
+    const drillKey = `drill_${Date.now()}_${Math.random().toString(36)
+      .slice(2, 10)}`;
+    try {
+      sessionStorage.setItem(drillKey, JSON.stringify({
+        drillConfig,
+        rowData: drillDownItemRowData,
+      }));
+    } catch {
+      // sessionStorage 写入失败时静默处理
+    }
+
     const routeData = router.resolve({
       name: 'toolDetail',
       params: { uid: targetUid },
       query: {
-        drillConfig: encodeURIComponent(JSON.stringify(drillConfig)),
-        rowData: encodeURIComponent(JSON.stringify(drillDownItemRowData)),
+        drillKey,
       },
     });
 

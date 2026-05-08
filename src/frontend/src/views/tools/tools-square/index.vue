@@ -199,8 +199,8 @@
   } = useToolTabs();
 
   const routeUid = route.params.uid as string;
-  const isDrillDownRoute = !!(routeUid && route.query.drillConfig);
-  const isRefreshRestore = !!(routeUid && !route.query.drillConfig);
+  const isDrillDownRoute = !!(routeUid && (route.query.drillKey || route.query.drillConfig));
+  const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
   const isProgrammaticReset = ref(false);
 
   if (isDrillDownRoute) {
@@ -209,10 +209,22 @@
     let drillConfig = null;
     let rowData = null;
     try {
-      const drillConfigRaw = route.query.drillConfig as string;
-      const rowDataRaw = route.query.rowData as string;
-      if (drillConfigRaw) drillConfig = JSON.parse(decodeURIComponent(drillConfigRaw));
-      if (rowDataRaw) rowData = JSON.parse(decodeURIComponent(rowDataRaw));
+      const drillKey = route.query.drillKey as string;
+      if (drillKey) {
+        const storedRaw = sessionStorage.getItem(drillKey);
+        if (storedRaw) {
+          const storedData = JSON.parse(storedRaw);
+          drillConfig = storedData.drillConfig;
+          rowData = storedData.rowData;
+          sessionStorage.removeItem(drillKey);
+        }
+      } else {
+        // 兼容旧的 URL 参数方式
+        const drillConfigRaw = route.query.drillConfig as string;
+        const rowDataRaw = route.query.rowData as string;
+        if (drillConfigRaw) drillConfig = JSON.parse(decodeURIComponent(drillConfigRaw));
+        if (rowDataRaw) rowData = JSON.parse(decodeURIComponent(rowDataRaw));
+      }
     } catch {
       // 解析失败时忽略
     }
