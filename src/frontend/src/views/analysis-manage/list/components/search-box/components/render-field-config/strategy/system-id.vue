@@ -29,13 +29,10 @@
       :placeholder="`请选择${config.label}`"
       show-selected-icon
       @change="handleChange">
-      <auth-option
+      <bk-option
         v-for="item in data"
         :key="item.id"
-        action-id="search_regular_event"
         :label="`${item.name}(${item.id})`"
-        :permission="item.permission.search_regular_event"
-        :resource="item.id"
         :value="item.id" />
       <template
         v-if="simple"
@@ -101,9 +98,7 @@
     if (props.config.service) {
       return props.config.service();
     }
-    return MetaManageService.fetchSystemWithAction({
-      action_ids: 'search_regular_event',
-    });
+    return MetaManageService.fetchSystemWithAction({});
   }, {
     defaultValue: [],
     manual: true,
