@@ -84,8 +84,6 @@
     run: fetchSceneInfo,
   } = useRequest(SceneManageService.fetchSceneInfo, {
     defaultValue: new SceneModel(),
-    defaultParams: sceneId.value,
-    manual: true,
   });
   const {
     run: fetchUpdateSceneInfo,
@@ -306,9 +304,7 @@
       fetchPermissionSystems();
       fetchPermissionTables();
     }
-    setTimeout(() => {
-      onEvent('scene:change', handleSceneChange);
-    }, 1000);
+    onEvent('scene:change', handleSceneChange);
   });
 
   onUnmounted(() => {
