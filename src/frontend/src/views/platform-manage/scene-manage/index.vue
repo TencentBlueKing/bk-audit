@@ -383,7 +383,7 @@
           type="jump-link"
           onClick={(e: Event) => {
             e.stopPropagation();
-            handleJumpToRisk();
+            handleJumpToRisk(row);
           }} />
       </span>
     ),
@@ -600,10 +600,11 @@
     window.open(routeData.href, '_blank');
   };
 
-  // 新开标签页跳转到风险列表页
-  const handleJumpToRisk = () => {
+  // 新开标签页跳转到场景风险列表页
+  const handleJumpToRisk = (row: SceneModel) => {
     const routeData = router.resolve({
-      name: 'riskManageList',
+      name: 'sceneRiskManageList',
+      query: { scene_id: String(row.scene_id) },
     });
     window.open(routeData.href, '_blank');
   };
