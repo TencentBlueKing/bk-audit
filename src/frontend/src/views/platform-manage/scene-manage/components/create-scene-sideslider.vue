@@ -265,6 +265,8 @@
 
   // 系统列表
   const systemList = ref<SystemModel[]>([]);
+  // 是否选择了"全部"
+  const isAllSystemsSelected = ref(false);
   // 数据表列表（保留兼容）
   const tableList = ref<TableItem[]>([]);
 
@@ -303,12 +305,19 @@
 
 
   // 关联系统变更
-  const handleSystemChange = () => {
+  const handleSystemChange = (value: any) => {
+    // 判断是否选中了"全部"：bk-select show-all 模式下选中全部时 value 为 [undefined]
+    isAllSystemsSelected.value = (value as any[]).includes(undefined)
+      || (value as string[]).includes('__ALL__')
+      || (Array.isArray(value) && value.length > 0 && value.length === systemList.value.length);
     formData.value.table_id = [];
-    if (formData.value.system_id.length > 0) {
+    if (Array.isArray(value) && value.length > 0) {
       fetchTableList();
     } else {
       tableList.value = [];
+      if (!isAllSystemsSelected.value) {
+        isAllSystemsSelected.value = false;
+      }
     }
   };
 
@@ -428,7 +437,6 @@
       return;
     }
     formData.value.table_id = value.map(path => path[path.length - 1]);
-    console.log('[关联数据表] 选中路径:', value, '| table_ids:', formData.value.table_id);
   };
 
   // 重置表单
@@ -443,6 +451,7 @@
     };
     tableList.value = [];
     tableId.value = [];
+    isAllSystemsSelected.value = false;
   };
 
   // 关闭前确认
@@ -503,38 +512,40 @@
     const rtIds = data.tables && data.tables.length
       ? data.tables.map(t => t.table_id)
       : [];
+    const allSysItem = data.systems?.find(s => s.is_all_systems === true);
+    isAllSystemsSelected.value = !!allSysItem;
     formData.value = {
       name: data.name || '',
       managers: data.managers || [],
       description: data.description || '',
       users: data.users || [],
-      system_id: data.systems.map(item => item.system_id),
+      system_id: (allSysItem ? [undefined] : (data.systems || []).map(item => item.system_id)) as string[],
       table_id: rtIds,
     };
     fillTableIdFromCascader(rtIds);
   };
 
   // 判断是否选择了"全部"
-  const isSelectAllSystems = computed(() => {
-    // show-all 模式下，选中全部时 system_id 会包含一个特殊标记或与系统列表长度一致
-    const selected = formData.value.system_id;
-    return selected.length > 0 && selected.includes('__ALL__');
-  });
+  const isSelectAllSystems = computed(() => isAllSystemsSelected.value);
 
   // 构建 systems 参数
   const buildSystemsParam = () => {
     if (isSelectAllSystems.value) {
-      // 选择全部时，返回完整系统列表
-      return systemList.value.map(item => ({
-        system_id: item.system_id,
+      // 选择全部时，is_all_systems 为 true，system_id 为空字符串
+      return [{
+        system_id: '',
+        is_all_systems: true,
+        filter_rules: [],
+      }];
+    }
+    // 非全部时，is_all_systems 为 false
+    return formData.value.system_id
+      .filter(id => id && id !== '__ALL__')
+      .map(id => ({
+        system_id: id,
         is_all_systems: false,
         filter_rules: [],
       }));
-    }
-    return formData.value.system_id.map(id => ({
-      system_id: id,
-      filter_rules: [],
-    }));
   };
 
   // 提交表单
