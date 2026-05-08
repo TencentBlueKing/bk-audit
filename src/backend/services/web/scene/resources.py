@@ -20,7 +20,6 @@ from apps.permission.handlers.permission import Permission
 from core.models import get_request_username
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import SceneStatus
-from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.exceptions import (
     RelatedResourceDetail,
     SceneHasRelatedResources,
@@ -46,24 +45,6 @@ class SceneResource(AuditMixinResource, abc.ABC):
     tags = ["Scene"]
 
     @staticmethod
-    def _enrich_iam_members(scene):
-        """用 IAM 用户组的真实成员替代 DB 中的 managers/users，用于场景详情展示"""
-
-        if scene.iam_manager_group_id:
-            members = IAMGroupManager.get_all_group_members(
-                group_id=scene.iam_manager_group_id,
-            )
-            scene.managers = [m["id"] for m in members]
-
-        if scene.iam_viewer_group_id:
-            members = IAMGroupManager.get_all_group_members(
-                group_id=scene.iam_viewer_group_id,
-            )
-            scene.users = [m["id"] for m in members]
-
-        return scene
-
-    @staticmethod
     def _sync_iam_group_members(scene, validated_request_data):
         """当 managers 或 users 变更时，同步到对应的 IAM 用户组；若用户组尚未创建则先创建"""
 
@@ -72,7 +53,7 @@ class SceneResource(AuditMixinResource, abc.ABC):
         if "managers" in validated_request_data:
             new_group_id = IAMGroupManager.sync_group_members(
                 group_id=scene.iam_manager_group_id,
-                members=scene.managers,
+                members=validated_request_data["managers"],
                 group_name=f"{scene.name}-管理用户组",
                 group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
                 group_actions=SCENE_MANAGER_GROUP_ACTIONS,
@@ -86,7 +67,7 @@ class SceneResource(AuditMixinResource, abc.ABC):
         if "users" in validated_request_data:
             new_group_id = IAMGroupManager.sync_group_members(
                 group_id=scene.iam_viewer_group_id,
-                members=scene.users,
+                members=validated_request_data["users"],
                 group_name=f"{scene.name}-使用用户组",
                 group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
                 group_actions=SCENE_VIEWER_GROUP_ACTIONS,
@@ -174,8 +155,6 @@ class CreateScene(SceneResource):
         scene = Scene.objects.create(
             name=validated_request_data["name"],
             description=validated_request_data.get("description", ""),
-            managers=validated_request_data["managers"],
-            users=validated_request_data.get("users", []),
         )
 
         # 创建系统关联
@@ -183,7 +162,7 @@ class CreateScene(SceneResource):
         # 创建数据表关联
         self._save_tables(scene, validated_request_data.get("tables", []))
         # 自动创建"场景管理员通知组"
-        self._create_scene_manager_notice_group(scene)
+        self._create_scene_manager_notice_group(scene, validated_request_data["managers"])
         # 创建 IAM 用户组、授权并添加成员（分别创建管理用户组和使用用户组）
         scene.iam_manager_group_id = IAMGroupManager.create_single_group_with_members(
             group_name=f"{scene.name}-管理用户组",
@@ -227,7 +206,7 @@ class CreateScene(SceneResource):
             )
 
     @staticmethod
-    def _create_scene_manager_notice_group(scene):
+    def _create_scene_manager_notice_group(scene, managers):
         """创建场景时自动创建场景管理员通知组"""
         from apps.notice.constants import get_default_notice_config
         from apps.notice.models import NoticeGroup
@@ -236,7 +215,7 @@ class CreateScene(SceneResource):
 
         notice_group = NoticeGroup.objects.create(
             group_name=f"{scene.name}-场景管理员通知组",
-            group_member=scene.managers,
+            group_member=managers,
             notice_config=get_default_notice_config(),
             description=f"场景「{scene.name}」的管理员通知组（系统自动创建）",
         )
@@ -305,7 +284,7 @@ class RetrieveScene(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
-        return self._enrich_iam_members(scene)
+        return scene
 
 
 class UpdateScene(SceneResource):
@@ -324,7 +303,7 @@ class UpdateScene(SceneResource):
             raise SceneNotExist()
 
         # 更新基础字段
-        for field in ["name", "description", "managers", "users"]:
+        for field in ["name", "description"]:
             if field in validated_request_data:
                 setattr(scene, field, validated_request_data[field])
         scene.save()
@@ -458,7 +437,7 @@ class GetSceneInfo(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
-        return self._enrich_iam_members(scene)
+        return scene
 
 
 class UpdateSceneInfo(SceneResource):
@@ -475,7 +454,7 @@ class UpdateSceneInfo(SceneResource):
         except Scene.DoesNotExist:
             raise SceneNotExist()
 
-        for field in ["name", "description", "managers", "users"]:
+        for field in ["name", "description"]:
             if field in validated_request_data:
                 setattr(scene, field, validated_request_data[field])
         scene.save()
@@ -519,26 +498,67 @@ class GetScenePermissionSystems(SceneResource):
         ]
 
 
-class GetScenePermissionTables(SceneResource):
-    """获取场景下有权限的数据表"""
+def get_scene_members_data(scene_id):
+    """
+    获取场景成员数据
+    """
+    try:
+        scene = Scene.objects.get(scene_id=scene_id)
+    except Scene.DoesNotExist:
+        return []
 
-    name = gettext_lazy("获取场景下有权限的数据表")
-    audit_action = ActionEnum.VIEW_SCENE
+    members = []
+
+    # 获取管理用户组成员
+    if scene.iam_manager_group_id:
+        try:
+            manager_members = IAMGroupManager.get_all_group_members(group_id=scene.iam_manager_group_id)
+            for member in manager_members:
+                members.append(
+                    {
+                        "type": member.get("type", ""),
+                        "id": member.get("id", ""),
+                        "name": member.get("name", ""),
+                        "role": "manager",
+                    }
+                )
+        except Exception:
+            pass
+
+    # 获取使用用户组成员
+    if scene.iam_viewer_group_id:
+        try:
+            viewer_members = IAMGroupManager.get_all_group_members(group_id=scene.iam_viewer_group_id)
+            for member in viewer_members:
+                members.append(
+                    {
+                        "type": member.get("type", ""),
+                        "id": member.get("id", ""),
+                        "name": member.get("name", ""),
+                        "role": "user",
+                    }
+                )
+        except Exception:
+            pass
+
+    return members
+
+
+class GetSceneMembers(SceneResource):
+    """获取场景下用户组成员列表"""
+
+    name = gettext_lazy("获取场景下用户组成员列表")
     many_response_data = True
 
     class RequestSerializer(serializers.Serializer):
         scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
 
     class ResponseSerializer(serializers.Serializer):
-        table_id = serializers.CharField(label=gettext_lazy("表ID"))
+        type = serializers.CharField(label=gettext_lazy("成员类型"))
+        id = serializers.CharField(label=gettext_lazy("成员ID"))
+        name = serializers.CharField(label=gettext_lazy("成员名称"), required=False, default="")
+        role = serializers.CharField(label=gettext_lazy("角色"), help_text="manager 或 user")
 
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
-
-        # 直接获取场景关联的数据表ID列表
-        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
-        if not scene_table_ids:
-            # 场景没有配置任何数据表，没有权限，直接返回空
-            return []
-
-        return [{"table_id": table_id} for table_id in scene_table_ids]
+        return get_scene_members_data(scene_id)

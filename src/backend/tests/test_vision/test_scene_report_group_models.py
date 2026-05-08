@@ -14,7 +14,7 @@ from services.web.vision.models import (
 
 class TestSceneReportGroupModels(TestCase):
     def setUp(self):
-        self.scene = Scene.objects.create(name="s1", managers=["admin"], users=["u1"])
+        self.scene = Scene.objects.create(name="s1")
         self.panel = VisionPanel.objects.create(id="p1", name="p1", scenario=Scenario.DEFAULT)
 
     def test_create_group(self):

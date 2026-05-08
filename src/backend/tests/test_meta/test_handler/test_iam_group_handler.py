@@ -61,18 +61,18 @@ class TestBuildPermissions(SimpleTestCase):
         self.assertEqual(perm["resources"][0]["paths"][0][0]["name"], "测试场景")
 
     def test_resource_type_mapping(self):
-        """测试各动作到资源类型的映射关系"""
-        # (action_id, expected_resource_type)
+        """测试各动作到资源类型的映射关系：子资源类型保持原始type，paths中使用scene拓扑路径"""
+        # (action_id, expected_resource_type, expected_path_type)
         cases = [
-            ("view_scene", "scene"),
-            ("edit_strategy", "strategy"),
-            ("list_risk_v2", "risk"),
-            ("list_rule_v2", "scene"),
-            ("view_link_table", "link_table"),
-            ("edit_notice_group_v2", "notice_group"),
-            ("list_pa_v2", "scene"),
+            ("view_scene", "scene", "scene"),
+            ("edit_strategy", "strategy", "scene"),  # 策略类型保持strategy，paths使用scene拓扑
+            ("list_risk_v2", "risk", "scene"),  # 风险类型保持risk，paths使用scene拓扑
+            ("list_rule_v2", "scene", "scene"),
+            ("view_link_table", "link_table", "scene"),  # 联表类型保持link_table，paths使用scene拓扑
+            ("edit_notice_group_v2", "notice_group", "scene"),  # 通知组类型保持notice_group，paths使用scene拓扑
+            ("list_pa_v2", "scene", "scene"),
         ]
-        for action_id, expected_type in cases:
+        for action_id, expected_type, expected_path_type in cases:
             with self.subTest(action_id=action_id):
                 result = IAMGroupManager.build_permissions(
                     actions=[_make_mock_action(action_id)],
@@ -80,7 +80,9 @@ class TestBuildPermissions(SimpleTestCase):
                     scene_id="s",
                     scene_name="n",
                 )
-                self.assertEqual(result["_multi_permissions"][0]["resources"][0]["type"], expected_type)
+                perm = result["_multi_permissions"][0]
+                self.assertEqual(perm["resources"][0]["type"], expected_type)
+                self.assertEqual(perm["resources"][0]["paths"][0][0]["type"], expected_path_type)
 
     def test_unknown_action_raises_error(self):
         """测试未知动作抛出 ActionNotExistError"""
@@ -106,7 +108,11 @@ class TestBuildPermissions(SimpleTestCase):
             scene_name="n",
         )
         types = {p["resources"][0]["type"] for p in result["_multi_permissions"]}
+        # 不同资源类型应产生各自独立的权限条目
         self.assertEqual(types, {"scene", "risk", "strategy"})
+        # 所有子资源类型的 paths 都应使用 scene 拓扑路径
+        for perm in result["_multi_permissions"]:
+            self.assertEqual(perm["resources"][0]["paths"][0][0]["type"], "scene")
 
 
 class TestGroupMembersCRUD(SimpleTestCase):
@@ -316,8 +322,6 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
         scene = mock.MagicMock()
         scene.scene_id = 1
         scene.name = "测试场景"
-        scene.managers = ["admin"]
-        scene.users = ["viewer1"]
         scene.iam_manager_group_id = manager_group_id
         scene.iam_viewer_group_id = viewer_group_id
         return scene
