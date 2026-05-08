@@ -66,8 +66,6 @@ def scene(db):
         name="Phase2测试场景",
         description="Phase 2 测试用场景",
         status=SceneStatus.ENABLED,
-        managers=["admin", "manager1"],
-        users=["user1", "user2"],
     )
 
 
@@ -78,8 +76,6 @@ def another_scene(db):
         name="另一个场景",
         description="用于隔离测试",
         status=SceneStatus.ENABLED,
-        managers=["admin2"],
-        users=["user3"],
     )
 
 

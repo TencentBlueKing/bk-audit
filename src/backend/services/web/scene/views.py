@@ -36,7 +36,7 @@ class SceneViewSet(ResourceViewSet):
             return []
         if self.action in ["list", "create", "retrieve", "update", "destroy", "disable", "enable"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
-        if self.action in ["get_scene_info", "update_scene_info"]:
+        if self.action in ["get_scene_info", "update_scene_info", "scene_members"]:
             if self.request.method == "GET":
                 return [
                     InstanceActionPermission(
@@ -52,7 +52,7 @@ class SceneViewSet(ResourceViewSet):
                     get_instance_id=self.get_scene_id,
                 )
             ]
-        if self.action in ["scene_permission_systems", "scene_permission_tables"]:
+        if self.action in ["scene_permission_systems"]:
             return [
                 InstanceActionPermission(
                     actions=[ActionEnum.MANAGE_SCENE],
@@ -97,8 +97,8 @@ class SceneViewSet(ResourceViewSet):
         ),
         ResourceRoute(
             "GET",
-            resource.scene.get_scene_permission_tables,
-            endpoint="scene_permission_tables",
+            resource.scene.get_scene_members,
+            endpoint="scene_members",
             pk_field="scene_id",
         ),
     ]

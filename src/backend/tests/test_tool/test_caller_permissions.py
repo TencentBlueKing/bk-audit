@@ -190,7 +190,7 @@ class TestToolViewPermissions(TestCase):
             field_name="operator",
             field_source=StrategyFieldSourceEnum.BASIC.value,
         )
-        scene = Scene.objects.create(name="scene_for_execute", status=SceneStatus.ENABLED, managers=["admin"])
+        scene = Scene.objects.create(name="scene_for_execute", status=SceneStatus.ENABLED)
         strategy_binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),
@@ -337,7 +337,7 @@ class TestToolViewPermissions(TestCase):
             field_source=StrategyFieldSourceEnum.BASIC.value,
         )
 
-        scene = Scene.objects.create(name="scene_for_execute_fixed", status=SceneStatus.ENABLED, managers=["admin"])
+        scene = Scene.objects.create(name="scene_for_execute_fixed", status=SceneStatus.ENABLED)
         strategy_binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),

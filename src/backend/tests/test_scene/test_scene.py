@@ -88,8 +88,6 @@ def scene(db):
         name="主机安全审计",
         description="主机安全相关的审计场景",
         status=SceneStatus.ENABLED,
-        managers=["admin", "manager1"],
-        users=["user1", "user2"],
     )
 
 
@@ -251,14 +249,10 @@ class TestSceneModel:
         scene = Scene.objects.create(
             name="测试场景",
             description="测试描述",
-            managers=["admin"],
-            users=["user1"],
         )
         assert scene.scene_id is not None
         assert scene.name == "测试场景"
         assert scene.status == SceneStatus.ENABLED
-        assert scene.managers == ["admin"]
-        assert scene.users == ["user1"]
 
     @pytest.mark.django_db
     def test_scene_str(self, scene):
@@ -268,15 +262,15 @@ class TestSceneModel:
     @pytest.mark.django_db
     def test_scene_ordering(self, db):
         """测试场景排序（按 scene_id 倒序）"""
-        Scene.objects.create(name="场景1", managers=["admin"])
-        Scene.objects.create(name="场景2", managers=["admin"])
+        Scene.objects.create(name="场景1")
+        Scene.objects.create(name="场景2")
         scenes = list(Scene.objects.all())
         assert scenes[0].scene_id > scenes[1].scene_id
 
     @pytest.mark.django_db
-    def test_scene_default_status(self):
-        """测试场景默认状态为启用"""
-        scene = Scene.objects.create(name="默认状态场景", managers=["admin"])
+    def test_scene_default_status(self, db):
+        """测试场景默认状态"""
+        scene = Scene.objects.create(name="默认状态场景")
         assert scene.status == SceneStatus.ENABLED
 
 
@@ -590,8 +584,6 @@ class TestSceneResource(TestCase):
             name="主机安全审计",
             description="主机安全相关的审计场景",
             status=SceneStatus.ENABLED,
-            managers=["admin", "manager1"],
-            users=["user1", "user2"],
         )
 
     def test_scene_list(self):
@@ -667,7 +659,7 @@ class TestSceneResource(TestCase):
 
     def test_scene_list_all_filter_by_status(self):
         """测试场景精简列表支持 status 过滤"""
-        Scene.objects.create(name="停用场景", status=SceneStatus.DISABLED, managers=["admin"])
+        Scene.objects.create(name="停用场景", status=SceneStatus.DISABLED)
         result = self.resource.scene.list_all_scene({"status": SceneStatus.DISABLED})
         self.assertTrue(result)
         self.assertTrue(all(item["status"] == SceneStatus.DISABLED for item in result))
@@ -746,7 +738,7 @@ class TestSceneResource(TestCase):
 
         with mock.patch(
             "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
-            side_effect=[mock_manager_members, mock_viewer_members],
+            side_effect=[mock_manager_members, mock_viewer_members, mock_manager_members, mock_viewer_members],
         ):
             result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
             # 验证返回的是 IAM 实时成员（字符串列表），而非 DB 中的原始值
@@ -769,7 +761,7 @@ class TestSceneResource(TestCase):
 
         with mock.patch(
             "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
-            side_effect=[mock_manager_members, mock_viewer_members],
+            side_effect=[mock_manager_members, mock_viewer_members, mock_manager_members, mock_viewer_members],
         ):
             result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
             self.assertEqual(result["managers"], ["scene_admin"])
@@ -967,12 +959,10 @@ class TestPanelResources(TestCase):
         self.scene = Scene.objects.create(
             name="主机安全审计",
             status=SceneStatus.ENABLED,
-            managers=["admin"],
         )
         self.another_scene = Scene.objects.create(
             name="容器安全审计",
             status=SceneStatus.ENABLED,
-            managers=["admin"],
         )
         from core.utils.data import unique_id
 
@@ -1366,12 +1356,10 @@ class TestToolResources(TestCase):
         self.scene = Scene.objects.create(
             name="主机安全审计",
             status=SceneStatus.ENABLED,
-            managers=["admin"],
         )
         self.another_scene = Scene.objects.create(
             name="容器安全审计",
             status=SceneStatus.ENABLED,
-            managers=["admin"],
         )
         from core.utils.data import unique_id
 

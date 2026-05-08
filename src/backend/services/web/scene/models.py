@@ -24,8 +24,6 @@ class Scene(OperateRecordModel):
         default=SceneStatus.ENABLED,
         db_index=True,
     )
-    managers = models.JSONField(gettext_lazy("场景管理员列表"), default=list)
-    users = models.JSONField(gettext_lazy("场景使用者列表"), default=list)
     iam_manager_group_id = models.BigIntegerField(
         gettext_lazy("管理用户组ID"), null=True, blank=True, help_text="IAM 管理用户组 ID"
     )

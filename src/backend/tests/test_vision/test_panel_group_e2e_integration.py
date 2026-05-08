@@ -27,8 +27,8 @@ from services.web.vision.resources import (
 
 class TestPanelGroupE2EIntegration(TestCase):
     def setUp(self):
-        self.scene1 = Scene.objects.create(name="链路场景A", managers=["admin"], users=["u1"])
-        self.scene2 = Scene.objects.create(name="链路场景B", managers=["admin"], users=["u2"])
+        self.scene1 = Scene.objects.create(name="链路场景A")
+        self.scene2 = Scene.objects.create(name="链路场景B")
 
     @patch("services.web.vision.resources.get_request_username", return_value="tester")
     @patch("services.web.vision.resources.ScopePermission.get_scene_ids")
