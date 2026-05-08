@@ -551,20 +551,22 @@
   });
 
   const handleSubmit = async () => {
-    console.log('formData.value', submitParams);
     try {
       await formRef.value?.validate();
+      submitLoading.value = true;
       if (isEditMode.value) {
         if (!props.sceneId) return;
-        updateScene({
+        await updateScene({
           id: props.sceneId,
           ...submitParams(),
         } as any);
       } else {
-        createScene(submitParams() as any);
+        await createScene(submitParams() as any);
       }
     } catch (e) {
-      console.error('表单校验失败', e);
+      console.error('表单校验失败或提交异常', e);
+    } finally {
+      submitLoading.value = false;
     }
   };
 
