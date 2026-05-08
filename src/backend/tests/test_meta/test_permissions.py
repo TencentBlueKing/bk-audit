@@ -64,7 +64,7 @@ class TestSearchLogSystemSearchPermission(TestCase):
 
 class TestSearchLogPermission(TestCase):
     @mock.patch("services.web.common.scope_permission.ScopePermission")
-    def test_get_scope_auth_systems_return_empty_when_scope_has_no_systems(self, scope_permission_cls):
+    def test_get_scope_auth_systems_return_empty_string_filter_when_scope_has_no_systems(self, scope_permission_cls):
         scope_permission_cls.return_value.get_system_ids_for_scope.return_value = set()
 
         system_ids = SearchLogPermission.get_scope_auth_systems(
@@ -73,4 +73,4 @@ class TestSearchLogPermission(TestCase):
             username="admin",
         )
 
-        self.assertEqual(system_ids, [])
+        self.assertEqual(system_ids, [""])

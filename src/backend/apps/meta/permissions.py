@@ -92,6 +92,8 @@ class SearchLogPermission:
 
         scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
         scoped_system_ids = {str(system_id) for system_id in ScopePermission(username).get_system_ids_for_scope(scope)}
+        if not scoped_system_ids:
+            return [""]
         return list(scoped_system_ids)
 
 
