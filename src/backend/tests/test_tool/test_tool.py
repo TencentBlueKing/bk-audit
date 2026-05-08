@@ -55,7 +55,13 @@ from services.web.tool.resources import (
     UpdateTool,
     UserQueryTableAuthCheck,
 )
-from services.web.tool.serializers import ListRequestSerializer
+from services.web.tool.serializers import (
+    ListRequestSerializer,
+    PlatformSceneToolCreateRequestSerializer,
+    PlatformSceneToolUpdateRequestSerializer,
+    SceneScopeToolCreateRequestSerializer,
+    SceneScopeToolUpdateRequestSerializer,
+)
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -564,6 +570,57 @@ class ToolResourceTestCase(TestCase):
     def test_list_tool_request_serializer_no_scope_support_scene_binding(self):
         serializer = ListRequestSerializer(data={"binding_type": BindingType.SCENE_BINDING})
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_platform_tool_create_serializer_ignores_scene_id(self):
+        serializer = PlatformSceneToolCreateRequestSerializer(
+            data={
+                "tool_type": ToolTypeEnum.API.value,
+                "config": self.api_debug_config,
+                "name": "platform-api-tool",
+                "tags": [],
+                "scene_id": self.scene_id,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("scene_id", serializer.validated_data)
+
+    def test_platform_tool_update_serializer_ignores_scene_id(self):
+        serializer = PlatformSceneToolUpdateRequestSerializer(
+            data={
+                "uid": self.sql_tool.uid,
+                "tags": [],
+                "scene_id": self.scene_id,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("scene_id", serializer.validated_data)
+
+    def test_scene_tool_create_serializer_requires_scene_id(self):
+        serializer = SceneScopeToolCreateRequestSerializer(
+            data={
+                "tool_type": ToolTypeEnum.API.value,
+                "config": self.api_debug_config,
+                "name": "scene-api-tool",
+                "tags": [],
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("scene_id", serializer.errors)
+
+    def test_scene_tool_update_serializer_keeps_scene_id(self):
+        serializer = SceneScopeToolUpdateRequestSerializer(
+            data={
+                "uid": self.sql_tool.uid,
+                "tags": [],
+                "scene_id": self.scene_id,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["scene_id"], self.scene_id)
 
     @patch.object(Permission, "has_action_any_permission", return_value=True)
     def test_tool_detail(self, _mock_has_action_any_permission):

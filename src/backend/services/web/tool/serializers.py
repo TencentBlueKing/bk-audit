@@ -145,8 +145,6 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         help_text=gettext_lazy("仅在 tool_type=data_search 时必须，支持 simple/sql"),
     )
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
-    # 场景隔离相关字段（场景级/平台级工具创建时使用）
-    scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -181,8 +179,6 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
     )
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
-    # 场景隔离相关字段（场景级工具更新时使用）
-    scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
