@@ -1366,6 +1366,103 @@ class TestCompositeScopeFilter:
         assert qs.first().group_name == "全系统平台组"
 
     @pytest.mark.django_db
+    def test_filter_system_id_does_not_return_scene_visibility_resources(self, scene):
+        """测试 system_id 过滤不应命中场景可见的平台资源"""
+        all_scenes_group = NoticeGroup.objects.create(group_name="全场景平台组", group_member=["admin"], notice_config=[])
+        specific_scenes_group = NoticeGroup.objects.create(
+            group_name="指定场景平台组", group_member=["admin"], notice_config=[]
+        )
+        all_visible_group = NoticeGroup.objects.create(group_name="全局平台组", group_member=["admin"], notice_config=[])
+        specific_systems_group = NoticeGroup.objects.create(
+            group_name="指定系统平台组", group_member=["admin"], notice_config=[]
+        )
+        SceneSystem.objects.create(scene=scene, system_id="bk_job")
+
+        ResourceBinding.objects.create(
+            resource_id=str(all_scenes_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SCENES,
+        )
+        specific_scene_binding = ResourceBinding.objects.create(
+            resource_id=str(specific_scenes_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SCENES,
+        )
+        ResourceBindingScene.objects.create(binding=specific_scene_binding, scene_id=scene.scene_id)
+        ResourceBinding.objects.create(
+            resource_id=str(all_visible_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+        specific_system_binding = ResourceBinding.objects.create(
+            resource_id=str(specific_systems_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=specific_system_binding, system_id="bk_job")
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            system_id="bk_job",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert set(qs.values_list("group_name", flat=True)) == {"全局平台组", "指定系统平台组"}
+
+    @pytest.mark.django_db
+    def test_filter_scene_and_system_ids_returns_platform_union(self, scene):
+        """测试同时传 scene_id 和 system_id 时返回两个维度的平台资源并集"""
+        scene_group = NoticeGroup.objects.create(group_name="场景组", group_member=["admin"], notice_config=[])
+        all_scenes_group = NoticeGroup.objects.create(group_name="全场景平台组", group_member=["admin"], notice_config=[])
+        all_systems_group = NoticeGroup.objects.create(group_name="全系统平台组", group_member=["admin"], notice_config=[])
+        specific_systems_group = NoticeGroup.objects.create(
+            group_name="指定系统平台组", group_member=["admin"], notice_config=[]
+        )
+
+        _bind_resource_to_scene(scene_group.group_id, ResourceVisibilityType.NOTICE_GROUP, scene.scene_id)
+        ResourceBinding.objects.create(
+            resource_id=str(all_scenes_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SCENES,
+        )
+        ResourceBinding.objects.create(
+            resource_id=str(all_systems_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SYSTEMS,
+        )
+        specific_system_binding = ResourceBinding.objects.create(
+            resource_id=str(specific_systems_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=specific_system_binding, system_id="bk_job")
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            scene_id=[scene.scene_id],
+            system_id=["bk_job"],
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert set(qs.values_list("group_name", flat=True)) == {
+            "场景组",
+            "全场景平台组",
+            "全系统平台组",
+            "指定系统平台组",
+        }
+
+    @pytest.mark.django_db
     def test_filter_scene_id_does_not_return_all_systems_resources(self, scene, another_scene):
         """测试 all_systems 不应按 scene_id 直接命中"""
         ng = NoticeGroup.objects.create(group_name="全系统平台组", group_member=["admin"], notice_config=[])
