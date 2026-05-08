@@ -60,7 +60,7 @@ from services.web.scene.constants import (
     ResourceVisibilityType,
     VisibilityScope,
 )
-from services.web.scene.models import ResourceBinding, ResourceBindingScene, SceneSystem
+from services.web.scene.models import ResourceBinding, ResourceBindingScene
 
 
 class BindingMetadataHelper:
@@ -434,31 +434,24 @@ class CompositeScopeFilter:
             assert_binding_relation_integrity(
                 binding, scene_count=binding.scene_count, system_count=binding.system_count
             )
-            if binding.visibility_type in (VisibilityScope.ALL_VISIBLE, VisibilityScope.ALL_SCENES):
-                # 全部可见 / 全部场景可见
+            if binding.visibility_type == VisibilityScope.ALL_VISIBLE:
+                # 全部可见：场景和系统维度均可见
                 visible_ids.add(binding.resource_id)
 
+            elif binding.visibility_type == VisibilityScope.ALL_SCENES:
+                # 全场景可见：仅按 scene_id 过滤时可见，不按场景关联系统扩展
+                if scene_ids:
+                    visible_ids.add(binding.resource_id)
+
             elif binding.visibility_type == VisibilityScope.ALL_SYSTEMS:
-                # 全系统可见：仅按 system_id 过滤时直接可见
+                # 全系统可见：仅按 system_id 过滤时可见
                 if system_ids:
                     visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
-                # 指定场景可见：检查是否绑定到目标场景
-                if scene_ids:
-                    if binding.binding_scenes.filter(scene_id__in=scene_ids).exists():
-                        visible_ids.add(binding.resource_id)
-                elif system_ids:
-                    # 按系统过滤时，检查该资源绑定的可见场景中是否有关联该系统的场景
-                    binding_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
-                    # 查找这些场景中哪些关联了目标系统
-                    if binding_scene_ids:
-                        matched = SceneSystem.objects.filter(
-                            scene_id__in=binding_scene_ids,
-                            system_id__in=system_ids,
-                        ).exists()
-                        if matched:
-                            visible_ids.add(binding.resource_id)
+                # 指定场景可见：仅按 scene_id 过滤时检查是否绑定到目标场景
+                if scene_ids and binding.binding_scenes.filter(scene_id__in=scene_ids).exists():
+                    visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS:
                 # 指定系统可见：检查目标系统是否在可见系统列表中
@@ -536,6 +529,7 @@ class CompositeScopeFilter:
                 platform_resource_ids = CompositeScopeFilter._get_visible_platform_ids(
                     resource_type=resource_type,
                     scene_id=scene_ids,
+                    system_id=system_ids,
                 )
                 return queryset.filter(**{f"{pk_field}__in": scene_resource_ids | platform_resource_ids})
             else:
