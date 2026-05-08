@@ -22,9 +22,10 @@ from unittest import mock
 
 from rest_framework.test import APIRequestFactory
 
-from apps.meta.permissions import SearchLogSystemSearchPermission
+from apps.meta.permissions import SearchLogPermission, SearchLogSystemSearchPermission
 from apps.permission.handlers.actions import ActionEnum
 from core.exceptions import PermissionException
+from services.web.common.constants import ScopeType
 from tests.base import TestCase
 
 
@@ -59,3 +60,17 @@ class TestSearchLogSystemSearchPermission(TestCase):
         exception_data = json.loads(cm.exception.data)
         self.assertEqual(exception_data["apply_url"], "https://iam.example/apply")
         self.assertEqual(exception_data["permission"], [{"id": ActionEnum.VIEW_SYSTEM.id}])
+
+
+class TestSearchLogPermission(TestCase):
+    @mock.patch("services.web.common.scope_permission.ScopePermission")
+    def test_get_scope_auth_systems_return_empty_when_scope_has_no_systems(self, scope_permission_cls):
+        scope_permission_cls.return_value.get_system_ids_for_scope.return_value = set()
+
+        system_ids = SearchLogPermission.get_scope_auth_systems(
+            scope_type=ScopeType.SCENE,
+            scope_id="1",
+            username="admin",
+        )
+
+        self.assertEqual(system_ids, [])
