@@ -65,8 +65,8 @@ class TestToolViewPermissions(TestCase):
         self.assertEqual(permission._get_instance_id(view.request, view), "11")
 
     def test_scene_scope_tool_destroy_permission_uses_tool_scene_id(self):
-        scene = Scene.objects.create(name="工具归属场景", managers=["admin"])
-        other_scene = Scene.objects.create(name="伪造请求场景", managers=["admin"])
+        scene = Scene.objects.create(name="工具归属场景")
+        other_scene = Scene.objects.create(name="伪造请求场景")
         tool = Tool.objects.create(
             name="场景工具",
             uid=str(uuid.uuid4()),

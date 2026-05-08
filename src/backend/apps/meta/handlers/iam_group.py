@@ -128,9 +128,13 @@ class IAMGroupManager:
                 ]
             }
 
+        # scene 的子资源类型，授权时 paths 统一使用 scene 拓扑路径，表达"该场景下的所有实例"
+        SCENE_CHILD_RESOURCE_TYPES = {"strategy", "notice_group", "link_table", "rule", "pa", "risk"}
+
         # 构建多资源类型权限结构
         multi_permissions = []
         for resource_type, grouped_actions in action_groups.items():
+            path_type = "scene" if resource_type in SCENE_CHILD_RESOURCE_TYPES else resource_type
             multi_permissions.append(
                 {
                     "actions": grouped_actions,
@@ -138,16 +142,7 @@ class IAMGroupManager:
                         {
                             "system": system_id,
                             "type": resource_type,
-                            "paths": [
-                                [
-                                    {
-                                        "system": system_id,
-                                        "type": resource_type,
-                                        "id": scene_id,
-                                        "name": scene_name,
-                                    }
-                                ]
-                            ],
+                            "paths": [[{"system": system_id, "type": path_type, "id": scene_id, "name": scene_name}]],
                         }
                     ],
                 }
@@ -275,8 +270,14 @@ class IAMGroupManager:
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
         grade_manager_id = "-"
 
+        # 为组名添加随机后缀，避免重名
+        import uuid
+
+        unique_suffix = uuid.uuid4().hex[:8]
+        group_name_with_suffix = f"{group_name}-{unique_suffix}"
+
         # 1. 创建用户组
-        group_def = [{"name": group_name, "description": group_description}]
+        group_def = [{"name": group_name_with_suffix, "description": group_description}]
         try:
             created_group_ids = api.bk_iam.create_grade_manager_groups(
                 system_id=system_id,

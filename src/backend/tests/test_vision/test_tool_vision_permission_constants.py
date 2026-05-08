@@ -223,7 +223,7 @@ class TestSceneManageViewSetPermission(TestCase):
         from services.web.vision.models import SceneReportGroup
         from services.web.vision.views import SceneReportGroupManageViewSet
 
-        scene = Scene.objects.create(name="分组归属场景", managers=["admin"])
+        scene = Scene.objects.create(name="分组归属场景")
         group = SceneReportGroup.objects.create(scene=scene, name="待删分组")
 
         view = SceneReportGroupManageViewSet()
@@ -237,8 +237,8 @@ class TestSceneManageViewSetPermission(TestCase):
     def test_scene_group_manage_destroy_prefers_group_scene_id_over_request_scene_id(self):
         from services.web.vision.views import SceneReportGroupManageViewSet
 
-        scene = Scene.objects.create(name="真实归属场景", managers=["admin"])
-        other_scene = Scene.objects.create(name="伪造请求场景", managers=["admin"])
+        scene = Scene.objects.create(name="真实归属场景")
+        other_scene = Scene.objects.create(name="伪造请求场景")
         group = SceneReportGroup.objects.create(scene=scene, name="待更新分组")
 
         view = SceneReportGroupManageViewSet()
@@ -252,8 +252,8 @@ class TestSceneManageViewSetPermission(TestCase):
     def test_scene_panel_manage_update_permission_uses_panel_scene_id(self):
         from services.web.vision.views import ScenePanelManageViewSet
 
-        scene = Scene.objects.create(name="报表归属场景", managers=["admin"])
-        other_scene = Scene.objects.create(name="伪造请求场景", managers=["admin"])
+        scene = Scene.objects.create(name="报表归属场景")
+        other_scene = Scene.objects.create(name="伪造请求场景")
         panel = VisionPanel.objects.create(id="scene-panel-1", name="场景报表")
         binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.PANEL,
