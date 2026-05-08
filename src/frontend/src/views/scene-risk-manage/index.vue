@@ -25,13 +25,31 @@
       @change-table-height="handleChangeTableHeight"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
-    <div class="risk-manage-list">
+    <div
+      :key="fieldConfigKey"
+      class="risk-manage-list">
+      <div class="add-button">
+        <bk-button
+          v-bk-tooltips="{
+            content: t('跨场景不支持新增风险'),
+            disabled: getSceneSystemParams().scope_type !== 'cross_scene',
+          }"
+          :disabled="getSceneSystemParams().scope_type === 'cross_scene'"
+          theme="primary"
+          @click="handleAddRisk">
+          <audit-icon
+            class="add-icon"
+            type="add" />
+          {{ t('新增风险') }}
+        </bk-button>
+      </div>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
         is-need-scene-params
         need-empty-search-tip
+        :row-class-name="getRowClassName"
         row-key="risk_id"
         :search-params="searchModel"
         secondary-sort-field="-event_time"
@@ -41,6 +59,9 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
+  <add-risk
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -77,6 +98,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
+  import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
@@ -206,9 +228,11 @@
     return defaultSettings;
   });
   const listRef = ref();
+  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const fieldConfigKey = ref(0);
+  const newAddedRiskIds = ref<string[]>([]);
   const dataSource = RiskManageService.fetchRiskList;
   // 导出数据
   const handleExport = () => {
@@ -299,6 +323,29 @@
     listRef.value.fetchData(dataParams);
   };
 
+  // 新增风险
+  const handleAddRisk = () => {
+    addRiskRef.value.show();
+  };
+  // 新增风险成功
+  const handleAddRiskSuccess = () => {
+    // 记录新增的风险ID，用于高亮显示
+    const riskIds = sessionStorage.getItem('addEventRiskIds');
+    if (riskIds) {
+      newAddedRiskIds.value = JSON.parse(riskIds);
+    }
+    searchBoxRef.value.clearValue();
+    fetchList();
+  };
+
+  // 行样式：新增的风险行显示绿色底色
+  const getRowClassName = (row: Record<string, any>) => {
+    if (newAddedRiskIds.value.includes(String(row.risk_id))) {
+      return 'new-row';
+    }
+    return '';
+  };
+
   const {
     run: getEventFields,
   } = useRequest(RiskManageService.fetchEventFields, {
@@ -380,6 +427,9 @@
   // 监听场景切换事件
   const { on, off } = useEventBus();
   onMounted(() => {
+    // 页面刷新后重置新增风险ID高亮状态
+    sessionStorage.removeItem('addEventRiskIds');
+    newAddedRiskIds.value = [];
     getEventFields();
     getRiskTags({
       scope_id: getSceneSystemParams().scope_id,
@@ -418,8 +468,18 @@
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
   .risk-manage-list {
+    padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
+
+    .add-button {
+      padding-bottom: 5px;
+
+      .add-icon {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+    }
   }
 
 }

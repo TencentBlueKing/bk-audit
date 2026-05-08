@@ -103,6 +103,7 @@
         :height="height"
         hover
         :max-height="effectiveTableMaxHeight"
+        :row-class-name="rowClassName"
         :row-key="rowKey as any"
         v-bind="$attrs"
         @filter-change="handleFilterChange"
@@ -220,6 +221,7 @@
     noUseRresults?: boolean;
     settings?: any[];
     rowKey?: string | ((row: any) => string | number);
+    rowClassName?: string | ((row: Record<string, any>) => string);
     /** 表格最大高度，传入时优先使用，不传则使用内部计算值 */
     tableMaxHeight?: number | string;
     /** 搜索参数（含 event_filters 等），排序时合并以保留其他参数 */
@@ -258,6 +260,7 @@
     noUseRresults: false,
     settings: () => [],
     rowKey: 'id',
+    rowClassName: undefined,
     tableMaxHeight: undefined,
     searchParams: undefined,
     isNeedSceneParams: false,
@@ -893,11 +896,16 @@
   }
 }
 
-.tdesign-list {
-  :deep(.new-row) {
-    td {
-      background-color: #e4faf0 !important;
-    }
+/* 新增行绿色高亮 - 使用多重选择器确保覆盖 TDesign 默认样式 */
+.audit-tdesign-list .tdesign-list tr.new-row {
+  td,
+  th {
+    background-color: #e4faf0 !important;
+  }
+
+  &:hover td,
+  &:hover th {
+    background-color: #d8f5e6 !important;
   }
 }
 
