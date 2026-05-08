@@ -34,7 +34,8 @@
         v-for="(item, index) in panels"
         :key="index"
         :label="item.label"
-        :name="item.name">
+        :name="item.name"
+        render-directive="if">
         <template #label>
           <div class="customize-label">
             <span
