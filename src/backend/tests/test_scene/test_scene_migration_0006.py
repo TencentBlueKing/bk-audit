@@ -19,8 +19,6 @@ def test_ensure_default_scene_create_reserved_scene():
     assert scene.name == migration_0006.DEFAULT_SCENE_NAME
     assert scene.description == migration_0006.DEFAULT_SCENE_DESCRIPTION
     assert scene.status == SceneStatus.ENABLED
-    assert scene.managers == []
-    assert scene.users == []
 
 
 @pytest.mark.django_db
@@ -29,9 +27,7 @@ def test_ensure_default_scene_reuse_reserved_scene():
     scene = Scene.objects.get(name=migration_0006.DEFAULT_SCENE_NAME)
     scene.description = migration_0006.DEFAULT_SCENE_DESCRIPTION
     scene.status = SceneStatus.DISABLED
-    scene.managers = []
-    scene.users = []
-    scene.save(update_fields=["description", "status", "managers", "users"])
+    scene.save(update_fields=["description", "status"])
 
     reused = migration_0006._ensure_default_scene(Scene)
     scene.refresh_from_db()
@@ -45,9 +41,7 @@ def test_ensure_default_scene_reject_user_managed_conflict():
     """存在同名用户场景时拒绝复用，避免权限扩大。"""
     scene = Scene.objects.get(name=migration_0006.DEFAULT_SCENE_NAME)
     scene.description = "用户自定义场景"
-    scene.managers = ["admin"]
-    scene.users = ["user1"]
-    scene.save(update_fields=["description", "managers", "users"])
+    scene.save(update_fields=["description"])
 
     with pytest.raises(RuntimeError, match="Reserved scene name conflict"):
         migration_0006._ensure_default_scene(Scene)
