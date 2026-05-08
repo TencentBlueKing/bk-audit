@@ -20,13 +20,7 @@
       v-if="status === 'normal' && !loading"
       style="width: 100%;height: 100%;">
       <div
-        v-if="menuData.length > 0"
         id="panel" />
-      <bk-exception
-        v-else
-        :description="t('暂无数据')"
-        style="padding-top: 80px;"
-        type="empty" />
     </div>
     <div
       v-if="status !== 'normal' && !loading"
@@ -234,7 +228,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
-  import { onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -271,6 +265,7 @@
     script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
     document.head.appendChild(script);
   });
+  let app: any;
 
 
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
@@ -286,7 +281,7 @@
   const init = async  () => {
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
-      window.BkVisionSDK.init(
+      app =  window.BkVisionSDK.init(
         '#panel',
         menuData.value[0].id,
         {
@@ -298,6 +293,8 @@
           ],
           constants: {
             system_id: systemId.value,
+            scope_type: 'system',
+            scope_id: systemId.value,
           },
           handleError,
         },
@@ -313,7 +310,12 @@
   } = useRequest(StatementManageService.fetchMenuList, {
     defaultValue: [],
     onSuccess: () => {
-      init();
+      nextTick(() => {
+        if (app) {
+          app.unmount();
+        }
+        init();
+      });
     },
   });
 
@@ -347,9 +349,7 @@
 
   watch(() => status.value, (data) => {
     if (data === 'normal') {
-      console.log('oute.params.id', route.params.id);
       fetchMenuList({
-        // scenario: 'per_app',
         scope_id: route.params.id,
         scope_type: 'system',
       });
