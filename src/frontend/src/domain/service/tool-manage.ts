@@ -46,6 +46,7 @@ export default  {
   fetchToolTags(params?: {
       scope_type?: string,
       scope_id?: string,
+      status?: string,
     }) {
     return ToolManageSources.getToolTags(params)
       .then(({ data }) => data);
