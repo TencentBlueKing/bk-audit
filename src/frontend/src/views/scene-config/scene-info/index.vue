@@ -109,7 +109,7 @@
 
   // 统计卡片数据（从接口返回数据中提取）
   const statCardsData = computed(() => ({
-    systemCount: sceneInfoData.value.systems?.length || 0,
+    systemCount: systemDetailList.value.length || 0,
     dataTableCount: sceneInfoData.value.tables?.length || 0,
     strategyCount: sceneInfoData.value.strategy_ids?.length || 0,
     activeRiskCount: sceneInfoData.value.risk_count || 0,
