@@ -17,9 +17,7 @@
 export default class EventSourceApp {
   id: string;
   name: string;
-  permission: {
-    search_regular_event: boolean;
-  };
+  permission: Record<string, boolean>;
   source_type: string;
   audit_status: string;
   system_id: string;
