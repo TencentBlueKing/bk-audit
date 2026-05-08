@@ -222,6 +222,7 @@
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
@@ -427,11 +428,21 @@
     if (item?.strategies.length === 0) {
       return;
     }
+    const sceneParams = getSceneSystemParams();
+    const query: Record<string, string> = {
+      strategy_id: item.strategies.join(','),
+    };
+    // 携带场景信息
+    if (sceneParams.scope_id) {
+      query.scene_id = sceneParams.scope_id;
+      query.scope_id = sceneParams.scope_id;
+      query.scope_type = sceneParams.scope_type;
+    } else if (sceneParams.scope_type) {
+      query.scope_type = sceneParams.scope_type;
+    }
     const url = router.resolve({
       name: 'strategyList',
-      query: {
-        strategy_id: item.strategies.join(','),
-      },
+      query,
     }).href;
     window.open(url, '_blank');
   };

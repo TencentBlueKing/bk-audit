@@ -99,6 +99,7 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import ToolContent from '@/views/tools/tools-square/components/tool-content.vue';
 
   interface TagItem {
@@ -209,11 +210,21 @@
   // 策略跳转
   const handleStrategiesClick = (item: any) => {
     if (!item?.strategies?.length) return;
+    const sceneParams = getSceneSystemParams();
+    const query: Record<string, string> = {
+      strategy_id: item.strategies.join(','),
+    };
+    // 携带场景信息
+    if (sceneParams.scope_id) {
+      query.scene_id = sceneParams.scope_id;
+      query.scope_id = sceneParams.scope_id;
+      query.scope_type = sceneParams.scope_type;
+    } else if (sceneParams.scope_type) {
+      query.scope_type = sceneParams.scope_type;
+    }
     const url = router.resolve({
       name: 'strategyList',
-      query: {
-        strategy_id: item.strategies.join(','),
-      },
+      query,
     }).href;
     window.open(url, '_blank');
   };

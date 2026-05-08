@@ -35,6 +35,8 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   // 工具类型枚举
   type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
 
@@ -120,11 +122,21 @@
 
   // 策略跳转
   const handleStrategyClick = (strategyId: number) => {
+    const sceneParams = getSceneSystemParams();
+    const query: Record<string, string> = {
+      strategy_id: String(strategyId),
+    };
+    // 携带场景信息
+    if (sceneParams.scope_id) {
+      query.scene_id = sceneParams.scope_id;
+      query.scope_id = sceneParams.scope_id;
+      query.scope_type = sceneParams.scope_type;
+    } else if (sceneParams.scope_type) {
+      query.scope_type = sceneParams.scope_type;
+    }
     const url = router.resolve({
       name: 'strategyList',
-      query: {
-        strategy_id: String(strategyId),
-      },
+      query,
     }).href;
     window.open(url, '_blank');
   };
