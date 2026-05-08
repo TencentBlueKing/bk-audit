@@ -86,9 +86,8 @@
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name:( userRole.includes('saas_admin') || userRole.includes('system_admin')
-          )? 'systemList' : 'systemLandingPage', params: {
-          } }">
+          :to="{ name: (isSystemListEmpty || !(userRole.includes('saas_admin') || userRole.includes('system_admin')))
+            ? 'systemLandingPage' : 'systemList' }">
           {{ t('系统接入') }}
         </router-link>
         <router-link
@@ -329,8 +328,8 @@
   } from 'vue-router';
 
   import IamManageService from '@service/iam-manage';
+  import MetaManageService from '@service/meta-manage';
 
-  // import MetaManageService from '@service/meta-manage';
   // import ConfigModel from '@model/root/config';
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
@@ -397,6 +396,8 @@
 
   // const projectList = ref<SystemItem[]>([]);
   const permissionCreateSystem = ref(false);
+  // 系统列表是否为空（用于决定跳转引导页还是列表页）
+  const isSystemListEmpty = ref(true);
 
   // const contentText = (stage: string | undefined) => {
   //   if (stage === 'permission_model') {
@@ -433,6 +434,19 @@
     manual: true,
     onSuccess: (data) => {
       permissionCreateSystem.value = data.create_system;
+    },
+  });
+
+  // 获取系统列表，判断是否为空以决定跳转目标
+  useRequest(MetaManageService.fetchSystemList, {
+    defaultValue: { total: 0 } as { total: number },
+    manual: true,
+    defaultParams: {
+      audit_status: 'accessed',
+      filter_actions: 'edit_system,view_system',
+    },
+    onSuccess: (data: any) => {
+      isSystemListEmpty.value = data.total === 0;
     },
   });
 
