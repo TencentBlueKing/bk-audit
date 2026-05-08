@@ -175,24 +175,21 @@ class StrategyFieldsViewSet(ResourceViewSet):
     ]
 
 
-class PlatformTableViewSet(ResourceViewSet):
-    """平台级数据表列表 ViewSet（平台管理员）"""
-
-    def get_permissions(self):
-        return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
-
-    resource_routes = [
-        ResourceRoute("GET", resource.strategy_v2.list_tables),
-    ]
-
-
 class StrategyTableViewSet(ResourceViewSet):
     # TODO: 需要补充内部数据权限筛选
+
+    def get_scene_id(self):
+        return get_value_by_request(self.request, "scene_id")
 
     def get_permissions(self):
         return [
             AnyOfPermissions(
                 IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                InstanceActionPermission(
+                    actions=[ActionEnum.MANAGE_SCENE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=self.get_scene_id,
+                ),
                 ActionPermission(
                     actions=[
                         ActionEnum.CREATE_STRATEGY,
@@ -210,6 +207,11 @@ class StrategyTableViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.get_rt_meta, endpoint="rt_meta"),
         ResourceRoute("GET", resource.strategy_v2.get_rt_last_data, endpoint="rt_last_data"),
         ResourceRoute("GET", resource.strategy_v2.bulk_get_rt_fields, endpoint="bulk_rt_fields"),
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.get_scene_permission_tables,
+            endpoint="scene_permission_tables",
+        ),
     ]
 
 

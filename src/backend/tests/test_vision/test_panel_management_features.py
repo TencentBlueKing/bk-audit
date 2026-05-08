@@ -45,8 +45,8 @@ from services.web.vision.views import (
 
 class TestPanelManagementFeatures(TestCase):
     def setUp(self):
-        self.scene1 = Scene.objects.create(name="场景A", managers=["admin"], users=["u1"])
-        self.scene2 = Scene.objects.create(name="场景B", managers=["admin"], users=["u2"])
+        self.scene1 = Scene.objects.create(name="场景A")
+        self.scene2 = Scene.objects.create(name="场景B")
         self.scene_group = SceneReportGroup.objects.create(
             scene=self.scene1,
             name="自定义分组",
@@ -576,7 +576,7 @@ class TestVisionIdFeature(TestCase):
     """测试 vision_id 字段在创建/更新报表时的传入与持久化"""
 
     def setUp(self):
-        self.scene1 = Scene.objects.create(name="场景A", managers=["admin"], users=["u1"])
+        self.scene1 = Scene.objects.create(name="场景A")
         self.scene_group = SceneReportGroup.objects.create(
             scene=self.scene1,
             name="自定义分组",

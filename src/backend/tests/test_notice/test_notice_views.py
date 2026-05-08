@@ -35,8 +35,6 @@ class TestNoticeGroupViewPermissions(TestCase):
         scene = Scene.objects.create(
             name="notice-scene-detail",
             description="scene detail",
-            managers=["admin"],
-            users=["admin"],
         )
         notice_group = NoticeGroup.objects.create(
             group_name="notice-group-detail",
@@ -59,8 +57,6 @@ class TestNoticeGroupViewPermissions(TestCase):
         scene = Scene.objects.create(
             name="notice-scene-batch",
             description="scene batch",
-            managers=["admin"],
-            users=["admin"],
         )
         notice_group = NoticeGroup.objects.create(
             group_name="notice-group-batch",
@@ -84,14 +80,10 @@ class TestListAllNoticeGroup(TestCase):
         self.scene_1 = Scene.objects.create(
             name="notice-scene-1",
             description="scene 1",
-            managers=["admin"],
-            users=["admin"],
         )
         self.scene_2 = Scene.objects.create(
             name="notice-scene-2",
             description="scene 2",
-            managers=["admin"],
-            users=["admin"],
         )
 
     def test_list_all_notice_group_only_returns_target_scene_groups(self):
