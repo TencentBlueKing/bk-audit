@@ -165,13 +165,39 @@ class SceneRelatedStatsMixin:
         return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("risk_count", 0)
 
 
-class SceneListSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
+class SceneMembersMixin:
+    """场景成员数据混入类，封装重复的成员数据方法"""
+
+    def _get_members_data(self, obj):
+        """获取场景成员数据并进行缓存"""
+        if not hasattr(self, "_members_data_cache"):
+            self._members_data_cache = {}
+
+        if obj.scene_id not in self._members_data_cache:
+            from services.web.scene.resources import get_scene_members_data
+
+            self._members_data_cache[obj.scene_id] = get_scene_members_data(obj.scene_id)
+
+        return self._members_data_cache[obj.scene_id]
+
+    def get_managers(self, obj):
+        members_data = self._get_members_data(obj)
+        return [m["id"] for m in members_data if m.get("role") == "manager"]
+
+    def get_users(self, obj):
+        members_data = self._get_members_data(obj)
+        return [m["id"] for m in members_data if m.get("role") == "user"]
+
+
+class SceneListSerializer(SceneRelatedStatsMixin, SceneMembersMixin, serializers.ModelSerializer):
     """场景列表序列化器"""
 
     system_count = serializers.IntegerField(read_only=True)
     table_count = serializers.IntegerField(read_only=True)
     strategy_ids = serializers.SerializerMethodField()
     risk_count = serializers.SerializerMethodField()
+    managers = serializers.SerializerMethodField()
+    users = serializers.SerializerMethodField()
 
     class Meta:
         model = Scene
@@ -202,13 +228,15 @@ class SceneSimpleListSerializer(serializers.ModelSerializer):
         fields = ["scene_id", "name", "status"]
 
 
-class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
+class SceneDetailSerializer(SceneRelatedStatsMixin, SceneMembersMixin, serializers.ModelSerializer):
     """场景详情序列化器"""
 
     systems = SceneSystemSerializer(source="scene_systems", many=True, read_only=True)
     tables = SceneDataTableSerializer(source="scene_tables", many=True, read_only=True)
     strategy_ids = serializers.SerializerMethodField()
     risk_count = serializers.SerializerMethodField()
+    managers = serializers.SerializerMethodField()
+    users = serializers.SerializerMethodField()
 
     class Meta:
         model = Scene

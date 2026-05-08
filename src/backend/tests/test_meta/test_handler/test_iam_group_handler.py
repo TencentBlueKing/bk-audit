@@ -65,11 +65,11 @@ class TestBuildPermissions(SimpleTestCase):
         # (action_id, expected_resource_type)
         cases = [
             ("view_scene", "scene"),
-            ("edit_strategy", "strategy"),
-            ("list_risk_v2", "risk"),
+            ("edit_strategy", "scene"),  # 策略类型统一映射到scene
+            ("list_risk_v2", "scene"),  # 风险类型统一映射到scene
             ("list_rule_v2", "scene"),
-            ("view_link_table", "link_table"),
-            ("edit_notice_group_v2", "notice_group"),
+            ("view_link_table", "scene"),  # 联表类型统一映射到scene
+            ("edit_notice_group_v2", "scene"),  # 通知组类型统一映射到scene
             ("list_pa_v2", "scene"),
         ]
         for action_id, expected_type in cases:
@@ -106,7 +106,8 @@ class TestBuildPermissions(SimpleTestCase):
             scene_name="n",
         )
         types = {p["resources"][0]["type"] for p in result["_multi_permissions"]}
-        self.assertEqual(types, {"scene", "risk", "strategy"})
+        # 由于所有类型都统一映射到scene，应该只产生scene类型权限
+        self.assertEqual(types, {"scene"})
 
 
 class TestGroupMembersCRUD(SimpleTestCase):
@@ -316,8 +317,6 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
         scene = mock.MagicMock()
         scene.scene_id = 1
         scene.name = "测试场景"
-        scene.managers = ["admin"]
-        scene.users = ["viewer1"]
         scene.iam_manager_group_id = manager_group_id
         scene.iam_viewer_group_id = viewer_group_id
         return scene

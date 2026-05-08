@@ -76,8 +76,6 @@ def _ensure_default_scene(SceneModel):
         name=DEFAULT_SCENE_NAME,
         description=DEFAULT_SCENE_DESCRIPTION,
         status="enabled",
-        managers=[],
-        users=[],
     )
 
 

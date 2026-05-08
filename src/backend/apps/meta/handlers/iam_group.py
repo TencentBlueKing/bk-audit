@@ -131,6 +131,10 @@ class IAMGroupManager:
         # 构建多资源类型权限结构
         multi_permissions = []
         for resource_type, grouped_actions in action_groups.items():
+            # 对于场景相关的资源类型，统一授权到场景级别
+            if resource_type in ["strategy", "notice_group", "link_table", "rule", "pa", "risk"]:
+                resource_type = "scene"
+
             multi_permissions.append(
                 {
                     "actions": grouped_actions,
@@ -275,8 +279,14 @@ class IAMGroupManager:
         system_id = system_id or settings.BK_IAM_SYSTEM_ID
         grade_manager_id = "-"
 
+        # 为组名添加随机后缀，避免重名
+        import uuid
+
+        unique_suffix = uuid.uuid4().hex[:8]
+        group_name_with_suffix = f"{group_name}-{unique_suffix}"
+
         # 1. 创建用户组
-        group_def = [{"name": group_name, "description": group_description}]
+        group_def = [{"name": group_name_with_suffix, "description": group_description}]
         try:
             created_group_ids = api.bk_iam.create_grade_manager_groups(
                 system_id=system_id,

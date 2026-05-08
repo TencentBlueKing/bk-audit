@@ -793,8 +793,6 @@ class TestCheckResourcePermission(TestCase):
         self.scene = Scene.objects.create(
             name="测试场景",
             status="enabled",
-            managers=["admin"],
-            users=["user1"],
         )
         # 创建 all_visible 绑定
         self.binding_all = ResourceBinding.objects.create(
@@ -1000,7 +998,7 @@ class TestGetSystemIdsForScope(TestCase):
     @patch("services.web.common.scope_permission.Permission")
     def test_scene_scope_with_all_systems_returns_all_system_ids(self, mock_perm_cls):
         mock_perm_cls.return_value = MagicMock()
-        scene = Scene.objects.create(name="全系统场景", status="enabled", managers=["admin"], users=["user1"])
+        scene = Scene.objects.create(name="全系统场景", status="enabled")
         SceneSystem.objects.create(scene=scene, system_id="", is_all_systems=True)
         System.objects.create(system_id="bk_monitor", namespace="bklog", name="监控", instance_id="bk_monitor")
         System.objects.create(system_id="bk_iam", namespace="bklog", name="权限", instance_id="bk_iam")
@@ -1014,7 +1012,7 @@ class TestGetSystemIdsForScope(TestCase):
     @patch("services.web.common.scope_permission.Permission")
     def test_scene_scope_filters_blank_system_ids(self, mock_perm_cls):
         mock_perm_cls.return_value = MagicMock()
-        scene = Scene.objects.create(name="普通场景", status="enabled", managers=["admin"], users=["user1"])
+        scene = Scene.objects.create(name="普通场景", status="enabled")
         SceneSystem.objects.create(scene=scene, system_id="bk_monitor", is_all_systems=False)
         SceneSystem.objects.create(scene=scene, system_id="", is_all_systems=False)
 
@@ -1036,8 +1034,6 @@ class TestGetResourceIdsSplitMethods(TestCase):
         self.scene = Scene.objects.create(
             name="场景A",
             status="enabled",
-            managers=["admin"],
-            users=["user1"],
         )
         SceneSystem.objects.create(scene=self.scene, system_id="bk_monitor")
 
@@ -1249,8 +1245,6 @@ class TestGetResourceIdsBindingType(TestCase):
         self.scene = Scene.objects.create(
             name="带系统场景",
             status="enabled",
-            managers=["admin"],
-            users=["user1"],
         )
         SceneSystem.objects.create(scene=self.scene, system_id="bk_monitor")
 

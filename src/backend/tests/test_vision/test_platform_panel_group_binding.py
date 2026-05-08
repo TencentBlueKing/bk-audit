@@ -10,8 +10,8 @@ from services.web.vision.resources import CreatePlatformPanel, UpdatePlatformPan
 
 class TestPlatformPanelGroupBinding(TestCase):
     def setUp(self):
-        self.scene1 = Scene.objects.create(name="s1", managers=["admin"], users=["u1"])
-        self.scene2 = Scene.objects.create(name="s2", managers=["admin"], users=["u2"])
+        self.scene1 = Scene.objects.create(name="s1")
+        self.scene2 = Scene.objects.create(name="s2")
 
     def test_create_platform_panel_auto_create_group_item(self):
         resp = CreatePlatformPanel().request(

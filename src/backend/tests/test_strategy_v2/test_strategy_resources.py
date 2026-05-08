@@ -35,7 +35,7 @@ from tests.base import TestCase
 class StrategyResourcesTest(TestCase):
     def setUp(self):
         super().setUp()
-        self.scene = Scene.objects.create(name="test-scene", status=SceneStatus.ENABLED, managers=["admin"])
+        self.scene = Scene.objects.create(name="test-scene", status=SceneStatus.ENABLED)
         self.strategy = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="example",
@@ -58,7 +58,7 @@ class StrategyResourcesTest(TestCase):
         )
 
     def test_list_link_table_all_filters_by_scene(self):
-        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
         link_table = LinkTable.objects.create(namespace=self.namespace, uid="lt_1", version=1, name="LT-1", config={})
         binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.LINK_TABLE,
@@ -81,7 +81,7 @@ class StrategyResourcesTest(TestCase):
 
     @mock.patch("services.web.strategy_v2.resources.ActionPermission.has_permission", return_value=True)
     def test_list_strategy_all_filters_by_scene(self, _):
-        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
         strategy_2 = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="other-scene-strategy",
