@@ -92,8 +92,8 @@
 
   // 根据选择的账号类型动态生成 placeholder
   const placeholderMap: Record<string, string> = {
-    ctx: '请输入企业微信账号，如 frodomei',
-    openid: '请输入 openid，如 47B1fC4b-dc0c-86dB-4f7D-d0FF16EDCe19',
+    ctx: '请输入企业微信账号',
+    openid: '请输入 openid',
     form_wechat: '请输入微信号',
     form_qq: '请输入QQ号',
   };
