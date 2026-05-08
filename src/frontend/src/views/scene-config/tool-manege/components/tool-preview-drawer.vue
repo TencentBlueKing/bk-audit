@@ -112,6 +112,13 @@
     tagsEnums: TagItem[];
     allToolsData: ToolDetailModel[];
   }
+  interface DrillDownConfig {
+    source_field: string;
+    target_value_type: string;
+    target_value: string;
+    target_field_type?: string;
+  }
+
   interface DrawerItem {
     id: number;
     isShow: boolean;
@@ -119,6 +126,8 @@
     uid: string;
     toolDetails: ToolDetailModel | null;
     searchList: any[];
+    drillConfig?: DrillDownConfig[];
+    drillRowData?: Record<string, any>;
   }
 
   const props = defineProps<Props>();
@@ -132,6 +141,22 @@
   const toolContentRefs = ref<Record<number, any>>({});
   let drawerIdCounter = 0;
   const DRILL_DOWN_OFFSET = 200;
+
+  // 根据路径从数据中提取值
+  const extractDataByPath = (data: any, path: string): any => {
+    if (!path || !data) return null;
+    const cleanPath = path.replace(/\[\d+\]/g, '');
+    const pathParts = cleanPath.split('.').filter(part => part.length > 0);
+    let result = data;
+    for (const part of pathParts) {
+      if (result === null || result === undefined) return null;
+      result = result[part];
+    }
+    if (typeof result === 'string') {
+      result = result.replace(/^["']|["']$/g, '');
+    }
+    return result;
+  };
 
   // 工具图标映射
   const toolIconMap: Record<string, string> = {
@@ -232,19 +257,54 @@
     const drawer = drawerStack.value[drawerIndex];
     if (!drawer) return;
 
-    drawer.searchList = currentToolDetail.config.input_variable.map(createSearchItem);
+    const { drillConfig, drillRowData } = drawer;
+
+    if (drillConfig && drillConfig.length > 0 && drillRowData) {
+      // 下钻模式：根据 drill_config 自动填充参数
+      const configMap = new Map<string, DrillDownConfig>();
+      drillConfig.forEach((configItem) => {
+        configMap.set(configItem.source_field, configItem);
+      });
+
+      drawer.searchList = (currentToolDetail.config?.input_variable || []).map((item: any) => {
+        const searchItem = createSearchItem(item);
+        const configItem = configMap.get(searchItem.raw_name);
+        if (!configItem) return searchItem;
+
+        let dynamicValue: any = '';
+        if (configItem.target_value_type !== 'fixed_value') {
+          if (configItem.target_value.includes('.')) {
+            dynamicValue = extractDataByPath(drillRowData, configItem.target_value);
+          } else if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
+            dynamicValue = drillRowData?.[configItem.target_value] ?? searchItem.value;
+          } else {
+            dynamicValue = drillRowData?.event_data?.[configItem.target_value] ?? searchItem.value;
+          }
+        }
+
+        return {
+          ...searchItem,
+          value: configItem.target_value_type === 'fixed_value'
+            ? configItem.target_value
+            : dynamicValue,
+        };
+      });
+    } else {
+      // 非下钻模式：使用默认值
+      drawer.searchList = currentToolDetail.config.input_variable.map(createSearchItem);
+    }
 
     nextTick(() => {
       const toolContentRef = toolContentRefs.value[drawerIndex];
       if (toolContentRef) {
         toolContentRef.setFormItemData(drawer.searchList);
-        // 如果所有必填字段都有值，则自动查询
-        nextTick(() => {
-          const isValid = drawer.searchList.every(validateField);
-          if (isValid) {
+        // 下钻模式或所有必填字段都有值时，自动查询
+        const shouldAutoSubmit = (drillConfig && drillConfig.length > 0) || drawer.searchList.every(validateField);
+        if (shouldAutoSubmit) {
+          nextTick(() => {
             toolContentRef.submit();
-          }
-        });
+          });
+        }
       }
     });
   };
@@ -278,14 +338,17 @@
 
   const handleFieldDown = (
     drillDownItem: any,
-    _drillDownItemRowData: Record<string, any>,
+    drillDownItemRowData: Record<string, any>,
     activeUid?: string,
   ) => {
     const targetUid = activeUid
       || drillDownItem?.drill_config?.[0]?.tool?.uid;
     if (!targetUid) return;
 
-    // 创建新的抽屉层
+    // 获取对应的 drill_config
+    const drillConfig = drillDownItem?.drill_config?.find((c: any) => c.tool.uid === targetUid)?.config || [];
+
+    // 创建新的抽屉层，携带下钻参数
     drawerIdCounter += 1;
     const newDrawer: DrawerItem = reactive({
       id: drawerIdCounter,
@@ -294,6 +357,8 @@
       uid: targetUid,
       toolDetails: null,
       searchList: [],
+      drillConfig,
+      drillRowData: drillDownItemRowData,
     });
 
     drawerStack.value.push(newDrawer);
