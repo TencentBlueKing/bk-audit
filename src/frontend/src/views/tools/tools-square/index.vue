@@ -310,7 +310,7 @@
 
   // 刷新标签列表（带 scope 参数）
   const refreshTagsList = () => {
-    fetchToolsTagsList(scopeParams.value);
+    fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
   };
 
   const syncRouteToUrl = (uid?: string) => {
