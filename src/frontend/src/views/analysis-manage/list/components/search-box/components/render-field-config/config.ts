@@ -44,7 +44,6 @@ export default () => ({
     service: () => {
       const params = getSceneSystemParams();
       return MetaManageService.fetchSystemWithAction({
-        action_ids: 'search_regular_event',
         scope_id: params.scope_id || '',
         scope_type: params.scope_type || '',
       });
