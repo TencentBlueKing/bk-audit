@@ -50,6 +50,7 @@ class ToolManage extends ModuleBase {
   getToolTags(params?: {
     scope_type?: string,
     scope_id?: string,
+    status?: string,
   }) {
     const sceneParams = getSceneSystemParams();
     const mergedParams = {
