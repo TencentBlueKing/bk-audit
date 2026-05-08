@@ -62,7 +62,7 @@ class TestCallerPermission(TestCase):
         from services.web.tool.models import Tool
 
         strategy = Strategy.objects.create(namespace="ns", strategy_name="s1")
-        scene = Scene.objects.create(name="scene_s1", status=SceneStatus.ENABLED, managers=["admin"])
+        scene = Scene.objects.create(name="scene_s1", status=SceneStatus.ENABLED)
         strategy_binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),
@@ -155,8 +155,8 @@ class TestCallerPermission(TestCase):
         from services.web.strategy_v2.models import Strategy, StrategyTool
         from services.web.tool.models import Tool
 
-        scene_1 = Scene.objects.create(name="scene-1", status=SceneStatus.ENABLED, managers=["admin"])
-        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED, managers=["admin"])
+        scene_1 = Scene.objects.create(name="scene-1", status=SceneStatus.ENABLED)
+        scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
 
         strategy = Strategy.objects.create(namespace="ns", strategy_name="s_scene")
         strategy_binding = ResourceBinding.objects.create(
@@ -245,7 +245,7 @@ class TestCallerPermission(TestCase):
                 }
             ],
         )
-        scene = Scene.objects.create(name="scene_s3", status=SceneStatus.ENABLED, managers=["admin"])
+        scene = Scene.objects.create(name="scene_s3", status=SceneStatus.ENABLED)
         strategy_binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),
@@ -344,7 +344,7 @@ class TestCallerPermission(TestCase):
                 }
             ],
         )
-        scene = Scene.objects.create(name="scene_basic", status=SceneStatus.ENABLED, managers=["admin"])
+        scene = Scene.objects.create(name="scene_basic", status=SceneStatus.ENABLED)
         strategy_binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),

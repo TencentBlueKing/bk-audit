@@ -62,7 +62,7 @@ def _ensure_default_scene(SceneModel):
     if scene:
         # 安全防护：
         # 不复用用户可控的同名场景，避免把历史资源错误绑定到用户场景导致权限扩大。
-        if scene.description != DEFAULT_SCENE_DESCRIPTION or list(scene.managers or []) or list(scene.users or []):
+        if scene.description != DEFAULT_SCENE_DESCRIPTION:
             raise RuntimeError(
                 "Reserved scene name conflict: existing 'system_default' scene is user-managed. "
                 "Please rename it before running migration."
@@ -76,8 +76,6 @@ def _ensure_default_scene(SceneModel):
         name=DEFAULT_SCENE_NAME,
         description=DEFAULT_SCENE_DESCRIPTION,
         status="enabled",
-        managers=[],
-        users=[],
     )
 
 

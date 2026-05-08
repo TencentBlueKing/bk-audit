@@ -39,6 +39,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
+from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
@@ -1151,6 +1152,59 @@ class ListTables(StrategyV2Base, CacheResource):
 
     def perform_request(self, validated_request_data):
         return TableHandler(**validated_request_data).list_tables()
+
+
+class GetScenePermissionTables(StrategyV2Base):
+    """获取场景下有权限的数据表"""
+
+    name = gettext_lazy("获取场景下有权限的数据表")
+    many_response_data = True
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        """响应序列化器 - 返回场景权限表结构"""
+
+        label = serializers.CharField(label=gettext_lazy("分组标签"))
+        value = serializers.CharField(label=gettext_lazy("分组值"))
+        children = serializers.ListField(child=serializers.DictField(), label=gettext_lazy("子表列表"))
+
+    def perform_request(self, validated_request_data):
+        from services.web.scene.data_filter import SceneDataFilter
+
+        scene_id = validated_request_data["scene_id"]
+
+        # 获取场景关联的数据表ID列表
+        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+        if not scene_table_ids:
+            return []
+
+        scene_table_ids_set = set(scene_table_ids)
+
+        # 调用 TableHandler 获取数据的完整表结构
+        results = []
+        for table_type in ("BuildIn", "BizRt"):
+            try:
+                handler = TableHandler(table_type=table_type, namespace=settings.DEFAULT_NAMESPACE)
+                tables = handler.list_tables()
+            except Exception:
+                continue
+            # 过滤出场景关联的表
+            for group in tables:
+                filtered_children = [
+                    child for child in group.get("children", []) if child.get("value") in scene_table_ids_set
+                ]
+                if filtered_children:
+                    results.append(
+                        {
+                            "label": group.get("label", ""),
+                            "value": group.get("value", ""),
+                            "children": filtered_children,
+                        }
+                    )
+
+        return results
 
 
 class GetRTFields(StrategyV2Base):
