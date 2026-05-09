@@ -45,10 +45,10 @@
                 <div class="scene-name-row">
                   <span class="scene-name">{{ item.name }}</span>
                   <audit-icon
-                    v-if="item.managers && item.managers.length > 0"
+                    v-if="managerList.length > 0"
                     class="admin-icon"
-                    type="person-fill" />
-                  <span class="admin-name">{{ item.managers?.[0] || '' }}</span>
+                    type="user" />
+                  <span class="admin-name"> {{ managerText }}</span>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
@@ -158,6 +158,13 @@
     managers?: string[];
   }
 
+  interface managerItem {
+    id: string;
+    name: string;
+    role?: string;
+    type?: string;
+  }
+
   const { t } = useI18n();
 
   const sceneList = ref<SceneItem[]>([]);
@@ -166,6 +173,9 @@
   const applyReason = ref('');
   const showApplyDialog = ref(false);
 
+  const managerList = ref<Array<managerItem>>([]);
+
+  const managerText = computed(() => managerList.value.map(item => `${item.id}(${item.name})`).join(','));
   const currentManagers = computed(() => sceneList.value[0]?.managers || []);
 
   const permHintText = computed(() => {
@@ -176,13 +186,26 @@
   });
 
   const {
+    run: fetchSceneMembers,
+  } = useRequest(SceneManageService.fetchSceneMembers, {
+    defaultValue: [],
+    onSuccess: (data: managerItem[]) => {
+      managerList.value = data.filter(item => item.role === 'manager');
+    },
+  });
+
+  const {
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
     onSuccess: (data) => {
       sceneList.value = data.filter(item => item.scene_id === Number(route.query.scene_id));
+      fetchSceneMembers({
+        scene_id: Number(route.query.scene_id),
+      });
     },
   });
+
 
   function handleApply() {
     showApplyDialog.value = true;

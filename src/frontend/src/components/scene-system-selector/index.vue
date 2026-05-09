@@ -232,8 +232,12 @@
     // 基于当前页面的 listScope 决定实际可用的匹配范围
     const showScene = props.listScope.includes('scene') && hasSceneAccess;
     const showSystem = props.listScope.includes('system') && hasSystemAccess;
-    const sceneItems = sceneList.value.filter(item => item.type !== 'aggregate');
-    const systemItems = systemList.value.filter(item => item.type !== 'aggregate');
+    // URL 精确匹配需包含 aggregate 项（allSystem/allSecen 也是合法选择）
+    const sceneItemsForMatch = showScene ? sceneList.value : [];
+    const systemItemsForMatch = showSystem ? systemList.value : [];
+    // 兜底选中只选具体项（不默认选聚合项）
+    const sceneItems = sceneItemsForMatch.filter(item => item.type !== 'aggregate');
+    const systemItems = systemItemsForMatch.filter(item => item.type !== 'aggregate');
     const urlMatchId = initialRouteSceneId || initialRouteScopeId;
 
     // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
@@ -242,18 +246,15 @@
 
     let targetItem: SelectorItem | null = null;
 
-    // ── 阶段2：URL中有ID时尝试精确匹配（仅在当前页面可见列表范围内查找）──
+    // ── 阶段2：URL中有ID时尝试精确匹配（包括聚合项 allSystem/allSecen）──
     if (urlMatchId) {
       if (showScene && !showSystem) {
-        // 当前只展示场景：只在场景列表中找
-        targetItem = sceneItems.find(item => item.id === urlMatchId) || null;
+        targetItem = sceneItemsForMatch.find(item => item.id === urlMatchId) || null;
       } else if (!showScene && showSystem) {
-        // 当前只展示系统：只在系统列表中找
-        targetItem = systemItems.find(item => item.id === urlMatchId) || null;
+        targetItem = systemItemsForMatch.find(item => item.id === urlMatchId) || null;
       } else if (showScene && showSystem) {
-        // 两个都展示：都找，优先场景
-        targetItem = sceneItems.find(item => item.id === urlMatchId)
-          || systemItems.find(item => item.id === urlMatchId)
+        targetItem = sceneItemsForMatch.find(item => item.id === urlMatchId)
+          || systemItemsForMatch.find(item => item.id === urlMatchId)
           || null;
       }
       if (!targetItem) {
@@ -272,10 +273,10 @@
       try {
         const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
         if (saved && saved.id) {
-          // 只在当前页面实际展示的列表中恢复
+          // 只在当前页面实际展示的列表中恢复（包括聚合项）
           const availableItems = [
-            ...(showScene ? sceneItems : []),
-            ...(showSystem ? systemItems : []),
+            ...sceneItemsForMatch,
+            ...systemItemsForMatch,
           ];
           targetItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
         }
