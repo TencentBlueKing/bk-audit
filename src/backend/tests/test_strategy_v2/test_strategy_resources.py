@@ -104,8 +104,7 @@ class StrategyResourcesTest(TestCase):
         self.assertIn("scene_id", serializer.fields)
         self.assertFalse(serializer.fields["scene_id"].required)
 
-    @mock.patch("services.web.strategy_v2.resources.ActionPermission.has_permission", return_value=True)
-    def test_list_strategy_all_filters_by_scene(self, _):
+    def test_list_strategy_all_filters_by_scene(self):
         scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
         strategy_2 = Strategy.objects.create(
             namespace=self.namespace,
@@ -127,8 +126,7 @@ class StrategyResourcesTest(TestCase):
 
         self.assertEqual(result, [{"label": self.strategy.strategy_name, "value": self.strategy.strategy_id}])
 
-    @mock.patch("services.web.strategy_v2.resources.ActionPermission.has_permission", return_value=True)
-    def test_list_strategy_all_returns_all_user_strategies_without_scene_id(self, _):
+    def test_list_strategy_all_returns_all_user_strategies_without_scene_id(self):
         strategy_2 = Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="another-user-strategy",
