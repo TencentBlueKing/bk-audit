@@ -43,6 +43,15 @@ export default {
         nodeSideContent: true,
       },
     },
+    // {
+    //   path: 'permissions-page',
+    //   component: () => import('@views/scene-config/permissions-page/index.vue'),
+    //   name: 'permissionsPage',
+    //   meta: {
+    //     title: '申请权限',
+    //     nodeSideContent: true,
+    //   },
+    // },
     {
       path: 'scene-info',
       component: () => import('@views/scene-config/scene-info/index.vue'),
