@@ -163,21 +163,21 @@
 
   const systemTableData = computed(() => systemDetailList.value);
 
-  // 关联数据报表表格数据（通过新接口获取有权限的数据表列表，再获取详情）
+  // 关联数据报表表格数据（从场景详情接口中获取 tables 数据，再获取详情）
   const dataTableDetailList = ref<Array<Record<string, any>>>([]);
   const dataTableDetailLoading = ref(false);
 
-  // 获取场景下有权限的数据表列表，再逐个获取数据表详情
+  // 根据场景详情中的 tables 列表，逐个获取数据表详情
   const fetchPermissionTables = async () => {
     if (!sceneId.value) return;
     dataTableDetailLoading.value = true;
     try {
-      const tables = await SceneManageService.fetchScenePermissionTables(sceneId.value);
+      const tables = sceneInfoData.value.tables || [];
       if (!tables || tables.length === 0) {
         dataTableDetailList.value = [];
         return;
       }
-      const detailPromises = tables.map((table: { table_id: string }) => StrategyManageService
+      const detailPromises = tables.map((table: Record<string, any>) => StrategyManageService
         .fetchTableRtMeta({ table_id: table.table_id })
         .catch(() => null));
       const details = await Promise.all(detailPromises);
@@ -312,11 +312,13 @@
       pageLoading.value = true;
     }
     try {
+      // 先获取场景信息（fetchPermissionTables 依赖 sceneInfoData 中的 tables 数据）
       await Promise.all([
         fetchSceneInfo(sceneId.value).catch(() => null),
         fetchPermissionSystems(),
-        fetchPermissionTables(),
       ]);
+      // 场景信息获取完成后，再根据其中的 tables 获取数据表详情
+      await fetchPermissionTables();
     } finally {
       isSkeletonLoading.value = false;
       pageLoading.value = false;
