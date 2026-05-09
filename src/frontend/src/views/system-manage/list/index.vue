@@ -69,11 +69,8 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import getAssetsFile from '@utils/getAssetsFile';
-
   import useRequest from '@/hooks/use-request';
 
-  // import useRequest from '@/hooks/use-request';
 
   interface Syetem {
     page: number;
@@ -113,43 +110,43 @@
       label: () => t('系统名称'),
       sort: 'custom',
       field: () => 'name',
-      render: ({ data }: {data: SyetemModel}) => {
-        const isNew = isNewData(data);
-        const to = {
-          name: 'systemDetail',
-          params: {
-            id: data.system_id,
-          },
-          query: {
-            type: data.permission_type,
-          },
-        };
-        return (isNew
-          ? <div style='display: flex;align-items: center;'>
-            <auth-router-link
-              id={`systemDetailLink${data.system_id}`}
-              permission={data.permission.view_system}
-              actionId='view_system'
-              resource={data.system_id}
-              resourceTypeId="system"
-              to={to}>
-              {data.name}
-            </auth-router-link>
-            <img
-              class='table-new-tip'
-              src={getAssetsFile('new-tip.png')}/>
-          </div>
-          : <auth-router-link
-            id={`systemDetailLink${data.system_id}`}
-            permission={data.permission.view_system}
-            actionId='view_system'
-            resource={data.system_id}
-            resourceTypeId="system"
-            to={to}>
-            {data.name}
-          </auth-router-link>
-        );
-      },
+      // render: ({ data }: {data: SyetemModel}) => {
+      //   const isNew = isNewData(data);
+      //   const to = {
+      //     name: 'systemDetail',
+      //     params: {
+      //       id: data.system_id,
+      //     },
+      //     query: {
+      //       type: data.permission_type,
+      //     },
+      //   };
+      //   return (isNew
+      //     ? <div style='display: flex;align-items: center;'>
+      //       <auth-router-link
+      //         id={`systemDetailLink${data.system_id}`}
+      //         permission={data.permission.view_system}
+      //         actionId='view_system'
+      //         resource={data.system_id}
+      //         resourceTypeId="system"
+      //         to={to}>
+      //         {data.name}
+      //       </auth-router-link>
+      //       <img
+      //         class='table-new-tip'
+      //         src={getAssetsFile('new-tip.png')}/>
+      //     </div>
+      //     : <auth-router-link
+      //       id={`systemDetailLink${data.system_id}`}
+      //       permission={data.permission.view_system}
+      //       actionId='view_system'
+      //       resource={data.system_id}
+      //       resourceTypeId="system"
+      //       to={to}>
+      //       {data.name}
+      //     </auth-router-link>
+      //   );
+      // },
     },
     {
       label: () => t('系统 ID'),
