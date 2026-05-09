@@ -15,39 +15,44 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading
-    :loading="pageLoading">
-    <div class="scene-info-page">
-      <!-- 顶部统计卡片 -->
-      <stat-cards
-        :scene-data="statCardsData"
-        @go-risk="handleGoRisk"
-        @go-strategy="handleGoStrategy" />
+  <skeleton-loading
+    fullscreen
+    :loading="isSkeletonLoading"
+    name="storageList">
+    <bk-loading
+      :loading="pageLoading">
+      <div class="scene-info-page">
+        <!-- 顶部统计卡片 -->
+        <stat-cards
+          :scene-data="statCardsData"
+          @go-risk="handleGoRisk"
+          @go-strategy="handleGoStrategy" />
 
-      <!-- 基础信息 -->
-      <base-info
-        :scene-data="sceneData"
-        @update:scene-data="handleUpdateSceneData" />
+        <!-- 基础信息 -->
+        <base-info
+          :scene-data="sceneData"
+          @update:scene-data="handleUpdateSceneData" />
 
-      <!-- 关联系统 -->
-      <scene-table
-        :columns="systemColumns"
-        :data="systemTableData"
-        resizable
-        stripe
-        :title="t('关联系统')"
-        :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员')" />
+        <!-- 关联系统 -->
+        <scene-table
+          :columns="systemColumns"
+          :data="systemTableData"
+          resizable
+          stripe
+          :title="t('关联系统')"
+          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员')" />
 
-      <!-- 关联数据报表 -->
-      <scene-table
-        :columns="dataTableColumns"
-        :data="dataTableData"
-        resizable
-        stripe
-        :title="t('关联数据报表')"
-        :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员')" />
-    </div>
-  </bk-loading>
+        <!-- 关联数据报表 -->
+        <scene-table
+          :columns="dataTableColumns"
+          :data="dataTableData"
+          resizable
+          stripe
+          :title="t('关联数据报表')"
+          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员')" />
+      </div>
+    </bk-loading>
+  </skeleton-loading>
 </template>
 
 <script setup lang="tsx">
@@ -76,6 +81,8 @@
   const { messageSuccess } = useMessage();
   const { on: onEvent, off } = useEventBus();
   const sceneId = ref(getSceneSystemParams().scope_id);
+  // 骨架屏 loading 状态（首次进入页面时展示）
+  const isSkeletonLoading = ref(true);
   // 页面整体 loading 状态（切换场景时）
   const pageLoading = ref(false);
 
@@ -283,9 +290,13 @@
     dataTableDetailList.value = [];
     // 如果 sceneId 为空（如选择了聚合项），不发起请求
     if (!sceneId.value) {
+      isSkeletonLoading.value = false;
       return;
     }
-    pageLoading.value = true;
+    // 首次加载使用骨架屏
+    if (!isSkeletonLoading.value) {
+      pageLoading.value = true;
+    }
     try {
       await Promise.all([
         fetchSceneInfo(sceneId.value).catch(() => null),
@@ -293,17 +304,12 @@
         fetchPermissionTables(),
       ]);
     } finally {
+      isSkeletonLoading.value = false;
       pageLoading.value = false;
     }
   };
 
   onMounted(() => {
-    // 初始加载：仅当 sceneId 有值时才发起请求
-    if (sceneId.value) {
-      fetchSceneInfo(sceneId.value);
-      fetchPermissionSystems();
-      fetchPermissionTables();
-    }
     onEvent('scene:change', handleSceneChange);
   });
 
