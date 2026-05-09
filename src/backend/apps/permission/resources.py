@@ -21,6 +21,7 @@ from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.models import System
 from apps.permission.constants import IAMSystems
 from apps.permission.exceptions import GetSystemInfoError
 from apps.permission.handlers.actions import ActionEnum
@@ -32,6 +33,7 @@ from apps.permission.serializers import (
     CheckPermissionRequestSerializer,
     GetApplyDataRequestSerializer,
 )
+from core.models import get_request_username
 
 
 class IAM(AuditMixinResource):
@@ -52,6 +54,18 @@ class SystemResource(IAM):
 class CheckPermissionResource(IAM):
     name = gettext_lazy("检查当前用户对该动作是否有权限")
     RequestSerializer = CheckPermissionRequestSerializer
+    system_manager_action_ids = {ActionEnum.VIEW_SYSTEM.id, ActionEnum.EDIT_SYSTEM.id}
+
+    @classmethod
+    def _is_system_manager_allowed(cls, action_id: str, instances) -> bool:
+        if action_id not in cls.system_manager_action_ids or not instances:
+            return False
+
+        username = get_request_username()
+        if not username:
+            return False
+
+        return all(System.is_manager(instance.id, username) for instance in instances)
 
     def perform_request(self, validated_request_data: dict) -> any:
         auth_info = AuthHandler.get_auth_info(
@@ -65,7 +79,9 @@ class CheckPermissionResource(IAM):
             client = Permission()
             resources = client.batch_make_resource(instances)
             for action_id in action_ids:
-                result[action_id] = client.is_allowed(action_id, resources)
+                result[action_id] = client.is_allowed(action_id, resources) or self._is_system_manager_allowed(
+                    action_id, auth_info.instances
+                )
             return result
 
         # 日志平台
