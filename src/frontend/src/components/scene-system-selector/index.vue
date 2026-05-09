@@ -229,50 +229,76 @@
     if (hasInitializedSelection || selectedItem.value) return;
 
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
+    // 基于当前页面的 listScope 决定实际可用的匹配范围
+    const showScene = props.listScope.includes('scene') && hasSceneAccess;
+    const showSystem = props.listScope.includes('system') && hasSystemAccess;
     const sceneItems = sceneList.value.filter(item => item.type !== 'aggregate');
     const systemItems = systemList.value.filter(item => item.type !== 'aggregate');
     const urlMatchId = initialRouteSceneId || initialRouteScopeId;
 
-    // 检查当前角色所需列表是否已加载完毕
-    if (hasSceneAccess && sceneItems.length === 0) return;
-    if (hasSystemAccess && systemItems.length === 0) return;
+    // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
+    if (showScene && sceneItems.length === 0) return;
+    if (showSystem && systemItems.length === 0) return;
 
     let targetItem: SelectorItem | null = null;
 
-    // ── 阶段2：URL中有ID时尝试精确匹配 ──
+    // ── 阶段2：URL中有ID时尝试精确匹配（仅在当前页面可见列表范围内查找）──
     if (urlMatchId) {
-      if (hasSceneAccess && !hasSystemAccess) {
-        // scene_admin / scene_user：只在场景列表中找
+      if (showScene && !showSystem) {
+        // 当前只展示场景：只在场景列表中找
         targetItem = sceneItems.find(item => item.id === urlMatchId) || null;
-      } else if (!hasSceneAccess && hasSystemAccess) {
-        // system_admin：只在系统列表中找
+      } else if (!showScene && showSystem) {
+        // 当前只展示系统：只在系统列表中找
         targetItem = systemItems.find(item => item.id === urlMatchId) || null;
-      } else {
-        // saas_admin：两个列表都找，优先场景
+      } else if (showScene && showSystem) {
+        // 两个都展示：都找，优先场景
         targetItem = sceneItems.find(item => item.id === urlMatchId)
           || systemItems.find(item => item.id === urlMatchId)
           || null;
       }
+      if (!targetItem) {
+        // URL中有scene_id但用户无权访问该场景 → 跳转到权限申请页
+        console.log('未找到对应场景', { urlMatchId, role: userRole });
+        router.replace({
+          name: 'permissionsPage',
+          query: { scene_id: urlMatchId },
+        });
+        return;
+      }
     }
 
-    // ── 阶段3：URL无ID 或 匹配失败时的兜底默认选择 ──
+    // ── 阶段2.5：恢复用户上次的选择（跨页面记忆，需在当前页面可见范围内）──
     if (!targetItem) {
-      if (hasSceneAccess && !hasSystemAccess) {
-        // 场景角色：默认选第一个非聚合场景
-        [targetItem] = sceneItems;
-      } else if (!hasSceneAccess && hasSystemAccess) {
-        // 系统角色：默认选第一个非聚合系统
-        [targetItem] = systemItems;
-      } else {
-        // saas_admin：默认选第一个非聚合场景
-        [targetItem] = sceneItems;
-        // 场景列表为空时退而求其次选系统
-        if (!targetItem) {
-          [targetItem] = systemItems;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+        if (saved && saved.id) {
+          // 只在当前页面实际展示的列表中恢复
+          const availableItems = [
+            ...(showScene ? sceneItems : []),
+            ...(showSystem ? systemItems : []),
+          ];
+          targetItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
         }
-      }
+      } catch { /* ignore */ }
+    }
 
-      // isDefaultSelectFirst 已包含在上面逻辑中，无需额外处理
+    // ── 阶段3：URL无ID / 匹配失败 / 上次选择不可用时的兜底逻辑 ──
+    if (!targetItem) {
+      // 优先选第一个非聚合场景；场景列表为空时退而求其次选系统
+      if (sceneItems.length > 0) {
+        [targetItem] = sceneItems;
+      } else if (systemItems.length > 0) {
+        [targetItem] = systemItems;
+      }
+      // 仍找不到任何可选项 → 跳转到权限申请页
+      if (!targetItem) {
+        console.log('无可选场景或系统');
+        router.replace({
+          name: 'permissionsPage',
+          query: urlMatchId ? { scene_id: urlMatchId } : {},
+        });
+        return;
+      }
     }
 
     // 设置选中项
