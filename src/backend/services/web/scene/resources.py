@@ -64,19 +64,20 @@ class SceneResource(AuditMixinResource, abc.ABC):
                 scene.iam_manager_group_id = new_group_id
                 update_fields.append("iam_manager_group_id")
 
-        if "users" in validated_request_data:
-            new_group_id = IAMGroupManager.sync_group_members(
-                group_id=scene.iam_viewer_group_id,
-                members=validated_request_data["users"],
-                group_name=f"{scene.name}-使用用户组",
-                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-                scene_id=str(scene.scene_id),
-                scene_name=scene.name,
-            )
-            if new_group_id is not None:
-                scene.iam_viewer_group_id = new_group_id
-                update_fields.append("iam_viewer_group_id")
+        # 处理 users 字段：如果存在则同步指定成员，如果不存在则按空列表清空使用用户组
+        users_to_sync = validated_request_data["users"] if "users" in validated_request_data else []
+        new_group_id = IAMGroupManager.sync_group_members(
+            group_id=scene.iam_viewer_group_id,
+            members=users_to_sync,
+            group_name=f"{scene.name}-使用用户组",
+            group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+            group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+            scene_id=str(scene.scene_id),
+            scene_name=scene.name,
+        )
+        if new_group_id is not None:
+            scene.iam_viewer_group_id = new_group_id
+            update_fields.append("iam_viewer_group_id")
 
         if update_fields:
             scene.save(update_fields=update_fields)
