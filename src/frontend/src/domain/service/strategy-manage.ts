@@ -165,6 +165,20 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取场景下有权限的数据表（BuildIn/BizRt使用新接口，其他类型使用原接口）
+   */
+  fetchScenePermissionTable(params: {
+    table_type: string;
+    scene_id?: string;
+  }) {
+    if (params.table_type === 'BuildIn' || params.table_type === 'BizRt') {
+      return StrategySource.getScenePermissionTable(params)
+        .then(({ data }) => data);
+    }
+    return StrategySource.getTable(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取表格信息
    */
   fetchTableRtMeta(params: {

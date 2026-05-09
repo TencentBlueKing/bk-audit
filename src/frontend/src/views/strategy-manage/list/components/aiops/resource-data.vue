@@ -120,7 +120,7 @@
   const {
     run: fetchTable,
     loading: tableLoading,
-  } = useRequest(StrategyManageService.fetchTable, {
+  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
     defaultValue: [],
     onSuccess(data) {
       const tableId = props.data.configs.data_source?.result_table_id;

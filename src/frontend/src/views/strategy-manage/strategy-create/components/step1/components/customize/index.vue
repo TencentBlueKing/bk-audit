@@ -471,7 +471,7 @@
   // 获取tableid
   const {
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchTable, {
+  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
     defaultValue: [],
   });
 
