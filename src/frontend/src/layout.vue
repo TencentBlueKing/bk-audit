@@ -41,7 +41,7 @@
             active: curNavName === 'auditRiskManage'
           }"
           :to="{ name:'handleManage', query: {} }">
-          {{ t('审计风险') }}
+          {{ t('风险') }}
         </router-link>
         <router-link
           v-if="!userRole.includes('risk_handler')"
@@ -60,7 +60,7 @@
             active: curNavName === 'auditStatement'
           }"
           :to="{ name:'statementManage', query: {} }">
-          {{ t('审计报表') }}
+          {{ t('报表') }}
         </router-link>
         <router-link
           v-if="!userRole.includes('risk_handler') &&

@@ -30,7 +30,7 @@
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('接入系统') }}
+          {{ t('接入新系统') }}
         </auth-button>
         <bk-input
           v-model="searckKey"
