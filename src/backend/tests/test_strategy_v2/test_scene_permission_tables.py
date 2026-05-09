@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from services.web.scene.data_filter import SceneDataFilter
+from services.web.strategy_v2.constants import ListTableType
 from services.web.strategy_v2.resources import GetScenePermissionTables
 from services.web.strategy_v2.utils.table import BizRtTableHandler, BuildInTableHandler
 
@@ -36,17 +37,22 @@ class TestGetScenePermissionTables(TestCase):
             }
         ]
 
-        result = self.resource.perform_request({'scene_id': 1})
+        result = self.resource.perform_request({'scene_id': 1, 'table_type': ListTableType.BUILD_ID_ASSET})
 
-        # 返回分组结构，每个分组包含children列表
-        self.assertEqual(len(result), 2)
-        # 提取所有子表中的table_id
-        table_ids = set()
-        for group in result:
-            for child in group.get('children', []):
-                table_ids.add(child.get('value'))
-        self.assertEqual(table_ids, {'table1', 'table2'})
+        # 当前接口按单一 table_type 返回对应分组结构
+        self.assertEqual(
+            result,
+            [
+                {
+                    'label': '分组1',
+                    'value': 'group1',
+                    'children': [{'value': 'table1', 'label': '表1'}],
+                }
+            ],
+        )
         mock_get_table_ids.assert_called_once_with(1)
+        mock_buildin_list_tables.assert_called_once()
+        mock_bizrt_list_tables.assert_not_called()
 
     @patch.object(SceneDataFilter, 'get_table_ids')
     @patch.object(BuildInTableHandler, 'list_tables')
@@ -57,22 +63,32 @@ class TestGetScenePermissionTables(TestCase):
         mock_buildin_list_tables.return_value = []
         mock_bizrt_list_tables.return_value = []
 
-        result = self.resource.perform_request({'scene_id': 1})
+        result = self.resource.perform_request({'scene_id': 1, 'table_type': ListTableType.BUILD_ID_ASSET})
 
         # 白名单为空，返回空列表
         self.assertEqual(result, [])
         mock_get_table_ids.assert_called_once_with(1)
+        mock_buildin_list_tables.assert_not_called()
+        mock_bizrt_list_tables.assert_not_called()
 
     def test_request_serializer_validation(self):
         """测试请求序列化器验证"""
         # 正常参数
-        serializer = self.resource.RequestSerializer(data={'scene_id': 1})
+        serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.BUILD_ID_ASSET})
         self.assertTrue(serializer.is_valid())
 
-        # 缺少必填字段 scene_id
+        serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.BIZ_RT})
+        self.assertTrue(serializer.is_valid())
+
+        serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.EVENT_LOG})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('table_type', serializer.errors)
+
+        # 缺少必填字段 scene_id / table_type
         serializer = self.resource.RequestSerializer(data={})
         self.assertFalse(serializer.is_valid())
         self.assertIn('scene_id', serializer.errors)
+        self.assertIn('table_type', serializer.errors)
 
     def test_response_serializer_structure(self):
         """测试响应序列化器结构：many_response_data=True 表示返回列表数据"""
