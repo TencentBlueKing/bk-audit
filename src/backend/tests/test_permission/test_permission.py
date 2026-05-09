@@ -17,6 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 from unittest import mock
 
+from apps.meta.models import System
+from apps.permission.handlers.actions import ActionEnum
 from tests.base import TestCase
 from tests.test_permission.constants import (
     CHECK_ALLOWED_API_RESP,
@@ -36,6 +38,19 @@ class PermissionTest(TestCase):
         """CheckPermissionResource"""
         result = self.resource.permission.check_permission(**CHECK_PERMISSION_PARAMS)
         self.assertEqual(result, CHECK_PERMISSION_DATA)
+
+    @mock.patch("permission.resources.get_request_username", mock.Mock(return_value="admin"), create=True)
+    @mock.patch("permission.resources.Permission", mock.Mock(return_value=PermissionMock()))
+    def test_check_system_permission_allows_system_manager(self):
+        """系统管理员即使没有 IAM 权限，也应拥有系统查看/编辑权限"""
+        system = System.objects.create(namespace=self.namespace, system_id="manager-system", managers=["admin"])
+
+        result = self.resource.permission.check_permission(
+            action_ids=f"{ActionEnum.VIEW_SYSTEM.id},{ActionEnum.EDIT_SYSTEM.id}",
+            resources=system.system_id,
+        )
+
+        self.assertEqual(result, {ActionEnum.VIEW_SYSTEM.id: True, ActionEnum.EDIT_SYSTEM.id: True})
 
     @mock.patch("permission.resources.api.bk_log.check_allowed", mock.Mock(return_value=CHECK_ALLOWED_API_RESP))
     @mock.patch("permission.resources.settings.BK_IAM_SYSTEM_ID", mock.Mock(return_value=None))
