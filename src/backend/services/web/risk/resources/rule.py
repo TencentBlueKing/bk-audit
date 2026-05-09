@@ -18,14 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from blueapps.utils.request_provider import get_local_request
 from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import RiskRuleInUse, ValidationError
 from core.utils.data import choices_to_dict
@@ -85,10 +83,7 @@ class ListAllRiskRule(RiskRuleMeta):
     RequestSerializer = ListAllRiskRuleReqSerializer
 
     def perform_request(self, validated_request_data):
-        if not ActionPermission(
-            actions=[ActionEnum.LIST_RULE, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
-        ).has_permission(request=get_local_request(), view=self):
-            return []
+        # 风险处理人不一定有规则/风险列表权限，但风险单展示需要按场景加载规则名称。
         scene_id = validated_request_data["scene_id"]
         rules = RiskRule.objects.all()
         rules = SceneScopeFilter.filter_queryset(
