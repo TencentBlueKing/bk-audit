@@ -689,10 +689,6 @@ class ListStrategyAll(StrategyV2Base):
     RequestSerializer = ListStrategyAllRequestSerializer
 
     def perform_request(self, validated_request_data):
-        if not ActionPermission(
-            actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.PROCESS_RISK]
-        ).has_permission(request=get_local_request(), view=self):
-            return []
         strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         scene_id = validated_request_data.get("scene_id")
         if scene_id:

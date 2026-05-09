@@ -849,11 +849,7 @@ class TestProcessApplicationSceneFilter:
         _bind_resource_to_scene(pa1.id, ResourceVisibilityType.PROCESS_APPLICATION, scene.scene_id)
         _bind_resource_to_scene(pa2.id, ResourceVisibilityType.PROCESS_APPLICATION, another_scene.scene_id)
 
-        with mock.patch(
-            "services.web.risk.resources.process_application.ActionPermission.has_permission",
-            return_value=True,
-        ):
-            result = ListAllProcessApplications().perform_request({"scene_id": scene.scene_id})
+        result = ListAllProcessApplications().perform_request({"scene_id": scene.scene_id})
 
         assert len(result) == 1
         assert result[0]["id"] == pa1.id
@@ -927,11 +923,7 @@ class TestRiskRuleSceneFilter:
         _bind_resource_to_scene(rule1.rule_id, ResourceVisibilityType.RISK_RULE, scene.scene_id)
         _bind_resource_to_scene(rule2.rule_id, ResourceVisibilityType.RISK_RULE, another_scene.scene_id)
 
-        with mock.patch(
-            "services.web.risk.resources.rule.ActionPermission.has_permission",
-            return_value=True,
-        ):
-            result = ListAllRiskRule().perform_request({"scene_id": scene.scene_id})
+        result = ListAllRiskRule().perform_request({"scene_id": scene.scene_id})
 
         assert len(result) == 1
         assert result[0]["id"] == rule1.rule_id

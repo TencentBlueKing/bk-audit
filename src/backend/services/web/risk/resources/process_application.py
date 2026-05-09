@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -27,16 +26,9 @@ from django.utils.translation import gettext_lazy
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.risk.constants import ApproveTicketFields, RiskStatus
-from services.web.risk.models import (
-    ProcessApplication,
-    Risk,
-    RiskRule,
-    TicketPermission,
-    UserType,
-)
+from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
     ListAllProcessApplicationsReqSerializer,
@@ -101,20 +93,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
     audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
-        if (
-            not ActionPermission(
-                actions=[
-                    ActionEnum.LIST_PA,
-                    ActionEnum.LIST_RISK,
-                    ActionEnum.PROCESS_RISK,
-                    ActionEnum.CREATE_RULE,
-                    ActionEnum.EDIT_RULE,
-                    ActionEnum.LIST_RULE,
-                ]
-            ).has_permission(request=get_local_request(), view=self)
-            and not TicketPermission.objects.filter(user=get_request_username(), user_type=UserType.OPERATOR).exists()
-        ):
-            return []
+        # 风险处理人不一定有处理套餐相关 action 权限，但风险单展示需要按场景加载套餐名称。
         scene_id = validated_request_data["scene_id"]
         process_applications = ProcessApplication.objects.all()
         process_applications = SceneScopeFilter.filter_queryset(
