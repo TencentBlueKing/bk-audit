@@ -394,7 +394,6 @@
   };
 
   onMounted(() => {
-    refreshTagsList();
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
