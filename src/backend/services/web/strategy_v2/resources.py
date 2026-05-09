@@ -102,6 +102,7 @@ from services.web.strategy_v2.constants import (
     EventInfoField,
     LinkTableJoinType,
     LinkTableTableType,
+    ListTableType,
     MappingType,
     RiskLevel,
     RuleAuditAggregateType,
@@ -1162,6 +1163,14 @@ class GetScenePermissionTables(StrategyV2Base):
 
     class RequestSerializer(serializers.Serializer):
         scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+        table_type = serializers.ChoiceField(
+            label=gettext_lazy("表类型"),
+            choices=[
+                (ListTableType.BUILD_ID_ASSET.value, ListTableType.BUILD_ID_ASSET.label),
+                (ListTableType.BIZ_RT.value, ListTableType.BIZ_RT.label),
+            ],
+            required=True,
+        )
 
     class ResponseSerializer(serializers.Serializer):
         """响应序列化器 - 返回场景权限表结构"""
@@ -1174,6 +1183,7 @@ class GetScenePermissionTables(StrategyV2Base):
         from services.web.scene.data_filter import SceneDataFilter
 
         scene_id = validated_request_data["scene_id"]
+        table_type = validated_request_data["table_type"]
 
         # 获取场景关联的数据表ID列表
         scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
@@ -1184,25 +1194,25 @@ class GetScenePermissionTables(StrategyV2Base):
 
         # 调用 TableHandler 获取数据的完整表结构
         results = []
-        for table_type in ("BuildIn", "BizRt"):
-            try:
-                handler = TableHandler(table_type=table_type, namespace=settings.DEFAULT_NAMESPACE)
-                tables = handler.list_tables()
-            except Exception:
-                continue
-            # 过滤出场景关联的表
-            for group in tables:
-                filtered_children = [
-                    child for child in group.get("children", []) if child.get("value") in scene_table_ids_set
-                ]
-                if filtered_children:
-                    results.append(
-                        {
-                            "label": group.get("label", ""),
-                            "value": group.get("value", ""),
-                            "children": filtered_children,
-                        }
-                    )
+
+        try:
+            handler = TableHandler(table_type=table_type, namespace=settings.DEFAULT_NAMESPACE)
+            tables = handler.list_tables()
+        except Exception:
+            return []
+        # 过滤出场景关联的表
+        for group in tables:
+            filtered_children = [
+                child for child in group.get("children", []) if child.get("value") in scene_table_ids_set
+            ]
+            if filtered_children:
+                results.append(
+                    {
+                        "label": group.get("label", ""),
+                        "value": group.get("value", ""),
+                        "children": filtered_children,
+                    }
+                )
 
         return results
 
