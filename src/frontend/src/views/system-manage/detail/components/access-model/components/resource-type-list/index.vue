@@ -26,10 +26,10 @@
         <bk-button
           v-bk-tooltips="{
             content: t('暂不支持变更，请前往权限中心变更'),
-            disabled: canEditSystem
+            disabled: (systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4'),
           }"
           class="mr8"
-          :disabled="!canEditSystem"
+          :disabled="!(systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4')"
           theme="primary"
           @click="handleCreate">
           <audit-icon
@@ -135,9 +135,6 @@
     (e: 'updateAction'): void;
     (e: 'updateListLength', listLength: number): void;
   }
-  interface Props {
-    canEditSystem: boolean;
-  }
   interface SearchKey {
     id: string,
     name: string,
@@ -157,7 +154,6 @@
     onlyRecommendChildren?: boolean,
   }
 
-  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t, locale } = useI18n();
   const route = useRoute();
@@ -323,10 +319,10 @@
             <bk-button
               theme='primary'
               class='mr16'
-              disabled={!props.canEditSystem}
+              disabled={ !(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
               v-bk-tooltips={{
                 content: t('暂不支持变更，请前往权限中心变更'),
-                disabled: props.canEditSystem,
+                disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
               }}
               onClick={() => handleEdit(data)}
               text>
@@ -362,10 +358,10 @@
                         class="ml8"
                         confirmHandler={() => handleDelete(data)}>
                         <bk-button
-                          disabled={!props.canEditSystem}
+                          disabled={!(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
                           v-bk-tooltips={{
                             content: t('暂不支持变更，请前往权限中心变更'),
-                            disabled: props.canEditSystem,
+                            disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
                           }}
                           text>
                           {t('删除')}
