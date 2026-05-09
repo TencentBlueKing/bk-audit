@@ -188,7 +188,7 @@
   const fetchTableTypeData = () => {
     // 获取tableData
     for (const type of uniqueTableTypes.value) {
-      StrategyManageService.fetchTable({
+      StrategyManageService.fetchScenePermissionTable({
         table_type: type,
         scene_id: getSceneSystemParams().scope_id,
       }).then((data) => {

@@ -324,7 +324,7 @@
   const {
     data: tableData,
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchTable, {
+  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
     defaultValue: [],
   });
 

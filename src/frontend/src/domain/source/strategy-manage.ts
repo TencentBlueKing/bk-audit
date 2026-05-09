@@ -173,6 +173,7 @@ class Strategy extends ModuleBase {
   // 获取表格id
   getTable(params: {
     table_type: string;
+    scene_id?: string;
   }) {
     return Request.get<Array<{
       label: string;
@@ -182,6 +183,22 @@ class Strategy extends ModuleBase {
         value: string;
       }>
     }>>(`${this.path}/strategy_table/`, {
+      params,
+    });
+  }
+  // 获取场景下有权限的数据表（BuildIn/BizRt）
+  getScenePermissionTable(params: {
+    table_type: string;
+    scene_id?: string;
+  }) {
+    return Request.get<Array<{
+      label: string;
+      value: string;
+      children: Array<{
+        label: string;
+        value: string;
+      }>
+    }>>(`${this.path}/strategy_table/scene_permission_tables/`, {
       params,
     });
   }
