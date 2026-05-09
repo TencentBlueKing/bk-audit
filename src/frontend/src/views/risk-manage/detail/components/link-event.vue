@@ -1268,16 +1268,19 @@
     immediate: true,
     deep: true,
   });
+
   watch(() => props.data, (data) => {
     if (data) {
-      fetchAllTools({
-        scope_id: data.scene_id,
-        scope_type: 'scene',
-      });
-      fetchToolTags({
-        scope_id: data.scene_id,
-        scope_type: 'scene',
-      });
+      setTimeout(() => {
+        fetchAllTools({
+          scope_id: data.scene_id,
+          scope_type: 'scene',
+        });
+        fetchToolTags({
+          scope_id: data.scene_id,
+          scope_type: 'scene',
+        });
+      }, 0);
     }
   });
   onMounted(() => {
