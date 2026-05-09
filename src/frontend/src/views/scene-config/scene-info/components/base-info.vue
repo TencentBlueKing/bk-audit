@@ -191,6 +191,12 @@
 
   // 普通文本字段保存
   const handleSave = (key: string) => {
+    // 值未变化时不触发更新
+    const originalValue = String((props.sceneData as any)[key] ?? '');
+    if (editValue.value === originalValue) {
+      editingField.value = '';
+      return;
+    }
     emit('update:sceneData', {
       ...props.sceneData,
       [key]: editValue.value,
@@ -206,6 +212,14 @@
 
   // 人员选择字段保存
   const handleUserSave = (key: string) => {
+    // 值未变化时不触发更新
+    const originalValue = (props.sceneData as any)[key] || [];
+    const isSame = originalValue.length === editUserValue.value.length
+      && originalValue.every((item: string, index: number) => item === editUserValue.value[index]);
+    if (isSame) {
+      editingField.value = '';
+      return;
+    }
     emit('update:sceneData', {
       ...props.sceneData,
       [key]: editUserValue.value,
