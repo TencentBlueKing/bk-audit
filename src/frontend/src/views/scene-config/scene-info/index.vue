@@ -80,6 +80,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { on: onEvent, off } = useEventBus();
+
   const sceneId = ref(getSceneSystemParams().scope_id);
   // 骨架屏 loading 状态（首次进入页面时展示）
   const isSkeletonLoading = ref(true);
@@ -284,16 +285,29 @@
     window.open(routeData.href, '_blank');
   };
 
+  // 已加载过的 sceneId，用于去重（onMounted 主动加载 + 选择器初始化 emit 两个触发源可能重复）
+  let lastLoadedSceneId: string | undefined;
+
   const handleSceneChange = async () => {
-    sceneId.value = getSceneSystemParams().scope_id;
-    systemDetailList.value = [];
-    dataTableDetailList.value = [];
-    // 如果 sceneId 为空（如选择了聚合项），不发起请求
-    if (!sceneId.value) {
+    const params = getSceneSystemParams();
+    // 只处理 scene 类型，过滤掉从其他页面残留的 system / cross_xxx 类型旧值
+    const newSceneId = params.scope_type === 'scene' ? params.scope_id : '';
+    // 同场景重复触发，跳过
+    if (newSceneId && newSceneId === lastLoadedSceneId) {
       isSkeletonLoading.value = false;
       return;
     }
-    // 首次加载使用骨架屏
+    sceneId.value = newSceneId;
+    systemDetailList.value = [];
+    dataTableDetailList.value = [];
+    // 不是有效的场景（如选择了聚合项 / sessionStorage 是 system 类型旧值），不发起请求
+    // 此时等待场景选择器初始化后 emit scene:change 事件来触发真正的加载
+    if (!sceneId.value) {
+      lastLoadedSceneId = undefined;
+      return;
+    }
+    lastLoadedSceneId = sceneId.value;
+    // 非首次加载（场景切换）展示页面 loading
     if (!isSkeletonLoading.value) {
       pageLoading.value = true;
     }
@@ -309,8 +323,14 @@
     }
   };
 
+  // 监听场景变化（场景选择器切换 / 自动选中第一个场景时触发）
+  onEvent('scene:change', handleSceneChange);
+
+  // 进入页面时主动加载一次，解决"同场景下切 tab 回来选择器不再 emit"的问题。
+  // 仅当 sessionStorage 里是有效的 scene 类型时才会真正发起请求；
+  // 否则（如从系统页面切过来，残留的是 system 类型）会跳过，等待选择器自动选场景后 emit 事件触发。
   onMounted(() => {
-    onEvent('scene:change', handleSceneChange);
+    handleSceneChange();
   });
 
   onUnmounted(() => {
