@@ -61,23 +61,18 @@
               <div class="scene-info">
                 <div class="scene-name-row">
                   <span class="scene-name">{{ item.name }}</span>
-                  <audit-icon
-                    v-if="item.managers && item.managers.length > 0"
-                    class="admin-icon"
-                    type="person-fill" />
-                  <span class="admin-name">{{ item.managers?.[0] || '' }}</span>
+                  <template v-if="(sceneManagers[item.scene_id] || []).length > 0">
+                    <audit-icon
+                      class="admin-icon"
+                      type="user" />
+                    <span class="admin-name">
+                      {{ sceneManagers[item.scene_id].map(m => `${m.id}(${m.name})`).join('、') }}
+                    </span>
+                  </template>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
                 </div>
-                <!-- <div
-                  v-if="item._applyStatus === 'pending'"
-                  class="apply-status">
-                  <bk-icon
-                    type="time" />
-                  {{ t('申请中') }}·{{ t('查看 TSM 审批') }}
-                  <span class="apply-count">[{{ item._applyCount || 0 }}]</span>
-                </div> -->
               </div>
             </div>
           </div>
@@ -134,9 +129,16 @@
     managers?: string[];
   }
 
+  interface SceneMember {
+    id: string;
+    name: string;
+    role?: string;
+  }
+
   const { t } = useI18n();
 
   const sceneList = ref<SceneItem[]>([]);
+  const sceneManagers = ref<Record<number, SceneMember[]>>({});
 
   const {
     data: configData,
@@ -148,8 +150,21 @@
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
-    onSuccess: (data) => {
-      sceneList.value = data;
+    onSuccess: async (data) => {
+      const list = data.filter(item => item.permission?.view_scene);
+      sceneList.value = list;
+
+      // 逐个获取每个场景的管理员
+      await Promise.all(list.map(async (item) => {
+        try {
+          const members = await SceneManageService.fetchSceneMembers({ scene_id: item.scene_id });
+          if (members && Array.isArray(members)) {
+            sceneManagers.value[item.scene_id] = members.filter((m: SceneMember) => m.role === 'manager');
+          }
+        } catch {
+          // 忽略单个请求失败
+        }
+      }));
     },
   });
 
