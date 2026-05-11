@@ -73,6 +73,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
   interface Props {
@@ -109,6 +111,10 @@
     data: systemList,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
+    defaultParams: {
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    },
     manual: true,
     onSuccess(data) {
       const ids = data.map(item => item.id).join(',');
