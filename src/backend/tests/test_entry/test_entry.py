@@ -16,12 +16,51 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from types import SimpleNamespace
+from unittest import mock
 from uuid import uuid1
 
 from bkcrypto.contrib.django.ciphers import get_asymmetric_cipher
+from django.test import SimpleTestCase
 
 from apps.bk_crypto.crypto import FakeAsymmetricCipher, asymmetric_cipher
+from services.web.entry.handler.entry import EntryHandler
 from tests.base import TestCase
+
+
+class EntryHandlerTest(SimpleTestCase):
+    @staticmethod
+    def _build_request(username="admin"):
+        return SimpleNamespace(user=SimpleNamespace(username=username))
+
+    @staticmethod
+    def _get_global_meta_config(configs=None):
+        configs = configs or {}
+
+        def _get(config_key, *args, **kwargs):
+            return configs.get(config_key, kwargs.get("default"))
+
+        return _get
+
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission")
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_entry_returns_empty_platform_admin_users_by_default(self, mock_get, mock_check_permission):
+        mock_check_permission.return_value = {}
+        mock_get.side_effect = self._get_global_meta_config()
+
+        data = EntryHandler.entry(self._build_request())
+
+        self.assertEqual(data["platform_admin_users"], [])
+
+    @mock.patch("services.web.entry.handler.entry.resource.permission.check_permission")
+    @mock.patch("services.web.entry.handler.entry.GlobalMetaConfig.get")
+    def test_entry_returns_platform_admin_users_from_global_meta_config(self, mock_get, mock_check_permission):
+        mock_check_permission.return_value = {}
+        mock_get.side_effect = self._get_global_meta_config({"platform_admin_users": ["admin", "operator"]})
+
+        data = EntryHandler.entry(self._build_request())
+
+        self.assertEqual(data["platform_admin_users"], ["admin", "operator"])
 
 
 class EntryTest(TestCase):

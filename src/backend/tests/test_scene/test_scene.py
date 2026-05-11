@@ -50,6 +50,7 @@ from services.web.scene.models import (
     SceneDataTable,
     SceneSystem,
 )
+from services.web.scene.serializers import SceneFilterSerializer
 from services.web.scene.views import SceneViewSet
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
@@ -586,6 +587,28 @@ class TestSceneResource(TestCase):
             status=SceneStatus.ENABLED,
         )
 
+    def _bind_strategy_to_scene(self, strategy, scene):
+        binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
+        return binding
+
+    def _create_bound_strategy(self, scene, name):
+        strategy = Strategy.objects.create(strategy_name=name)
+        self._bind_strategy_to_scene(strategy, scene)
+        return strategy
+
+    def _create_risk(self, strategy, raw_event_id):
+        return Risk.objects.create(
+            raw_event_id=raw_event_id,
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+
     def test_scene_list(self):
         """测试场景列表"""
         result = self.resource.scene.list_scene({})
@@ -593,19 +616,8 @@ class TestSceneResource(TestCase):
 
     def test_scene_list_contains_related_strategy_ids_and_risk_count(self):
         """测试场景列表返回关联策略ID和风险数量"""
-        strategy = Strategy.objects.create(strategy_name="场景策略")
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.STRATEGY,
-            resource_id=str(strategy.strategy_id),
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
-        Risk.objects.create(
-            raw_event_id="raw-scene-list-1",
-            strategy=strategy,
-            event_time=timezone.now(),
-            event_end_time=timezone.now(),
-        )
+        strategy = self._create_bound_strategy(self.scene, "场景策略")
+        self._create_risk(strategy, "raw-scene-list-1")
 
         result = self.resource.scene.list_scene({})
         target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
@@ -625,18 +637,14 @@ class TestSceneResource(TestCase):
 
     def test_scene_list_ignores_deleted_strategy_binding(self):
         """测试场景列表忽略已删除策略的残留绑定"""
-        strategy = Strategy.objects.create(strategy_name="已删除场景策略")
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.STRATEGY,
-            resource_id=str(strategy.strategy_id),
-            binding_type=BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        strategy = self._create_bound_strategy(self.scene, "已删除场景策略")
+        self._create_risk(strategy, "raw-deleted-strategy-risk")
         strategy.delete()
 
         result = self.resource.scene.list_scene({})
         target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
         self.assertNotIn(strategy.strategy_id, target["strategy_ids"])
+        self.assertEqual(target["strategy_count"], 0)
         self.assertEqual(target["risk_count"], 0)
 
     def test_scene_list_filter_by_status(self):
@@ -648,6 +656,107 @@ class TestSceneResource(TestCase):
         """测试按关键词过滤场景列表"""
         result = self.resource.scene.list_scene({"keyword": "主机"})
         self.assertGreaterEqual(len(result), 1)
+
+    def test_scene_list_filter_by_scene_fields(self):
+        """测试场景列表支持单值筛选且条件之间为 AND 关系"""
+        matched = Scene.objects.create(name="网络安全审计", description="命中描述", updated_by="alice")
+        unmatched_description = Scene.objects.create(name="网络安全审计-未命中", description="其他描述")
+        unmatched_updated_by = Scene.objects.create(name="主机安全审计-未命中", description="命中描述")
+        Scene.objects.filter(scene_id__in=[matched.scene_id, unmatched_description.scene_id]).update(
+            _update_record=False, updated_by="alice"
+        )
+        Scene.objects.filter(scene_id=unmatched_updated_by.scene_id).update(_update_record=False, updated_by="bob")
+
+        result = self.resource.scene.list_scene(
+            {
+                "scene_id": matched.scene_id,
+                "name": "网络",
+                "description": "命中",
+                "updated_by": "alice",
+            }
+        )
+
+        self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
+
+    def test_scene_list_accepts_reserved_member_filters_without_filtering(self):
+        """测试 manager/user 参数可传入但暂不参与实际筛选"""
+        Scene.objects.create(name="成员筛选预留场景")
+
+        result = self.resource.scene.list_scene({"manager": "nobody", "user": "nobody"})
+
+        self.assertGreaterEqual(len(result), 2)
+
+    def test_scene_list_default_sort_by_scene_id_desc(self):
+        """测试场景列表默认按场景 ID 逆序"""
+        scene_2 = Scene.objects.create(name="默认排序场景2")
+        scene_3 = Scene.objects.create(name="默认排序场景3")
+
+        result = self.resource.scene.list_scene({})
+        result_ids = [item["scene_id"] for item in result]
+
+        self.assertEqual(
+            result_ids[:3], sorted([self.scene.scene_id, scene_2.scene_id, scene_3.scene_id], reverse=True)
+        )
+
+    def test_scene_list_sort_by_strategy_count_risk_count_and_updated_at(self):
+        """测试场景列表支持按策略数、风险数、更新时间排序"""
+        strategy_scene = Scene.objects.create(name="策略数排序场景")
+        risk_scene = Scene.objects.create(name="风险数排序场景")
+        updated_scene = Scene.objects.create(name="更新时间排序场景")
+        old_time = timezone.now() - timezone.timedelta(days=1)
+        new_time = timezone.now()
+        Scene.objects.filter(scene_id=self.scene.scene_id).update(_update_record=False, updated_at=old_time)
+        Scene.objects.filter(scene_id=updated_scene.scene_id).update(_update_record=False, updated_at=new_time)
+
+        self._create_bound_strategy(strategy_scene, "策略数排序策略1")
+        self._create_bound_strategy(strategy_scene, "策略数排序策略2")
+        risk_strategy = self._create_bound_strategy(risk_scene, "风险数排序策略")
+        self._create_risk(risk_strategy, "scene-sort-risk-1")
+        self._create_risk(risk_strategy, "scene-sort-risk-2")
+        self._create_risk(risk_strategy, "scene-sort-risk-3")
+
+        strategy_result = self.resource.scene.list_scene({"sort": ["-strategy_count"]})
+        risk_result = self.resource.scene.list_scene({"sort": ["-risk_count"]})
+        updated_result = self.resource.scene.list_scene({"sort": ["-updated_at"]})
+
+        self.assertEqual(strategy_result[0]["scene_id"], strategy_scene.scene_id)
+        self.assertEqual(risk_result[0]["scene_id"], risk_scene.scene_id)
+        self.assertEqual(updated_result[0]["scene_id"], updated_scene.scene_id)
+
+    def test_scene_list_rejects_invalid_sort_field(self):
+        """测试场景列表拒绝非法排序字段"""
+        serializer = SceneFilterSerializer(data={"sort": ["name"]})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("sort", serializer.errors)
+
+    def test_scene_list_rejects_malformed_sort_field(self):
+        """测试场景列表拒绝格式异常排序字段"""
+        for sort_field in ["--scene_id", "-"]:
+            serializer = SceneFilterSerializer(data={"sort": [sort_field]})
+
+            self.assertFalse(serializer.is_valid())
+            self.assertIn("sort", serializer.errors)
+
+    def test_scene_list_sort_help_text_contains_supported_fields(self):
+        """测试排序字段说明包含支持字段"""
+        help_text = str(SceneFilterSerializer().fields["sort"].help_text)
+
+        for field in ["scene_id", "strategy_count", "risk_count", "updated_at"]:
+            self.assertIn(field, help_text)
+
+    def test_scene_list_contains_strategy_count_and_is_all_systems(self):
+        """测试场景列表返回策略数量与是否授权全部系统"""
+        strategy = self._create_bound_strategy(self.scene, "统计策略")
+        SceneSystem.objects.create(scene=self.scene, system_id="", is_all_systems=True, filter_rules=[])
+        self._create_risk(strategy, "scene-list-stats-risk-1")
+
+        result = self.resource.scene.list_scene({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+
+        self.assertEqual(target["strategy_count"], 1)
+        self.assertEqual(target["risk_count"], 1)
+        self.assertTrue(target["is_all_systems"])
 
     def test_scene_list_all(self):
         """测试场景精简列表返回字段"""
