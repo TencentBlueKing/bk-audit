@@ -4,6 +4,7 @@ from collections import defaultdict
 from django.db.models import Count
 from rest_framework import serializers
 
+from core.serializers import SortListField, SortSerializerMixin
 from services.web.scene.binding_validation import validate_platform_visibility_payload
 from services.web.scene.constants import (
     ResourceVisibilityType,
@@ -19,38 +20,14 @@ from services.web.scene.models import (
     SceneSystem,
 )
 
-
-class FlexibleListField(serializers.ListField):
-    """兼容单值、数组、重复查询参数的列表字段"""
-
-    def get_value(self, dictionary):
-        if hasattr(dictionary, "getlist"):
-            values = dictionary.getlist(self.field_name)
-            if len(values) > 1:
-                return values
-            if len(values) == 1:
-                return values[0]
-        return super().get_value(dictionary)
-
-    def to_internal_value(self, data):
-        if data in (None, ""):
-            data = []
-        elif not isinstance(data, (list, tuple, set, frozenset)):
-            data = [data]
-        else:
-            data = list(data)
-
-        normalized = []
-        for item in data:
-            if item is None:
-                continue
-            if isinstance(item, str):
-                parts = [part.strip() for part in item.split(",")]
-                normalized.extend([part for part in parts if part != ""])
-            elif item != "":
-                normalized.append(item)
-
-        return super().to_internal_value(normalized)
+SCENE_LIST_SORT_FIELDS = ("scene_id", "strategy_count", "risk_count", "updated_at")
+SCENE_LIST_SORT_FIELD_DESCRIPTIONS = {
+    "scene_id": "场景ID",
+    "strategy_count": "策略数",
+    "risk_count": "风险数",
+    "updated_at": "更新时间",
+}
+DEFAULT_SCENE_LIST_SORT = ["-scene_id"]
 
 
 # ==================== 场景管理 ====================
@@ -134,7 +111,9 @@ class SceneRelatedStatsMixin:
             from services.web.strategy_v2.models import Strategy
 
             valid_strategy_ids = set(
-                Strategy.objects.filter(strategy_id__in=raw_strategy_ids).values_list("strategy_id", flat=True)
+                Strategy.objects.filter(strategy_id__in=raw_strategy_ids, is_deleted=False).values_list(
+                    "strategy_id", flat=True
+                )
             )
 
         strategy_risk_count_map = {}
@@ -162,7 +141,14 @@ class SceneRelatedStatsMixin:
         return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("strategy_ids", [])
 
     def get_risk_count(self, obj):
+        if hasattr(obj, "risk_count"):
+            return obj.risk_count or 0
         return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("risk_count", 0)
+
+    def get_strategy_count(self, obj):
+        if hasattr(obj, "strategy_count"):
+            return obj.strategy_count or 0
+        return len(self.get_strategy_ids(obj))
 
 
 class SceneMembersMixin:
@@ -195,9 +181,16 @@ class SceneListSerializer(SceneRelatedStatsMixin, SceneMembersMixin, serializers
     system_count = serializers.IntegerField(read_only=True)
     table_count = serializers.IntegerField(read_only=True)
     strategy_ids = serializers.SerializerMethodField()
+    strategy_count = serializers.SerializerMethodField()
     risk_count = serializers.SerializerMethodField()
+    is_all_systems = serializers.SerializerMethodField()
     managers = serializers.SerializerMethodField()
     users = serializers.SerializerMethodField()
+
+    def get_is_all_systems(self, obj):
+        if hasattr(obj, "is_all_systems"):
+            return bool(obj.is_all_systems)
+        return SceneSystem.objects.filter(scene_id=obj.scene_id, is_all_systems=True).exists()
 
     class Meta:
         model = Scene
@@ -216,7 +209,9 @@ class SceneListSerializer(SceneRelatedStatsMixin, SceneMembersMixin, serializers
             "system_count",
             "table_count",
             "strategy_ids",
+            "strategy_count",
             "risk_count",
+            "is_all_systems",
         ]
 
 
@@ -293,11 +288,22 @@ class SceneInfoUpdateSerializer(serializers.Serializer):
     users = serializers.ListField(child=serializers.CharField(), required=False)
 
 
-class SceneFilterSerializer(serializers.Serializer):
+class SceneFilterSerializer(SortSerializerMixin, serializers.Serializer):
     """场景列表过滤参数"""
 
+    scene_id = serializers.IntegerField(required=False)
     status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
     keyword = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    manager = serializers.CharField(required=False, allow_blank=True)
+    user = serializers.CharField(required=False, allow_blank=True)
+    updated_by = serializers.CharField(required=False, allow_blank=True)
+    sort = SortListField(
+        allowed_fields=SCENE_LIST_SORT_FIELDS,
+        default_sort=DEFAULT_SCENE_LIST_SORT,
+        field_descriptions=SCENE_LIST_SORT_FIELD_DESCRIPTIONS,
+    )
 
 
 class SceneStatusFilterSerializer(serializers.Serializer):

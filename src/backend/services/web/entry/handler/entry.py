@@ -40,6 +40,7 @@ from services.web.entry.constants import (
     IAM_WEB_URL_KEY,
     IEG_STD_OP_DOC_URL_KEY,
     PERMISSION_MODEL_IWIKI_URL_KEY,
+    PLATFORM_ADMIN_USERS_KEY,
     SDK_CONFIG_KEY,
     SEARCH_RULE_IWIKI_URL_KEY,
     V3_SYSTEM_CREATE_URL_KEY,
@@ -74,6 +75,7 @@ class EntryHandler(object):
             # 用户信息
             "username": request.user.username,
             "super_manager": super_manager,
+            "platform_admin_users": GlobalMetaConfig.get(PLATFORM_ADMIN_USERS_KEY, default=[]),
             # 远程静态资源url
             "remote_static_url": settings.REMOTE_STATIC_URL,
             # 静态资源
