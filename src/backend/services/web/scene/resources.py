@@ -4,7 +4,18 @@ import abc
 from bk_resource import resource
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import (
+    CharField,
+    Count,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Cast, Coalesce
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -18,14 +29,20 @@ from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.models import get_request_username
+from services.web.risk.models import Risk
 from services.web.scene.binding_validation import assert_binding_relation_integrity
-from services.web.scene.constants import SceneStatus
+from services.web.scene.constants import ResourceVisibilityType, SceneStatus
 from services.web.scene.exceptions import (
     RelatedResourceDetail,
     SceneHasRelatedResources,
     SceneNotExist,
 )
-from services.web.scene.models import Scene, SceneDataTable, SceneSystem
+from services.web.scene.models import (
+    ResourceBindingScene,
+    Scene,
+    SceneDataTable,
+    SceneSystem,
+)
 from services.web.scene.serializers import (
     CreateSceneSerializer,
     MyRolePermissionSerializer,
@@ -37,6 +54,7 @@ from services.web.scene.serializers import (
     SceneStatusFilterSerializer,
     UpdateSceneSerializer,
 )
+from services.web.strategy_v2.models import Strategy
 
 
 class SceneResource(AuditMixinResource, abc.ABC):
@@ -94,17 +112,67 @@ class ListScene(SceneResource):
     ResponseSerializer = SceneListSerializer
     many_response_data = True
 
-    def perform_request(self, validated_request_data):
-        queryset = Scene.objects.annotate(
+    @staticmethod
+    def _annotate_list_queryset(queryset):
+        valid_strategy_ids = (
+            Strategy.objects.filter(is_deleted=False)
+            .annotate(strategy_id_str=Cast("strategy_id", output_field=CharField()))
+            .values("strategy_id_str")
+        )
+        bound_strategy_queryset = ResourceBindingScene.objects.filter(
+            scene_id=OuterRef("scene_id"),
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id__in=valid_strategy_ids,
+        )
+        strategy_count_subquery = (
+            bound_strategy_queryset.values("scene_id")
+            .annotate(count=Count("binding__resource_id", distinct=True))
+            .values("count")[:1]
+        )
+        risk_count_subquery = (
+            bound_strategy_queryset.values("scene_id", "binding__resource_id")
+            .distinct()
+            .annotate(strategy_id_int=Cast("binding__resource_id", output_field=IntegerField()))
+            .annotate(
+                risk_count=Coalesce(
+                    Subquery(
+                        Risk.objects.filter(strategy_id=OuterRef("strategy_id_int"), strategy__is_deleted=False)
+                        .values("strategy_id")
+                        .annotate(count=Count("risk_id"))
+                        .values("count")[:1],
+                        output_field=IntegerField(),
+                    ),
+                    Value(0),
+                )
+            )
+            .values("scene_id")
+            .annotate(total=Sum("risk_count"))
+            .values("total")[:1]
+        )
+        return queryset.annotate(
             system_count=Count("scene_systems", distinct=True),
             table_count=Count("scene_tables", distinct=True),
+            strategy_count=Coalesce(Subquery(strategy_count_subquery, output_field=IntegerField()), Value(0)),
+            risk_count=Coalesce(Subquery(risk_count_subquery, output_field=IntegerField()), Value(0)),
+            is_all_systems=Exists(SceneSystem.objects.filter(scene_id=OuterRef("scene_id"), is_all_systems=True)),
         )
+
+    def perform_request(self, validated_request_data):
+        queryset = self._annotate_list_queryset(Scene.objects.all())
+        if "scene_id" in validated_request_data:
+            queryset = queryset.filter(scene_id=validated_request_data["scene_id"])
         if "status" in validated_request_data:
             queryset = queryset.filter(status=validated_request_data["status"])
+        if validated_request_data.get("name"):
+            queryset = queryset.filter(name__icontains=validated_request_data["name"])
+        if validated_request_data.get("description"):
+            queryset = queryset.filter(description__icontains=validated_request_data["description"])
+        if validated_request_data.get("updated_by"):
+            queryset = queryset.filter(updated_by=validated_request_data["updated_by"])
         if validated_request_data.get("keyword"):
             keyword = validated_request_data["keyword"]
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
-        return queryset
+        return queryset.order_by(*validated_request_data["order_fields"])
 
 
 class ListAllScene(SceneResource):

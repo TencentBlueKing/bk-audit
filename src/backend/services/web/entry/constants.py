@@ -83,6 +83,7 @@ BKVISION_WEB_URL_KEY = "bkvision_web_url"
 
 SDK_CONFIG_KEY = "sdk_config"
 AUDIT_DOC_CONFIG_KEY = "audit_doc_config"
+PLATFORM_ADMIN_USERS_KEY = "platform_admin_users"
 
 # AI 实践文档地址
 AI_PRACTICES_KEY = "ai_practices"

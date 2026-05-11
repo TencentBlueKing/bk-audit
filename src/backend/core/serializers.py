@@ -39,6 +39,100 @@ class OrderSerializer(OrderBaseSerializer):
         return attrs
 
 
+class FlexibleListField(serializers.ListField):
+    """兼容单值、数组、重复查询参数的列表字段"""
+
+    def get_value(self, dictionary):
+        if hasattr(dictionary, "getlist"):
+            values = dictionary.getlist(self.field_name)
+            if len(values) > 1:
+                return values
+            if len(values) == 1:
+                return values[0]
+        return super().get_value(dictionary)
+
+    def to_internal_value(self, data):
+        if data in (None, ""):
+            data = []
+        elif not isinstance(data, (list, tuple, set, frozenset)):
+            data = [data]
+        else:
+            data = list(data)
+
+        normalized = []
+        for item in data:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                parts = [part.strip() for part in item.split(",")]
+                normalized.extend([part for part in parts if part != ""])
+            elif item != "":
+                normalized.append(item)
+
+        return super().to_internal_value(normalized)
+
+
+class SortListField(FlexibleListField):
+    """通用 sort 查询参数字段。
+
+    支持 field / -field 语法，并校验字段必须在 allowed_fields 内。
+    """
+
+    default_error_messages = {
+        "invalid_sort_field": "无效的排序字段: {fields}",
+    }
+
+    def __init__(self, *, allowed_fields, default_sort=None, field_descriptions=None, **kwargs):
+        self.allowed_fields = tuple(allowed_fields)
+        self.default_sort = list(default_sort or [])
+        self.field_descriptions = field_descriptions or {}
+        kwargs.setdefault("child", serializers.CharField())
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_empty", True)
+        kwargs.setdefault("help_text", self._build_help_text())
+        super().__init__(**kwargs)
+
+    def _build_help_text(self):
+        supported_fields = []
+        for field in self.allowed_fields:
+            description = self.field_descriptions.get(field)
+            supported_fields.append(f"{field}({description})" if description else field)
+        return '多字段排序，如 ["-updated_at", "scene_id"]。' "每个元素为字段名，前缀 - 表示倒序。" f"可用字段：{', '.join(supported_fields)}。"
+
+    @staticmethod
+    def _normalize_sort_field(field):
+        return field[1:] if field.startswith("-") else field
+
+    def to_internal_value(self, data):
+        sort_fields = super().to_internal_value(data)
+        if not sort_fields:
+            return list(self.default_sort)
+
+        invalid_fields = []
+        for field in sort_fields:
+            order_field = self._normalize_sort_field(field)
+            if not order_field or order_field.startswith("-") or order_field not in self.allowed_fields:
+                invalid_fields.append(field)
+
+        if invalid_fields:
+            self.fail("invalid_sort_field", fields=", ".join(invalid_fields))
+        return sort_fields
+
+
+class SortSerializerMixin:
+    """将 sort 查询参数转换为资源层使用的 order_fields。"""
+
+    sort_field_name = "sort"
+    order_fields_name = "order_fields"
+
+    def validate(self, attrs: dict) -> dict:
+        attrs = super().validate(attrs)
+        sort_field = self.fields.get(self.sort_field_name)
+        default_sort = getattr(sort_field, "default_sort", [])
+        attrs[self.order_fields_name] = attrs.pop(self.sort_field_name, list(default_sort))
+        return attrs
+
+
 class ExtraDataSerializerMixin(serializers.Serializer):
     """支持额外字段的序列化器"""
 
