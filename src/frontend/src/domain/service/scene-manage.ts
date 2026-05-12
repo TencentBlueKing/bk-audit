@@ -24,10 +24,17 @@ export default {
    * @param { Object } params
    */
   fetchSceneList(params: {
+    description?: string;
     keyword?: string;
+    manager?: string;
+    name?: string;
     page?: number;
     page_size?: number;
+    scene_id?: string | number;
+    sort?: string[];
     status?: 'enabled' | 'disabled';
+    updated_by?: string;
+    user?: string;
   } = {}) {
     return SceneManageSource.getSceneList(params)
       .then(({ data }) => ({
