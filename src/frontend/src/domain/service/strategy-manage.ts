@@ -28,8 +28,9 @@ export default {
   fetchStrategyList(params: {
     label?: string
     name?: string,
-    page: number,
-    page_size: number
+    order_type?: string
+    page?: number,
+    page_size?: number
   }) {
     return StrategySource.getStrategyList(
       params,
