@@ -279,9 +279,12 @@
     });
   };
 
-  // 新开标签页跳转到风险列表页
+  // 新开标签页跳转到场景风险列表页
   const handleGoRisk = () => {
-    const routeData = router.resolve({ name: 'riskManageList' });
+    const routeData = router.resolve({
+      name: 'sceneRiskManageList',
+      query: { scene_id: sceneId.value },
+    });
     window.open(routeData.href, '_blank');
   };
 
