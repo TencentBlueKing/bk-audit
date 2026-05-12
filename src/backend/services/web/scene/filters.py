@@ -60,7 +60,7 @@ from services.web.scene.constants import (
     ResourceVisibilityType,
     VisibilityScope,
 )
-from services.web.scene.models import ResourceBinding, ResourceBindingScene
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 
 
 class BindingMetadataHelper:
@@ -199,6 +199,7 @@ class BindingMetadataHelper:
         scene_id_map = {
             resource_id: scene_id
             for resource_id, scene_id in ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=binding_resource_type,
                 binding__resource_id__in=cls._normalize_resource_ids(binding_resource_ids),
             ).values_list("binding__resource_id", "scene_id")
@@ -277,6 +278,7 @@ class SceneScopeFilter:
                 SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
                 strategy_ids = ResourceBindingScene.objects.filter(
                     scene_id__in=scene_ids,
+                    scene__is_deleted=False,
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
                 ).values_list("binding__resource_id", flat=True)
                 return queryset.filter(strategy_id__in=list(strategy_ids))
@@ -284,6 +286,7 @@ class SceneScopeFilter:
             # 按场景列表过滤：通过 ResourceBindingScene 查找并取并集
             bound_ids = ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
+                scene__is_deleted=False,
                 binding__resource_type=resource_type,
             ).values_list("binding__resource_id", flat=True)
             return queryset.filter(**{f"{pk_field}__in": list(bound_ids)})
@@ -307,6 +310,7 @@ class SceneScopeFilter:
             SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
             strategy_ids = ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
             ).values_list("binding__resource_id", flat=True)
             return list(Risk.objects.filter(strategy_id__in=list(strategy_ids)).values_list("risk_id", flat=True))
@@ -315,6 +319,7 @@ class SceneScopeFilter:
         return list(
             ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
+                scene__is_deleted=False,
                 binding__resource_type=resource_type,
             ).values_list("binding__resource_id", flat=True)
         )
@@ -341,6 +346,8 @@ class SceneScopeFilter:
 
         if scene_id is None:
             raise ValueError("创建场景级资源绑定时，scene_id 为必传参数")
+        if not Scene.objects.filter(scene_id=scene_id).exists():
+            raise ValueError("scene_id 不存在或已删除")
 
         binding = ResourceBinding.objects.create(
             resource_type=resource_type,
@@ -400,6 +407,7 @@ class CompositeScopeFilter:
 
         binding_ids = ResourceBindingScene.objects.filter(
             scene_id__in=scene_ids,
+            scene__is_deleted=False,
         ).values_list("binding_id", flat=True)
         return set(all_scene_bindings.filter(id__in=binding_ids).values_list("resource_id", flat=True))
 
@@ -427,6 +435,9 @@ class CompositeScopeFilter:
         )
         scene_ids = _normalize_scope_values(scene_id)
         system_ids = _normalize_scope_values(system_id)
+        active_scene_ids = set()
+        if scene_ids:
+            active_scene_ids = set(Scene.objects.filter(scene_id__in=scene_ids).values_list("scene_id", flat=True))
 
         visible_ids = set()
 
@@ -436,11 +447,12 @@ class CompositeScopeFilter:
             )
             if binding.visibility_type == VisibilityScope.ALL_VISIBLE:
                 # 全部可见：场景和系统维度均可见
-                visible_ids.add(binding.resource_id)
+                if active_scene_ids or system_ids:
+                    visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.ALL_SCENES:
                 # 全场景可见：仅按 scene_id 过滤时可见，不按场景关联系统扩展
-                if scene_ids:
+                if active_scene_ids:
                     visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.ALL_SYSTEMS:
@@ -450,7 +462,10 @@ class CompositeScopeFilter:
 
             elif binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
                 # 指定场景可见：仅按 scene_id 过滤时检查是否绑定到目标场景
-                if scene_ids and binding.binding_scenes.filter(scene_id__in=scene_ids).exists():
+                if (
+                    active_scene_ids
+                    and binding.binding_scenes.filter(scene_id__in=active_scene_ids, scene__is_deleted=False).exists()
+                ):
                     visible_ids.add(binding.resource_id)
 
             elif binding.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS:

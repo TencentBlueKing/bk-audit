@@ -2,6 +2,7 @@ from unittest import mock
 
 from api.bk_base.default import UserAuthBatchCheck
 from services.web.scene.data_filter import SceneDataFilter
+from services.web.scene.models import Scene, SceneDataTable
 from services.web.tool.exceptions import DataSearchTablePermission
 from tests.base import TestCase
 
@@ -66,3 +67,19 @@ class TestSqlAnalyseResource(TestCase):
         with mock.patch.object(SceneDataFilter, 'get_table_ids') as mock_get_table_ids:
             self.resource.tool.sql_analyse(sql=sql, with_permission=False)
             mock_get_table_ids.assert_not_called()
+
+    def test_soft_deleted_scene_table_permission_not_authorized(self):
+        """软删除场景保留的授权表不应再放行 SQL 解析权限校验"""
+        scene = Scene.objects.create(name="已删除场景")
+        SceneDataTable.objects.create(scene=scene, table_id="users")
+        scene.delete()
+
+        with mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[{"result": False, "user_id": "test_user", "object_id": "users"}],
+        ):
+            with self.assertRaises(DataSearchTablePermission):
+                self.resource.tool.sql_analyse(
+                    sql="SELECT id FROM users", scene_id=scene.scene_id, with_permission=False
+                )

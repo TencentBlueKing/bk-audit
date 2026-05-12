@@ -57,6 +57,7 @@ class NoticeGroupsViewSet(ResourceViewSet):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
                 binding__resource_id=str(group_id),
             )

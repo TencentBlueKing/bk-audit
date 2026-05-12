@@ -68,6 +68,7 @@ class RiskResourceProvider(IAMResourceProvider):
         str_ids = ResourceBindingScene.objects.filter(
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=scene_id,
+            scene__is_deleted=False,
         ).values_list("binding__resource_id", flat=True)
         int_ids = []
         for sid in str_ids:

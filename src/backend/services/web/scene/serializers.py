@@ -96,6 +96,7 @@ class SceneRelatedStatsMixin:
         raw_strategy_ids = set()
         bindings = ResourceBindingScene.objects.filter(
             scene_id__in=scene_ids,
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
         ).values_list("scene_id", "binding__resource_id")
         for scene_id, strategy_id_str in bindings:

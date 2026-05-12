@@ -318,7 +318,9 @@ class ScopePermission:
 
         # 场景级绑定：检查 ResourceBindingScene
         if binding.binding_type == BindingType.SCENE_BINDING:
-            bound_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
+            bound_scene_ids = set(
+                binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+            )
             return bool(set(scene_ids) & bound_scene_ids)
 
         # 平台级绑定：按 visibility_type 分支
@@ -329,7 +331,9 @@ class ScopePermission:
             return bool(system_ids)
 
         if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
-            bound_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
+            bound_scene_ids = set(
+                binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+            )
             return bool(set(scene_ids) & bound_scene_ids)
 
         if binding.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS:
@@ -385,7 +389,10 @@ class ScopePermission:
         elif scope.scope_type == ScopeType.SCENE:
             # 实例级校验
             resource = ResourceEnum.SCENE.create_instance(scope.scope_id)
-            if self.permission.is_allowed(action, [resource], raise_exception=False):
+            if (
+                self.permission.is_allowed(action, [resource], raise_exception=False)
+                and Scene.objects.filter(scene_id=scope.scope_id).exists()
+            ):
                 result = [int(scope.scope_id)]
 
         self._scene_ids_cache[cache_key] = result
@@ -458,7 +465,7 @@ class ScopePermission:
             scene_ids = self.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
             if not scene_ids:
                 return []
-            scene_systems = SceneSystem.objects.filter(scene_id__in=scene_ids)
+            scene_systems = SceneSystem.objects.filter(scene_id__in=scene_ids, scene__is_deleted=False)
             if scene_systems.filter(is_all_systems=True).exists():
                 return list(System.objects.exclude(system_id="").values_list("system_id", flat=True).distinct())
             return list(scene_systems.exclude(system_id="").values_list("system_id", flat=True).distinct())
@@ -588,7 +595,7 @@ class ScopeInstancePermission(InstancePermission):
             return permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
 
         if binding.binding_type == BindingType.SCENE_BINDING:
-            scene_ids = list(binding.binding_scenes.values_list("scene_id", flat=True))
+            scene_ids = list(binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True))
             return any(
                 permission.is_allowed(
                     ActionEnum.MANAGE_SCENE,
@@ -604,7 +611,7 @@ class ScopeInstancePermission(InstancePermission):
         if not binding or binding.binding_type != BindingType.SCENE_BINDING:
             return True
 
-        scene_ids = list(binding.binding_scenes.values_list("scene_id", flat=True))
+        scene_ids = list(binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True))
         if not scene_ids:
             return False
         return Scene.objects.filter(scene_id__in=scene_ids, status=SceneStatus.ENABLED).exists()

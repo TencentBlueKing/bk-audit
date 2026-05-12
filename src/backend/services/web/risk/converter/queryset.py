@@ -69,6 +69,7 @@ class RiskPathEqDjangoQuerySetConverter(PathEqDjangoQuerySetConverter):
                 ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
                     scene_id=scene_id,
+                    scene__is_deleted=False,
                 ).values_list("binding__resource_id", flat=True)
             )
             # 将 str → int 以匹配 Risk.strategy_id（ForeignKey int）
