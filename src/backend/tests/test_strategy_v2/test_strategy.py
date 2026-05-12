@@ -21,6 +21,7 @@ from unittest import mock
 
 from bk_resource import resource
 from django.conf import settings
+from django.http import Http404
 
 from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
@@ -42,7 +43,13 @@ from services.web.strategy_v2.constants import (
     StrategyStatusChoices,
 )
 from services.web.strategy_v2.models import Strategy, StrategyTool
-from services.web.strategy_v2.resources import CreateStrategy, UpdateStrategy
+from services.web.strategy_v2.resources import (
+    CreateStrategy,
+    DeleteStrategy,
+    RetryStrategy,
+    ToggleStrategy,
+    UpdateStrategy,
+)
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.models import Tool
 from tests.base import TestCase
@@ -463,6 +470,60 @@ class StrategyTest(TestCase):
                 resource_id=str(strategy_id),
             ).exists()
         )
+
+    @mock.patch("services.web.strategy_v2.resources.call_controller")
+    def test_delete_strategy_rejects_soft_deleted_scene_binding(self, mock_call_controller):
+        data = self._create_rule_strategy(name_suffix="delete_soft_deleted_scene")
+        strategy_id = data["strategy_id"]
+        self.scene.delete()
+
+        with self.assertRaises(Http404):
+            DeleteStrategy().perform_request({"strategy_id": strategy_id})
+
+        mock_call_controller.assert_not_called()
+        self.assertTrue(Strategy.objects.filter(strategy_id=strategy_id).exists())
+        self.assertTrue(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy_id),
+            ).exists()
+        )
+
+    @mock.patch("services.web.strategy_v2.resources.call_controller")
+    def test_toggle_strategy_rejects_soft_deleted_scene_binding(self, mock_call_controller):
+        data = self._create_rule_strategy(name_suffix="toggle_soft_deleted_scene")
+        strategy_id = data["strategy_id"]
+        self.scene.delete()
+
+        with self.assertRaises(Http404):
+            ToggleStrategy().perform_request({"strategy_id": strategy_id, "toggle": True})
+
+        mock_call_controller.assert_not_called()
+
+    @mock.patch("services.web.strategy_v2.resources.call_controller")
+    def test_retry_strategy_rejects_soft_deleted_scene_binding(self, mock_call_controller):
+        data = self._create_rule_strategy(name_suffix="retry_soft_deleted_scene")
+        strategy_id = data["strategy_id"]
+        self.scene.delete()
+
+        with self.assertRaises(Http404):
+            RetryStrategy().perform_request({"strategy_id": strategy_id})
+
+        mock_call_controller.assert_not_called()
+
+    def test_update_strategy_rejects_soft_deleted_scene_binding(self):
+        data = self._create_rule_strategy(name_suffix="update_soft_deleted_scene")
+        strategy = Strategy.objects.get(strategy_id=data["strategy_id"])
+        params = self._build_update_request_from_strategy(strategy)
+        params["strategy_id"] = strategy.strategy_id
+        params["strategy_name"] = "不应更新"
+        self.scene.delete()
+
+        with self.assertRaises(Http404):
+            UpdateStrategy().perform_request(params)
+
+        strategy.refresh_from_db()
+        self.assertNotEqual(strategy.strategy_name, "不应更新")
 
     @mock.patch("services.web.strategy_v2.resources.call_controller")
     def test_create_rule_strategy_with_manual_sql(self, mock_call_controller):

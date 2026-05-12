@@ -1484,6 +1484,36 @@ class TestCompositeScopeFilter:
         assert scene_qs.count() == 0
         assert hidden_qs.count() == 0
 
+    @pytest.mark.django_db
+    def test_filter_soft_deleted_scene_id_does_not_return_platform_scene_resources(self, scene):
+        """测试软删除 scene_id 不应命中 all_visible/all_scenes 平台资源"""
+        all_visible_group = NoticeGroup.objects.create(group_name="软删场景全局平台组", group_member=["admin"], notice_config=[])
+        all_scenes_group = NoticeGroup.objects.create(group_name="软删场景全场景平台组", group_member=["admin"], notice_config=[])
+        ResourceBinding.objects.create(
+            resource_id=str(all_visible_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+        ResourceBinding.objects.create(
+            resource_id=str(all_scenes_group.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_SCENES,
+        )
+        scene_id = scene.scene_id
+        scene.delete()
+
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            scene_id=scene_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+
+        assert qs.count() == 0
+
 
 # ==================== 创建序列化器 scope 校验测试 ====================
 
@@ -1589,6 +1619,19 @@ class TestCreateResourceBinding:
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=None,
             )
+
+    @pytest.mark.django_db
+    def test_create_with_soft_deleted_scene_id_raises(self, scene):
+        """测试软删除场景不能创建新的场景级绑定"""
+        scene.delete()
+
+        with pytest.raises(ValueError, match="scene_id 不存在或已删除"):
+            SceneScopeFilter.create_resource_binding(
+                resource_id="test_deleted_scene",
+                resource_type=ResourceVisibilityType.STRATEGY,
+                scene_id=scene.scene_id,
+            )
+        assert not ResourceBinding.objects.filter(resource_id="test_deleted_scene").exists()
 
 
 class TestDeleteResourceBinding:

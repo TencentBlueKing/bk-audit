@@ -880,6 +880,21 @@ class TestCheckResourcePermission(TestCase):
         assert result is True
 
     @patch("services.web.common.scope_permission.Permission")
+    def test_specific_scenes_ignores_soft_deleted_scene_binding(self, mock_perm_cls):
+        """specific_scenes 不把软删除场景的残留绑定视为可见"""
+        mock_perm_cls.return_value = MagicMock()
+        self.scene.delete()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_2",
+            scene_ids=[self.scene.scene_id],
+            system_ids=[],
+        )
+        assert result is False
+
+    @patch("services.web.common.scope_permission.Permission")
     def test_specific_scenes_no_match(self, mock_perm_cls):
         """specific_scenes 绑定无交集时返回 False"""
         mock_perm_cls.return_value = MagicMock()
@@ -1059,6 +1074,33 @@ class TestGetSystemIdsForScope(TestCase):
 
         result = sp.get_system_ids_for_scope(ScopeContext(ScopeType.CROSS_SCENE))
         assert result == ["bk_monitor"]
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_scope_deleted_scene_returns_empty_scene_ids(self, mock_perm_cls):
+        scene = Scene.objects.create(name="已删除显式场景", status="enabled")
+        scene.delete()
+        permission = MagicMock()
+        permission.is_allowed.return_value = True
+        mock_perm_cls.return_value = permission
+
+        sp = ScopePermission("admin")
+
+        result = sp.get_scene_ids(ScopeContext(ScopeType.SCENE, scene.scene_id), ActionEnum.VIEW_SCENE)
+        assert result == []
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_scope_deleted_scene_systems_do_not_expand_all_systems(self, mock_perm_cls):
+        mock_perm_cls.return_value = MagicMock()
+        scene = Scene.objects.create(name="已删除全系统场景", status="enabled")
+        SceneSystem.objects.create(scene=scene, system_id="", is_all_systems=True)
+        System.objects.create(system_id="bk_monitor", namespace="bklog", name="监控", instance_id="bk_monitor")
+        scene.delete()
+
+        sp = ScopePermission("admin")
+        sp._scene_ids_cache[(ScopeType.SCENE, scene.scene_id, ActionEnum.VIEW_SCENE.id)] = [scene.scene_id]
+
+        result = sp.get_system_ids_for_scope(ScopeContext(ScopeType.SCENE, scene.scene_id))
+        assert result == []
 
 
 # ==================== System Model 便捷方法 Tests ====================

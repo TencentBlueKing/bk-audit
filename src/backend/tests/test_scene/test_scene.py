@@ -19,6 +19,7 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
+from django.db import IntegrityError
 from django.db.models import Q
 from django.test import RequestFactory
 from django.utils import timezone
@@ -42,6 +43,8 @@ from services.web.scene.constants import (
     VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter, _parse_list_value
+from services.web.scene.exceptions import SceneStrategyNotDisabled
+from services.web.scene.filters import SceneScopeFilter
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -52,6 +55,7 @@ from services.web.scene.models import (
 )
 from services.web.scene.serializers import SceneFilterSerializer
 from services.web.scene.views import SceneViewSet
+from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
 from services.web.vision.constants import ReportGroupType
@@ -274,6 +278,102 @@ class TestSceneModel:
         scene = Scene.objects.create(name="默认状态场景")
         assert scene.status == SceneStatus.ENABLED
 
+    @pytest.mark.django_db
+    def test_scene_soft_delete_filters_default_manager(self, db):
+        """测试软删除后默认 Manager 过滤已删除场景"""
+        scene = Scene.objects.create(name="软删除场景")
+        scene_id = scene.scene_id
+        scene_name = scene.name
+
+        scene.delete()
+
+        assert Scene.objects.filter(scene_id=scene_id).count() == 0
+        deleted_scene = Scene._objects.get(scene_id=scene_id)
+        assert deleted_scene.is_deleted is True
+        assert deleted_scene.name == f"{scene_name}__deleted__{scene_id}"
+
+    @pytest.mark.django_db
+    def test_scene_soft_deleted_name_does_not_block_recreate(self, db):
+        """测试软删除场景名称归档后不阻塞同名重建和再次删除"""
+        scene_name = "可重建场景"
+        scene = Scene.objects.create(name=scene_name)
+        scene.delete()
+
+        new_scene = Scene.objects.create(name=scene_name)
+        new_scene.delete()
+
+        assert new_scene.scene_id != scene.scene_id
+        assert Scene.objects.filter(name=scene_name).count() == 0
+        assert Scene._objects.filter(name=scene_name).count() == 0
+        assert Scene._objects.filter(name__startswith=f"{scene_name}__deleted__").count() == 2
+
+    @pytest.mark.django_db
+    def test_scene_queryset_soft_delete_archives_name(self, db):
+        """测试 QuerySet 软删除同样归档名称，避免重复生命周期唯一约束冲突"""
+        scene_name = "批量删除可重建场景"
+        scene = Scene.objects.create(name=scene_name)
+        Scene.objects.filter(scene_id=scene.scene_id).delete()
+
+        new_scene = Scene.objects.create(name=scene_name)
+        Scene.objects.filter(scene_id=new_scene.scene_id).delete()
+
+        assert Scene.objects.filter(name=scene_name).count() == 0
+        assert Scene._objects.filter(name=scene_name).count() == 0
+        assert Scene._objects.filter(name__startswith=f"{scene_name}__deleted__").count() == 2
+
+    @pytest.mark.django_db
+    def test_scene_values_list_filters_soft_deleted_rows(self, db):
+        """测试 values_list 也默认过滤软删除场景"""
+        scene = Scene.objects.create(name="values_list 过滤场景")
+        scene_id = scene.scene_id
+        scene.delete()
+
+        assert scene_id not in Scene.objects.values_list("scene_id", flat=True)
+        assert scene_id in Scene._objects.values_list("scene_id", flat=True)
+
+    @pytest.mark.django_db
+    def test_scene_soft_delete_truncates_archived_name(self, db):
+        """测试软删除归档名称不会超过字段长度"""
+        scene = Scene.objects.create(name="A" * 128)
+
+        scene.delete()
+
+        deleted_scene = Scene._objects.get(scene_id=scene.scene_id)
+        assert len(deleted_scene.name) == 128
+        assert deleted_scene.name.endswith(f"__deleted__{scene.scene_id}")
+
+    @pytest.mark.django_db
+    def test_scene_can_be_restored_from_backend_when_name_available(self, db):
+        """测试后端恢复已删除场景时，原名称可用则恢复成功"""
+        scene_name = "后端恢复可用场景"
+        scene = Scene.objects.create(name=scene_name)
+        scene_id = scene.scene_id
+        scene.delete()
+
+        deleted_scene = Scene._objects.get(scene_id=scene_id)
+        deleted_scene.name = scene_name
+        deleted_scene.is_deleted = False
+        deleted_scene.save(update_fields=["name", "is_deleted"])
+
+        restored_scene = Scene.objects.get(scene_id=scene_id)
+        assert restored_scene.name == scene_name
+        assert restored_scene.is_deleted is False
+
+    @pytest.mark.django_db
+    def test_scene_backend_restore_rejects_existing_active_name(self, db):
+        """测试后端恢复已删除场景时，原名称已被占用则触发唯一约束"""
+        scene_name = "后端恢复冲突场景"
+        scene = Scene.objects.create(name=scene_name)
+        scene_id = scene.scene_id
+        scene.delete()
+        Scene.objects.create(name=scene_name)
+
+        deleted_scene = Scene._objects.get(scene_id=scene_id)
+        deleted_scene.name = scene_name
+        deleted_scene.is_deleted = False
+        with pytest.raises(IntegrityError):
+            deleted_scene.save(update_fields=["name", "is_deleted"])
+
 
 class TestSceneSystemModel:
     """场景-系统关联模型测试"""
@@ -299,11 +399,11 @@ class TestSceneSystemModel:
 
     @pytest.mark.django_db
     def test_scene_system_cascade_delete(self, scene):
-        """测试场景删除时级联删除系统关联"""
+        """测试场景软删除时保留系统关联"""
         SceneSystem.objects.create(scene=scene, system_id="bk_cmdb")
         scene_id = scene.scene_id
         scene.delete()
-        assert SceneSystem.objects.filter(scene_id=scene_id).count() == 0
+        assert SceneSystem.objects.filter(scene_id=scene_id).count() == 1
 
 
 class TestSceneDataTableModel:
@@ -600,6 +700,20 @@ class TestSceneResource(TestCase):
         strategy = Strategy.objects.create(strategy_name=name)
         self._bind_strategy_to_scene(strategy, scene)
         return strategy
+
+    def test_scene_scope_filter_excludes_soft_deleted_scene_binding(self):
+        """SceneScopeFilter 不返回软删除场景的残留资源绑定"""
+        strategy = self._create_bound_strategy(self.scene, "软删除场景策略")
+        self.scene.delete()
+
+        queryset = SceneScopeFilter.filter_queryset(
+            queryset=Strategy.objects.filter(strategy_id=strategy.strategy_id),
+            scene_id=self.scene.scene_id,
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
+
+        self.assertFalse(queryset.exists())
 
     def _create_risk(self, strategy, raw_event_id):
         return Risk.objects.create(
@@ -898,8 +1012,58 @@ class TestSceneResource(TestCase):
                 }
             )
 
+    def test_delete_scene_with_disabled_bound_strategy_soft_deletes_scene_and_preserves_relations(self):
+        """删除仅绑定停用策略的场景时只软删除场景并保留关系数据"""
+        strategy = Strategy.objects.create(
+            strategy_name="已停用策略",
+            status=StrategyStatusChoices.DISABLED,
+        )
+        binding = self._bind_strategy_to_scene(strategy, self.scene)
+        scene_system = SceneSystem.objects.create(scene=self.scene, system_id="bk_cmdb")
+        scene_table = SceneDataTable.objects.create(scene=self.scene, table_id="audit_log_table")
+        binding_scene = ResourceBindingScene.objects.get(binding=binding, scene_id=self.scene.scene_id)
+
+        result = self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(result["message"], "success")
+        scene = Scene._base_manager.get(scene_id=self.scene.scene_id, is_deleted=True)
+        self.assertTrue(scene.is_deleted)
+        self.assertTrue(scene.name.endswith(f"__deleted__{self.scene.scene_id}"))
+        self.assertTrue(SceneSystem.objects.filter(pk=scene_system.pk).exists())
+        self.assertTrue(SceneDataTable.objects.filter(pk=scene_table.pk).exists())
+        self.assertTrue(ResourceBindingScene.objects.filter(pk=binding_scene.pk).exists())
+
+    def test_delete_scene_with_enabled_bound_strategy_raises_and_keeps_scene_active(self):
+        """删除绑定未停用策略的场景时提示先停用策略且不删除场景"""
+        strategy = Strategy.objects.create(strategy_name="运行中策略")
+        binding = self._bind_strategy_to_scene(strategy, self.scene)
+
+        with self.assertRaises(SceneStrategyNotDisabled) as context:
+            self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(context.exception.data["strategy_ids"], [strategy.strategy_id])
+        scene = Scene.objects.get(scene_id=self.scene.scene_id)
+        self.assertFalse(scene.is_deleted)
+        self.assertTrue(ResourceBinding.objects.filter(pk=binding.pk).exists())
+        self.assertTrue(ResourceBindingScene.objects.filter(binding=binding, scene_id=self.scene.scene_id).exists())
+
+    def test_delete_scene_request_with_enabled_bound_strategy_raises_and_keeps_scene_active(self):
+        """通过 request 删除绑定未停用策略的场景时完整校验链路生效"""
+        strategy = Strategy.objects.create(strategy_name="request 运行中策略")
+        binding = self._bind_strategy_to_scene(strategy, self.scene)
+
+        with self.assertRaises(SceneStrategyNotDisabled) as context:
+            self.resource.scene.delete_scene.request({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(context.exception.data["strategy_ids"], [strategy.strategy_id])
+        self.assertIn(str(strategy.strategy_id), str(context.exception))
+        scene = Scene.objects.get(scene_id=self.scene.scene_id)
+        self.assertFalse(scene.is_deleted)
+        self.assertTrue(ResourceBinding.objects.filter(pk=binding.pk).exists())
+        self.assertTrue(ResourceBindingScene.objects.filter(binding=binding, scene_id=self.scene.scene_id).exists())
+
     def test_delete_scene_ignores_deleted_strategy_binding(self):
-        """测试删除场景时会清理已删除策略的残留绑定"""
+        """测试删除场景时忽略已删除策略的残留绑定"""
         strategy = Strategy.objects.create(strategy_name="待删除策略")
         binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
@@ -907,11 +1071,24 @@ class TestSceneResource(TestCase):
             binding_type=BindingType.SCENE_BINDING,
         )
         ResourceBindingScene.objects.create(binding=binding, scene_id=self.scene.scene_id)
+        invalid_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id="deleted-strategy-residue",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=invalid_binding, scene_id=self.scene.scene_id)
         strategy.delete()
 
         result = self.resource.scene.delete_scene({"scene_id": self.scene.scene_id})
         self.assertEqual(result["message"], "success")
         self.assertFalse(Scene.objects.filter(scene_id=self.scene.scene_id).exists())
+        self.assertTrue(Scene._base_manager.get(scene_id=self.scene.scene_id, is_deleted=True).is_deleted)
+        self.assertTrue(ResourceBinding.objects.filter(pk=binding.pk).exists())
+        self.assertTrue(ResourceBindingScene.objects.filter(binding=binding, scene_id=self.scene.scene_id).exists())
+        self.assertTrue(ResourceBinding.objects.filter(pk=invalid_binding.pk).exists())
+        self.assertTrue(
+            ResourceBindingScene.objects.filter(binding=invalid_binding, scene_id=self.scene.scene_id).exists()
+        )
 
     def test_scene_disable(self):
         """测试停用场景"""
@@ -1741,6 +1918,53 @@ class TestToolResources(TestCase):
                 }
             )
 
+    def test_create_platform_tool_rejects_soft_deleted_specific_scene(self):
+        """测试平台级工具指定场景可见时不允许绑定软删除场景"""
+        self.scene.delete()
+
+        with self.assertRaisesMessage(Exception, "可见性配置不合法"):
+            self.resource.tool.create_platform_scene_tool(
+                {
+                    "name": "软删除场景可见平台工具",
+                    "tool_type": "data_search",
+                    "tags": ["测试"],
+                    "data_search_config_type": "sql",
+                    "config": {
+                        "sql": "SELECT * FROM test_table",
+                        "referenced_tables": [{"table_name": "test_table"}],
+                        "input_variable": [],
+                        "output_fields": [],
+                    },
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                        "scene_ids": [self.scene.scene_id],
+                        "system_ids": [],
+                    },
+                }
+            )
+        self.assertFalse(Tool.objects.filter(name="软删除场景可见平台工具").exists())
+
+    def test_update_platform_tool_rejects_soft_deleted_specific_scene(self):
+        """测试平台级工具更新指定场景可见时不允许绑定软删除场景"""
+        self.scene.delete()
+
+        with self.assertRaisesMessage(Exception, "可见性配置不合法"):
+            self.resource.tool.update_platform_scene_tool(
+                {
+                    "uid": self.platform_tool.uid,
+                    "tags": ["测试"],
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                        "scene_ids": [self.scene.scene_id],
+                        "system_ids": [],
+                    },
+                }
+            )
+
+        binding = ResourceBinding.objects.get(resource_id=self.platform_tool.uid)
+        self.assertEqual(binding.visibility_type, VisibilityScope.ALL_VISIBLE)
+        self.assertFalse(binding.binding_scenes.exists())
+
     def test_update_platform_tool_specific_systems_without_system_ids_raise(self):
         """测试平台级工具 specific_systems 未传 system_ids 时校验失败"""
         with self.assertRaises(ValidateException):
@@ -1800,6 +2024,18 @@ class TestToolResources(TestCase):
         self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
         updated_tool = Tool.last_version_tool(self.scene_tool.uid)
         self.assertEqual(updated_tool.status, PanelStatus.UNPUBLISHED)
+
+    def test_publish_scene_tool_rejects_soft_deleted_scene_binding(self):
+        """测试上架/下架场景工具不接受软删除场景残留绑定"""
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        self.scene.delete()
+
+        with self.assertRaises(SceneToolNotExist):
+            self.resource.tool.publish_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": self.scene_tool.uid})
+
+        updated_tool = Tool.last_version_tool(self.scene_tool.uid)
+        self.assertNotEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
     def test_publish_scene_tool_with_int_scene_id_and_status(self):
         """测试场景级工具上下架支持整型 scene_id 和显式状态"""
@@ -1881,6 +2117,28 @@ class TestToolResources(TestCase):
         self.assertTrue(binding.binding_scenes.filter(scene_id=self.scene.scene_id).exists())
         self.assertEqual(tool.status, PanelStatus.PUBLISHED)
 
+    def test_create_scene_tool_rejects_soft_deleted_scene(self):
+        """测试创建场景级工具时不允许绑定软删除场景"""
+        self.scene.delete()
+
+        with self.assertRaisesMessage(Exception, "scene_id 不存在或已删除"):
+            self.resource.tool.create_scene_scope_tool(
+                {
+                    "scene_id": self.scene.scene_id,
+                    "name": "软删除场景级工具",
+                    "tool_type": "data_search",
+                    "tags": ["安全"],
+                    "data_search_config_type": "sql",
+                    "config": {
+                        "sql": "SELECT * FROM test_table",
+                        "referenced_tables": [{"table_name": "test_table"}],
+                        "input_variable": [],
+                        "output_fields": [],
+                    },
+                }
+            )
+        self.assertFalse(Tool.objects.filter(name="软删除场景级工具").exists())
+
     def test_update_scene_tool(self):
         """测试编辑场景级工具"""
         self.resource.tool.update_scene_scope_tool(
@@ -1896,6 +2154,25 @@ class TestToolResources(TestCase):
         self.assertEqual(updated_tool.name, "更新后的场景工具")
         self.assertEqual(updated_tool.status, PanelStatus.PUBLISHED)
 
+    def test_update_scene_tool_rejects_soft_deleted_scene_binding(self):
+        """测试编辑场景工具不接受软删除场景残留绑定"""
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        self.scene.delete()
+
+        with self.assertRaises(SceneToolNotExist):
+            self.resource.tool.update_scene_scope_tool(
+                {
+                    "scene_id": self.scene.scene_id,
+                    "uid": self.scene_tool.uid,
+                    "name": "不应更新",
+                    "tags": ["安全"],
+                }
+            )
+
+        updated_tool = Tool.last_version_tool(self.scene_tool.uid)
+        self.assertNotEqual(updated_tool.name, "不应更新")
+
     def test_delete_scene_tool(self):
         """测试删除场景级工具"""
         uid = self.scene_tool.uid
@@ -1903,6 +2180,24 @@ class TestToolResources(TestCase):
         self.assertIsNone(Tool.last_version_tool(uid))
         # 验证 ResourceBinding 也被删除
         self.assertFalse(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+            ).exists()
+        )
+
+    def test_delete_scene_tool_rejects_soft_deleted_scene_binding(self):
+        """测试删除场景工具不接受软删除场景残留绑定"""
+        from services.web.tool.exceptions import SceneToolNotExist
+
+        uid = self.scene_tool.uid
+        self.scene.delete()
+
+        with self.assertRaises(SceneToolNotExist):
+            self.resource.tool.delete_scene_scope_tool({"scene_id": self.scene.scene_id, "uid": uid})
+
+        self.assertIsNotNone(Tool.last_version_tool(uid))
+        self.assertTrue(
             ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.TOOL,
                 resource_id=uid,

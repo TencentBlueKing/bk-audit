@@ -55,6 +55,28 @@ class SceneHasRelatedResources(SceneException):
         return f"{cls.MESSAGE}，请先删除：{'; '.join(details)}"
 
 
+class SceneStrategyNotDisabled(SceneException):
+    MESSAGE = gettext_lazy("场景绑定的策略未停用，请先手动停用策略后再删除")
+    ERROR_CODE = "008"
+
+    def __init__(
+        self,
+        strategy_ids: Sequence[int] | None = None,
+        *args: object,
+        **kwargs: Any,
+    ):
+        strategy_ids = list(strategy_ids or [])
+        kwargs.setdefault("data", {"strategy_ids": strategy_ids})
+        kwargs.setdefault("message", self.build_message(strategy_ids))
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def build_message(cls, strategy_ids: Sequence[int]) -> str:
+        if not strategy_ids:
+            return str(cls.MESSAGE)
+        return f"{cls.MESSAGE}：{', '.join(str(strategy_id) for strategy_id in strategy_ids[:10])}"
+
+
 class PanelNotExist(SceneException):
     MESSAGE = gettext_lazy("报表不存在")
     ERROR_CODE = "004"
