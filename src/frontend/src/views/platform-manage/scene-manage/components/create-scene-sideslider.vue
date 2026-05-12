@@ -56,9 +56,9 @@
             </template>
             <audit-user-selector
               v-model="formData.managers"
-              :auto-focus="false"
               :collapse-tags="false"
-              multiple />
+              multiple
+              @blur="handleManagersBlur" />
           </bk-form-item>
 
           <!-- 场景描述 -->
@@ -303,6 +303,13 @@
     ],
   };
 
+  // 场景管理员失去焦点时重新校验
+  const handleManagersBlur = () => {
+    formRef.value?.clearValidate('managers');
+    if (formData.value.managers.length === 0) {
+      formRef.value?.validateField('managers');
+    }
+  };
 
   // 关联系统变更
   const handleSystemChange = (value: any) => {
