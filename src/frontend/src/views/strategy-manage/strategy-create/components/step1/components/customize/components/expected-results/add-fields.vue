@@ -15,21 +15,21 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div
-    class="add-field-btn"
-    @click="handleShowPop">
-    <audit-icon
-      type="add" />
-  </div>
   <bk-popover
     ref="popoverRef"
     ext-cls="field-custom-popover"
     height="500"
     :is-show="isShow"
     theme="light"
-    trigger="click"
+    trigger="manual"
     width="auto"
     @after-hidden="handleAfterHidden">
+    <div
+      class="add-field-btn"
+      @click="handleShowPop">
+      <audit-icon
+        type="add" />
+    </div>
     <template #content>
       <div class="add-field-pop-content">
         <div
