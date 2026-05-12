@@ -22,34 +22,54 @@
       @query="handleQuery"
       @reset="handleReset" />
 
-    <!-- 用户信息 + 关联游戏列表统一 loading -->
-    <bk-loading
-      class="page-loading-wrapper"
-      :loading="pageLoading">
-      <!-- loading时的占位元素，撑开容器高度使loading居中 -->
-      <div
-        v-if="pageLoading"
-        class="loading-placeholder" />
-      <template v-if="hasQueried">
-        <!-- 暂无数据 -->
-        <bk-exception
-          v-if="!pageLoading && isPageEmpty"
-          class="page-empty"
-          type="empty">
-          {{ t('暂无数据') }}
-        </bk-exception>
-
-        <template v-else-if="!pageLoading">
+    <!-- 用户信息 - 独立 loading -->
+    <template v-if="hasQueried">
+      <bk-loading
+        class="user-info-loading-wrapper"
+        :loading="userInfoLoading">
+        <div
+          v-if="userInfoLoading"
+          class="user-info-loading-placeholder" />
+        <template v-else>
+          <!-- 用户信息为空 -->
+          <bk-exception
+            v-if="isUserInfoEmpty"
+            class="user-info-empty"
+            scene="part"
+            type="empty">
+            {{ t('暂无用户信息') }}
+          </bk-exception>
           <!-- 用户信息 -->
           <profile-user-info
+            v-else
             :user-info="userInfo"
             @view-detail="handleViewDetail" />
+        </template>
+      </bk-loading>
 
-          <!-- 分割线 -->
-          <div class="section-divider" />
+      <!-- 分割线 -->
+      <div class="section-divider" />
 
+      <!-- 关联游戏列表 - 独立 loading -->
+      <bk-loading
+        class="game-list-loading-wrapper"
+        :loading="gameListLoading">
+        <div
+          v-if="gameListLoading"
+          class="game-list-loading-placeholder" />
+        <template v-else>
+          <!-- 游戏列表为空 -->
+          <bk-exception
+            v-if="gameList.length === 0"
+            class="game-list-empty"
+            scene="part"
+            type="empty">
+            {{ t('暂无关联游戏数据') }}
+          </bk-exception>
           <!-- 关联游戏列表 -->
-          <div class="top-search game-list-section">
+          <div
+            v-else
+            class="top-search game-list-section">
             <div class="game-list-header">
               <div class="top-search-title">
                 {{ t('关联游戏列表') }}
@@ -122,8 +142,8 @@
               @page-value-change="handlePageChange" />
           </div>
         </template>
-      </template>
-    </bk-loading>
+      </bk-loading>
+    </template>
   </div>
 </template>
 
@@ -268,13 +288,9 @@
     pagination.value.current = 1;
   });
 
-  // 统一 loading 状态（用户信息 + 游戏列表任一加载中即为 loading）
-  const pageLoading = computed(() => userInfoLoading.value || gameListLoading.value);
-
-  // 页面是否为空（用户信息无有效数据 且 游戏列表为空）
-  const isPageEmpty = computed(() => !userInfo.value.wecom
-    && !userInfo.value.username
-    && gameList.value.length === 0);
+  // 用户信息是否为空
+  const isUserInfoEmpty = computed(() => !userInfo.value.wecom
+    && !userInfo.value.username);
 
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
@@ -371,10 +387,10 @@
           }
         });
         if (wechatAccounts.length > 0) {
-          userInfo.value.wechat = wechatAccounts.join(', ');
+          userInfo.value.wechat = wechatAccounts.join(';');
         }
         if (qqAccounts.length > 0) {
-          userInfo.value.qq = qqAccounts.join(', ');
+          userInfo.value.qq = qqAccounts.join(';');
         }
       }
     },
@@ -795,8 +811,15 @@
   /* 分割线 */
   .section-divider {
     height: 1px;
-    margin: 0 24px;
-    background: #eaebf0;
+    background: #fff;
+
+    &::before {
+      display: block;
+      height: 1px;
+      margin: 0 24px;
+      content: '';
+      background: #eaebf0;
+    }
   }
 
   /* 关联游戏列表 */
@@ -805,22 +828,40 @@
   }
 }
 
-/* loading 容器 */
-.page-loading-wrapper {
-  min-height: 400px;
+/* 用户信息 loading 容器 */
+.user-info-loading-wrapper {
+  min-height: 120px;
 }
 
-/* loading 占位元素 */
-.loading-placeholder {
-  height: 400px;
+/* 用户信息 loading 占位 */
+.user-info-loading-placeholder {
+  height: 120px;
 }
 
-/* 暂无数据 */
-.page-empty {
+/* 用户信息为空 */
+.user-info-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  min-height: 120px;
+}
+
+/* 游戏列表 loading 容器 */
+.game-list-loading-wrapper {
+  min-height: 200px;
+}
+
+/* 游戏列表 loading 占位 */
+.game-list-loading-placeholder {
+  height: 200px;
+}
+
+/* 游戏列表为空 */
+.game-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
 }
 
 .top-search {
