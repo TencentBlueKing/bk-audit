@@ -78,11 +78,11 @@
           {{ t('审计策略') }}
         </audit-menu-item>
         <audit-menu-item
-          :class="{ active: currentRoute === 'linkDataManage' }"
-          index="linkDataManage"
-          @click="handleMenuClick('linkDataManage')">
+          :class="{ active: currentRoute === 'ruleManage' }"
+          index="ruleManage"
+          @click="handleMenuClick('ruleManage')">
           <span class="side-child-dot" />
-          {{ t('联表管理') }}
+          {{ t('处理规则') }}
         </audit-menu-item>
         <audit-menu-item
           :class="{ active: currentRoute === 'applicationManage' }"
@@ -92,12 +92,14 @@
           {{ t('处理套餐') }}
         </audit-menu-item>
         <audit-menu-item
-          :class="{ active: currentRoute === 'ruleManage' }"
-          index="ruleManage"
-          @click="handleMenuClick('ruleManage')">
+          :class="{ active: currentRoute === 'linkDataManage' }"
+          index="linkDataManage"
+          @click="handleMenuClick('linkDataManage')">
           <span class="side-child-dot" />
-          {{ t('处理规则') }}
+          {{ t('联表管理') }}
         </audit-menu-item>
+
+
         <audit-menu-item
           :class="{ active: currentRoute === 'noticeGroup' }"
           index="noticeGroup"
