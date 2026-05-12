@@ -69,6 +69,7 @@ class StrategyBaseProvider(IAMResourceProvider):
                 bound_ids = ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = Strategy.objects.filter(strategy_id__in=bound_ids)
             elif resource_type == ResourceEnum.STRATEGY.id:
@@ -125,6 +126,7 @@ class StrategyBaseProvider(IAMResourceProvider):
                 bound_ids = ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = Strategy.objects.filter(strategy_id__in=bound_ids)
             elif resource_type == ResourceEnum.STRATEGY.id:
@@ -152,6 +154,7 @@ class StrategyBaseProvider(IAMResourceProvider):
             bound_ids = ResourceBindingScene.objects.filter(
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=parent_id,
+                scene__is_deleted=False,
             ).values_list("binding__resource_id", flat=True)
             queryset = queryset.filter(strategy_id__in=bound_ids)
         results = [
@@ -245,6 +248,7 @@ class LinkTableProvider(IAMResourceProvider):
                 bound_uids = ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.LINK_TABLE,
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = LinkTable.list_max_version_link_table().filter(uid__in=bound_uids)
             else:
@@ -295,6 +299,7 @@ class LinkTableProvider(IAMResourceProvider):
                 bound_uids = ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.LINK_TABLE,
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = LinkTable.list_max_version_link_table().filter(uid__in=bound_uids)
             else:
@@ -318,6 +323,7 @@ class LinkTableProvider(IAMResourceProvider):
             bound_uids = ResourceBindingScene.objects.filter(
                 binding__resource_type=ResourceVisibilityType.LINK_TABLE,
                 scene_id=parent_id,
+                scene__is_deleted=False,
             ).values_list("binding__resource_id", flat=True)
             queryset = queryset.filter(uid__in=bound_uids)
         results = [{"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]

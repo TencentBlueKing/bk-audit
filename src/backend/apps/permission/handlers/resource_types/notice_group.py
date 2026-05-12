@@ -46,6 +46,7 @@ class NoticeGroup(ResourceTypeMeta):
         notice_group_map = {str(notice_group.group_id): notice_group for notice_group in notice_groups}
 
         scene_bindings = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
             binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
         ).values_list("binding__resource_id", "scene_id")

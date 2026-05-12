@@ -314,7 +314,7 @@ class ScenePanelManageViewSet(SceneManageBaseViewSet):
             resource_id=str(panel_id),
             binding_type=BindingType.SCENE_BINDING,
         )
-        binding_scene = binding.binding_scenes.first()
+        binding_scene = binding.binding_scenes.filter(scene__is_deleted=False).first()
         if not binding_scene:
             raise ValidationError(message=gettext("无法获取场景ID"))
         return str(binding_scene.scene_id)

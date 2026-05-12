@@ -42,7 +42,7 @@ class SceneDataFilter:
         q = Q()
 
         # 处理系统级过滤规则
-        scene_systems = SceneSystem.objects.filter(scene_id=scene_id)
+        scene_systems = SceneSystem.objects.filter(scene_id=scene_id, scene__is_deleted=False)
         for scene_system in scene_systems:
             if scene_system.is_all_systems:
                 continue
@@ -51,7 +51,7 @@ class SceneDataFilter:
                 q &= system_q
 
         # 处理数据表级过滤规则
-        scene_tables = SceneDataTable.objects.filter(scene_id=scene_id)
+        scene_tables = SceneDataTable.objects.filter(scene_id=scene_id, scene__is_deleted=False)
         for scene_table in scene_tables:
             table_q = cls._build_rules_q(scene_table.filter_rules)
             if table_q:
@@ -91,7 +91,7 @@ class SceneDataFilter:
         :param scene_id: 场景 ID
         :return: 系统 ID 列表
         """
-        scene_systems = SceneSystem.objects.filter(scene_id=scene_id)
+        scene_systems = SceneSystem.objects.filter(scene_id=scene_id, scene__is_deleted=False)
 
         # 如果有 is_all_systems=True 的记录，返回空列表表示不限制
         if scene_systems.filter(is_all_systems=True).exists():
@@ -107,7 +107,9 @@ class SceneDataFilter:
         :param scene_id: 场景 ID
         :return: 数据表 ID 列表
         """
-        return list(SceneDataTable.objects.filter(scene_id=scene_id).values_list("table_id", flat=True))
+        return list(
+            SceneDataTable.objects.filter(scene_id=scene_id, scene__is_deleted=False).values_list("table_id", flat=True)
+        )
 
 
 def _parse_list_value(value: Any) -> List[str]:

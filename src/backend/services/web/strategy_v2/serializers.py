@@ -183,6 +183,7 @@ class StrategySerializer(serializers.Serializer):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
                 binding__resource_id=str(strategy_id),
             )
@@ -226,6 +227,7 @@ class StrategySerializer(serializers.Serializer):
             resource_id
             for resource_id in ResourceBindingScene.objects.filter(
                 scene_id=scene_id,
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
                 binding__resource_id__in=expected_ids,
             ).values_list("binding__resource_id", flat=True)
@@ -296,6 +298,7 @@ class StrategySerializer(serializers.Serializer):
 
         is_bound = ResourceBindingScene.objects.filter(
             scene_id=scene_id,
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.LINK_TABLE,
             binding__resource_id=link_table_uid,
         ).exists()

@@ -91,6 +91,7 @@ from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -336,6 +337,15 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
                 mappings=[],
             )
 
+    @staticmethod
+    def ensure_active_scene_binding_or_404(strategy_id: int) -> None:
+        if not ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id=str(strategy_id),
+        ).exists():
+            raise Http404
+
 
 class CreateStrategy(StrategyV2Base):
     """
@@ -436,9 +446,10 @@ class UpdateStrategy(StrategyV2Base):
     audit_action = ActionEnum.EDIT_STRATEGY
 
     def perform_request(self, validated_request_data):
-        self._check_source_type(validated_request_data)
         # load strategy
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data.pop("strategy_id", int()))
+        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        self._check_source_type(validated_request_data)
         # check strategy status
         if strategy.status in [
             StrategyStatusChoices.STARTING,
@@ -565,6 +576,7 @@ class DeleteStrategy(StrategyV2Base):
     @transaction.atomic()
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
         # delete tags
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
         StrategyTool.objects.filter(strategy=strategy).delete()
@@ -793,6 +805,7 @@ class ToggleStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         # 更新处理人
@@ -811,6 +824,7 @@ class RetryStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # load strategy
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         need_update = strategy.backend_data and (
