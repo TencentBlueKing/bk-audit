@@ -1308,11 +1308,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0 8px;
+  padding: 50px 0 8px;
 
   .tip-icon {
     position: absolute;
-    top: -25px;
+    top: 5px;
     left: 50%;
     width: 50px;
     height: 50px;
