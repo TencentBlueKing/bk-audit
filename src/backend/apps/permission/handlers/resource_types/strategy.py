@@ -46,6 +46,7 @@ class Strategy(ResourceTypeMeta):
         strategies = StrategyModel.objects.filter(strategy_id__in=instance_ids).only("strategy_id", "strategy_name")
         strategy_map = {str(strategy.strategy_id): strategy for strategy in strategies}
         scene_bindings = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
         ).values_list("binding__resource_id", "scene_id")
@@ -83,6 +84,7 @@ class LinkTable(ResourceTypeMeta):
         link_tables = LinkTableModel.list_max_version_link_table().filter(uid__in=instance_ids).only("uid", "name")
         link_table_map = {link_table.uid: link_table for link_table in link_tables}
         scene_bindings = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.LINK_TABLE,
             binding__resource_id__in=[str(instance_id) for instance_id in instance_ids],
         ).values_list("binding__resource_id", "scene_id")

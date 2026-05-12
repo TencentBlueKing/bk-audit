@@ -5,7 +5,11 @@ from django.test import TestCase
 
 from core.testing import assert_dict_contains
 from services.web.common.constants import ScopeType
-from services.web.scene.constants import VisibilityScope
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    VisibilityScope,
+)
 from services.web.scene.models import ResourceBinding, ResourceBindingSystem, Scene
 from services.web.vision.constants import ReportGroupType
 from services.web.vision.models import (
@@ -62,6 +66,22 @@ class TestPanelManagementFeatures(TestCase):
         panel = VisionPanel.objects.get(id=resp["id"])
         self.assertTrue(SceneReportGroupItem.objects.filter(group=self.scene_group, panel=panel).exists())
 
+    def test_create_scene_panel_rejects_soft_deleted_scene(self):
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            CreateScenePanel().request(
+                {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "软删除场景报表"}
+            )
+        self.assertFalse(VisionPanel.objects.filter(name="软删除场景报表").exists())
+
+    def test_create_scene_group_rejects_soft_deleted_scene(self):
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            CreateSceneReportGroup().request({"scene_id": self.scene1.scene_id, "name": "软删除场景分组"})
+        self.assertFalse(SceneReportGroup.objects.filter(name="软删除场景分组").exists())
+
     def test_create_scene_group_duplicate_name_returns_validation_error(self):
         with self.assertRaisesMessage(Exception, "同一场景下分组名称已存在"):
             CreateSceneReportGroup().request({"scene_id": self.scene1.scene_id, "name": self.scene_group.name})
@@ -96,6 +116,20 @@ class TestPanelManagementFeatures(TestCase):
                     "name": "平台报表",
                 }
             )
+
+    def test_update_scene_group_rejects_soft_deleted_scene(self):
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            UpdateSceneReportGroup().request(
+                {
+                    "scene_id": self.scene1.scene_id,
+                    "group_id": self.scene_group.id,
+                    "name": "不应更新",
+                }
+            )
+        self.scene_group.refresh_from_db()
+        self.assertNotEqual(self.scene_group.name, "不应更新")
 
     def test_list_platform_panels_with_visibility(self):
         panel_data = CreatePlatformPanel().request(
@@ -255,6 +289,19 @@ class TestPanelManagementFeatures(TestCase):
         DeleteSceneReportGroup().request({"group_id": group.id})
         self.assertFalse(SceneReportGroup.objects.filter(id=group.id).exists())
 
+    def test_delete_group_rejects_soft_deleted_scene(self):
+        group = SceneReportGroup.objects.create(
+            scene=self.scene1,
+            name="软删除场景空分组",
+            group_type=ReportGroupType.CUSTOM,
+        )
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            DeleteSceneReportGroup().request({"group_id": group.id})
+
+        self.assertTrue(SceneReportGroup.objects.filter(id=group.id).exists())
+
     def test_recreate_platform_group_when_platform_panel_authorized(self):
         panel_data = CreatePlatformPanel().request(
             {
@@ -333,6 +380,21 @@ class TestPanelManagementFeatures(TestCase):
         panel.refresh_from_db()
         self.assertEqual(panel.status, "unpublished")
 
+    def test_publish_scene_panel_rejects_soft_deleted_scene_binding(self):
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        scene_panel = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "软删除场景报表"}
+        )
+        panel = VisionPanel.objects.get(id=scene_panel["id"])
+        self.scene1.delete()
+
+        with self.assertRaises(ScenePanelNotExist):
+            PublishScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
+
+        panel.refresh_from_db()
+        self.assertEqual(panel.status, "unpublished")
+
     def test_delete_published_scene_panel_should_fail(self):
         scene_panel = CreateScenePanel().request(
             {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "已上架场景报表"}
@@ -358,6 +420,27 @@ class TestPanelManagementFeatures(TestCase):
         self.assertFalse(UserPanelFavorite.objects.filter(panel_id=panel.id).exists())
         self.assertFalse(VisionPanel.objects.filter(id=panel.id).exists())
         self.assertTrue(VisionPanel.objects.filter(id=panel.id, is_deleted=True).exists())
+
+    def test_delete_scene_panel_rejects_soft_deleted_scene_binding(self):
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        panel_resp = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "软删除场景待删报表"}
+        )
+        panel = VisionPanel.objects.get(id=panel_resp["id"])
+        self.scene1.delete()
+
+        with self.assertRaises(ScenePanelNotExist):
+            DeleteScenePanel().request({"scene_id": self.scene1.scene_id, "panel_id": panel.id})
+
+        self.assertTrue(VisionPanel.objects.filter(id=panel.id).exists())
+        self.assertTrue(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.PANEL,
+                resource_id=str(panel.id),
+                binding_type=BindingType.SCENE_BINDING,
+            ).exists()
+        )
 
     def test_delete_platform_panel_clears_group_items_and_favorites(self):
         panel_resp = CreatePlatformPanel().request(
@@ -471,6 +554,44 @@ class TestPanelManagementFeatures(TestCase):
         self.assertEqual(self.scene_group.priority_index, 10)
         self.assertEqual(group2.priority_index, 9)
 
+    def test_group_order_rejects_soft_deleted_scene(self):
+        original_priority = self.scene_group.priority_index
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            UpdateSceneReportGroupOrder().request(
+                {
+                    "scene_id": self.scene1.scene_id,
+                    "groups": [{"group_id": self.scene_group.id, "priority_index": 10}],
+                }
+            )
+        self.scene_group.refresh_from_db()
+        self.assertEqual(self.scene_group.priority_index, original_priority)
+
+    def test_group_panel_order_rejects_soft_deleted_scene(self):
+        panel_resp = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "待排序报表"}
+        )
+        original_item = SceneReportGroupItem.objects.get(group=self.scene_group, panel_id=panel_resp["id"])
+        original_priority = original_item.priority_index
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "场景不存在或已删除"):
+            UpdateSceneReportGroupPanelOrder().request(
+                {
+                    "scene_id": self.scene1.scene_id,
+                    "items": [
+                        {
+                            "panel_id": panel_resp["id"],
+                            "group_id": self.scene_group.id,
+                            "priority_index": 10,
+                        }
+                    ],
+                }
+            )
+        original_item.refresh_from_db()
+        self.assertEqual(original_item.priority_index, original_priority)
+
     def test_scene_manage_viewset_has_publish_route(self):
         publish_routes = [route for route in ScenePanelManageViewSet.resource_routes if route.endpoint == "publish"]
         self.assertEqual(len(publish_routes), 1)
@@ -529,6 +650,33 @@ class TestPanelManagementFeatures(TestCase):
         self.assertEqual(items.count(), 1)
         self.assertEqual(items.first().group_id, another_group.id)
 
+    def test_update_scene_panel_rejects_soft_deleted_scene_binding(self):
+        from services.web.vision.exceptions import ScenePanelNotExist
+
+        another_group = SceneReportGroup.objects.create(
+            scene=self.scene1,
+            name="软删除后不应迁移分组",
+            group_type=ReportGroupType.CUSTOM,
+            priority_index=2,
+        )
+        created = CreateScenePanel().request(
+            {"scene_id": self.scene1.scene_id, "group_id": self.scene_group.id, "name": "软删除场景待更新报表"}
+        )
+        self.scene1.delete()
+
+        with self.assertRaises(ScenePanelNotExist):
+            UpdateScenePanel().request(
+                {
+                    "scene_id": self.scene1.scene_id,
+                    "group_id": another_group.id,
+                    "panel_id": created["id"],
+                    "name": "不应更新",
+                }
+            )
+
+        panel = VisionPanel.objects.get(id=created["id"])
+        self.assertNotEqual(panel.name, "不应更新")
+
     @patch("services.web.vision.resources.ScopePermission.get_scene_ids", return_value=[100001])
     @patch("services.web.vision.resources.ScopePermission.get_system_ids", return_value=["bk_cmdb"])
     def test_list_group_returns_empty_in_system_scope(self, *_):
@@ -571,6 +719,16 @@ class TestPanelManagementFeatures(TestCase):
             },
         )
 
+    @patch("services.web.vision.resources.get_request_username", return_value="tester")
+    @patch("services.web.vision.resources.ScopePermission.get_scene_ids")
+    def test_list_group_excludes_soft_deleted_scene_scope(self, mock_scene_ids, _):
+        mock_scene_ids.return_value = [self.scene1.scene_id]
+        self.scene1.delete()
+
+        data = ListSceneReportGroup().request({"scope_type": ScopeType.SCENE, "scope_id": self.scene1.scene_id})
+
+        self.assertEqual(data, [])
+
 
 class TestVisionIdFeature(TestCase):
     """测试 vision_id 字段在创建/更新报表时的传入与持久化"""
@@ -600,6 +758,23 @@ class TestVisionIdFeature(TestCase):
         )
         panel = VisionPanel.objects.get(id=resp["id"])
         self.assertEqual(panel.vision_id, "bk_vision_dashboard_001")
+
+    def test_create_platform_panel_rejects_soft_deleted_specific_scene(self):
+        """平台报表指定场景可见时不允许绑定软删除场景"""
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "可见性配置不合法"):
+            CreatePlatformPanel().request(
+                {
+                    "name": "软删除场景可见平台报表",
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                        "scene_ids": [self.scene1.scene_id],
+                        "system_ids": [],
+                    },
+                }
+            )
+        self.assertFalse(VisionPanel.objects.filter(name="软删除场景可见平台报表").exists())
 
     def test_create_platform_panel_without_vision_id(self):
         """创建平台报表时不传 vision_id，应为 None"""
@@ -648,6 +823,36 @@ class TestVisionIdFeature(TestCase):
         )
         panel = VisionPanel.objects.get(id=resp["id"])
         self.assertEqual(panel.vision_id, "new_vision_id")
+
+    def test_update_platform_panel_rejects_soft_deleted_specific_scene(self):
+        """平台报表更新指定场景可见时不允许绑定软删除场景"""
+        resp = CreatePlatformPanel().request(
+            {
+                "name": "待更新软删除场景可见平台报表",
+                "visibility": {
+                    "visibility_type": VisibilityScope.ALL_VISIBLE,
+                    "scene_ids": [],
+                    "system_ids": [],
+                },
+            }
+        )
+        self.scene1.delete()
+
+        with self.assertRaisesMessage(Exception, "可见性配置不合法"):
+            UpdatePlatformPanel().request(
+                {
+                    "panel_id": resp["id"],
+                    "visibility": {
+                        "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                        "scene_ids": [self.scene1.scene_id],
+                        "system_ids": [],
+                    },
+                }
+            )
+
+        binding = ResourceBinding.objects.get(resource_id=resp["id"])
+        self.assertEqual(binding.visibility_type, VisibilityScope.ALL_VISIBLE)
+        self.assertFalse(binding.binding_scenes.exists())
 
     def test_update_platform_panel_clear_vision_id(self):
         """更新平台报表时将 vision_id 置空"""

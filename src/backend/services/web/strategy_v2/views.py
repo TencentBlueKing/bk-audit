@@ -52,6 +52,7 @@ class StrategyViewSet(ResourceViewSet):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
                 binding__resource_id=str(strategy_id),
             )
