@@ -41,6 +41,8 @@ export default {
       meta: {
         title: '新建策略',
         skeleton: 'strategyCreate',
+        changeSceneIsBackedList: true, // 标识是否在切换场景后返回列表页
+        ListPageName: 'strategyList', // 切换场景后要返回的列表页路由name
       },
     },
     {
@@ -50,6 +52,8 @@ export default {
       meta: {
         title: '编辑策略',
         skeleton: 'strategyEdit',
+        changeSceneIsBackedList: true, // 标识是否在切换场景后返回列表页
+        ListPageName: 'strategyList', // 切换场景后要返回的列表页路由name
       },
     },
     {
@@ -59,6 +63,8 @@ export default {
       meta: {
         title: '克隆策略',
         skeleton: 'strategyClone',
+        changeSceneIsBackedList: true, // 标识是否在切换场景后返回列表页
+        ListPageName: 'strategyList', // 切换场景后要返回的列表页路由name
       },
     },
     {
@@ -68,6 +74,8 @@ export default {
       meta: {
         title: '升级详情',
         skeleton: 'strategyUpgrade',
+        changeSceneIsBackedList: true, // 标识是否在切换场景后返回列表页
+        ListPageName: 'strategyList', // 切换场景后要返回的列表页路由name
       },
     },
   ],
