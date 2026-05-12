@@ -115,6 +115,7 @@
 <style lang="postcss" scoped>
   .stat-cards {
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
     margin-bottom: 24px;
   }
