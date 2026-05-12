@@ -44,8 +44,9 @@ class Strategy extends ModuleBase {
   getStrategyList(params: {
     label?: string,
     name?: string,
-    page: number,
-    page_size: number
+    page?: number,
+    order_type?: string
+    page_size?: number
   }, payload = {} as IRequestPayload) {
     return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
