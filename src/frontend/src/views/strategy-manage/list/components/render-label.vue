@@ -193,7 +193,9 @@
   watch(() => props.upgradeTotal, (data) => {
     if (data !== undefined && data !== null) {
       nextTick(() => {
-        all.value[1].strategy_count = data;
+        if (all.value[1]) {
+          all.value[1].strategy_count = data;
+        }
       });
     }
   }, {
