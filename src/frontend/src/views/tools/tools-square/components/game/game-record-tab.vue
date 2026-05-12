@@ -16,47 +16,88 @@
 -->
 <template>
   <div class="game-record-tab">
-    <!-- ECharts 图表区域 -->
-    <template v-if="chartRows.length > 0">
-      <div
-        v-for="(row, rowIndex) in chartRows"
-        :key="rowIndex"
-        class="charts-section">
-        <record-pie-chart
-          v-for="(chart, chartIndex) in row"
-          :key="chartIndex"
-          :center-label="chart.centerLabel"
-          :data="chart.data"
-          :title="chart.title"
-          :total="chart.total" />
-      </div>
-    </template>
+    <!-- ECharts 图表区域 - 独立 loading -->
+    <div
+      v-if="chartLoading || chartRows.length > 0 || (!chartLoading && chartRows.length === 0)"
+      class="chart-section-wrapper">
+      <bk-loading
+        class="chart-loading-wrapper"
+        :loading="chartLoading"
+        size="small">
+        <div
+          v-if="chartLoading"
+          class="chart-loading-placeholder" />
+        <template v-else>
+          <!-- 图表有数据 -->
+          <div
+            v-if="chartRows.length > 0"
+            class="charts-content">
+            <div
+              v-for="(row, rowIndex) in chartRows"
+              :key="rowIndex"
+              class="charts-section">
+              <record-pie-chart
+                v-for="(chart, chartIndex) in row"
+                :key="chartIndex"
+                :center-label="chart.centerLabel"
+                :data="chart.data"
+                :title="chart.title"
+                :total="chart.total" />
+            </div>
+          </div>
+          <!-- 图表无数据 -->
+          <div
+            v-else
+            class="chart-empty">
+            <bk-exception
+              scene="part"
+              type="empty">
+              <div class="chart-empty-text">
+                {{ t('暂无图表数据') }}
+              </div>
+            </bk-exception>
+          </div>
+        </template>
+      </bk-loading>
+    </div>
 
-    <!-- 表格明细区域 -->
-    <record-detail-table
-      :columns="tableColumns"
-      :data="tableData"
-      :pagination="tablePagination"
-      :search-fields="searchFields"
-      :search-placeholder="searchPlaceholder"
-      :show-date-picker="showDatePicker"
-      :title="tableTitle"
-      @date-change="handleDateChange"
-      @page-change="handlePageChange"
-      @page-limit-change="handlePageLimitChange"
-      @search="handleSearch"
-      @search-condition-change="handleSearchConditionChange">
-      <!-- 透传额外筛选插槽 -->
-      <template
-        v-if="$slots['extra-filter']"
-        #extra-filter>
-        <slot name="extra-filter" />
-      </template>
-    </record-detail-table>
+    <!-- 表格明细区域 - 独立 loading，始终保留筛选框 -->
+    <bk-loading
+      class="table-loading-wrapper"
+      :loading="tableLoading"
+      size="small">
+      <div
+        v-show="tableLoading"
+        class="table-loading-placeholder" />
+      <!-- 始终渲染 record-detail-table，表格为空时由 bk-table 自身显示空状态 -->
+      <record-detail-table
+        v-show="!tableLoading"
+        :columns="tableColumns"
+        :data="tableData"
+        :pagination="tablePagination"
+        :search-fields="searchFields"
+        :search-placeholder="searchPlaceholder"
+        :show-date-picker="showDatePicker"
+        :title="tableTitle"
+        @date-change="handleDateChange"
+        @page-change="handlePageChange"
+        @page-limit-change="handlePageLimitChange"
+        @search="handleSearch"
+        @search-condition-change="handleSearchConditionChange">
+        <!-- 透传额外筛选插槽 -->
+        <template
+          v-if="$slots['extra-filter']"
+          #extra-filter>
+          <slot name="extra-filter" />
+        </template>
+      </record-detail-table>
+    </bk-loading>
   </div>
 </template>
 
 <script setup lang="ts">
+  import { useI18n } from 'vue-i18n';
+
   import type { SearchFieldItem } from './game-search-fields';
   import RecordDetailTable from './record-detail-table.vue';
   import RecordPieChart from './record-pie-chart.vue';
@@ -81,12 +122,16 @@
     searchPlaceholder: string;                        // 搜索框 placeholder
     showDatePicker?: boolean;                         // 是否显示日期选择器
     searchFields?: SearchFieldItem[];                 // 搜索字段配置
+    chartLoading?: boolean;                           // 图表区域 loading
+    tableLoading?: boolean;                           // 表格区域 loading
   }
 
   withDefaults(defineProps<Props>(), {
     chartRows: () => [],
     showDatePicker: true,
     searchFields: () => [],
+    chartLoading: false,
+    tableLoading: false,
   });
 
   const emit = defineEmits<{
@@ -96,6 +141,8 @@
     'date-change': [range: [string, string]];
     'search-condition-change': [conditions: any[]];
   }>();
+
+  const { t } = useI18n();
 
   const handlePageChange = (page: number) => {
     emit('page-change', page);
@@ -123,6 +170,46 @@
   padding-top: 16px;
 }
 
+/* 图表区域容器 */
+.chart-section-wrapper {
+  margin-bottom: 16px;
+}
+
+/* 图表区域 loading */
+.chart-loading-wrapper {
+  min-height: 100px;
+}
+
+.chart-loading-placeholder {
+  height: 200px;
+}
+
+/* 图表无数据 */
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 2px;
+
+  .chart-empty-text {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #979ba5;
+  }
+}
+
+/* 表格区域 loading */
+.table-loading-wrapper {
+  min-height: 200px;
+}
+
+.table-loading-placeholder {
+  height: 300px;
+}
+
 .charts-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -131,6 +218,10 @@
   overflow: hidden;
   background: #fff;
   border-radius: 2px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 
   :deep(.record-pie-chart) {
     min-width: 0;
