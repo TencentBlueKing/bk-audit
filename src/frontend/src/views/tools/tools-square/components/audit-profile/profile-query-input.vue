@@ -49,12 +49,13 @@
     </div>
     <div class="query-actions">
       <bk-button
-        class="mr8"
+        class="query-btn mr8"
         theme="primary"
         @click="handleQuery">
         {{ t('查询') }}
       </bk-button>
       <bk-button
+        class="query-btn"
         @click="handleReset">
         {{ t('重置') }}
       </bk-button>
@@ -221,6 +222,13 @@
 }
 
 .query-actions {
-  margin-top: 16px;
+  margin-top: 24px;
+
+  .query-btn {
+    height: 32px;
+    min-width: 88px;
+    padding: 0 20px;
+    font-size: 14px;
+  }
 }
 </style>

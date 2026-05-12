@@ -27,6 +27,30 @@ import {
 } from './game-field-keys';
 
 /**
+ * 将后端返回的 ISO 8601 时间字符串（如 "2026-04-29T08:09:09Z"）格式化为本地时间
+ * 输出格式：YYYY-MM-DD HH:mm:ss
+ * 若入参非 ISO 格式或无法解析，则原样返回
+ */
+export const formatIsoDateTime = (val: any): string => {
+  if (val === null || val === undefined || val === '') return '--';
+  const str = String(val);
+  // 仅处理 ISO 8601 格式（包含 T 和 Z 或时区偏移），其他格式原样返回
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(str)) {
+    return str;
+  }
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) return str;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+};
+
+/**
  * 创建所有游戏详情页的表格列配置
  */
 export const useGameTableColumns = () => {
@@ -72,10 +96,10 @@ export const useGameTableColumns = () => {
   const giveDetailColumns = [
     { label: () => t('赠送对象'), field: GIFT_DETAIL_FIELDS.TARGET_OPENID },
     { label: () => t('昵称'), field: GIFT_DETAIL_FIELDS.NICKNAME },
-    { label: () => t('是否员工'), field: GIFT_DETAIL_FIELDS.IS_EMPLOYEE },
+    { label: () => t('是否员工'), field: GIFT_DETAIL_FIELDS.IS_EMPLOYEE, filter: true },
     { label: () => t('赠送时间'), field: GIFT_DETAIL_FIELDS.TIME, sort: true },
     { label: () => t('大区'), field: GIFT_DETAIL_FIELDS.ZONE },
-    { label: () => t('道具ID'), field: GIFT_DETAIL_FIELDS.ITEM_ID },
+    { label: () => `${t('道具')} ID`, field: GIFT_DETAIL_FIELDS.ITEM_ID },
     { label: () => t('道具名称'), field: GIFT_DETAIL_FIELDS.ITEM_NAME },
     { label: () => `${t('赠送总额')}(${t('元')})`, field: GIFT_DETAIL_FIELDS.GIFT_AMOUNT, sort: true },
     { label: () => `${t('赠送单价')}(${t('元')})`, field: GIFT_DETAIL_FIELDS.GIFT_UNIT_PRICE, sort: true },
@@ -100,7 +124,12 @@ export const useGameTableColumns = () => {
 
   // ========== 代币发放记录明细列 ==========
   const sapDetailColumns = [
-    { label: () => t('发放时间'), field: COIN_DETAIL_FIELDS.ISSUE_TIME, sort: true },
+    {
+      label: () => t('发放时间'),
+      field: COIN_DETAIL_FIELDS.ISSUE_TIME,
+      sort: true,
+      render: ({ data }: { data: Record<string, any> }) => formatIsoDateTime(data?.[COIN_DETAIL_FIELDS.ISSUE_TIME]),
+    },
     { label: () => t('发放人'), field: COIN_DETAIL_FIELDS.ISSUER },
     { label: () => t('大区'), field: COIN_DETAIL_FIELDS.ZONE },
     { label: () => t('发放数量'), field: COIN_DETAIL_FIELDS.ISSUE_COUNT, sort: true },
