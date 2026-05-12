@@ -4,7 +4,7 @@ from collections import defaultdict
 from django.db.models import Count
 from rest_framework import serializers
 
-from core.serializers import SortListField, SortSerializerMixin
+from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from services.web.scene.binding_validation import validate_platform_visibility_payload
 from services.web.scene.constants import (
     ResourceVisibilityType,
@@ -246,7 +246,7 @@ class UpdateSceneSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=128, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), required=False)
-    users = serializers.ListField(child=serializers.CharField(), required=False)
+    users = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     systems = SceneSystemInputSerializer(many=True, required=False)
     tables = SceneTableInputSerializer(many=True, required=False)
 
@@ -258,13 +258,13 @@ class SceneInfoUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=128, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), required=False)
-    users = serializers.ListField(child=serializers.CharField(), required=False)
+    users = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 
 
 class SceneFilterSerializer(SortSerializerMixin, serializers.Serializer):
     """场景列表过滤参数"""
 
-    scene_id = serializers.IntegerField(required=False)
+    scene_id = FlexibleListField(child=serializers.IntegerField(), required=False)
     status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
     keyword = serializers.CharField(required=False, allow_blank=True)
     name = serializers.CharField(required=False, allow_blank=True)

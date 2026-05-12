@@ -185,8 +185,8 @@ class ListScene(SceneResource):
 
     def perform_request(self, validated_request_data):
         queryset = self._annotate_list_queryset(Scene.objects.all())
-        if "scene_id" in validated_request_data:
-            queryset = queryset.filter(scene_id=validated_request_data["scene_id"])
+        if validated_request_data.get("scene_id"):
+            queryset = queryset.filter(scene_id__in=validated_request_data["scene_id"])
         if "status" in validated_request_data:
             queryset = queryset.filter(status=validated_request_data["status"])
         if validated_request_data.get("name"):
