@@ -31,10 +31,17 @@ class SceneManage extends ModuleBase {
 
   // 场景列表
   getSceneList(params: {
+    description?: string;
     keyword?: string;
+    manager?: string;
+    name?: string;
     page?: number;
     page_size?: number;
+    scene_id?: string | number;
+    sort?: string[];
     status?: 'enabled' | 'disabled' | '';
+    updated_by?: string;
+    user?: string;
   } = {}, payload = {} as IRequestPayload) {
     // 过滤空值参数
     const filteredParams: Record<string, any> = {};

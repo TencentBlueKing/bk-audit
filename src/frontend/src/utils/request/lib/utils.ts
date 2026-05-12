@@ -101,7 +101,9 @@ export const paramsSerializer = (params: any) => {
     }
 
     if (isArray(val)) {
-      key = key + '[]'
+      if (key !== 'sort') {
+        key = key + '[]'
+      }
     } else {
       val = [val]
     }
