@@ -381,7 +381,7 @@ class ScopePermission:
             if policies:
                 converter = SceneDjangoQuerySetConverter()
                 filters = converter.convert(policies)
-                scene_qs = Scene.objects.filter(filters)
+                scene_qs = Scene.objects.filter(filters, status=SceneStatus.ENABLED)
                 result = list(scene_qs.values_list("scene_id", flat=True))
             else:
                 result = []
@@ -391,7 +391,7 @@ class ScopePermission:
             resource = ResourceEnum.SCENE.create_instance(scope.scope_id)
             if (
                 self.permission.is_allowed(action, [resource], raise_exception=False)
-                and Scene.objects.filter(scene_id=scope.scope_id).exists()
+                and Scene.objects.filter(scene_id=scope.scope_id, status=SceneStatus.ENABLED).exists()
             ):
                 result = [int(scope.scope_id)]
 
@@ -626,11 +626,11 @@ class ScopeInstancePermission(InstancePermission):
         resource_id = str(self._get_instance_id(request, view))
         username = get_request_username()
 
-        if self._is_resource_manager_exception(username, resource_id):
-            return True
-
         if not self._is_scene_binding_enabled(resource_id):
             return False
+
+        if self._is_resource_manager_exception(username, resource_id):
+            return True
 
         if not self._is_resource_published(resource_id):
             return False

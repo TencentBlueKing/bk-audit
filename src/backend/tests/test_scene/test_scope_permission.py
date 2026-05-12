@@ -19,6 +19,7 @@ ScopePermission 权限组件单元测试
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db.models import Q
 from django.test import RequestFactory
 
 from apps.meta.models import System
@@ -39,7 +40,7 @@ from services.web.common.scope_permission import (
     _is_scope_action,
     _is_system_action,
 )
-from services.web.scene.constants import BindingType, VisibilityScope
+from services.web.scene.constants import BindingType, SceneStatus, VisibilityScope
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -581,6 +582,37 @@ class TestScopePermissionCache(TestCase):
 
         assert result == []
 
+    @patch("services.web.common.scope_permission.Permission")
+    def test_get_scene_ids_with_disabled_single_scene_returns_empty(self, mock_perm_cls):
+        """单场景 scope 过滤停用场景"""
+        scene = Scene.objects.create(name="停用单场景", status=SceneStatus.DISABLED)
+        mock_instance = MagicMock()
+        mock_instance.is_allowed.return_value = True
+        mock_perm_cls.return_value = mock_instance
+
+        sp = ScopePermission("admin")
+        result = sp.get_scene_ids(ScopeContext(ScopeType.SCENE, scene.scene_id), ActionEnum.VIEW_SCENE)
+
+        assert result == []
+
+    @patch("services.web.common.scope_permission.SceneDjangoQuerySetConverter")
+    @patch("services.web.common.scope_permission.Permission")
+    def test_get_scene_ids_with_cross_scene_filters_disabled_scene(self, mock_perm_cls, mock_converter_cls):
+        """跨场景 scope 过滤停用场景"""
+        enabled_scene = Scene.objects.create(name="启用跨场景", status=SceneStatus.ENABLED)
+        disabled_scene = Scene.objects.create(name="停用跨场景", status=SceneStatus.DISABLED)
+        mock_instance = MagicMock()
+        mock_instance.get_policies_for_action.return_value = {"any": "policy"}
+        mock_perm_cls.return_value = mock_instance
+        mock_converter = MagicMock()
+        mock_converter.convert.return_value = Q(scene_id__in=[enabled_scene.scene_id, disabled_scene.scene_id])
+        mock_converter_cls.return_value = mock_converter
+
+        sp = ScopePermission("admin")
+        result = sp.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
+
+        assert result == [enabled_scene.scene_id]
+
     @patch("services.web.common.scope_permission.System.get_managed_system_ids", return_value=[])
     @patch("services.web.common.scope_permission.Permission")
     def test_get_system_ids_cache(self, mock_perm_cls, mock_managed):
@@ -818,6 +850,41 @@ class TestScopeInstancePermission(TestCase):
 
         perm = ScopeInstancePermission(resource_type=BindingResourceType.PANEL)
         assert isinstance(perm.resource_type, BindingResourceType)
+
+    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
+    @patch("services.web.common.scope_permission.Permission")
+    @patch("services.web.common.scope_permission.ScopePermission")
+    def test_disabled_scene_binding_rejects_before_manager_exception(
+        self,
+        mock_scope_perm_cls,
+        mock_permission_cls,
+        mock_get_username,
+    ):
+        """停用场景下的场景级资源即使是场景管理员也不能使用"""
+
+        scene = Scene.objects.create(name="停用场景", status=SceneStatus.DISABLED)
+        binding = ResourceBinding.objects.create(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="disabled_panel",
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
+        mock_permission = MagicMock()
+        mock_permission.is_allowed.return_value = True
+        mock_permission_cls.return_value = mock_permission
+
+        perm = ScopeInstancePermission(resource_type=BindingResourceType.PANEL)
+        request = _make_request(self.rf, self.user, {})
+        view = MagicMock()
+        view.kwargs = {"pk": "disabled_panel"}
+        view.lookup_url_kwarg = None
+        view.lookup_field = "pk"
+
+        result = perm.has_permission(request, view)
+
+        assert result is False
+        mock_permission.is_allowed.assert_not_called()
+        mock_scope_perm_cls.assert_not_called()
 
 
 # ==================== check_resource_permission Tests ====================

@@ -24,7 +24,11 @@ from services.web.scene.constants import (
     SceneStatus,
     VisibilityScope,
 )
-from services.web.scene.filters import CompositeScopeFilter, SceneScopeFilter
+from services.web.scene.filters import (
+    BindingMetadataHelper,
+    CompositeScopeFilter,
+    SceneScopeFilter,
+)
 from services.web.scene.models import (
     ResourceBinding,
     ResourceBindingScene,
@@ -308,7 +312,7 @@ class TestToolSceneId:
             permission_owner="admin",
         )
 
-        binding = SceneScopeFilter.create_resource_binding(
+        binding = BindingMetadataHelper.create_resource_binding(
             resource_id=str(tool.uid),
             resource_type=ResourceVisibilityType.TOOL,
             scene_id=scene.scene_id,
@@ -442,7 +446,7 @@ class TestLinkTableSceneId:
 
         before = LinkTable.objects.count()
         with mock.patch(
-            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            "services.web.scene.filters.BindingMetadataHelper.create_resource_binding",
             side_effect=RuntimeError("binding failed"),
         ):
             with pytest.raises(RuntimeError, match="binding failed"):
@@ -741,7 +745,7 @@ class TestNoticeGroupSceneFilter:
 
         before = NoticeGroup.objects.count()
         with mock.patch(
-            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            "services.web.scene.filters.BindingMetadataHelper.create_resource_binding",
             side_effect=RuntimeError("binding failed"),
         ):
             with pytest.raises(RuntimeError, match="binding failed"):
@@ -863,7 +867,7 @@ class TestProcessApplicationSceneFilter:
 
         before = ProcessApplication.objects.count()
         with mock.patch(
-            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            "services.web.scene.filters.BindingMetadataHelper.create_resource_binding",
             side_effect=RuntimeError("binding failed"),
         ):
             with pytest.raises(RuntimeError, match="binding failed"):
@@ -948,7 +952,7 @@ class TestRiskRuleSceneFilter:
 
         before = RiskRule.objects.count()
         with mock.patch(
-            "services.web.scene.filters.SceneScopeFilter.create_resource_binding",
+            "services.web.scene.filters.BindingMetadataHelper.create_resource_binding",
             side_effect=RuntimeError("binding failed"),
         ):
             with pytest.raises(RuntimeError, match="binding failed"):
@@ -1097,6 +1101,47 @@ class TestSceneScopeFilter:
             pk_field="group_id",
         )
         assert qs.count() == 0
+
+    @pytest.mark.django_db
+    def test_filter_keeps_disabled_scene_when_not_deleted(self):
+        """SceneScopeFilter 只表达系统可见性，不因停用态过滤场景资源。"""
+        scene = Scene.objects.create(name="停用但未删除场景", status=SceneStatus.DISABLED)
+        strategy = Strategy.objects.create(namespace="default", strategy_name="停用场景策略")
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene.scene_id,
+        )
+
+        qs = SceneScopeFilter.filter_queryset(
+            queryset=Strategy.objects.all(),
+            scene_id=scene.scene_id,
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
+
+        assert list(qs.values_list("strategy_id", flat=True)) == [strategy.strategy_id]
+
+    @pytest.mark.django_db
+    def test_filter_excludes_soft_deleted_scene(self):
+        """SceneScopeFilter 需要排除软删除场景绑定的资源。"""
+        scene = Scene.objects.create(name="软删除场景", status=SceneStatus.ENABLED)
+        strategy = Strategy.objects.create(namespace="default", strategy_name="软删除场景策略")
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene.scene_id,
+        )
+        scene.delete()
+
+        qs = SceneScopeFilter.filter_queryset(
+            queryset=Strategy.objects.all(),
+            scene_id=scene.scene_id,
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
+
+        assert not qs.exists()
 
 
 class TestCompositeScopeFilter:
@@ -1596,12 +1641,12 @@ class TestCreateSerializerScopeValidation:
 
 
 class TestCreateResourceBinding:
-    """SceneScopeFilter.create_resource_binding 方法测试"""
+    """BindingMetadataHelper.create_resource_binding 方法测试"""
 
     @pytest.mark.django_db
     def test_create_with_scene_id(self, scene):
         """测试传 scene_id 时创建 ResourceBindingScene"""
-        binding = SceneScopeFilter.create_resource_binding(
+        binding = BindingMetadataHelper.create_resource_binding(
             resource_id="test_001",
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=scene.scene_id,
@@ -1611,10 +1656,31 @@ class TestCreateResourceBinding:
         assert not binding.binding_systems.exists()
 
     @pytest.mark.django_db
+    def test_binding_metadata_helper_create_and_delete_resource_binding(self, scene):
+        """绑定元数据创建/删除职责由 BindingMetadataHelper 承担。"""
+        binding = BindingMetadataHelper.create_resource_binding(
+            resource_id="helper_resource",
+            resource_type=ResourceVisibilityType.TOOL,
+            scene_id=scene.scene_id,
+        )
+
+        assert binding.resource_type == ResourceVisibilityType.TOOL
+        assert binding.resource_id == "helper_resource"
+        assert binding.binding_type == BindingType.SCENE_BINDING
+        assert list(binding.binding_scenes.values_list("scene_id", flat=True)) == [scene.scene_id]
+
+        deleted_count = BindingMetadataHelper.delete_resource_binding(
+            resource_id="helper_resource",
+            resource_type=ResourceVisibilityType.TOOL,
+        )
+        assert deleted_count == 2
+        assert not ResourceBinding.objects.filter(resource_id="helper_resource").exists()
+
+    @pytest.mark.django_db
     def test_create_without_scene_id_raises(self):
         """测试不传 scene_id 时抛出 ValueError"""
         with pytest.raises(ValueError, match="scene_id 为必传参数"):
-            SceneScopeFilter.create_resource_binding(
+            BindingMetadataHelper.create_resource_binding(
                 resource_id="test_004",
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=None,
@@ -1626,7 +1692,7 @@ class TestCreateResourceBinding:
         scene.delete()
 
         with pytest.raises(ValueError, match="scene_id 不存在或已删除"):
-            SceneScopeFilter.create_resource_binding(
+            BindingMetadataHelper.create_resource_binding(
                 resource_id="test_deleted_scene",
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=scene.scene_id,
@@ -1635,7 +1701,7 @@ class TestCreateResourceBinding:
 
 
 class TestDeleteResourceBinding:
-    """SceneScopeFilter.delete_resource_binding 方法测试"""
+    """BindingMetadataHelper.delete_resource_binding 方法测试"""
 
     @pytest.mark.django_db
     def test_delete_binding_cascades_related_records(self, scene):
@@ -1648,7 +1714,7 @@ class TestDeleteResourceBinding:
         ResourceBindingScene.objects.create(binding=binding, scene_id=scene.scene_id)
         ResourceBindingSystem.objects.create(binding=binding, system_id="bk_audit")
 
-        deleted_count = SceneScopeFilter.delete_resource_binding(
+        deleted_count = BindingMetadataHelper.delete_resource_binding(
             resource_id="test_delete_001",
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
         )
