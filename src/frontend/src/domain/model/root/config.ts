@@ -30,6 +30,7 @@ export default class Config {
   iegsec_helper: string;
   username: string;
   title: string;
+  platform_admin_users: string[];
   footer: Array<{
     type: string;
     type_description: string;
@@ -93,6 +94,7 @@ export default class Config {
     this.username = payload.username;
     this.footer = payload.footer || [];
     this.title = payload.title;
+    this.platform_admin_users = payload.platform_admin_users || [];
     this.copyright = payload.copyright;
     this.version = payload.version;
     this.site_title = payload.site_title;

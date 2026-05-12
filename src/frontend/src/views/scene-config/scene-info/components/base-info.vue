@@ -58,9 +58,14 @@
                   :data="row.rawValue"
                   :max="5" />
                 <audit-icon
+                  v-if="canEdit && savingField !== row.key"
                   class="edit-icon"
                   type="edit-fill"
                   @click="handleUserEdit(row.key, row.rawValue)" />
+                <audit-icon
+                  v-else-if="savingField === row.key"
+                  class="edit-loading"
+                  type="loading" />
               </span>
             </template>
             <!-- 可编辑字段：编辑态 -->
@@ -77,9 +82,14 @@
               class="user-info">
               {{ row.value }}
               <audit-icon
+                v-if="canEdit && savingField !== row.key"
                 class="edit-icon"
                 type="edit-fill"
                 @click="handleEdit(row.key, row.value)" />
+              <audit-icon
+                v-else-if="savingField === row.key"
+                class="edit-loading"
+                type="loading" />
             </span>
             <!-- 普通字段 -->
             <template v-else>
@@ -112,8 +122,10 @@
     updatedAt: string;
   }
 
-  const props = defineProps<{
+  const { sceneData, savingField, canEdit } = defineProps<{
     sceneData: SceneData;
+    savingField: string;
+    canEdit: boolean;
   }>();
 
   const emit = defineEmits<{
@@ -125,47 +137,47 @@
     {
       key: 'id',
       label: t('场景ID'),
-      value: props.sceneData.id,
+      value: sceneData.id,
       editable: false,
     },
     {
       key: 'name',
       label: t('场景名称'),
-      value: props.sceneData.name,
+      value: sceneData.name,
       editable: false,
     },
     {
       key: 'description',
       label: t('场景描述'),
-      value: props.sceneData.description,
-      editable: false,
+      value: sceneData.description,
+      editable: true,
     },
     {
       key: 'manager',
       label: t('场景管理员'),
-      value: props.sceneData.manager?.join('、') || '--',
-      rawValue: props.sceneData.manager || [],
+      value: sceneData.manager?.join('、') || '--',
+      rawValue: sceneData.manager || [],
       tooltip: t('拥有场景的完整管理权限，包括策略配置、数据源管理、成员管理等'),
       type: 'user-selector',
     },
     {
       key: 'users',
       label: t('场景使用者'),
-      value: props.sceneData.users?.join('、') || '--',
-      rawValue: props.sceneData.users || [],
+      value: sceneData.users?.join('、') || '--',
+      rawValue: sceneData.users || [],
       tooltip: t('拥有场景下资源的只读使用权限（检索、报表、工具），无法更改场景配置'),
       type: 'user-selector',
     },
     {
       key: 'updatedBy',
       label: t('更新人'),
-      value: props.sceneData.updatedBy,
+      value: sceneData.updatedBy,
       editable: false,
     },
     {
       key: 'updatedAt',
       label: t('更新时间'),
-      value: props.sceneData.updatedAt,
+      value: sceneData.updatedAt,
       editable: false,
     },
   ]);
@@ -192,13 +204,13 @@
   // 普通文本字段保存
   const handleSave = (key: string) => {
     // 值未变化时不触发更新
-    const originalValue = String((props.sceneData as any)[key] ?? '');
+    const originalValue = String((sceneData as any)[key] ?? '');
     if (editValue.value === originalValue) {
       editingField.value = '';
       return;
     }
     emit('update:sceneData', {
-      ...props.sceneData,
+      ...sceneData,
       [key]: editValue.value,
     });
     editingField.value = '';
@@ -213,7 +225,7 @@
   // 人员选择字段保存
   const handleUserSave = (key: string) => {
     // 值未变化时不触发更新
-    const originalValue = (props.sceneData as any)[key] || [];
+    const originalValue = (sceneData as any)[key] || [];
     const isSame = originalValue.length === editUserValue.value.length
       && originalValue.every((item: string, index: number) => item === editUserValue.value[index]);
     if (isSame) {
@@ -221,7 +233,7 @@
       return;
     }
     emit('update:sceneData', {
-      ...props.sceneData,
+      ...sceneData,
       [key]: editUserValue.value,
     });
     editingField.value = '';
@@ -229,6 +241,11 @@
 </script>
 
 <style lang="postcss" scoped>
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
   .section {
     padding: 16px 24px 24px;
     margin-bottom: 24px;
@@ -263,6 +280,14 @@
     &:hover {
       color: #3a84ff;
     }
+  }
+
+  .edit-loading {
+    flex-shrink: 0;
+    margin-left: 4px;
+    font-size: 14px;
+    color: #3a84ff;
+    animation: spin 1s linear infinite;
   }
 
   .inline-edit-input {

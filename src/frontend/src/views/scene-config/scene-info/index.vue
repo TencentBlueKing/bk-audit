@@ -30,6 +30,8 @@
 
         <!-- 基础信息 -->
         <base-info
+          :can-edit="canEdit"
+          :saving-field="savingField"
           :scene-data="sceneData"
           @update:scene-data="handleUpdateSceneData" />
 
@@ -40,7 +42,7 @@
           resizable
           stripe
           :title="t('关联系统')"
-          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员')" />
+          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员: ') + configData.platform_admin_users.join(',')" />
 
         <!-- 关联数据报表 -->
         <scene-table
@@ -49,7 +51,8 @@
           resizable
           stripe
           :title="t('关联数据报表')"
-          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员')" />
+          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
+            + configData.platform_admin_users.join(',')" />
       </div>
     </bk-loading>
   </skeleton-loading>
@@ -61,9 +64,11 @@
   import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
+  import RootManageService from '@service/root-manage';
   import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
+  import ConfigModel from '@model/root/config';
   import SceneModel from '@model/scene/scene';
 
   import useEventBus from '@hooks/use-event-bus';
@@ -86,6 +91,29 @@
   const isSkeletonLoading = ref(true);
   // 页面整体 loading 状态（切换场景时）
   const pageLoading = ref(false);
+  // 基础信息字段保存 loading 状态
+  const savingField = ref('');
+
+  // 是否有编辑权限：平台管理或场景管理权限
+  const canEdit = computed(() => {
+    try {
+      const permissionStr = sessionStorage.getItem('userScenePermission');
+      if (permissionStr) {
+        const permission = JSON.parse(permissionStr);
+        return !!(permission.manage_platform || permission.manage_scene);
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  });
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 
   const {
     data: sceneInfoData,
@@ -250,6 +278,11 @@
 
   // 更新场景数据（来自基础信息组件的行内编辑）
   const handleUpdateSceneData = (newData: any) => {
+    // 确定正在编辑的字段 key，用于显示 loading 状态
+    const changedField = Object.keys(newData).find(key => key !== 'id' && key !== 'updatedBy' && key !== 'updatedAt'
+      && newData[key] !== (sceneInfoData.value as any)[key]) || '';
+    savingField.value = changedField;
+
     // 构建更新参数，将前端字段映射回后端字段
     const updateParams: Record<string, any> = {
       sceneId: sceneInfoData.value.scene_id,
@@ -267,7 +300,10 @@
     if (newData.description !== undefined) {
       updateParams.description = newData.description;
     }
-    fetchUpdateSceneInfo(updateParams);
+    fetchUpdateSceneInfo(updateParams)
+      .finally(() => {
+        savingField.value = '';
+      });
   };
 
   // 跳转到审计策略列表页（携带 strategy_ids）
