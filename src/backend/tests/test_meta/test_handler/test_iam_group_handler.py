@@ -335,67 +335,37 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
             SceneResource._sync_iam_group_members(scene, {"managers": ["new_admin"], "users": ["new_user"]})
             self.assertEqual(mock_sync.call_count, 2)
 
-    def test_missing_users_clears_viewer_group(self):
-        """测试缺失 users 字段时按空列表清空使用用户组"""
+    def test_missing_users_does_not_sync_viewer_group(self):
+        """测试缺失 users 字段时不会同步使用用户组"""
         from services.web.scene.resources import SceneResource
 
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
             SceneResource._sync_iam_group_members(scene, {"name": "新名称"})
-            mock_sync.assert_called_once_with(
-                group_id=1002,
-                members=[],
-                group_name=f"{scene.name}-使用用户组",
-                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-                scene_id=str(scene.scene_id),
-                scene_name=scene.name,
-            )
+            mock_sync.assert_not_called()
 
-    def test_no_managers_or_users_skips(self):
-        """测试不包含 managers/users 时仍会按空列表同步使用用户组"""
+    def test_no_managers_or_users_skips_sync(self):
+        """测试不包含 managers/users 时不会触发任何用户组同步"""
         from services.web.scene.resources import SceneResource
 
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
             SceneResource._sync_iam_group_members(scene, {"name": "新名称"})
-            mock_sync.assert_called_once_with(
-                group_id=1002,
-                members=[],
-                group_name=f"{scene.name}-使用用户组",
-                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-                scene_id=str(scene.scene_id),
-                scene_name=scene.name,
-            )
+            mock_sync.assert_not_called()
 
-    def test_missing_users_still_calls_sync(self):
-        """测试缺失 users 字段时仍会同步管理组，并按空列表同步使用用户组"""
+    def test_missing_users_only_syncs_manager_group(self):
+        """测试缺失 users 字段时仅同步管理用户组"""
         from services.web.scene.resources import SceneResource
 
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
             SceneResource._sync_iam_group_members(scene, {"managers": ["new_admin"]})
-            self.assertEqual(mock_sync.call_count, 2)
-            mock_sync.assert_has_calls(
-                [
-                    mock.call(
-                        group_id=1001,
-                        members=["new_admin"],
-                        group_name=f"{scene.name}-管理用户组",
-                        group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
-                        group_actions=SCENE_MANAGER_GROUP_ACTIONS,
-                        scene_id=str(scene.scene_id),
-                        scene_name=scene.name,
-                    ),
-                    mock.call(
-                        group_id=1002,
-                        members=[],
-                        group_name=f"{scene.name}-使用用户组",
-                        group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-                        group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-                        scene_id=str(scene.scene_id),
-                        scene_name=scene.name,
-                    ),
-                ]
+            mock_sync.assert_called_once_with(
+                group_id=1001,
+                members=scene.managers,
+                group_name=f"{scene.name}-管理用户组",
+                group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
             )
