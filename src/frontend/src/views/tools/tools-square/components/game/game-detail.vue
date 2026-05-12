@@ -62,51 +62,60 @@
       </div>
       <bk-popover
         ref="exportPopoverRef"
+        ext-cls="export-popover-wrapper"
         :is-show="isExportPopoverShow"
         placement="bottom-end"
         theme="light"
-        trigger="click"
-        :width="340"
-        @after-hidden="isExportPopoverShow = false">
+        trigger="manual"
+        :width="340">
         <bk-button
           class="export-btn"
-          @click="isExportPopoverShow = !isExportPopoverShow">
+          @click.stop="isExportPopoverShow = !isExportPopoverShow">
           <audit-icon
             style="margin-right: 4px;"
             type="download" />
           {{ t('导出') }}
         </bk-button>
         <template #content>
-          <div class="export-popover-content">
-            <div class="export-popover-title">
-              {{ t('导出游戏审计数据') }}
-            </div>
-            <div class="export-form-item">
-              <div class="export-form-label">
-                {{ t('时间范围') }}
-                <span class="required-star">*</span>
+          <div
+            class="export-popover-content"
+            @click.stop>
+            <div class="export-popover-body">
+              <div class="export-popover-title">
+                {{ t('导出游戏审计数据') }}
               </div>
-              <bk-date-picker
-                v-model="exportDateRange"
-                :placeholder="t('选择时间范围')"
-                style="width: 100%"
-                type="daterange" />
-            </div>
-            <div class="export-form-item">
-              <div class="export-form-label">
-                {{ t('导出内容') }}
-                <span class="required-star">*</span>
-              </div>
-              <bk-checkbox-group v-model="exportContentChecked">
-                <div class="export-checkbox-grid">
-                  <bk-checkbox
-                    v-for="item in exportContentOptions"
-                    :key="item.id"
-                    :label="item.id">
-                    {{ item.name }}
-                  </bk-checkbox>
+              <div class="export-form-item">
+                <div class="export-form-label">
+                  {{ t('时间范围') }}
+                  <span class="required-star">*</span>
                 </div>
-              </bk-checkbox-group>
+                <bk-date-picker
+                  v-model="exportDateRange"
+                  append-to-body
+                  :clearable="false"
+                  :shortcut-selected-index="exportShortcutSelectedIndex"
+                  :shortcuts="exportDateShortcuts"
+                  style="width: 100%"
+                  type="daterange"
+                  use-shortcut-text />
+              </div>
+              <div class="export-form-item">
+                <div class="export-form-label">
+                  {{ t('导出内容') }}
+                  <span class="required-star">*</span>
+                </div>
+                <bk-checkbox-group v-model="exportContentChecked">
+                  <div class="export-checkbox-grid">
+                    <bk-checkbox
+                      v-for="item in exportContentOptions"
+                      :key="item.id"
+                      :disabled="item.disabled"
+                      :label="item.id">
+                      {{ item.name }}
+                    </bk-checkbox>
+                  </div>
+                </bk-checkbox-group>
+              </div>
             </div>
             <div class="export-popover-footer">
               <bk-button
@@ -132,67 +141,76 @@
         <bk-tab-panel
           :label="t('概览')"
           name="overview">
-          <!-- 概览内容 -->
-          <bk-loading
-            class="tab-loading-wrapper"
-            :loading="overviewLoading">
-            <!-- loading时的占位元素，擑开容器高度使loading居中 -->
+          <!-- 概览内容 - 每个 section 独立骨架屏 -->
+          <div class="overview-content">
             <div
-              v-if="overviewLoading"
-              class="loading-placeholder" />
-            <bk-exception
-              v-if="!overviewLoading && isOverviewEmpty"
-              class="tab-empty"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
-            <div
-              v-else-if="!overviewLoading"
-              class="overview-content">
+              v-for="section in overviewSections"
+              :key="section.key"
+              class="section">
+              <!-- 标题行（始终显示） -->
               <div
-                v-for="section in overviewSections"
-                :key="section.key"
-                class="section">
-                <!-- 标题行 -->
-                <div
-                  v-if="section.tabKey"
-                  class="section-title-row">
-                  <span class="section-title">{{ section.title }}</span>
-                  <span
-                    class="view-detail-link"
-                    @click="activeTab = section.tabKey">
-                    {{ t('查看详情') }}
-                    <audit-icon type="jump-link" />
-                  </span>
-                </div>
-                <div
-                  v-else
-                  class="section-title">
-                  {{ section.title }}
-                </div>
-
-                <!-- 最近记录行 -->
-                <div
-                  v-if="section.lastRecordItems?.length"
-                  class="last-record-row">
-                  <span
-                    v-for="item in section.lastRecordItems"
-                    :key="item.label"
-                    class="record-item">
-                    <span class="record-label">{{ item.label }}：</span>
-                    <span class="record-value">{{ item.value }}</span>
-                  </span>
-                </div>
-
-                <!-- 表格（simple 模式） -->
-                <record-detail-table
-                  v-if="section.table"
-                  :columns="section.table.columns"
-                  :data="section.table.data"
-                  simple />
+                v-if="section.tabKey"
+                class="section-title-row">
+                <span class="section-title">{{ section.title }}</span>
+                <span
+                  class="view-detail-link"
+                  @click="activeTab = section.tabKey">
+                  {{ t('查看详情') }}
+                  <audit-icon type="jump-link" />
+                </span>
               </div>
+              <div
+                v-else
+                class="section-title">
+                {{ section.title }}
+              </div>
+
+              <!-- loading 时显示简洁占位 -->
+              <div
+                v-if="sectionLoadingMap[section.key]"
+                class="section-skeleton">
+                <bk-loading
+                  loading
+                  size="small" />
+              </div>
+
+              <template v-else>
+                <!-- 该 section 无数据时显示空提示 -->
+                <div
+                  v-if="isSectionEmpty(section.key)"
+                  class="section-empty">
+                  <bk-exception
+                    scene="part"
+                    type="empty">
+                    <div class="section-empty-text">
+                      {{ t('暂无数据') }}
+                    </div>
+                  </bk-exception>
+                </div>
+                <template v-else>
+                  <!-- 最近记录行 -->
+                  <div
+                    v-if="section.lastRecordItems?.length"
+                    class="last-record-row">
+                    <span
+                      v-for="item in section.lastRecordItems"
+                      :key="item.label"
+                      class="record-item">
+                      <span class="record-label">{{ item.label }}：</span>
+                      <span class="record-value">{{ item.value }}</span>
+                    </span>
+                  </div>
+
+                  <!-- 表格（simple 模式） -->
+                  <record-detail-table
+                    v-if="section.table"
+                    :columns="section.table.columns"
+                    :data="section.table.data"
+                    simple />
+                </template>
+              </template>
             </div>
-          </bk-loading>
+          </div>
         </bk-tab-panel>
 
         <bk-tab-panel
@@ -200,44 +218,31 @@
           :key="tab.key"
           :label="tab.label"
           :name="tab.key">
-          <bk-loading
-            class="tab-loading-wrapper"
-            :loading="tabLoadingMap[tab.key]">
-            <!-- loading时的占位元素，擑开容器高度使loading居中 -->
-            <div
-              v-if="tabLoadingMap[tab.key]"
-              class="loading-placeholder" />
-            <bk-exception
-              v-if="!tabLoadingMap[tab.key] && isTabEmpty(tab.key)"
-              class="tab-empty"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
-            <game-record-tab
-              v-else-if="!tabLoadingMap[tab.key]"
-              :chart-rows="tab.chartRows"
-              :search-fields="tab.searchFields"
-              :search-placeholder="tab.searchPlaceholder"
-              :table-columns="tab.table.columns"
-              :table-data="tab.table.data"
-              :table-pagination="tab.table.pagination"
-              :table-title="tab.table.title"
-              @date-change="handleTabDateChange(tab.key, $event)"
-              @page-change="handleTabPageChange(tab.key, $event)"
-              @page-limit-change="handleTabPageLimitChange(tab.key, $event)"
-              @search-condition-change="handleTabSearchConditionChange(tab.key, $event)">
-              <!-- 插槽控制 -->
-              <template
-                v-if="tab.extraFilter === 'chatViolation'"
-                #extra-filter>
-                <bk-checkbox
-                  v-model="chatSuspectedViolation"
-                  class="suspected-violation-checkbox">
-                  {{ t('疑似违规') }}
-                </bk-checkbox>
-              </template>
-            </game-record-tab>
-          </bk-loading>
+          <game-record-tab
+            :chart-loading="tabChartLoadingMap[tab.key]"
+            :chart-rows="tab.chartRows"
+            :search-fields="tab.searchFields"
+            :search-placeholder="tab.searchPlaceholder"
+            :table-columns="tab.table.columns"
+            :table-data="tab.table.data"
+            :table-loading="tabTableLoadingMap[tab.key]"
+            :table-pagination="tab.table.pagination"
+            :table-title="tab.table.title"
+            @date-change="handleTabDateChange(tab.key, $event)"
+            @page-change="handleTabPageChange(tab.key, $event)"
+            @page-limit-change="handleTabPageLimitChange(tab.key, $event)"
+            @search-condition-change="handleTabSearchConditionChange(tab.key, $event)">
+            <!-- 插槽控制 -->
+            <template
+              v-if="tab.extraFilter === 'chatViolation'"
+              #extra-filter>
+              <bk-checkbox
+                v-model="chatSuspectedViolation"
+                class="suspected-violation-checkbox">
+                {{ t('疑似违规') }}
+              </bk-checkbox>
+            </template>
+          </game-record-tab>
         </bk-tab-panel>
       </bk-tab>
     </div>
@@ -245,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue';
+  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import * as XLSX from 'xlsx';
 
@@ -516,8 +521,8 @@
       title: t('赠送记录'),
       tabKey: 'gift',
       lastRecordItems: [
-        { label: t('最近一次赠送时间'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_TIME] || '--' },
-        { label: t('赠送账号'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_TARGET] || lastGiveRecord.value[GIFT_DETAIL_FIELDS.TARGET_OPENID] || '--' },
+        { label: t('最近一次赠送时间'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.TIME] || '--' },
+        { label: t('赠送账号'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.TARGET_OPENID] || '--' },
         { label: t('道具名称'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.ITEM_NAME] || '--' },
         { label: t('赠送总额'), value: lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_AMOUNT] ? `${lastGiveRecord.value[GIFT_DETAIL_FIELDS.GIFT_AMOUNT]} 元` : '--' },
       ],
@@ -865,20 +870,9 @@
     lastChatRecord.value = chatResults[0] || {};
   };
 
-  // 概览 loading 状态
-  const overviewLoading = ref(false);
-
-  // 概览是否为空（所有数据都没有）
-  const isOverviewEmpty = computed(() => roleList.value.length === 0
-    && loginStatList.value.length === 0
-    && Object.keys(lastLoginRecord.value).length === 0
-    && Object.keys(lastGiveRecord.value).length === 0
-    && Object.keys(lastDealRecord.value).length === 0
-    && Object.keys(lastSapRecord.value).length === 0
-    && Object.keys(lastChatRecord.value).length === 0);
-
-  // 各明细 Tab loading 状态
-  const tabLoadingMap = ref<Record<string, boolean>>({
+  // ========== 概览各 section 独立 loading 状态 ==========
+  const sectionLoadingMap = ref<Record<string, boolean>>({
+    role: false,
     login: false,
     gift: false,
     trade: false,
@@ -886,139 +880,203 @@
     chat: false,
   });
 
-  // 判断某个 Tab 是否为空
-  const isTabEmpty = (tabKey: string): boolean => {
-    switch (tabKey) {
+  // 判断某个概览 section 是否为空
+  const isSectionEmpty = (sectionKey: string): boolean => {
+    switch (sectionKey) {
+    case 'role':
+      return roleList.value.length === 0;
     case 'login':
-      return loginGroupStats.value.length === 0 && loginDetailList.value.length === 0;
+      return loginStatList.value.length === 0
+        && Object.keys(lastLoginRecord.value).length === 0;
     case 'gift':
-      return giveGroupStats.value.length === 0 && giveDetailList.value.length === 0;
+      return Object.keys(lastGiveRecord.value).length === 0;
     case 'trade':
-      return dealGroupStats.value.length === 0 && dealDetailList.value.length === 0;
+      return Object.keys(lastDealRecord.value).length === 0;
     case 'coin':
-      return sapGroupStats.value.length === 0 && sapDetailList.value.length === 0;
+      return Object.keys(lastSapRecord.value).length === 0;
     case 'chat':
-      return chatDetailList.value.length === 0;
+      return Object.keys(lastChatRecord.value).length === 0;
     default:
       return false;
     }
   };
 
-  // 加载所有概览数据
-  const fetchOverviewData = async () => {
+  // 各明细 Tab 图表区域 loading 状态
+  const tabChartLoadingMap = ref<Record<string, boolean>>({
+    login: false,
+    gift: false,
+    trade: false,
+    coin: false,
+    chat: false,
+  });
+
+  // 各明细 Tab 表格区域 loading 状态
+  const tabTableLoadingMap = ref<Record<string, boolean>>({
+    login: false,
+    gift: false,
+    trade: false,
+    coin: false,
+    chat: false,
+  });
+
+  // 加载所有概览数据（每个数据源独立 loading，互不阻塞）
+  const fetchOverviewData = () => {
     if (!props.toolUid || !props.gameData.openid) return;
-    overviewLoading.value = true;
-    try {
-      await Promise.all([
-        fetchOverviewRoleStats(),
-        fetchOverviewLoginStats(),
-        fetchOverviewLastRecords(),
-      ]);
-    } finally {
-      overviewLoading.value = false;
-    }
+
+    // 角色总览 - 独立 loading
+    sectionLoadingMap.value.role = true;
+    fetchOverviewRoleStats().finally(() => {
+      sectionLoadingMap.value.role = false;
+    });
+
+    // 登录统计 - 独立 loading
+    sectionLoadingMap.value.login = true;
+    fetchOverviewLoginStats().finally(() => {
+      sectionLoadingMap.value.login = false;
+    });
+
+    // 最近记录（5个接口并行，但共享 loading 状态按 section 拆分）
+    // gift/trade/coin/chat 的最近记录都在 fetchOverviewLastRecords 中一起请求
+    sectionLoadingMap.value.gift = true;
+    sectionLoadingMap.value.trade = true;
+    sectionLoadingMap.value.coin = true;
+    sectionLoadingMap.value.chat = true;
+    fetchOverviewLastRecords().finally(() => {
+      sectionLoadingMap.value.gift = false;
+      sectionLoadingMap.value.trade = false;
+      sectionLoadingMap.value.coin = false;
+      sectionLoadingMap.value.chat = false;
+    });
   };
 
-  // ========== 明细 Tab 接口调用 ==========
+  // ========== 明细 Tab 接口调用（图表和表格分开 loading） ==========
   // 登录记录
   const fetchLoginData = async () => {
-    tabLoadingMap.value.login = true;
-    try {
-      const range = detailDateRange.value.login;
-      const baseParams = {
-        detail_startdate_Ymd: range.start,
-        detail_enddate_Ymd: range.end,
-        selected_gameid: props.gameData.gameid,
-        selected_openid: props.gameData.openid,
-      };
-      const [groupRes, detailRes] = await Promise.all([
-        executeDataSource('login_groupdim_stats', baseParams),
-        executeDataSource('login_detail_list', baseParams),
-      ]);
+    const range = detailDateRange.value.login;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+
+    // 图表数据 - 独立 loading
+    tabChartLoadingMap.value.login = true;
+    executeDataSource('login_groupdim_stats', baseParams).then((groupRes) => {
       loginGroupStats.value = extractResults(groupRes);
+    })
+      .finally(() => {
+        tabChartLoadingMap.value.login = false;
+      });
+
+    // 表格数据 - 独立 loading
+    tabTableLoadingMap.value.login = true;
+    executeDataSource('login_detail_list', baseParams).then((detailRes) => {
       loginDetailList.value = extractResults(detailRes);
       loginPagination.value.count = loginDetailList.value.length;
-    } finally {
-      tabLoadingMap.value.login = false;
-    }
+    })
+      .finally(() => {
+        tabTableLoadingMap.value.login = false;
+      });
   };
 
   // 赠送记录
   const fetchGiveData = async () => {
-    tabLoadingMap.value.gift = true;
-    try {
-      const dp = getDateParams();
-      const range = detailDateRange.value.gift;
-      const [groupRes, detailRes] = await Promise.all([
-        executeDataSource('give_groupdim_stats', {
-          detail_startdate_Ymd: range.start,
-          detail_enddate_Ymd: range.end,
-          selected_gameid: props.gameData.gameid,
-          selected_openid: props.gameData.openid,
-        }),
-        executeDataSource('give_detail_list', {
-          one_year_ago_Ymd: dp.one_year_ago_Ymd,
-          selected_gameid: props.gameData.gameid,
-          selected_openid: props.gameData.openid,
-        }),
-      ]);
+    const dp = getDateParams();
+    const range = detailDateRange.value.gift;
+
+    // 图表数据 - 独立 loading
+    tabChartLoadingMap.value.gift = true;
+    executeDataSource('give_groupdim_stats', {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    }).then((groupRes) => {
       giveGroupStats.value = extractResults(groupRes);
+    })
+      .finally(() => {
+        tabChartLoadingMap.value.gift = false;
+      });
+
+    // 表格数据 - 独立 loading
+    tabTableLoadingMap.value.gift = true;
+    executeDataSource('give_detail_list', {
+      one_year_ago_Ymd: dp.one_year_ago_Ymd,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    }).then((detailRes) => {
       giveDetailList.value = extractResults(detailRes);
       giftPagination.value.count = giveDetailList.value.length;
-    } finally {
-      tabLoadingMap.value.gift = false;
-    }
+    })
+      .finally(() => {
+        tabTableLoadingMap.value.gift = false;
+      });
   };
 
   // 交易记录
   const fetchDealData = async () => {
-    tabLoadingMap.value.trade = true;
-    try {
-      const range = detailDateRange.value.trade;
-      const baseParams = {
-        detail_startdate_Ymd: range.start,
-        detail_enddate_Ymd: range.end,
-        selected_gameid: props.gameData.gameid,
-        selected_openid: props.gameData.openid,
-      };
-      const [groupRes, detailRes] = await Promise.all([
-        executeDataSource('deal_groupdim_stats', baseParams),
-        executeDataSource('deal_detail_list', baseParams),
-      ]);
+    const range = detailDateRange.value.trade;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+
+    // 图表数据 - 独立 loading
+    tabChartLoadingMap.value.trade = true;
+    executeDataSource('deal_groupdim_stats', baseParams).then((groupRes) => {
       dealGroupStats.value = extractResults(groupRes);
+    })
+      .finally(() => {
+        tabChartLoadingMap.value.trade = false;
+      });
+
+    // 表格数据 - 独立 loading
+    tabTableLoadingMap.value.trade = true;
+    executeDataSource('deal_detail_list', baseParams).then((detailRes) => {
       dealDetailList.value = extractResults(detailRes);
       tradePagination.value.count = dealDetailList.value.length;
-    } finally {
-      tabLoadingMap.value.trade = false;
-    }
+    })
+      .finally(() => {
+        tabTableLoadingMap.value.trade = false;
+      });
   };
 
   // 发放记录
   const fetchSapData = async () => {
-    tabLoadingMap.value.coin = true;
-    try {
-      const range = detailDateRange.value.coin;
-      const baseParams = {
-        detail_startdate_Ymd: range.start,
-        detail_enddate_Ymd: range.end,
-        selected_gameid: props.gameData.gameid,
-        selected_openid: props.gameData.openid,
-      };
-      const [groupRes, detailRes] = await Promise.all([
-        executeDataSource('sap_groupdim_stats', baseParams),
-        executeDataSource('sap_detail_list', baseParams),
-      ]);
+    const range = detailDateRange.value.coin;
+    const baseParams = {
+      detail_startdate_Ymd: range.start,
+      detail_enddate_Ymd: range.end,
+      selected_gameid: props.gameData.gameid,
+      selected_openid: props.gameData.openid,
+    };
+
+    // 图表数据 - 独立 loading
+    tabChartLoadingMap.value.coin = true;
+    executeDataSource('sap_groupdim_stats', baseParams).then((groupRes) => {
       sapGroupStats.value = extractResults(groupRes);
+    })
+      .finally(() => {
+        tabChartLoadingMap.value.coin = false;
+      });
+
+    // 表格数据 - 独立 loading
+    tabTableLoadingMap.value.coin = true;
+    executeDataSource('sap_detail_list', baseParams).then((detailRes) => {
       sapDetailList.value = extractResults(detailRes);
       coinPagination.value.count = sapDetailList.value.length;
-    } finally {
-      tabLoadingMap.value.coin = false;
-    }
+    })
+      .finally(() => {
+        tabTableLoadingMap.value.coin = false;
+      });
   };
 
-  // 聊天记录
+  // 聊天记录（无图表，只有表格）
   const fetchChatData = async () => {
-    tabLoadingMap.value.chat = true;
+    tabTableLoadingMap.value.chat = true;
     try {
       const range = detailDateRange.value.chat;
       const res = await executeDataSource('chat_detail_list', {
@@ -1031,7 +1089,7 @@
       chatDetailList.value = extractResults(res);
       chatPagination.value.count = chatDetailList.value.length;
     } finally {
-      tabLoadingMap.value.chat = false;
+      tabTableLoadingMap.value.chat = false;
     }
   };
 
@@ -1133,27 +1191,100 @@
   const isExportPopoverShow = ref(false);
   const isExporting = ref(false);
 
-  // 默认时间范围：最近半年
-  const getDefaultExportDateRange = (): [Date, Date] => {
-    const now = new Date();
-    const halfYearAgo = new Date(now);
-    halfYearAgo.setMonth(halfYearAgo.getMonth() - 6);
-    return [halfYearAgo, now];
-  };
-  const exportDateRange = ref<[Date, Date]>(getDefaultExportDateRange());
+  // 导出时间范围快捷选项
+  interface ExportShortcut {
+    text: string;
+    value: () => [Date, Date];
+  }
+  const exportDateShortcuts: ExportShortcut[] = [
+    {
+      text: t('最近一周'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 7);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近一个月'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 1);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近三个月'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 3);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近半年'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 6);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近一年'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setFullYear(start.getFullYear() - 1);
+        return [start, end];
+      },
+    },
+  ];
+  // 默认选中“最近半年”（index = 3）
+  const exportShortcutSelectedIndex = ref(3);
+  const exportDateRange = ref<[Date, Date]>(exportDateShortcuts[3].value());
 
-  // 导出内容选项
+  // 导出内容选项（用户信息、游戏角色为必选项，禁用不可取消）
   const exportContentOptions = [
-    { id: 'userInfo', name: t('用户信息') },
-    { id: 'gameRole', name: t('游戏角色') },
-    { id: 'login', name: t('登录记录') },
-    { id: 'gift', name: t('赠送记录') },
-    { id: 'trade', name: t('交易记录') },
-    { id: 'coin', name: t('代币发放记录') },
-    { id: 'chat', name: t('聊天记录') },
+    { id: 'userInfo', name: t('用户信息'), disabled: true },
+    { id: 'gameRole', name: t('游戏角色'), disabled: true },
+    { id: 'login', name: t('登录记录'), disabled: false },
+    { id: 'gift', name: t('赠送记录'), disabled: false },
+    { id: 'trade', name: t('交易记录'), disabled: false },
+    { id: 'coin', name: t('代币发放记录'), disabled: false },
+    { id: 'chat', name: t('聊天记录'), disabled: false },
   ];
   // 默认全选
   const exportContentChecked = ref<string[]>(exportContentOptions.map(item => item.id));
+
+  // 导出弹窗：手动控制关闭（点击外部关闭，但排除日期选择器面板）
+  const handleDocumentClickForExport = (e: MouseEvent) => {
+    if (!isExportPopoverShow.value) return;
+    const target = e.target as HTMLElement;
+    if (!target) return;
+    // 点击在日期选择器下拉面板内部——不关闭
+    const datePickerDropdowns = document.querySelectorAll('.bk-date-picker-dropdown');
+    for (const dropdown of Array.from(datePickerDropdowns)) {
+      if (dropdown.contains(target)) return;
+    }
+    // 点击在导出弹窗内容区或触发按钮内部——不关闭（已通过 @click.stop 拦截）
+    const popoverContents = document.querySelectorAll('.export-popover-wrapper');
+    for (const content of Array.from(popoverContents)) {
+      if (content.contains(target)) return;
+    }
+    // 其他区域 —— 关闭
+    isExportPopoverShow.value = false;
+  };
+
+  onMounted(() => {
+    document.addEventListener('click', handleDocumentClickForExport, true);
+  });
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClickForExport, true);
+  });
 
   // 导出逻辑
   const handleExport = async () => {
@@ -1374,7 +1505,11 @@
 
 /* 导出弹窗样式 */
 .export-popover-content {
-  padding: 4px 0;
+  padding: 0;
+
+  .export-popover-body {
+    padding: 16px 16px 0;
+  }
 
   .export-popover-title {
     margin-bottom: 16px;
@@ -1401,15 +1536,30 @@
 
   .export-checkbox-grid {
     display: grid;
-    grid-template-columns: auto auto;
-    gap: 12px 24px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 24px;
+
+    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: 24px，
+       会导致 grid 单元格内复选框居中且偏移，必须强制覆盖以保证严格左对齐 */
+    :deep(.bk-checkbox) {
+      margin-right: 0 !important;
+      margin-left: 0 !important;
+      justify-self: start !important;
+    }
+
+    :deep(.bk-checkbox ~ .bk-checkbox) {
+      margin-left: 0 !important;
+    }
   }
 
   .export-popover-footer {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
-    padding-top: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    background: #fafbfd;
+    border-top: 1px solid #dcdee5;
   }
 }
 
@@ -1423,22 +1573,25 @@
   padding-top: 16px;
 }
 
-/* Tab loading 容器 */
-.tab-loading-wrapper {
-  min-height: 400px;
-}
-
-/* loading 占位元素 */
-.loading-placeholder {
-  height: 400px;
-}
-
-/* Tab 暂无数据 */
-.tab-empty {
+/* section 加载占位 */
+.section-skeleton {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  min-height: 50px;
+}
+
+/* section 无数据提示 */
+.section-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 50px;
+
+  .section-empty-text {
+    font-size: 12px;
+    color: #979ba5;
+  }
 }
 
 .section {
@@ -1502,4 +1655,25 @@
 .suspected-violation-checkbox {
   flex-shrink: 0;
 }
+</style>
+
+<!-- 全局样式：提升日期选择器下拉面板的 z-index，避免被导出 popover 遮挡 -->
+<style lang="postcss">
+  /* 日期选择器下拉面板 z-index 必须高于导出 popover（bk-popover 默认在 2000-3000 段），
+     设置一个足够高的值以确保不会被遮挡 */
+  .bk-date-picker-dropdown,
+  .bk-date-picker-dropdown.bk-picker-dropdown {
+    z-index: 99999 !important;
+  }
+
+  /* 导出弹窗内的日期选择器，进一步保证其触发的下拉面板不被同级 popover 遮挡 */
+  .export-popover-wrapper ~ .bk-date-picker-dropdown,
+  body > .bk-date-picker-dropdown {
+    z-index: 99999 !important;
+  }
+
+  /* 导出弹窗：消除 bk-popover 默认的 12px padding（仅作用于当前导出弹窗，不影响其他 popover） */
+  .bk-popover.bk-pop2-content.export-popover-wrapper {
+    padding: 0 !important;
+  }
 </style>
