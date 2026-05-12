@@ -595,7 +595,7 @@
     height: 100%;
     min-width: 0;
     margin-top: 0;
-    overflow: auto;
+    overflow: hidden;
     contain: layout style;
     transition: margin-left .3s ease;
 
