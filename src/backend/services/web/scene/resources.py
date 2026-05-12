@@ -59,8 +59,37 @@ class SceneResource(AuditMixinResource, abc.ABC):
 
     tags = ["Scene"]
 
-    @staticmethod
-    def _sync_iam_group_members(scene, validated_request_data):
+    @classmethod
+    def _refresh_scene_members_from_iam(cls, scene, save=True):
+        """从 IAM 刷新场景成员到 DB"""
+        manager_members = list(scene.managers or [])
+        if scene.iam_manager_group_id:
+            manager_members = [
+                member.get("id", "")
+                for member in IAMGroupManager.get_all_group_members(group_id=scene.iam_manager_group_id)
+                if member.get("id", "")
+            ]
+
+        user_members = list(scene.users or [])
+        if scene.iam_viewer_group_id:
+            user_members = [
+                member.get("id", "")
+                for member in IAMGroupManager.get_all_group_members(group_id=scene.iam_viewer_group_id)
+                if member.get("id", "")
+            ]
+
+        if save and (scene.managers != manager_members or scene.users != user_members):
+            scene.managers = manager_members
+            scene.users = user_members
+            scene.save(update_fields=["managers", "users"])
+        else:
+            scene.managers = manager_members
+            scene.users = user_members
+
+        return {"manager": manager_members, "user": user_members}
+
+    @classmethod
+    def _sync_iam_group_members(cls, scene, validated_request_data):
         """当 managers 或 users 变更时，同步到对应的 IAM 用户组；若用户组尚未创建则先创建"""
 
         update_fields = []
@@ -68,7 +97,7 @@ class SceneResource(AuditMixinResource, abc.ABC):
         if "managers" in validated_request_data:
             new_group_id = IAMGroupManager.sync_group_members(
                 group_id=scene.iam_manager_group_id,
-                members=validated_request_data["managers"],
+                members=scene.managers,
                 group_name=f"{scene.name}-管理用户组",
                 group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
                 group_actions=SCENE_MANAGER_GROUP_ACTIONS,
@@ -79,20 +108,19 @@ class SceneResource(AuditMixinResource, abc.ABC):
                 scene.iam_manager_group_id = new_group_id
                 update_fields.append("iam_manager_group_id")
 
-        # 处理 users 字段：如果存在则同步指定成员，如果不存在则按空列表清空使用用户组
-        users_to_sync = validated_request_data["users"] if "users" in validated_request_data else []
-        new_group_id = IAMGroupManager.sync_group_members(
-            group_id=scene.iam_viewer_group_id,
-            members=users_to_sync,
-            group_name=f"{scene.name}-使用用户组",
-            group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-            group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-            scene_id=str(scene.scene_id),
-            scene_name=scene.name,
-        )
-        if new_group_id is not None:
-            scene.iam_viewer_group_id = new_group_id
-            update_fields.append("iam_viewer_group_id")
+        if "users" in validated_request_data:
+            new_group_id = IAMGroupManager.sync_group_members(
+                group_id=scene.iam_viewer_group_id,
+                members=scene.users,
+                group_name=f"{scene.name}-使用用户组",
+                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
+            )
+            if new_group_id is not None:
+                scene.iam_viewer_group_id = new_group_id
+                update_fields.append("iam_viewer_group_id")
 
         if update_fields:
             scene.save(update_fields=update_fields)
@@ -165,6 +193,10 @@ class ListScene(SceneResource):
             queryset = queryset.filter(name__icontains=validated_request_data["name"])
         if validated_request_data.get("description"):
             queryset = queryset.filter(description__icontains=validated_request_data["description"])
+        if validated_request_data.get("manager"):
+            queryset = queryset.filter(managers__contains=[validated_request_data["manager"]])
+        if validated_request_data.get("user"):
+            queryset = queryset.filter(users__contains=[validated_request_data["user"]])
         if validated_request_data.get("updated_by"):
             queryset = queryset.filter(updated_by=validated_request_data["updated_by"])
         if validated_request_data.get("keyword"):
@@ -222,6 +254,8 @@ class CreateScene(SceneResource):
         scene = Scene.objects.create(
             name=validated_request_data["name"],
             description=validated_request_data.get("description", ""),
+            managers=validated_request_data["managers"],
+            users=validated_request_data.get("users", []),
         )
 
         # 创建系统关联
@@ -229,13 +263,13 @@ class CreateScene(SceneResource):
         # 创建数据表关联
         self._save_tables(scene, validated_request_data.get("tables", []))
         # 自动创建"场景管理员通知组"
-        self._create_scene_manager_notice_group(scene, validated_request_data["managers"])
+        self._create_scene_manager_notice_group(scene)
         # 创建 IAM 用户组、授权并添加成员（分别创建管理用户组和使用用户组）
         scene.iam_manager_group_id = IAMGroupManager.create_single_group_with_members(
             group_name=f"{scene.name}-管理用户组",
             group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
             group_actions=SCENE_MANAGER_GROUP_ACTIONS,
-            members=validated_request_data["managers"],
+            members=scene.managers,
             scene_id=str(scene.scene_id),
             scene_name=scene.name,
         )
@@ -243,7 +277,7 @@ class CreateScene(SceneResource):
             group_name=f"{scene.name}-使用用户组",
             group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
             group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-            members=validated_request_data.get("users", []),
+            members=scene.users,
             scene_id=str(scene.scene_id),
             scene_name=scene.name,
         )
@@ -273,7 +307,7 @@ class CreateScene(SceneResource):
             )
 
     @staticmethod
-    def _create_scene_manager_notice_group(scene, managers):
+    def _create_scene_manager_notice_group(scene):
         """创建场景时自动创建场景管理员通知组"""
         from apps.notice.constants import get_default_notice_config
         from apps.notice.models import NoticeGroup
@@ -282,7 +316,7 @@ class CreateScene(SceneResource):
 
         notice_group = NoticeGroup.objects.create(
             group_name=f"{scene.name}-场景管理员通知组",
-            group_member=managers,
+            group_member=scene.managers,
             notice_config=get_default_notice_config(),
             description=f"场景「{scene.name}」的管理员通知组（系统自动创建）",
         )
@@ -351,6 +385,7 @@ class RetrieveScene(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
+        self._refresh_scene_members_from_iam(scene)
         return scene
 
 
@@ -370,7 +405,7 @@ class UpdateScene(SceneResource):
             raise SceneNotExist()
 
         # 更新基础字段
-        for field in ["name", "description"]:
+        for field in ["name", "description", "managers", "users"]:
             if field in validated_request_data:
                 setattr(scene, field, validated_request_data[field])
         scene.save()
@@ -490,6 +525,7 @@ class GetSceneInfo(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
+        self._refresh_scene_members_from_iam(scene)
         return scene
 
 
@@ -507,7 +543,7 @@ class UpdateSceneInfo(SceneResource):
         except Scene.DoesNotExist:
             raise SceneNotExist()
 
-        for field in ["name", "description"]:
+        for field in ["name", "description", "managers", "users"]:
             if field in validated_request_data:
                 setattr(scene, field, validated_request_data[field])
         scene.save()
