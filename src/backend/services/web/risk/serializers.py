@@ -66,6 +66,7 @@ def get_strategy_scene_id(strategy_id: int | None) -> int | None:
         return None
     return (
         ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id=str(strategy_id),
         )
@@ -838,6 +839,7 @@ class RuleScopeValidator(serializers.Serializer):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.RISK_RULE,
                 binding__resource_id=str(rule_id),
             )
@@ -862,6 +864,7 @@ class RuleScopeValidator(serializers.Serializer):
 
         is_bound = ResourceBindingScene.objects.filter(
             scene_id=scene_id,
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             binding__resource_id=str(pa_id),
         ).exists()

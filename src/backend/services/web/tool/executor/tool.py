@@ -202,6 +202,7 @@ class SqlDataSearchExecutor(
 
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.TOOL,
                 binding__resource_id=tool_uid,
             )

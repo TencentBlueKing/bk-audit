@@ -50,6 +50,7 @@ class NoticeGroupBaseProvider(IAMResourceProvider):
                 # 通过 ResourceBindingScene 反查场景下的通知组
                 bound_group_ids = ResourceBindingScene.objects.filter(
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                     binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = NoticeGroup.objects.filter(group_id__in=bound_group_ids)
@@ -102,6 +103,7 @@ class NoticeGroupBaseProvider(IAMResourceProvider):
                 # 通过 ResourceBindingScene 反查场景下的通知组
                 bound_group_ids = ResourceBindingScene.objects.filter(
                     scene_id=parent_id,
+                    scene__is_deleted=False,
                     binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
                 ).values_list("binding__resource_id", flat=True)
                 queryset = NoticeGroup.objects.filter(group_id__in=bound_group_ids)
@@ -126,6 +128,7 @@ class NoticeGroupBaseProvider(IAMResourceProvider):
             # 通过 ResourceBindingScene 反查场景下的通知组
             bound_group_ids = ResourceBindingScene.objects.filter(
                 scene_id=parent_id,
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
             ).values_list("binding__resource_id", flat=True)
             queryset = queryset.filter(group_id__in=bound_group_ids)

@@ -571,6 +571,24 @@ class ToolResourceTestCase(TestCase):
         serializer = ListRequestSerializer(data={"binding_type": BindingType.SCENE_BINDING})
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_list_tool_no_scope_scene_binding_excludes_soft_deleted_scene(self):
+        self.scene.delete()
+
+        factory = APIRequestFactory()
+        django_request = factory.post('/fake-url/', {}, format='json')
+        drf_request = Request(django_request)
+
+        response = ListTool().request(
+            {
+                "binding_type": BindingType.SCENE_BINDING,
+                "page": 1,
+                "page_size": 10,
+            },
+            _request=drf_request,
+        )
+
+        self.assertEqual(response.data.get("results", []), [])
+
     def test_platform_tool_create_serializer_ignores_scene_id(self):
         serializer = PlatformSceneToolCreateRequestSerializer(
             data={

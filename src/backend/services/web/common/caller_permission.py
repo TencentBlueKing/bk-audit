@@ -205,6 +205,7 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
 
     scene_id = (
         ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id=str(strategy_id),
         )
