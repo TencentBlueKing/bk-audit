@@ -655,6 +655,10 @@
     { immediate: true },
   );
 
+  // smart_page（审计用户画像）查询状态在 sessionStorage 中按 toolUid 区分存储的 key 前缀
+  // 关闭工具 tab 时清理对应 key，避免下次打开时仍恢复上次输入
+  const STORAGE_KEY_PROFILE_QUERY_PREFIX = 'tool_audit_profile_query_';
+
   // 监听工具列表变化，清理已关闭工具的缓存数据
   watch(
     () => props.toolList,
@@ -676,6 +680,19 @@
           delete gameDetailToolUidMap.value[uid];
         }
       });
+      // 清理已关闭的 smart_page 工具在 sessionStorage 中保存的查询输入
+      try {
+        Object.keys(sessionStorage)
+          .filter(key => key.startsWith(STORAGE_KEY_PROFILE_QUERY_PREFIX))
+          .forEach((key) => {
+            const uid = key.slice(STORAGE_KEY_PROFILE_QUERY_PREFIX.length);
+            if (uid && !activeUids.has(uid)) {
+              sessionStorage.removeItem(key);
+            }
+          });
+      } catch {
+        // 静默处理
+      }
       syncSearchListToStorage();
       syncGameDetailToStorage();
     },

@@ -22,8 +22,18 @@
       @query="handleQuery"
       @reset="handleReset" />
 
+    <!-- 全部为空时，统一展示一个"暂无数据" -->
+    <template v-if="hasQueried && !userInfoLoading && !gameListLoading && isUserInfoEmpty && gameList.length === 0">
+      <bk-exception
+        class="profile-all-empty"
+        scene="part"
+        type="empty">
+        {{ t('暂无数据') }}
+      </bk-exception>
+    </template>
+
     <!-- 用户信息 - 独立 loading -->
-    <template v-if="hasQueried">
+    <template v-else-if="hasQueried">
       <bk-loading
         class="user-info-loading-wrapper"
         :loading="userInfoLoading">
@@ -189,12 +199,18 @@
   const gameSearchKey = ref('');
 
   // ========== 状态持久化（sessionStorage）==========
-  const STORAGE_KEY_PROFILE_QUERY = 'tool_audit_profile_query';
+  // key 按 toolUid 区分：
+  // 1. 多个画像工具实例间互不干扰
+  // 2. 关闭工具 tab 时，外层可按 toolUid 精准清除该工具的查询状态
+  // 3. 刷新页面 / 同 tab 内路由切换返回时，该 key 仍然存在，可恢复查询
+  const STORAGE_KEY_PROFILE_QUERY_PREFIX = 'tool_audit_profile_query_';
+  const getStorageKey = () => `${STORAGE_KEY_PROFILE_QUERY_PREFIX}${props.toolUid || ''}`;
 
   // 保存查询状态到 sessionStorage
   const saveQueryState = (accountType: string, accountId: string) => {
+    if (!props.toolUid) return;
     try {
-      sessionStorage.setItem(STORAGE_KEY_PROFILE_QUERY, JSON.stringify({
+      sessionStorage.setItem(getStorageKey(), JSON.stringify({
         accountType,
         accountId,
         toolUid: props.toolUid,
@@ -206,8 +222,9 @@
 
   // 清除保存的查询状态
   const clearQueryState = () => {
+    if (!props.toolUid) return;
     try {
-      sessionStorage.removeItem(STORAGE_KEY_PROFILE_QUERY);
+      sessionStorage.removeItem(getStorageKey());
     } catch {
       // 静默处理
     }
@@ -215,8 +232,9 @@
 
   // 从 sessionStorage 恢复查询状态
   const loadQueryState = (): { accountType: string; accountId: string; toolUid: string } | null => {
+    if (!props.toolUid) return null;
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY_PROFILE_QUERY);
+      const raw = sessionStorage.getItem(getStorageKey());
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -867,6 +885,15 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
+}
+
+/* 全部为空时的统一空状态 */
+.profile-all-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  background: #fff;
 }
 
 .top-search {

@@ -44,7 +44,8 @@
         <bk-input
           v-model="accountId"
           class="account-input"
-          :placeholder="accountPlaceholder" />
+          :placeholder="accountPlaceholder"
+          @keydown="handleKeydown" />
       </div>
     </div>
     <div class="query-actions">
@@ -67,6 +68,8 @@
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useMessage from '@hooks/use-message';
+
   interface Emits {
     (e: 'query', accountType: string, accountId: string): void;
     (e: 'reset'): void;
@@ -80,6 +83,7 @@
 
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const { messageWarn } = useMessage();
 
   const accountTypes = [
     { label: t('企业微信'), value: 'ctx' },
@@ -103,7 +107,29 @@
 
   // 查询
   const handleQuery = () => {
-    emit('query', selectedAccountType.value, accountId.value);
+    const trimmedAccountId = accountId.value.trim();
+    if (!trimmedAccountId) {
+      messageWarn(t('账号标识不能为空'));
+      return;
+    }
+    accountId.value = trimmedAccountId;
+    emit('query', selectedAccountType.value, trimmedAccountId);
+  };
+
+  // 输入框 keydown 事件
+  // bk-input 的 keydown 回调签名为 (value: string, event: KeyboardEvent)
+  const handleKeydown = (value: string, event: KeyboardEvent) => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+    // 输入法组合输入状态下的回车（中文输入法确认候选词）不触发查询。
+    // 浏览器原生提供两种判断方式：
+    // 1. event.isComposing：现代浏览器标准 API
+    // 2. event.keyCode === 229：老浏览器中输入法交互时 keydown 的特殊 keyCode
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+    handleQuery();
   };
 
   // 重置

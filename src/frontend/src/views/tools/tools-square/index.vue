@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="tools-square">
+  <div
+    class="tools-square"
+    :class="{ 'is-animating': isSidebarAnimating }">
     <!-- 左侧标签 -->
     <div
       class="sidebar-wrapper"
@@ -153,6 +155,8 @@
     backgroundColor: '#fff',
   });
   const isSidebarCollapsed = ref(false);
+  const isSidebarAnimating = ref(false);
+  let sidebarAnimateTimer: ReturnType<typeof setTimeout> | null = null;
   const isReturningHome = ref(false);
   const route = useRoute();
   const router = useRouter();
@@ -369,6 +373,13 @@
   }, { immediate: true });
 
   watch(isSidebarCollapsed, (val) => {
+    isSidebarAnimating.value = true;
+    if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
+    sidebarAnimateTimer = setTimeout(() => {
+      isSidebarAnimating.value = false;
+      window.dispatchEvent(new Event('resize'));
+    }, 320);
+
     if (val || isReturningHome.value) return;
     nextTick(() => {
       safeResetLabels();
@@ -408,6 +419,7 @@
 
   onUnmounted(() => {
     off('scene:change');
+    if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
   });
 </script>
 
@@ -426,6 +438,8 @@
     overflow: hidden;
     background-color: #f5f7fa;
     transition: width .3s ease;
+    will-change: width;
+    contain: layout style;
 
     /* position: relative; */
     flex-shrink: 0;
@@ -582,10 +596,19 @@
     min-width: 0;
     margin-top: 0;
     overflow: auto;
+    contain: layout style;
     transition: margin-left .3s ease;
 
     &.has-shadow {
       box-shadow: -3px 0 6px 0 rgb(0 0 0 / 10%);
+    }
+
+    .tools-square.is-animating & {
+      pointer-events: none;
+
+      .content-card {
+        will-change: contents;
+      }
     }
 
     .content-card {
