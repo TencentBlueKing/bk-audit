@@ -18,47 +18,61 @@
   <div class="game-record-tab">
     <!-- ECharts 图表区域 - 独立 loading -->
     <div
-      v-if="chartLoading || chartRows.length > 0 || (!chartLoading && chartRows.length === 0)"
+      v-if="showChart && (chartLoading || chartRows.length > 0 || (!chartLoading && chartRows.length === 0))"
       class="chart-section-wrapper">
-      <bk-loading
-        class="chart-loading-wrapper"
-        :loading="chartLoading"
-        size="small">
-        <div
-          v-if="chartLoading"
-          class="chart-loading-placeholder" />
-        <template v-else>
-          <!-- 图表有数据 -->
+      <!-- 分布总览标题（可点击收起/展开） -->
+      <div
+        v-if="chartTitle"
+        class="chart-overview-header"
+        @click="isChartCollapsed = !isChartCollapsed">
+        <audit-icon
+          class="collapse-icon"
+          :type="isChartCollapsed ? 'angle-fill-rignt' : 'angle-fill-down'" />
+        <span class="chart-overview-title">{{ chartTitle }}</span>
+      </div>
+      <div v-show="!isChartCollapsed">
+        <bk-loading
+          class="chart-loading-wrapper"
+          :loading="chartLoading"
+          size="small">
           <div
-            v-if="chartRows.length > 0"
-            class="charts-content">
+            v-if="chartLoading"
+            class="chart-loading-placeholder" />
+          <template v-else>
+            <!-- 图表有数据 -->
             <div
-              v-for="(row, rowIndex) in chartRows"
-              :key="rowIndex"
-              class="charts-section">
-              <record-pie-chart
-                v-for="(chart, chartIndex) in row"
-                :key="chartIndex"
-                :center-label="chart.centerLabel"
-                :data="chart.data"
-                :title="chart.title"
-                :total="chart.total" />
-            </div>
-          </div>
-          <!-- 图表无数据 -->
-          <div
-            v-else
-            class="chart-empty">
-            <bk-exception
-              scene="part"
-              type="empty">
-              <div class="chart-empty-text">
-                {{ t('暂无图表数据') }}
+              v-if="chartRows.length > 0"
+              class="charts-content">
+              <div
+                v-for="(row, rowIndex) in chartRows"
+                :key="rowIndex"
+                class="charts-section">
+                <record-pie-chart
+                  v-for="(chart, chartIndex) in row"
+                  :key="chartIndex"
+                  :active-name="chartActiveNames[chart.title] || ''"
+                  :center-label="chart.centerLabel"
+                  :data="chart.data"
+                  :title="chart.title"
+                  :total="chart.total"
+                  @legend-click="handleLegendClick" />
               </div>
-            </bk-exception>
-          </div>
-        </template>
-      </bk-loading>
+            </div>
+            <!-- 图表无数据 -->
+            <div
+              v-else
+              class="chart-empty">
+              <bk-exception
+                scene="part"
+                type="empty">
+                <div class="chart-empty-text">
+                  {{ t('暂无图表数据') }}
+                </div>
+              </bk-exception>
+            </div>
+          </template>
+        </bk-loading>
+      </div>
     </div>
 
     <!-- 表格明细区域 - 独立 loading，始终保留筛选框 -->
@@ -74,6 +88,7 @@
         v-show="!tableLoading"
         :columns="tableColumns"
         :data="tableData"
+        :external-conditions="externalConditions"
         :pagination="tablePagination"
         :search-fields="searchFields"
         :search-placeholder="searchPlaceholder"
@@ -96,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import type { SearchFieldItem } from './game-search-fields';
@@ -111,6 +127,7 @@
 
   interface Props {
     chartRows?: ChartConfig[][];                      // 图表行配置，每个子数组代表一行
+    chartTitle?: string;                              // 图表区域总览标题（如"赠送分布总览"）
     tableTitle: string;                               // 表格标题
     tableColumns: Array<Record<string, any>>;         // 表格列配置
     tableData: Array<Record<string, any>>;            // 表格数据
@@ -124,14 +141,21 @@
     searchFields?: SearchFieldItem[];                 // 搜索字段配置
     chartLoading?: boolean;                           // 图表区域 loading
     tableLoading?: boolean;                           // 表格区域 loading
+    showChart?: boolean;                              // 是否显示图表区域
+    externalConditions?: any[];                       // 外部注入的搜索条件（用于图表联动）
+    chartActiveNames?: Record<string, string>;        // 各饼图当前激活项（key=图表title，value=激活的图例名）
   }
 
   withDefaults(defineProps<Props>(), {
     chartRows: () => [],
+    chartTitle: '',
     showDatePicker: true,
     searchFields: () => [],
     chartLoading: false,
     tableLoading: false,
+    showChart: true,
+    externalConditions: () => [],
+    chartActiveNames: () => ({}),
   });
 
   const emit = defineEmits<{
@@ -140,9 +164,13 @@
     'search': [keyword: string];
     'date-change': [range: [string, string]];
     'search-condition-change': [conditions: any[]];
+    'legend-click': [payload: { title: string; name: string; selected: boolean }];
   }>();
 
   const { t } = useI18n();
+
+  // 图表收起状态（默认展开）
+  const isChartCollapsed = ref(false);
 
   const handlePageChange = (page: number) => {
     emit('page-change', page);
@@ -163,6 +191,11 @@
   const handleSearchConditionChange = (conditions: any[]) => {
     emit('search-condition-change', conditions);
   };
+
+  // 饼图图例点击：透传给父组件，由父组件转换成表格搜索条件
+  const handleLegendClick = (payload: { title: string; name: string; selected: boolean }) => {
+    emit('legend-click', payload);
+  };
 </script>
 
 <style scoped lang="postcss">
@@ -172,7 +205,43 @@
 
 /* 图表区域容器 */
 .chart-section-wrapper {
-  margin-bottom: 16px;
+  position: relative;
+  padding: 12px 16px 16px;
+  background: #fff;
+  border-radius: 2px 2px 0 0;
+
+  /* 与下方明细之间的分割线 */
+  &::after {
+    position: absolute;
+    right: 16px;
+    bottom: 0;
+    left: 16px;
+    height: 1px;
+    background: #eaebf0;
+    content: '';
+  }
+}
+
+/* 分布总览标题 */
+.chart-overview-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  cursor: pointer;
+  user-select: none;
+
+  .collapse-icon {
+    margin-right: 6px;
+    font-size: 12px;
+    color: #63656e;
+  }
+
+  .chart-overview-title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
 }
 
 /* 图表区域 loading */
@@ -181,7 +250,7 @@
 }
 
 .chart-loading-placeholder {
-  height: 200px;
+  height: 260px;
 }
 
 /* 图表无数据 */
@@ -189,7 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 260px;
   padding: 24px;
   background: #fff;
   border-radius: 2px;
@@ -204,6 +273,8 @@
 /* 表格区域 loading */
 .table-loading-wrapper {
   min-height: 200px;
+  background: #fff;
+  border-radius: 0 0 2px 2px;
 }
 
 .table-loading-placeholder {
@@ -225,9 +296,9 @@
 
   :deep(.record-pie-chart) {
     min-width: 0;
-    padding: 16px 20px;
+    padding: 16px 20px 0;
     background: transparent;
-    border-right: 1px solid #f0f1f5;
+    border-right: 1px solid #dcdee5;
     border-radius: 0;
   }
 
