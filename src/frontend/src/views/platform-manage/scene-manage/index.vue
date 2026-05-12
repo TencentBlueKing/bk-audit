@@ -100,13 +100,22 @@
       <bk-dialog
         v-model:is-show="deleteDialogVisible"
         dialog-type="confirm"
+        footer-align="center"
         header-align="center"
         :quick-close="false"
-        :title="t('确定删除该场景？')">
+        :title="t('')">
         <div class="confirm-dialog-content">
+          <div class="dialog-title-row">
+            <img
+              class="tip-icon"
+              src="@images/tip-icon.svg">
+            <div class="dialog-title-text">
+              {{ t('确定删除该场景？') }}
+            </div>
+          </div>
           <div class="warning-message">
             <span>{{ t('此操作将') }}</span>
-            <span class="warning-text">{{ t('永久删除该场景及其所有关联配置（策略、规则、通知组等）') }}</span>
+            <span class="warning-text">{{ t(' 永久删除该场景及其所有关联配置（策略、规则、通知组等）') }}</span>
             <span>{{ t('，不可恢复，请谨慎操作！') }}</span>
           </div>
           <div class="confirm-input-label">
@@ -140,11 +149,20 @@
       <bk-dialog
         v-model:is-show="disableDialogVisible"
         dialog-type="confirm"
+        footer-align="center"
         header-align="center"
         :quick-close="false"
-        :title="t('确定停用该场景？')">
+        :title="t('')">
         <div class="confirm-dialog-content">
-          <div class="warning-message disable-warning">
+          <div class="dialog-title-row">
+            <img
+              class="tip-icon"
+              src="@images/tip-icon.svg">
+            <div class="dialog-title-text">
+              {{ t('确定停用该场景？') }}
+            </div>
+          </div>
+          <div class="warning-message">
             {{ t('停用后，该场景下的所有资源将不可用，已产生的风险数据不受影响，请谨慎操作！') }}
           </div>
           <div class="confirm-input-label">
@@ -347,7 +365,7 @@
       minWidth: 150,
       ellipsis: true,
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <Tooltips data={row.data_source || '--'} />
+      <Tooltips data={dataSourceRender(row) || '--'} />
     ),
     },
     {
@@ -496,6 +514,9 @@
             content: () => (
               <div class="more-action-menu">
                 <div
+                  v-bk-tooltips={row.status === 'enabled'
+                    ? { content: t('删除场景需先停用场景'), disabled: false }
+                    : { disabled: true }}
                   class={['more-action-item', row.status === 'enabled' ? 'is-disabled' : '']}
                   onClick={() => row.status !== 'enabled' && handleDeleteScene(row)}>
                   {t('删除')}
@@ -508,9 +529,13 @@
     ),
     },
   ];
-
   // 模拟数据源 - 实际应替换为真实API
-  const dataSource = SceneManageService.fetchSceneList;
+  const dataSource = (params: any) => SceneManageService.fetchSceneList({
+    ...params,
+    sort: params?.sort || ['-scene_id'],
+  });
+
+  const dataSourceRender = (row: SceneModel) => `${row.system_count} ${t('个系统')}，${row.table_count} ${t('个数据表')}` || '--';
 
   // 获取全局状态统计（不受筛选条件影响）
   const fetchStatusCounts = () => {
@@ -847,6 +872,31 @@
 .confirm-dialog-content {
   padding: 0 24px;
 
+  .dialog-title-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .tip-icon {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    width: 50px;
+    height: 50px;
+    margin-bottom: 16px;
+    transform: translateX(-50%)
+  }
+
+  .dialog-title-text {
+    width: 100%;
+    margin-top: 65px;
+    margin-bottom: 16px;
+    font-size: 20px;
+    font-weight: 400;
+    color: #313238;
+    text-align: center;
+  }
+
   .warning-message {
     padding: 12px 16px;
     margin-bottom: 16px;
@@ -855,7 +905,7 @@
     border-radius: 2px;
 
     .warning-text {
-      color: #ea3636;
+      color: #e71818;
     }
   }
 
