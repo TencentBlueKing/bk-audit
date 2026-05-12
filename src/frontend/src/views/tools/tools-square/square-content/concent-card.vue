@@ -16,13 +16,29 @@
 -->
 <template>
   <div class="card">
+    <!-- 正在使用中的工具提示条 -->
+    <div
+      v-if="openedTools.length > 0"
+      class="tool-using-tip">
+      <img
+        class="tip-icon"
+        :src="infoBlueSvg">
+      <span class="tip-text">
+        {{ t('你有') }} <strong class="tip-count">{{ openedTools.length }}</strong> {{ t('个工具正在使用中') }}
+      </span>
+      <span
+        class="tip-link"
+        @click="handleContinueUsingTool">
+        {{ t('点击继续') }}
+      </span>
+    </div>
     <div
       v-if="dataList.length > 0 || searchValue"
       class="card-search">
       <bk-input
         v-model="searchValue"
         class="search-input"
-        :placeholder="t('搜索 工具名称、工具说明、创建人等')"
+        :placeholder="t('搜索 工具名称、工具说明、工具类型、创建人')"
         type="search"
         @enter="handleSearch" />
     </div>
@@ -201,7 +217,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { nextTick, ref } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -211,6 +227,7 @@
 
   import useUrlSearch from '@hooks/use-url-search';
 
+  import infoBlueSvg from '@images/info-blue.svg';
   import pentagramIcon from '@images/pentagram.svg';
   import pentagramFillIcon from '@images/pentagram-fill.svg';
   import userProfileIcon from '@images/user.svg';
@@ -222,6 +239,7 @@
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import useToolTabs from '@/hooks/use-tool-tabs';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
@@ -263,6 +281,21 @@
   const router = useRouter();
   const route = useRoute();
 
+  // 获取已打开的工具列表
+  const {
+    openedTools,
+    switchTab,
+  } = useToolTabs();
+
+  // 点击继续使用工具
+  const handleContinueUsingTool = () => {
+    const lastTool = openedTools.value[openedTools.value.length - 1];
+    if (lastTool) {
+      switchTab(lastTool.uid);
+      emits('openTool', lastTool);
+    }
+  };
+
   // 使用工具对话框hooks
   const {
     allOpenToolsData,
@@ -272,6 +305,14 @@
   } = useToolDialog();
 
   const searchValue = ref<string>('');
+
+  // 监听搜索值变化，清空时自动重新搜索
+  watch(searchValue, (newVal) => {
+    if (newVal === '') {
+      handleSearch();
+    }
+  });
+
   const itemMouseenter = ref(null);
   const dataList = ref<ToolInfo[]>([]);
 
@@ -636,6 +677,42 @@
   padding-left: 20px;
   background-color: #f5f7fa;
 
+  .tool-using-tip {
+    display: flex;
+    align-items: center;
+    width: 98%;
+    height: 36px;
+    padding: 0 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 36px;
+    color: #4d4f56;
+    background: #f0f5ff;
+    border: 1px solid #a3c5fd;
+    border-radius: 2px;
+
+    .tip-icon {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+
+    .tip-text {
+      margin-right: 8px;
+    }
+
+    .tip-link {
+      color: #5897ff;
+      cursor: pointer;
+
+      &:hover {
+        color: #1768ef;
+      }
+    }
+  }
+
   .card-search {
     position: relative;
     display: flex;
@@ -643,7 +720,7 @@
     justify-content: flex-end;
 
     .search-input {
-      width: 600px;
+      width: 100%;
     }
   }
 
