@@ -301,7 +301,11 @@ class ScenePanelManageViewSet(SceneManageBaseViewSet):
 
     def _get_scene_id_from_panel(self):
         """优先使用详情路由中的 panel_id，再通过报表绑定关系反查所属场景。"""
-        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.constants import (
+            BindingType,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
         from services.web.scene.models import ResourceBinding
 
         panel_id = get_value_by_request_or_path(self.request, "panel_id")
@@ -314,7 +318,10 @@ class ScenePanelManageViewSet(SceneManageBaseViewSet):
             resource_id=str(panel_id),
             binding_type=BindingType.SCENE_BINDING,
         )
-        binding_scene = binding.binding_scenes.filter(scene__is_deleted=False).first()
+        binding_scene = binding.binding_scenes.filter(
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).first()
         if not binding_scene:
             raise ValidationError(message=gettext("无法获取场景ID"))
         return str(binding_scene.scene_id)

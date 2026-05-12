@@ -22,6 +22,7 @@ from services.web.scene.constants import (
     BindingType,
     PanelStatus,
     ResourceVisibilityType,
+    SceneStatus,
     VisibilityScope,
 )
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
@@ -45,6 +46,8 @@ from services.web.tool.models import (
     ToolTag,
 )
 from services.web.tool.resources import (
+    CreatePlatformSceneTool,
+    CreateSceneScopeTool,
     CreateTool,
     DeleteTool,
     GetToolDetail,
@@ -52,6 +55,7 @@ from services.web.tool.resources import (
     GetToolEnumMappingByCollectionKeys,
     ListTool,
     ToolExecuteDebug,
+    UpdatePlatformSceneTool,
     UpdateTool,
     UserQueryTableAuthCheck,
 )
@@ -639,6 +643,80 @@ class ToolResourceTestCase(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["scene_id"], self.scene_id)
+
+    def _tool_create_payload(self, name):
+        return {
+            "name": name,
+            "namespace": "default_ns",
+            "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+            "config": {
+                "sql": "select * from test",
+                "referenced_tables": [],
+                "input_variable": [],
+                "output_fields": [],
+            },
+            "description": "desc",
+            "tags": [],
+        }
+
+    def test_create_scene_scope_tool_rejects_disabled_scene(self):
+        self.scene.status = SceneStatus.DISABLED
+        self.scene.save(update_fields=["status"])
+
+        with self.assertRaisesMessage(Exception, "scene_id 不存在、已删除或已停用"):
+            CreateSceneScopeTool().request(
+                {
+                    **self._tool_create_payload("disabled-scene-scope-tool"),
+                    "scene_id": self.scene_id,
+                }
+            )
+
+    def test_create_platform_scene_tool_allows_disabled_specific_scene_visibility(self):
+        self.scene.status = SceneStatus.DISABLED
+        self.scene.save(update_fields=["status"])
+
+        tool = CreatePlatformSceneTool().request(
+            {
+                **self._tool_create_payload("disabled-platform-tool"),
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+
+        self.assertTrue(
+            ResourceBindingScene.objects.filter(binding__resource_id=tool["uid"], scene_id=self.scene_id).exists()
+        )
+
+    def test_update_platform_scene_tool_allows_disabled_specific_scene_visibility(self):
+        binding = ResourceBinding.objects.get(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=self.sql_tool.uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+        )
+        self.scene.status = SceneStatus.DISABLED
+        self.scene.save(update_fields=["status"])
+
+        UpdatePlatformSceneTool().request(
+            {
+                "uid": self.sql_tool.uid,
+                "name": self.sql_tool.name,
+                "description": "disabled scene visibility",
+                "tags": [],
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+
+        binding.refresh_from_db()
+        self.assertEqual(binding.visibility_type, VisibilityScope.SPECIFIC_SCENES)
+        self.assertTrue(binding.binding_scenes.filter(scene_id=self.scene_id).exists())
 
     @patch.object(Permission, "has_action_any_permission", return_value=True)
     def test_tool_detail(self, _mock_has_action_any_permission):

@@ -27,7 +27,7 @@ from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
 from services.web.risk.serializers import RetrieveRiskStrategyInfoResponseSerializer
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
@@ -60,12 +60,12 @@ class TestRiskExport(TestCase):
             risk_level=RiskLevel.MIDDLE,
             event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.strategy_1.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.strategy_2.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,
@@ -208,7 +208,7 @@ class TestRiskExport(TestCase):
             strategy_name="Strategy C",
             risk_level=RiskLevel.LOW,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.other_scene.scene_id,
@@ -259,7 +259,7 @@ class TestRiskExport(TestCase):
             event_evidence_field_configs=[],
             risk_meta_field_config=[],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,

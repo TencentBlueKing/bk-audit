@@ -51,7 +51,7 @@ from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.utils.data import choices_to_dict
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 
 
 class NoticeMeta(AuditMixinResource, abc.ABC):
@@ -151,7 +151,7 @@ class CreateNoticeGroup(NoticeMeta):
         # 存入数据库
         notice_group = NoticeGroup.objects.create(**validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene_id,
@@ -167,7 +167,7 @@ class CreateNoticeGroup(NoticeMeta):
 
     def _compensate_create_failure(self, notice_group):
         with transaction.atomic():
-            SceneScopeFilter.delete_resource_binding(
+            BindingMetadataHelper.delete_resource_binding(
                 resource_id=notice_group.group_id,
                 resource_type=ResourceVisibilityType.NOTICE_GROUP,
             )
@@ -221,7 +221,7 @@ class DeleteNoticeGroup(NoticeMeta):
         self.add_audit_instance_to_context(instance=notice_group.audit_instance)
 
         notice_group.delete()
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=notice_group.group_id,
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
         )

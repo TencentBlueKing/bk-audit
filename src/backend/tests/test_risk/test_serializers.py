@@ -19,7 +19,7 @@ from services.web.risk.serializers import (
     UpdateRiskRuleReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -197,7 +197,7 @@ class RiskRuleSerializersTest(TestCase):
             sops_template_id=1,
             need_approve=False,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(process_application.id),
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             scene_id=scene_id,
@@ -230,7 +230,7 @@ class RiskRuleSerializersTest(TestCase):
             pa_params={},
             auto_close_risk=True,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(rule.rule_id),
             resource_type=ResourceVisibilityType.RISK_RULE,
             scene_id=self.scene.scene_id,
