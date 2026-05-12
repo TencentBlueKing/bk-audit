@@ -72,14 +72,14 @@
               </bk-tag>
             </bk-radio-button>
           </bk-radio-group>
-          <bk-input
-            v-model="searchKeyword"
+          <bk-search-select
+            v-model="searchValue"
             class="search-input"
             clearable
+            :data="searchSelectData"
             :placeholder="t('搜索场景 ID、场景名称、场景描述、管理员、使用者、更新人')"
-            type="search"
-            @clear="handleSearch"
-            @enter="handleSearch" />
+            unique-select
+            @update:model-value="handleSearch" />
         </div>
       </div>
 
@@ -87,6 +87,7 @@
       <div class="scene-manage-content">
         <tdesign-list
           ref="listRef"
+          allow-multiple-sort
           :columns="tableColumns"
           :data-source="dataSource"
           need-empty-search-tip
@@ -192,11 +193,9 @@
 
 <script setup lang='tsx'>
   import {
-    nextTick,
     onMounted,
     reactive,
     ref,
-    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
@@ -214,6 +213,12 @@
   import CreateSceneSideslider from './components/create-scene-sideslider.vue';
   import SceneDetailSideslider from './components/scene-detail-sideslider.vue';
 
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
+
   const router = useRouter();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -222,8 +227,45 @@
   const isLoading = ref(false);
   // 状态筛选
   const statusFilter = ref('all');
-  // 搜索关键词
-  const searchKeyword = ref('');
+  // bk-search-select 搜索值
+  const searchValue = ref<SearchKey[]>([]);
+
+  // bk-search-select 搜索条件配置
+  const searchSelectData = [
+    {
+      name: '场景ID',
+      id: 'scene_id',
+      placeholder: '请输入场景ID',
+    },
+    {
+      name: '场景名称',
+      id: 'name',
+      placeholder: '请输入场景名称',
+    },
+    {
+      name: '场景描述',
+      id: 'description',
+      placeholder: '请输入场景描述',
+    },
+    {
+      name: '场景管理员',
+      id: 'manager',
+      placeholder: '请选择场景管理员',
+      multiple: false,
+    },
+    {
+      name: '场景使用者',
+      id: 'user',
+      placeholder: '请选择场景使用者',
+      multiple: false,
+    },
+    {
+      name: '更新人',
+      id: 'updated_by',
+      placeholder: '请选择更新人',
+      multiple: false,
+    },
+  ];
   // 表格引用
   const listRef = ref<InstanceType<typeof TdesignList>>();
 
@@ -392,15 +434,6 @@
       title: t('状态'),
       colKey: 'status',
       width: 100,
-      filter: {
-        type: 'single',
-        showConfirmAndReset: true,
-        resetValue: undefined,
-        list: [
-          { label: t('启用'), value: 'enabled' },
-          { label: t('停用'), value: 'disabled' },
-        ],
-      },
       cell: (_: any, { row }: { row: SceneModel }) => (
       <bk-tag theme={row.status === 'enabled' ? 'success' : ''}>
         {row.status === 'enabled' ? t('启用') : t('停用')}
@@ -495,66 +528,54 @@
     fetchStatusCounts();
   };
 
-  // 搜索（回车或点击搜索按钮时触发）
-  const handleSearch = () => {
-    // 清除防抖定时器，立即执行搜索
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = null;
-    }
-    fetchList();
+  // 搜索 - 仿造 strategy-manage/list/index.vue
+  const handleSearch = (keyword: SearchKey[]) => {
+    const search = {
+      scene_id: undefined,
+      name: '',
+      description: '',
+      manager: '',
+      user: '',
+      updated_by: '',
+    } as Record<string, any>;
+
+    keyword.forEach((item) => {
+      if (item.values && item.values.length) {
+        const value = item.values.map(v => v.id).join(',');
+        if (item.id === 'scene_id') {
+          search.scene_id = value;
+        } else if (item.id === 'name') {
+          search.name = value;
+        } else if (item.id === 'description') {
+          search.description = value;
+        } else if (item.id === 'manager') {
+          search.manager = value;
+        } else if (item.id === 'user') {
+          search.user = value;
+        } else if (item.id === 'updated_by') {
+          search.updated_by = value;
+        }
+      }
+    });
+
+    listRef.value?.fetchData(search);
   };
 
   // 状态筛选变化
   const handleStatusFilterChange = () => {
-    fetchList();
+    handleSearch(searchValue.value);
   };
 
   // 清空搜索条件，重新请求初始化数据
   const handleClearSearch = () => {
-    // 清除防抖定时器
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = null;
-    }
-    // 重置搜索条件
-    searchKeyword.value = '';
+    searchValue.value = [];
     statusFilter.value = 'all';
     // 清除 URL 中的所有搜索参数，只保留基础分页参数
     replaceSearchParams({
       page: 1,
       page_size: 10,
     });
-    // 刷新列表 - 由于 URL 已清除，重新加载页面时会使用干净的参数
-    nextTick(() => {
-      if (listRef.value) {
-        // 使用 initData 方法刷新，但需要先清理内部的 paramsMemo
-        // 由于组件限制，这里我们传入空值覆盖
-        listRef.value.fetchData({
-          keyword: '',
-          status: '',
-          page: 1,
-        });
-      }
-    });
-  };
-
-  // 获取列表数据
-  const fetchList = (extraParams: Record<string, any> = {}) => {
-    if (!listRef.value) return;
-    const params: Record<string, any> = {
-      ...extraParams,
-    };
-    // 状态过滤
-    if (statusFilter.value && statusFilter.value !== 'all') {
-      params.status = statusFilter.value;
-    } else {
-      params.status = '';
-    }
-    // 关键字搜索
-    params.keyword = searchKeyword.value.trim();
-
-    listRef.value.fetchData(params);
+    listRef.value?.fetchData({});
   };
 
   // 新建场景
@@ -565,7 +586,7 @@
 
   // 新建场景成功
   const handleCreateSceneSuccess = () => {
-    fetchList();
+    listRef.value?.fetchData({});
   };
 
   // 显示场景详情
@@ -632,7 +653,7 @@
       // 启用直接执行
       SceneManageService.enableScene(row.scene_id).then(() => {
         messageSuccess(t('启用成功'));
-        fetchList();
+        listRef.value?.fetchData({});
         sceneDetailRef.value?.refresh();
       });
     }
@@ -649,7 +670,7 @@
       disableDialogVisible.value = false;
       disableConfirmName.value = '';
       currentDisableScene.value = null;
-      fetchList();
+      listRef.value?.fetchData({});
       sceneDetailRef.value?.refresh();
     });
   };
@@ -679,7 +700,7 @@
       deleteDialogVisible.value = false;
       deleteConfirmName.value = '';
       currentDeleteScene.value = null;
-      fetchList();
+      listRef.value?.fetchData({});
     });
   };
 
@@ -698,23 +719,8 @@
     });
   };
 
-  // 防抖搜索定时器
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // 监听搜索关键词变化，添加防抖
-  watch(searchKeyword, (newVal, oldVal) => {
-    if (newVal !== oldVal) {
-      if (searchDebounceTimer) {
-        clearTimeout(searchDebounceTimer);
-      }
-      searchDebounceTimer = setTimeout(() => {
-        fetchList();
-      }, 300);
-    }
-  });
-
   onMounted(() => {
-    fetchList();
+    listRef.value?.fetchData({});
   });
 </script>
 
@@ -783,7 +789,7 @@
 }
 
 .search-input {
-  width: 400px;
+  width: 600px;
 }
 
 .scene-manage-content {

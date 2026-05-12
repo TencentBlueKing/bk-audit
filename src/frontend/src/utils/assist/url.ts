@@ -83,7 +83,9 @@ export const buildURLParams = (params: any) => {
     }
 
     if (_.isArray(val)) {
-      key = `${key}[]`;
+      if (key !== 'sort') {
+        key = `${key}[]`;
+      }
     } else {
       val = [val];
     }
