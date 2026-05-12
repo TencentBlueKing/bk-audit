@@ -65,19 +65,17 @@ export const LOGIN_DETAIL_FIELDS = {
 
 // ========== 赠送明细相关字段 ==========
 export const GIFT_DETAIL_FIELDS = {
-  TARGET_OPENID: '对方openid',
+  TARGET_OPENID: '赠送对象',
   NICKNAME: '昵称',
-  IS_EMPLOYEE: '是否员工',
-  TIME: '时间',
+  IS_EMPLOYEE: '是否员工(严格版1,10)',
+  TIME: '赠送时间',
   ZONE: '大区',
-  ITEM_ID: '道具id',
+  ITEM_ID: '道具ID',
   ITEM_NAME: '道具名称',
-  GIFT_AMOUNT: '赠送金额',
-  GIFT_UNIT_PRICE: '赠送单价',
-  ITEM_COUNT: '道具数量',
+  GIFT_AMOUNT: '赠送总额（元）',
+  GIFT_UNIT_PRICE: '赠送单价（元）',
+  ITEM_COUNT: '赠送数量',
   GIFT_TIMES: '赠送次数',
-  GIFT_TARGET: '赠送对象',
-  GIFT_TIME: '赠送时间',
 } as const;
 
 // ========== 交易明细相关字段 ==========
@@ -179,4 +177,8 @@ export const PROFILE_FIELDS = {
   TOTAL_TOPUP: '总充值',
   PLATFORM_ACCOUNT: '平台账号',
   EXCHANGE_RATE: '人民币代币兑换比',
+  // 账号宽表新增字段（main_openid_list 调整后返回）
+  PLATFORM_ACCOUNT_TYPE: '平台账号类型',
+  TOTAL_RECHARGE_YUAN: '总充值（元）',
+  ACCOUNT_NATURE: '账号性质',
 } as const;
