@@ -176,15 +176,6 @@
     };
   });
 
-  // 场景切换
-  const handleSceneChange = (value: SceneItem | null) => {
-    selectedScene.value = value;
-    // 切换场景/系统时重新拉取标签和工具列表
-    refreshTagsList();
-    if (hasOpenedTools.value) return;
-    ContentCardRef.value?.getToolsList(tagId.value);
-  };
-
   const {
     openedTools,
     activeToolUid,
@@ -202,6 +193,18 @@
   const isDrillDownRoute = !!(routeUid && (route.query.drillKey || route.query.drillConfig));
   const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
   const isProgrammaticReset = ref(false);
+
+  // 场景切换
+  const handleSceneChange = async (value: SceneItem | null) => {
+    selectedScene.value = value;
+    // 切换场景/系统时，先收起工具详情面板
+    if (hasOpenedTools.value) {
+      await handleGoHomePage();
+    }
+    // 重新拉取标签和工具列表
+    refreshTagsList();
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
 
   if (isDrillDownRoute) {
     resetForDrillDown();

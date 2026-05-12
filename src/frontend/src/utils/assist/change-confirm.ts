@@ -15,11 +15,25 @@
   to the current version of the project delivered to anyone in the future.
 */
 import { InfoBox } from 'bkui-vue';
+import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
 
 import i18n from '@language/index.js';
 
-export const changeConfirm = (message = '离开将会导致未保存信息丢失'): Promise<boolean> => {
+interface ChangeConfirmOptions {
+  message?: string;
+  route?: RouteLocationNormalizedLoaded;
+  router?: Router;
+}
+
+export const changeConfirm = (options?: string | ChangeConfirmOptions): Promise<boolean> => {
   const { t, te } = i18n.global;
+
+  // 兼容旧调用方式：直接传字符串 message
+  const opts: ChangeConfirmOptions = typeof options === 'string'
+    ? { message: options }
+    : options || {};
+  const { message = '离开将会导致未保存信息丢失', route, router } = opts;
+
   if (!window.changeConfirm || window.changeConfirm === 'popover') {
     return Promise.resolve(true);
   }
@@ -36,6 +50,15 @@ export const changeConfirm = (message = '离开将会导致未保存信息丢失
       class: 'change-confirm-info-box',
       onConfirm() {
         window.changeConfirm = false;
+        if (route && route.meta.changeSceneIsBackedList && router) {
+          console.log('返回', route.meta.ListPageName);
+          // 延迟跳转，等待 syncSceneIdToRoute 的 router.replace 及 route.query watcher 完成后再导航
+          setTimeout(() => {
+            router.push({
+              name: route.meta.ListPageName as string,
+            });
+          }, 0);
+        }
         resolve(true);
       },
       onClose() {

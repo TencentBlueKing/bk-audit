@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import {
     computed,
     onMounted,
@@ -259,7 +260,6 @@
       }
       if (!targetItem) {
         // URL中有scene_id但用户无权访问该场景 → 跳转到权限申请页
-        console.log('未找到对应场景', { urlMatchId, role: userRole });
         router.replace({
           name: 'permissionsPage',
           query: { scene_id: urlMatchId },
@@ -293,7 +293,6 @@
       }
       // 仍找不到任何可选项 → 跳转到权限申请页
       if (!targetItem) {
-        console.log('无可选场景或系统');
         router.replace({
           name: 'permissionsPage',
           query: urlMatchId ? { scene_id: urlMatchId } : {},
@@ -313,13 +312,44 @@
 
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
-    selectedItem.value = item;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-    emits('update:modelValue', item);
-    emits('change', item);
-    isPopoverShow.value = false;
-    // 同步 scene_id 到路由参数
-    syncSceneIdToRoute(item);
+    if ((!window.changeConfirm || window.changeConfirm === 'popover') && route.meta.changeSceneIsBackedList) {
+      InfoBox({
+        title: t('确认离开当前页？'),
+        subTitle: t('离开将会导致未保存信息丢失'),
+        cancelText: t('取消'),
+        confirmText: t('确定'),
+        headerAlign: 'center',
+        contentAlign: 'center',
+        footerAlign: 'center',
+        class: 'change-confirm-info-box',
+        onConfirm() {
+          // 同步 scene_id 到路由参数
+          syncSceneIdToRoute(item);
+          selectedItem.value = item;
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+          emits('update:modelValue', item);
+          emits('change', item);
+          isPopoverShow.value = false;
+          // 延迟跳转，等待 syncSceneIdToRoute 的 router.replace 及 route.query watcher 完成后再导航
+          setTimeout(() => {
+            router.push({
+              name: route.meta.ListPageName as string || 'strategyList',
+            });
+          }, 100);
+        },
+        onClose() {
+          console.log('取消');
+        },
+      });
+    } else {
+      // 同步 scene_id 到路由参数
+      syncSceneIdToRoute(item);
+      selectedItem.value = item;
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+      emits('update:modelValue', item);
+      emits('change', item);
+      isPopoverShow.value = false;
+    }
   };
 
   // 同步场景参数到路由 query 参数
