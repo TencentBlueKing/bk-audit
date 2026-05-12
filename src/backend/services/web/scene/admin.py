@@ -14,10 +14,31 @@ from services.web.scene.models import (
 
 @admin.register(Scene)
 class SceneAdmin(admin.ModelAdmin):
-    list_display = ["scene_id", "name", "status", "iam_manager_group_id", "iam_viewer_group_id", "updated_at"]
-    list_filter = ["status"]
+    list_display = [
+        "scene_id",
+        "name",
+        "status",
+        "iam_manager_group_id",
+        "iam_viewer_group_id",
+        "is_deleted",
+        "updated_at",
+    ]
+    list_filter = ["status", "is_deleted"]
     search_fields = ["name", "description"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+
+    def get_queryset(self, request):
+        """后台需要能看到软删除场景，便于手动恢复。"""
+        return Scene._objects.all()
+
+    def delete_model(self, request, obj):
+        """后台删除也必须走软删除，避免绕过 Scene.delete() 造成级联硬删。"""
+        obj.delete()
+
+    def delete_queryset(self, request, queryset):
+        """后台批量删除使用软删除语义。"""
+        for obj in queryset:
+            obj.delete()
 
 
 @admin.register(SceneSystem)

@@ -210,6 +210,7 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
         binding_scene_map = {
             item["binding__resource_id"]: item["scene_id"]
             for item in ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.RISK_RULE,
                 binding__resource_id__in=rule_ids,
             ).values("binding__resource_id", "scene_id")

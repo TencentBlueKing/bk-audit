@@ -32,7 +32,10 @@ from apps.permission.handlers.actions import ActionEnum
 from core.models import get_request_username
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
-from services.web.scene.binding_validation import assert_binding_relation_integrity
+from services.web.scene.binding_validation import (
+    assert_binding_relation_integrity,
+    validate_platform_visibility_payload,
+)
 from services.web.scene.constants import (
     BindingType,
     PanelStatus,
@@ -105,6 +108,13 @@ class BKVision(AuditMixinResource, abc.ABC):
         except ValueError:
             raise drf_serializers.ValidationError({"binding": gettext_lazy("资源绑定关系不合法")})
 
+    @staticmethod
+    def _ensure_active_scene_or_raise(scene_id: int) -> int:
+        scene_id = int(scene_id)
+        if not Scene.objects.filter(scene_id=scene_id).exists():
+            raise drf_serializers.ValidationError({"scene_id": gettext_lazy("场景不存在或已删除")})
+        return scene_id
+
     @classmethod
     def _get_or_create_platform_group(cls, scene_id: int) -> SceneReportGroup:
         group, _ = SceneReportGroup.objects.get_or_create(
@@ -127,7 +137,7 @@ class BKVision(AuditMixinResource, abc.ABC):
         if binding.visibility_type in {VisibilityScope.ALL_VISIBLE, VisibilityScope.ALL_SCENES}:
             return list(Scene.objects.values_list("scene_id", flat=True))
         if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
-            return list(binding.binding_scenes.values_list("scene_id", flat=True))
+            return list(binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True))
         return []
 
     @classmethod
@@ -293,7 +303,7 @@ class ListSceneReportGroup(BKVision):
             return []
 
         return list(
-            SceneReportGroup.objects.filter(scene_id__in=scene_ids)
+            SceneReportGroup.objects.filter(scene_id__in=scene_ids, scene__is_deleted=False)
             .order_by("-priority_index", "id")
             .values("id", "scene_id", "name", "group_type", "priority_index")
         )
@@ -390,6 +400,12 @@ class CreatePlatformPanel(BKVision):
         from services.web.scene.constants import PanelStatus
 
         visibility_data = validated_request_data.pop("visibility", None) or {}
+        if visibility_data:
+            validate_platform_visibility_payload(
+                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                scene_ids=visibility_data.get("scene_ids", []),
+                system_ids=visibility_data.get("system_ids", []),
+            )
         with transaction.atomic():
             panel = VisionPanel.objects.create(
                 id=unique_id(),
@@ -454,6 +470,12 @@ class UpdatePlatformPanel(BKVision):
             raise ScenePanelNotExist()
 
         visibility_data = validated_request_data.pop("visibility", None)
+        if visibility_data:
+            validate_platform_visibility_payload(
+                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
+                scene_ids=visibility_data.get("scene_ids", []),
+                system_ids=visibility_data.get("system_ids", []),
+            )
         with transaction.atomic():
             for field in ["name", "category", "description", "status", "vision_id"]:
                 if field in validated_request_data:
@@ -574,9 +596,9 @@ class CreateScenePanel(BKVision):
         from core.utils.data import unique_id
         from services.web.scene.constants import PanelStatus
 
-        scene_id = validated_request_data.get("scene_id")
+        scene_id = self._ensure_active_scene_or_raise(validated_request_data.get("scene_id"))
         group_id = validated_request_data.get("group_id")
-        group = get_object_or_404(SceneReportGroup, id=group_id, scene_id=int(scene_id))
+        group = get_object_or_404(SceneReportGroup, id=group_id, scene_id=scene_id)
 
         with transaction.atomic():
             panel = VisionPanel.objects.create(
@@ -594,9 +616,9 @@ class CreateScenePanel(BKVision):
                 resource_id=str(panel.pk),
                 binding_type=BindingType.SCENE_BINDING,
             )
-            ResourceBindingScene.objects.create(binding=binding, scene_id=int(scene_id))
+            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
             self._ensure_binding_integrity_or_raise(binding)
-            self._upsert_single_scene_group_item(scene_id=int(scene_id), panel=panel, target_group=group)
+            self._upsert_single_scene_group_item(scene_id=scene_id, panel=panel, target_group=group)
 
         return {"id": panel.pk, "name": panel.name}
 
@@ -630,7 +652,7 @@ class UpdateScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
+        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
             raise ScenePanelNotExist()
 
         try:
@@ -676,7 +698,7 @@ class DeleteScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id)).exists():
+        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
             raise ScenePanelNotExist()
 
         try:
@@ -727,7 +749,7 @@ class PublishScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=scene_id).exists():
+        if not binding.binding_scenes.filter(scene_id=scene_id, scene__is_deleted=False).exists():
             raise ScenePanelNotExist()
 
         try:
@@ -789,7 +811,9 @@ class ListPlatformPanels(BKVision):
                     "updated_at": panel.updated_at,
                     "binding_type": binding.binding_type,
                     "visibility_type": binding.visibility_type,
-                    "scene_ids": list(binding.binding_scenes.values_list("scene_id", flat=True)),
+                    "scene_ids": list(
+                        binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+                    ),
                     "system_ids": list(binding.binding_systems.values_list("system_id", flat=True)),
                 }
             )
@@ -859,11 +883,12 @@ class CreateSceneReportGroup(BKVision):
     ResponseSerializer = SceneReportGroupSerializer
 
     def perform_request(self, validated_request_data):
+        scene_id = self._ensure_active_scene_or_raise(validated_request_data["scene_id"])
         if validated_request_data["name"] == PLATFORM_REPORT_GROUP_NAME:
             raise drf_serializers.ValidationError({"name": "平台报表为保留分组名称"})
         try:
             group = SceneReportGroup.objects.create(
-                scene_id=validated_request_data["scene_id"],
+                scene_id=scene_id,
                 name=validated_request_data["name"],
                 group_type=ReportGroupType.CUSTOM,
                 priority_index=validated_request_data.get("priority_index", 0),
@@ -879,10 +904,11 @@ class UpdateSceneReportGroup(BKVision):
     ResponseSerializer = SceneReportGroupSerializer
 
     def perform_request(self, validated_request_data):
+        scene_id = self._ensure_active_scene_or_raise(validated_request_data["scene_id"])
         group = get_object_or_404(
             SceneReportGroup,
             id=validated_request_data["group_id"],
-            scene_id=validated_request_data["scene_id"],
+            scene_id=scene_id,
         )
         if group.group_type == ReportGroupType.PLATFORM and "name" in validated_request_data:
             raise drf_serializers.ValidationError({"name": "平台报表分组不支持重命名"})
@@ -910,6 +936,7 @@ class DeleteSceneReportGroup(BKVision):
 
     def perform_request(self, validated_request_data):
         group = get_object_or_404(SceneReportGroup, id=validated_request_data["group_id"])
+        self._ensure_active_scene_or_raise(group.scene_id)
         if group.items.exists():
             raise drf_serializers.ValidationError({"group_id": "分组下仍有报表，无法删除"})
         group.delete()
@@ -922,7 +949,7 @@ class UpdateSceneReportGroupOrder(BKVision):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data["scene_id"]
+        scene_id = self._ensure_active_scene_or_raise(validated_request_data["scene_id"])
         order_list = validated_request_data["groups"]
         group_ids = [item["group_id"] for item in order_list]
         groups = {group.id: group for group in SceneReportGroup.objects.filter(id__in=group_ids, scene_id=scene_id)}
@@ -950,7 +977,7 @@ class UpdateSceneReportGroupPanelOrder(BKVision):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data["scene_id"]
+        scene_id = self._ensure_active_scene_or_raise(validated_request_data["scene_id"])
         order_list = validated_request_data["items"]
         panel_ids = [item["panel_id"] for item in order_list]
         group_ids = [item["group_id"] for item in order_list]

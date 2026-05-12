@@ -247,6 +247,7 @@ class ProcessApplicationsViewSet(ResourceViewSet):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
                 binding__resource_id=str(pa_id),
             )
@@ -313,6 +314,7 @@ class RiskRulesViewSet(ResourceViewSet):
             return None
         return (
             ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.RISK_RULE,
                 binding__resource_id=str(rule_id),
             )

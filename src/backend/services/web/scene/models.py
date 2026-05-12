@@ -2,7 +2,12 @@
 from django.db import models
 from django.utils.translation import gettext_lazy
 
-from core.models import OperateRecordModel
+from core.models import (
+    OperateRecordModel,
+    SoftDeleteModel,
+    SoftDeleteModelManager,
+    SoftDeleteQuerySet,
+)
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,
@@ -11,11 +16,32 @@ from services.web.scene.constants import (
 )
 
 
-class Scene(OperateRecordModel):
+class SceneQuerySet(SoftDeleteQuerySet):
+    """场景软删除 QuerySet：删除前归档名称，释放 active name 唯一约束"""
+
+    def delete(self):
+        deleted_count = 0
+        for scene in self:
+            scene.delete()
+            deleted_count += 1
+        return deleted_count, {self.model._meta.label: deleted_count}
+
+
+class SceneManager(SoftDeleteModelManager):
+    def get_queryset(self):
+        """获取默认过滤软删除数据且带场景归档删除行为的 queryset"""
+        return SceneQuerySet(self.model, using=self._db).filter(is_deleted=False)
+
+
+class Scene(SoftDeleteModel):
     """审计场景"""
 
+    objects = SceneManager()
+
+    SOFT_DELETE_NAME_SUFFIX_TEMPLATE = "__deleted__{}"
+
     scene_id = models.BigAutoField(gettext_lazy("场景ID"), primary_key=True)
-    name = models.CharField(gettext_lazy("场景名称"), max_length=128, db_index=True, unique=True)
+    name = models.CharField(gettext_lazy("场景名称"), max_length=128, db_index=True)
     description = models.TextField(gettext_lazy("场景描述"), blank=True, default="")
     status = models.CharField(
         gettext_lazy("状态"),
@@ -35,9 +61,23 @@ class Scene(OperateRecordModel):
         verbose_name = gettext_lazy("审计场景")
         verbose_name_plural = verbose_name
         ordering = ["-scene_id"]
+        unique_together = [("name", "is_deleted")]
 
     def __str__(self):
         return f"Scene({self.scene_id}: {self.name})"
+
+    def get_soft_delete_name(self) -> str:
+        """生成软删除归档名称，释放原始名称给后续重建使用"""
+        suffix = self.SOFT_DELETE_NAME_SUFFIX_TEMPLATE.format(self.scene_id)
+        max_length = self._meta.get_field("name").max_length
+        return f"{self.name[: max_length - len(suffix)]}{suffix}"
+
+    def delete(self, *args, **kwargs):  # pylint: disable=unused-argument
+        if self.is_deleted:
+            return
+        self.name = self.get_soft_delete_name()
+        self.is_deleted = True
+        self.save(update_fields=["name", "is_deleted"])
 
 
 class SceneSystem(OperateRecordModel):

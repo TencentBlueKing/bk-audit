@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from services.web.scene.constants import BindingType, VisibilityScope
+from services.web.scene.models import Scene
 
 
 def _normalize_values(values) -> list:
@@ -23,6 +24,13 @@ def validate_platform_visibility_payload(visibility_type: str, scene_ids=None, s
 
     if visibility_type == VisibilityScope.SPECIFIC_SCENES and not normalized_scene_ids:
         raise ValueError("platform_binding 的 visibility_type 为 specific_scenes 时，scene_ids 不能为空")
+    if normalized_scene_ids:
+        active_scene_ids = set(
+            Scene.objects.filter(scene_id__in=normalized_scene_ids).values_list("scene_id", flat=True)
+        )
+        missing_scene_ids = sorted({int(scene_id) for scene_id in normalized_scene_ids} - active_scene_ids)
+        if missing_scene_ids:
+            raise ValueError("scene_ids 不存在或已删除: %s" % ",".join(str(scene_id) for scene_id in missing_scene_ids))
     if visibility_type == VisibilityScope.SPECIFIC_SYSTEMS and not normalized_system_ids:
         raise ValueError("platform_binding 的 visibility_type 为 specific_systems 时，system_ids 不能为空")
 

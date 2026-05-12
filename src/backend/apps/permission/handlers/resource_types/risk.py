@@ -48,6 +48,7 @@ class Risk(ResourceTypeMeta):
         # 收集所有 risk 对应的 strategy_id，通过策略绑定的场景反查 scene_id
         strategy_ids = {str(risk.strategy_id) for risk in risks if risk.strategy_id}
         scene_bindings = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id__in=list(strategy_ids),
         ).values_list("binding__resource_id", "scene_id")
@@ -116,6 +117,7 @@ class ManualEvent(ResourceTypeMeta):
         # 收集所有 manual_event 对应的 strategy_id，通过策略绑定的场景反查 scene_id
         strategy_ids = {str(event.strategy_id) for event in manual_events if event.strategy_id}
         scene_bindings = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id__in=list(strategy_ids),
         ).values_list("binding__resource_id", "scene_id")
