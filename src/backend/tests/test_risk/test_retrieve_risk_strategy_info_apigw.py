@@ -25,7 +25,7 @@ from services.web.risk.constants import RiskStatus
 from services.web.risk.models import Risk
 from services.web.risk.resources.risk import RetrieveRiskStrategyInfoAPIGW
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
@@ -92,7 +92,7 @@ class TestRetrieveRiskStrategyInfoAPIGW(TestCase):
             event_evidence_field_configs=[],
             risk_meta_field_config=[],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,
