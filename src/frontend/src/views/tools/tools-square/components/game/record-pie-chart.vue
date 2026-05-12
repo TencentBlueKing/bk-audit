@@ -37,7 +37,14 @@
   import { CanvasRenderer } from 'echarts/renderers';
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    activeName: '',
+  });
+
+  // 定义事件：图例点击时触发，用于与下方表格搜索联动
+  const emit = defineEmits<{
+    'legend-click': [payload: { title: string; name: string; selected: boolean }];
+  }>();
 
   // 注册 echarts 组件
   echarts.use([
@@ -59,6 +66,7 @@
     data: ChartDataItem[];        // 饼图数据
     total: number;                // 总数
     centerLabel: string;          // 中心文字，如"登录总数"、"总额（元）"
+    activeName?: string;          // 当前激活项的 name；为空表示全部显示（默认）
   }
 
   const chartRef = ref<HTMLElement>();
@@ -70,20 +78,36 @@
   // 格式化数字，添加千分位分隔符
   const formatNumber = (num: number) => num.toLocaleString();
 
+  // hover 高亮时扇区向外放大的尺寸（与 series.emphasis.scaleSize 保持一致）
+  const HOVER_SCALE_SIZE = 6;
+
+  // 根据 activeName 生成 legend.selected 配置
+  // - activeName 为空：全部选中（默认显示全部）
+  // - activeName 非空：仅 activeName 选中
+  const buildLegendSelected = () => {
+    const selected: Record<string, boolean> = {};
+    props.data.forEach((item) => {
+      selected[item.name] = props.activeName ? item.name === props.activeName : true;
+    });
+    return selected;
+  };
+
   // 根据容器实际像素尺寸动态计算布局参数
   const getLayoutParams = () => {
     const containerWidth = chartRef.value?.clientWidth || 400;
     const containerHeight = chartRef.value?.clientHeight || 200;
 
-    // 饼图最大直径不超过容器高度的 90%
-    const pieMaxDiameter = containerHeight ;
+    // 为 hover 放大预留安全间距，避免超出容器被裁切
+    const safePadding = HOVER_SCALE_SIZE + 2;
+    // 饼图最大直径不超过容器高度（预留 hover 放大空间）
+    const pieMaxDiameter = containerHeight - safePadding * 2;
     // 饼图区域宽度 = min(饼图直径 + 留白, 容器宽度的 40%)
     const pieAreaWidth = Math.min(pieMaxDiameter + 20, containerWidth * 0.4);
     // 饼图中心 X 坐标（像素）
     const pieCenterX = pieAreaWidth * 0.7;
 
-    // 饼图内外半径（像素），确保不超出容器
-    const outerRadius = Math.min(pieMaxDiameter / 2, pieAreaWidth / 2 - 4);
+    // 饼图内外半径（像素），确保 hover 放大后也不超出容器
+    const outerRadius = Math.min(pieMaxDiameter / 2, pieAreaWidth / 2 - safePadding);
     // 图例起始位置（像素），以饼图真实右边界为基准再留安全间距
     const legendLeftPx = pieCenterX + outerRadius + 24;
     const innerRadius = outerRadius * 0.6;
@@ -119,13 +143,16 @@
       tooltip: {
         trigger: 'item',
         formatter: '{b}：{c}（{d}%）',
-        confine: true,
+        appendToBody: true,
       },
       legend: {
         orient: 'vertical' as const,
         left: layout.legendLeftPx,
         top: 'middle',
         right: layout.legendRight,
+        // 多选模式（默认）；通过 selected 字段精确控制每一项是否选中，从而实现"默认全部 / 单选切换"的效果
+        selectedMode: 'multiple' as const,
+        selected: buildLegendSelected(),
         itemWidth: 8,
         itemHeight: 8,
         itemGap: 6,
@@ -168,6 +195,7 @@
             },
           },
           emphasis: {
+            scaleSize: HOVER_SCALE_SIZE,
             label: {
               show: true,
             },
@@ -200,8 +228,49 @@
 
     if (!chartInstance) {
       chartInstance = echarts.init(chartRef.value);
+      bindChartEvents();
     }
     chartInstance.setOption(createPieOption());
+  };
+
+  // 绑定图表事件
+  const bindChartEvents = () => {
+    if (!chartInstance) return;
+    // 图例点击逻辑：
+    // - 当前为"全部显示"(activeName 为空)：点击 X → 切换为只显示 X
+    // - 当前为"仅显示 X"：点击 X → 复位为全部显示；点击 Y → 切换为只显示 Y
+    // 注意：echarts 默认会"切换被点击项的 selected 状态"，这与我们需要的"单选切换"语义不一致，
+    // 所以这里立刻用 setOption 把 legend.selected 强制修正回受控状态（由 activeName 决定），
+    // 真正的切换通过 emit 给父组件、父组件更新 activeName 后再下发 prop 完成。
+    chartInstance.on('legendselectchanged', (params: any) => {
+      const clickedName = params?.name as string;
+      if (!clickedName) return;
+
+      // 计算"用户点击后期望的 activeName"
+      let nextActiveName = '';
+      if (!props.activeName) {
+        // 当前全部显示 → 点击则切换到仅显示该项
+        nextActiveName = clickedName;
+      } else if (props.activeName === clickedName) {
+        // 当前仅显示该项 → 再次点击复位
+        nextActiveName = '';
+      } else {
+        // 当前显示其它项 → 切换到刚点击的项
+        nextActiveName = clickedName;
+      }
+
+      // 立即用受控状态覆盖 echarts 默认行为，避免视图与父组件不同步
+      chartInstance?.setOption({
+        legend: { selected: buildLegendSelected() },
+      });
+
+      emit('legend-click', {
+        title: props.title,
+        name: nextActiveName,
+        // 是否处于"仅显示某项"状态：nextActiveName 非空时为 true
+        selected: !!nextActiveName,
+      });
+    });
   };
 
   // 更新图表
@@ -212,7 +281,7 @@
   };
 
   // 监听数据变化，更新图表
-  watch(() => [props.data, props.total, props.centerLabel], () => {
+  watch(() => [props.data, props.total, props.centerLabel, props.activeName], () => {
     updateChart();
   }, { deep: true });
 
@@ -234,6 +303,7 @@
           if (!chartInstance) {
             // 容器首次获得正确宽度，初始化图表
             chartInstance = echarts.init(chartRef.value);
+            bindChartEvents();
             chartInstance.setOption(createPieOption());
           } else {
             // 容器尺寸变化，先 resize 再重新设置布局参数

@@ -82,11 +82,12 @@
                   type="search" />
                 <bk-popover
                   ref="exportPopoverRef"
+                  ext-cls="export-popover-wrapper"
                   :is-show="isExportPopoverShow"
                   placement="bottom-start"
                   theme="light"
                   trigger="click"
-                  :width="420"
+                  :width="340"
                   @after-hidden="isExportPopoverShow = false">
                   <bk-button
                     @click="isExportPopoverShow = !isExportPopoverShow">
@@ -97,24 +98,26 @@
                   </bk-button>
                   <template #content>
                     <div class="export-popover-content">
-                      <div class="export-popover-title">
-                        {{ t('导出关联游戏列表') }}
-                      </div>
-                      <div class="export-form-item">
-                        <div class="export-form-label">
-                          {{ t('导出内容') }}
-                          <span class="required-star">*</span>
+                      <div class="export-popover-body">
+                        <div class="export-popover-title">
+                          {{ t('导出关联游戏列表') }}
                         </div>
-                        <bk-checkbox-group v-model="exportContentChecked">
-                          <div class="export-checkbox-grid">
-                            <bk-checkbox
-                              v-for="item in exportContentOptions"
-                              :key="item.id"
-                              :label="item.id">
-                              {{ item.name }}
-                            </bk-checkbox>
+                        <div class="export-form-item">
+                          <div class="export-form-label">
+                            {{ t('导出内容') }}
+                            <span class="required-star">*</span>
                           </div>
-                        </bk-checkbox-group>
+                          <bk-checkbox-group v-model="exportContentChecked">
+                            <div class="export-checkbox-grid">
+                              <bk-checkbox
+                                v-for="item in exportContentOptions"
+                                :key="item.id"
+                                :label="item.id">
+                                {{ item.name }}
+                              </bk-checkbox>
+                            </div>
+                          </bk-checkbox-group>
+                        </div>
                       </div>
                       <div class="export-popover-footer">
                         <bk-button
@@ -232,8 +235,6 @@
     return `${y}${m}${day}`;
   };
 
-  // 用户信息（默认空值，接口返回后填充）
-  // 按设计稿只展示：企业微信、用户名、微信、QQ、在职状态、部门 + 责任单数/风险系数
   const userInfo = ref({
     avatar: '',
     wecom: '',       // 企业微信
@@ -257,7 +258,7 @@
   // 缓存最近一次查询的账号类型
   const lastAccountType = ref('');
 
-  // 搜索过滤，并按累计赠送逆序排序
+  // 搜索过滤（main_openid_list 改用账号宽表后，旧的总支出字段不再返回，按接口返回顺序展示）
   const filteredGameList = computed(() => {
     let list = gameList.value;
     if (gameSearchKey.value) {
@@ -265,8 +266,7 @@
       list = list.filter(item => (item.name || item[PROFILE_FIELDS.GAME_NAME] || '').toLowerCase().includes(key)
         || (item.openid || '').toLowerCase().includes(key));
     }
-    return [...list].sort((a, b) => (b.totalGift || b[PROFILE_FIELDS.TOTAL_GIFT] || 0)
-      - (a.totalGift || a[PROFILE_FIELDS.TOTAL_GIFT] || 0));
+    return list;
   });
 
   // 前端分页：根据当前页码和每页条数截取数据
@@ -456,6 +456,7 @@
     wechat: userInfo.value.wechat || '',
     coinBalance: row[PROFILE_FIELDS.COIN_BALANCE_UNIT] || row.coinBalance || 0,
     totalRecharge: row[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] || row.totalRecharge || 0,
+    // 以下旧字段后端已不再返回，保留兜底以兼容历史调用方；后续后端补充后会自动生效
     totalGift: row[PROFILE_FIELDS.TOTAL_GIFT] || row.totalGift || 0,
     totalIssue: row[PROFILE_FIELDS.TOTAL_ISSUE] || row.totalIssue || 0,
     totalBalance: row[PROFILE_FIELDS.TOTAL_BALANCE] || row.totalBalance || 0,
@@ -463,6 +464,10 @@
     source: row.source || '',
     platformAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
     exchangeRate: row[PROFILE_FIELDS.EXCHANGE_RATE] || row.exchangeRate || '',
+    // 账号宽表新增字段
+    platformAccountType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
+    totalRechargeYuan: row[PROFILE_FIELDS.TOTAL_RECHARGE_YUAN] || row.totalRechargeYuan || 0,
+    accountNature: row[PROFILE_FIELDS.ACCOUNT_NATURE] || row.accountNature || '',
   });
 
   // 封装：通过 ctx（企业微信）查询用户信息（用于微信/QQ/openid搜索的级联查询）
@@ -817,8 +822,8 @@
       display: block;
       height: 1px;
       margin: 0 24px;
-      content: '';
       background: #eaebf0;
+      content: '';
     }
   }
 
@@ -883,6 +888,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 12px;
 
   .top-search-title {
     margin-bottom: 0;
@@ -891,17 +897,21 @@
 
 .game-list-actions {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
 
   .game-search-input {
-    width: 320px;
+    width: 500px;
   }
 }
 
 /* 导出弹窗样式 */
 .export-popover-content {
-  padding: 4px 0;
+  padding: 0;
+
+  .export-popover-body {
+    padding: 16px 16px 0;
+  }
 
   .export-popover-title {
     margin-bottom: 16px;
@@ -929,14 +939,29 @@
   .export-checkbox-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px 24px;
+    gap: 16px 24px;
+
+    /* bkui-vue 默认给 .bk-checkbox 设置 justify-self: center 和 ~ 选择器加 margin-left: 24px，
+       会导致 grid 单元格内复选框居中且偏移，必须强制覆盖以保证严格左对齐 */
+    :deep(.bk-checkbox) {
+      margin-right: 0 !important;
+      margin-left: 0 !important;
+      justify-self: start !important;
+    }
+
+    :deep(.bk-checkbox ~ .bk-checkbox) {
+      margin-left: 0 !important;
+    }
   }
 
   .export-popover-footer {
     display: flex;
     gap: 8px;
-    justify-content: center;
-    padding-top: 8px;
+    justify-content: flex-end;
+    padding: 12px 16px;
+    margin-top: 8px;
+    background: #fafbfd;
+    border-top: 1px solid #dcdee5;
   }
 }
 
@@ -965,4 +990,12 @@
 :deep(tr:hover .hover-show-icon) {
   visibility: visible;
 }
+</style>
+
+<!-- 全局样式：导出弹窗去除 bk-popover 默认 padding -->
+<style lang="postcss">
+  /* 导出弹窗：消除 bk-popover 默认的 12px padding（仅作用于当前导出弹窗，不影响其他 popover） */
+  .bk-popover.bk-pop2-content.export-popover-wrapper {
+    padding: 0 !important;
+  }
 </style>
