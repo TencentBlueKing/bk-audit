@@ -25,7 +25,7 @@ from services.web.common.constants import ScopeType
 from services.web.risk.constants import RiskReportStatus, RiskStatus
 from services.web.risk.models import Risk, RiskReport
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
@@ -295,7 +295,7 @@ class TestListRiskBrief(TestCase):
             strategy_name="test-strategy",
             risk_level=RiskLevel.HIGH.value,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene.scene_id,
@@ -342,7 +342,7 @@ class TestListRiskBrief(TestCase):
             strategy_name="other-strategy",
             risk_level=RiskLevel.LOW.value,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(other_strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.other_scene.scene_id,
@@ -391,7 +391,7 @@ class TestListRiskBrief(TestCase):
             strategy_name="other-scene-strategy",
             risk_level=RiskLevel.LOW.value,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(other_strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.other_scene.scene_id,

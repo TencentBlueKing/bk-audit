@@ -58,9 +58,9 @@ def assert_hive_sql(testcase: TestCase, sql_statements: List[str]) -> None:
 
 def bind_strategy_to_scene(strategy_id: int, scene_id) -> None:
     from services.web.scene.constants import ResourceVisibilityType
-    from services.web.scene.filters import SceneScopeFilter
+    from services.web.scene.filters import BindingMetadataHelper
 
-    SceneScopeFilter.create_resource_binding(
+    BindingMetadataHelper.create_resource_binding(
         resource_id=str(strategy_id),
         resource_type=ResourceVisibilityType.STRATEGY,
         scene_id=scene_id,

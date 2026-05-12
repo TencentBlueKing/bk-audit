@@ -32,14 +32,12 @@ from apps.permission.handlers.actions import ActionEnum
 from core.models import get_request_username
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
-from services.web.scene.binding_validation import (
-    assert_binding_relation_integrity,
-    validate_platform_visibility_payload,
-)
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
     PanelStatus,
     ResourceVisibilityType,
+    SceneStatus,
     VisibilityScope,
 )
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
@@ -111,8 +109,8 @@ class BKVision(AuditMixinResource, abc.ABC):
     @staticmethod
     def _ensure_active_scene_or_raise(scene_id: int) -> int:
         scene_id = int(scene_id)
-        if not Scene.objects.filter(scene_id=scene_id).exists():
-            raise drf_serializers.ValidationError({"scene_id": gettext_lazy("场景不存在或已删除")})
+        if not Scene.objects.filter(scene_id=scene_id, status=SceneStatus.ENABLED).exists():
+            raise drf_serializers.ValidationError({"scene_id": gettext_lazy("场景不存在、已删除或已停用")})
         return scene_id
 
     @classmethod
@@ -400,12 +398,6 @@ class CreatePlatformPanel(BKVision):
         from services.web.scene.constants import PanelStatus
 
         visibility_data = validated_request_data.pop("visibility", None) or {}
-        if visibility_data:
-            validate_platform_visibility_payload(
-                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
-                scene_ids=visibility_data.get("scene_ids", []),
-                system_ids=visibility_data.get("system_ids", []),
-            )
         with transaction.atomic():
             panel = VisionPanel.objects.create(
                 id=unique_id(),
@@ -470,12 +462,6 @@ class UpdatePlatformPanel(BKVision):
             raise ScenePanelNotExist()
 
         visibility_data = validated_request_data.pop("visibility", None)
-        if visibility_data:
-            validate_platform_visibility_payload(
-                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
-                scene_ids=visibility_data.get("scene_ids", []),
-                system_ids=visibility_data.get("system_ids", []),
-            )
         with transaction.atomic():
             for field in ["name", "category", "description", "status", "vision_id"]:
                 if field in validated_request_data:
@@ -539,10 +525,8 @@ class DeletePlatformPanel(BKVision):
         if panel.status == PanelStatus.PUBLISHED:
             raise ScenePanelCannotDelete()
 
-        from services.web.scene.filters import SceneScopeFilter
-
         # 删除绑定关系（级联删除关联的场景和系统）
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=panel_id,
             resource_type=ResourceVisibilityType.PANEL,
         )
@@ -652,7 +636,11 @@ class UpdateScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=int(scene_id),
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise ScenePanelNotExist()
 
         try:
@@ -698,7 +686,11 @@ class DeleteScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=int(scene_id),
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise ScenePanelNotExist()
 
         try:
@@ -709,10 +701,8 @@ class DeleteScenePanel(BKVision):
         if panel.status == PanelStatus.PUBLISHED:
             raise ScenePanelCannotDelete()
 
-        from services.web.scene.filters import SceneScopeFilter
-
         # 删除绑定关系（级联删除关联的场景）
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=panel_id,
             resource_type=ResourceVisibilityType.PANEL,
         )
@@ -749,7 +739,11 @@ class PublishScenePanel(BKVision):
             raise ScenePanelNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=scene_id, scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=scene_id,
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise ScenePanelNotExist()
 
         try:

@@ -9,7 +9,7 @@ from services.web.scene.constants import (
     ResourceVisibilityType,
     VisibilityScope,
 )
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBinding
 from services.web.strategy_v2.constants import (
     RiskLevel,
@@ -59,7 +59,7 @@ class StrategySerializersTest(TestCase):
             group_member=["admin"],
             notice_config=[{"msg_type": "mail"}],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene_id,
@@ -75,7 +75,7 @@ class StrategySerializersTest(TestCase):
             config={},
             permission_owner="admin",
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(tool.uid),
             resource_type=ResourceVisibilityType.TOOL,
             scene_id=scene_id,
@@ -106,7 +106,7 @@ class StrategySerializersTest(TestCase):
             name=name,
             config={"links": []},
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(link_table.uid),
             resource_type=ResourceVisibilityType.LINK_TABLE,
             scene_id=scene_id,
@@ -384,7 +384,7 @@ class TestReportConfigValidation(TestCase):
             group_member=["admin"],
             notice_config=[{"msg_type": "mail"}],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene_id,
@@ -568,7 +568,7 @@ class TestReportConfigValidation(TestCase):
             risk_level=RiskLevel.HIGH.value,
             risk_title="risk",
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene_id,

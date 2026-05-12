@@ -90,7 +90,7 @@ from services.web.risk.permissions import RiskViewPermission
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
@@ -389,7 +389,7 @@ class CreateStrategy(StrategyV2Base):
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
 
-            SceneScopeFilter.create_resource_binding(
+            BindingMetadataHelper.create_resource_binding(
                 resource_id=str(strategy.strategy_id),
                 resource_type=ResourceVisibilityType.STRATEGY,
                 scene_id=scene_id,
@@ -595,7 +595,7 @@ class DeleteStrategy(StrategyV2Base):
         # delete strategy
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=str(strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
         )
@@ -1572,7 +1572,7 @@ class CreateLinkTable(LinkTableBase):
         scene_id = validated_request_data.pop("scene_id", None)
         link_table = self.create_link_table(validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(link_table.uid),
             resource_type=ResourceVisibilityType.LINK_TABLE,
             scene_id=scene_id,
@@ -1587,7 +1587,7 @@ class CreateLinkTable(LinkTableBase):
 
     def _compensate_create_failure(self, link_table):
         with transaction.atomic():
-            SceneScopeFilter.delete_resource_binding(
+            BindingMetadataHelper.delete_resource_binding(
                 resource_id=link_table.uid,
                 resource_type=ResourceVisibilityType.LINK_TABLE,
             )
@@ -1677,7 +1677,7 @@ class DeleteLinkTable(LinkTableBase):
         # 删除联表
         LinkTableTag.objects.filter(link_table_uid=uid).delete()
         LinkTable.objects.filter(uid=uid).delete()
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=uid,
             resource_type=ResourceVisibilityType.LINK_TABLE,
         )

@@ -40,7 +40,7 @@ from services.web.risk.serializers import (
     UpdateRiskRuleReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 from services.web.scene.models import ResourceBindingScene
 
 
@@ -109,7 +109,7 @@ class CreateRiskRule(RiskRuleMeta):
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
         instance.save(update_fields=["rule_id", "priority_index"])
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(instance.rule_id),
             resource_type=ResourceVisibilityType.RISK_RULE,
             scene_id=scene_id,
@@ -153,7 +153,7 @@ class DeleteRiskRule(RiskRuleMeta):
             return
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instances.first()))
         instances.delete()
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=validated_request_data["rule_id"],
             resource_type=ResourceVisibilityType.RISK_RULE,
         )

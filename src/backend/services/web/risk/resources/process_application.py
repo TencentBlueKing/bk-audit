@@ -40,7 +40,7 @@ from services.web.risk.serializers import (
     UpdateProcessApplicationsReqSerializer,
 )
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
@@ -119,7 +119,7 @@ class CreateProcessApplication(ProcessApplicationMeta):
         scene_id = validated_request_data.pop("scene_id", None)
         pa = ProcessApplication.objects.create(**validated_request_data)
         # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(pa.id),
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             scene_id=scene_id,
