@@ -53,14 +53,12 @@ from services.web.common.caller_permission import (
 )
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
-from services.web.scene.binding_validation import (
-    assert_binding_relation_integrity,
-    validate_platform_visibility_payload,
-)
+from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import (
     BindingType,
     PanelStatus,
     ResourceVisibilityType,
+    SceneStatus,
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
@@ -997,10 +995,13 @@ class ListToolAll(ToolBase):
         binding_type = validated_request_data.get("binding_type")
         if not scope_type:
             binding_filter = binding_type or BindingType.PLATFORM_BINDING
-            tool_uids = ResourceBinding.objects.filter(
+            bindings = ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.TOOL,
                 binding_type=binding_filter,
-            ).values_list("resource_id", flat=True)
+            )
+            if binding_filter == BindingType.SCENE_BINDING:
+                bindings = bindings.filter(binding_scenes__scene__is_deleted=False)
+            tool_uids = bindings.values_list("resource_id", flat=True)
             return queryset.filter(uid__in=tool_uids)
 
         scope = ScopeContext(
@@ -1091,7 +1092,11 @@ class GetToolDetail(ToolBase):
             return permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
 
         if binding.binding_type == BindingType.SCENE_BINDING:
-            scene_id = binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True).first()
+            scene_id = (
+                binding.binding_scenes.filter(scene__is_deleted=False, scene__status=SceneStatus.ENABLED)
+                .values_list("scene_id", flat=True)
+                .first()
+            )
             if not scene_id:
                 return False
             scene_resource = ResourceEnum.SCENE.create_instance(scene_id)
@@ -1381,12 +1386,6 @@ class CreatePlatformSceneTool(CreateTool):
         )
 
         visibility_data = validated_request_data.pop("visibility", None) or {}
-        if visibility_data:
-            validate_platform_visibility_payload(
-                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
-                scene_ids=visibility_data.get("scene_ids", []),
-                system_ids=visibility_data.get("system_ids", []),
-            )
         validated_request_data.setdefault("status", PanelStatus.UNPUBLISHED)
 
         with transaction.atomic():
@@ -1445,12 +1444,6 @@ class UpdatePlatformSceneTool(UpdateTool):
             raise SceneToolNotExist()
 
         visibility_data = validated_request_data.pop("visibility", None)
-        if visibility_data:
-            validate_platform_visibility_payload(
-                visibility_type=visibility_data.get("visibility_type", VisibilityScope.ALL_VISIBLE),
-                scene_ids=visibility_data.get("scene_ids", []),
-                system_ids=visibility_data.get("system_ids", []),
-            )
         with transaction.atomic():
             # 复用父类 UpdateTool 的核心更新逻辑
             result = super().perform_request(validated_request_data)
@@ -1504,10 +1497,8 @@ class DeletePlatformSceneTool(DeleteTool):
         if tool and tool.status == PanelStatus.PUBLISHED:
             raise SceneToolCannotDelete()
 
-        from services.web.scene.filters import SceneScopeFilter
-
         # 删除绑定关系（级联删除关联的场景和系统）
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=uid,
             resource_type=ResourceVisibilityType.TOOL,
         )
@@ -1564,9 +1555,11 @@ class CreateSceneScopeTool(CreateTool):
         from services.web.scene.constants import BindingType, ResourceVisibilityType
         from services.web.scene.models import ResourceBinding, ResourceBindingScene
 
-        scene_id = validated_request_data.pop("scene_id")
-        if not Scene.objects.filter(scene_id=int(scene_id)).exists():
+        scene_id = int(validated_request_data.pop("scene_id"))
+        if not Scene.objects.filter(scene_id=scene_id).exists():
             raise ValueError("scene_id 不存在或已删除")
+        if not Scene.objects.filter(scene_id=scene_id, status=SceneStatus.ENABLED).exists():
+            raise ValueError("scene_id 不存在、已删除或已停用")
 
         with transaction.atomic():
             # 复用父类 CreateTool 的核心创建逻辑
@@ -1578,7 +1571,7 @@ class CreateSceneScopeTool(CreateTool):
                 resource_id=tool.uid,
                 binding_type=BindingType.SCENE_BINDING,
             )
-            ResourceBindingScene.objects.create(binding=binding, scene_id=int(scene_id))
+            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
             self._ensure_binding_integrity_or_raise(binding)
 
         return tool
@@ -1608,7 +1601,11 @@ class UpdateSceneScopeTool(UpdateTool):
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=int(scene_id),
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise SceneToolNotExist()
 
         # 复用父类 UpdateTool 的核心更新逻辑
@@ -1640,13 +1637,15 @@ class DeleteSceneScopeTool(DeleteTool):
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=int(scene_id),
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise SceneToolNotExist()
 
-        from services.web.scene.filters import SceneScopeFilter
-
         # 删除绑定关系（级联删除关联的场景）
-        SceneScopeFilter.delete_resource_binding(
+        BindingMetadataHelper.delete_resource_binding(
             resource_id=uid,
             resource_type=ResourceVisibilityType.TOOL,
         )
@@ -1685,7 +1684,11 @@ class PublishSceneScopeTool(ToolBase):
             raise SceneToolNotExist()
         self._ensure_binding_integrity_or_raise(binding)
 
-        if not binding.binding_scenes.filter(scene_id=int(scene_id), scene__is_deleted=False).exists():
+        if not binding.binding_scenes.filter(
+            scene_id=int(scene_id),
+            scene__is_deleted=False,
+            scene__status=SceneStatus.ENABLED,
+        ).exists():
             raise SceneToolNotExist()
 
         tool = Tool.last_version_tool(uid)

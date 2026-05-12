@@ -8,7 +8,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from tests.base import TestCase
 
@@ -41,7 +41,7 @@ class TestNoticeGroupViewPermissions(TestCase):
             group_member=["admin"],
             notice_config=[],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene.scene_id,
@@ -63,7 +63,7 @@ class TestNoticeGroupViewPermissions(TestCase):
             group_member=["admin"],
             notice_config=[],
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=scene.scene_id,
@@ -103,12 +103,12 @@ class TestListAllNoticeGroup(TestCase):
             notice_config=[],
         )
 
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group_1.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=self.scene_1.scene_id,
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(notice_group_2.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=self.scene_2.scene_id,

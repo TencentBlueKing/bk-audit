@@ -31,7 +31,7 @@ from apps.notice.models import NoticeGroup
 from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBinding, Scene
 from services.web.strategy_v2.constants import (
     RiskLevel,
@@ -73,7 +73,7 @@ from tests.test_strategy_v2.constants import (
 
 def create_bound_notice_group(scene_id: int, group_name: str) -> NoticeGroup:
     notice_group = NoticeGroup.objects.create(group_name=group_name, group_member=[], notice_config=[])
-    SceneScopeFilter.create_resource_binding(
+    BindingMetadataHelper.create_resource_binding(
         resource_id=str(notice_group.group_id),
         resource_type=ResourceVisibilityType.NOTICE_GROUP,
         scene_id=scene_id,
@@ -90,7 +90,7 @@ def create_bound_tool(scene_id: int) -> Tool:
         tool_type=ToolTypeEnum.API.value,
         permission_owner="admin",
     )
-    SceneScopeFilter.create_resource_binding(
+    BindingMetadataHelper.create_resource_binding(
         resource_id=tool.uid,
         resource_type=ResourceVisibilityType.TOOL,
         scene_id=scene_id,
@@ -115,7 +115,7 @@ class StrategyTest(TestCase):
         self.tool = create_bound_tool(self.scene_id)
 
     def _bind_strategy_to_scene(self, strategy_id: int):
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene_id,

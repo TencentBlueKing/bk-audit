@@ -12,7 +12,7 @@ from django.conf import settings
 from apps.notice.models import NoticeGroup
 from services.web.analyze.models import Control, ControlVersion
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
@@ -36,14 +36,14 @@ class TestStrategyIsFormal(TestCase):
         self.notice_group = NoticeGroup.objects.create(
             group_name="test_notice_group_formal", group_member=[], notice_config=[]
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.notice_group.group_id),
             resource_type=ResourceVisibilityType.NOTICE_GROUP,
             scene_id=self.scene_id,
         )
 
     def _bind_strategy_to_scene(self, strategy_id: int):
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene_id,

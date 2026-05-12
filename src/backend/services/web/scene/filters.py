@@ -208,6 +208,36 @@ class BindingMetadataHelper:
             binding_resource_id = getattr(obj, binding_resource_id_attr, None)
             setattr(obj, target_attr, scene_id_map.get(str(binding_resource_id)))
 
+    @staticmethod
+    def create_resource_binding(resource_id: str, resource_type: str, scene_id) -> ResourceBinding:
+        """
+        创建资源的 ResourceBinding 关联（纯场景级资源专用）。
+
+        场景级资源只能绑定到场景，不支持绑定到系统。
+        """
+        if scene_id is None:
+            raise ValueError("创建场景级资源绑定时，scene_id 为必传参数")
+        if not Scene.objects.filter(scene_id=scene_id).exists():
+            raise ValueError("scene_id 不存在或已删除")
+
+        binding = ResourceBinding.objects.create(
+            resource_type=resource_type,
+            resource_id=str(resource_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
+        assert_binding_relation_integrity(binding)
+        return binding
+
+    @staticmethod
+    def delete_resource_binding(resource_id: str, resource_type: str) -> int:
+        """删除资源的 ResourceBinding 关联（依赖 FK 级联清理 scenes/systems）。"""
+        deleted_count, _ = ResourceBinding.objects.filter(
+            resource_type=resource_type,
+            resource_id=str(resource_id),
+        ).delete()
+        return deleted_count
+
 
 def _normalize_scope_values(value) -> list:
     """将单值/多值 scope 参数统一转为列表。"""
@@ -323,55 +353,6 @@ class SceneScopeFilter:
                 binding__resource_type=resource_type,
             ).values_list("binding__resource_id", flat=True)
         )
-
-    @staticmethod
-    def create_resource_binding(
-        resource_id: str,
-        resource_type: str,
-        scene_id,
-    ) -> ResourceBinding:
-        """
-        创建资源的 ResourceBinding 关联（纯场景级资源专用）
-
-        场景级资源只能绑定到场景，不支持绑定到系统。
-        - 传 scene_id：创建 ResourceBinding + ResourceBindingScene
-        - 不传 scene_id：抛出 ValueError
-
-        :param resource_id: 资源 ID
-        :param resource_type: ResourceVisibilityType 枚举值
-        :param scene_id: 场景 ID（必传）
-        :return: 创建的 ResourceBinding 实例
-        """
-        from services.web.scene.constants import BindingType as _BindingType
-
-        if scene_id is None:
-            raise ValueError("创建场景级资源绑定时，scene_id 为必传参数")
-        if not Scene.objects.filter(scene_id=scene_id).exists():
-            raise ValueError("scene_id 不存在或已删除")
-
-        binding = ResourceBinding.objects.create(
-            resource_type=resource_type,
-            resource_id=str(resource_id),
-            binding_type=_BindingType.SCENE_BINDING,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
-        assert_binding_relation_integrity(binding)
-        return binding
-
-    @staticmethod
-    def delete_resource_binding(resource_id: str, resource_type: str) -> int:
-        """
-        删除资源的 ResourceBinding 关联（依赖 FK 级联清理 scenes/systems）
-
-        :param resource_id: 资源 ID
-        :param resource_type: ResourceVisibilityType 枚举值
-        :return: 删除的 ResourceBinding 数量
-        """
-        deleted_count, _ = ResourceBinding.objects.filter(
-            resource_type=resource_type,
-            resource_id=str(resource_id),
-        ).delete()
-        return deleted_count
 
 
 class CompositeScopeFilter:

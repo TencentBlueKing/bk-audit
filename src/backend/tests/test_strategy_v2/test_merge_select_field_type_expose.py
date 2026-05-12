@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from services.web.risk.models import Risk
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
+from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
@@ -43,7 +43,7 @@ class MergeSelectFieldTypeExposeTests(TestCase):
                 ]
             },
         )
-        SceneScopeFilter.create_resource_binding(
+        BindingMetadataHelper.create_resource_binding(
             resource_id=str(self.strategy.strategy_id),
             resource_type=ResourceVisibilityType.STRATEGY,
             scene_id=self.scene_id,
