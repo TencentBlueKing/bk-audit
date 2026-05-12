@@ -481,7 +481,9 @@
     },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
-  const dataSource = StrategyManageService.fetchStrategyList;
+  const dataSource = () => StrategyManageService.fetchStrategyList({
+    order_type: 'asc',
+  });
   const initStatusFilterList = [
     {
       text: t('已停用', 2),
