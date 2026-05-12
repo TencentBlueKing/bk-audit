@@ -23,7 +23,7 @@
     placement="bottom-start"
     :theme="dark ? 'dark' : 'light'"
     trigger="click"
-    :width="popoverWidth"
+    :width="popoverWidth || (typeof width === 'number' ? width : undefined)"
     @after-hidden="handlePopoverHidden"
     @after-show="handlePopoverShow">
     <div
@@ -59,9 +59,18 @@
           <div class="group-title">
             {{ t('审计场景') }}
           </div>
+          <div class="group-search">
+            <bk-input
+              v-model="sceneSearchKey"
+              clearable
+              left-icon="bk-icon icon-search"
+              :placeholder="t('搜索场景ID、场景名称')"
+              size="small"
+              :theme="dark ? 'dark' : ''" />
+          </div>
           <div class="group-list">
             <div
-              v-for="item in sceneList"
+              v-for="item in filteredSceneList"
               :key="item.id"
               class="dropdown-item"
               :class="{ 'is-selected': isSelected(item) }"
@@ -155,7 +164,7 @@
   const props = withDefaults(defineProps<Props>(), {
     modelValue: null,
     width: 320,
-    popoverWidth: 400,
+    popoverWidth: undefined as number | undefined,
     dark: false,
     listScope: () => ['scene', 'system'],
     isAllSecen: true,
@@ -180,6 +189,17 @@
 
   //  审计场景列表
   const sceneList = ref<SelectorItem[]>([]);
+
+  // 场景搜索关键词
+  const sceneSearchKey = ref('');
+
+  // 过滤后的场景列表（支持按名称和ID搜索）
+  const filteredSceneList = computed(() => {
+    const keyword = sceneSearchKey.value.trim().toLowerCase();
+    if (!keyword) return sceneList.value;
+    return sceneList.value.filter(item => item.name.toLowerCase().includes(keyword)
+      || item.id.toLowerCase().includes(keyword));
+  });
 
   // 接入系统列表
   const systemList = ref<SelectorItem[]>([]);
@@ -631,6 +651,7 @@
 .scene-system-dropdown {
   max-height: 400px;
   overflow-y: auto;
+  font-size: 12px;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -716,6 +737,10 @@
       color: #979ba5;
     }
 
+    .group-search {
+      padding: 0 12px 8px;
+    }
+
     .group-list {
       .dropdown-item {
         display: flex;
@@ -787,5 +812,34 @@
   background: #1a2233 !important;
   border: none !important;
   box-shadow: 0 3px 9px 0 rgb(0 0 0 / 50%) !important;
+
+  .group-search {
+    .bk-input {
+      .bk-form-control {
+        background-color: #253047;
+        border-color: #3c4558;
+      }
+
+      input {
+        color: #c4c6cc;
+        background-color: transparent;
+
+        &::placeholder {
+          color: #63656e;
+        }
+      }
+
+      .input-icon-left,
+      [class*='icon'] {
+        color: #63656e;
+      }
+
+      &:hover .bk-form-control,
+      &.is-focus .bk-form-control,
+      &:focus-within .bk-form-control {
+        border-color: #699df4;
+      }
+    }
+  }
 }
 </style>
