@@ -96,6 +96,7 @@
         v-model:selected-row-keys="selectedRowKeys"
         :active-row-keys="[]"
         active-row-type="multiple"
+        :allow-multiple-sort="allowMultipleSort"
         :bordered="border"
         class="tdesign-list"
         :columns="tableColumns"
@@ -230,6 +231,8 @@
     // 是否需要场景ID
     isNeedSceneId?: boolean,
     sceneIdKey?: string,
+    /** 是否允许多列同时排序（按住 Ctrl/Shift 点击多个列头），默认 false */
+    allowMultipleSort?: boolean,
   }
 
   interface Emits {
@@ -266,6 +269,7 @@
     isNeedSceneParams: false,
     isNeedSceneId: false,
     sceneIdKey: 'scope_id',
+    allowMultipleSort: false,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -554,8 +558,7 @@
     const {
       page,
       page_size: pageSize,
-      order_field: orderField,
-      order_type: orderType,
+      sort,
     } = getSearchParams();
     console.log('!!!!!》》》》》》》', getSearchParams());
 
@@ -572,11 +575,10 @@
       }
       pagination.limitList = Array.from(new Set([...pagination.limitList, pagination.limit])).sort((a, b) => a - b);
     }
-    if (orderField && orderType) {
+    if (sort) {
       paramsMemo = {
         ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
+        sort: [sort],
       };
     }
     isReady = false;
@@ -600,41 +602,41 @@
       // 清除排序
       paramsMemo = {
         ...paramsMemo,
-        order_field: undefined,
-        order_type: undefined,
         sort: undefined,
       };
     } else {
-      const firstSort = sortInfo[0];
-      let orderType = firstSort.descending ? 'desc' : 'asc';
-
-      // 颠倒排序（兼容旧逻辑）
-      if (props.reverseSortFields && props.reverseSortFields.includes(firstSort.sortBy)) {
-        orderType = orderType === 'asc' ? 'desc' : 'asc';
-      }
-
-      // 同时兼容两种后端参数形式：order_field/order_type 和 sort 数组
-      const sortPrefix = orderType === 'desc' ? '-' : '';
-      const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
-
       // 合并 searchParams 以保留 event_filters 等搜索参数，避免排序时丢失
       const baseParams = { ...(props.searchParams || {}), ...paramsMemo };
       const nextParams = { ...baseParams };
 
-      // event_data.xxx 列排序时 sort 只保留该字段，不追加 secondarySortField
-      const isEventDataSort = firstSort.sortBy.startsWith('event_data.');
-      if (props.secondarySortField && !isEventDataSort) {
-        if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
-          sortArray.push(props.secondarySortField);
+      if (props.allowMultipleSort) {
+        // 多列排序：遍历所有排序列，生成完整 sort 数组（如 ["-strategy_count", "risk_count"]）
+        nextParams.sort = sortInfo.map((s) => {
+          let prefix = s.descending ? '-' : '';
+          if (props.reverseSortFields && props.reverseSortFields.includes(s.sortBy)) {
+            prefix = s.descending ? '' : '-';
+          }
+          return `${prefix}${s.sortBy}`;
+        });
+      } else {
+        // 单列排序：只取第一个排序项
+        const firstSort = sortInfo[0];
+        let orderType = firstSort.descending ? 'desc' : 'asc';
+        if (props.reverseSortFields && props.reverseSortFields.includes(firstSort.sortBy)) {
+          orderType = orderType === 'asc' ? 'desc' : 'asc';
         }
-      }
-      if (props.secondarySortField || isEventDataSort) {
+        const sortPrefix = orderType === 'desc' ? '-' : '';
+        const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
+
+        // event_data.xxx 列排序时 sort 只保留该字段，不追加 secondarySortField
+        const isEventDataSort = firstSort.sortBy.startsWith('event_data.');
+        if (props.secondarySortField && !isEventDataSort) {
+          if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
+            sortArray.push(props.secondarySortField);
+          }
+        }
         delete nextParams.order_field;
         delete nextParams.order_type;
-        nextParams.sort = sortArray;
-      } else {
-        nextParams.order_field = firstSort.sortBy;
-        nextParams.order_type = orderType;
         nextParams.sort = sortArray;
       }
 
@@ -798,14 +800,14 @@
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
-      const {
-        order_field: orderField,
-        order_type: orderType,
-      } = getSearchParams();
+      const { sort } = getSearchParams();
+      const urlSortParams: Record<string, any> = {};
+      if (sort) {
+        urlSortParams.sort = [sort];
+      }
       paramsMemo = {
         ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
+        ...urlSortParams,
         ...params,
       };
       if (isReady) {
