@@ -48,7 +48,7 @@
               @mouseenter="hoverField = 'wechat'"
               @mouseleave="hoverField = ''">
               <span class="detail-label">{{ t('微信') }}：</span>
-              <span class="detail-value">{{ wechatVisible ? userInfo.wechat : maskValue(userInfo.wechat) }}</span>
+              <span class="detail-value">{{ wechatDisplay }}</span>
               <audit-icon
                 class="eye-icon"
                 :type="wechatVisible ? 'view' : 'unview'"
@@ -64,7 +64,7 @@
               @mouseenter="hoverField = 'qq'"
               @mouseleave="hoverField = ''">
               <span class="detail-label">QQ：</span>
-              <span class="detail-value">{{ qqVisible ? userInfo.qq : maskValue(userInfo.qq) }}</span>
+              <span class="detail-value">{{ qqDisplay }}</span>
               <audit-icon
                 class="eye-icon"
                 :type="qqVisible ? 'view' : 'unview'"
@@ -107,10 +107,10 @@
             <div class="stat-value">
               {{ userInfo.responsibilityCount }}
             </div>
-            <img
-              class="stat-icon"
-              :src="danjvIcon">
           </div>
+          <img
+            class="stat-icon"
+            :src="danjvIcon">
         </div>
         <div
           class="stat-card risk"
@@ -124,10 +124,10 @@
               :class="riskLevelClass">
               {{ userInfo.riskLevel }}
             </div>
-            <img
-              class="stat-icon"
-              :src="riskWarningIcon">
           </div>
+          <img
+            class="stat-icon"
+            :src="riskWarningIcon">
         </div>
       </div>
     </div>
@@ -176,12 +176,41 @@
   // hover 状态
   const hoverField = ref('');
 
-  // 脱敏显示
-  const maskValue = (value: string) => {
+  // 脱敏单个账号
+  const maskSingle = (value: string) => {
     if (!value) return '';
     if (value.length <= 2) return value;
     return `${value[0]}${'*'.repeat(value.length - 2)}${value[value.length - 1]}`;
   };
+
+  // 脱敏显示（支持多账号，仅使用英文分号 ; 分隔，输出以 "; " 拼接）
+  const maskValue = (value: string) => {
+    if (!value) return '';
+    const parts = String(value)
+      .split(';')
+      .map(v => v.trim())
+      .filter(Boolean);
+    if (parts.length <= 1) return maskSingle(parts[0] || '');
+    return parts.map(maskSingle).join(' ; ');
+  };
+
+  // 明文显示时，仅按 ; 分隔并统一以 " ; " 拼接（与脱敏态保持一致）
+  const formatValue = (value: string) => {
+    if (!value) return '';
+    const parts = String(value)
+      .split(';')
+      .map(v => v.trim())
+      .filter(Boolean);
+    return parts.join(' ; ');
+  };
+
+  // 计算微信/QQ 的最终展示文本（控制行长度）
+  const wechatDisplay = computed(() => (
+    wechatVisible.value ? formatValue(props.userInfo.wechat) : maskValue(props.userInfo.wechat)
+  ));
+  const qqDisplay = computed(() => (
+    qqVisible.value ? formatValue(props.userInfo.qq) : maskValue(props.userInfo.qq)
+  ));
 
   // 复制功能
   const handleCopy = (text: string) => {
@@ -307,10 +336,12 @@
 }
 
 .stat-card {
+  position: relative;
   display: flex;
   width: 240px;
   min-width: 200px;
   padding: 10px 16px;
+  overflow: hidden;
   border-radius: 2px;
   flex-direction: column;
 
@@ -336,6 +367,8 @@
   }
 
   .stat-label {
+    position: relative;
+    z-index: 2;
     display: flex;
     font-size: 12px;
     line-height: 20px;
@@ -355,6 +388,8 @@
   }
 
   .stat-value-row {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -383,9 +418,14 @@
   }
 
   .stat-icon {
+    position: absolute;
+    top: 50%;
+    right: 16px;
     width: 52px;
     height: 56px;
+    pointer-events: none;
     opacity: 80%;
+    transform: translateY(-50%);
   }
 }
 </style>

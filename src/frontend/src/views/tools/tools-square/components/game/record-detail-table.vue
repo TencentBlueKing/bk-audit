@@ -26,15 +26,20 @@
     <div
       v-if="!simple"
       class="detail-filter">
+      <!-- 额外筛选控件插槽（放在最前） -->
+      <slot name="extra-filter" />
       <bk-date-picker
         v-if="showDatePicker"
         v-model="localDateRange"
         class="date-picker"
+        :clearable="false"
         :placeholder="t('最近半年')"
+        :shortcut-selected-index="shortcutSelectedIndex"
+        :shortcuts="dateShortcuts"
         type="daterange"
-        @change="handleDateChange" />
-      <!-- 额外筛选控件插槽 -->
-      <slot name="extra-filter" />
+        use-shortcut-text
+        @change="handleDateChange"
+        @shortcut-change="handleShortcutChange" />
       <!-- 搜索框：点击弹出三段式筛选浮层 -->
       <div
         v-if="searchFields.length > 0"
@@ -65,7 +70,23 @@
           {{ searchBoxPlaceholder }}
         </span>
         <!-- 搜索图标 -->
-        <i class="bk-icon icon-search search-icon" />
+        <svg
+          class="search-icon"
+          fill="none"
+          height="14"
+          viewBox="0 0 14 14"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg">
+          <circle
+            cx="6"
+            cy="6"
+            r="4.5"
+            stroke="currentColor" />
+          <path
+            d="M9.5 9.5L12.5 12.5"
+            stroke="currentColor"
+            stroke-linecap="round" />
+        </svg>
         <!-- 三段式筛选浮层 -->
         <div
           v-if="showPopover"
@@ -136,10 +157,9 @@
         @enter="handleSearch" />
     </div>
     <bk-table
-      :columns="columns"
+      :columns="processedColumns"
       :data="data"
-      :pagination="simple ? false : pagination"
-      :remote-pagination="!simple"
+      :pagination="simple ? false : localPagination"
       stripe
       @page-limit-change="handlePageLimitChange"
       @page-value-change="handlePageChange" />
@@ -177,6 +197,11 @@
     simple?: boolean;
     initialDateRange?: [string, string];
     searchFields?: SearchFieldItem[];
+    /**
+     * 外部注入的搜索条件 tags（例如饼图图例点击联动）
+     * 传入后会覆盖表格内部的 conditionTags，实现双向同步
+     */
+    externalConditions?: ConditionTag[];
   }
   const props = withDefaults(defineProps<Props>(), {
     title: '',
@@ -186,6 +211,7 @@
     simple: false,
     initialDateRange: () => ['', ''],
     searchFields: () => [],
+    externalConditions: () => [],
   });
 
   const emit = defineEmits<{
@@ -198,6 +224,85 @@
 
   const { t } = useI18n();
 
+  // 本地分页：使用前端分页，让 bk-table 自身管理 sort/filter/pagination
+  // count 始终跟随当前 data 长度（已经过外部 searchConditions 过滤后的数据）
+  const localPagination = computed(() => ({
+    count: props.data?.length || 0,
+    current: props.pagination?.current || 1,
+    limit: props.pagination?.limit || 10,
+  }));
+
+  // 通用比较器：优先按数字 / 时间戳比较，否则退化为字符串本地比较
+  const compareValues = (a: any, b: any): number => {
+    // null / undefined / '' 统一视为最小
+    const isEmpty = (v: any) => v === null || v === undefined || v === '';
+    if (isEmpty(a) && isEmpty(b)) return 0;
+    if (isEmpty(a)) return -1;
+    if (isEmpty(b)) return 1;
+
+    // 纯数字
+    const numA = Number(a);
+    const numB = Number(b);
+    if (!Number.isNaN(numA) && !Number.isNaN(numB)
+      && String(a).trim() !== '' && String(b).trim() !== '') {
+      return numA - numB;
+    }
+
+    // 时间字符串：用 Date.parse 尝试解析
+    const tA = Date.parse(String(a));
+    const tB = Date.parse(String(b));
+    if (!Number.isNaN(tA) && !Number.isNaN(tB)) {
+      return tA - tB;
+    }
+
+    // 字符串
+    return String(a).localeCompare(String(b));
+  };
+
+  // 处理列定义：
+  // 1. 将 filter: true 自动展开为 { list, filterFn }（list 来源于当前 data 中该列所有非空唯一值）
+  //    这样点击表头筛选图标时才能展示候选项，而不是出现"暂无数据"
+  // 2. 将 sort: true 自动展开为 { sortFn }，使用通用比较器（兼容数字、时间、字符串），
+  //    避免 bk-table 默认的字符串字典序对"赠送时间"等格式不友好导致点击无效
+  // 3. 其他属性（render 等）原样保留
+  const processedColumns = computed(() => (props.columns || []).map((col) => {
+    const next: Record<string, any> = { ...col };
+
+    // 处理 filter
+    if (col.filter === true && col.field) {
+      const field = col.field as string;
+      const valueSet = new Set<string>();
+      (props.data || []).forEach((row) => {
+        const v = row?.[field];
+        if (v !== null && v !== undefined && v !== '') {
+          valueSet.add(String(v));
+        }
+      });
+      const list = Array.from(valueSet).map(v => ({ text: v, value: v }));
+      next.filter = {
+        list,
+        filterFn: (checked: string[], row: Record<string, any>) => {
+          if (!checked || checked.length === 0) return true;
+          return checked.includes(String(row?.[field] ?? ''));
+        },
+      };
+    }
+
+    // 处理 sort：提供显式 sortFn，确保点击表头排序立即生效
+    if (col.sort === true && col.field) {
+      const field = col.field as string;
+      next.sort = {
+        sortFn: (rowA: Record<string, any>, rowB: Record<string, any>, type: 'asc' | 'desc' | 'null') => {
+          if (type === 'null') return 0;
+          const r = compareValues(rowA?.[field], rowB?.[field]);
+          return type === 'desc' ? -r : r;
+        },
+      };
+    }
+
+    return next;
+  }));
+
   // 默认操作符（文本类型）
   const defaultConditions = [
     { id: 'like', name: t('包含') },
@@ -207,7 +312,72 @@
     { id: 'not_in', name: 'NOT IN' },
   ];
 
-  const localDateRange = ref<[string, string]>(props.initialDateRange || ['', '']);
+  // 日期快捷选项
+  interface DateShortcut {
+    text: string;
+    value: () => [Date, Date];
+  }
+  const dateShortcuts: DateShortcut[] = [
+    {
+      text: t('最近一周'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 7);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近一个月'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 1);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近三个月'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 3);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近半年'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setMonth(start.getMonth() - 6);
+        return [start, end];
+      },
+    },
+    {
+      text: t('最近一年'),
+      value: () => {
+        const end = new Date();
+        const start = new Date();
+        start.setFullYear(start.getFullYear() - 1);
+        return [start, end];
+      },
+    },
+  ];
+  // 默认选中"最近半年"（index = 3）
+  const shortcutSelectedIndex = ref(3);
+
+  // 计算默认日期范围（最近半年）
+  const getDefaultDateRange = (): [Date, Date] => dateShortcuts[3].value();
+
+  // 若外部未传入 initialDateRange，则使用最近半年作为默认值
+  const computeInitialRange = (): [Date | string, Date | string] => {
+    const [s, e] = props.initialDateRange || ['', ''];
+    if (s && e) return [s, e];
+    return getDefaultDateRange();
+  };
+
+  const localDateRange = ref<[Date | string, Date | string]>(computeInitialRange());
   const localKeyword = ref('');
 
   // 三段式搜索状态
@@ -257,6 +427,23 @@
       selectedFieldId.value = fields[0].id;
     }
   }, { immediate: true });
+
+  // 同步外部注入的搜索条件（例如饼图联动传入的条件）到表格内部的 conditionTags
+  // 实现联动：点击饼图图例 -> 父组件计算出搜索条件 -> 传入表格 -> tag 渲染到搜索框
+  watch(() => props.externalConditions, (val) => {
+    const next = Array.isArray(val) ? val : [];
+    // 浅比较避免不必要的赋值导致 watch 循环
+    const sameLen = next.length === conditionTags.value.length;
+    const sameContent = sameLen && next.every((tag, idx) => {
+      const cur = conditionTags.value[idx];
+      return cur && cur.fieldId === tag.fieldId
+        && cur.operator === tag.operator
+        && cur.value === tag.value;
+    });
+    if (!sameContent) {
+      conditionTags.value = next.map(tag => ({ ...tag }));
+    }
+  }, { immediate: true, deep: true });
 
   // 字段变化时，重置操作符为该字段的默认操作符
   const handleFieldChange = () => {
@@ -391,6 +578,15 @@
   const handleDateChange = (val: [string, string]) => {
     emit('date-change', val);
   };
+
+  // 快捷选项变化
+  const handleShortcutChange = (value: { text: string; value: () => [Date, Date] }, index: number) => {
+    shortcutSelectedIndex.value = index;
+    if (value && typeof value.value === 'function') {
+      const range = value.value();
+      localDateRange.value = range;
+    }
+  };
 </script>
 
 <style scoped lang="postcss">
@@ -451,8 +647,10 @@
       position: absolute;
       top: 50%;
       right: 10px;
-      font-size: 14px;
+      width: 14px;
+      height: 14px;
       color: #979ba5;
+      pointer-events: none;
       transform: translateY(-50%);
     }
 

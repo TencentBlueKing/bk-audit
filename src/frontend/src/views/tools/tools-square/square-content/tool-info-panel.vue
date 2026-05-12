@@ -735,10 +735,6 @@
   overflow: hidden;
   background: #fff;
   border-bottom: 1px solid #dcdee5;
-
-  &:nth-child(2) {
-    border-left: 1px solid #dcdee5;
-  }
 }
 
 .tab-box {
