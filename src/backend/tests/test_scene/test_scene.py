@@ -792,13 +792,15 @@ class TestSceneResource(TestCase):
 
         self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
 
-    def test_scene_list_accepts_reserved_member_filters_without_filtering(self):
-        """测试 manager/user 参数可传入但暂不参与实际筛选"""
-        Scene.objects.create(name="成员筛选预留场景")
+    def test_scene_list_filter_by_members(self):
+        """测试按 manager/user 过滤场景列表"""
+        matched = Scene.objects.create(name="成员筛选命中场景", managers=["alice"], users=["bob"])
+        Scene.objects.create(name="成员筛选未命中管理者", managers=["charlie"], users=["bob"])
+        Scene.objects.create(name="成员筛选未命中使用者", managers=["alice"], users=["david"])
 
-        result = self.resource.scene.list_scene({"manager": "nobody", "user": "nobody"})
+        result = self.resource.scene.list_scene({"manager": "alice", "user": "bob"})
 
-        self.assertGreaterEqual(len(result), 2)
+        self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
 
     def test_scene_list_default_sort_by_scene_id_desc(self):
         """测试场景列表默认按场景 ID 逆序"""
