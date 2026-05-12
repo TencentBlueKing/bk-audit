@@ -198,7 +198,7 @@ export default (config: ConfigModel) => {
       }
 
       // 显示确认弹窗
-      const confirmed = await changeConfirm();
+      const confirmed = await changeConfirm({ route: from, router });
       if (confirmed) {
         lastRouterHrefCache = to.fullPath;
         next();

@@ -40,6 +40,8 @@ export default {
       name: 'processApplicationCreate',
       meta: {
         title: '新建处理套餐',
+        changeSceneIsBackedList: true,
+        ListPageName: 'applicationManageList',
       },
     },
     {
@@ -48,6 +50,9 @@ export default {
       name: 'processApplicationEdit',
       meta: {
         title: '编辑处理套餐',
+        changeSceneIsBackedList: true,
+        ListPageName: 'applicationManageList',
+
       },
     },
     {
@@ -56,6 +61,8 @@ export default {
       name: 'processApplicationClone',
       meta: {
         title: '克隆处理套餐',
+        changeSceneIsBackedList: true,
+        ListPageName: 'applicationManageList',
       },
     },
     // {
