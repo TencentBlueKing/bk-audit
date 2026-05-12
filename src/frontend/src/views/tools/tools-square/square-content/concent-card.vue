@@ -332,7 +332,8 @@
   const scrollStyle = {
     width: '98%',
     'margin-top': '10px',
-    height: 'calc(100vh - 150px)',
+    flex: '1',
+    'min-height': '0',
   };
 
   const urlToolsIds = ref<Set<string>>(new Set());
@@ -672,10 +673,13 @@
 <style scoped lang="postcss">
 .card {
   position: relative;
+  display: flex;
   width: 100%;
+  height: 100%;
   padding-top: 20px;
   padding-left: 20px;
   background-color: #f5f7fa;
+  flex-direction: column;
 
   .tool-using-tip {
     display: flex;
