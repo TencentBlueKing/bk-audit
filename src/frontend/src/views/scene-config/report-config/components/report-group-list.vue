@@ -941,9 +941,9 @@
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
     localGroups.value = [...groups];
-    // 默认全部展开
+    // 默认只展开第一个分组
     if (groups.length > 0) {
-      activeGroups.value = groups.map(group => group.id);
+      activeGroups.value = [groups[0].id];
     }
   }, { immediate: true, deep: true });
 
