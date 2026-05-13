@@ -24,10 +24,10 @@
         :is-all-secen="false"
         is-default-select-first
         :list-scope="['scene']"
-        :popover-width="320"
+        :popover-width="250"
         scene-permission="manage_scene"
         system-permission="edit_system"
-        width="100%"
+        width="250px"
         @change="handleSceneChange" />
     </div>
 
