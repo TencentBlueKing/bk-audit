@@ -764,7 +764,7 @@
 
 .panel-content {
   height: calc(100% - 86px);
-  padding: 24px;
+  padding: 16px 24px;
   overflow: auto;
   background: #f5f7fa;
   scrollbar-width: thin;
