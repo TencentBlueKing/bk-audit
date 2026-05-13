@@ -22,8 +22,10 @@
       @query="handleQuery"
       @reset="handleReset" />
 
-    <!-- 全部为空时，统一展示一个"暂无数据" -->
-    <template v-if="hasQueried && !userInfoLoading && !gameListLoading && isUserInfoEmpty && gameList.length === 0">
+    <!-- 全部为空时，统一展示一个"暂无数据"（隐藏游戏列表场景下，仅以用户信息为空判断） -->
+    <template
+      v-if="hasQueried && !isQuerying && !userInfoLoading && !gameListLoading
+        && isUserInfoEmpty && (hideGameList || gameList.length === 0)">
       <bk-exception
         class="profile-all-empty"
         scene="part"
@@ -32,40 +34,33 @@
       </bk-exception>
     </template>
 
-    <!-- 用户信息 - 独立 loading -->
-    <template v-else-if="hasQueried">
+    <!-- 用户信息 - 独立 loading（加载完成且为空时整块不渲染，避免中间出现灰色占位） -->
+    <template v-else-if="hasQueried || isQuerying">
       <bk-loading
+        v-if="isQuerying || userInfoLoading || !isUserInfoEmpty"
         class="user-info-loading-wrapper"
-        :loading="userInfoLoading">
+        :loading="isQuerying || userInfoLoading">
         <div
-          v-if="userInfoLoading"
+          v-if="isQuerying || userInfoLoading"
           class="user-info-loading-placeholder" />
-        <template v-else>
-          <!-- 用户信息为空 -->
-          <bk-exception
-            v-if="isUserInfoEmpty"
-            class="user-info-empty"
-            scene="part"
-            type="empty">
-            {{ t('暂无用户信息') }}
-          </bk-exception>
-          <!-- 用户信息 -->
-          <profile-user-info
-            v-else
-            :user-info="userInfo"
-            @view-detail="handleViewDetail" />
-        </template>
+        <profile-user-info
+          v-else
+          :user-info="userInfo"
+          @view-detail="handleViewDetail" />
       </bk-loading>
 
-      <!-- 分割线 -->
-      <div class="section-divider" />
+      <!-- 分割线（隐藏游戏列表 或 用户信息已加载完且为空时不展示） -->
+      <div
+        v-if="!hideGameList && !(!isQuerying && !userInfoLoading && isUserInfoEmpty)"
+        class="section-divider" />
 
-      <!-- 关联游戏列表 - 独立 loading -->
+      <!-- 关联游戏列表 - 独立 loading（openid 单条结果场景隐藏整个游戏列表区块） -->
       <bk-loading
+        v-if="!hideGameList"
         class="game-list-loading-wrapper"
-        :loading="gameListLoading">
+        :loading="isQuerying || gameListLoading">
         <div
-          v-if="gameListLoading"
+          v-if="isQuerying || gameListLoading"
           class="game-list-loading-placeholder" />
         <template v-else>
           <!-- 游戏列表为空 -->
@@ -196,6 +191,9 @@
 
   const queryInputRef = ref();
   const hasQueried = ref(false);
+  // 查询进行中标志：从点击查询起立即为 true，待 useRequest 的 loading 真正接管后自动置 false，
+  // 避免请求发起前出现"用户信息块不渲染、loading 也未起来"的空白时间窗
+  const isQuerying = ref(false);
   const gameSearchKey = ref('');
 
   // ========== 状态持久化（sessionStorage）==========
@@ -267,6 +265,8 @@
 
   // 关联游戏列表（接口返回后填充）
   const gameList = ref<Array<Record<string, any>>>([]);
+  // 是否隐藏"关联游戏列表"区块（openid 搜索仅 1 条结果时，已自动跳转到游戏详情，工具页不再展示游戏列表，但仍展示用户信息）
+  const hideGameList = ref(false);
 
   // 缓存 openid_list_first_ctx（微信/QQ/openid 搜索时，从 main_openid_list 首条结果获取的 ctx）
   const openidListFirstCtx = ref('');
@@ -449,14 +449,28 @@
 
         // 微信/QQ/openid 搜索时，游戏列表返回后需要级联查询用户信息
         if (['form_wechat', 'form_qq', 'openid'].includes(lastAccountType.value)) {
+          // openid 搜索且仅有1条结果：自动跳转游戏详情，且工具页隐藏游戏列表区块（仅展示用户信息）
           if (lastAccountType.value === 'openid' && results.length === 1) {
-            // openid 搜索且仅有1条结果：直接跳转游戏详情
+            hideGameList.value = true;
             const gameData = mapGameData(results[0]);
-            // 赋值 openid_list_selected_* 变量
+            // 此时用户信息接口尚未返回，mapGameData 中 ctx 可能为空
+            // 使用从游戏列表首条结果中提取的 openidListFirstCtx 作为 ctx，确保工具名称能正确显示用户名
+            if (!gameData.ctx && openidListFirstCtx.value) {
+              gameData.ctx = openidListFirstCtx.value;
+            }
+            // 赋值 openid_list_selected_* 变量并跳转游戏详情
             emit('openGameDetail', gameData, 'overview');
+          } else {
+            // 多条 / 0 条：正常展示游戏列表区块
+            hideGameList.value = false;
           }
 
-          // 有结果时，用 openid_list_first_ctx 查询用户信息
+          // openid 搜索时，结果返回后才展示工具页内容（避免 1 条时闪现"暂无用户信息"）
+          if (lastAccountType.value === 'openid') {
+            hasQueried.value = true;
+          }
+
+          // 有结果时，用 openid_list_first_ctx 查询用户信息（1 条时也要查，所以不再提前 return）
           if (openidListFirstCtx.value) {
             executeUserInfoByCtx(openidListFirstCtx.value);
           }
@@ -464,6 +478,17 @@
       }
     },
   });
+
+  // 当 useRequest 的 loading 真正接管后，自动关闭 isQuerying
+  // 这样可以避免请求发起前的空白时间窗
+  watch(
+    () => [userInfoLoading.value, gameListLoading.value],
+    ([uLoading, gLoading]) => {
+      if (isQuerying.value && (uLoading || gLoading)) {
+        isQuerying.value = false;
+      }
+    },
+  );
 
   // 映射游戏数据字段
   const mapGameData = (row: Record<string, any>) => ({
@@ -649,7 +674,10 @@
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
-    hasQueried.value = true;
+    // openid 类型查询时，先不设置 hasQueried，等结果返回后再决定（避免1条时闪现"暂无用户信息"）
+    hasQueried.value = accountType !== 'openid';
+    // 立即进入"查询中"状态，确保 loading 占位立刻显示（涵盖 openid 类型 hasQueried=false 的场景）
+    isQuerying.value = true;
     lastAccountType.value = accountType;
     // 保存查询状态到 sessionStorage
     saveQueryState(accountType, accountId);
@@ -657,6 +685,8 @@
     // 重置中间变量
     openidListFirstCtx.value = '';
     gameList.value = [];
+    // 重置游戏列表隐藏标识（仅 openid 单条结果时会再次置 true）
+    hideGameList.value = false;
     userInfo.value = {
       avatar: '', wecom: '', username: '', wechat: '', qq: '',
       status: '', department: '',
@@ -691,8 +721,10 @@
       // ===== 选择openid =====
       // 1. 查询"游戏列表" main_openid_list（输入 form_openid=openid）
       //    成功后 onSuccess 中自动：
-      //    a. 仅1条 → 直接跳转游戏详情
-      //    b. 大于1条 → 触发查询用户信息 + 展示列表
+      //    a. 仅1条 → 自动跳转游戏详情 + 隐藏游戏列表区块 + 仍触发查询用户信息（用于返回工具页时展示）
+      //    b. 大于1条 / 0 条 → 触发查询用户信息 + 展示游戏列表区块
+      // 因此 openid 类型查询时，先不设置 hasQueried，等结果返回后再设为 true
+      hasQueried.value = false;
       lastQueryParams.value = { form_openid: accountId };
       executeDataSource('main_openid_list', {
         form_openid: accountId,
@@ -703,9 +735,11 @@
   // 重置
   const handleReset = () => {
     hasQueried.value = false;
+    isQuerying.value = false;
     lastQueryParams.value = null;
     lastAccountType.value = '';
     openidListFirstCtx.value = '';
+    hideGameList.value = false;
     // 清除保存的查询状态
     clearQueryState();
     // 重置用户信息
@@ -859,14 +893,6 @@
 /* 用户信息 loading 占位 */
 .user-info-loading-placeholder {
   height: 120px;
-}
-
-/* 用户信息为空 */
-.user-info-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 120px;
 }
 
 /* 游戏列表 loading 容器 */
