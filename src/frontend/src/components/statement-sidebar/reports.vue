@@ -39,11 +39,10 @@
         @click="toggleFavoritesGroup">
         <img
           class="side-pentagram-title"
-          src="@images/pentagram.svg">
+          :src="favoriteItems.length === 0 ? pentagramSvg : pentagramFillSvg">
         <span class="side-group-name">
           {{ t('我的收藏') }}
           <span class="favorite-count">{{ favoriteItems.length }}</span>
-
         </span>
         <audit-icon
           class="side-group-arrow"
@@ -67,7 +66,7 @@
           <tool-tip-text
             :data="child.name"
             :line="1"
-            style="display: inline-block;max-width: 190px; vertical-align: middle;"
+            style="display: inline-block;max-width: 200px; vertical-align: middle;"
             theme="light" />
 
           <audit-icon
@@ -75,11 +74,6 @@
             class="side-pentagram-close"
             type="close"
             @click.stop="handleToggleFavorite(child, false)" />
-          <img
-            v-if="!collapsed && hoveredFavoriteItemId !== child.id"
-            class="side-pentagram-fill"
-            src="@images/pentagram-fill.svg"
-            @click.stop="handleToggleFavorite(child, false)">
         </audit-menu-item>
       </div>
     </div>
@@ -177,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -188,6 +182,9 @@
 
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+
+  import pentagramSvg from '@images/pentagram.svg';
+  import pentagramFillSvg from '@images/pentagram-fill.svg';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -352,7 +349,6 @@
     // 保存用户偏好
     savePanelPreference();
   };
-
   // 收藏/取消收藏处理
   const {
     run: updateFavorite,
@@ -360,6 +356,12 @@
     defaultValue: {},
     onSuccess: () => {
       emit('refresh-menu');
+      setTimeout(() => {
+        fetchGroups({
+          scope_id: getSceneSystemParams().scope_id,
+          scope_type: getSceneSystemParams().scope_type,
+        });
+      }, 500);
     },
   });
 
@@ -495,6 +497,43 @@
         isFavoritesExpanded.value = userPreference.value.isFavoritesExpanded;
       }
     },
+  });
+
+  // 聚合模式下，根据 panelId 查找所属场景并 emit
+  const emitPanelScene = () => {
+    const rawId = route.params.id;
+    const id = Array.isArray(rawId) ? rawId[0] : String(rawId);
+    // 非聚合模式（单场景/单系统）时立即清除 tag
+    const isAggregateMode = route.query.scope_type === 'cross_scene'
+      || route.query.scope_type === 'cross_system';
+    if (!id || !isAggregateMode) {
+      emit('panel-scene-change', null);
+      return;
+    }
+    let sceneGroup: { id: string; name: string; type: string } | undefined;
+    for (const scene of allSideRoutes.value) {
+      for (const group of scene.children || []) {
+        if (group.children?.some(child => child.id === id)) {
+          sceneGroup = scene;
+          break;
+        }
+      }
+      if (sceneGroup) break;
+    }
+    if (sceneGroup) {
+      emit('panel-scene-change', { id: sceneGroup.id, name: sceneGroup.name, type: sceneGroup.type });
+    } else {
+      emit('panel-scene-change', null);
+    }
+  };
+
+  // 路由变化时触发（正常切换）
+  watch(() => route.params.id, emitPanelScene, { immediate: true });
+  // allSideRoutes 数据加载完成时也触发（刷新恢复）
+  watch(allSideRoutes, (newVal) => {
+    if (newVal.length > 0 && sceneChangeItem.value?.type === 'aggregate') {
+      emitPanelScene();
+    }
   });
 
   onMounted(() => {

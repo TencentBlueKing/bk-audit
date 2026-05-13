@@ -25,6 +25,19 @@
       <template #header>
         <router-back v-if="!(route.meta?.isNoBack)" />
         <span>{{ t(pageTitle) }}</span>
+        <!-- 聚合模式下显示当前面板所属场景标签 -->
+        <bk-tag
+          v-if="panelSceneTag"
+          class="title-scene-tag"
+          :class="[`type-${panelSceneTag.type}`]">
+          {{ panelSceneTag.name }}({{ panelSceneTag.id }})
+        </bk-tag>
+        <span
+          v-if="panelDescription"
+          class="title-tip">
+          <span> | </span>
+          <span class="title-tip-text">{{ panelDescription }}</span>
+        </span>
         <span
           v-if="route.meta?.isShowTitleTip"
           class="title-tip">
@@ -37,10 +50,10 @@
           <scene-system-selector
             v-model="selectedScene"
             :list-scope="['scene']"
-            :popover-width="280"
+            :popover-width="400"
             scene-permission="manage_scene"
             system-permission="view_system"
-            width="300px"
+            width="400px"
             @change="handleSceneChange" />
         </span>
         <div
@@ -176,6 +189,10 @@
   const selectedScene = ref<SceneItem | null>();
   const layoutRef = ref();
   const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
+  // 报表详情页的描述信息（来自 layoutRef 的 descriptionRef）
+  const panelDescription = computed(() => (layoutRef.value as any)?.descriptionRef || '');
+  // 聚合模式下当前面板所属场景标签（来自 layoutRef 的 currentPanelScene）
+  const panelSceneTag = computed(() => (layoutRef.value as any)?.currentPanelScene || null);
   const titleTip = computed(() => {
     const paramTip = route.params?.routeTitleTp as string | string[] | undefined;
     const queryTip = route.query?.routeTitleTp as string | string[] | undefined;
@@ -294,14 +311,37 @@
 }
 
 .title-tip {
+  display: inline-flex;
+  align-items: center;
   margin-left: 5px;
-  font-size: 14px;
-  color: #4d4f56;
+  font-size: 12px;
+  color: #979ba5;
 }
 
 .title-tip-text {
-  font-size: 14px;
+  display: inline-block;
+  max-width: 400px;
+  margin-left: 5px;
+  overflow: hidden;
+  font-size: 12px;
   line-height: 52px;
-  color: #4d4f56;
+  color: #979ba5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-scene-tag {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  margin-left: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #63656e;
+  background-color: #f0f1f5;
+  border: none;
+  border-radius: 2px;
 }
 </style>
