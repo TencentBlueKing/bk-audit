@@ -70,23 +70,9 @@
           {{ searchBoxPlaceholder }}
         </span>
         <!-- 搜索图标 -->
-        <svg
+        <audit-icon
           class="search-icon"
-          fill="none"
-          height="14"
-          viewBox="0 0 14 14"
-          width="14"
-          xmlns="http://www.w3.org/2000/svg">
-          <circle
-            cx="6"
-            cy="6"
-            r="4.5"
-            stroke="currentColor" />
-          <path
-            d="M9.5 9.5L12.5 12.5"
-            stroke="currentColor"
-            stroke-linecap="round" />
-        </svg>
+          type="search1" />
         <!-- 三段式筛选浮层 -->
         <div
           v-if="showPopover"
@@ -647,8 +633,7 @@
       position: absolute;
       top: 50%;
       right: 10px;
-      width: 14px;
-      height: 14px;
+      font-size: 14px;
       color: #979ba5;
       pointer-events: none;
       transform: translateY(-50%);
