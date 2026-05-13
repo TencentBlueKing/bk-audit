@@ -316,9 +316,10 @@
   const itemMouseenter = ref(null);
   const dataList = ref<ToolInfo[]>([]);
 
-  // 判断 tagId 是否为有效的后端标签（排除空值和以 - 开头的内置特殊标签）
+  // 判断 tagId 是否为有效的后端标签（排除空值和前端内置特殊标签：-3全部、-4我创建的、-5最近使用）
+  const FRONTEND_SPECIAL_TAGS = ['-3', '-4', '-5'];
   const getValidTagsParam = (id: string) => {
-    if (!id || id.startsWith('-')) return {};
+    if (!id || FRONTEND_SPECIAL_TAGS.includes(id)) return {};
     return { tags: [id] };
   };
 

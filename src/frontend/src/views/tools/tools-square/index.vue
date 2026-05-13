@@ -289,6 +289,9 @@
     refreshTagsList();
   };
 
+  // 固定分类数量（全部工具、我创建的、最近使用、无标签）
+  const FIXED_TAG_COUNT = 4;
+
   const {
     run: fetchToolsTagsList,
   } = useRequest(ToolManageService.fetchToolTags, {
@@ -300,13 +303,24 @@
         2: 'shijian',
         3: 'weifenpei',
       };
-      strategyLabelList.value = data
-        .filter(item => item.tag_name?.trim())
-        .map((item: any, index: number) => ({
+      // 前4项为固定分类，不参与排序；后续为动态标签
+      const fixedTags = data.slice(0, FIXED_TAG_COUNT);
+      const dynamicTags = data.slice(FIXED_TAG_COUNT);
+      strategyLabelList.value = [
+        ...fixedTags.map((item: any, index: number) => ({
           ...item,
+          strategy_count: item.tool_count ?? 0,
           icon: iconMap[index] || 'tag',
-        }));
+        })),
+        ...dynamicTags.map((item: any) => ({
+          ...item,
+          strategy_count: item.tool_count ?? 0,
+          icon: 'tag',
+        })),
+      ];
       tagsEnums.value = strategyLabelList.value;
+      // 始终清空 all，避免 render-label 顶部出现空白行
+      renderLabelRef.value?.resetAll([]);
       // 初始化阶段（tagId 为空）：通过 resetAll 触发 handleChecked 来加载工具列表
       // 场景切换阶段（tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
       if (!tagId.value) {
