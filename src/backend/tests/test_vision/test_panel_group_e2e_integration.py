@@ -98,6 +98,7 @@ class TestPanelGroupE2EIntegration(TestCase):
         self.assertEqual(len(scene_list_after), 1)
         self.assertEqual(scene_list_after[0]["group_id"], group_b["id"])
         self.assertEqual(scene_list_after[0]["group_name"], "分组B")
+        self.assertEqual(scene_list_after[0]["group_priority_index"], 99)
 
         TogglePanelFavorite().request({"panel_id": panel["id"], "favorite": True})
 

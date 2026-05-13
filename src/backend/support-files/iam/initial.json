@@ -1880,9 +1880,6 @@
               "name_en": "System",
               "actions": [
                 {
-                  "id": "create_system"
-                },
-                {
                   "id": "view_system"
                 },
                 {
@@ -1959,6 +1956,9 @@
               "actions": [
                 {
                   "id": "list_system"
+                },
+                {
+                  "id": "create_system"
                 },
                 {
                   "id": "list_strategy"
