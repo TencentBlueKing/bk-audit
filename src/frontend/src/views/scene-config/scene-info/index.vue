@@ -277,11 +277,9 @@
   };
 
   // 更新场景数据（来自基础信息组件的行内编辑）
-  const handleUpdateSceneData = (newData: any) => {
-    // 确定正在编辑的字段 key，用于显示 loading 状态
-    const changedField = Object.keys(newData).find(key => key !== 'id' && key !== 'updatedBy' && key !== 'updatedAt'
-      && newData[key] !== (sceneInfoData.value as any)[key]) || '';
-    savingField.value = changedField;
+  const handleUpdateSceneData = (newData: any, changedKey = '') => {
+    // 子组件直接传入正在编辑的字段 key，用于显示 loading 状态
+    savingField.value = changedKey;
 
     // 构建更新参数，将前端字段映射回后端字段
     const updateParams: Record<string, any> = {
