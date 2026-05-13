@@ -66,6 +66,7 @@ export const getDateParams = () => {
     one_week_ago_Ymd_dashed: formatYmdDashed(oneWeekAgo),
     two_week_ago_Ymd_dashed: formatYmdDashed(twoWeekAgo),
     six_month_ago_Ymd: formatYmd(sixMonthAgo),
+    six_month_ago_Ymd_dashed: formatYmdDashed(sixMonthAgo),
     one_year_ago_Ymd: formatYmd(oneYearAgo),
     last_record_thedate_Ymd: formatYmd(oneMonthAgo),
     today_Ymd: formatYmd(now),
@@ -159,11 +160,13 @@ export const useGameOverviewFetcher = (
   };
 
   // 角色总览（合并3个接口）
+  // 注：与明细 tab 默认"最近半年"保持一致，避免概览查不到数据但明细有数据的不一致情况
+  // 后端字段名 one_month_ago_Ymd_dashed 不变，仅将值改为半年前日期
   const fetchOverviewRoleStats = async () => {
     const dp = getDateParams();
     const ctx = getCtx();
     const baseParams = {
-      one_month_ago_Ymd_dashed: dp.one_month_ago_Ymd_dashed,
+      one_month_ago_Ymd_dashed: dp.six_month_ago_Ymd_dashed,
       one_year_ago_Ymd: dp.one_year_ago_Ymd,
       selected_gameid: ctx.gameid,
       selected_openid: ctx.openid,
@@ -181,13 +184,15 @@ export const useGameOverviewFetcher = (
   };
 
   // 登录统计
+  // 注：与明细 tab 默认"最近半年"保持一致，避免概览查不到数据但明细有数据的不一致情况
+  // 后端字段名不变，仅将值改为半年前日期
   const fetchOverviewLoginStats = async () => {
     const dp = getDateParams();
     const ctx = getCtx();
     const res = await executeDataSource('overview_login_stats', {
-      one_month_ago_Ymd: dp.one_month_ago_Ymd,
-      one_week_ago_Ymd_dashed: dp.one_week_ago_Ymd_dashed,
-      two_week_ago_Ymd_dashed: dp.two_week_ago_Ymd_dashed,
+      one_month_ago_Ymd: dp.six_month_ago_Ymd,
+      one_week_ago_Ymd_dashed: dp.six_month_ago_Ymd_dashed,
+      two_week_ago_Ymd_dashed: dp.six_month_ago_Ymd_dashed,
       selected_gameid: ctx.gameid,
       selected_openid: ctx.openid,
     });
@@ -195,11 +200,13 @@ export const useGameOverviewFetcher = (
   };
 
   // 最近记录（5个接口并行）
+  // 注：与明细 tab 默认"最近半年"保持一致，避免概览查不到数据但明细有数据的不一致情况
+  // 后端字段名 last_record_thedate_Ymd 不变，仅将值改为半年前日期
   const fetchOverviewLastRecords = async () => {
     const dp = getDateParams();
     const ctx = getCtx();
     const baseParams = {
-      last_record_thedate_Ymd: dp.last_record_thedate_Ymd,
+      last_record_thedate_Ymd: dp.six_month_ago_Ymd,
       selected_gameid: ctx.gameid,
       selected_openid: ctx.openid,
     };
