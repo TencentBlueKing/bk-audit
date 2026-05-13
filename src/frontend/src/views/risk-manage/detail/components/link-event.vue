@@ -1132,6 +1132,8 @@
       name: 'strategyList',
       query: {
         strategy_id: eventItem.value.strategy_id,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       },
     });
     window.open(to.href, '_blank');
