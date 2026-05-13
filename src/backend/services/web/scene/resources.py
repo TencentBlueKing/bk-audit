@@ -136,9 +136,22 @@ class ListScene(SceneResource):
     RequestSerializer = SceneFilterSerializer
     ResponseSerializer = SceneListSerializer
     many_response_data = True
+    RELATED_STATS_SORT_FIELDS = {"strategy_count", "risk_count"}
 
     @staticmethod
-    def _annotate_list_queryset(queryset):
+    def _should_annotate_related_stats(order_fields):
+        return any(order_field.lstrip("-") in ListScene.RELATED_STATS_SORT_FIELDS for order_field in order_fields)
+
+    @staticmethod
+    def _annotate_list_queryset(queryset, include_related_stats=True):
+        queryset = queryset.annotate(
+            system_count=Count("scene_systems", distinct=True),
+            table_count=Count("scene_tables", distinct=True),
+            is_all_systems=Exists(SceneSystem.objects.filter(scene_id=OuterRef("scene_id"), is_all_systems=True)),
+        )
+        if not include_related_stats:
+            return queryset
+
         valid_strategy_ids = (
             Strategy.objects.filter(is_deleted=False)
             .annotate(strategy_id_str=Cast("strategy_id", output_field=CharField()))
@@ -176,15 +189,12 @@ class ListScene(SceneResource):
             .values("total")[:1]
         )
         return queryset.annotate(
-            system_count=Count("scene_systems", distinct=True),
-            table_count=Count("scene_tables", distinct=True),
             strategy_count=Coalesce(Subquery(strategy_count_subquery, output_field=IntegerField()), Value(0)),
             risk_count=Coalesce(Subquery(risk_count_subquery, output_field=IntegerField()), Value(0)),
-            is_all_systems=Exists(SceneSystem.objects.filter(scene_id=OuterRef("scene_id"), is_all_systems=True)),
         )
 
     def perform_request(self, validated_request_data):
-        queryset = self._annotate_list_queryset(Scene.objects.all())
+        queryset = Scene.objects.all()
         if validated_request_data.get("scene_id"):
             queryset = queryset.filter(scene_id__in=validated_request_data["scene_id"])
         if "status" in validated_request_data:
@@ -202,7 +212,11 @@ class ListScene(SceneResource):
         if validated_request_data.get("keyword"):
             keyword = validated_request_data["keyword"]
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
-        return queryset.order_by(*validated_request_data["order_fields"])
+        order_fields = validated_request_data["order_fields"]
+        queryset = self._annotate_list_queryset(
+            queryset, include_related_stats=self._should_annotate_related_stats(order_fields)
+        )
+        return queryset.order_by(*order_fields)
 
 
 class ListAllScene(SceneResource):

@@ -19,9 +19,10 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.db.models import Q
 from django.test import RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.request import Request
@@ -737,6 +738,21 @@ class TestSceneResource(TestCase):
         target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
         self.assertIn(strategy.strategy_id, target["strategy_ids"])
         self.assertEqual(target["risk_count"], 1)
+
+    def test_scene_list_default_sort_defers_strategy_and_risk_stats_to_batch_queries(self):
+        """默认排序主查询不内联策略/风险统计子查询"""
+        strategy = self._create_bound_strategy(self.scene, "默认排序批量统计策略")
+        self._create_risk(strategy, "raw-scene-list-batch-stats-1")
+
+        with CaptureQueriesContext(connection) as captured:
+            result = self.resource.scene.list_scene({})
+
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+        self.assertEqual(target["strategy_count"], 1)
+        self.assertEqual(target["risk_count"], 1)
+        list_sql = captured.captured_queries[0]["sql"]
+        self.assertNotIn("risk_risk", list_sql)
+        self.assertNotIn("strategy_v2_strategy", list_sql)
 
     def test_scene_list_contains_system_count_and_table_count(self):
         """测试场景列表返回系统和数据表数量"""
