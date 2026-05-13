@@ -22,14 +22,15 @@
     :is-show="isPopoverShow"
     placement="bottom-start"
     :theme="dark ? 'dark' : 'light'"
-    trigger="click"
+    trigger="manual"
     :width="popoverWidth || (typeof width === 'number' ? width : undefined)"
     @after-hidden="handlePopoverHidden"
     @after-show="handlePopoverShow">
     <div
       class="scene-system-selector"
       :class="{ 'is-active': isPopoverShow, 'is-dark': dark }"
-      :style="{ width: typeof width === 'number' ? `${width}px` : width }">
+      :style="{ width: typeof width === 'number' ? `${width}px` : width }"
+      @click="isPopoverShow = !isPopoverShow">
       <div class="selector-content">
         <bk-tag
           v-if="selectedItem"
@@ -74,7 +75,7 @@
               :key="item.id"
               class="dropdown-item"
               :class="{ 'is-selected': isSelected(item) }"
-              @click="handleSelect(item)">
+              @click.stop="handleSelect(item)">
               <bk-tag
                 class="type-tag"
                 :class="[`type-${item.type}`]">
@@ -101,7 +102,7 @@
               :key="item.id"
               class="dropdown-item"
               :class="{ 'is-selected': isSelected(item) }"
-              @click="handleSelect(item)">
+              @click.stop="handleSelect(item)">
               <bk-tag
                 class="type-tag"
                 :class="[`type-${item.type}`]">
@@ -541,13 +542,22 @@
     systemList,
   });
 
+  // 点击外部区域关闭 popover
+  const handleClickOutside = (e: Event) => {
+    if (!isPopoverShow.value) return;
+    const el = popoverRef.value?.$el || popoverRef.value;
+    if (el && !el.contains(e.target as Node)) {
+      isPopoverShow.value = false;
+    }
+  };
+
   onMounted(() => {
     fetchData();
+    document.addEventListener('click', handleClickOutside, true);
   });
 
   onUnmounted(() => {
-    // 清理路由监听器（如果需要的话）
-    // 通常不需要手动清理，因为router.afterEach返回的函数会在组件卸载时自动清理
+    document.removeEventListener('click', handleClickOutside, true);
   });
 </script>
 

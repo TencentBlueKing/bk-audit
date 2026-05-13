@@ -18,10 +18,11 @@
   <div
     ref="rootRef"
     class="show-tooltips-text"
-    :style="{
+    :class="{ 'single-line': line === 1 }"
+    :style="line !== 1 ? {
       '-webkit-line-clamp': line,
       'line-clamp': line,
-    }">
+    } : {}">
     <span>
       {{ data || '--' }}
     </span>
@@ -138,6 +139,13 @@
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
+
+    &.single-line {
+      display: block;
+      text-overflow: ellipsis;
+      word-break: normal;
+      white-space: nowrap;
+    }
   }
 
   .text-content {
