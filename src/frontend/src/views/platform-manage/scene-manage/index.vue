@@ -316,6 +316,21 @@
     disabled: 0,
   });
 
+  // 获取删除按钮的 tooltips 配置
+  const getDeleteTooltips = (row: SceneModel) => {
+    if (row.status === 'enabled') {
+      return { content: t('请先停用后再删除'), disabled: false };
+    }
+    if (row.status === 'disabled' && row.strategy_ids.length > 0) {
+      return { content: t('该场景已被策略引用，无法删除'), disabled: false };
+    }
+    return { disabled: true };
+  };
+
+  // 判断删除按钮是否禁用
+  const isDeleteDisabled = (row: SceneModel) => row.status === 'enabled'
+    || (row.status === 'disabled' && row.strategy_ids.length > 0);
+
   // 表格列配置
   const tableColumns = [
     {
@@ -517,11 +532,9 @@
             content: () => (
               <div class="more-action-menu">
                 <div
-                  v-bk-tooltips={row.status === 'enabled'
-                    ? { content: t('删除场景需先停用场景'), disabled: false }
-                    : { disabled: true }}
-                  class={['more-action-item', row.status === 'enabled' ? 'is-disabled' : '']}
-                  onClick={() => row.status !== 'enabled' && handleDeleteScene(row)}>
+                  v-bk-tooltips={getDeleteTooltips(row)}
+                  class={['more-action-item', isDeleteDisabled(row) ? 'is-disabled' : '']}
+                  onClick={() => !isDeleteDisabled(row) && handleDeleteScene(row)}>
                   {t('删除')}
                 </div>
               </div>
