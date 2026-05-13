@@ -25,7 +25,7 @@ from apps.meta.permissions import (
     SystemPermissionHandler,
 )
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission, insert_action_permission_field
+from apps.permission.handlers.drf import insert_action_permission_field
 
 
 class SystemsViewSet(ResourceViewSet):
@@ -34,13 +34,11 @@ class SystemsViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["retrieve", "resource_types", "resource_type_schema", "actions"]:
             return SystemPermissionHandler.system_view_permissions()
-        if self.action in ["create"]:
-            return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
         if self.action in ["update"]:
             return SystemPermissionHandler.system_edit_permissions()
         if self.action in ["search", "resource_type_schema_search"]:
             return [SearchLogSystemSearchPermission()]
-        # all,favorite,resource_type_search,action_search,list
+        # create,all,favorite,resource_type_search,action_search,list
         return []
 
     resource_routes = [
