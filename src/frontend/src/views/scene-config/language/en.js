@@ -79,6 +79,10 @@ export default {
     删除成功: 'Deleted successfully',
     排序成功: 'Sorted successfully',
     暂无数据: 'No data',
+    // hover jump tips
+    点击查看审计报表: 'Click to view audit report',
+    跳转至BKVision查看: 'Jump to BKVision to view',
+    暂无权限: 'No permission',
     // Scene Info
     场景信息: 'Scene Info',
     关联系统: 'Linked Systems',
