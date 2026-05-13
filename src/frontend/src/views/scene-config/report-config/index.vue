@@ -71,14 +71,13 @@
               {{ t('停用') }}
             </bk-radio-button>
           </bk-radio-group>
-          <bk-input
+          <bk-search-select
             v-model="searchKeyword"
             class="search-input"
-            clearable
+            :data="searchSelectData"
             :placeholder="t('搜索 报表ID、名称、描述、BKVision 报表、更新人')"
-            type="search"
-            @clear="handleSearch"
-            @enter="handleSearch" />
+            unique-select
+            @update:model-value="handleSearch" />
         </div>
       </div>
       <div class="report-config-content">
@@ -183,9 +182,46 @@
   // 状态筛选
   const statusFilter = ref('all');
   // 搜索关键词
-  const searchKeyword = ref('');
+  const searchKeyword = ref<any[]>([]);
   // 是否全部展开
   const isAllExpanded = ref(false);
+  // 搜索选择器数据
+  const searchSelectData = [
+    { name: '报表ID', id: 'id', placeholder: '请输入报表ID' },
+    { name: '名称', id: 'name', placeholder: '请输入名称' },
+    { name: '描述', id: 'description', placeholder: '请输入描述' },
+    { name: 'BKVision 报表', id: 'bkvision_report', placeholder: '请输入BKVision报表' },
+    { name: '更新人', id: 'updated_by', placeholder: '请输入更新人' },
+  ];
+
+  // 从 searchSelect 数组中提取对应字段参数（仿造 scene-manage）
+  const getSearchParams = (keyword?: any[]): Record<string, any> => {
+    const search = {
+      id: undefined,
+      name: '',
+      description: '',
+      bkvision_report: '',
+      updated_by: '',
+    } as Record<string, any>;
+
+    (keyword || searchKeyword.value).forEach((item) => {
+      if (item.values && item.values.length) {
+        const value = item.values.map((v: any) => v.id).join(',');
+        if (item.id === 'id') {
+          search.id = value;
+        } else if (item.id === 'name') {
+          search.name = value;
+        } else if (item.id === 'description') {
+          search.description = value;
+        } else if (item.id === 'bkvision_report') {
+          search.bkvision_report = value;
+        } else if (item.id === 'updated_by') {
+          search.updated_by = value;
+        }
+      }
+    });
+    return search;
+  };
 
   // 新建分组相关状态
   const createGroupDialogVisible = ref(false);
@@ -218,7 +254,7 @@
     name: g.name,
   })));
 
-  const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
+  const groups = ref<Array<{ id: number; name: string; group_type?: string; priority_index: number }>>([]);
   const reportGroups = ref<ReportGroup[]>([]);
   // 数据加载状态（覆盖 fetchGroups + fetchPanels 完整链路）
   const isDataLoading = ref(false);
@@ -286,6 +322,7 @@
         .map(group => ({
           id: group.id,
           name: group.name,
+          group_type: group.group_type,
           priority_index: group.priority_index,
           reports: panelsData
             .filter((panel: PanelModel) => panel.group_id === group.id)
@@ -302,12 +339,15 @@
               updatedAt: panel.updated_at || '--',
             })) as Report[],
         }))
+        // 过滤掉 reports 为空的分组（搜索时无匹配数据的分组不展示）
+        .filter(group => group.reports.length > 0)
         .sort((a, b) => b.priority_index - a.priority_index);
     },
     onFinally: () => {
       isDataLoading.value = false;
     },
   });
+
   // 获取分组
   const {
     run: fetchGroups,
@@ -315,12 +355,13 @@
     defaultValue: {},
     onSuccess: (data) => {
       groups.value = data;
+      const searchParams = getSearchParams();
       fetchPanels({
         page: 1,
         page_size: 10000,
         status: '',
         scene_id: getSceneSystemParams().scope_id,
-        keyword: searchKeyword.value || undefined,
+        ...searchParams,
       });
     },
     onFinally: () => {
@@ -385,8 +426,8 @@
     isAllExpanded.value = !isAllExpanded.value;
   };
 
-  // 搜索/筛选
-  const handleSearch = () => {
+  // 搜索/筛选（仿造 scene-manage）
+  const handleSearch = (keyword?: any[]) => {
     // 根据状态筛选确定 status 参数
     let statusParam: 'published' | 'unpublished' | '' = '';
     if (statusFilter.value === 'enabled') {
@@ -396,12 +437,13 @@
     }
     isDataLoading.value = true;
     reportGroups.value = [];
+    const searchParams = getSearchParams(keyword);
     fetchPanels({
       page: 1,
       page_size: 10000,
       status: statusParam,
-      keyword: searchKeyword.value || undefined,
       scene_id: getSceneSystemParams().scope_id,
+      ...searchParams,
     });
   };
 
