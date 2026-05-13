@@ -251,10 +251,16 @@ class SceneReportGroupListItemSerializer(serializers.Serializer):
     priority_index = serializers.IntegerField()
 
 
+class PanelGroupItemSerializer(serializers.Serializer):
+    group_id = serializers.IntegerField()
+    priority_index = serializers.IntegerField()
+
+
 class ScenePanelListItemSerializer(VisionPanelBaseSerializer):
     group_id = serializers.IntegerField(allow_null=True)
     group_name = serializers.CharField(allow_blank=True)
     group_type = serializers.CharField(allow_blank=True)
+    group_priority_index = serializers.IntegerField(allow_null=True)
     binding_type = serializers.ChoiceField(
         choices=BindingType.choices,
         required=False,
@@ -292,6 +298,7 @@ class PanelSquareListItemSerializer(VisionPanelBaseSerializer):
         help_text="资源绑定类型：platform_binding 表示平台级绑定，scene_binding 表示场景级绑定",
     )
     group_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+    groups = PanelGroupItemSerializer(many=True)
     favorite_created_at = serializers.DateTimeField(allow_null=True)
 
 

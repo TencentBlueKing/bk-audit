@@ -236,14 +236,22 @@ class ListPanels(BKVision):
             resource_type=ResourceVisibilityType.PANEL,
             resource_ids=panel_ids,
         )
-        group_map = defaultdict(list)
+        group_ids_map = defaultdict(list)
+        groups_map = defaultdict(list)
         group_items = (
             SceneReportGroupItem.objects.filter(panel_id__in=panel_ids, group__scene_id__in=scene_ids)
-            .values("panel_id", "group_id")
+            .values("panel_id", "group_id", "priority_index")
             .order_by("-group__priority_index", "-priority_index", "id")
         )
         for item in group_items:
-            group_map[str(item["panel_id"])].append(item["group_id"])
+            panel_id = str(item["panel_id"])
+            group_ids_map[panel_id].append(item["group_id"])
+            groups_map[panel_id].append(
+                {
+                    "group_id": item["group_id"],
+                    "priority_index": item["priority_index"],
+                }
+            )
         favorite_map = {
             str(item["panel_id"]): item["created_at"]
             for item in UserPanelFavorite.objects.filter(
@@ -266,7 +274,8 @@ class ListPanels(BKVision):
                     "updated_by": panel.updated_by,
                     "updated_at": panel.updated_at,
                     "binding_type": binding_metadata_map.get(panel_id, {}).get("binding_type"),
-                    "group_ids": group_map.get(panel_id, []),
+                    "group_ids": group_ids_map.get(panel_id, []),
+                    "groups": groups_map.get(panel_id, []),
                     "favorite_created_at": favorite_map.get(panel_id),
                 }
             )
@@ -865,6 +874,7 @@ class ListScenePanels(BKVision):
                     "group_id": item.group_id if item else None,
                     "group_name": item.group.name if item else "",
                     "group_type": item.group.group_type if item else "",
+                    "group_priority_index": item.priority_index if item else None,
                     "binding_type": binding.binding_type if binding else None,
                 }
             )
