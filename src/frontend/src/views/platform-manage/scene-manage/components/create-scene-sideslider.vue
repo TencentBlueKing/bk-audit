@@ -219,7 +219,7 @@
 
   interface Emits {
     (e: 'update:isShow', value: boolean): void;
-    (e: 'success'): void;
+    (e: 'success', sceneId?: string | number): void;
   }
 
   interface FormData {
@@ -485,9 +485,14 @@
     run: createScene,
   } = useRequest(SceneManageService.createScene, {
     defaultValue: new SceneModel(),
-    onSuccess: () => {
+    onSuccess: (res) => {
       messageSuccess(t(isEditMode.value ? '编辑成功' : '创建成功'));
-      emits('success');
+      // 新建模式下传递新场景 ID，用于高亮显示
+      if (!isEditMode.value && res?.scene_id) {
+        emits('success', res.scene_id);
+      } else {
+        emits('success');
+      }
       handleClose();
     },
   });
