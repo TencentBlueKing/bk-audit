@@ -195,7 +195,7 @@ class SceneSimpleListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Scene
-        fields = ["scene_id", "name", "description", "status"]
+        fields = ["scene_id", "name", "description", "status", "managers", "users"]
 
 
 class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
@@ -246,7 +246,7 @@ class UpdateSceneSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=128, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), required=False)
-    users = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+    users = serializers.ListField(child=serializers.CharField(), required=False)
     systems = SceneSystemInputSerializer(many=True, required=False)
     tables = SceneTableInputSerializer(many=True, required=False)
 
@@ -258,7 +258,7 @@ class SceneInfoUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=128, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     managers = serializers.ListField(child=serializers.CharField(), required=False)
-    users = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+    users = serializers.ListField(child=serializers.CharField(), required=False)
 
 
 class SceneFilterSerializer(SortSerializerMixin, serializers.Serializer):
