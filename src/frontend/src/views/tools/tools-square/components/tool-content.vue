@@ -332,7 +332,6 @@
 <style scoped lang="postcss">
 .top-search {
   padding: 16px;
-  margin-top: 12px;
   background: #fff;
 
   .top-search-title {
