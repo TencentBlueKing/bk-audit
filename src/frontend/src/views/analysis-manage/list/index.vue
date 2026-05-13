@@ -20,10 +20,10 @@
       <span class="header-title">{{ t('检索') }}</span>
       <scene-system-selector
         v-model="selectedScene"
-        :popover-width="320"
+        :popover-width="400"
         scene-permission="view_scene"
         system-permission="view_system"
-        :width="240"
+        :width="400"
         @change="handleSceneChange" />
     </div>
     <skeleton-loading

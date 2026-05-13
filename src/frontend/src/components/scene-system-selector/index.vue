@@ -50,7 +50,8 @@
     <template #content>
       <div
         class="scene-system-dropdown"
-        :class="{ 'is-dark': dark }">
+        :class="{ 'is-dark': dark }"
+        @click.stop>
         <!-- 审计场景分组 -->
         <div
           v-if="listScope.includes('scene') && (
@@ -135,6 +136,8 @@
   import MetaManageService from '@service/meta-manage';
   import sceneManageService from '@service/scene-manage';
 
+  import useEventBus from '@hooks/use-event-bus';
+
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -177,6 +180,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const { emit: sceneEmit } = useEventBus();
 
   const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["scene_admin"]') as string[];
 
@@ -459,6 +463,9 @@
           type: 'scene' as const,
         }));
       sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
+      // 存储纯场景列表（不含聚合项）供 layout.vue 聚合模式使用
+      sessionStorage.setItem('scene-system-selector:sceneList', JSON.stringify(list));
+      sceneEmit('scene-list-ready', list);
       // 尝试从路由参数选中（场景列表已就绪）
       trySelectFromRoute();
     },
@@ -553,11 +560,11 @@
 
   onMounted(() => {
     fetchData();
-    document.addEventListener('click', handleClickOutside, true);
+    document.addEventListener('click', handleClickOutside);
   });
 
   onUnmounted(() => {
-    document.removeEventListener('click', handleClickOutside, true);
+    document.removeEventListener('click', handleClickOutside);
   });
 </script>
 
