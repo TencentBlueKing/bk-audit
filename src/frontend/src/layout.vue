@@ -351,10 +351,13 @@
 
   interface Exposes {
     titleRef: Ref<string>
+    descriptionRef: Ref<string>
+    currentPanelScene: Ref<{ id: string; name: string; type: string } | null>
   }
   interface MenuDataType {
     id: string;
     name: string;
+    description?: string;
     group_ids: number[];
     priority_index?: number;
     favorite_created_at?: string | null;
@@ -379,6 +382,18 @@
   const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
+  const descriptionRef = ref<string>('');
+  // 聚合模式下当前面板所属场景信息（供 header 显示场景标签）
+  const currentPanelScene = ref<{ id: string; name: string; type: string } | null>(null);
+  // 从 scene-system-selector 缓存的稳定场景列表
+  const cachedSceneList = ref<Array<{ id: string; name: string; type: string }>>([]);
+  // 尝试从 sessionStorage 恢复已缓存的 sceneList
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('scene-system-selector:sceneList') || '[]');
+    if (Array.isArray(saved)) {
+      cachedSceneList.value = saved;
+    }
+  } catch { /* ignore */ }
   const menuData = ref<Array<MenuDataType>>([]);
   // const systemId = ref<string | null>(null);
   // 项目列表
@@ -501,10 +516,25 @@
   on('statement-menuData', (data) => {
     menuData.value = data as Array<MenuDataType>;
     if (route.params.id) {
-      titleRef.value = menuData.value.find(item => item.id === route.params.id)?.name || '';
+      const matched = menuData.value.find(item => item.id === route.params.id);
+      titleRef.value = matched?.name || '';
+      descriptionRef.value = matched?.description || '';
     } else {
       titleRef.value =  menuData.value[0]?.name;
+      descriptionRef.value = menuData.value[0]?.description || '';
     }
+  });
+
+  // 聚合模式下监听当前面板所属场景变化
+  on('panel-scene-change', (scene) => {
+    currentPanelScene.value = scene as { id: string; name: string; type: string } | null;
+    // 缓存到 sessionStorage，刷新后可恢复
+    sessionStorage.setItem('layout:currentPanelScene', JSON.stringify(scene));
+  });
+
+  // 监听 scene-system-selector 的 sceneList 就绪事件（稳定数据源，刷新也可用）
+  on('scene-list-ready', (list) => {
+    cachedSceneList.value = list as Array<{ id: string; name: string; type: string }>;
   });
 
   const handleSideMenuFlodChange = (value: boolean) => {
@@ -588,6 +618,29 @@
   // };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
+    // 切换菜单项时同步更新 descriptionRef
+    if (curNavName.value === 'auditStatement' && route.params.id && menuData.value.length > 0) {
+      const matched = menuData.value.find(item => item.id === route.params.id);
+      titleRef.value = matched?.name || '';
+      descriptionRef.value = matched?.description || '';
+    }
+    // 切换单场景时立即清除场景标签（scope_type 不再是 cross_scene/cross_system）
+    const isAggregateMode = route.query.scope_type === 'cross_scene'
+      || route.query.scope_type === 'cross_system';
+    if (curNavName.value === 'auditStatement' && !isAggregateMode) {
+      currentPanelScene.value = null;
+    }
+    // 聚合模式下，刷新页面时从 sessionStorage 恢复场景标签
+    if (curNavName.value === 'auditStatement'
+      && !currentPanelScene.value
+      && isAggregateMode) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('layout:currentPanelScene') || 'null');
+        if (saved) {
+          currentPanelScene.value = saved;
+        }
+      } catch { /* ignore */ }
+    }
   }, {
     deep: true,
     immediate: true,
@@ -609,6 +662,8 @@
 
   defineExpose<Exposes>({
     titleRef,
+    descriptionRef,
+    currentPanelScene,
   });
 </script>
 <style lang="postcss">
