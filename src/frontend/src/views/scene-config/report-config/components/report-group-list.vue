@@ -487,6 +487,7 @@
   interface Props {
     groups: ReportGroup[];
     expandAll?: boolean;
+    activeGroups?: number[];
   }
 
   // 拖拽排序结果
@@ -520,11 +521,13 @@
     (e: 'drag-sort', result: DragSortResult): void;
     (e: 'group-drag-sort', result: GroupDragSortResult): void;
     (e: 'order-updated'): void;
+    (e: 'update:activeGroups', value: number[]): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     groups: () => [],
     expandAll: false,
+    activeGroups: () => [],
   });
 
   const emit = defineEmits<Emits>();
@@ -543,8 +546,11 @@
       .replace(/\+/, ' ');       // 时区 + 号替换为空格
   };
 
-  // 展开的分组
+  // 展开的分组（内部管理，用持久备份防止 bk-collapse 重置）
+  // eslint-disable-next-line vue/no-dupe-keys
   const activeGroups = ref<number[]>([]);
+  // 持久化备份：用户操作展开/收起时保存，数据刷新时恢复
+  const savedActiveGroups = ref<number[]>([]);
 
   // 当前 hover 的报表行 ID
   const hoveredReportId = ref<string | null>(null);
@@ -970,11 +976,25 @@
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
     localGroups.value = [...groups];
-    // 默认只展开第一个分组
+    // 有数据时恢复展开状态
     if (groups.length > 0) {
-      activeGroups.value = [groups[0].id];
+      if (savedActiveGroups.value.length > 0) {
+        // 从持久备份恢复（清理已删除的分组）
+        const validIds = new Set(groups.map(g => g.id));
+        activeGroups.value = savedActiveGroups.value.filter(id => validIds.has(id));
+      } else {
+        // 首次加载，默认展开第一个
+        activeGroups.value = [groups[0].id];
+        savedActiveGroups.value = [groups[0].id];
+      }
     }
   }, { immediate: true, deep: true });
+
+  // 用户操作展开/收起时，同步到持久备份并通知父组件
+  watch(activeGroups, (val) => {
+    savedActiveGroups.value = [...val];
+    emit('update:activeGroups', [...val]);
+  }, { deep: true });
 
   // 监听全部展开/收起
   watch(() => props.expandAll, (val) => {
