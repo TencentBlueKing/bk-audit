@@ -198,6 +198,10 @@
                       <div class="custom-table-cell action-cell">
                         <div class="action-column">
                           <bk-button
+                            v-bk-tooltips="{
+                              content: t('平台报表不支持编辑'),
+                              disabled: report.binding_type !== 'platform_binding',
+                            }"
                             class="mr8"
                             :disabled="report.binding_type === 'platform_binding'"
                             text
