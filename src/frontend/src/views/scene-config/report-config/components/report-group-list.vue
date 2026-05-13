@@ -55,9 +55,16 @@
                       type="plus-circle" />
                     {{ t('新建报表') }}
                   </bk-button>
-                  <bk-dropdown trigger="hover">
+                  <bk-dropdown
+                    :disabled="isPlatformGroup(group)"
+                    trigger="hover">
                     <bk-button
+                      v-bk-tooltips="{
+                        content: t('平台报表为系统内置分组，不支持重命名和删除'),
+                        disabled: !isPlatformGroup(group),
+                      }"
                       class="group-more-btn ml8"
+                      :disabled="isPlatformGroup(group)"
                       text
                       theme="primary">
                       <audit-icon type="more" />
@@ -95,11 +102,9 @@
                 <div class="custom-table-header">
                   <div class="custom-table-cell drag-cell" />
                   <div class="custom-table-cell id-cell">
-                    {{ t('报表ID') }}
-                  </div>
-                  <div class="custom-table-cell name-cell">
                     {{ t('报表名称') }}
                   </div>
+
                   <div class="custom-table-cell desc-cell">
                     {{ t('描述') }}
                   </div>
@@ -139,7 +144,7 @@
                       </div>
                       <div class="custom-table-cell id-cell">
                         <tool-tip-text
-                          :data="report.id"
+                          :data="report.name"
                           :line="1" />
                         <bk-tag
                           v-if="report.binding_type === 'platform_binding'"
@@ -153,11 +158,6 @@
                           class="jump-link id-jump-link"
                           type="jump-link"
                           @click.stop="handleGoAuditReport(report)" />
-                      </div>
-                      <div class="custom-table-cell name-cell">
-                        <tool-tip-text
-                          :data="report.name"
-                          :line="1" />
                       </div>
                       <div class="custom-table-cell desc-cell">
                         <tool-tip-text
@@ -193,7 +193,7 @@
                         <span class="cell-text">{{ report.updatedBy }}</span>
                       </div>
                       <div class="custom-table-cell time-cell">
-                        <span class="cell-text">{{ report.updatedAt }}</span>
+                        <span class="time-text">{{ formatUpdateTime(report.updatedAt) }}</span>
                       </div>
                       <div class="custom-table-cell action-cell">
                         <div class="action-column">
@@ -475,6 +475,7 @@
   export interface ReportGroup {
     id: number;
     name: string;
+    group_type?: string;
     reports: Report[];
     priority_index: number;
   }
@@ -528,11 +529,24 @@
   const router = useRouter();
   const { messageSuccess } = useMessage();
 
+  // 格式化更新时间：将 T 替换为空格，去掉毫秒，时区用空格分隔
+  // 例: "2026-04-08T11:37:31.736326+08:00" → "2026-04-08 11:37:31 08:00"
+  const formatUpdateTime = (timeStr: string): string => {
+    if (!timeStr) return '-';
+    return timeStr
+      .replace('T', ' ')        // 替换 T 为空格
+      .replace(/\.\d{6}/, '')    // 移除毫秒部分
+      .replace(/\+/, ' ');       // 时区 + 号替换为空格
+  };
+
   // 展开的分组
   const activeGroups = ref<number[]>([]);
 
   // 当前 hover 的报表行 ID
   const hoveredReportId = ref<string | null>(null);
+
+  // 判断是否为平台报表分组（系统内置分组）
+  const isPlatformGroup = (group: ReportGroup): boolean => group.group_type === 'platform';
 
   // 本地分组数据（用于拖拽排序）
   const localGroups = ref<ReportGroup[]>([]);
@@ -1182,7 +1196,9 @@
 
 .id-cell {
   position: relative;
-  width: 300px;
+  flex: 1;
+  min-width: 150px;
+
 }
 
 .id-jump-link {
@@ -1197,10 +1213,6 @@
   }
 }
 
-.name-cell {
-  flex: 1;
-  min-width: 150px;
-}
 
 .desc-cell {
   flex: 1;
@@ -1220,7 +1232,13 @@
 }
 
 .time-cell {
-  width: 180px;
+  min-width: 200px;
+}
+
+/* 更新时间列 - 完整展示，不截断 */
+.time-text {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .action-cell {
@@ -1412,5 +1430,9 @@
 .group-name-highlight {
   font-weight: 600;
   color: #313238;
+}
+
+.platform-binding-tag {
+  margin-left: 5px;
 }
 </style>

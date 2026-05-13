@@ -42,6 +42,8 @@ class PanelManage extends ModuleBase {
     status?: 'published' | 'unpublished',
     keyword?: string,
     scene_id: string,
+    name?: string,
+    description?: string,
   }) {
     return Request.get<PanelModel[]>(`bkvision${this.module}/panel/scene/`, {
       params,
