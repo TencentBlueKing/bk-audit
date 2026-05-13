@@ -91,6 +91,7 @@
           :columns="tableColumns"
           :data-source="dataSource"
           need-empty-search-tip
+          :row-class-name="getSceneRowClassName"
           row-key="scene_id"
           @clear-search="handleClearSearch"
           @request-success="handleRequestSuccess" />
@@ -300,6 +301,8 @@
   // 新建/编辑场景侧边栏
   const createSceneVisible = ref(false);
   const editSceneId = ref<string | number | undefined>(undefined);
+  // 新增的场景ID集合（用于高亮显示绿色底）
+  const newSceneIds = ref<Set<string | number>>(new Set());
 
   // 场景详情侧边栏
   const sceneDetailVisible = ref(false);
@@ -610,8 +613,23 @@
   };
 
   // 新建场景成功
-  const handleCreateSceneSuccess = () => {
+  const handleCreateSceneSuccess = (newSceneId?: string | number) => {
+    // 如果返回了新场景ID，记录下来用于高亮显示
+    if (newSceneId !== undefined && newSceneId !== null) {
+      // 统一转为字符串存储，避免类型不匹配
+      newSceneIds.value.add(String(newSceneId));
+    }
     listRef.value?.fetchData({});
+  };
+
+  // 获取场景行的类名（新增的场景显示绿色底）
+  const getSceneRowClassName = (row: any): string => {
+    // 兼容 TDesign 传入 { row } 或直接 row 的情况
+    const rowData = row?.row || row;
+    if (rowData && newSceneIds.value.has(String(rowData.scene_id))) {
+      return 'new-row';
+    }
+    return '';
   };
 
   // 显示场景详情

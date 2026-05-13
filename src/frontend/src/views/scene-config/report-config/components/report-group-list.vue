@@ -128,7 +128,10 @@
                   item-key="id"
                   @change="(evt: any) => handleReportDragChange(group.id, evt)">
                   <template #item="{ element: report }">
-                    <div class="custom-table-row">
+                    <div
+                      class="custom-table-row"
+                      @mouseenter="hoveredReportId = report.id"
+                      @mouseleave="hoveredReportId = null">
                       <div class="custom-table-cell drag-cell">
                         <audit-icon
                           class="row-drag-handle table-drag-icon"
@@ -143,6 +146,13 @@
                           class="platform-binding-tag">
                           {{ t('平台') }}
                         </bk-tag>
+                        <!-- hover整行时显示跳转icon，停用状态不显示 -->
+                        <audit-icon
+                          v-if="hoveredReportId === report.id && report.status === 'published'"
+                          v-bk-tooltips="t('点击查看审计报表')"
+                          class="jump-link id-jump-link"
+                          type="jump-link"
+                          @click.stop="handleGoAuditReport(report)" />
                       </div>
                       <div class="custom-table-cell name-cell">
                         <tool-tip-text
@@ -156,26 +166,22 @@
                       </div>
                       <div class="custom-table-cell bkvision-cell">
                         <span
-                          v-if="report.bkvisionReportName"
+                          v-if="report.bkvisionReportName || report.bkvisionReport"
                           class="bkvision-report-cell">
                           <tool-tip-text
-                            :data="report.bkvisionReportName"
+                            :data="report.bkvisionReportName || report.bkvisionReport"
                             :line="1" />
                           <audit-icon
-                            v-if="report.bkvisionReport"
+                            v-if="(report.bkvisionReport || report.bkvisionReportName) && hoveredReportId === report.id"
+                            v-bk-tooltips="t('跳转至BKVision查看')"
                             class="jump-link"
                             type="jump-link"
-                            @click="handleGoBkvision(report)" />
+                            @click.stop="handleGoBkvision(report)" />
                         </span>
                         <span
                           v-else
                           class="bkvision-report-cell">
-                          <span class="cell-text">{{ report.bkvisionReport || '-' }}</span>
-                          <audit-icon
-                            v-if="report.bkvisionReport"
-                            v-bk-tooltips="t('暂无权限')"
-                            class="jump-link disabled"
-                            type="jump-link" />
+                          <span class="cell-text">-</span>
                         </span>
                       </div>
                       <div class="custom-table-cell status-cell">
@@ -437,6 +443,7 @@
 <script setup lang='tsx'>
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
   import ReportConfigService from '@service/report-config';
@@ -518,10 +525,14 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const router = useRouter();
   const { messageSuccess } = useMessage();
 
   // 展开的分组
   const activeGroups = ref<number[]>([]);
+
+  // 当前 hover 的报表行 ID
+  const hoveredReportId = ref<string | null>(null);
 
   // 本地分组数据（用于拖拽排序）
   const localGroups = ref<ReportGroup[]>([]);
@@ -589,24 +600,24 @@
     defaultValue: null,
   });
 
-  // 跳转到BKVision
-  const handleGoBkvision = async (report: Report) => {
-    if (!report.bkvisionReport || !report.bkvisionSpaceUid) return;
-    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
-    if (!baseUrl) return;
+  // 跳转到审计报表查看页
+  const handleGoAuditReport = (report: Report) => {
+    const routeData = router.resolve({
+      name: 'statementManageDetail',
+      params: { id: report.id },
+      query: {
+        scene_id: getSceneSystemParams().scope_id,
+        scene_type: 'scene',
+      },
+    });
+    window.open(routeData.href, '_blank');
+  };
 
-    try {
-      // 先调用接口获取 dashboard_uid
-      const res = await fetchReportDetail({
-        share_uid: report.bkvisionReport,
-      });
-      if (res && res.data?.dashboard_uid) {
-        // 构建跳转链接：baseUrl#/spaceUid/dashboards/detail/root/dashboardUid
-        window.open(`${baseUrl}#/${report.bkvisionSpaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
-      }
-    } catch (e) {
-      console.error('获取报表详情失败:', e);
-    }
+  // 跳转到BKVision（参考新建报表预览逻辑）
+  const handleGoBkvision = async (report: Report) => {
+    const res = await fetchReportDetail({ share_uid: report.vision_id });
+    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
+    window.open(`${baseUrl}#/${report.bkvisionSpaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
   };
   // 调用排序接口
   const {
@@ -1170,7 +1181,20 @@
 }
 
 .id-cell {
+  position: relative;
   width: 300px;
+}
+
+.id-jump-link {
+  flex-shrink: 0;
+  margin-left: 4px;
+  font-size: 14px;
+  color: #3a84ff;
+  cursor: pointer;
+
+  &:hover {
+    color: #699df4;
+  }
 }
 
 .name-cell {
