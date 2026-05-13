@@ -43,10 +43,10 @@
           <scene-system-selector
             v-model="selectedScene"
             :list-scope="['scene']"
-            :popover-width="250"
+            :popover-width="210"
             scene-permission="view_scene"
             system-permission="view_system"
-            width="100%"
+            width="210px"
             @change="handleSceneChange" />
         </div>
         <div class="sidebar-header">
