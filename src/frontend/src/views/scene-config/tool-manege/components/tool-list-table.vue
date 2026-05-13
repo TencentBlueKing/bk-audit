@@ -149,7 +149,7 @@
           class="strategy-item"
           onClick={() => handleStrategyClick(strategyId)}>
           <span class="strategy-name">
-            {getStrategyName(strategyId)}（CL{strategyId}）
+            {getStrategyName(strategyId)}（{strategyId}）
           </span>
           <audit-icon
             class="strategy-link-icon"
