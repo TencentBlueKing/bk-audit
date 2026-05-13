@@ -38,6 +38,8 @@ export default  {
     status?: 'published' | 'unpublished',
     keyword?: string,
     scene_id: string,
+    name?: string,
+    description?: string,
   }) {
     return PanelModelSource.fetchPanels(params)
       .then(({ data }) => data.map((item: PanelModel) => new PanelModel(item)));
