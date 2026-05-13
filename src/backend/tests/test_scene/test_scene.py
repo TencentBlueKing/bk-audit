@@ -879,7 +879,7 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.list_all_scene({})
         self.assertGreaterEqual(len(result), 1)
         target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
-        self.assertSetEqual(set(target.keys()), {"scene_id", "name", "description", "status"})
+        self.assertSetEqual(set(target.keys()), {"scene_id", "name", "description", "status", "managers", "users"})
         self.assertEqual(target["description"], self.scene.description)
 
     def test_scene_list_all_filter_by_status(self):
@@ -951,46 +951,29 @@ class TestSceneResource(TestCase):
         """测试场景详情 - IAM 成员覆盖"""
         self.scene.iam_manager_group_id = 1001
         self.scene.iam_viewer_group_id = 1002
-        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+        # 设置场景的成员信息（由定时任务同步）
+        self.scene.managers = ["iam_admin", "iam_manager1"]
+        self.scene.users = ["iam_user1"]
+        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id", "managers", "users"])
 
-        mock_manager_members = [
-            {"type": "user", "id": "iam_admin"},
-            {"type": "user", "id": "iam_manager1"},
-        ]
-        mock_viewer_members = [
-            {"type": "user", "id": "iam_user1"},
-        ]
-
-        with mock.patch(
-            "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
-            side_effect=[mock_manager_members, mock_viewer_members, mock_manager_members, mock_viewer_members],
-        ):
-            result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
-            # 验证返回的是 IAM 实时成员（字符串列表），而非 DB 中的原始值
-            self.assertEqual(result["managers"], ["iam_admin", "iam_manager1"])
-            self.assertEqual(result["users"], ["iam_user1"])
+        result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
+        # 验证返回的是场景对象中的成员信息（由定时任务同步）
+        self.assertEqual(result["managers"], ["iam_admin", "iam_manager1"])
+        self.assertEqual(result["users"], ["iam_user1"])
 
     def test_scene_info_get_with_iam_members(self):
         """测试获取场景信息 - IAM 成员覆盖"""
         self.scene.iam_manager_group_id = 2001
         self.scene.iam_viewer_group_id = 2002
-        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+        # 设置场景的成员信息（由定时任务同步）
+        self.scene.managers = ["scene_admin"]
+        self.scene.users = ["scene_user1", "scene_user2"]
+        self.scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id", "managers", "users"])
 
-        mock_manager_members = [
-            {"type": "user", "id": "scene_admin"},
-        ]
-        mock_viewer_members = [
-            {"type": "user", "id": "scene_user1"},
-            {"type": "user", "id": "scene_user2"},
-        ]
-
-        with mock.patch(
-            "apps.meta.handlers.iam_group.IAMGroupManager.get_all_group_members",
-            side_effect=[mock_manager_members, mock_viewer_members, mock_manager_members, mock_viewer_members],
-        ):
-            result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
-            self.assertEqual(result["managers"], ["scene_admin"])
-            self.assertEqual(result["users"], ["scene_user1", "scene_user2"])
+        result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
+        # 验证返回的是场景对象中的成员信息（由定时任务同步）
+        self.assertEqual(result["managers"], ["scene_admin"])
+        self.assertEqual(result["users"], ["scene_user1", "scene_user2"])
 
     def test_update_scene_all_systems_without_system_id(self):
         """更新场景选择全系统时允许不传 system_id"""
