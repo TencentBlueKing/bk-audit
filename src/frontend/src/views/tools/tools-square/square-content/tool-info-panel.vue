@@ -74,51 +74,6 @@
       </div>
     </div>
     <div class="panel-content">
-      <div
-        v-show="!activeUid.startsWith('game_detail_') && !isSmartPageTool(activeUid)"
-        class="content-header">
-        <div class="top-right">
-          <img
-            v-if="activeTool?.tool_type === 'smart_page'"
-            alt="smart_page"
-            class="top-left-icon"
-            :src="userProfileIcon">
-          <audit-icon
-            v-else
-            class="top-left-icon"
-            svg
-            :type="activeTool ? itemIcon(activeTool) : ''" />
-          <div class="top-right-box">
-            <div class="top-right-title">
-              <span class="top-right-name">{{ activeTool?.name || '' }}</span>
-              <bk-tag
-                v-for="(tag, tagIndex) in (activeTool?.tags || []).slice(0, 3)"
-                :key="tagIndex"
-                class="desc-tag">
-                {{ returnTagsName(tag) }}
-              </bk-tag>
-              <bk-tag
-                v-if="activeTool?.tags && activeTool.tags.length > 3"
-                v-bk-tooltips="{
-                  content: tagContent(activeTool.tags),
-                  placement: 'top',
-                }"
-                class="desc-tag">
-                + {{ activeTool.tags.length - 3 }}
-              </bk-tag>
-              <bk-tag
-                class="desc-tag desc-tag-info"
-                theme="info"
-                @click.stop="handlesStrategiesClick(activeTool)">
-                运用在 {{ activeTool?.strategies?.length || 0 }} 个策略中
-              </bk-tag>
-            </div>
-            <div class="top-right-desc">
-              {{ activeTool?.description || '--' }}
-            </div>
-          </div>
-        </div>
-      </div>
       <template
         v-for="tool in toolList"
         :key="tool.uid">
@@ -143,8 +98,9 @@
           v-else-if="toolDetailMap[tool.uid]"
           v-show="activeUid === tool.uid"
           :ref="(el: any) => setToolContentRef(tool.uid, el)"
-          :content-style="{ height: 'calc(100% - 160px)' }"
+          :content-style="{ height: '100%' }"
           :get-tool-name-and-type="getToolNameAndType"
+
           :search-list="getSearchList(tool.uid)"
           :tool-details="toolDetailMap[tool.uid]"
           :uid="toolDetailMap[tool.uid].uid"
@@ -156,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+  import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
@@ -174,7 +130,6 @@
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import userProfileIcon from '@/images/user.svg';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface SearchItem {
     value: any;
@@ -292,52 +247,6 @@
     }
   };
 
-  // 当前激活的工具
-  const activeTool = computed(() => props.toolList.find(t => t.uid === props.activeUid) || null);
-
-  const returnTagsName = (tagId: string) => {
-    let tagName = '';
-    props.tagsEnums.forEach((item: TagItem) => {
-      if (item.tag_id === tagId) {
-        tagName = item.tag_name;
-      }
-    });
-    return tagName;
-  };
-  const tagContent = (tags: Array<string>) => {
-    const tagNameList = props.tagsEnums.map((i: TagItem) => {
-      if (tags.slice(3, tags.length).includes(i.tag_id)) {
-        return i.tag_name;
-      }
-      return null;
-    }).filter(e => e !== null);
-    return tagNameList.join(',');
-  };
-
-  // 策略跳转
-  const handlesStrategiesClick = (item: ToolInfo | null) => {
-    if (!item?.strategies || item.strategies.length === 0) {
-      return;
-    }
-    const sceneParams = getSceneSystemParams();
-    const query: Record<string, string> = {
-      strategy_id: item.strategies.join(','),
-    };
-    // 携带场景信息
-    if (sceneParams.scope_id) {
-      query.scene_id = sceneParams.scope_id;
-      query.scope_id = sceneParams.scope_id;
-      query.scope_type = sceneParams.scope_type;
-    } else if (sceneParams.scope_type) {
-      query.scope_type = sceneParams.scope_type;
-    }
-    const url = router.resolve({
-      name: 'strategyList',
-      query,
-    }).href;
-    window.open(url, '_blank');
-  };
-
   const toolContentRefs = ref<Record<string, any>>({});
   // 从 sessionStorage 恢复 searchListMap
   const STORAGE_KEY_SEARCH_LIST = 'tool_tabs_search_list_map';
@@ -395,12 +304,6 @@
       applyToolDetail(data);
     },
   });
-
-  // 判断指定 uid 的工具是否为 smart_page 类型
-  const isSmartPageTool = (uid: string): boolean => {
-    const tool = props.toolList.find(t => t.uid === uid);
-    return tool?.tool_type === 'smart_page';
-  };
 
   const extractDataByPath = (data: any, path: string): any => {
     if (!path || !data) return null;
@@ -883,73 +786,6 @@
 
 .panel-content::-webkit-scrollbar-thumb:hover {
   background: #c4c6cc;
-}
-
-.content-header {
-  padding: 8px 0 16px;
-  border-radius: 8px;
-}
-
-.top-right {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-
-  .top-left-icon {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
-  }
-
-  .top-right-box {
-    flex: 1;
-    min-width: 0;
-
-    .top-right-title {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-
-      .top-right-name {
-        max-width: 800px;
-        overflow: hidden;
-        font-size: 16px;
-        font-weight: 700;
-        line-height: 24px;
-        color: #313238;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .desc-tag {
-        font-size: 12px;
-        font-weight: 500;
-        line-height: 22px;
-        color: #4d4f56;
-        border-radius: 2px;
-      }
-
-      .desc-tag-info {
-        color: #3a84ff;
-        cursor: pointer;
-        background: #f0f5ff;
-
-        &:hover {
-          color: #1768ef;
-          background: #e1ecff;
-        }
-      }
-    }
-
-    .top-right-desc {
-      font-size: 14px;
-      line-height: 22px;
-      color: #63656e;
-      word-break: break-word;
-    }
-  }
 }
 
 </style>
