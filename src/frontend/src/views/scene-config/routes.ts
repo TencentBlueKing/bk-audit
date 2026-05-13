@@ -85,7 +85,7 @@ export default {
       name: 'sceneToolCreate',
       meta: {
         title: '新建工具',
-        hideSidebar: true,
+        nodeSideContent: false,
       },
     },
     {
@@ -95,7 +95,7 @@ export default {
       meta: {
         title: '编辑工具',
         skeleton: 'strategyEdit',
-        hideSidebar: true,
+        nodeSideContent: false,
       },
     },
   ],
