@@ -828,10 +828,12 @@
       }
 
       // 游戏角色 sheet
+      // 注：与明细 tab 默认"最近半年"保持一致，避免概览查不到数据但明细有数据的不一致情况
+      // 后端字段名 one_month_ago_Ymd_dashed 不变，仅将值改为半年前日期
       if (exportContentChecked.value.includes('gameRole')) {
         const dp = getDateParams();
         const roleParams = {
-          one_month_ago_Ymd_dashed: dp.one_month_ago_Ymd_dashed,
+          one_month_ago_Ymd_dashed: dp.six_month_ago_Ymd_dashed,
           one_year_ago_Ymd: dp.one_year_ago_Ymd,
           ...baseParams,
         };
