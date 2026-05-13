@@ -385,7 +385,6 @@ class RetrieveScene(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
-        self._refresh_scene_members_from_iam(scene)
         return scene
 
 
@@ -525,7 +524,6 @@ class GetSceneInfo(SceneResource):
             scene = Scene.objects.get(scene_id=scene_id)
         except Scene.DoesNotExist:
             raise SceneNotExist()
-        self._refresh_scene_members_from_iam(scene)
         return scene
 
 
