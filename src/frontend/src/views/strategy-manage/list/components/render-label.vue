@@ -133,18 +133,24 @@
   const { t, te } = useI18n();
 
   // eslint-disable-next-line vue/no-mutating-props, vue/no-side-effects-in-computed-properties
-  const labelList = computed(() => [...all.value, ...props.labels.sort((x, y) => {
-    const reg = /[a-zA-Z0-9]/;
-    if (reg.test(x.name) || reg.test(y.name)) {
-      if (x > y) {
-        return 1;
-      } if (x < y) {
-        return 1;
+  const labelList = computed(() => {
+    // final 之前（含 final）的标签为固定分类，不参与排序
+    const fixedEndIndex = props.final + 1 - all.value.length;
+    const fixedLabels = props.labels.slice(0, Math.max(0, fixedEndIndex));
+    const dynamicLabels = props.labels.slice(Math.max(0, fixedEndIndex)).sort((x, y) => {
+      const reg = /[a-zA-Z0-9]/;
+      if (reg.test(x.name) || reg.test(y.name)) {
+        if (x > y) {
+          return 1;
+        } if (x < y) {
+          return 1;
+        }
+        return 0;
       }
-      return 0;
-    }
-    return x.name.localeCompare(y.name);
-  })]);
+      return x.name?.localeCompare(y.name);
+    });
+    return [...all.value, ...fixedLabels, ...dynamicLabels];
+  });
 
 
   const handleSelect = (id: string) => {
@@ -184,7 +190,9 @@
   watch(() => props.total, (data) => {
     if (data !== undefined && data !== null) {
       nextTick(() => {
-        all.value[0].strategy_count = data;
+        if (all.value[0]) {
+          all.value[0].strategy_count = data;
+        }
       });
     }
   }, {
