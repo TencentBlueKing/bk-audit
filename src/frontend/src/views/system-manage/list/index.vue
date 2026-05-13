@@ -40,6 +40,7 @@
       </div>
       <render-list
         ref="listRef"
+        :border="['row']"
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
@@ -108,7 +109,6 @@
     },
     {
       label: () => t('系统名称'),
-      sort: 'custom',
       field: () => 'name',
       // render: ({ data }: {data: SyetemModel}) => {
       //   const isNew = isNewData(data);
@@ -150,7 +150,6 @@
     },
     {
       label: () => t('系统 ID'),
-      sort: 'custom',
       field: () => 'instance_id',
       width: '180px',
     },
