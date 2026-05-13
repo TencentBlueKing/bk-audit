@@ -740,9 +740,10 @@
       sort: 'custom',
       render: ({ data }: { data: StrategyModel }) => {
         const to = {
-          name: 'riskManageList',
+          name: 'sceneRiskManageList',
           query: {
-            strategy_id: data.strategy_id,
+            scene_id: getSceneSystemParams().scope_id,
+            scope_type: 'scene',
           },
         };
         return data.risk_count ? <router-link to = {to} target='_blank'>
