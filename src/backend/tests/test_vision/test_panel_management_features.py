@@ -260,6 +260,7 @@ class TestPanelManagementFeatures(TestCase):
         self.assertGreaterEqual(len(data), 1)
         panel_item = next(item for item in data if item["id"] == panel_data["id"])
         self.assertIn("group_id", panel_item)
+        self.assertIsNone(panel_item["group_priority_index"])
         self.assertIn("binding_type", panel_item)
         self.assertEqual(panel_item["vision_id"], "scene_list_vision_001")
         self.assertEqual(panel_item["updated_by"], VisionPanel.objects.get(id=panel_data["id"]).updated_by)
@@ -515,11 +516,24 @@ class TestPanelManagementFeatures(TestCase):
             }
         )
         panel = VisionPanel.objects.get(id=panel_info["id"])
+        group_items = list(SceneReportGroupItem.objects.filter(panel=panel).order_by("group__scene_id"))
+        self.assertEqual(len(group_items), 2)
+        for priority_index, group_item in zip([10, 9], group_items):
+            group_item.priority_index = priority_index
+            group_item.save(update_fields=["priority_index"])
+
         TogglePanelFavorite().request({"panel_id": panel.id, "favorite": True})
 
         data = ListPanels().request({"scope_type": ScopeType.CROSS_SCENE})
         self.assertEqual(len(data), 1)
         self.assertEqual(len(data[0]["group_ids"]), 2)
+        self.assertEqual(
+            sorted(data[0]["groups"], key=lambda item: item["group_id"]),
+            sorted(
+                [{"group_id": item.group_id, "priority_index": item.priority_index} for item in group_items],
+                key=lambda item: item["group_id"],
+            ),
+        )
         self.assertIsNotNone(data[0]["favorite_created_at"])
         self.assertEqual(data[0]["vision_id"], "square_vision_001")
         self.assertEqual(data[0]["updated_by"], panel.updated_by)
