@@ -335,7 +335,9 @@
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo) => {
-    openTool(tool, false);
+    openTool(tool);
+    isSidebarCollapsed.value = true;
+    syncRouteToUrl(tool.uid);
   };
 
   const handleGoHomePage = async () => {
