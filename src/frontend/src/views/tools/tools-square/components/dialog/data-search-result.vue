@@ -165,7 +165,9 @@
       </span>
     ),
     field: item.raw_name,
-    minWidth: 200,
+    width: 200,
+    minWidth: 100,
+    resizable: true,
     showOverflowTooltip: true,
     render: ({ data }: { data?: Record<any, any> }) => {
       if (!data) {
