@@ -29,7 +29,7 @@ export default {
       name: 'statementManageDetail',
       meta: {
         title: '',
-        // skeleton: 'noticeGroupList',
+        hideToggleBtn: true,
       },
     },
   ],
