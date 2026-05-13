@@ -23,6 +23,7 @@ from unittest import mock
 from rest_framework.test import APIRequestFactory
 
 from apps.meta.permissions import SearchLogPermission, SearchLogSystemSearchPermission
+from apps.meta.views.system_views import SystemsViewSet
 from apps.permission.handlers.actions import ActionEnum
 from core.exceptions import PermissionException
 from services.web.common.constants import ScopeType
@@ -74,3 +75,11 @@ class TestSearchLogPermission(TestCase):
         )
 
         self.assertEqual(system_ids, [""])
+
+
+class TestSystemsViewSetPermissions(TestCase):
+    def test_create_system_has_no_iam_permission_check(self):
+        view = SystemsViewSet()
+        view.action = "create"
+
+        self.assertEqual(view.get_permissions(), [])
