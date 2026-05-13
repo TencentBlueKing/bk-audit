@@ -100,20 +100,14 @@
                 class="right-tab-item"
                 :class="{ active: rightActiveTab === 'recent' }"
                 @click="rightActiveTab = 'recent'">
-                <img
-                  alt="clock"
-                  class="right-tab-icon"
-                  src="@images/clock.svg">
+                <i class="right-tab-icon right-tab-icon-clock" />
                 最近使用
               </div>
               <div
                 class="right-tab-item"
                 :class="{ active: rightActiveTab === 'favorite' }"
                 @click="rightActiveTab = 'favorite'">
-                <img
-                  alt="star"
-                  class="right-tab-icon"
-                  src="@images/star.svg">
+                <i class="right-tab-icon right-tab-icon-star" />
                 我的收藏
               </div>
             </div>
@@ -320,12 +314,12 @@
     });
   });
 
-  // 点击添加工具
   const handleAddTool = (tool: ToolInfo) => {
     if (isToolOpened(tool.uid)) return;
     emit('addTool', tool);
+    // 关闭 popover
     nextTick(() => {
-      addPopoverRef.value?.popperInstance?.update?.();
+      addPopoverRef.value?.hide?.();
     });
   };
 </script>
@@ -521,17 +515,37 @@
   width: 14px;
   height: 14px;
   margin-right: 4px;
+  background-color: #63656e;
+  transition: background-color .15s;
   flex: 0 0 auto;
+}
+
+.right-tab-icon-clock {
+  mask: url('@images/clock.svg') no-repeat center / contain;
+  mask: url('@images/clock.svg') no-repeat center / contain;
+}
+
+.right-tab-icon-star {
+  mask: url('@images/star.svg') no-repeat center / contain;
+  mask: url('@images/star.svg') no-repeat center / contain;
 }
 
 .right-tab-item:hover {
   color: #3a84ff;
 }
 
+.right-tab-item:hover .right-tab-icon {
+  background-color: #3a84ff;
+}
+
 .right-tab-item.active {
   font-weight: 500;
   color: #3a84ff;
   border-bottom-color: #3a84ff;
+}
+
+.right-tab-item.active .right-tab-icon {
+  background-color: #3a84ff;
 }
 
 .right-tab-content {
