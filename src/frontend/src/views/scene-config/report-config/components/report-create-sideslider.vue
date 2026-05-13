@@ -30,7 +30,7 @@
           <!-- 关联 BKVision 报表 -->
           <bk-form-item
             :label="t('关联 BKVision 报表')"
-            property="bkvisionReport"
+            property="vision_id"
             required>
             <div class="bkvision-select-wrapper">
               <bk-cascader
@@ -62,7 +62,8 @@
             required>
             <bk-input
               v-model="formData.name"
-              :placeholder="t('请输入报表名称（选择报表后自动填充）')" />
+              :placeholder="t('请输入报表名称（选择报表后自动填充）')"
+              @change="handleNameChange" />
           </bk-form-item>
 
           <!-- 所属分组 -->
@@ -73,7 +74,8 @@
             <bk-select
               v-model="formData.groupId"
               :placeholder="t('请选择')"
-              style="flex: 1;">
+              style="flex: 1;"
+              @change="handleGroupChange">
               <bk-option
                 v-for="group in groupList"
                 :key="group.id"
@@ -126,7 +128,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ReportConfigService from '@service/report-config';
@@ -215,29 +217,34 @@
 
   // 新建模式，重置表单
   const formRules = {
-    bkvisionReport: [
+    vision_id: [
       {
         required: true,
         message: t('请选择关联 BKVision 报表'),
-        trigger: 'change',
+        trigger: 'blur',
       },
     ],
     name: [
       {
         required: true,
         message: t('请输入报表名称'),
-        trigger: 'change',
+        trigger: 'blur',
       },
     ],
     groupId: [
       {
         required: true,
         message: t('请选择所属分组'),
-        trigger: 'change',
+        trigger: 'blur',
       },
     ],
   };
-
+  const handleNameChange = () => {
+    formRef.value?.validate('name');
+  };
+  const handleGroupChange = () => {
+    formRef.value?.validate('groupId');
+  };
   // 根据子级 uid 查找完整的级联路径
   const findCascaderPath = (targetUid: string): string[] => {
     for (const parent of chartLists.value) {
@@ -296,6 +303,14 @@
       } else {
         resetCreateFormData();
       }
+      // 打开时清除校验状态，避免立即显示错误提示
+      nextTick(() => {
+        formRef.value?.clearValidate();
+        // 再次确保清除（解决某些情况下 clearValidate 不生效的问题）
+        setTimeout(() => {
+          formRef.value?.clearValidate();
+        }, 100);
+      });
     }
   });
 
@@ -335,6 +350,8 @@
       formData.value.bkvisionReport = '';
       formData.value.name = '';
     }
+    formRef.value?.validate('vision_id');
+    formRef.value?.validate('name');
   };
 
   // 获取配置数据（用于获取 BKVision URL）
