@@ -23,16 +23,15 @@
         v-model="selectedScene"
         dark
         :list-scope="['scene']"
-        :popover-width="280"
+        :popover-width="250"
         scene-permission="view_scene"
         system-permission="view_system"
-        width="100%"
+        width="250px"
         @change="(val: any) => handleSceneChange(val as SceneItem)" />
     </div>
 
     <!-- 我的收藏分组 -->
     <div
-      v-if="favoriteItems.length > 0"
       class="side-group">
       <div
         class="side-group-header"
@@ -68,7 +67,7 @@
           <tool-tip-text
             :data="child.name"
             :line="1"
-            style="display: inline-block;max-width: 130px; vertical-align: middle;"
+            style="display: inline-block;max-width: 190px; vertical-align: middle;"
             theme="light" />
 
           <audit-icon
@@ -111,7 +110,7 @@
           <tool-tip-text
             :data="`${side.name}(${side.id})`"
             :line="1"
-            style="display: inline-block;max-width: 130px; vertical-align: middle;"
+            style="display: inline-block;max-width: 200px; vertical-align: middle;"
             theme="light" />
         </span>
       </div>
@@ -150,7 +149,7 @@
             <tool-tip-text
               :data="child.name"
               :line="1"
-              style="display: inline-block;max-width: 130px; vertical-align: middle;"
+              style="display: inline-block;max-width: 200px; vertical-align: middle;"
               theme="light" />
             <img
               v-if="!collapsed && child.favorite_created_at"
