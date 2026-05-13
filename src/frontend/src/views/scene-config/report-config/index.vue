@@ -89,7 +89,8 @@
             {{ t('暂无数据') }}
           </bk-exception>
           <report-group-list
-            v-else-if="!isDataLoading && !isLoading"
+            v-show="!isDataLoading && !isLoading"
+            :active-groups="expandedGroupIds"
             :expand-all="isAllExpanded"
             :groups="reportGroups"
             @add-report="handleAddReport"
@@ -98,7 +99,8 @@
             @edit="handleEdit"
             @group-drag-sort="handleGroupDragSort"
             @order-updated="handleOrderUpdated"
-            @status-updated="handleStatusUpdated" />
+            @status-updated="handleStatusUpdated"
+            @update:active-groups="expandedGroupIds = $event" />
         </bk-loading>
       </div>
 
@@ -256,6 +258,8 @@
 
   const groups = ref<Array<{ id: number; name: string; group_type?: string; priority_index: number }>>([]);
   const reportGroups = ref<ReportGroup[]>([]);
+  // 展开的分组 ID（提升到父组件，避免子组件销毁时丢失状态）
+  const expandedGroupIds = ref<number[]>([]);
   // 数据加载状态（覆盖 fetchGroups + fetchPanels 完整链路）
   const isDataLoading = ref(false);
 
