@@ -432,6 +432,7 @@
       width: 100,
       sortType: 'all',
       sorter: true,
+      align: 'right',
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="strategy-count-cell">
         {row.strategy_ids.length}
@@ -452,6 +453,7 @@
       width: 100,
       sortType: 'all',
       sorter: true,
+      align: 'right',
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="risk-count-cell">
         {row.risk_count}
