@@ -445,6 +445,12 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         required=False,
         help_text=gettext_lazy('策略ID。从"可用策略"列表匹配名称取 id 值，多个逗号拼接如 "137,169"。' "匹配规则：①完全匹配名称 > ②名称中包含用户关键词的最精确项"),
     )
+    scene_id = serializers.CharField(
+        label=gettext_lazy("Scene ID"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy("场景ID。用于在权限域结果内按风险所属场景筛选，多个逗号拼接如 \"1,2\"。"),
+    )
     operator = serializers.CharField(
         label=gettext_lazy("Operator"),
         allow_blank=True,
