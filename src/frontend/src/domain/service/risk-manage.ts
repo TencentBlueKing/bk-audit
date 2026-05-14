@@ -24,11 +24,10 @@ export default {
    */
   fetchRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scope_id?: string,
   }) {
-    return RiskManageSource.getRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -59,7 +58,8 @@ export default {
    */
   fetchTodoRiskList(params: {
       page: number,
-      page_size: number
+      page_size: number,
+      scope_id?: string,
     }) {
     return RiskManageSource.getTodoRiskList(params)
       .then(({ data }) => ({
@@ -72,11 +72,10 @@ export default {
    */
   fetchWatchRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scope_id?: string,
   }) {
-    return RiskManageSource.getWatchRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getWatchRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -87,11 +86,10 @@ export default {
    */
   fetchProcessedRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scope_id?: string,
   }) {
-    return RiskManageSource.getProcessedRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getProcessedRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -392,6 +390,19 @@ export default {
     page_size: number,
   }) {
     return RiskManageSource.getReportRiskList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取风险关联的场景
+   */
+  fetchRiskScenes(params: {
+    end_time?: string,
+    risk_view_type?: string,
+    scope_id?: string,
+    scope_type?: string,
+    start_time?: string,
+  }) {
+    return RiskManageSource.getRiskScenes(params)
       .then(({ data }) => data);
   },
 };
