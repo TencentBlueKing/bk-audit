@@ -62,13 +62,20 @@
             {{ t('审计场景') }}
           </div>
           <div class="group-search">
+            <span class="search-prefix-wrap">
+              <audit-icon
+                class="search-prefix"
+                type="search1" />
+            </span>
             <bk-input
               v-model="sceneSearchKey"
-              clearable
-              left-icon="bk-icon icon-search"
-              :placeholder="t('搜索场景ID、场景名称')"
-              size="small"
-              :theme="dark ? 'dark' : ''" />
+              behavior="simplicity"
+              :placeholder="t('搜索场景名称、场景ID')"
+              size="small">
+              <!-- <template #prefix>
+
+              </template> -->
+            </bk-input>
           </div>
           <div class="group-list">
             <div
@@ -716,11 +723,11 @@
       .group-list {
         .dropdown-item {
           &:hover {
-            background-color: #253047;
+            background-color: #1a2232;
           }
 
           &.is-selected {
-            background-color: #2a3a54;
+            background-color: #1a2232;
 
             .item-name.is-highlight {
               color: #699df4;
@@ -755,7 +762,9 @@
     }
 
     .group-search {
+      display: flex;
       padding: 0 12px 8px;
+      align-items: center;
     }
 
     .group-list {
@@ -821,40 +830,127 @@
     }
   }
 }
+
+.search-prefix-wrap {
+  display: inline-block;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+
+  .search-prefix {
+    font-size: 14px;
+    line-height: 1;
+    color: #979ba5;
+  }
+}
+
 </style>
 
 <style lang="postcss">
 /* 深色主题弹出层样式 */
 .scene-system-selector-popover-dark.bk-popover.bk-pop2-content {
-  background: #1a2233 !important;
-  border: none !important;
+  background: #1a2232 !important;
   box-shadow: 0 3px 9px 0 rgb(0 0 0 / 50%) !important;
 
-  .group-search {
-    .bk-input {
-      .bk-form-control {
-        background-color: #253047;
-        border-color: #3c4558;
+  /* 搜索框：深色主题，仅保留底部边框 */
+  .group-search .bk-input {
+    border: none !important;
+
+    .bk-form-control,
+    .bk-form-control *,
+    .bk-form-control[style],
+    .bk-form-content,
+    input[type='text'],
+    input[type='text'][style] {
+      background-color: #1a2232 !important;
+      background-image: none !important;
+      border: none !important;
+      border-bottom: 1px solid #4f5566 !important;
+      outline: none !important;
+      box-shadow: none !important;
+      caret-color: #c4c6cc;
+    }
+
+    input {
+      color: #979ba5;
+
+      &::placeholder {
+        color: #63656e;
+      }
+    }
+
+    .input-icon-left,
+    [class*='icon'],
+    .bk-icon,
+    /* 自定义 prefix 插槽中的图标：去除白底、对齐 */
+    .input-prefix,
+    .input-prefix *,
+    .audit-icon {
+      display: flex;
+      color: #63656e;
+      background: transparent !important;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 去除前缀区域白底（组件内部 .bk-input--prefix 设置了 #fff !important） */
+    .input-prefix,
+    [class*='prefix'],
+    .bk-input--prefix,
+    .bk-input--prefix *,
+    .input-left-icon,
+    .input-left-icon * {
+      background: transparent !important;
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+
+    /* 自定义 prefix 包装：彻底覆盖白底 */
+
+    &:hover {
+      .input-prefix,
+      .input-prefix *,
+      .audit-icon,
+      .bk-icon,
+      .input-icon-left,
+      [class*='icon'],
+      [class*='prefix'],
+      .input-left-icon,
+      .bk-input--prefix,
+      .bk-input--prefix *,
+      .search-prefix-wrap,
+      .search-prefix-wrap * {
+        color: #63656e;
+        background-color: #1a2232 !important;
+        border-radius: 0;
+      }
+    }
+
+    /* 聚焦状态：保持样式不变 */
+    .group-search .bk-input.is-focused:not(.is-readonly):is-simplicity,
+    .group-search .bk-input.is-focus,
+    .group-search .bk-input.is-focused,
+    .group-search .bk-input:focus-within,
+    .group-search .bk-input:focus,
+    .group-search .is-focus .bk-input {
+      .bk-form-control,
+      .bk-form-control *,
+      .bk-form-control[style],
+      .bk-form-content,
+      input[type='text'],
+      input[type='text'][style],
+      input[type='text']:focus,
+      input[type='text']:active {
+        background-color: transparent !important;
+        background-image: none !important;
+        border: none !important;
+        border-bottom: 1px solid #4f5566 !important;
+        outline: none !important;
+        box-shadow: none !important;
       }
 
       input {
-        color: #c4c6cc;
-        background-color: transparent;
-
-        &::placeholder {
-          color: #63656e;
-        }
-      }
-
-      .input-icon-left,
-      [class*='icon'] {
-        color: #63656e;
-      }
-
-      &:hover .bk-form-control,
-      &.is-focus .bk-form-control,
-      &:focus-within .bk-form-control {
-        border-color: #699df4;
+        color: #979ba5;
       }
     }
   }
