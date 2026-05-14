@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import abc
-import datetime
 
 from bk_resource import resource
 from django.conf import settings
@@ -17,7 +16,6 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Cast, Coalesce
-from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -52,11 +50,7 @@ from services.web.scene.serializers import (
     SceneStatusFilterSerializer,
     UpdateSceneSerializer,
 )
-from services.web.strategy_v2.constants import (
-    STRATEGY_RISK_DEFAULT_INTERVAL,
-    StrategySource,
-    StrategyStatusChoices,
-)
+from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 
@@ -175,7 +169,6 @@ class ListScene(SceneResource):
             .annotate(count=Count("binding__resource_id", distinct=True))
             .values("count")[:1]
         )
-        risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
         risk_count_subquery = (
             bound_strategy_queryset.values("scene_id", "binding__resource_id")
             .distinct()
@@ -186,7 +179,6 @@ class ListScene(SceneResource):
                         Risk.objects.filter(
                             strategy_id=OuterRef("strategy_id_int"),
                             strategy__is_deleted=False,
-                            event_time__gte=risk_start_time,
                         )
                         .values("strategy_id")
                         .annotate(count=Count("risk_id"))

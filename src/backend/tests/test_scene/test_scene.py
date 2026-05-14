@@ -878,27 +878,28 @@ class TestSceneResource(TestCase):
         self.assertEqual(result_map[invisible_scene.scene_id]["strategy_count"], 0)
         self.assertEqual(result_map[visible_scene.scene_id]["strategy_ids"], [visible_strategy.strategy_id])
 
-    def test_scene_list_sort_by_risk_count_uses_recent_six_months_window(self):
-        """测试场景列表风险数排序默认统计最近 6 个月"""
-        old_risk_scene = Scene.objects.create(name="风险数排序过期风险场景")
+    def test_scene_list_sort_by_risk_count_includes_historical_risks(self):
+        """测试场景列表风险数排序统计全量历史风险"""
+        historical_risk_scene = Scene.objects.create(name="风险数排序历史风险场景")
         recent_risk_scene = Scene.objects.create(name="风险数排序近期风险场景")
-        old_strategy = self._create_bound_strategy(old_risk_scene, "风险数排序过期风险策略")
+        historical_strategy = self._create_bound_strategy(historical_risk_scene, "风险数排序历史风险策略")
         recent_strategy = self._create_bound_strategy(recent_risk_scene, "风险数排序近期风险策略")
         old_time = timezone.now() - timezone.timedelta(days=181)
-        Risk.objects.create(
-            raw_event_id="scene-sort-old-risk",
-            strategy=old_strategy,
-            event_time=old_time,
-            event_end_time=old_time,
-        )
+        for index in range(2):
+            Risk.objects.create(
+                raw_event_id=f"scene-sort-old-risk-{index}",
+                strategy=historical_strategy,
+                event_time=old_time,
+                event_end_time=old_time,
+            )
         self._create_risk(recent_strategy, "scene-sort-recent-risk")
 
         result = self.resource.scene.list_scene({"sort": ["-risk_count"]})
         result_map = {item["scene_id"]: item for item in result}
 
-        self.assertEqual(result[0]["scene_id"], recent_risk_scene.scene_id)
+        self.assertEqual(result[0]["scene_id"], historical_risk_scene.scene_id)
         self.assertEqual(result_map[recent_risk_scene.scene_id]["risk_count"], 1)
-        self.assertEqual(result_map[old_risk_scene.scene_id]["risk_count"], 0)
+        self.assertEqual(result_map[historical_risk_scene.scene_id]["risk_count"], 2)
 
     def test_scene_list_rejects_invalid_sort_field(self):
         """测试场景列表拒绝非法排序字段"""
@@ -975,8 +976,8 @@ class TestSceneResource(TestCase):
         self.assertEqual(result["strategy_ids"], [strategy.strategy_id])
         self.assertEqual(result["risk_count"], 1)
 
-    def test_scene_retrieve_risk_count_defaults_to_recent_six_months(self):
-        """测试场景详情风险数量默认统计最近 6 个月"""
+    def test_scene_retrieve_risk_count_includes_historical_risks(self):
+        """测试场景详情风险数量统计全量历史风险"""
         strategy = self._create_bound_strategy(self.scene, "详情风险时间窗口策略")
         Risk.objects.create(
             raw_event_id="raw-scene-detail-recent",
@@ -994,7 +995,7 @@ class TestSceneResource(TestCase):
 
         result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
 
-        self.assertEqual(result["risk_count"], 1)
+        self.assertEqual(result["risk_count"], 2)
 
     def test_scene_retrieve_strategy_count_matches_scene_strategy_list_scope(self):
         """测试场景详情策略统计与场景下策略列表默认口径一致"""
