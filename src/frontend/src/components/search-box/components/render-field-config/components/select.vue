@@ -151,7 +151,8 @@
 
   // 判断是否为特殊字段
   const isSpecialField = (fieldName: keyof FieldMapModel): boolean => fieldName === 'tags' as keyof FieldMapModel
-    || fieldName === 'strategy_id' as keyof FieldMapModel;
+    || fieldName === 'strategy_id' as keyof FieldMapModel
+    || fieldName === 'scope_id' as keyof FieldMapModel;
 
   watchEffect(() => {
     if (props.config.service) {
