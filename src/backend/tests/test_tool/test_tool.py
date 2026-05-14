@@ -593,6 +593,118 @@ class ToolResourceTestCase(TestCase):
 
         self.assertEqual(response.data.get("results", []), [])
 
+    def test_list_tool_filter_by_status_list(self):
+        """测试按状态列表过滤工具"""
+        self.sql_tool.status = PanelStatus.PUBLISHED
+        self.sql_tool.save(update_fields=["status"])
+        self.bk_tool.status = PanelStatus.UNPUBLISHED
+        self.bk_tool.save(update_fields=["status"])
+
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "status": [PanelStatus.PUBLISHED, PanelStatus.UNPUBLISHED], "page": 1, "page_size": 10},
+        )
+        self.assertGreaterEqual(len(result), 2)
+
+        result_single = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "status": [PanelStatus.PUBLISHED], "page": 1, "page_size": 10},
+        )
+        self.assertTrue(all(item["status"] == PanelStatus.PUBLISHED for item in result_single))
+
+    def test_list_tool_filter_by_name_list(self):
+        """测试按名称列表过滤工具（icontains 模糊匹配，多值 OR 关系）"""
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "name": ["SQL"], "page": 1, "page_size": 10},
+        )
+        self.assertTrue(all("SQL" in item["name"] or "sql" in item["name"].lower() for item in result))
+        self.assertGreaterEqual(len(result), 1)
+
+        result_multi = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "name": ["SQL", "Vision"], "page": 1, "page_size": 10},
+        )
+        self.assertGreaterEqual(len(result_multi), 2)
+
+    def test_list_tool_filter_by_description_list(self):
+        """测试按描述列表过滤工具（icontains 模糊匹配，多值 OR 关系）"""
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "description": ["SQL Tool Desc"], "page": 1, "page_size": 10},
+        )
+        self.assertGreaterEqual(len(result), 1)
+        self.assertTrue(any("SQL Tool" in item["name"] for item in result))
+
+        result_multi = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "description": ["SQL Tool Desc", "BK Vision"], "page": 1, "page_size": 10},
+        )
+        self.assertGreaterEqual(len(result_multi), 2)
+
+    def test_list_tool_filter_by_tool_type_list(self):
+        """测试按工具类型列表过滤工具（精确匹配，多值 IN 关系）"""
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "tool_type": [ToolTypeEnum.DATA_SEARCH.value], "page": 1, "page_size": 10},
+        )
+        self.assertTrue(all(item["tool_type"] == ToolTypeEnum.DATA_SEARCH.value for item in result))
+        self.assertGreaterEqual(len(result), 1)
+
+        result_multi = self._call_resource_with_request(
+            ListTool,
+            {
+                "keyword": "",
+                "tool_type": [ToolTypeEnum.DATA_SEARCH.value, ToolTypeEnum.BK_VISION.value],
+                "page": 1,
+                "page_size": 10,
+            },
+        )
+        self.assertGreaterEqual(len(result_multi), 2)
+
+    def test_list_tool_filter_by_updated_by_list(self):
+        """测试按更新人列表过滤工具（精确匹配，多值 IN 关系）"""
+        Tool.objects.filter(uid=self.sql_tool.uid, version=self.sql_tool.version).update(
+            _update_record=False, updated_by="alice"
+        )
+        Tool.objects.filter(uid=self.bk_tool.uid, version=self.bk_tool.version).update(
+            _update_record=False, updated_by="bob"
+        )
+
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "updated_by": ["alice"], "page": 1, "page_size": 10},
+        )
+        self.assertTrue(all(item["updated_by"] == "alice" for item in result))
+        self.assertGreaterEqual(len(result), 1)
+
+        result_multi = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "updated_by": ["alice", "bob"], "page": 1, "page_size": 10},
+        )
+        self.assertGreaterEqual(len(result_multi), 2)
+
+    def test_list_tool_multi_filters_and_relation(self):
+        """测试多个过滤条件之间为 AND 关系"""
+        Tool.objects.filter(uid=self.sql_tool.uid, version=self.sql_tool.version).update(
+            _update_record=False, updated_by="alice"
+        )
+
+        result = self._call_resource_with_request(
+            ListTool,
+            {
+                "keyword": "",
+                "name": ["SQL"],
+                "tool_type": [ToolTypeEnum.DATA_SEARCH.value],
+                "updated_by": ["alice"],
+                "page": 1,
+                "page_size": 10,
+            },
+        )
+        self.assertGreaterEqual(len(result), 1)
+        self.assertTrue(all("SQL" in item["name"] or "sql" in item["name"].lower() for item in result))
+        self.assertTrue(all(item["tool_type"] == ToolTypeEnum.DATA_SEARCH.value for item in result))
+
     def test_platform_tool_create_serializer_ignores_scene_id(self):
         serializer = PlatformSceneToolCreateRequestSerializer(
             data={
