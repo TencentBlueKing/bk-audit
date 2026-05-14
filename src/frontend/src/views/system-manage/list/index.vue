@@ -21,17 +21,15 @@
     name="systemList">
     <div class="system-list-page">
       <div class="mb16 action-header">
-        <auth-button
-          action-id="create_system"
+        <bk-button
           class="mr8"
-          :permission="permissionCheckData"
           theme="primary"
           @click="handleCreate">
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
           {{ t('接入新系统') }}
-        </auth-button>
+        </bk-button>
         <bk-input
           v-model="searckKey"
           :placeholder="t('请输入 系统名称、系统ID 进行搜索')"
@@ -63,7 +61,6 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
-  import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
   import type SyetemModel from '@model/meta/system';
@@ -333,7 +330,6 @@
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
-  const permissionCheckData = ref();
   const systemStatusMap = (status: string) => {
     const map: Record<string, string> = {
       incomplete: t('待完善'),
@@ -414,18 +410,6 @@
       console.error('本地设置解析失败，使用默认配置', e);
       return defaultSettings;
     }
-  });
-
-  // 获取策略新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'create_system',
-    },
-    defaultValue: {},
-    manual: true,
-    onSuccess: (data) => {
-      permissionCheckData.value = data.create_system;
-    },
   });
 
   const {

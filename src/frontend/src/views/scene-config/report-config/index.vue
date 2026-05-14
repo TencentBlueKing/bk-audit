@@ -490,7 +490,6 @@
       description: report.description === '-' ? '' : report.description,
       status: report.status,
       enabled: report.status === 'published',
-      vision_id: [],
     };
     currentGroupId.value = null;
     reportSidesliderVisible.value = true;
