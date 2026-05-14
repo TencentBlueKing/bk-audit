@@ -305,6 +305,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scope_id: '',
       start_time: '',
       end_time: '',
       strategy_id: route.query.strategy_id || '',
