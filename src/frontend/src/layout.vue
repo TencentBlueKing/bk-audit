@@ -43,15 +43,7 @@
           :to="{ name:'handleManage', query: {} }">
           {{ t('风险') }}
         </router-link>
-        <router-link
-          v-if="!userRole.includes('risk_handler')"
-          class="main-navigation-nav "
-          :class="{
-            active: curNavName === 'auditConfigurationManage'
-          }"
-          :to="{ name:'analysisManage', query: {} }">
-          {{ t('检索') }}
-        </router-link>
+
         <router-link
           v-if="hasBkvision.enabled &&
             (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
@@ -71,6 +63,15 @@
           }"
           :to="{ name:'toolsSquare', query: {} }">
           {{ t('工具广场') }}
+        </router-link>
+        <router-link
+          v-if="!userRole.includes('risk_handler')"
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'auditConfigurationManage'
+          }"
+          :to="{ name:'analysisManage', query: {} }">
+          {{ t('日志检索') }}
         </router-link>
         <!-- 风险使用者、系统管理员要跳转到应到页 -->
         <router-link
