@@ -210,22 +210,43 @@
   // 默认的可配置列键
   const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
+  // 用于在场景切换时强制刷新 settings 计算属性
+  const settingsVersion = ref(0);
+
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
-    const jsonStr = localStorage.getItem('audit-processed-risk-list-setting');
+    // 强制依赖 settingsVersion，场景切换时触发重新计算
+    void settingsVersion.value;
+    const jsonStr = localStorage.getItem('audit-scene-risk-list-setting');
+    let result: string[];
     if (jsonStr) {
       try {
         const savedSettings = JSON.parse(jsonStr);
         // 如果保存的设置中有 checked 字段，使用它；否则使用默认设置
-        return savedSettings.checked && Array.isArray(savedSettings.checked)
+        result = savedSettings.checked && Array.isArray(savedSettings.checked)
           ? savedSettings.checked
           : defaultSettings;
       } catch (e) {
         console.error('本地设置解析失败，使用默认配置', e);
-        return defaultSettings;
+        result = defaultSettings;
       }
+    } else {
+      result = defaultSettings;
     }
-    return defaultSettings;
+    // 选择具体场景时，默认不展示所属场景(scene_id)列；
+    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id
+    const sceneParams = getSceneSystemParams();
+    const isAllRisks = !sceneParams.scope_id
+      || sceneParams.scope_type === 'cross_scene'
+      || sceneParams.scope_type === 'cross_system';
+    if (isAllRisks && !result.includes('scene_id')) {
+      // 在 event_time 之后插入 scene_id，保持合理顺序
+      const idx = result.indexOf('event_time');
+      result.splice(idx + 1, 0, 'scene_id');
+    } else if (!isAllRisks) {
+      result = result.filter((key: string) => key !== 'scene_id');
+    }
+    return result;
   });
   const listRef = ref();
   const addRiskRef = ref();
@@ -273,7 +294,7 @@
   };
 
   const handleSettingChange = (setting: ISettings) => {
-    localStorage.setItem('audit-processed-risk-list-setting', JSON.stringify(setting));
+    localStorage.setItem('audit-scene-risk-list-setting', JSON.stringify(setting));
   };
 
   const handleSearchChange = (value: Record<string, any>, exValue: Record<string, any>) => {
@@ -437,6 +458,8 @@
     });
     on('scene-change', () => {
       fieldConfigKey.value += 1;
+      // 场景切换时刷新表格列设置（所属场景列的显示/隐藏随场景变化）
+      settingsVersion.value += 1;
       fetchList();
     });
   });

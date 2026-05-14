@@ -229,19 +229,23 @@
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
     const jsonStr = localStorage.getItem('audit-handle-risk-list-setting');
+    let result: string[];
     if (jsonStr) {
       try {
         const savedSettings = JSON.parse(jsonStr);
         // 如果保存的设置中有 checked 字段，使用它；否则使用默认设置
-        return savedSettings.checked && Array.isArray(savedSettings.checked)
+        result = savedSettings.checked && Array.isArray(savedSettings.checked)
           ? savedSettings.checked
           : defaultSettings;
       } catch (e) {
         console.error('本地设置解析失败，使用默认配置', e);
-        return defaultSettings;
+        result = defaultSettings;
       }
+    } else {
+      result = defaultSettings;
     }
-    return defaultSettings;
+    // 默认不展示所属场景(scene_id)列
+    return result.filter((key: string) => key !== 'scene_id');
   });
   // 批量操作
   const {
