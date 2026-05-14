@@ -311,11 +311,20 @@
 
   // 页面挂载时加载待接入系统列表（与 system-access 保持一致）
   onMounted(() => {
+    const userRole = JSON.parse(sessionStorage.getItem('userRole') || '[]');
+    // 如果是 saas_admin\system_admin 直接跳转到系统列表
+    if (userRole.includes('saas_admin') || userRole.includes('system_admin')) {
+      router.push({ name: 'systemList' });
+      return;
+    }
+
     fetchSystemWithAction({
       sort_keys: 'audit_status,name',
       with_favorite: false,
       with_system_status: false,
       source_type__in: 'iam_v3,iam_v4',
+      action_ids: 'edit_system',
+      audit_status__in: 'pending',
     });
   });
 
@@ -479,17 +488,16 @@
   color: #63656e;
 
   span {
-    display: inline-flex;
     color: #3b7eff;
-    vertical-align: baseline;
+    white-space: nowrap;
     cursor: pointer;
-    align-items: center;
-    gap: 5px;
-  }
 
-  .qw-icon {
-    width: 19px;
-    height: 19px;
+    .qw-icon {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      vertical-align: text-bottom;
+    }
   }
 }
 

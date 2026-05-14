@@ -110,6 +110,7 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
   import SceneManageService from '@service/scene-manage';
@@ -136,6 +137,7 @@
   }
 
   const { t } = useI18n();
+  const router = useRouter();
 
   const sceneList = ref<SceneItem[]>([]);
   const sceneManagers = ref<Record<number, SceneMember[]>>({});
@@ -169,6 +171,12 @@
   });
 
   onMounted(() => {
+    const userRole = JSON.parse(sessionStorage.getItem('userRole') || '[]');
+    // 如果是 saas_admin\scene_admin 直接跳转到场景列表页
+    if (userRole.includes('saas_admin') || userRole.includes('scene_admin')) {
+      router.push({ name: 'sceneInfo' });
+      return;
+    }
     fetchSceneAll({
       page_size: 100,
       status: 'enabled',
