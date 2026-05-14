@@ -75,7 +75,9 @@
 </template>
 
 <script setup lang="ts">
+  import { onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
 
@@ -86,6 +88,7 @@
   import landingImg from '@/images/landing.png';
 
   const { t } = useI18n();
+  const router = useRouter();
 
   const {
     data: configData,
@@ -101,6 +104,15 @@
   const contactHelper = () => {
     window.open(`wxwork://message?uin=${configData.value.iegsec_helper}`, '_blank');
   };
+
+  onMounted(() => {
+    const userRole = JSON.parse(sessionStorage.getItem('userRole') || '[]');
+    // 如果是 saas_admin\scene_admin 直接跳转到场景列表页
+    if (userRole.includes('saas_admin') || userRole.includes('scene_admin')) {
+      router.push({ name: 'sceneInfo' });
+      return;
+    }
+  });
 </script>
 
 <style scoped lang="postcss">
