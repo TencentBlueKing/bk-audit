@@ -43,6 +43,7 @@ from services.web.tool.models import (
     BkVisionToolConfig,
     DataSearchToolConfig,
     Tool,
+    ToolFavorite,
     ToolTag,
 )
 from services.web.tool.resources import (
@@ -554,7 +555,54 @@ class ToolResourceTestCase(TestCase):
             }
             result = self._call_resource_with_request(ListTool, data)
             result_uids = [tool["uid"] for tool in result]
-            self.assertCountEqual(result_uids, recent_uids)
+            self.assertEqual(result_uids, recent_uids)
+
+    def test_list_tool_filter_recent_uids_ignores_sort(self):
+        recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
+
+        with (
+            patch(
+                "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+                return_value=recent_uids,
+            ),
+            patch("services.web.tool.resources.get_request_username", return_value=self.uid),
+        ):
+            data = {
+                "keyword": "",
+                "recent_used": True,
+                "sort": ["name"],
+                "page": 1,
+                "page_size": 10,
+            }
+            result = self._call_resource_with_request(ListTool, data)
+
+        self.assertEqual([tool["uid"] for tool in result], recent_uids)
+
+    def test_list_tool_sort_by_name_ignores_default_favorite_first(self):
+        ToolFavorite.objects.create(tool_uid=self.sql_tool.uid, username=self.uid)
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
+            result = self._call_resource_with_request(
+                ListTool,
+                {"keyword": "", "sort": ["name"], "page": 1, "page_size": 10},
+            )
+
+        self.assertEqual([tool["uid"] for tool in result[:2]], [self.bk_tool.uid, self.sql_tool.uid])
+
+    def test_list_tool_sort_by_updated_at_desc(self):
+        old_time = timezone.now() - timedelta(days=2)
+        new_time = timezone.now()
+        self.sql_tool.updated_at = new_time
+        self.sql_tool.save(update_record=False, update_fields=["updated_at"])
+        self.bk_tool.updated_at = old_time
+        self.bk_tool.save(update_record=False, update_fields=["updated_at"])
+
+        result = self._call_resource_with_request(
+            ListTool,
+            {"keyword": "", "sort": ["-updated_at"], "page": 1, "page_size": 10},
+        )
+
+        self.assertEqual(result[0]["uid"], self.sql_tool.uid)
 
     def test_list_tool_request_serializer_reject_scene_binding_in_system_scope(self):
         serializer = ListRequestSerializer(
@@ -566,6 +614,11 @@ class ToolResourceTestCase(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("binding_type", serializer.errors)
+
+    def test_list_tool_request_serializer_reject_recent_used_sort(self):
+        serializer = ListRequestSerializer(data={"sort": ["recent_used"]})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("sort", serializer.errors)
 
     def test_list_tool_request_serializer_scope_is_optional(self):
         serializer = ListRequestSerializer(data={"keyword": ""})

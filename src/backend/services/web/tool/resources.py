@@ -347,6 +347,7 @@ class ListTool(ToolBase):
         updated_by = validated_request_data.get("updated_by", [])
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
+        order_fields = validated_request_data.pop("order_fields", [])
         status = validated_request_data.get("status")
         recent_tool_uids = []
 
@@ -378,6 +379,7 @@ class ListTool(ToolBase):
 
         if recent_used:
             recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
+
             if not recent_tool_uids:
                 return []
             else:
@@ -417,13 +419,15 @@ class ListTool(ToolBase):
             tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
-        # 排序逻辑：收藏优先 + 名称 ASCII 正序
+        # 排序逻辑：查询最近使用时保持原 Redis 顺序；否则显式 sort 优先，默认保持旧逻辑
         if recent_used and recent_tool_uids:
             queryset = preserved_order_sort(
                 queryset,
                 ordering_field="uid",
                 value_list=recent_tool_uids,
             )
+        elif order_fields:
+            queryset = queryset.order_by(*order_fields)
         else:
             queryset = queryset.order_by("-favorite", "name")
 
