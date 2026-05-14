@@ -779,9 +779,17 @@ class TestSceneResource(TestCase):
         self.assertEqual(target["risk_count"], 0)
 
     def test_scene_list_filter_by_status(self):
-        """测试按状态过滤场景列表"""
-        result = self.resource.scene.list_scene({"status": "enabled"})
+        """测试按状态过滤场景列表（支持列表多值）"""
+        result = self.resource.scene.list_scene({"status": ["enabled"]})
         self.assertTrue(all(s["status"] == SceneStatus.ENABLED for s in result))
+
+    def test_scene_list_filter_by_multiple_status(self):
+        """测试按多个状态过滤场景列表"""
+        Scene.objects.create(name="停用场景", status=SceneStatus.DISABLED)
+        result = self.resource.scene.list_scene({"status": ["enabled", "disabled"]})
+        statuses = {s["status"] for s in result}
+        self.assertTrue(statuses.issubset({SceneStatus.ENABLED, SceneStatus.DISABLED}))
+        self.assertGreaterEqual(len(result), 2)
 
     def test_scene_list_filter_by_keyword(self):
         """测试按关键词过滤场景列表"""
@@ -809,15 +817,60 @@ class TestSceneResource(TestCase):
 
         self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
 
+    def test_scene_list_filter_by_multi_value_name(self):
+        """测试场景列表按多个 name 值过滤（OR 关系）"""
+        s1 = Scene.objects.create(name="网络安全审计")
+        s2 = Scene.objects.create(name="数据安全审计")
+        Scene.objects.create(name="完全不匹配")
+
+        result = self.resource.scene.list_scene({"name": ["网络", "数据"]})
+        result_ids = {item["scene_id"] for item in result}
+        self.assertIn(s1.scene_id, result_ids)
+        self.assertIn(s2.scene_id, result_ids)
+
+    def test_scene_list_filter_by_multi_value_updated_by(self):
+        """测试场景列表按多个 updated_by 值过滤（OR 关系）"""
+        s1 = Scene.objects.create(name="场景A")
+        s2 = Scene.objects.create(name="场景B")
+        Scene.objects.filter(scene_id=s1.scene_id).update(_update_record=False, updated_by="alice")
+        Scene.objects.filter(scene_id=s2.scene_id).update(_update_record=False, updated_by="bob")
+
+        result = self.resource.scene.list_scene({"updated_by": ["alice", "bob"]})
+        result_ids = {item["scene_id"] for item in result}
+        self.assertIn(s1.scene_id, result_ids)
+        self.assertIn(s2.scene_id, result_ids)
+
     def test_scene_list_filter_by_members(self):
-        """测试按 manager/user 过滤场景列表"""
+        """测试按 managers/users 过滤场景列表（支持列表多值）"""
         matched = Scene.objects.create(name="成员筛选命中场景", managers=["alice"], users=["bob"])
         Scene.objects.create(name="成员筛选未命中管理者", managers=["charlie"], users=["bob"])
         Scene.objects.create(name="成员筛选未命中使用者", managers=["alice"], users=["david"])
 
-        result = self.resource.scene.list_scene({"manager": "alice", "user": "bob"})
+        result = self.resource.scene.list_scene({"managers": ["alice"], "users": ["bob"]})
 
         self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
+
+    def test_scene_list_filter_by_multiple_managers(self):
+        """测试按多个 managers 值过滤场景列表（OR 关系）"""
+        s1 = Scene.objects.create(name="管理者A场景", managers=["alice"], users=[])
+        s2 = Scene.objects.create(name="管理者B场景", managers=["bob"], users=[])
+        Scene.objects.create(name="管理者C场景", managers=["charlie"], users=[])
+
+        result = self.resource.scene.list_scene({"managers": ["alice", "bob"]})
+        result_ids = {item["scene_id"] for item in result}
+        self.assertIn(s1.scene_id, result_ids)
+        self.assertIn(s2.scene_id, result_ids)
+
+    def test_scene_list_filter_by_multiple_users(self):
+        """测试按多个 users 值过滤场景列表（OR 关系）"""
+        s1 = Scene.objects.create(name="用户A场景", managers=[], users=["alice"])
+        s2 = Scene.objects.create(name="用户B场景", managers=[], users=["bob"])
+        Scene.objects.create(name="用户C场景", managers=[], users=["charlie"])
+
+        result = self.resource.scene.list_scene({"users": ["alice", "bob"]})
+        result_ids = {item["scene_id"] for item in result}
+        self.assertIn(s1.scene_id, result_ids)
+        self.assertIn(s2.scene_id, result_ids)
 
     def test_scene_list_default_sort_by_scene_id_desc(self):
         """测试场景列表默认按场景 ID 逆序"""
@@ -1516,6 +1569,112 @@ class TestPanelResources(TestCase):
         )
         names = {item["name"] for item in result}
         self.assertEqual(names, set())
+
+    def test_panel_list_filter_by_status_list(self):
+        """测试报表列表支持多状态列表过滤"""
+        self.scene_panel.status = PanelStatus.PUBLISHED
+        self.scene_panel.save(update_fields=["status"])
+
+        result = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "status": [PanelStatus.PUBLISHED],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertIn("场景报表", names)
+        self.assertNotIn("安全总览报表", names)
+
+        result_multi = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "status": [PanelStatus.PUBLISHED, PanelStatus.UNPUBLISHED],
+            }
+        )
+        names_multi = {item["name"] for item in result_multi}
+        self.assertIn("场景报表", names_multi)
+        self.assertIn("安全总览报表", names_multi)
+
+    def test_panel_list_filter_by_name_list(self):
+        """测试报表列表支持按名称列表模糊过滤"""
+        result = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "name": ["安全总览"],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表"})
+
+        result_multi = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "name": ["安全", "场景"],
+            }
+        )
+        names_multi = {item["name"] for item in result_multi}
+        self.assertEqual(names_multi, {"安全总览报表", "场景报表", "另一个场景报表"})
+
+    def test_panel_list_filter_by_description_list(self):
+        """测试报表列表支持按描述列表模糊过滤"""
+        result = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "description": ["全局"],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表"})
+
+        result_multi = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "description": ["全局", "场景级"],
+            }
+        )
+        names_multi = {item["name"] for item in result_multi}
+        self.assertEqual(names_multi, {"安全总览报表", "场景报表", "另一个场景报表"})
+
+    def test_panel_list_filter_by_updated_by_list(self):
+        """测试报表列表支持按更新人列表模糊过滤"""
+        VisionPanel.objects.filter(pk=self.platform_panel.pk).update(updated_by="alice")
+        VisionPanel.objects.filter(pk=self.scene_panel.pk).update(updated_by="bob")
+        VisionPanel.objects.filter(pk=self.another_scene_panel.pk).update(updated_by="charlie")
+
+        result = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "updated_by": ["alice"],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"安全总览报表"})
+
+        result_multi = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "updated_by": ["alice", "bob"],
+            }
+        )
+        names_multi = {item["name"] for item in result_multi}
+        self.assertEqual(names_multi, {"安全总览报表", "场景报表"})
+
+    def test_panel_list_filter_combined_multi_value(self):
+        """测试报表列表多值过滤条件之间为 AND 关系"""
+        self.scene_panel.status = PanelStatus.PUBLISHED
+        self.scene_panel.save(update_fields=["status"])
+        VisionPanel.objects.filter(pk=self.platform_panel.pk).update(updated_by="alice")
+        VisionPanel.objects.filter(pk=self.scene_panel.pk).update(updated_by="alice")
+
+        result = self._call_list_panels(
+            {
+                "scope_type": "cross_scene",
+                "status": [PanelStatus.PUBLISHED],
+                "updated_by": ["alice"],
+            }
+        )
+        names = {item["name"] for item in result}
+        self.assertEqual(names, {"场景报表"})
 
     def test_panel_list_no_scope(self):
         """测试不传 scope 参数时校验失败"""

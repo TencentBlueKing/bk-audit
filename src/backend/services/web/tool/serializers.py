@@ -23,6 +23,7 @@ from pydantic import Field as PydanticField
 from rest_framework import serializers
 from rest_framework.fields import DictField
 
+from core.serializers import FlexibleListField
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
@@ -448,13 +449,19 @@ class ListRequestSerializer(OptionalScopeBindingRequestSerializer):
     )
     my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
     recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
-    status = serializers.ChoiceField(
-        choices=PanelStatus.choices,
+    status = FlexibleListField(
+        child=serializers.ChoiceField(choices=PanelStatus.choices),
         required=False,
-        allow_null=True,
-        default=None,
         label=gettext_lazy("上架状态"),
     )
+    name = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="工具名称")
+    description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="工具说明")
+    tool_type = FlexibleListField(
+        child=serializers.ChoiceField(choices=ToolTypeEnum.choices),
+        required=False,
+        label=gettext_lazy("工具类型"),
+    )
+    updated_by = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="更新人")
 
 
 class SqlAnalyseRequestSerializer(serializers.Serializer):

@@ -224,11 +224,29 @@ class ListPanels(BKVision):
             pk_field="id",
         ).order_by("-updated_at", "id")
         keyword = validated_request_data.get("keyword", "")
-        status = validated_request_data.get("status")
+        status_list = validated_request_data.get("status")
+        name_list = validated_request_data.get("name")
+        description_list = validated_request_data.get("description")
+        updated_by_list = validated_request_data.get("updated_by")
+
         if keyword:
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
-        if status:
-            queryset = queryset.filter(status=status)
+        if status_list:
+            queryset = queryset.filter(status__in=status_list)
+
+        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+            q_filter = Q()
+            for value in values:
+                if value:
+                    q_filter |= Q(**{f"{field_name}__{lookup}": value})
+            return queryset.filter(q_filter)
+
+        if name_list:
+            queryset = apply_multi_value_filter("name", name_list)
+        if description_list:
+            queryset = apply_multi_value_filter("description", description_list)
+        if updated_by_list:
+            queryset = apply_multi_value_filter("updated_by", updated_by_list)
 
         panels = list(queryset)
         panel_ids = [str(panel.id) for panel in panels]
