@@ -341,6 +341,10 @@ class ListTool(ToolBase):
         request = validated_request_data.pop("_request")
         tags = validated_request_data.pop("tags", [])
         keyword = validated_request_data.get("keyword", "").strip()
+        name = validated_request_data.get("name", [])
+        description = validated_request_data.get("description", [])
+        tool_type = validated_request_data.get("tool_type", [])
+        updated_by = validated_request_data.get("updated_by", [])
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
         status = validated_request_data.get("status")
@@ -383,8 +387,24 @@ class ListTool(ToolBase):
             queryset = queryset.filter(created_by=current_user)
 
         if status:
-            queryset = queryset.filter(status=status)
+            queryset = queryset.filter(status__in=status)
 
+        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+            q_filter = Q()
+            for value in values:
+                if value:
+                    q_filter |= Q(**{f"{field_name}__{lookup}": value})
+            return queryset.filter(q_filter)
+
+        if name:
+            queryset = apply_multi_value_filter("name", name)
+        if description:
+            queryset = apply_multi_value_filter("description", description)
+
+        if tool_type:
+            queryset = queryset.filter(tool_type__in=tool_type)
+        if updated_by:
+            queryset = queryset.filter(updated_by__in=updated_by)
         if keyword:
             keyword_filter = (
                 Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)

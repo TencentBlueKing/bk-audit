@@ -271,13 +271,13 @@ class SceneFilterSerializer(SortSerializerMixin, serializers.Serializer):
     """场景列表过滤参数"""
 
     scene_id = FlexibleListField(child=serializers.IntegerField(), required=False)
-    status = serializers.ChoiceField(choices=SceneStatus.choices, required=False)
+    status = FlexibleListField(child=serializers.ChoiceField(choices=SceneStatus.choices), required=False)
     keyword = serializers.CharField(required=False, allow_blank=True)
-    name = serializers.CharField(required=False, allow_blank=True)
-    description = serializers.CharField(required=False, allow_blank=True)
-    manager = serializers.CharField(required=False, allow_blank=True)
-    user = serializers.CharField(required=False, allow_blank=True)
-    updated_by = serializers.CharField(required=False, allow_blank=True)
+    name = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False)
+    description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
+    managers = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
+    users = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
+    updated_by = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
     sort = SortListField(
         allowed_fields=SCENE_LIST_SORT_FIELDS,
         default_sort=DEFAULT_SCENE_LIST_SORT,
