@@ -486,7 +486,6 @@
 
   interface Props {
     groups: ReportGroup[];
-    expandAll?: boolean;
     activeGroups?: number[];
   }
 
@@ -526,7 +525,6 @@
 
   const props = withDefaults(defineProps<Props>(), {
     groups: () => [],
-    expandAll: false,
     activeGroups: () => [],
   });
 
@@ -551,6 +549,8 @@
   const activeGroups = ref<number[]>([]);
   // 持久化备份：用户操作展开/收起时保存，数据刷新时恢复
   const savedActiveGroups = ref<number[]>([]);
+  // 标记是否已完成首次初始化
+  let isInitialized = false;
 
   // 当前 hover 的报表行 ID
   const hoveredReportId = ref<string | null>(null);
@@ -979,13 +979,23 @@
     // 有数据时恢复展开状态
     if (groups.length > 0) {
       if (savedActiveGroups.value.length > 0) {
-        // 从持久备份恢复（清理已删除的分组）
+        // 从持久备份恢复（清理已删除/不存在的分组）
         const validIds = new Set(groups.map(g => g.id));
-        activeGroups.value = savedActiveGroups.value.filter(id => validIds.has(id));
+        const restored = savedActiveGroups.value.filter(id => validIds.has(id));
+        // 切换场景后旧ID全部失效时，回退到展开第一个
+        activeGroups.value = restored.length > 0 ? restored : [groups[0].id];
+        // 同步更新持久备份（场景切换后应使用新数据）
+        if (restored.length === 0) {
+          savedActiveGroups.value = [groups[0].id];
+        }
       } else {
-        // 首次加载，默认展开第一个
+        // 首次加载，默认展开第一个（即使 expandAll 为 true 也只展开第一个）
         activeGroups.value = [groups[0].id];
         savedActiveGroups.value = [groups[0].id];
+      }
+      // 标记首次初始化完成
+      if (!isInitialized) {
+        isInitialized = true;
       }
     }
   }, { immediate: true, deep: true });
@@ -995,15 +1005,6 @@
     savedActiveGroups.value = [...val];
     emit('update:activeGroups', [...val]);
   }, { deep: true });
-
-  // 监听全部展开/收起
-  watch(() => props.expandAll, (val) => {
-    if (val) {
-      activeGroups.value = localGroups.value.map(group => group.id);
-    } else {
-      activeGroups.value = [];
-    }
-  });
 
   // 监听 props.groups 变化时更新映射
   watch(() => props.groups, () => {
