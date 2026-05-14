@@ -40,6 +40,9 @@ from services.web.risk.models import (
 )
 from services.web.risk.resources.risk import ListMineRisk
 from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import BindingMetadataHelper
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -57,9 +60,6 @@ def assert_hive_sql(testcase: TestCase, sql_statements: List[str]) -> None:
 
 
 def bind_strategy_to_scene(strategy_id: int, scene_id) -> None:
-    from services.web.scene.constants import ResourceVisibilityType
-    from services.web.scene.filters import BindingMetadataHelper
-
     BindingMetadataHelper.create_resource_binding(
         resource_id=str(strategy_id),
         resource_type=ResourceVisibilityType.STRATEGY,
@@ -73,7 +73,6 @@ class TestListRiskResource(TestCase):
         self.factory = APIRequestFactory()
         self.username = "admin"
         self.bkbase_title = "bkbase-title"
-        from services.web.scene.models import Scene
 
         self.scene = Scene.objects.create(name="risk-list-scene")
         self.scene_id = self.scene.scene_id
@@ -174,6 +173,78 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["scene_id"], self.scene_id)
         self.assertEqual(data["sql"], [])
 
+    def test_list_risk_filters_by_scene_id_within_scope(self):
+        """scene_id 作为业务筛选项，在权限域结果内按风险所属场景过滤"""
+        another_scene = Scene.objects.create(name="risk-list-another-scene")
+        another_strategy = Strategy.objects.create(
+            strategy_name="another-scene-strategy", risk_level=RiskLevel.LOW.value
+        )
+        bind_strategy_to_scene(another_strategy.strategy_id, another_scene.scene_id)
+        another_risk = Risk.objects.create(
+            risk_id="risk-another-scene",
+            raw_event_id="raw-another-scene",
+            strategy=another_strategy,
+            status=RiskStatus.NEW,
+            title="another",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+
+        with mock.patch(
+            "services.web.risk.resources.risk.ScopePermission.get_scene_ids",
+            return_value=[self.scene_id, another_scene.scene_id],
+        ):
+            data = self._call_resource({"scene_id": str(another_scene.scene_id)})
+        results = data["results"]
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], another_risk.risk_id)
+        self.assertEqual(results[0]["scene_id"], another_scene.scene_id)
+
+    def test_list_risk_filters_by_scene_id_outside_scope_returns_empty(self):
+        """scene_id 业务筛选不能扩大 scope 权限域"""
+        another_scene = Scene.objects.create(name="risk-list-outside-scope-scene")
+        another_strategy = Strategy.objects.create(
+            strategy_name="outside-scope-strategy", risk_level=RiskLevel.LOW.value
+        )
+        bind_strategy_to_scene(another_strategy.strategy_id, another_scene.scene_id)
+        Risk.objects.create(
+            risk_id="risk-outside-scope-scene",
+            raw_event_id="raw-outside-scope-scene",
+            strategy=another_strategy,
+            status=RiskStatus.NEW,
+            title="outside-scope",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+
+        data = self._call_resource({"scene_id": str(another_scene.scene_id)})
+
+        self.assertEqual(data["results"], [])
+
+    def test_list_risk_filters_by_multiple_scene_ids(self):
+        """scene_id 支持逗号多选"""
+        another_scene = Scene.objects.create(name="risk-list-multi-scene")
+        another_strategy = Strategy.objects.create(strategy_name="multi-scene-strategy", risk_level=RiskLevel.LOW.value)
+        bind_strategy_to_scene(another_strategy.strategy_id, another_scene.scene_id)
+        another_risk = Risk.objects.create(
+            risk_id="risk-multi-scene",
+            raw_event_id="raw-multi-scene",
+            strategy=another_strategy,
+            status=RiskStatus.NEW,
+            title="multi",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+
+        with mock.patch(
+            "services.web.risk.resources.risk.ScopePermission.get_scene_ids",
+            return_value=[self.scene_id, another_scene.scene_id],
+        ):
+            data = self._call_resource({"scene_id": f"{self.scene_id},{another_scene.scene_id}"})
+        risk_ids = {item["risk_id"] for item in data["results"]}
+        scene_ids = {item["scene_id"] for item in data["results"]}
+
+        self.assertSetEqual(risk_ids, {self.risk.risk_id, another_risk.risk_id})
+        self.assertSetEqual(scene_ids, {self.scene_id, another_scene.scene_id})
+
     def test_list_risk_via_db_event_end_time_ceils_microseconds(self):
         target_end_time = self.risk.event_time + datetime.timedelta(seconds=59, microseconds=1)
         Risk.objects.filter(pk=self.risk.pk).update(event_end_time=target_end_time)
@@ -246,6 +317,7 @@ class TestListRiskResource(TestCase):
             data = self._call_resource(
                 {
                     "title": "bkbase-title",
+                    "scene_id": str(self.scene_id),
                     "event_filters": [
                         {"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}
                     ],
@@ -264,6 +336,7 @@ class TestListRiskResource(TestCase):
         # 所有风险为 IAM 仅用，不 join ticket_permission 表
         ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
         self.assertFalse(any(ticket_table in sql for sql in sql_log))
+        self.assertFalse(any("scene_resourcebinding" in sql for sql in sql_log))
         event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
         self.assertTrue(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
