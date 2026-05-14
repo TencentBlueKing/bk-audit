@@ -46,6 +46,7 @@ export default () => ({
       return MetaManageService.fetchSystemWithAction({
         scope_id: params.scope_id || '',
         scope_type: params.scope_type || '',
+        audit_status__in: 'accessed',
       });
     },
   },
