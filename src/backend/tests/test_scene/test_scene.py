@@ -19,6 +19,7 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
+from django.conf import settings
 from django.db import IntegrityError, connection
 from django.db.models import Q
 from django.test import RequestFactory
@@ -56,7 +57,7 @@ from services.web.scene.models import (
 )
 from services.web.scene.serializers import SceneFilterSerializer
 from services.web.scene.views import SceneViewSet
-from services.web.strategy_v2.constants import StrategyStatusChoices
+from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
 from services.web.vision.constants import ReportGroupType
@@ -698,7 +699,7 @@ class TestSceneResource(TestCase):
         return binding
 
     def _create_bound_strategy(self, scene, name):
-        strategy = Strategy.objects.create(strategy_name=name)
+        strategy = Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name=name)
         self._bind_strategy_to_scene(strategy, scene)
         return strategy
 
@@ -855,6 +856,50 @@ class TestSceneResource(TestCase):
         self.assertEqual(risk_result[0]["scene_id"], risk_scene.scene_id)
         self.assertEqual(updated_result[0]["scene_id"], updated_scene.scene_id)
 
+    def test_scene_list_sort_by_strategy_count_ignores_system_and_other_namespace_strategies(self):
+        """测试场景列表策略数排序忽略系统内置与非默认命名空间策略"""
+        invisible_scene = Scene.objects.create(name="策略数排序不可见策略场景")
+        visible_scene = Scene.objects.create(name="策略数排序可见策略场景")
+        system_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="策略数排序系统内置策略",
+            source=StrategySource.SYSTEM,
+        )
+        self._bind_strategy_to_scene(system_strategy, invisible_scene)
+        other_namespace_strategy = Strategy.objects.create(namespace="other", strategy_name="策略数排序其他命名空间策略")
+        self._bind_strategy_to_scene(other_namespace_strategy, invisible_scene)
+        visible_strategy = self._create_bound_strategy(visible_scene, "策略数排序用户策略")
+
+        result = self.resource.scene.list_scene({"sort": ["-strategy_count"]})
+        result_map = {item["scene_id"]: item for item in result}
+
+        self.assertEqual(result[0]["scene_id"], visible_scene.scene_id)
+        self.assertEqual(result_map[visible_scene.scene_id]["strategy_count"], 1)
+        self.assertEqual(result_map[invisible_scene.scene_id]["strategy_count"], 0)
+        self.assertEqual(result_map[visible_scene.scene_id]["strategy_ids"], [visible_strategy.strategy_id])
+
+    def test_scene_list_sort_by_risk_count_uses_recent_six_months_window(self):
+        """测试场景列表风险数排序默认统计最近 6 个月"""
+        old_risk_scene = Scene.objects.create(name="风险数排序过期风险场景")
+        recent_risk_scene = Scene.objects.create(name="风险数排序近期风险场景")
+        old_strategy = self._create_bound_strategy(old_risk_scene, "风险数排序过期风险策略")
+        recent_strategy = self._create_bound_strategy(recent_risk_scene, "风险数排序近期风险策略")
+        old_time = timezone.now() - timezone.timedelta(days=181)
+        Risk.objects.create(
+            raw_event_id="scene-sort-old-risk",
+            strategy=old_strategy,
+            event_time=old_time,
+            event_end_time=old_time,
+        )
+        self._create_risk(recent_strategy, "scene-sort-recent-risk")
+
+        result = self.resource.scene.list_scene({"sort": ["-risk_count"]})
+        result_map = {item["scene_id"]: item for item in result}
+
+        self.assertEqual(result[0]["scene_id"], recent_risk_scene.scene_id)
+        self.assertEqual(result_map[recent_risk_scene.scene_id]["risk_count"], 1)
+        self.assertEqual(result_map[old_risk_scene.scene_id]["risk_count"], 0)
+
     def test_scene_list_rejects_invalid_sort_field(self):
         """测试场景列表拒绝非法排序字段"""
         serializer = SceneFilterSerializer(data={"sort": ["name"]})
@@ -912,7 +957,7 @@ class TestSceneResource(TestCase):
 
     def test_scene_retrieve_contains_related_strategy_ids_and_risk_count(self):
         """测试场景详情返回关联策略ID和风险数量"""
-        strategy = Strategy.objects.create(strategy_name="详情场景策略")
+        strategy = Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="详情场景策略")
         binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),
@@ -929,6 +974,53 @@ class TestSceneResource(TestCase):
         result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
         self.assertEqual(result["strategy_ids"], [strategy.strategy_id])
         self.assertEqual(result["risk_count"], 1)
+
+    def test_scene_retrieve_risk_count_defaults_to_recent_six_months(self):
+        """测试场景详情风险数量默认统计最近 6 个月"""
+        strategy = self._create_bound_strategy(self.scene, "详情风险时间窗口策略")
+        Risk.objects.create(
+            raw_event_id="raw-scene-detail-recent",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+        old_time = timezone.now() - timezone.timedelta(days=181)
+        Risk.objects.create(
+            raw_event_id="raw-scene-detail-old",
+            strategy=strategy,
+            event_time=old_time,
+            event_end_time=old_time,
+        )
+
+        result = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(result["risk_count"], 1)
+
+    def test_scene_retrieve_strategy_count_matches_scene_strategy_list_scope(self):
+        """测试场景详情策略统计与场景下策略列表默认口径一致"""
+        visible_strategy = self._create_bound_strategy(self.scene, "详情可见策略")
+        another_visible_strategy = self._create_bound_strategy(self.scene, "详情另一个可见策略")
+        system_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="详情系统内置策略",
+            source=StrategySource.SYSTEM,
+        )
+        self._bind_strategy_to_scene(system_strategy, self.scene)
+        other_namespace_strategy = Strategy.objects.create(namespace="other", strategy_name="详情其他命名空间策略")
+        self._bind_strategy_to_scene(other_namespace_strategy, self.scene)
+
+        detail = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
+        strategies = self.resource.strategy_v2.list_strategy(
+            namespace=settings.DEFAULT_NAMESPACE, scene_id=self.scene.scene_id
+        )
+        list_strategy_ids = [strategy["strategy_id"] for strategy in strategies]
+
+        self.assertSetEqual(set(detail["strategy_ids"]), set(list_strategy_ids))
+        self.assertSetEqual(
+            set(detail["strategy_ids"]),
+            {visible_strategy.strategy_id, another_visible_strategy.strategy_id},
+        )
+        self.assertEqual(detail["strategy_count"], len(list_strategy_ids))
 
     def test_create_scene_all_systems_without_system_id(self):
         """创建场景选择全系统时允许不传 system_id"""
