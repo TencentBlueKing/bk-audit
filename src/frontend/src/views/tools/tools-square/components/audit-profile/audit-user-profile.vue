@@ -563,7 +563,8 @@
     window.open(routeData.href, '_blank');
   };
 
-  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(代) | 累计充值(代) | 累计赠送(¥) | 累计发放(¥) | 登录次数/月 | 责任单数 | 操作）
+  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(代) | 累计充值(代) | 累计赠送(¥)
+  // | 累计发放(¥) | 累计发数(¥) | 登录天数(31) | 登录次数(7天) | 登录次数/月 | 责任单数 | 操作）
   const gameColumns: Array<Record<string, any>> = [
     {
       label: () => t('游戏名称'),
@@ -611,6 +612,9 @@
     { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
     { label: () => `${t('累计赠送')} (¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_YUAN] ?? '--') },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
+    { label: () => `${t('累计发数')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_COUNT_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_COUNT_YUAN] ?? '--') },
+    { label: () => `${t('登录天数')} (31)`, field: PROFILE_FIELDS.LOGIN_DAYS_31, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--') },
+    { label: () => `${t('登录次数')} (7${t('天')})`, field: PROFILE_FIELDS.LOGIN_COUNT_7DAYS, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_7DAYS] ?? '--') },
     { label: () => `${t('登录次数')} / ${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_MONTH] ?? '--') },
     {
       label: () => t('责任单数'),
@@ -777,6 +781,9 @@
     { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
     { id: 'totalGift', name: `${t('累计赠送')}(¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, fallbackField: 'totalGift' },
     { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
+    { id: 'totalIssueCount', name: `${t('累计发数')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_COUNT_YUAN, fallbackField: 'totalIssueCount' },
+    { id: 'loginDays31', name: `${t('登录天数')}(31)`, field: PROFILE_FIELDS.LOGIN_DAYS_31, fallbackField: 'loginDays31' },
+    { id: 'loginCount7Days', name: `${t('登录次数')}(7${t('天')})`, field: PROFILE_FIELDS.LOGIN_COUNT_7DAYS, fallbackField: 'loginCount7Days' },
     { id: 'loginCount', name: `${t('登录次数')}/${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, fallbackField: 'loginCount' },
     { id: 'responsibilityCount', name: t('责任单数'), field: PROFILE_FIELDS.RESPONSIBILITY_COUNT, fallbackField: 'responsibility_count' },
   ];

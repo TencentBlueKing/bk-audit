@@ -850,6 +850,10 @@
 
 .scene-manage-content {
   min-height: 400px;
+
+  :deep(.audit-tdesign-list) {
+    border: none;
+  }
 }
 
 .scene-id-cell {
