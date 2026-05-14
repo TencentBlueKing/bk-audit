@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.constants import SystemAuditStatusEnum
 from apps.meta.handlers.iam_group import (
     SCENE_MANAGER_GROUP_ACTIONS,
     SCENE_VIEWER_GROUP_ACTIONS,
@@ -261,7 +262,9 @@ class GetMyRolePermissions(SceneResource):
     def perform_request(self, validated_request_data):
         username = get_request_username()
         permission = Permission(username=username)
-        has_local_system_manage_permission = bool(System.get_managed_system_ids(username))
+        has_local_system_manage_permission = bool(
+            System.get_managed_system_ids(username, audit_status=SystemAuditStatusEnum.ACCESSED)
+        )
 
         edit_system = has_local_system_manage_permission or permission.has_action_any_permission(ActionEnum.EDIT_SYSTEM)
 

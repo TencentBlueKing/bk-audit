@@ -29,6 +29,7 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from apps.meta.constants import SystemAuditStatusEnum
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
@@ -1366,8 +1367,16 @@ class TestGetMyRolePermissions(TestCase):
 
     def test_local_system_manager_grants_system_permissions(self):
         drf_request = self._make_drf_request()
+        System.objects.create(
+            system_id="bk_test",
+            instance_id="bk_test",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="已接入系统",
+            managers=["admin"],
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
 
-        with mock.patch.object(System, "get_managed_system_ids", return_value=["bk_test"]), mock.patch.object(
+        with mock.patch.object(
             Permission,
             "has_action_any_permission",
             side_effect=lambda action: {
@@ -1382,6 +1391,33 @@ class TestGetMyRolePermissions(TestCase):
 
         self.assertEqual(result["edit_system"], True)
         self.assertEqual(result["view_system"], True)
+
+    def test_pending_local_system_manager_does_not_grant_system_permissions(self):
+        drf_request = self._make_drf_request()
+        System.objects.create(
+            system_id="bk_pending",
+            instance_id="bk_pending",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="待接入系统",
+            managers=["admin"],
+            audit_status=SystemAuditStatusEnum.PENDING,
+        )
+
+        with mock.patch.object(
+            Permission,
+            "has_action_any_permission",
+            side_effect=lambda action: {
+                ActionEnum.MANAGE_PLATFORM: False,
+                ActionEnum.MANAGE_SCENE: False,
+                ActionEnum.VIEW_SCENE: False,
+                ActionEnum.EDIT_SYSTEM: False,
+                ActionEnum.VIEW_SYSTEM: False,
+            }[action],
+        ):
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["edit_system"], False)
+        self.assertEqual(result["view_system"], False)
 
 
 class TestPanelResources(TestCase):

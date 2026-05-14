@@ -248,12 +248,13 @@ class System(OperateRecordModel):
         return []
 
     @classmethod
-    def get_managed_system_ids(cls, username: str) -> List[str]:
+    def get_managed_system_ids(cls, username: str, audit_status: Optional[SystemAuditStatusEnum] = None) -> List[str]:
         """获取用户作为管理员的所有系统 ID（单条 SQL，避免 N+1）
 
         查询逻辑：
         1. managers JSONField 中包含该用户名
         2. 或在 SystemRole 表中有 manager 角色记录
+        3. 指定 audit_status 时，仅返回该审计状态的系统
         """
         # managers JSONField 包含用户名（MySQL / SQLite 均支持 __contains）
         json_q = Q(managers__contains=[username])
@@ -261,7 +262,10 @@ class System(OperateRecordModel):
         role_system_ids = set(
             SystemRole.objects.filter(username=username, role=IAM_MANAGER_ROLE).values_list("system_id", flat=True)
         )
-        qs = cls.objects.filter(json_q | Q(system_id__in=role_system_ids)).values_list("system_id", flat=True)
+        qs = cls.objects.filter(json_q | Q(system_id__in=role_system_ids))
+        if audit_status is not None:
+            qs = qs.filter(audit_status=audit_status)
+        qs = qs.values_list("system_id", flat=True)
         return list(qs)
 
     @classmethod
