@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
-import datetime
 from collections import defaultdict
 
 from django.conf import settings
 from django.db.models import Count
-from django.utils import timezone
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
@@ -23,10 +21,7 @@ from services.web.scene.models import (
     SceneDataTable,
     SceneSystem,
 )
-from services.web.strategy_v2.constants import (
-    STRATEGY_RISK_DEFAULT_INTERVAL,
-    StrategySource,
-)
+from services.web.strategy_v2.constants import StrategySource
 from services.web.strategy_v2.models import Strategy
 
 SCENE_LIST_SORT_FIELDS = ("scene_id", "strategy_count", "risk_count", "updated_at")
@@ -130,10 +125,9 @@ class SceneRelatedStatsMixin:
 
         strategy_risk_count_map = {}
         if valid_strategy_ids:
-            risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
             strategy_risk_count_map = {
                 item["strategy_id"]: item["count"]
-                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids, event_time__gte=risk_start_time)
+                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids)
                 .values("strategy_id")
                 .annotate(count=Count("risk_id"))
             }
