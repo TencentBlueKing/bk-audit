@@ -50,6 +50,7 @@
                 <audit-user-selector
                   v-model="editUserValue"
                   allow-create
+                  auto-focus
                   multiple
                   @blur="handleUserSave(row.key)" />
               </div>
