@@ -410,7 +410,7 @@
   // }
 
   // const projectList = ref<SystemItem[]>([]);
-  const permissionCreateSystem = ref(false);
+  // const permissionCreateSystem = ref(false);
   // 系统列表是否为空（用于决定跳转引导页还是列表页）
   const isSystemListEmpty = ref(true);
 
@@ -440,17 +440,17 @@
     }
     return 'landingPage';
   });
-  // 获取新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'create_system',
-    },
-    defaultValue: {},
-    manual: true,
-    onSuccess: (data) => {
-      permissionCreateSystem.value = data.create_system;
-    },
-  });
+  // // 获取新建权限
+  // useRequest(IamManageService.check, {
+  //   defaultParams: {
+  //     action_ids: 'create_system',
+  //   },
+  //   defaultValue: {},
+  //   manual: true,
+  //   onSuccess: (data) => {
+  //     permissionCreateSystem.value = data.create_system;
+  //   },
+  // });
 
   // 获取系统列表，判断是否为空以决定跳转目标
   useRequest(MetaManageService.fetchSystemList, {
