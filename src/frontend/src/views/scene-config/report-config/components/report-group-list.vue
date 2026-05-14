@@ -975,7 +975,14 @@
 
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
-    localGroups.value = [...groups];
+    localGroups.value = [...groups]
+      .sort((a, b) => (b.priority_index ?? 0) - (a.priority_index ?? 0))
+      .map(group => ({
+        ...group,
+        // eslint-disable-next-line max-len
+        reports: [...group.reports].sort((a: any, b: any) => (b.group_priority_index ?? 0) - (a.group_priority_index ?? 0)),
+      }));
+
     // 有数据时恢复展开状态
     if (groups.length > 0) {
       if (savedActiveGroups.value.length > 0) {
