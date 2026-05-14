@@ -314,6 +314,7 @@ class ListRisk(RiskMeta):
         event_filters = validated_request_data.pop("event_filters", [])
         scope_type = validated_request_data.pop("scope_type", None)
         scope_id = validated_request_data.pop("scope_id", None)
+        scene_ids = validated_request_data.pop("scene_id", [])
 
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
         thedate_range = self._extract_thedate_range(validated_request_data)
@@ -322,14 +323,15 @@ class ListRisk(RiskMeta):
         # 仅在显式传入 scope 时应用场景过滤；个人视图可不传 scope
         if scope_type:
             scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
-            scene_ids = ScopePermission(get_request_username(request)).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+            scope_scene_ids = ScopePermission(get_request_username(request)).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
             base_queryset = SceneScopeFilter.filter_queryset(
                 queryset=base_queryset,
-                scene_id=scene_ids,
+                scene_id=scope_scene_ids,
                 resource_type=ResourceVisibilityType.RISK,
                 pk_field="risk_id",
             )
 
+        base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
         if use_bkbase:
@@ -367,6 +369,21 @@ class ListRisk(RiskMeta):
         ).data
         response["sql"] = []
         return response
+
+    def _filter_queryset_by_scene_ids(self, queryset: QuerySet, scene_ids: List[str]) -> QuerySet:
+        if not scene_ids:
+            return queryset
+
+        strategy_ids = list(
+            ResourceBindingScene.objects.filter(
+                scene_id__in=scene_ids,
+                scene__is_deleted=False,
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+            ).values_list("binding__resource_id", flat=True)
+        )
+        if not strategy_ids:
+            return queryset.none()
+        return queryset.filter(strategy_id__in=strategy_ids)
 
     def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
         end_dt = (
