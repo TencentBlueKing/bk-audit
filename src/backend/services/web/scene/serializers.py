@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import datetime
 from collections import defaultdict
 
+from django.conf import settings
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
+from services.web.risk.models import Risk
 from services.web.scene.binding_validation import validate_platform_visibility_payload
 from services.web.scene.constants import (
     ResourceVisibilityType,
@@ -19,6 +23,11 @@ from services.web.scene.models import (
     SceneDataTable,
     SceneSystem,
 )
+from services.web.strategy_v2.constants import (
+    STRATEGY_RISK_DEFAULT_INTERVAL,
+    StrategySource,
+)
+from services.web.strategy_v2.models import Strategy
 
 SCENE_LIST_SORT_FIELDS = ("scene_id", "strategy_count", "risk_count", "updated_at")
 SCENE_LIST_SORT_FIELD_DESCRIPTIONS = {
@@ -109,21 +118,22 @@ class SceneRelatedStatsMixin:
 
         valid_strategy_ids = set()
         if raw_strategy_ids:
-            from services.web.strategy_v2.models import Strategy
-
             valid_strategy_ids = set(
-                Strategy.objects.filter(strategy_id__in=raw_strategy_ids, is_deleted=False).values_list(
-                    "strategy_id", flat=True
+                Strategy.objects.filter(
+                    strategy_id__in=raw_strategy_ids,
+                    is_deleted=False,
+                    namespace=settings.DEFAULT_NAMESPACE,
                 )
+                .exclude(source=StrategySource.SYSTEM)
+                .values_list("strategy_id", flat=True)
             )
 
         strategy_risk_count_map = {}
         if valid_strategy_ids:
-            from services.web.risk.models import Risk
-
+            risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
             strategy_risk_count_map = {
                 item["strategy_id"]: item["count"]
-                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids)
+                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids, event_time__gte=risk_start_time)
                 .values("strategy_id")
                 .annotate(count=Count("risk_id"))
             }
@@ -204,6 +214,7 @@ class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer)
     systems = SceneSystemSerializer(source="scene_systems", many=True, read_only=True)
     tables = SceneDataTableSerializer(source="scene_tables", many=True, read_only=True)
     strategy_ids = serializers.SerializerMethodField()
+    strategy_count = serializers.SerializerMethodField()
     risk_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -220,6 +231,7 @@ class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer)
             "systems",
             "tables",
             "strategy_ids",
+            "strategy_count",
             "risk_count",
             "created_by",
             "created_at",
