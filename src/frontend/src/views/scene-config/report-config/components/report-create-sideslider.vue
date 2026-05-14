@@ -30,22 +30,41 @@
           <!-- 关联 BKVision 报表 -->
           <bk-form-item
             :label="t('关联 BKVision 报表')"
-            property="vision_id"
+            property="bkvisionReport"
             required>
             <div class="bkvision-select-wrapper">
-              <bk-cascader
-                v-model="formData.vision_id"
-                children-key="share"
-                id-key="uid"
-                :list="Array.isArray(chartLists) ? chartLists : []"
-                :multiple="false"
-                :show-complete-name="false"
+              <bk-select
+                v-model="formData.bkvisionReport"
+                :clearable="false"
+                filterable
+                :placeholder="t('选择项目')"
                 style="width: 500px;"
-                trigger="click"
-                @change="handleSpaceChange" />
+                @change="handleReportChange">
+                <bk-option-group
+                  v-for="group in chartGroupedLists"
+                  :key="group.uid"
+                  collapsible
+                  :label="group.name">
+                  <bk-option
+                    v-for="item in group.share"
+                    :id="item.uid"
+                    :key="item.uid"
+                    :name="`【${group.name}】${item.name}`">
+                    <template #default>
+                      <div class="report-option-content">
+                        <span class="option-name">{{ item.name }}</span>
+                        <audit-icon
+                          class="preview-icon"
+                          type="jump-link"
+                          @click.stop="handlePreviewReport(item)" />
+                      </div>
+                    </template>
+                  </bk-option>
+                </bk-option-group>
+              </bk-select>
               <bk-button
+                v-if="formData.bkvisionReport"
                 class="preview-btn"
-                :disabled="!formData.bkvisionReport"
                 @click="handlePreview">
                 {{ t('预览') }}
                 <audit-icon
@@ -154,7 +173,6 @@
     description: string;
     status?: 'published' | 'unpublished';
     enabled: boolean;
-    vision_id: string[];
   }
 
   interface ChartListModel {
@@ -200,6 +218,10 @@
 
   // 图表列表数据（从 props 获取）
   const chartLists = computed(() => props.chartLists || []);
+
+  // 分组后的图表列表（用于下拉框展示）
+  const chartGroupedLists = computed(() => chartLists.value);
+
   const { messageSuccess } = useMessage();
 
   // 表单引用
@@ -208,7 +230,6 @@
   // 表单数据
   const formData = ref<ReportFormData>({
     bkvisionReport: '',
-    vision_id: [],
     name: '',
     groupId: null,
     description: '',
@@ -217,7 +238,7 @@
 
   // 新建模式，重置表单
   const formRules = {
-    vision_id: [
+    bkvisionReport: [
       {
         required: true,
         message: t('请选择关联 BKVision 报表'),
@@ -245,35 +266,17 @@
   const handleGroupChange = () => {
     formRef.value?.validate('groupId');
   };
-  // 根据子级 uid 查找完整的级联路径
-  const findCascaderPath = (targetUid: string): string[] => {
-    for (const parent of chartLists.value) {
-      if (parent.share) {
-        const child = parent.share.find(item => item.uid === targetUid);
-        if (child) {
-          return [parent.uid, child.uid];
-        }
-      }
-    }
-    return [];
-  };
-
   // 填充编辑数据的通用逻辑
   const fillEditFormData = (data: ReportFormData) => {
     formData.value = {
       id: data.id,
-      bkvisionReport: data.bkvisionReport,
-      vision_id: [],
+      bkvisionReport: data.bkvisionReport || '',
       name: data.name,
       groupId: data.groupId ?? null,
       description: data.description || '--',
       status: data.status || 'unpublished',
       enabled: (data.status ?? 'unpublished') === 'published',
     };
-    // 如果有 bkvisionReport，尝试设置级联选择器的值
-    if (data.bkvisionReport && chartLists.value.length > 0) {
-      formData.value.vision_id = findCascaderPath(data.bkvisionReport);
-    }
   };
 
   // 重置新建模式表单
@@ -287,7 +290,6 @@
     }
     formData.value = {
       bkvisionReport: '',
-      vision_id: [],
       name: '',
       groupId: defaultGroupIdValue,
       description: '',
@@ -323,35 +325,53 @@
     }
   });
 
-  // 监听 chartLists 加载完成，编辑模式下设置级联选择器的值
-  watch(() => chartLists.value, (newChartLists) => {
-    if (newChartLists.length > 0 && props.isShow && props.editData?.bkvisionReport) {
-      formData.value.vision_id = findCascaderPath(props.editData.bkvisionReport);
-    }
-  });
+  // 监听 chartLists 加载完成，编辑模式下设置选择器的值
+  // bkvisionReport 直接存储 uid，无需额外处理
 
-  // 级联选择器变化处理
-  const handleSpaceChange = (value: string[]) => {
-    if (value && value.length > 0) {
-      // 获取最后一级选中的值作为 bkvisionReport
-      const reportUid = value[value.length - 1];
-      formData.value.bkvisionReport = reportUid;
-
+  // 报表选择变化处理
+  const handleReportChange = (value: string) => {
+    if (value) {
+      formData.value.bkvisionReport = value;
       // 从 chartLists 中查找报表名称并自动填充
-      const spaceUid = value[0];
-      const space = chartLists.value.find(item => item.uid === spaceUid);
-      if (space?.share) {
-        const report = space.share.find(item => item.uid === reportUid);
-        if (report?.name) {
-          formData.value.name = report.name;
+      for (const group of chartLists.value) {
+        if (group.share) {
+          const report = group.share.find(item => item.uid === value);
+          if (report?.name) {
+            formData.value.name = report.name;
+            break;
+          }
         }
       }
     } else {
       formData.value.bkvisionReport = '';
       formData.value.name = '';
     }
-    formRef.value?.validate('vision_id');
+    formRef.value?.validate('bkvisionReport');
     formRef.value?.validate('name');
+  };
+
+  // 预览报表（点击选项右侧图标）
+  const handlePreviewReport = async (item: { uid: string; name: string }) => {
+    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
+    if (!baseUrl) return;
+
+    try {
+      const res = await fetchReportDetail({
+        share_uid: item.uid,
+      });
+      if (res && res.data?.dashboard_uid) {
+        let spaceUid = '';
+        for (const group of chartLists.value) {
+          if (group.share?.find(i => i.uid === item.uid)) {
+            spaceUid = group.uid;
+            break;
+          }
+        }
+        window.open(`${baseUrl}#/${spaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
+      }
+    } catch (e) {
+      console.error('获取报表详情失败:', e);
+    }
   };
 
   // 获取配置数据（用于获取 BKVision URL）
@@ -371,7 +391,7 @@
 
   // 预览报表
   const handlePreview = async () => {
-    if (!formData.value.bkvisionReport || formData.value.vision_id.length === 0) return;
+    if (!formData.value.bkvisionReport) return;
     const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
     if (!baseUrl) return;
 
@@ -381,8 +401,15 @@
         share_uid: formData.value.bkvisionReport,
       });
       if (res && res.data?.dashboard_uid) {
-        // 获取空间 ID（级联选择器的第一个值）
-        const spaceUid = formData.value.vision_id[0];
+        // 从 chartLists 中查找空间 uid
+        let spaceUid = '';
+        for (const group of chartLists.value) {
+          const report = group.share?.find(item => item.uid === formData.value.bkvisionReport);
+          if (report) {
+            spaceUid = group.uid;
+            break;
+          }
+        }
         // 构建跳转链接：baseUrl#/spaceUid/dashboards/detail/root/dashboardUid
         window.open(`${baseUrl}#/${spaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
       }
@@ -426,10 +453,8 @@
       // 从 groupList 中查找选中分组的名称
       const selectedGroup = props.groupList.find(g => g.id === formData.value.groupId);
       const groupId = selectedGroup?.id || '';
-      // 获取级联选择器选中的最后一级值（报表ID）
-      const visionId = formData.value.vision_id.length > 0
-        ? formData.value.vision_id[formData.value.vision_id.length - 1]
-        : '';
+      // 直接使用 bkvisionReport 作为 vision_id
+      const visionId = formData.value.bkvisionReport;
 
       if (isEditMode.value && formData.value.id) {
         // 编辑模式，调用 updatePanel API
@@ -491,13 +516,37 @@
   align-items: center;
   gap: 8px;
 
-  :deep(.bk-cascader) {
+  :deep(.bk-select) {
     flex: 1;
   }
 
   .preview-btn {
     flex-shrink: 0;
     color: #3a84ff;
+
+    &:hover {
+      color: #699df4;
+    }
+  }
+}
+
+.report-option-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+
+  .option-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .preview-icon {
+    margin-left: 8px;
+    color: #3a84ff;
+    cursor: pointer;
 
     &:hover {
       color: #699df4;
