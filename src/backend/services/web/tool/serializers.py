@@ -23,7 +23,7 @@ from pydantic import Field as PydanticField
 from rest_framework import serializers
 from rest_framework.fields import DictField
 
-from core.serializers import FlexibleListField
+from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
@@ -442,7 +442,16 @@ class OptionalScopeBindingRequestSerializer(ScopeBindingRequestSerializer):
         return super().validate(attrs)
 
 
-class ListRequestSerializer(OptionalScopeBindingRequestSerializer):
+TOOL_LIST_SORT_FIELDS = ["favorite", "name", "updated_at", "created_at"]
+TOOL_LIST_SORT_FIELD_DESCRIPTIONS = {
+    "favorite": gettext_lazy("是否收藏"),
+    "name": gettext_lazy("工具名称"),
+    "updated_at": gettext_lazy("更新时间"),
+    "created_at": gettext_lazy("创建时间"),
+}
+
+
+class ListRequestSerializer(SortSerializerMixin, OptionalScopeBindingRequestSerializer):
     keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
@@ -462,6 +471,10 @@ class ListRequestSerializer(OptionalScopeBindingRequestSerializer):
         label=gettext_lazy("工具类型"),
     )
     updated_by = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="更新人")
+    sort = SortListField(
+        allowed_fields=TOOL_LIST_SORT_FIELDS,
+        field_descriptions=TOOL_LIST_SORT_FIELD_DESCRIPTIONS,
+    )
 
 
 class SqlAnalyseRequestSerializer(serializers.Serializer):
