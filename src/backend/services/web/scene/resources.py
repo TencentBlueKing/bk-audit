@@ -86,7 +86,7 @@ class SceneResource(AuditMixinResource, abc.ABC):
             scene.managers = manager_members
             scene.users = user_members
 
-        return {"manager": manager_members, "user": user_members}
+        return {"managers": manager_members, "users": user_members}
 
     @classmethod
     def _sync_iam_group_members(cls, scene, validated_request_data):
@@ -201,18 +201,32 @@ class ListScene(SceneResource):
         queryset = Scene.objects.all()
         if validated_request_data.get("scene_id"):
             queryset = queryset.filter(scene_id__in=validated_request_data["scene_id"])
-        if "status" in validated_request_data:
-            queryset = queryset.filter(status=validated_request_data["status"])
+        if validated_request_data.get("status"):
+            queryset = queryset.filter(status__in=validated_request_data["status"])
+
+        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+            q_filter = Q()
+            for value in values:
+                if value:
+                    q_filter |= Q(**{f"{field_name}__{lookup}": value})
+            return queryset.filter(q_filter)
+
         if validated_request_data.get("name"):
-            queryset = queryset.filter(name__icontains=validated_request_data["name"])
+            queryset = apply_multi_value_filter("name", validated_request_data.get("name"))
         if validated_request_data.get("description"):
-            queryset = queryset.filter(description__icontains=validated_request_data["description"])
-        if validated_request_data.get("manager"):
-            queryset = queryset.filter(managers__contains=[validated_request_data["manager"]])
-        if validated_request_data.get("user"):
-            queryset = queryset.filter(users__contains=[validated_request_data["user"]])
+            queryset = apply_multi_value_filter("description", validated_request_data.get("description"))
         if validated_request_data.get("updated_by"):
-            queryset = queryset.filter(updated_by=validated_request_data["updated_by"])
+            queryset = apply_multi_value_filter("updated_by", validated_request_data.get("updated_by"))
+        if validated_request_data.get("managers"):
+            manager_filter = Q()
+            for manager in validated_request_data["managers"]:
+                manager_filter |= Q(managers__contains=[manager])
+            queryset = queryset.filter(manager_filter)
+        if validated_request_data.get("users"):
+            user_filter = Q()
+            for user in validated_request_data["users"]:
+                user_filter |= Q(users__contains=[user])
+            queryset = queryset.filter(user_filter)
         if validated_request_data.get("keyword"):
             keyword = validated_request_data["keyword"]
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))

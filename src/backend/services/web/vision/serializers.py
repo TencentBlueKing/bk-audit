@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from rest_framework import serializers
 
-from core.serializers import ExtraDataSerializerMixin
+from core.serializers import ExtraDataSerializerMixin, FlexibleListField
 from services.web.common.constants import ScopeQueryField, ScopeType
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.scene.constants import BindingType, PanelStatus
@@ -222,13 +222,19 @@ class ScenePanelListQuerySerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     keyword = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    name = FlexibleListField(child=serializers.CharField(), required=False)
+    description = FlexibleListField(child=serializers.CharField(), required=False)
+    updated_by = FlexibleListField(child=serializers.CharField(), required=False)
 
 
 class PanelSquareListQuerySerializer(VisionPanelInfoQuerySerializer):
     """广场报表列表：按 scope 查询。"""
 
     keyword = serializers.CharField(required=False, allow_blank=True, default="")
-    status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    status = FlexibleListField(child=serializers.ChoiceField(choices=PanelStatus.choices), required=False)
+    name = FlexibleListField(child=serializers.CharField(), required=False)
+    description = FlexibleListField(child=serializers.CharField(), required=False)
+    updated_by = FlexibleListField(child=serializers.CharField(), required=False)
 
 
 class PanelGroupListQuerySerializer(ScopeQuerySerializer):
