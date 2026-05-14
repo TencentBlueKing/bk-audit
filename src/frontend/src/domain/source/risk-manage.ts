@@ -18,7 +18,6 @@ import type RiskManageModel from '@model/risk/risk';
 import type StrategyInfo from '@model/risk/strategy-info';
 
 import Request, {
-  type IRequestPayload,
   type IRequestResponsePaginationData,
 } from '@utils/request';
 
@@ -36,11 +35,12 @@ class RiskManage extends ModuleBase {
   // 获取风险列表
   getRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scope_id?: string,
+  }) {
+    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/?page=${params.page}&page_size=${params.page_size}`, {
-      params,
-      payload,
+      params: requestParams,
     });
   }
   // 获取正在生成的事件列表
@@ -63,30 +63,34 @@ class RiskManage extends ModuleBase {
   // 获取待我处理的风险列表
   getTodoRiskList(params: {
       page: number,
-      page_size: number
+      page_size: number,
+      scope_id?: string,
     }) {
+    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/?page=${params.page}&page_size=${params.page_size}`, {
-      params,
+      params: requestParams,
     });
   }
   // 我关注的获取风险列表
   getWatchRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scope_id?: string,
+  }) {
+    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/?page=${params.page}&page_size=${params.page_size}`, {
-      params,
-      payload,
+      params: requestParams,
     });
   }
   // 获取处理历史风险列表
   getProcessedRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scope_id?: string,
+  }) {
+    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/processed/?page=${params.page}&page_size=${params.page_size}`, {
-      params,
-      payload,
+      params: requestParams,
     });
   }
   // 获取风险可用字段
@@ -375,6 +379,18 @@ class RiskManage extends ModuleBase {
     page_size: number,
   }) {
     return Request.get(`${this.api}/analyse_report/${params.report_id}/risks/`, {
+      params,
+    });
+  }
+  // 获取风险关联的场景
+  getRiskScenes(params: {
+    end_time?: string,
+    risk_view_type?: string,
+    scope_id?: string,
+    scope_type?: string,
+    start_time?: string,
+  }) {
+    return Request.get(`${this.module}/scenes/`, {
       params,
     });
   }
