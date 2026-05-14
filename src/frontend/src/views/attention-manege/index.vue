@@ -92,7 +92,7 @@
 
   // attention-manege 列顺序与其他页面不同，通过指定列顺序重新排列
   const columnOrder = [
-    'row-select', 'risk_id', 'title', 'event_content', 'risk_level',
+    'row-select', 'risk_id', 'title', 'event_content', 'scene_id', 'risk_level',
     'tags', 'operator', 'status', 'event_time', 'strategy_id',
     'notice_users', 'current_operator', 'last_operate_time', 'has_report', 'risk_label',
   ];
@@ -151,19 +151,22 @@
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
     const jsonStr = localStorage.getItem('audit-attention-risk-list-setting');
+    let result: string[];
     if (jsonStr) {
       try {
         const savedSettings = JSON.parse(jsonStr);
         // 如果保存的设置中有 checked 字段，使用它；否则使用默认设置
-        return savedSettings.checked && Array.isArray(savedSettings.checked)
+        result = savedSettings.checked && Array.isArray(savedSettings.checked)
           ? savedSettings.checked
           : defaultSettings;
       } catch (e) {
-        console.error('本地设置解析失败，使用默认配置', e);
-        return defaultSettings;
+        result = defaultSettings;
       }
+    } else {
+      result = defaultSettings;
     }
-    return defaultSettings;
+    // 默认不展示所属场景(scene_id)列
+    return result.filter((key: string) => key !== 'scene_id');
   });
 
 

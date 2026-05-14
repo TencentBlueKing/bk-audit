@@ -75,6 +75,9 @@
             </router-link>
             <span v-else>--</span>
           </template>
+          <template v-else-if="fieldItem.field_name === 'scene_id'">
+            <span>{{ sceneName || '--' }}</span>
+          </template>
           <template v-else-if="fieldItem.field_name === 'event_content'">
             <span v-if="isAddRisk">
               <edit-tag
@@ -175,6 +178,7 @@
 
   import RiskManageService from '@service/risk-manage';
   import RiskRuleManageService from '@service/rule-manage';
+  import SceneManageService from '@service/scene-manage';
 
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
@@ -242,6 +246,22 @@
   };
 
   const statusToMap = RISK_STATUS_THEME_MAP;
+
+  // 获取场景列表
+  const {
+    data: sceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    manual: true,
+    defaultValue: [],
+  });
+
+  // 获取场景名称
+  const sceneName = computed(() => {
+    if (!props.data?.scene_id) return '';
+    // 场景数据的ID字段为 scene_id
+    const item = sceneList.value.find((s: any) => String(s.scene_id || s.id) === String(props.data.scene_id));
+    return item ? (item.name || '') : props.data.scene_id;
+  });
   // 判断值是否为数组（包括字符串形式的数组）
   const handleShowText = (value: any) => {
     // 1. 如果是真正的数组，直接连接
@@ -311,7 +331,22 @@
     return newArray;
   };
 
-  const renderShowFieldNames = computed(() => group(props.showFieldNames));
+  const renderShowFieldNames = computed(() => {
+    const fields = props.showFieldNames;
+    // 在"风险命中策略"(strategy_name)前插入所属场景(scene_id)字段
+    const strategyIndex = fields.findIndex(f => f.field_name === 'strategy_name');
+    if (strategyIndex > 0) {
+      const sceneField = {
+        field_name: 'scene_id',
+        display_name: t('所属场景'),
+        is_priority: false,
+      };
+      const newFields = [...fields];
+      newFields.splice(strategyIndex, 0, sceneField as any);
+      return group(newFields);
+    }
+    return group(fields);
+  });
 
   // 获取字段样式
   const getFieldStyle = (fieldName: string) => {
@@ -357,6 +392,10 @@
       fetchRiskTags({
         scope_id: val.scene_id,
         scope_type: 'scene',
+      });
+      // 获取场景列表（用于展示所属场景名称）
+      SceneManageService.fetchSceneAll().then((data) => {
+        sceneList.value = data;
       });
     }
   });

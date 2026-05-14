@@ -324,9 +324,9 @@
     if (visibleColumnKeys.value.length === 0) {
       initVisibleColumns();
     } else {
-      // 将新增的列（如 event_filters 动态列）合并进可见列，默认勾选
+      // 仅将新增的动态关联事件列(event_data.xxx)合并进可见列，其他列不自动勾选
       const currentKeys = new Set(visibleColumnKeys.value);
-      const addedKeys = newKeys.filter((key: string) => !currentKeys.has(key));
+      const addedKeys = newKeys.filter((key: string) => !currentKeys.has(key) && key.startsWith('event_data.'));
       if (addedKeys.length > 0) {
         visibleColumnKeys.value = [...visibleColumnKeys.value, ...addedKeys];
         tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
