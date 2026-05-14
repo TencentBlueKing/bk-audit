@@ -163,6 +163,8 @@
 
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
+  // 记录上一次场景的唯一标识，用于区分"初始化选中"和"用户主动切换场景"
+  const lastSceneKey = ref<string | null>(null);
 
   // 将选择器值转换为 scope 参数
   const scopeParams = computed(() => {
@@ -198,14 +200,38 @@
   const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
   const isProgrammaticReset = ref(false);
 
-  // 场景切换
-  const handleSceneChange = async (value: SceneItem | null) => {
-    selectedScene.value = value;
-    // 切换场景/系统时，先收起工具详情面板
-    if (hasOpenedTools.value) {
-      await handleGoHomePage();
+  // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
+  // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
+  if (!routeUid && openedTools.value.length > 0) {
+    if (!activeToolUid.value) {
+      // activeToolUid 为空说明之前在首页，自动激活最后一个工具
+      activeToolUid.value = openedTools.value[openedTools.value.length - 1].uid;
     }
-    // 重新拉取标签和工具列表
+    // 恢复 URL 到对应的工具详情路由
+    router.replace({ name: 'toolDetail', params: { uid: activeToolUid.value } });
+  }
+
+  // 场景切换
+  const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
+  const handleSceneChange = async (value: SceneItem | null) => {
+    const newKey = getSceneKey(value);
+    const isActualChange = lastSceneKey.value !== null && lastSceneKey.value !== newKey;
+    selectedScene.value = value;
+    lastSceneKey.value = newKey;
+
+    if (isActualChange) {
+      // 用户主动切换场景 → 清空所有已打开的工具 tab，实现场景隔离
+      clearAll();
+      try {
+        sessionStorage.removeItem('tool_tabs_search_list_map');
+        sessionStorage.removeItem('tool_tabs_game_detail_map');
+      } catch {
+        // 静默处理
+      }
+      isSidebarCollapsed.value = false;
+      syncRouteToUrl();
+    }
+    // 无论是初始化还是切换，都重新拉取标签和工具列表
     refreshTagsList();
     ContentCardRef.value?.getToolsList(tagId.value);
   };

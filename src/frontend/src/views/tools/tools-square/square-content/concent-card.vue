@@ -18,13 +18,13 @@
   <div class="card">
     <!-- 正在使用中的工具提示条 -->
     <div
-      v-if="openedTools.length > 0"
+      v-if="activeToolsInScene.length > 0"
       class="tool-using-tip">
       <img
         class="tip-icon"
         :src="infoBlueSvg">
       <span class="tip-text">
-        {{ t('你有') }} <strong class="tip-count">{{ openedTools.length }}</strong> {{ t('个工具正在使用中') }}
+        {{ t('你有') }} <strong class="tip-count">{{ activeToolsInScene.length }}</strong> {{ t('个工具正在使用中') }}
       </span>
       <span
         class="tip-link"
@@ -217,7 +217,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -286,6 +286,27 @@
     openedTools,
     switchTab,
   } = useToolTabs();
+
+  // 当前场景下所有工具的 uid 集合
+  const sceneToolUids = ref<Set<string>>(new Set());
+
+  // 获取当前场景下的全量工具 uid
+  const {
+    run: fetchSceneAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      sceneToolUids.value = new Set(data.map(item => item.uid));
+    },
+  });
+
+  // 监听场景切换，刷新当前场景下的全量工具 uid
+  watch(() => props.scopeParams, () => {
+    fetchSceneAllTools({ ...props.scopeParams, status: 'published' });
+  }, { immediate: true, deep: true });
+
+  // 当前场景下正在使用的工具（openedTools 与场景全量工具的交集）
+  const activeToolsInScene = computed(() => openedTools.value.filter(tool => sceneToolUids.value.has(tool.uid)));
 
   // 点击继续使用工具
   const handleContinueUsingTool = () => {
