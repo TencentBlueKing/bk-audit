@@ -303,9 +303,9 @@ class MyRolePermissionSerializer(serializers.Serializer):
     manage_platform = serializers.BooleanField(help_text="是否具备平台管理权限，对应 IAM action: manage_platform。")
     manage_scene = serializers.BooleanField(help_text="是否具备任一场景的管理权限，对应 IAM action: manage_scene。")
     view_scene = serializers.BooleanField(help_text="是否具备任一场景的查看权限，对应 IAM action: view_scene。")
-    edit_system = serializers.BooleanField(help_text="是否具备任一系统的编辑权限；判定口径为本地系统管理员关系或 IAM action: edit_system。")
+    edit_system = serializers.BooleanField(help_text="是否具备任一系统的编辑权限；判定口径为已接入系统的本地管理员关系或 IAM action: edit_system。")
     view_system = serializers.BooleanField(
-        help_text="是否具备任一系统的查看权限；判定口径为本地系统管理员关系或 IAM action: view_system/edit_system。"
+        help_text="是否具备任一系统的查看权限；判定口径为已接入系统的本地管理员关系或 IAM action: view_system/edit_system。"
     )
 
 
