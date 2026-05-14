@@ -64,6 +64,10 @@ SCENE_MANAGER_GROUP_ACTIONS = [
 # 场景使用用户组拥有的操作列表
 SCENE_VIEWER_GROUP_ACTIONS = [
     ActionEnum.VIEW_SCENE,
+    # 风险
+    ActionEnum.LIST_RISK,
+    ActionEnum.EDIT_RISK,
+    ActionEnum.PROCESS_RISK,
 ]
 
 
