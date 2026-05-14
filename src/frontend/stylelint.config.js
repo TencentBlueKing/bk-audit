@@ -41,7 +41,7 @@ module.exports = {
       ],
     }],
     'selector-pseudo-class-no-unknown': [true, {
-      ignorePseudoClasses: ['/deep/'],
+      ignorePseudoClasses: ['/deep/', 'is-simplicity'],
     }],
     'selector-class-pattern': '^[a-z][a-z0-9_-]+$',
     'alpha-value-notation': 'percentage',
