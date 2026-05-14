@@ -30,7 +30,7 @@
       class="scene-system-selector"
       :class="{ 'is-active': isPopoverShow, 'is-dark': dark }"
       :style="{ width: typeof width === 'number' ? `${width}px` : width }"
-      @click="isPopoverShow = !isPopoverShow">
+      @click.stop="isPopoverShow = !isPopoverShow">
       <div class="selector-content">
         <bk-tag
           v-if="selectedItem"
@@ -559,19 +559,22 @@
   // 点击外部区域关闭 popover
   const handleClickOutside = (e: Event) => {
     if (!isPopoverShow.value) return;
-    const el = popoverRef.value?.$el || popoverRef.value;
-    if (el && !el.contains(e.target as Node)) {
-      isPopoverShow.value = false;
-    }
+    // 检查是否点击在选择器触发区域内（如果是，由 @click.stop 处理切换，不在这里关闭）
+    const triggerEl = popoverRef.value?.$el || popoverRef.value;
+    if (triggerEl && triggerEl.contains(e.target as Node)) return;
+    // 检查是否点击在 popover 弹出层内容区域内（teleport 到 body 的部分）
+    const popoverContent = (e.target as HTMLElement)?.closest?.('.bk-popover.bk-pop2-content');
+    if (popoverContent) return;
+    isPopoverShow.value = false;
   };
 
   onMounted(() => {
     fetchData();
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('click', handleClickOutside, true);
   });
 
   onUnmounted(() => {
-    document.removeEventListener('click', handleClickOutside);
+    document.removeEventListener('click', handleClickOutside, true);
   });
 </script>
 

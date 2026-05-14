@@ -91,7 +91,6 @@
           <report-group-list
             v-show="!isDataLoading && !isLoading"
             :active-groups="expandedGroupIds"
-            :expand-all="isAllExpanded"
             :groups="reportGroups"
             @add-report="handleAddReport"
             @deleted="handleDeleted"
@@ -185,8 +184,9 @@
   const statusFilter = ref('all');
   // 搜索关键词
   const searchKeyword = ref<any[]>([]);
-  // 是否全部展开
-  const isAllExpanded = ref(false);
+  // 是否全部展开（根据当前展开的分组数动态计算）
+  const isAllExpanded = computed(() => reportGroups.value.length > 0
+    && expandedGroupIds.value.length === reportGroups.value.length);
   // 搜索选择器数据
   const searchSelectData = [
     { name: '报表ID', id: 'id', placeholder: '请输入报表ID' },
@@ -427,7 +427,13 @@
 
   // 全部展开/收起
   const handleToggleExpand = () => {
-    isAllExpanded.value = !isAllExpanded.value;
+    if (isAllExpanded.value) {
+      // 当前全部展开了 → 全部收起
+      expandedGroupIds.value = [];
+    } else {
+      // 当前未全展 → 全部展开
+      expandedGroupIds.value = reportGroups.value.map(g => g.id);
+    }
   };
 
   // 搜索/筛选（仿造 scene-manage）
