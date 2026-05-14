@@ -1082,6 +1082,50 @@ class TestListRiskResource(TestCase):
         self.assertIn(self.strategy.strategy_id, strategy_ids)
         self.assertIn(unused_strategy.strategy_id, strategy_ids)
 
+    def test_list_risk_scenes_returns_risk_related_scenes(self):
+        """ListRiskScenes 应基于当前检索风险关联策略返回所属场景"""
+        from services.web.risk.resources.risk import ListRiskScenes
+        from services.web.scene.models import Scene
+
+        other_scene = Scene.objects.create(name="other-risk-scene")
+        other_strategy = Strategy.objects.create(strategy_name="other-scene-strategy", risk_level=RiskLevel.LOW.value)
+        bind_strategy_to_scene(other_strategy.strategy_id, other_scene.scene_id)
+        Risk.objects.create(
+            risk_id="risk-other-scene",
+            raw_event_id="raw-other-scene",
+            strategy=other_strategy,
+            status=RiskStatus.NEW,
+            title="other",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+
+        result = ListRiskScenes().perform_request(
+            {"risk_view_type": "all", "scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id)}
+        )
+        scene_ids = {scene.scene_id if hasattr(scene, "scene_id") else scene["scene_id"] for scene in result}
+
+        self.assertIn(self.scene_id, scene_ids)
+        self.assertNotIn(other_scene.scene_id, scene_ids)
+
+    def test_list_risk_scenes_no_memory_materialization(self):
+        """ListRiskScenes 应复用策略子查询，不将风险或策略 ID 物化到内存"""
+        from services.web.risk.resources.risk import ListRiskScenes
+
+        result = ListRiskScenes().perform_request(
+            {"risk_view_type": "all", "scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id)}
+        )
+
+        self.assertFalse(isinstance(result, list))
+
+    def test_list_risk_scenes_without_view_type_reuses_strategy_scope(self):
+        """未传 risk_view_type 时沿用 ListRiskStrategy 的全量策略逻辑"""
+        from services.web.risk.resources.risk import ListRiskScenes
+
+        result = ListRiskScenes().perform_request({})
+        scene_ids = {scene.scene_id if hasattr(scene, "scene_id") else scene["scene_id"] for scene in result}
+
+        self.assertIn(self.scene_id, scene_ids)
+
 
 class TestListMineAndNoticingRisk(TestCase):
     def setUp(self):

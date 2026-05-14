@@ -53,7 +53,7 @@ from services.web.risk.models import (
 )
 from services.web.risk.report_config import AIVariableConfig
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.models import ResourceBindingScene
+from services.web.scene.models import ResourceBindingScene, Scene
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import (
     EventFieldSerializer,
@@ -665,6 +665,15 @@ class ListRiskStrategyRespSerializer(serializers.ModelSerializer):
     class Meta:
         model = Strategy
         fields = ["label", "value"]
+
+
+class ListRiskScenesRespSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(label=gettext_lazy("Scene ID"), source="scene_id")
+    name = serializers.CharField(label=gettext_lazy("Scene Name"))
+
+    class Meta:
+        model = Scene
+        fields = ["id", "name"]
 
 
 class ListRiskResponseSerializer(serializers.ModelSerializer):

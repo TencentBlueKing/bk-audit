@@ -174,6 +174,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.risk_display_status_common, endpoint="status_common"),
         ResourceRoute("GET", resource.risk.list_risk_tags, endpoint="tags"),
         ResourceRoute("GET", resource.risk.list_risk_strategy, endpoint="strategies"),
+        ResourceRoute("GET", resource.risk.list_risk_scenes, endpoint="scenes"),
         ResourceRoute("POST", resource.risk.custom_close_risk, endpoint="close", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_trans_risk, endpoint="trans", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.bulk_custom_trans_risk, endpoint="bulk_trans"),
