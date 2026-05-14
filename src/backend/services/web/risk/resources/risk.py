@@ -31,7 +31,8 @@ from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
+from django.db.models import Case, CharField, Count, IntegerField, Q, QuerySet, When
+from django.db.models.functions import Cast
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
@@ -131,6 +132,7 @@ from services.web.risk.serializers import (
     ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
+    ListRiskScenesRespSerializer,
     ListRiskStrategyRespSerializer,
     ListRiskTagsRespSerializer,
     ManualEventSerializer,
@@ -152,6 +154,7 @@ from services.web.risk.tasks import (
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
+from services.web.scene.models import ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -901,6 +904,32 @@ class ListRiskStrategy(ListRiskMetaBase):
             .distinct()
         )
         return strategies.filter(strategy_id__in=strategy_id_qs)
+
+
+class ListRiskScenes(ListRiskStrategy):
+    """
+    获取风险关联的场景，复用风险策略筛选结果生成场景列表
+    注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
+    """
+
+    name = gettext_lazy("获取风险的场景")
+    ResponseSerializer = ListRiskScenesRespSerializer
+    cache_type = CacheTypeItem(key="ListRiskScenes", timeout=60, user_related=True)
+
+    def perform_request(self, validated_request_data):
+        strategies = super().perform_request(validated_request_data)
+        strategy_id_str_qs = (
+            strategies.order_by()
+            .annotate(strategy_id_str=Cast("strategy_id", output_field=CharField()))
+            .values("strategy_id_str")
+            .distinct()
+        )
+        scene_id_qs = ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id__in=strategy_id_str_qs,
+        ).values("scene_id")
+        return Scene.objects.filter(scene_id__in=scene_id_qs).only("scene_id", "name").distinct()
 
 
 class CustomCloseRisk(RiskMeta):
