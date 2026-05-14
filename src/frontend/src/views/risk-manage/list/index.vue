@@ -264,8 +264,8 @@
     return [...beforeAction, ...eventColumns, ...afterAction];
   });
 
-  // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  // 默认的可配置列键（所有风险页面默认展示所属场景）
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
