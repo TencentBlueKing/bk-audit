@@ -169,7 +169,7 @@ export const PROFILE_FIELDS = {
   COIN_BALANCE_UNIT: '代币存量（代）',
   TOTAL_RECHARGE_UNIT: '累计充值（代）',
   TOTAL_GIFT_YUAN: '累计赠送（¥）',
-  TOTAL_ISSUE_YUAN: '累计发放（¥）',
+  TOTAL_ISSUE_YUAN: '累计发放（元）',
   LOGIN_COUNT_MONTH: '登录次数/月',
   TOTAL_GIFT: '总支出',
   TOTAL_ISSUE: '总入账',
@@ -181,7 +181,6 @@ export const PROFILE_FIELDS = {
   PLATFORM_ACCOUNT_TYPE: '平台账号类型',
   TOTAL_RECHARGE_YUAN: '总充值（元）',
   ACCOUNT_NATURE: '账号性质',
-  // 20260513 新增输出字段
   TOTAL_ISSUE_COUNT_YUAN: '累计发数（¥）',
   LOGIN_DAYS_31: '登录天数（31）',
   LOGIN_COUNT_7DAYS: '登录次数（7天）',
