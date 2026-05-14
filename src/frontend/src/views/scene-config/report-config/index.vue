@@ -334,6 +334,7 @@
               id: panel.id,
               binding_type: panel.binding_type,
               name: panel.name,
+              group_priority_index: panel.group_priority_index,
               description: panel.description || '--',
               vision_id: panel.vision_id,
               bkvisionReportName: findVisionName(panel.vision_id),
