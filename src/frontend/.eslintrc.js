@@ -115,6 +115,7 @@ module.exports = {
           ignores: [],
         }],
         'vue/multi-word-component-names': 'off',
+        'simple-import-sort/imports': 'off',
       },
     },
   ],
