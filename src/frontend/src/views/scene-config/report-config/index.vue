@@ -75,7 +75,7 @@
             v-model="searchKeyword"
             class="search-input"
             :data="searchSelectData"
-            :placeholder="t('搜索 报表ID、名称、描述、BKVision 报表、更新人')"
+            :placeholder="t('搜索 名称、描述、BKVision 报表、更新人')"
             unique-select
             @update:model-value="handleSearch" />
         </div>
@@ -91,6 +91,7 @@
           <report-group-list
             v-show="!isDataLoading && !isLoading"
             :active-groups="expandedGroupIds"
+            :force-expand-all="forceExpandAll"
             :groups="reportGroups"
             @add-report="handleAddReport"
             @deleted="handleDeleted"
@@ -189,7 +190,6 @@
     && expandedGroupIds.value.length === reportGroups.value.length);
   // 搜索选择器数据
   const searchSelectData = [
-    { name: '报表ID', id: 'id', placeholder: '请输入报表ID' },
     { name: '名称', id: 'name', placeholder: '请输入名称' },
     { name: '描述', id: 'description', placeholder: '请输入描述' },
     { name: 'BKVision 报表', id: 'bkvision_report', placeholder: '请输入BKVision报表' },
@@ -199,7 +199,6 @@
   // 从 searchSelect 数组中提取对应字段参数（仿造 scene-manage）
   const getSearchParams = (keyword?: any[]): Record<string, any> => {
     const search = {
-      id: undefined,
       name: '',
       description: '',
       bkvision_report: '',
@@ -209,9 +208,7 @@
     (keyword || searchKeyword.value).forEach((item) => {
       if (item.values && item.values.length) {
         const value = item.values.map((v: any) => v.id).join(',');
-        if (item.id === 'id') {
-          search.id = value;
-        } else if (item.id === 'name') {
+        if (item.id === 'name') {
           search.name = value;
         } else if (item.id === 'description') {
           search.description = value;
@@ -258,8 +255,12 @@
 
   const groups = ref<Array<{ id: number; name: string; group_type?: string; priority_index: number }>>([]);
   const reportGroups = ref<ReportGroup[]>([]);
+  // 全量报表分组数据（用于前端搜索过滤）
+  const allReportGroups = ref<ReportGroup[]>([]);
   // 展开的分组 ID（提升到父组件，避免子组件销毁时丢失状态）
   const expandedGroupIds = ref<number[]>([]);
+  // 强制全展开（用于搜索后自动展开所有分组）
+  const forceExpandAll = ref(false);
   // 数据加载状态（覆盖 fetchGroups + fetchPanels 完整链路）
   const isDataLoading = ref(false);
 
@@ -322,7 +323,7 @@
     onSuccess: (panelsData) => {
       // 处理分组Panel数据，将panelsData中group_priority_index与groups中的priority_index相等的项合到groups.reports 中
       // 过滤掉 reports 为空的分组，按 priority_index 从大到小排列
-      reportGroups.value = groups.value
+      const processedGroups = groups.value
         .map(group => ({
           id: group.id,
           name: group.name,
@@ -344,9 +345,13 @@
               updatedAt: panel.updated_at || '--',
             })) as Report[],
         }))
-        // 过滤掉 reports 为空的分组（搜索时无匹配数据的分组不展示）
-        .filter(group => group.reports.length > 0)
+        // 保留所有分组（包括 reports 为空的，用于全量数据存储）
         .sort((a, b) => b.priority_index - a.priority_index);
+
+      // 保存全量数据
+      allReportGroups.value = processedGroups;
+      // 应用当前筛选条件到展示数据
+      applyFilters();
     },
     onFinally: () => {
       isDataLoading.value = false;
@@ -437,25 +442,59 @@
     }
   };
 
-  // 搜索/筛选（仿造 scene-manage）
-  const handleSearch = (keyword?: any[]) => {
-    // 根据状态筛选确定 status 参数
+  // 前端过滤：应用搜索和状态筛选
+  const applyFilters = () => {
+    const searchParams = getSearchParams();
+    // 状态筛选
     let statusParam: 'published' | 'unpublished' | '' = '';
     if (statusFilter.value === 'enabled') {
       statusParam = 'published';
     } else if (statusFilter.value === 'disabled') {
       statusParam = 'unpublished';
     }
-    isDataLoading.value = true;
-    reportGroups.value = [];
-    const searchParams = getSearchParams(keyword);
-    fetchPanels({
-      page: 1,
-      page_size: 10000,
-      status: statusParam,
-      scene_id: getSceneSystemParams().scope_id,
-      ...searchParams,
-    });
+
+    reportGroups.value = allReportGroups.value
+      .map((group) => {
+        // 过滤 reports
+        let filteredReports = group.reports;
+        // 状态筛选
+        if (statusParam) {
+          filteredReports = filteredReports.filter(r => r.status === statusParam);
+        }
+        // 搜索关键词过滤
+        if (searchParams.name) {
+          filteredReports = filteredReports.filter(r => r.name.toLowerCase().includes(searchParams.name.toLowerCase()));
+        }
+        if (searchParams.description) {
+          filteredReports = filteredReports.filter(r => r.description !== '--'
+            && r.description.toLowerCase().includes(searchParams.description.toLowerCase()));
+        }
+        if (searchParams.bkvision_report) {
+          filteredReports = filteredReports.filter(r => (r.bkvisionReportName ?? '').toLowerCase()
+            .includes(searchParams.bkvision_report.toLowerCase()));
+        }
+        if (searchParams.updated_by) {
+          filteredReports = filteredReports.filter(r => r.updatedBy !== '--'
+            && r.updatedBy.toLowerCase().includes(searchParams.updated_by.toLowerCase()));
+        }
+        return { ...group, reports: filteredReports };
+      })
+      // 过滤掉 reports 为空的分组
+      .filter(group => group.reports.length > 0);
+  };
+
+  // 搜索/筛选（前端JS过滤）
+  const handleSearch = (keyword?: any[]) => {
+    if (keyword) {
+      searchKeyword.value = keyword;
+    }
+    // 先执行过滤
+    applyFilters();
+    // 先重置，再设为 true 触发子组件 watch 强制全展开
+    forceExpandAll.value = false;
+    setTimeout(() => {
+      forceExpandAll.value = true;
+    }, 0);
   };
 
   // 状态筛选变化
