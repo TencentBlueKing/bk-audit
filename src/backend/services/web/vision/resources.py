@@ -225,6 +225,8 @@ class ListPanels(BKVision):
         ).order_by("-updated_at", "id")
         keyword = validated_request_data.get("keyword", "")
         status_list = validated_request_data.get("status")
+        id_list = validated_request_data.get("id")
+        bkvision_report_list = validated_request_data.get("bkvision_report")
         name_list = validated_request_data.get("name")
         description_list = validated_request_data.get("description")
         updated_by_list = validated_request_data.get("updated_by")
@@ -233,6 +235,10 @@ class ListPanels(BKVision):
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
         if status_list:
             queryset = queryset.filter(status__in=status_list)
+        if id_list:
+            queryset = queryset.filter(id__in=id_list)
+        if bkvision_report_list:
+            queryset = queryset.filter(vision_id__in=bkvision_report_list)
 
         def apply_multi_value_filter(field_name, values, lookup='icontains'):
             q_filter = Q()
@@ -853,6 +859,10 @@ class ListScenePanels(BKVision):
         scene_id = int(validated_request_data["scene_id"])
         keyword = validated_request_data.get("keyword") or ""
         status = validated_request_data.get("status")
+        id_list = validated_request_data.get("id")
+        name_list = validated_request_data.get("name")
+        description_list = validated_request_data.get("description")
+        updated_by_list = validated_request_data.get("updated_by")
 
         queryset = CompositeScopeFilter.filter_queryset(
             queryset=VisionPanel.objects.filter(scenario=validated_request_data.get("scenario", Scenario.DEFAULT)),
@@ -865,6 +875,22 @@ class ListScenePanels(BKVision):
             queryset = queryset.filter(Q(name__icontains=keyword) | Q(description__icontains=keyword))
         if status:
             queryset = queryset.filter(status=status)
+        if id_list:
+            queryset = queryset.filter(id__in=id_list)
+
+        def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
+            q_filter = Q()
+            for value in values:
+                if value:
+                    q_filter |= Q(**{f"{field_name}__{lookup}": value})
+            return qs.filter(q_filter) if q_filter else qs
+
+        if name_list:
+            queryset = apply_multi_value_filter(queryset, "name", name_list)
+        if description_list:
+            queryset = apply_multi_value_filter(queryset, "description", description_list)
+        if updated_by_list:
+            queryset = apply_multi_value_filter(queryset, "updated_by", updated_by_list)
 
         panels = list(queryset)
         panel_ids = [str(item.id) for item in panels]
