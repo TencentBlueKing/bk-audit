@@ -275,8 +275,8 @@ class SceneFilterSerializer(SortSerializerMixin, serializers.Serializer):
     keyword = serializers.CharField(required=False, allow_blank=True)
     name = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False)
     description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
-    managers = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
-    users = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
+    manager = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
+    user = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
     updated_by = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False)
     sort = SortListField(
         allowed_fields=SCENE_LIST_SORT_FIELDS,

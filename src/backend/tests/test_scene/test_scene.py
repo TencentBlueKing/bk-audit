@@ -847,7 +847,7 @@ class TestSceneResource(TestCase):
         Scene.objects.create(name="成员筛选未命中管理者", managers=["charlie"], users=["bob"])
         Scene.objects.create(name="成员筛选未命中使用者", managers=["alice"], users=["david"])
 
-        result = self.resource.scene.list_scene({"managers": ["alice"], "users": ["bob"]})
+        result = self.resource.scene.list_scene({"manager": ["alice"], "user": ["bob"]})
 
         self.assertEqual([item["scene_id"] for item in result], [matched.scene_id])
 
