@@ -222,6 +222,7 @@ class ScenePanelListQuerySerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(required=True)
     keyword = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    id = FlexibleListField(child=serializers.CharField(), required=False)
     name = FlexibleListField(child=serializers.CharField(), required=False)
     description = FlexibleListField(child=serializers.CharField(), required=False)
     updated_by = FlexibleListField(child=serializers.CharField(), required=False)
@@ -232,6 +233,7 @@ class PanelSquareListQuerySerializer(VisionPanelInfoQuerySerializer):
 
     keyword = serializers.CharField(required=False, allow_blank=True, default="")
     status = FlexibleListField(child=serializers.ChoiceField(choices=PanelStatus.choices), required=False)
+    id = FlexibleListField(child=serializers.CharField(), required=False)
     name = FlexibleListField(child=serializers.CharField(), required=False)
     description = FlexibleListField(child=serializers.CharField(), required=False)
     updated_by = FlexibleListField(child=serializers.CharField(), required=False)
