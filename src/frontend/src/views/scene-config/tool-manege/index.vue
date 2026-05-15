@@ -189,6 +189,7 @@
   const refreshList = () => {
     toolListRef.value?.fetchData({
       keyword: searchKeyword.value,
+      sort: ['-created_at'],
     });
   };
 
@@ -199,7 +200,7 @@
 
   const handleClearSearch = () => {
     searchKeyword.value = '';
-    toolListRef.value?.fetchData({ keyword: '' });
+    toolListRef.value?.fetchData({ keyword: '', sort: ['-created_at'] });
   };
 
   const handleRequestSuccess = (data: any) => {
