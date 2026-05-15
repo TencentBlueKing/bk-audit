@@ -487,6 +487,7 @@
   interface Props {
     groups: ReportGroup[];
     activeGroups?: number[];
+    forceExpandAll?: boolean;
   }
 
   // 拖拽排序结果
@@ -526,6 +527,7 @@
   const props = withDefaults(defineProps<Props>(), {
     groups: () => [],
     activeGroups: () => [],
+    forceExpandAll: false,
   });
 
   const emit = defineEmits<Emits>();
@@ -1012,6 +1014,15 @@
     savedActiveGroups.value = [...val];
     emit('update:activeGroups', [...val]);
   }, { deep: true });
+
+  // 监听 forceExpandAll：父组件强制全展开（搜索后使用）
+  watch(() => props.forceExpandAll, (val) => {
+    if (val && localGroups.value.length > 0) {
+      const allIds = localGroups.value.map(g => g.id);
+      activeGroups.value = allIds;
+      savedActiveGroups.value = allIds;
+    }
+  });
 
   // 监听 props.groups 变化时更新映射
   watch(() => props.groups, () => {
