@@ -1338,20 +1338,31 @@ class TestGetMyRolePermissions(TestCase):
         django_request.user = MockUser(username)
         return Request(django_request)
 
-    def test_returns_iam_permissions(self):
+    def test_returns_role_permissions_with_log_search_visible(self):
         drf_request = self._make_drf_request()
+        System.objects.create(
+            system_id="bk_test",
+            instance_id="bk_test",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="已接入系统",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
 
-        with mock.patch.object(System, "get_managed_system_ids", return_value=[]), mock.patch.object(
+        with mock.patch.object(
             Permission,
             "has_action_any_permission",
-            side_effect=lambda action: {
-                ActionEnum.MANAGE_PLATFORM: True,
-                ActionEnum.MANAGE_SCENE: False,
-                ActionEnum.VIEW_SCENE: True,
-                ActionEnum.EDIT_SYSTEM: False,
-                ActionEnum.VIEW_SYSTEM: True,
-            }[action],
-        ):
+            side_effect=lambda action: action == ActionEnum.MANAGE_PLATFORM,
+        ), mock.patch("scene.resources.ScopePermission") as mock_scope_permission:
+            scope_permission = mock_scope_permission.return_value
+            scope_permission.get_scene_ids.side_effect = lambda scope, action: {
+                ActionEnum.MANAGE_SCENE: [],
+                ActionEnum.VIEW_SCENE: [1],
+            }[action]
+            scope_permission.get_system_ids.side_effect = lambda scope, action: {
+                ActionEnum.EDIT_SYSTEM: [],
+                ActionEnum.VIEW_SYSTEM: ["bk_test"],
+            }[action]
+            scope_permission.get_system_ids_for_scope.side_effect = [[], ["bk_test"]]
             result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
 
         self.assertEqual(
@@ -1362,8 +1373,115 @@ class TestGetMyRolePermissions(TestCase):
                 "view_scene": True,
                 "edit_system": False,
                 "view_system": True,
+                "show_log_search": True,
             },
         )
+
+    def test_scene_permission_with_accessed_system_shows_log_search(self):
+        drf_request = self._make_drf_request()
+        scene = Scene.objects.create(name="启用场景", status=SceneStatus.ENABLED)
+        SceneSystem.objects.create(scene=scene, system_id="bk_accessed")
+        System.objects.create(
+            system_id="bk_accessed",
+            instance_id="bk_accessed",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="已接入系统",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
+
+        with mock.patch.object(Permission, "has_action_any_permission", return_value=False), mock.patch(
+            "scene.resources.ScopePermission"
+        ) as mock_scope_permission:
+            scope_permission = mock_scope_permission.return_value
+            scope_permission.get_scene_ids.side_effect = lambda scope, action: {
+                ActionEnum.MANAGE_SCENE: [],
+                ActionEnum.VIEW_SCENE: [scene.scene_id],
+            }[action]
+            scope_permission.get_system_ids.return_value = []
+            scope_permission.get_system_ids_for_scope.return_value = ["bk_accessed"]
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["view_scene"], True)
+        self.assertEqual(result["show_log_search"], True)
+
+    def test_scene_permission_with_only_pending_system_hides_log_search(self):
+        drf_request = self._make_drf_request()
+        scene = Scene.objects.create(name="启用场景", status=SceneStatus.ENABLED)
+        SceneSystem.objects.create(scene=scene, system_id="bk_pending")
+        System.objects.create(
+            system_id="bk_pending",
+            instance_id="bk_pending",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="待接入系统",
+            audit_status=SystemAuditStatusEnum.PENDING,
+        )
+
+        with mock.patch.object(Permission, "has_action_any_permission", return_value=False), mock.patch(
+            "scene.resources.ScopePermission"
+        ) as mock_scope_permission:
+            scope_permission = mock_scope_permission.return_value
+            scope_permission.get_scene_ids.side_effect = lambda scope, action: {
+                ActionEnum.MANAGE_SCENE: [],
+                ActionEnum.VIEW_SCENE: [scene.scene_id],
+            }[action]
+            scope_permission.get_system_ids.return_value = []
+            scope_permission.get_system_ids_for_scope.return_value = ["bk_pending"]
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["view_scene"], True)
+        self.assertEqual(result["show_log_search"], False)
+
+    def test_system_permission_with_only_pending_system_does_not_grant_role_or_log_search(self):
+        drf_request = self._make_drf_request()
+        System.objects.create(
+            system_id="bk_pending",
+            instance_id="bk_pending",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="待接入系统",
+            audit_status=SystemAuditStatusEnum.PENDING,
+        )
+
+        with mock.patch.object(Permission, "has_action_any_permission", return_value=False), mock.patch(
+            "scene.resources.ScopePermission"
+        ) as mock_scope_permission:
+            scope_permission = mock_scope_permission.return_value
+            scope_permission.get_scene_ids.return_value = []
+            scope_permission.get_system_ids.side_effect = lambda scope, action: {
+                ActionEnum.EDIT_SYSTEM: [],
+                ActionEnum.VIEW_SYSTEM: ["bk_pending"],
+            }[action]
+            scope_permission.get_system_ids_for_scope.return_value = ["bk_pending"]
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["edit_system"], False)
+        self.assertEqual(result["view_system"], False)
+        self.assertEqual(result["show_log_search"], False)
+
+    def test_edit_system_permission_with_accessed_system_shows_log_search(self):
+        drf_request = self._make_drf_request()
+        System.objects.create(
+            system_id="bk_edit",
+            instance_id="bk_edit",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="编辑权限系统",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
+
+        with mock.patch.object(Permission, "has_action_any_permission", return_value=False), mock.patch(
+            "scene.resources.ScopePermission"
+        ) as mock_scope_permission:
+            scope_permission = mock_scope_permission.return_value
+            scope_permission.get_scene_ids.return_value = []
+            scope_permission.get_system_ids.side_effect = lambda scope, action: {
+                ActionEnum.EDIT_SYSTEM: ["bk_edit"],
+                ActionEnum.VIEW_SYSTEM: [],
+            }[action]
+            scope_permission.get_system_ids_for_scope.return_value = []
+            result = self.resource.scene.get_my_role_permissions.request({}, _request=drf_request)
+
+        self.assertEqual(result["edit_system"], True)
+        self.assertEqual(result["view_system"], True)
+        self.assertEqual(result["show_log_search"], True)
 
     def test_local_system_manager_grants_system_permissions(self):
         drf_request = self._make_drf_request()
@@ -1376,7 +1494,7 @@ class TestGetMyRolePermissions(TestCase):
             audit_status=SystemAuditStatusEnum.ACCESSED,
         )
 
-        with mock.patch.object(
+        with mock.patch.object(Permission, "get_policies_for_action", return_value={}), mock.patch.object(
             Permission,
             "has_action_any_permission",
             side_effect=lambda action: {
@@ -1391,6 +1509,7 @@ class TestGetMyRolePermissions(TestCase):
 
         self.assertEqual(result["edit_system"], True)
         self.assertEqual(result["view_system"], True)
+        self.assertEqual(result["show_log_search"], True)
 
     def test_pending_local_system_manager_does_not_grant_system_permissions(self):
         drf_request = self._make_drf_request()
@@ -1403,7 +1522,7 @@ class TestGetMyRolePermissions(TestCase):
             audit_status=SystemAuditStatusEnum.PENDING,
         )
 
-        with mock.patch.object(
+        with mock.patch.object(Permission, "get_policies_for_action", return_value={}), mock.patch.object(
             Permission,
             "has_action_any_permission",
             side_effect=lambda action: {
@@ -1418,6 +1537,7 @@ class TestGetMyRolePermissions(TestCase):
 
         self.assertEqual(result["edit_system"], False)
         self.assertEqual(result["view_system"], False)
+        self.assertEqual(result["show_log_search"], False)
 
 
 class TestPanelResources(TestCase):
