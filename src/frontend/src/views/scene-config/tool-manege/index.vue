@@ -34,6 +34,44 @@
           </bk-button>
         </div>
         <div class="header-right">
+          <bk-radio-group
+            v-model="statusFilter"
+            class="status-filter mr16"
+            type="capsule"
+            @change="handleStatusFilterChange">
+            <bk-radio-button label="all">
+              {{ t('全部') }}
+              <bk-tag
+                class="status-count"
+                theme="info">
+                {{ statusCounts.all }}
+              </bk-tag>
+            </bk-radio-button>
+            <bk-radio-button label="published">
+              <audit-icon
+                class="mr4"
+                svg
+                type="normal" />
+              {{ t('启用') }}
+              <bk-tag
+                class="status-count"
+                theme="success">
+                {{ statusCounts.published }}
+              </bk-tag>
+            </bk-radio-button>
+            <bk-radio-button label="unpublished">
+              <audit-icon
+                class="mr4"
+                svg
+                type="unknown" />
+              {{ t('停用') }}
+              <bk-tag
+                class="status-count"
+                theme="warning">
+                {{ statusCounts.unpublished }}
+              </bk-tag>
+            </bk-radio-button>
+          </bk-radio-group>
           <bk-input
             v-model="searchKeyword"
             class="search-input"
@@ -79,7 +117,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, onUnmounted, ref } from 'vue';
+  import { onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -126,6 +164,14 @@
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
   // 全部工具数据（用于下钻时获取工具名称）
   const allToolsData = ref<Array<ToolDetailModel>>([]);
+
+  // 状态筛选
+  const statusFilter = ref('all');
+  const statusCounts = reactive({
+    all: 0,
+    published: 0,
+    unpublished: 0,
+  });
 
   // 确认操作弹窗相关（删除/启用/停用）
   const confirmDialogVisible = ref(false);
@@ -179,18 +225,27 @@
     confirmDialogRef.value?.showToggleStatusInfoBox(row, actionType);
   };
 
-  // 操作成功后刷新列表
+  // 操作成功后刷新列表和状态统计
   const handleActionSuccess = () => {
     confirmTarget.value = null;
     refreshList();
+    // 操作（删除/启用/停用）成功后，重新获取状态统计
+    fetchStatusCounts();
   };
 
   // 刷新列表（统一入口）
   const refreshList = () => {
-    toolListRef.value?.fetchData({
+    const params: Record<string, any> = {
       keyword: searchKeyword.value,
       sort: ['-created_at'],
-    });
+    };
+    if (statusFilter.value !== 'all') {
+      params.status = [statusFilter.value];
+    } else {
+      // 全部状态时，显式清除 status 参数，避免 paramsMemo 中残留上次的 status 值
+      params.status = undefined;
+    }
+    toolListRef.value?.fetchData(params);
   };
 
   // 搜索
@@ -198,14 +253,33 @@
     refreshList();
   };
 
+  // 状态筛选变化
+  const handleStatusFilterChange = () => {
+    refreshList();
+  };
+
   const handleClearSearch = () => {
     searchKeyword.value = '';
+    statusFilter.value = 'all';
     toolListRef.value?.fetchData({ keyword: '', sort: ['-created_at'] });
   };
 
   const handleRequestSuccess = (data: any) => {
     isLoading.value = false;
     console.log('handleRequestSuccess', data);
+  };
+
+  // 获取全局状态统计（分别请求各状态数量）
+  const fetchStatusCounts = () => {
+    // 不传 status 即获取全部工具
+    const allPromise = ToolManageService.fetchAllTools();
+    const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'] });
+    const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'] });
+    Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([all, published, unpublished]) => {
+      statusCounts.all = all.length;
+      statusCounts.published = published.length;
+      statusCounts.unpublished = unpublished.length;
+    });
   };
 
   const {
@@ -246,6 +320,8 @@
     fetchToolsTagsList(scopeParams);
     fetchAllToolsData();
     refreshList();
+    // 场景切换时也需要刷新状态统计
+    fetchStatusCounts();
   };
 
   onMounted(() => {
@@ -253,6 +329,8 @@
     fetchToolsTagsList(scopeParams);
     fetchStrategyList();
     fetchAllToolsData();
+    // 初始化时获取一次状态统计
+    fetchStatusCounts();
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
@@ -297,6 +375,36 @@
 
   .mr8 {
     margin-right: 8px;
+  }
+
+  .mr16 {
+    margin-right: 16px;
+  }
+
+  .status-filter {
+    :deep(.bk-radio-button) {
+      .bk-radio-button-label {
+        display: flex;
+        align-items: center;
+      }
+    }
+
+    :deep(.bk-radio-button:not(.is-checked)) {
+      .status-count {
+        color: #979ba5;
+        background-color: #fff !important;
+        border-color: #fff !important;
+      }
+    }
+  }
+
+  .status-count {
+    height: 18px;
+    min-width: 18px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 12px;
+    line-height: 18px;
   }
 
   .search-input {
