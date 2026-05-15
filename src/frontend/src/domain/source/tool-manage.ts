@@ -43,6 +43,8 @@ class ToolManage extends ModuleBase {
     scope_type?: string,
     scope_id?: string,
     binding_type?: string,
+    status?: string[],
+    sort?: string[],
   }) {
     return Request.get<IRequestResponsePaginationData<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
   }
@@ -50,7 +52,7 @@ class ToolManage extends ModuleBase {
   getToolTags(params?: {
     scope_type?: string,
     scope_id?: string,
-    status?: string,
+    status?: string[],
   }) {
     const sceneParams = getSceneSystemParams();
     const mergedParams = {
@@ -107,7 +109,7 @@ class ToolManage extends ModuleBase {
   getAllTools(params?: {
     scope_type?: string,
     scope_id?: string,
-    status?: string,
+    status?: string[],
   }) {
     const sceneParams = getSceneSystemParams();
     const mergedParams = {
