@@ -203,12 +203,11 @@
   // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
   // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
   if (!routeUid && openedTools.value.length > 0) {
-    if (!activeToolUid.value) {
-      // activeToolUid 为空说明之前在首页，自动激活最后一个工具
-      activeToolUid.value = openedTools.value[openedTools.value.length - 1].uid;
+    if (activeToolUid.value) {
+      // activeToolUid 有值说明离开前在工具详情，恢复 URL 到对应的工具详情路由
+      router.replace({ name: 'toolDetail', params: { uid: activeToolUid.value } });
     }
-    // 恢复 URL 到对应的工具详情路由
-    router.replace({ name: 'toolDetail', params: { uid: activeToolUid.value } });
+    // activeToolUid 为空说明离开前在工具列表（首页），保持在工具列表页面，不自动打开工具详情
   }
 
   // 场景切换
