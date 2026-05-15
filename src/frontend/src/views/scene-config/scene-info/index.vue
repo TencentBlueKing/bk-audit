@@ -50,8 +50,8 @@
           :data="dataTableData"
           resizable
           stripe
-          :title="t('关联数据报表')"
-          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据报表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
+          :title="t('关联数据表')"
+          :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
             + configData.platform_admin_users.join(',')" />
       </div>
     </bk-loading>
@@ -74,6 +74,9 @@
   import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import EditTag from '@components/edit-box/tag.vue';
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import BaseInfo from './components/base-info.vue';
   import SceneTable from './components/scene-table.vue';
@@ -213,7 +216,7 @@
         .filter(Boolean)
         .map((detail: any) => ({
           result_table_id: detail.result_table_id || '',
-          name: detail.result_table_name_alias
+          result_table_name_alias: detail.result_table_name_alias
             || detail.result_table_name || '--',
           managers: detail.managers || [],
           updated_at: detail.updated_at || '',
@@ -390,7 +393,7 @@
       width: 180,
       resizable: true,
       cell: (_h: any, { row }: { row: any }) => (
-        <span>{row.managers && row.managers.length > 0 ? row.managers.join('、') : '--'}</span>
+        <EditTag data={row.managers || []} />
       ),
     },
     {
@@ -414,6 +417,13 @@
       ),
     },
     {
+      colKey: 'data_scope',
+      title: () => t('数据范围'),
+      width: 150,
+      resizable: true,
+      cell: () => <span>{t('全部数据')}</span>,
+    },
+    {
       colKey: 'last_time',
       title: () => t('最近数据时间'),
       width: 280,
@@ -425,10 +435,18 @@
   // ==================== 关联数据报表表格列配置 ====================
   const dataTableColumns = [
     {
-      colKey: 'name',
-      title: () => t('数据报表名称'),
-      width: 260,
+      colKey: 'result_table_name_alias',
+      title: () => t('数据表名称'),
+      width: 250,
       resizable: true,
+      cell: (_h: any, { row }: { row: any }) => {
+        const text = `${row.result_table_name_alias}${row.result_table_id ? `(${row.result_table_id})` : ''}`;
+        return (
+          <div style="max-width: 450px;">
+            <ShowTooltipsText data={text} />
+          </div>
+        );
+      },
     },
     {
       colKey: 'managers',
@@ -436,12 +454,15 @@
       width: 180,
       resizable: true,
       cell: (_h: any, { row }: { row: any }) => (
-        <span>
-          {row.managers && row.managers.length > 0
-            ? row.managers.join('、')
-            : '--'}
-        </span>
+        <EditTag data={row.managers || []}  />
       ),
+    },
+    {
+      colKey: 'data_scope',
+      title: () => t('数据范围'),
+      width: 150,
+      resizable: true,
+      cell: () => <span>{t('全部数据')}</span>,
     },
     {
       colKey: 'updated_at',
