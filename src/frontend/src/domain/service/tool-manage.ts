@@ -32,7 +32,8 @@ export default  {
       scope_type?: string,
       scope_id?: string,
       binding_type?: string,
-      status?: string,
+      status?: string[],
+      sort?: string[],
     }) {
     return ToolManageSources.getToolsList(params).then(({ data }) =>  ({
       ...data,
@@ -46,7 +47,7 @@ export default  {
   fetchToolTags(params?: {
       scope_type?: string,
       scope_id?: string,
-      status?: string,
+      status?: string[],
     }) {
     return ToolManageSources.getToolTags(params)
       .then(({ data }) => data);
@@ -98,7 +99,7 @@ export default  {
   fetchAllTools(params?: {
     scope_type?: string,
     scope_id?: string,
-    status?: string,
+    status?: string[],
   }) {
     return ToolManageSources.getAllTools(params)
       .then(({ data }) => data);
