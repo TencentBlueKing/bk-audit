@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import abc
+from collections.abc import Collection
 
 from bk_resource import resource
 from django.conf import settings
@@ -30,6 +31,8 @@ from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.models import get_request_username
+from services.web.common.constants import ScopeType
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.models import Risk
 from services.web.scene.binding_validation import assert_binding_relation_integrity
 from services.web.scene.constants import ResourceVisibilityType, SceneStatus
@@ -259,21 +262,48 @@ class GetMyRolePermissions(SceneResource):
     name = gettext_lazy("获取当前用户角色相关权限")
     ResponseSerializer = MyRolePermissionSerializer
 
-    def perform_request(self, validated_request_data):
-        username = get_request_username()
+    @staticmethod
+    def _has_accessed_system(system_ids: Collection[str]) -> bool:
+        if not system_ids:
+            return False
+        return System.objects.filter(
+            system_id__in=system_ids,
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        ).exists()
+
+    def perform_request(self, validated_request_data: dict) -> dict[str, bool]:
+        username: str = get_request_username()
         permission = Permission(username=username)
-        has_local_system_manage_permission = bool(
-            System.get_managed_system_ids(username, audit_status=SystemAuditStatusEnum.ACCESSED)
+        scope_permission = ScopePermission(username)
+
+        cross_scene_scope = ScopeContext(ScopeType.CROSS_SCENE)
+        cross_system_scope = ScopeContext(ScopeType.CROSS_SYSTEM)
+
+        manage_scene_ids = scope_permission.get_scene_ids(cross_scene_scope, ActionEnum.MANAGE_SCENE)
+        view_scene_ids = scope_permission.get_scene_ids(cross_scene_scope, ActionEnum.VIEW_SCENE)
+        edit_system_ids = scope_permission.get_system_ids(cross_system_scope, ActionEnum.EDIT_SYSTEM)
+        view_system_ids = scope_permission.get_system_ids(cross_system_scope, ActionEnum.VIEW_SYSTEM)
+        scene_scope_system_ids = scope_permission.get_system_ids_for_scope(cross_scene_scope)
+
+        # 角色布尔值按实际可用实例收口，避免停用场景或待接入系统让前端展示不可用入口。
+        # SaaS 管理员仍按平台 action 判定；场景/系统角色必须回收到至少一个可用实例。
+        manage_platform = permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)
+        manage_scene = bool(manage_scene_ids)
+        view_scene = bool(view_scene_ids)
+        edit_system = self._has_accessed_system(edit_system_ids)
+        view_system = edit_system or self._has_accessed_system(view_system_ids)
+        # 日志检索入口要求存在真实可检索范围：平台视角、已接入系统，或启用场景展开后的已接入系统。
+        show_log_search = (
+            manage_platform or self._has_accessed_system(scene_scope_system_ids) or edit_system or view_system
         )
 
-        edit_system = has_local_system_manage_permission or permission.has_action_any_permission(ActionEnum.EDIT_SYSTEM)
-
         return {
-            "manage_platform": permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM),
-            "manage_scene": permission.has_action_any_permission(ActionEnum.MANAGE_SCENE),
-            "view_scene": permission.has_action_any_permission(ActionEnum.VIEW_SCENE),
+            "manage_platform": manage_platform,
+            "manage_scene": manage_scene,
+            "view_scene": view_scene,
             "edit_system": edit_system,
-            "view_system": edit_system or permission.has_action_any_permission(ActionEnum.VIEW_SYSTEM),
+            "view_system": view_system,
+            "show_log_search": show_log_search,
         }
 
 
