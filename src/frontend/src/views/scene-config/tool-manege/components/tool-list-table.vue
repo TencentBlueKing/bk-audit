@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="tsx">
-  import { ref } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -363,6 +363,13 @@
   const fetchData = (params: Record<string, any>) => {
     listRef.value.fetchData(params);
   };
+
+  // 组件初始化后，立即带排序参数重新请求（覆盖 tdesign-list 的默认无排序请求）
+  onMounted(() => {
+    nextTick(() => {
+      listRef.value?.fetchData({ sort: ['-created_at'] });
+    });
+  });
 
   defineExpose({ fetchData });
 </script>

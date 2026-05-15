@@ -384,7 +384,16 @@
       service(data)
         .then(() => {
           isFailed.value = false;
-          isSuccessful.value = true;
+          // 成功后直接跳转回工具管理列表，不再展示引导页
+          window.changeConfirm = false;
+          router.push({
+            name: backRouteName,
+            query: {
+              scene_id: route.query?.scene_id,
+              scope_id: route.query?.scope_id,
+              scope_type: route.query?.scope_type,
+            },
+          });
         })
         .catch(() => {
           isSuccessful.value = false;
