@@ -365,7 +365,7 @@
       flex-wrap: wrap;
 
       .formref-item-item {
-        width: 400px;
+        min-width: 400px;
         margin-right: 15px;
       }
     }
