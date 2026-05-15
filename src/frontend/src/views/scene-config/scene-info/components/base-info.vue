@@ -160,7 +160,7 @@
       key: 'description',
       label: t('场景描述'),
       value: sceneData.description,
-      editable: false,
+      editable: true,
     },
     {
       key: 'manager',
@@ -196,6 +196,8 @@
   const editUserValue = ref<string[]>([]);
   const inputRefs: Record<string, any> = {};
   const editorRefs: Record<string, HTMLElement | null> = {};
+  // 防止 blur 和 mousedown/enter 事件同时触发导致重复保存
+  let isSaving = false;
 
   const setInputRef = (key: string, el: any) => {
     if (el) {
@@ -218,10 +220,16 @@
 
   // 普通文本字段保存
   const handleSave = (key: string) => {
+    // 防止 blur + enter/mousedown 重复触发
+    if (isSaving) return;
+    isSaving = true;
     // 值未变化时不触发更新
     const originalValue = String((sceneData as any)[key] ?? '');
     if (editValue.value === originalValue) {
       editingField.value = '';
+      nextTick(() => {
+        isSaving = false;
+      });
       return;
     }
     emit('update:sceneData', {
@@ -229,6 +237,9 @@
       [key]: editValue.value,
     }, key);
     editingField.value = '';
+    nextTick(() => {
+      isSaving = false;
+    });
   };
 
   // 人员选择字段编辑
@@ -239,12 +250,18 @@
 
   // 人员选择字段保存
   const handleUserSave = (key: string) => {
+    // 防止 blur + mousedown 重复触发
+    if (isSaving) return;
+    isSaving = true;
     // 值未变化时不触发更新
     const originalValue = (sceneData as any)[key] || [];
     const isSame = originalValue.length === editUserValue.value.length
       && originalValue.every((item: string, index: number) => item === editUserValue.value[index]);
     if (isSame) {
       editingField.value = '';
+      nextTick(() => {
+        isSaving = false;
+      });
       return;
     }
     emit('update:sceneData', {
@@ -252,6 +269,9 @@
       [key]: editUserValue.value,
     }, key);
     editingField.value = '';
+    nextTick(() => {
+      isSaving = false;
+    });
   };
 
   // 判断点击位置是否在 bk-select 浮层内（人员选择器选项弹层挂在 body 上）
