@@ -256,6 +256,19 @@
 
   /* PrimaryTable 表格样式 */
   :deep(.t-table) {
+    table {
+      table-layout: fixed !important;
+    }
+
+    /* TDesign ellipsis 样式（tdesign-vue-next 原生 CSS 未被引入时需要手动补充） */
+    .t-text-ellipsis {
+      overflow: hidden;
+      line-height: 22px;
+      text-overflow: ellipsis;
+      word-wrap: normal;
+      white-space: nowrap;
+    }
+
     th,
     td {
       height: var(--row-height, 36px) !important;
