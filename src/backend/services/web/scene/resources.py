@@ -218,14 +218,14 @@ class ListScene(SceneResource):
             queryset = apply_multi_value_filter("description", validated_request_data.get("description"))
         if validated_request_data.get("updated_by"):
             queryset = apply_multi_value_filter("updated_by", validated_request_data.get("updated_by"))
-        if validated_request_data.get("managers"):
+        if validated_request_data.get("manager"):
             manager_filter = Q()
-            for manager in validated_request_data["managers"]:
+            for manager in validated_request_data["manager"]:
                 manager_filter |= Q(managers__contains=[manager])
             queryset = queryset.filter(manager_filter)
-        if validated_request_data.get("users"):
+        if validated_request_data.get("user"):
             user_filter = Q()
-            for user in validated_request_data["users"]:
+            for user in validated_request_data["user"]:
                 user_filter |= Q(users__contains=[user])
             queryset = queryset.filter(user_filter)
         if validated_request_data.get("keyword"):
