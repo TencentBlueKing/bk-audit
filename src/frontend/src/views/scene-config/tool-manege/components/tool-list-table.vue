@@ -264,6 +264,8 @@
       colKey: 'updated_at',
       width: 130,
       ellipsis: true,
+      sortType: 'all',
+      sorter: true,
     },
     {
       title: t('操作'),
