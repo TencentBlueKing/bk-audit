@@ -294,19 +294,21 @@ class SceneStatusFilterSerializer(serializers.Serializer):
 class MyRolePermissionSerializer(serializers.Serializer):
     """当前用户角色相关权限。
 
-    返回 action 级布尔值，由前端按既定规则映射角色：
+    返回可用角色布尔值，由前端按既定规则映射角色：
     - `manage_platform` -> SaaS 管理员
-    - `manage_scene` / `view_scene` -> 场景管理员 / 场景查看者
-    - `edit_system` / `view_system` -> 系统管理员 / 系统查看者
+    - `manage_scene` / `view_scene` -> 启用场景管理员 / 场景查看者
+    - `edit_system` / `view_system` -> 已接入系统管理员 / 系统查看者
+    - `show_log_search` -> 是否展示日志检索页面
     """
 
     manage_platform = serializers.BooleanField(help_text="是否具备平台管理权限，对应 IAM action: manage_platform。")
-    manage_scene = serializers.BooleanField(help_text="是否具备任一场景的管理权限，对应 IAM action: manage_scene。")
-    view_scene = serializers.BooleanField(help_text="是否具备任一场景的查看权限，对应 IAM action: view_scene。")
-    edit_system = serializers.BooleanField(help_text="是否具备任一系统的编辑权限；判定口径为已接入系统的本地管理员关系或 IAM action: edit_system。")
+    manage_scene = serializers.BooleanField(help_text="是否具备至少一个启用场景的管理权限，对应 IAM action: manage_scene。")
+    view_scene = serializers.BooleanField(help_text="是否具备至少一个启用场景的查看权限，对应 IAM action: view_scene。")
+    edit_system = serializers.BooleanField(help_text="是否具备至少一个已接入系统的编辑权限；判定口径为本地管理员关系或 IAM action: edit_system。")
     view_system = serializers.BooleanField(
-        help_text="是否具备任一系统的查看权限；判定口径为已接入系统的本地管理员关系或 IAM action: view_system/edit_system。"
+        help_text="是否具备至少一个已接入系统的查看权限；判定口径为本地管理员关系或 IAM action: view_system/edit_system。"
     )
+    show_log_search = serializers.BooleanField(help_text="是否展示日志检索页面；平台管理员、有已接入系统权限、或有启用场景且场景展开后存在已接入系统时为 true。")
 
 
 # ==================== 场景选择器 ====================
