@@ -357,10 +357,9 @@
 
     .date-content {
       flex: 1;
-      min-width: 0;
 
       span {
-        max-width: 100%;
+        width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
