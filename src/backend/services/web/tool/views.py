@@ -42,7 +42,7 @@ class ToolViewSet(ResourceViewSet):
         ),
         ResourceRoute("POST", resource.tool.get_tool_enum_mapping_by_collection, endpoint="enum_mapping_by_collection"),
         ResourceRoute("GET", resource.tool.list_tool_tags, endpoint="tags"),
-        ResourceRoute("GET", resource.tool.list_tool, enable_paginate=True),
+        ResourceRoute("GET", resource.tool.list_tool),
         ResourceRoute("POST", resource.tool.execute_tool, endpoint="execute", pk_field="uid"),
         ResourceRoute("GET", resource.tool.list_tool_all, endpoint="all"),
         ResourceRoute("GET", resource.tool.get_tool_detail, pk_field="uid"),

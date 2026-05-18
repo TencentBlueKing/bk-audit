@@ -45,7 +45,6 @@ from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import preserved_order_sort
-from core.utils.page import paginate_data
 from core.utils.tools import get_app_info
 from services.web.common.caller_permission import (
     CurrentType,
@@ -62,7 +61,12 @@ from services.web.scene.constants import (
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
-from services.web.scene.models import ResourceBinding, Scene
+from services.web.scene.models import (
+    ResourceBinding,
+    ResourceBindingScene,
+    ResourceBindingSystem,
+    Scene,
+)
 from services.web.strategy_v2.models import StrategyTool
 from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionKeysWithCallerSerializer,
@@ -230,6 +234,48 @@ class ToolBase(AuditMixinResource, abc.ABC):
             pk_field="uid",
         )
 
+    @staticmethod
+    def attach_visibility_metadata(tools: List[Tool]) -> None:
+        """批量回填工具绑定可见范围，供前端按 binding/visibility 自行展示。"""
+        tool_uids = [tool.uid for tool in tools]
+        bindings = list(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id__in=tool_uids,
+            ).values("id", "resource_id", "binding_type", "visibility_type")
+        )
+        binding_map = {binding["resource_id"]: binding for binding in bindings}
+        binding_ids = [binding["id"] for binding in bindings]
+        scene_id_map = defaultdict(list)
+        for binding_id, scene_id in ResourceBindingScene.objects.filter(
+            binding_id__in=binding_ids,
+            scene__is_deleted=False,
+        ).values_list("binding_id", "scene_id"):
+            scene_id_map[binding_id].append(scene_id)
+
+        system_id_map = defaultdict(list)
+        for binding_id, system_id in ResourceBindingSystem.objects.filter(binding_id__in=binding_ids).values_list(
+            "binding_id", "system_id"
+        ):
+            system_id_map[binding_id].append(system_id)
+
+        for tool in tools:
+            binding = binding_map.get(str(tool.uid))
+            visibility = {
+                "binding_type": None,
+                "visibility_type": None,
+                "scene_ids": [],
+                "system_ids": [],
+            }
+            if binding is not None:
+                visibility = {
+                    "binding_type": binding["binding_type"],
+                    "visibility_type": binding["visibility_type"],
+                    "scene_ids": scene_id_map[binding["id"]],
+                    "system_ids": system_id_map[binding["id"]],
+                }
+            setattr(tool, "visibility", visibility)
+
 
 class ListToolTags(ToolBase):
     name = gettext_lazy("列出工具标签")
@@ -272,6 +318,14 @@ class ListToolTags(ToolBase):
                 "tag_id": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
                 "tool_count": scoped_tools.filter(
                     uid__in=recent_tool_usage_manager.get_recent_uids(current_user)
+                ).count(),
+            },
+            {
+                "tag_name": str(ToolTagsEnum.FAVORITE_TOOLS.label),
+                "tag_id": ToolTagsEnum.FAVORITE_TOOLS.value,
+                "tool_count": ToolFavorite.objects.filter(
+                    username=current_user,
+                    tool_uid__in=scoped_tools.values_list("uid", flat=True),
                 ).count(),
             },
             {
@@ -335,10 +389,12 @@ class ListTool(ToolBase):
 
     name = gettext_lazy("获取工具列表")
     RequestSerializer = ListRequestSerializer
+    ResponseSerializer = ToolListResponseSerializer
+    many_response_data = True
     bind_request = True
 
     def perform_request(self, validated_request_data):
-        request = validated_request_data.pop("_request")
+        validated_request_data.pop("_request", None)
         tags = validated_request_data.pop("tags", [])
         keyword = validated_request_data.get("keyword", "").strip()
         name = validated_request_data.get("name", [])
@@ -431,8 +487,8 @@ class ListTool(ToolBase):
         else:
             queryset = queryset.order_by("-favorite", "name")
 
-        paged_tools, page = paginate_data(queryset=queryset, request=request)
-        tool_uids = [t.uid for t in paged_tools]
+        tools = list(queryset)
+        tool_uids = [t.uid for t in tools]
 
         # 查询 tags
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
@@ -446,17 +502,17 @@ class ListTool(ToolBase):
         for row in rows:
             strategy_map[row["tool_uid"]].append(row["strategy_id"])
 
-        for tool in paged_tools:
+        for tool in tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
         BindingMetadataHelper.attach_binding_metadata(
-            paged_tools,
+            tools,
             resource_type=ResourceVisibilityType.TOOL,
             id_attr="uid",
         )
+        self.attach_visibility_metadata(tools)
 
-        serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
-        return page.get_paginated_response(data=serialized_data)
+        return ToolListResponseSerializer(instance=tools, many=True).data
 
 
 class DeleteTool(ToolBase):
