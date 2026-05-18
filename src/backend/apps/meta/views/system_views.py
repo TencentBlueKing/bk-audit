@@ -36,6 +36,9 @@ class SystemsViewSet(ResourceViewSet):
             return SystemPermissionHandler.system_view_permissions()
         if self.action in ["update"]:
             return SystemPermissionHandler.system_edit_permissions()
+        if self.action in ["audit_status"]:
+            # 审计状态允许任意来源系统更新，但仍需要系统管理员/系统编辑权限。
+            return [SystemPermissionHandler.generate_permission([ActionEnum.EDIT_SYSTEM])]
         if self.action in ["search", "resource_type_schema_search"]:
             return [SearchLogSystemSearchPermission()]
         # create,all,favorite,resource_type_search,action_search,list

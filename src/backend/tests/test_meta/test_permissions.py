@@ -25,6 +25,7 @@ from rest_framework.test import APIRequestFactory
 from apps.meta.permissions import SearchLogPermission, SearchLogSystemSearchPermission
 from apps.meta.views.system_views import SystemsViewSet
 from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import AnyOfPermissions
 from core.exceptions import PermissionException
 from services.web.common.constants import ScopeType
 from tests.base import TestCase
@@ -83,3 +84,12 @@ class TestSystemsViewSetPermissions(TestCase):
         view.action = "create"
 
         self.assertEqual(view.get_permissions(), [])
+
+    def test_update_audit_status_requires_system_admin_permission_without_source_check(self):
+        view = SystemsViewSet()
+        view.action = "audit_status"
+
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], AnyOfPermissions)
