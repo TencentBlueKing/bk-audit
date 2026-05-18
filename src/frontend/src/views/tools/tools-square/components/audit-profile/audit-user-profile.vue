@@ -172,7 +172,6 @@
 
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
-    toolName?: string;      // 工具名称，用于导出文件命名
     toolConfig?: {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
       property?: {
         scene_id?: number | string;
@@ -187,7 +186,6 @@
 
   const props = withDefaults(defineProps<Props>(), {
     toolUid: '',
-    toolName: '',
     toolConfig: () => ({}),
   });
   const emit = defineEmits<Emits>();
@@ -510,9 +508,8 @@
     wechat: userInfo.value.wechat || '',
     coinBalance: row[PROFILE_FIELDS.COIN_BALANCE_UNIT] || row.coinBalance || 0,
     totalRecharge: row[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] || row.totalRecharge || 0,
-    // 以下旧字段后端已不再返回，保留兜底以兼容历史调用方；后续后端补充后会自动生效
-    totalGift: row[PROFILE_FIELDS.TOTAL_GIFT] || row.totalGift || 0,
-    totalIssue: row[PROFILE_FIELDS.TOTAL_ISSUE] || row.totalIssue || 0,
+    totalGift: row[PROFILE_FIELDS.TOTAL_GIFT_YUAN] || row.totalGift || 0,
+    totalIssue: row[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] || row.totalIssue || 0,
     totalBalance: row[PROFILE_FIELDS.TOTAL_BALANCE] || row.totalBalance || 0,
     totalTopup: row[PROFILE_FIELDS.TOTAL_TOPUP] || row.totalTopup || 0,
     source: row.source || '',
@@ -837,7 +834,7 @@
             if (totalLen > maxLen) maxLen = totalLen;
           }
         }
-        colWidths.push({ wch: Math.min(maxLen + 2, 50) });
+        colWidths.push({ wch: Math.min(maxLen + 2, 200) });
       }
       ws['!cols'] = colWidths;
       // 表头自动筛选
@@ -872,8 +869,12 @@
       // 设置列宽自适应 & 表头自动筛选
       applyExcelStyles(wb);
 
-      // 导出文件，文件名为工具名
-      const fileName = props.toolName || t('关联游戏列表');
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      const userName = userInfo.value.wecom || '';
+      const sheetName = t('关联游戏列表');
+      const fileName = userName ? `${userName}_${sheetName}_${dateStr}_${timeStr}` : `${sheetName}_${dateStr}_${timeStr}`;
       XLSX.writeFile(wb, `${fileName}.xlsx`);
 
       isExportPopoverShow.value = false;
