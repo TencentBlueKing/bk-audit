@@ -682,6 +682,10 @@ class SmartPageToolConfig(BaseModel):
     """智能页面工具配置"""
 
     marker_type: Optional[str] = PydanticField(default=None, title=gettext_lazy("页面标记类型"))
+    property: Annotated[Dict[str, Any], DictField()] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("业务自定义属性"),
+    )
     data_sources: Annotated[List[SmartPageDataSourceConfigUnion], ListField(child=DictField())] = PydanticField(
         default_factory=list,
         title=gettext_lazy("数据源列表"),
