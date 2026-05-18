@@ -198,6 +198,7 @@ class SqlDataSearchExecutor(
         """
         获取工具关联的场景ID
         """
+        from services.web.scene.constants import BindingType
         from services.web.scene.models import ResourceBindingScene
 
         return (
@@ -205,6 +206,7 @@ class SqlDataSearchExecutor(
                 scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.TOOL,
                 binding__resource_id=tool_uid,
+                binding__binding_type=BindingType.SCENE_BINDING,
             )
             .values_list("scene_id", flat=True)
             .first()
