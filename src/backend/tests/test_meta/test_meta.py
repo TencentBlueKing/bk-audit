@@ -161,6 +161,13 @@ class MetaTest(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["filter_actions"], ["view_system", "edit_system"])
 
+    def test_system_list_filter_actions_serializer_treats_null_as_no_filter(self):
+        """SystemListResource filter_actions null means no permission filter"""
+        serializer = SystemListRequestSerializer(data={"namespace": "default", "filter_actions": None})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["filter_actions"], [])
+
     def test_system_list_filter_actions_serializer_rejects_unknown_actions(self):
         """SystemListResource filter_actions serializer"""
         serializer = SystemListRequestSerializer(data={"namespace": "default", "filter_actions": "delete_system"})
