@@ -72,14 +72,14 @@
               </bk-tag>
             </bk-radio-button>
           </bk-radio-group>
-          <bk-input
-            v-model="searchKeyword"
+          <bk-search-select
+            v-model="searchValue"
             class="search-input"
             clearable
-            :placeholder="t('搜索 工具名称、工具说明、工具类型、工具来源、更新人')"
-            type="search"
-            @clear="handleSearch"
-            @enter="handleSearch" />
+            :data="searchSelectData"
+            :placeholder="t('搜索工具名称、工具说明、工具类型、更新人')"
+            unique-select
+            @update:model-value="handleSearch" />
         </div>
       </div>
 
@@ -137,6 +137,12 @@
 
   type ActionType = 'delete' | 'enable' | 'disable';
 
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
+
   interface TagItem {
     tag_id: string;
     tag_name: string;
@@ -155,7 +161,41 @@
   const router = useRouter();
   const route = useRoute();
   const isLoading = ref(true);
-  const searchKeyword = ref('');
+  // bk-search-select 搜索值
+  const searchValue = ref<SearchKey[]>([]);
+
+  // bk-search-select 搜索条件配置（对应接口参数）
+  const searchSelectData = [
+    {
+      name: '工具名称',
+      id: 'name',
+      placeholder: '请输入工具名称',
+    },
+    {
+      name: '工具说明',
+      id: 'description',
+      placeholder: '请输入工具说明',
+    },
+    {
+      name: '工具类型',
+      id: 'tool_type',
+      placeholder: '请选择工具类型',
+      multiple: false,
+      children: [
+        { id: 'data_search', name: '数据查询' },
+        { id: 'api', name: 'API' },
+        { id: 'bk_vision', name: 'BK-Vision' },
+      ],
+    },
+    {
+      name: '更新人',
+      id: 'updated_by',
+      placeholder: '请选择更新人',
+      multiple: false,
+    },
+  ];
+
+  // 表格引用
   const toolListRef = ref();
   const previewDrawerRef = ref();
   const searchModel = ref<Record<string, any>>({});
@@ -234,9 +274,9 @@
   };
 
   // 刷新列表（统一入口）
-  const refreshList = () => {
+  const refreshList = (searchParams?: Record<string, any>) => {
     const params: Record<string, any> = {
-      keyword: searchKeyword.value,
+      ...searchParams,
       sort: ['-created_at'],
     };
     if (statusFilter.value !== 'all') {
@@ -248,20 +288,43 @@
     toolListRef.value?.fetchData(params);
   };
 
-  // 搜索
-  const handleSearch = () => {
-    refreshList();
+  // 搜索 - 参考 platform-manage/scene-manage 的 handleSearch 实现
+  const handleSearch = (keyword: SearchKey[]) => {
+    const search: Record<string, any> = {
+      name: undefined,
+      description: '',
+      tool_type: undefined,
+      updated_by: '',
+    };
+
+    keyword.forEach((item) => {
+      if (item.values && item.values.length) {
+        const value = item.values.map(v => v.id).join(',');
+        if (item.id === 'name') {
+          search.name = value;
+        } else if (item.id === 'description') {
+          search.description = value;
+        } else if (item.id === 'tool_type') {
+          // tool_type 接口期望 array<string>
+          search.tool_type = value.split(',').map(v => v.trim());
+        } else if (item.id === 'updated_by') {
+          search.updated_by = value;
+        }
+      }
+    });
+
+    refreshList(search);
   };
 
   // 状态筛选变化
   const handleStatusFilterChange = () => {
-    refreshList();
+    handleSearch(searchValue.value);
   };
 
   const handleClearSearch = () => {
-    searchKeyword.value = '';
+    searchValue.value = [];
     statusFilter.value = 'all';
-    toolListRef.value?.fetchData({ keyword: '', sort: ['-created_at'] });
+    toolListRef.value?.fetchData({ sort: ['-created_at'] });
   };
 
   const handleRequestSuccess = (data: any) => {
