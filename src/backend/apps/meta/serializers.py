@@ -206,6 +206,8 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
         return [i for i in audit_status.split(",") if i]
 
     def validate_filter_actions(self, filter_actions: str) -> list[str]:
+        if not filter_actions:
+            return []
         actions = [action.strip() for action in filter_actions.split(",") if action.strip()]
         invalid_actions = set(actions) - set(SystemListFilterActionEnum.values)
         if invalid_actions:
