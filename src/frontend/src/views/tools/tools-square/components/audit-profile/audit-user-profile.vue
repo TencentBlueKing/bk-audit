@@ -19,6 +19,7 @@
     <!-- 查询输入 -->
     <profile-query-input
       ref="queryInputRef"
+      :loading="isQuerying"
       @query="handleQuery"
       @reset="handleReset" />
 
