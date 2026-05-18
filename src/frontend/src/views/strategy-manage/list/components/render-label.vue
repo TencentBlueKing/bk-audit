@@ -115,7 +115,7 @@
     resetAll: (val: Array<TagItem>) => void;
   }
   interface Props{
-    labels: Array<Record<string, any>>,
+    labels: Array<TagItem>,
     total: number,
     upgradeTotal: number,
     final?: number;
@@ -131,7 +131,7 @@
   const route = useRoute();
   const showTipObjects = ref({} as Record<string, boolean>);
 
-  const all = ref([
+  const all = ref<Array<TagItem>>([
     { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0, icon: 'quanbu' },
   ]);
   const active = ref<string|number>(props.active);
@@ -145,15 +145,15 @@
     const fixedLabels = props.labels.slice(0, Math.max(0, fixedEndIndex));
     const dynamicLabels = props.labels.slice(Math.max(0, fixedEndIndex)).sort((x, y) => {
       const reg = /[a-zA-Z0-9]/;
-      if (reg.test(x.name) || reg.test(y.name)) {
-        if (x > y) {
+      if (reg.test(x.tag_name) || reg.test(y.tag_name)) {
+        if (x.tag_name > y.tag_name) {
           return 1;
-        } if (x < y) {
+        } if (x.tag_name < y.tag_name) {
           return 1;
         }
         return 0;
       }
-      return x.name?.localeCompare(y.name);
+      return x.tag_name?.localeCompare(y.tag_name);
     });
     return [...all.value, ...fixedLabels, ...dynamicLabels];
   });
@@ -173,7 +173,7 @@
   };
 
   // 如果省略号就hover展示tips
-  const handleShowTips = (data: Array<Record<string, any>>) => {
+  const handleShowTips = (data: Array<TagItem>) => {
     const labelWidth = 240;
     const iconWidth = 21;
     const showTipObjects = data.reduce((results, item, index) => {
