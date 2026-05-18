@@ -44,54 +44,103 @@
             type="text">
         </div>
         <div class="add-tool-body">
-          <!-- 左侧：按标签分组 -->
+          <!-- 左侧：按场景分组（跨场景模式）或平铺列表 -->
           <div class="add-tool-left">
-            <template
-              v-for="group in filteredGroupedTools"
-              :key="group.tag_id">
-              <div
-                v-if="group.tools.length > 0"
-                class="tool-group">
+            <template v-if="isCrossScene">
+              <template
+                v-for="group in filteredSceneGroupedTools"
+                :key="group.sceneId">
                 <div
-                  class="tool-group-title"
-                  @click="toggleGroupCollapse(group.tag_id)">
-                  <audit-icon
-                    :class="{ 'is-collapsed': collapsedGroups[group.tag_id] }"
-                    style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
-                    type="angle-fill-down" />
-                  {{ group.tag_name }}
-                </div>
-                <template v-if="!collapsedGroups[group.tag_id]">
+                  v-if="group.tools.length > 0"
+                  class="tool-group">
                   <div
-                    v-for="tool in group.tools"
-                    :key="tool.uid"
-                    class="tool-group-item"
-                    :class="{ 'is-added': isToolOpened(tool.uid) }"
-                    @click="handleAddTool(tool)">
-                    <img
-                      v-if="tool.tool_type === 'smart_page'"
-                      alt="smart_page"
-                      class="tool-group-item-icon"
-                      :src="userProfileIcon">
+                    class="tool-group-title"
+                    @click="toggleSceneCollapse(group.sceneId)">
                     <audit-icon
-                      v-else
-                      class="tool-group-item-icon"
-                      svg
-                      :type="itemIcon(tool)" />
-                    <span class="tool-group-item-name">{{ tool.name }}</span>
-                    <audit-icon
-                      v-if="isToolOpened(tool.uid)"
-                      class="tool-group-item-check"
-                      type="check-line" />
+                      :class="{ 'is-collapsed': collapsedScenes.has(group.sceneId) }"
+                      style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
+                      type="angle-fill-down" />
+                    {{ group.sceneName }}({{ group.sceneId }})
                   </div>
-                </template>
-              </div>
+                  <template v-if="!collapsedScenes.has(group.sceneId)">
+                    <div
+                      v-for="tool in group.tools"
+                      :key="tool.uid"
+                      v-bk-tooltips="{
+                        content: '该工具已打开',
+                        disabled: !isToolOpened(tool.uid),
+                        delay: [300, 0],
+                        placement: 'right'
+                      }"
+                      class="tool-group-item"
+                      :class="{ 'is-added': isToolOpened(tool.uid) }"
+                      @click="handleAddTool(tool)">
+                      <img
+                        v-if="tool.tool_type === 'smart_page'"
+                        alt="smart_page"
+                        class="tool-group-item-icon"
+                        :src="userProfileIcon">
+                      <audit-icon
+                        v-else
+                        class="tool-group-item-icon"
+                        svg
+                        :type="itemIcon(tool)" />
+                      <span class="tool-group-item-name">{{ tool.name }}</span>
+                      <span
+                        v-if="isToolOpened(tool.uid)"
+                        class="tool-opened-status">
+                        <audit-icon
+                          svg
+                          type="normal" />
+                      </span>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <bk-exception
+                v-if="filteredSceneGroupedTools.every(g => g.tools.length === 0)"
+                class="no-data"
+                scene="part"
+                type="search-empty" />
             </template>
-            <bk-exception
-              v-if="filteredGroupedTools.every(g => g.tools.length === 0)"
-              class="no-data"
-              scene="part"
-              type="search-empty" />
+            <template v-else>
+              <div
+                v-for="tool in filteredFlatTools"
+                :key="tool.uid"
+                v-bk-tooltips="{
+                  content: '该工具已打开',
+                  disabled: !isToolOpened(tool.uid),
+                  delay: [300, 0],
+                  placement: 'right'
+                }"
+                class="tool-group-item"
+                :class="{ 'is-added': isToolOpened(tool.uid) }"
+                @click="handleAddTool(tool)">
+                <img
+                  v-if="tool.tool_type === 'smart_page'"
+                  alt="smart_page"
+                  class="tool-group-item-icon"
+                  :src="userProfileIcon">
+                <audit-icon
+                  v-else
+                  class="tool-group-item-icon"
+                  svg
+                  :type="itemIcon(tool)" />
+                <span class="tool-group-item-name">{{ tool.name }}</span>
+                <span
+                  v-if="isToolOpened(tool.uid)"
+                  class="tool-opened-status">
+                  <audit-icon
+                    svg
+                    type="normal" />
+                </span>
+              </div>
+              <bk-exception
+                v-if="filteredFlatTools.length === 0"
+                class="no-data"
+                scene="part"
+                type="search-empty" />
+            </template>
           </div>
           <!-- 右侧：最近使用 / 我的收藏 -->
           <div class="add-tool-right">
@@ -113,59 +162,189 @@
             </div>
             <div class="right-tab-content">
               <template v-if="rightActiveTab === 'recent'">
-                <div
-                  v-for="tool in filteredRecentTools"
-                  :key="tool.uid"
-                  class="tool-group-item"
-                  :class="{ 'is-added': isToolOpened(tool.uid) }"
-                  @click="handleAddTool(tool)">
-                  <img
-                    v-if="tool.tool_type === 'smart_page'"
-                    alt="smart_page"
-                    class="tool-group-item-icon"
-                    :src="userProfileIcon">
-                  <audit-icon
-                    v-else
-                    class="tool-group-item-icon"
-                    svg
-                    :type="itemIcon(tool)" />
-                  <span class="tool-group-item-name">{{ tool.name }}</span>
-                  <audit-icon
-                    v-if="isToolOpened(tool.uid)"
-                    class="tool-group-item-check"
-                    type="check-line" />
-                </div>
+                <template v-if="isCrossScene">
+                  <template
+                    v-for="group in filteredRecentSceneGrouped"
+                    :key="group.sceneId">
+                    <div
+                      v-if="group.tools.length > 0"
+                      class="tool-group">
+                      <div
+                        class="tool-group-title"
+                        @click="toggleRightSceneCollapse(group.sceneId)">
+                        <audit-icon
+                          :class="{ 'is-collapsed': collapsedRightScenes.has(group.sceneId) }"
+                          style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
+                          type="angle-fill-down" />
+                        {{ group.sceneName }}({{ group.sceneId }})
+                      </div>
+                      <template v-if="!collapsedRightScenes.has(group.sceneId)">
+                        <div
+                          v-for="tool in group.tools"
+                          :key="tool.uid"
+                          v-bk-tooltips="{
+                            content: '该工具已打开',
+                            disabled: !isToolOpened(tool.uid),
+                            delay: [300, 0],
+                            placement: 'right'
+                          }"
+                          class="tool-group-item"
+                          :class="{ 'is-added': isToolOpened(tool.uid) }"
+                          @click="handleAddTool(tool)">
+                          <img
+                            v-if="tool.tool_type === 'smart_page'"
+                            alt="smart_page"
+                            class="tool-group-item-icon"
+                            :src="userProfileIcon">
+                          <audit-icon
+                            v-else
+                            class="tool-group-item-icon"
+                            svg
+                            :type="itemIcon(tool)" />
+                          <span class="tool-group-item-name">{{ tool.name }}</span>
+                          <span
+                            v-if="isToolOpened(tool.uid)"
+                            class="tool-opened-status">
+                            <audit-icon
+                              svg
+                              type="normal" />
+                          </span>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </template>
+                <template v-else>
+                  <div
+                    v-for="tool in filteredRecentTools"
+                    :key="tool.uid"
+                    v-bk-tooltips="{
+                      content: '该工具已打开',
+                      disabled: !isToolOpened(tool.uid),
+                      delay: [300, 0],
+                      placement: 'right'
+                    }"
+                    class="tool-group-item"
+                    :class="{ 'is-added': isToolOpened(tool.uid) }"
+                    @click="handleAddTool(tool)">
+                    <img
+                      v-if="tool.tool_type === 'smart_page'"
+                      alt="smart_page"
+                      class="tool-group-item-icon"
+                      :src="userProfileIcon">
+                    <audit-icon
+                      v-else
+                      class="tool-group-item-icon"
+                      svg
+                      :type="itemIcon(tool)" />
+                    <span class="tool-group-item-name">{{ tool.name }}</span>
+                    <span
+                      v-if="isToolOpened(tool.uid)"
+                      class="tool-opened-status">
+                      <audit-icon
+                        svg
+                        type="normal" />
+                    </span>
+                  </div>
+                </template>
                 <bk-exception
-                  v-if="filteredRecentTools.length === 0"
+                  v-if="isCrossScene
+                    ? filteredRecentSceneGrouped.every(g => g.tools.length === 0)
+                    : filteredRecentTools.length === 0"
                   class="no-data"
                   scene="part"
                   type="empty" />
               </template>
               <template v-if="rightActiveTab === 'favorite'">
-                <div
-                  v-for="tool in filteredFavoriteTools"
-                  :key="tool.uid"
-                  class="tool-group-item"
-                  :class="{ 'is-added': isToolOpened(tool.uid) }"
-                  @click="handleAddTool(tool)">
-                  <img
-                    v-if="tool.tool_type === 'smart_page'"
-                    alt="smart_page"
-                    class="tool-group-item-icon"
-                    :src="userProfileIcon">
-                  <audit-icon
-                    v-else
-                    class="tool-group-item-icon"
-                    svg
-                    :type="itemIcon(tool)" />
-                  <span class="tool-group-item-name">{{ tool.name }}</span>
-                  <audit-icon
-                    v-if="isToolOpened(tool.uid)"
-                    class="tool-group-item-check"
-                    type="check-line" />
-                </div>
+                <template v-if="isCrossScene">
+                  <template
+                    v-for="group in filteredFavoriteSceneGrouped"
+                    :key="group.sceneId">
+                    <div
+                      v-if="group.tools.length > 0"
+                      class="tool-group">
+                      <div
+                        class="tool-group-title"
+                        @click="toggleRightSceneCollapse(group.sceneId)">
+                        <audit-icon
+                          :class="{ 'is-collapsed': collapsedRightScenes.has(group.sceneId) }"
+                          style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
+                          type="angle-fill-down" />
+                        {{ group.sceneName }}({{ group.sceneId }})
+                      </div>
+                      <template v-if="!collapsedRightScenes.has(group.sceneId)">
+                        <div
+                          v-for="tool in group.tools"
+                          :key="tool.uid"
+                          v-bk-tooltips="{
+                            content: '该工具已打开',
+                            disabled: !isToolOpened(tool.uid),
+                            delay: [300, 0],
+                            placement: 'right'
+                          }"
+                          class="tool-group-item"
+                          :class="{ 'is-added': isToolOpened(tool.uid) }"
+                          @click="handleAddTool(tool)">
+                          <img
+                            v-if="tool.tool_type === 'smart_page'"
+                            alt="smart_page"
+                            class="tool-group-item-icon"
+                            :src="userProfileIcon">
+                          <audit-icon
+                            v-else
+                            class="tool-group-item-icon"
+                            svg
+                            :type="itemIcon(tool)" />
+                          <span class="tool-group-item-name">{{ tool.name }}</span>
+                          <span
+                            v-if="isToolOpened(tool.uid)"
+                            class="tool-opened-status">
+                            <audit-icon
+                              svg
+                              type="normal" />
+                          </span>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </template>
+                <template v-else>
+                  <div
+                    v-for="tool in filteredFavoriteTools"
+                    :key="tool.uid"
+                    v-bk-tooltips="{
+                      content: '该工具已打开',
+                      disabled: !isToolOpened(tool.uid),
+                      delay: [300, 0],
+                      placement: 'right'
+                    }"
+                    class="tool-group-item"
+                    :class="{ 'is-added': isToolOpened(tool.uid) }"
+                    @click="handleAddTool(tool)">
+                    <img
+                      v-if="tool.tool_type === 'smart_page'"
+                      alt="smart_page"
+                      class="tool-group-item-icon"
+                      :src="userProfileIcon">
+                    <audit-icon
+                      v-else
+                      class="tool-group-item-icon"
+                      svg
+                      :type="itemIcon(tool)" />
+                    <span class="tool-group-item-name">{{ tool.name }}</span>
+                    <span
+                      v-if="isToolOpened(tool.uid)"
+                      class="tool-opened-status">
+                      <audit-icon
+                        svg
+                        type="normal" />
+                    </span>
+                  </div>
+                </template>
                 <bk-exception
-                  v-if="filteredFavoriteTools.length === 0"
+                  v-if="isCrossScene
+                    ? filteredFavoriteSceneGrouped.every(g => g.tools.length === 0)
+                    : filteredFavoriteTools.length === 0"
                   class="no-data"
                   scene="part"
                   type="empty" />
@@ -197,30 +376,49 @@
 
   interface Props {
     toolList: ToolInfo[];
+    // eslint-disable-next-line vue/no-unused-properties
     tagsEnums: TagItem[];
     scopeParams?: {
       scope_type?: string;
       scope_id?: string;
     };
+    sceneNameMap?: Record<number, string>;
   }
 
   const props = defineProps<Props>();
   const emit = defineEmits<{
     addTool: [tool: ToolInfo];
+    switchTool: [tool: ToolInfo];
   }>();
 
   const addPopoverRef = ref();
   const popoverSearchValue = ref('');
   const rightActiveTab = ref<'recent' | 'favorite'>('recent');
-  const collapsedGroups = ref<Record<string, boolean>>({});
+  const collapsedScenes = ref<Set<number>>(new Set());
+  const collapsedRightScenes = ref<Set<number>>(new Set());
+
+  // 是否为跨场景模式
+  const isCrossScene = computed(() => props.scopeParams?.scope_type === 'cross_scene');
 
   // 已打开工具的 uid 集合
   const openedUidSet = computed(() => new Set(props.toolList.map(t => t.uid)));
   const isToolOpened = (uid: string) => openedUidSet.value.has(uid);
 
-  // 切换分组折叠/展开
-  const toggleGroupCollapse = (tagId: string) => {
-    collapsedGroups.value[tagId] = !collapsedGroups.value[tagId];
+  // 切换场景分组折叠/展开
+  const toggleSceneCollapse = (sceneId: number) => {
+    if (collapsedScenes.value.has(sceneId)) {
+      collapsedScenes.value.delete(sceneId);
+    } else {
+      collapsedScenes.value.add(sceneId);
+    }
+  };
+
+  const toggleRightSceneCollapse = (sceneId: number) => {
+    if (collapsedRightScenes.value.has(sceneId)) {
+      collapsedRightScenes.value.delete(sceneId);
+    } else {
+      collapsedRightScenes.value.add(sceneId);
+    }
   };
 
   const itemIcon = (item: { tool_type?: string }) => {
@@ -282,19 +480,65 @@
   };
 
   // 左侧分组标签（排除固定标签）
-  const toolTagGroups = computed(() => props.tagsEnums.filter(tag => !tag.tag_id.startsWith('-') && tag.tag_id !== 'all'));
+  // const toolTagGroups = computed(() =>
+  //   props.tagsEnums.filter(tag => !tag.tag_id.startsWith('-') && tag.tag_id !== 'all'));
 
-  // 按标签分组的工具列表（已过滤搜索关键词）
-  const filteredGroupedTools = computed(() => {
-    const keyword = popoverSearchValue.value.trim().toLowerCase();
-    return toolTagGroups.value.map(tag => ({
-      ...tag,
-      tools: allToolsList.value.filter((tool) => {
-        if (keyword && !tool.name.toLowerCase().includes(keyword)) return false;
-        return tool.tags?.includes(tag.tag_id);
-      }),
+  // 场景分组工具列表辅助函数
+  interface SceneGroup {
+    sceneId: number;
+    sceneName: string;
+    tools: ToolInfo[];
+  }
+
+  const buildSceneGroups = (tools: ToolInfo[]): SceneGroup[] => {
+    const groupMap = new Map<number, ToolInfo[]>();
+    const sceneOrder: number[] = [];
+    tools.forEach((tool) => {
+      const sceneIds = tool.visibility?.scene_ids || [];
+      if (sceneIds.length === 0) {
+        if (!groupMap.has(0)) {
+          groupMap.set(0, []);
+          sceneOrder.push(0);
+        }
+        groupMap.get(0)!.push(tool);
+      } else {
+        sceneIds.forEach((sid: number) => {
+          if (!groupMap.has(sid)) {
+            groupMap.set(sid, []);
+            sceneOrder.push(sid);
+          }
+          groupMap.get(sid)!.push(tool);
+        });
+      }
+    });
+    const nameMap = props.sceneNameMap || {};
+    return sceneOrder.map(sid => ({
+      sceneId: sid,
+      sceneName: sid === 0 ? '未分类' : (nameMap[sid] || `场景 ${sid}`),
+      tools: groupMap.get(sid) || [],
     }));
+  };
+
+  // 跨场景模式：按场景分组（左侧）
+  const filteredSceneGroupedTools = computed(() => {
+    const keyword = popoverSearchValue.value.trim().toLowerCase();
+    const filtered = allToolsList.value.filter((tool) => {
+      if (keyword && !tool.name.toLowerCase().includes(keyword)) return false;
+      return true;
+    });
+    return buildSceneGroups(filtered);
   });
+
+  // 非跨场景模式：平铺列表（左侧）
+  const filteredFlatTools = computed(() => {
+    const keyword = popoverSearchValue.value.trim().toLowerCase();
+    return allToolsList.value.filter((tool) => {
+      if (keyword && !tool.name.toLowerCase().includes(keyword)) return false;
+      return true;
+    });
+  });
+
+  // 按标签分组的工具列表 - 已废弃，改为按场景分组
 
   // 右侧最近使用
   const filteredRecentTools = computed(() => {
@@ -305,6 +549,9 @@
     });
   });
 
+  // 右侧最近使用（按场景分组）
+  const filteredRecentSceneGrouped = computed(() => buildSceneGroups(filteredRecentTools.value));
+
   // 右侧我的收藏
   const filteredFavoriteTools = computed(() => {
     const keyword = popoverSearchValue.value.trim().toLowerCase();
@@ -314,9 +561,16 @@
     });
   });
 
+  // 右侧我的收藏（按场景分组）
+  const filteredFavoriteSceneGrouped = computed(() => buildSceneGroups(filteredFavoriteTools.value));
+
   const handleAddTool = (tool: ToolInfo) => {
-    if (isToolOpened(tool.uid)) return;
-    emit('addTool', tool);
+    if (isToolOpened(tool.uid)) {
+      // 已打开的工具，点击后直接切换到该工具tab
+      emit('switchTool', tool);
+    } else {
+      emit('addTool', tool);
+    }
     // 关闭 popover
     nextTick(() => {
       addPopoverRef.value?.hide?.();
@@ -464,8 +718,11 @@
 }
 
 .tool-group-item.is-added {
-  cursor: not-allowed;
-  opacity: 50%;
+  color: #3a84ff;
+}
+
+.tool-group-item.is-added .tool-group-item-name {
+  color: #3a84ff;
 }
 
 .tool-group-item-icon {
@@ -485,10 +742,15 @@
   white-space: nowrap;
 }
 
-.tool-group-item-check {
-  font-size: 16px;
-  color: #3a84ff;
-  flex: 0 0 auto;
+.tool-opened-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  font-size: 14px;
+  flex: 0 0 14px;
 }
 
 .right-tab-header {
