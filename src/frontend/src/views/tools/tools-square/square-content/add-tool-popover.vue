@@ -243,9 +243,9 @@
   const {
     run: fetchAllToolsList,
   } = useRequest(ToolManageService.fetchToolsList, {
-    defaultValue: {} as any,
-    onSuccess: (data: any) => {
-      allToolsList.value = data.results || [];
+    defaultValue: [] as ToolInfo[],
+    onSuccess: (data: ToolInfo[]) => {
+      allToolsList.value = data || [];
     },
   });
 
@@ -254,9 +254,9 @@
   const {
     run: fetchRecentTools,
   } = useRequest(ToolManageService.fetchToolsList, {
-    defaultValue: {} as any,
-    onSuccess: (data: any) => {
-      recentToolsList.value = data.results || [];
+    defaultValue: [] as ToolInfo[],
+    onSuccess: (data: ToolInfo[]) => {
+      recentToolsList.value = data || [];
     },
   });
 
@@ -265,9 +265,9 @@
   const {
     run: fetchFavoriteTools,
   } = useRequest(ToolManageService.fetchToolsList, {
-    defaultValue: {} as any,
-    onSuccess: (data: any) => {
-      favoriteToolsList.value = (data.results || []).filter((t: ToolInfo) => t.favorite);
+    defaultValue: [] as ToolInfo[],
+    onSuccess: (data: ToolInfo[]) => {
+      favoriteToolsList.value = (data || []).filter((t: ToolInfo) => t.favorite);
     },
   });
 
@@ -276,9 +276,9 @@
     popoverSearchValue.value = '';
     rightActiveTab.value = 'recent';
     const scope = props.scopeParams || {};
-    fetchAllToolsList({ page: 1, page_size: 200, ...scope });
-    fetchRecentTools({ page: 1, page_size: 50, recent_used: true, ...scope } as any);
-    fetchFavoriteTools({ page: 1, page_size: 200, ...scope });
+    fetchAllToolsList({ status: 'published', ...scope });
+    fetchRecentTools({ recent_used: true, status: 'published', ...scope } as any);
+    fetchFavoriteTools({ status: 'published', ...scope });
   };
 
   // 左侧分组标签（排除固定标签）
@@ -522,11 +522,9 @@
 
 .right-tab-icon-clock {
   mask: url('@images/clock.svg') no-repeat center / contain;
-  mask: url('@images/clock.svg') no-repeat center / contain;
 }
 
 .right-tab-icon-star {
-  mask: url('@images/star.svg') no-repeat center / contain;
   mask: url('@images/star.svg') no-repeat center / contain;
 }
 

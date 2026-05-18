@@ -19,26 +19,21 @@ import ToolManageSources from '../source/tool-manage';
 
 export default  {
   /**
-   * @desc 工具列表
+   * @desc 工具列表（不再分页，直接返回数组）
    * @param { Object } params
    */
   fetchToolsList(params: {
-      offset?: number
-      limit?: number
       keyword?: string,
-      page: number,
-      page_size: number
       tags?: string[],
       scope_type?: string,
       scope_id?: string,
       binding_type?: string,
       status?: string[],
       sort?: string[],
+      my_created?: boolean,
+      recent_used?: boolean,
     }) {
-    return ToolManageSources.getToolsList(params).then(({ data }) =>  ({
-      ...data,
-      results: data.results.map((item: any) => new ToolInfo(item)),
-    }));
+    return ToolManageSources.getToolsList(params).then(({ data }) => data.map((item: any) => new ToolInfo(item)));
   },
   /**
    * @desc tag列表
