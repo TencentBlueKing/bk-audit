@@ -36,7 +36,12 @@ from services.web.scene.constants import (
     ResourceVisibilityType,
     VisibilityScope,
 )
-from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
+from services.web.scene.models import (
+    ResourceBinding,
+    ResourceBindingScene,
+    ResourceBindingSystem,
+    Scene,
+)
 from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     FieldCategory,
@@ -279,6 +284,72 @@ class ToolFavoriteTestCase(TestCase):
         self.assertEqual(tool_1_data["binding_type"], BindingType.PLATFORM_BINDING)
         self.assertEqual(tool_2_data["binding_type"], BindingType.SCENE_BINDING)
 
+    def test_list_tool_returns_visibility_snapshot(self):
+        """测试工具列表返回绑定可见范围快照"""
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            data = {"keyword": "", "page": 1, "page_size": 10}
+            result = self._call_resource_with_request(ListTool, data)
+
+        tool_1_data = next((t for t in result if t["uid"] == self.tool_1.uid), None)
+        tool_2_data = next((t for t in result if t["uid"] == self.tool_2.uid), None)
+
+        self.assertEqual(
+            tool_1_data["visibility"],
+            {
+                "binding_type": BindingType.PLATFORM_BINDING,
+                "visibility_type": VisibilityScope.ALL_VISIBLE,
+                "scene_ids": [],
+                "system_ids": [],
+            },
+        )
+        self.assertEqual(
+            tool_2_data["visibility"],
+            {
+                "binding_type": BindingType.SCENE_BINDING,
+                "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                "scene_ids": [self.scene_id],
+                "system_ids": [],
+            },
+        )
+
+    def test_list_tool_returns_visibility_system_ids(self):
+        """测试工具列表返回系统可见范围"""
+
+        ResourceBinding.objects.filter(resource_id=self.tool_1.uid).update(
+            visibility_type=VisibilityScope.SPECIFIC_SYSTEMS
+        )
+        binding = ResourceBinding.objects.get(resource_id=self.tool_1.uid)
+        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_job")
+
+        factory = APIRequestFactory()
+        django_request = factory.post('/fake-url/', {"keyword": ""}, format='json')
+        drf_request = Request(django_request)
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            response = ListTool().request({"keyword": ""}, _request=drf_request)
+
+        result = response.data if hasattr(response, "data") else response
+        tool_1_data = next((t for t in result if t["uid"] == self.tool_1.uid), None)
+        self.assertEqual(
+            tool_1_data["visibility"],
+            {
+                "binding_type": BindingType.PLATFORM_BINDING,
+                "visibility_type": VisibilityScope.SPECIFIC_SYSTEMS,
+                "scene_ids": [],
+                "system_ids": ["bk_job"],
+            },
+        )
+
+    def test_attach_visibility_metadata_uses_batch_queries(self):
+        """测试工具可见范围元数据批量查询，避免按工具 N+1 查询"""
+
+        with self.assertNumQueries(3):
+            ListTool.attach_visibility_metadata([self.tool_1, self.tool_2])
+
+        self.assertEqual(self.tool_1.visibility["binding_type"], BindingType.PLATFORM_BINDING)
+        self.assertEqual(self.tool_2.visibility["scene_ids"], [self.scene_id])
+
     def test_list_tool_favorite_first_ordering(self):
         """测试工具列表收藏优先排序"""
 
@@ -318,6 +389,62 @@ class ToolFavoriteTestCase(TestCase):
 
         # 验证返回空列表
         self.assertEqual(len(result), 0)
+
+    def test_list_tool_tags_include_favorite_tools(self):
+        """测试工具标签列表返回我的收藏虚拟标签"""
+
+        ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
+        ToolFavorite.objects.create(tool_uid=self.tool_2.uid, username=self.other_user)
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            result = self._call_resource_with_request(ListToolTags, {"status": None})
+
+        tag_counts = {item["tag_id"]: item["tool_count"] for item in result}
+        self.assertEqual(tag_counts[ToolTagsEnum.FAVORITE_TOOLS.value], 1)
+
+    def test_list_tool_tags_favorite_tools_filter_by_status_and_scope(self):
+        """测试我的收藏标签数量按状态和 scope 过滤"""
+
+        other_scene = Scene.objects.create(name="other-favorite-scene")
+        other_uid = str(uuid.uuid4())
+        other_tool = Tool.objects.create(
+            uid=other_uid,
+            version=1,
+            name="Other Scene Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            created_by=self.test_user,
+            config=self.tool_1.config,
+            is_deleted=False,
+            description="Other Scene Tool Desc",
+            updated_at=timezone.now(),
+        )
+        other_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=other_tool.uid,
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=other_binding, scene_id=other_scene.scene_id)
+
+        self.tool_1.status = PanelStatus.PUBLISHED
+        self.tool_1.save(update_fields=["status"])
+        self.tool_2.status = PanelStatus.UNPUBLISHED
+        self.tool_2.save(update_fields=["status"])
+        other_tool.status = PanelStatus.PUBLISHED
+        other_tool.save(update_fields=["status"])
+
+        ToolFavorite.objects.create(tool_uid=self.tool_1.uid, username=self.test_user)
+        ToolFavorite.objects.create(tool_uid=self.tool_2.uid, username=self.test_user)
+        ToolFavorite.objects.create(tool_uid=other_tool.uid, username=self.test_user)
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.test_user):
+            scope_result = self._call_resource_with_request(ListToolTags, {"status": None})
+            status_result = self._call_resource_with_request(ListToolTags, {"status": PanelStatus.PUBLISHED})
+
+        scope_counts = {item["tag_id"]: item["tool_count"] for item in scope_result}
+        status_counts = {item["tag_id"]: item["tool_count"] for item in status_result}
+        self.assertEqual(scope_counts[ToolTagsEnum.FAVORITE_TOOLS.value], 2)
+        self.assertEqual(status_counts[ToolTagsEnum.FAVORITE_TOOLS.value], 1)
 
     # ==================== 收藏状态在详情中的返回测试 ====================
 
