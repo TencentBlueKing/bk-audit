@@ -143,6 +143,7 @@
               :pagination="frontendPagination"
               remote-pagination
               stripe
+              @column-sort="handleColumnSort"
               @page-limit-change="handlePageLimitChange"
               @page-value-change="handlePageChange" />
           </div>
@@ -280,6 +281,12 @@
   // 缓存最近一次查询的账号类型
   const lastAccountType = ref('');
 
+  // 排序状态：默认按代币存量(代)逆序
+  const sortState = ref<{ column: string; type: string }>({
+    column: PROFILE_FIELDS.COIN_BALANCE_UNIT,
+    type: 'desc',
+  });
+
   // 搜索过滤（main_openid_list 改用账号宽表后，旧的总支出字段不再返回，按接口返回顺序展示）
   const filteredGameList = computed(() => {
     let list = gameList.value;
@@ -291,11 +298,24 @@
     return list;
   });
 
+  // 排序后的列表
+  const sortedGameList = computed(() => {
+    const list = [...filteredGameList.value];
+    const { column, type } = sortState.value;
+    if (!column || !type) return list;
+    list.sort((a, b) => {
+      const valA = Number(a[column]) || 0;
+      const valB = Number(b[column]) || 0;
+      return type === 'asc' ? valA - valB : valB - valA;
+    });
+    return list;
+  });
+
   // 前端分页：根据当前页码和每页条数截取数据
   const paginatedGameList = computed(() => {
     const start = (pagination.value.current - 1) * pagination.value.limit;
     const end = start + pagination.value.limit;
-    return filteredGameList.value.slice(start, end);
+    return sortedGameList.value.slice(start, end);
   });
 
   // 前端分页配置
@@ -614,7 +634,7 @@
         );
       },
     },
-    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
+    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
     { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
     { label: () => `${t('累计赠送')} (¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_YUAN] ?? '--') },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
@@ -676,6 +696,12 @@
 
   const handlePageLimitChange = (limit: number) => {
     pagination.value.limit = limit;
+    pagination.value.current = 1;
+  };
+
+  // 排序事件处理
+  const handleColumnSort = ({ column, type }: { column: string; type: string }) => {
+    sortState.value = { column, type };
     pagination.value.current = 1;
   };
 
