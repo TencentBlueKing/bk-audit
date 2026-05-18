@@ -123,7 +123,6 @@
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
           :tool-config="toolDetailMap[tool.uid]?.config"
-          :tool-name="tool.name"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail" />
         <!-- 游戏数据详情 -->
@@ -132,7 +131,6 @@
           v-show="activeUid === tool.uid"
           :game-data="gameDetailDataMap[tool.uid]"
           :initial-tab="gameDetailInitialTabMap[tool.uid]"
-          :tool-name="tool.name"
           :tool-uid="gameDetailToolUidMap[tool.uid]" />
         <!-- 普通工具 -->
         <tool-content
@@ -641,6 +639,7 @@
       name: gameData.name,
       openid: gameData.openid || '',
       gameid: gameData.gameid || '',
+      ctx: gameData.ctx || '',
       wechat: gameData.wechat || '',
       coinBalance: gameData.coinBalance || 0,
       totalRecharge: gameData.totalRecharge || 0,

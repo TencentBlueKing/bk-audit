@@ -311,6 +311,7 @@
     name: string;
     openid: string;
     gameid: string | number;
+    ctx: string;
     wechat: string;
     coinBalance: number;
     totalRecharge: number;
@@ -322,7 +323,6 @@
     gameData?: GameData;
     initialTab?: string;
     toolUid?: string;
-    toolName?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -330,6 +330,7 @@
       name: '',
       openid: '',
       gameid: '',
+      ctx: '',
       wechat: '',
       coinBalance: 0,
       totalRecharge: 0,
@@ -338,7 +339,6 @@
     }),
     initialTab: '',
     toolUid: '',
-    toolName: '',
   });
 
   const { t } = useI18n();
@@ -941,15 +941,20 @@
               if (totalLen > maxLen) maxLen = totalLen;
             }
           }
-          colWidths.push({ wch: Math.min(maxLen + 2, 50) });
+          colWidths.push({ wch: Math.min(maxLen + 2, 200) });
         }
         ws['!cols'] = colWidths;
         // 表头自动筛选
         ws['!autofilter'] = { ref: ws['!ref'] };
       });
 
-      // 导出文件，文件名为工具名
-      const fileName = props.toolName || props.gameData.name || t('游戏审计数据');
+      // 导出文件，文件名格式：企业微信名_表格名_日期_时分秒
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      const userName = props.gameData.ctx || '';
+      const sheetName = props.gameData.name || t('游戏审计数据');
+      const fileName = userName ? `${userName}_${sheetName}_${dateStr}_${timeStr}` : `${sheetName}_${dateStr}_${timeStr}`;
       XLSX.writeFile(wb, `${fileName}.xlsx`);
 
       isExportPopoverShow.value = false;
