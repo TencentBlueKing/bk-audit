@@ -138,6 +138,8 @@ class IAMGroupManager:
         # 构建多资源类型权限结构
         multi_permissions = []
         for resource_type, grouped_actions in action_groups.items():
+            # 场景子资源使用 scene 作为 path_type，其他资源类型保持原样
+            # 对于 scene 资源类型本身，path_type 也是 scene，这是正确的
             path_type = "scene" if resource_type in SCENE_CHILD_RESOURCE_TYPES else resource_type
             multi_permissions.append(
                 {
