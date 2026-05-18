@@ -22,8 +22,6 @@
       :loading="isQuerying"
       @query="handleQuery"
       @reset="handleReset" />
-
-    <!-- 全部为空时，统一展示一个"暂无数据"（隐藏游戏列表场景下，仅以用户信息为空判断） -->
     <template
       v-if="hasQueried && !isQuerying && !userInfoLoading && !gameListLoading
         && isUserInfoEmpty && (hideGameList || gameList.length === 0)">
@@ -35,8 +33,7 @@
       </bk-exception>
     </template>
 
-    <!-- 用户信息 - 独立 loading（加载完成且为空时整块不渲染，避免中间出现灰色占位） -->
-    <template v-else-if="hasQueried || isQuerying">
+    <template v-else-if="hasQueried || isQuerying || gameListLoading || userInfoLoading">
       <bk-loading
         v-if="isQuerying || userInfoLoading || !isUserInfoEmpty"
         class="user-info-loading-wrapper"
@@ -50,7 +47,6 @@
           @view-detail="handleViewDetail" />
       </bk-loading>
 
-      <!-- 分割线（隐藏游戏列表 或 用户信息已加载完且为空时不展示） -->
       <div
         v-if="!hideGameList && !(!isQuerying && !userInfoLoading && isUserInfoEmpty)"
         class="section-divider" />
@@ -176,6 +172,12 @@
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
     toolName?: string;      // 工具名称，用于导出文件命名
+    toolConfig?: {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
+      property?: {
+        scene_id?: number | string;
+      };
+      [key: string]: any;
+    };
   }
 
   interface Emits {
@@ -185,6 +187,7 @@
   const props = withDefaults(defineProps<Props>(), {
     toolUid: '',
     toolName: '',
+    toolConfig: () => ({}),
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -450,28 +453,15 @@
 
         // 微信/QQ/openid 搜索时，游戏列表返回后需要级联查询用户信息
         if (['form_wechat', 'form_qq', 'openid'].includes(lastAccountType.value)) {
-          // openid 搜索且仅有1条结果：自动跳转游戏详情，且工具页隐藏游戏列表区块（仅展示用户信息）
-          if (lastAccountType.value === 'openid' && results.length === 1) {
-            hideGameList.value = true;
-            const gameData = mapGameData(results[0]);
-            // 此时用户信息接口尚未返回，mapGameData 中 ctx 可能为空
-            // 使用从游戏列表首条结果中提取的 openidListFirstCtx 作为 ctx，确保工具名称能正确显示用户名
-            if (!gameData.ctx && openidListFirstCtx.value) {
-              gameData.ctx = openidListFirstCtx.value;
-            }
-            // 赋值 openid_list_selected_* 变量并跳转游戏详情
-            emit('openGameDetail', gameData, 'overview');
-          } else {
-            // 多条 / 0 条：正常展示游戏列表区块
-            hideGameList.value = false;
-          }
+          // 正常展示游戏列表区块
+          hideGameList.value = false;
 
-          // openid 搜索时，结果返回后才展示工具页内容（避免 1 条时闪现"暂无用户信息"）
+          // openid 搜索时，结果返回后展示工具页内容
           if (lastAccountType.value === 'openid') {
             hasQueried.value = true;
           }
 
-          // 有结果时，用 openid_list_first_ctx 查询用户信息（1 条时也要查，所以不再提前 return）
+          // 有结果时，用 openid_list_first_ctx 查询用户信息
           if (openidListFirstCtx.value) {
             executeUserInfoByCtx(openidListFirstCtx.value);
           }
@@ -555,11 +545,26 @@
     emit('openGameDetail', mapGameData(gameData), 'login');
   };
 
+  const toolSceneId = computed(() => {
+    const id = props.toolConfig?.property?.scene_id;
+    return (id !== undefined && id !== null && id !== '') ? String(id) : '';
+  });
+
+  const buildSceneRiskQuery = (extra: Record<string, string> = {}): Record<string, string> => {
+    const query: Record<string, string> = { ...extra };
+    if (toolSceneId.value) {
+      query.scene_id = toolSceneId.value;
+      query.scope_id = toolSceneId.value;
+      query.scope_type = 'scene';
+    }
+    return query;
+  };
+
   // 点击责任单数跳转 - 新开标签页至场景风险，带入openid筛选
   const handleJumpToSceneRisk = (openid: string) => {
     const routeData = router.resolve({
       name: 'sceneRiskManageList',
-      query: { openid },
+      query: buildSceneRiskQuery({ openid }),
     });
     window.open(routeData.href, '_blank');
   };
@@ -676,7 +681,7 @@
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
-    // openid 类型查询时，先不设置 hasQueried，等结果返回后再决定（避免1条时闪现"暂无用户信息"）
+    // openid 类型查询时，先不设置 hasQueried，等结果返回后再决定
     hasQueried.value = accountType !== 'openid';
     // 立即进入"查询中"状态，确保 loading 占位立刻显示（涵盖 openid 类型 hasQueried=false 的场景）
     isQuerying.value = true;
@@ -723,9 +728,8 @@
       // ===== 选择openid =====
       // 1. 查询"游戏列表" main_openid_list（输入 form_openid=openid）
       //    成功后 onSuccess 中自动：
-      //    a. 仅1条 → 自动跳转游戏详情 + 隐藏游戏列表区块 + 仍触发查询用户信息（用于返回工具页时展示）
-      //    b. 大于1条 / 0 条 → 触发查询用户信息 + 展示游戏列表区块
-      // 因此 openid 类型查询时，先不设置 hasQueried，等结果返回后再设为 true
+      //    a. 展示游戏列表区块
+      //    b. 触发查询用户信息
       hasQueried.value = false;
       lastQueryParams.value = { form_openid: accountId };
       executeDataSource('main_openid_list', {
@@ -761,7 +765,7 @@
     const { wecom } = userInfo.value;
     const routeData = router.resolve({
       name: 'sceneRiskManageList',
-      query: wecom ? { operator: wecom } : {},
+      query: buildSceneRiskQuery(wecom ? { operator: wecom } : {}),
     });
     window.open(routeData.href, '_blank');
   };

@@ -60,6 +60,10 @@ export default class ToolDetail {
   data_search_config_type: string;
   is_bkvision: boolean;
   config: {
+    // 智能页面工具（如审计用户画像）携带的属性，用于风险卡片跳转风险时携带场景 id
+    property?: {
+      scene_id?: number | string;
+    };
     referenced_tables: Array<{
       table_name: string | null;
       alias: string | null;
