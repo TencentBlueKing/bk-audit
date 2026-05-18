@@ -2164,7 +2164,10 @@ class TestToolResources(TestCase):
         ):
             res = ListTool()
             response = res.request(data, _request=drf_request)
-            return response.data.get("results", [])
+            data = response.data if hasattr(response, "data") else response
+            if isinstance(data, list):
+                return data
+            return data.get("results", [])
 
     def test_tool_list(self):
         """测试跨场景视角返回场景工具与平台工具并集"""

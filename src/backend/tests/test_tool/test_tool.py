@@ -66,7 +66,9 @@ from services.web.tool.serializers import (
     PlatformSceneToolUpdateRequestSerializer,
     SceneScopeToolCreateRequestSerializer,
     SceneScopeToolUpdateRequestSerializer,
+    ToolListResponseSerializer,
 )
+from services.web.tool.views import ToolViewSet
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -218,7 +220,27 @@ class ToolResourceTestCase(TestCase):
                 response = resource.request(request_data, _request=drf_request)
         else:
             response = resource.request(request_data, _request=drf_request)
-        return response.data.get("results", [])
+        if hasattr(response, "data"):
+            if isinstance(response.data, list):
+                return response.data
+            return response.data.get("results", [])
+        return response
+
+    def test_list_tool_route_disables_paginate(self):
+        """测试工具列表路由不启用框架分页"""
+
+        list_route = next(
+            route
+            for route in ToolViewSet.resource_routes
+            if route.method == "GET" and route.endpoint == "" and route.resource_class.__name__ == ListTool.__name__
+        )
+        self.assertFalse(list_route.enable_paginate)
+
+    def test_list_tool_declares_response_serializer(self):
+        """测试工具列表声明响应序列化器，确保 Swagger 生成结构化响应"""
+
+        self.assertIs(ListTool.ResponseSerializer, ToolListResponseSerializer)
+        self.assertTrue(ListTool.many_response_data)
 
     def test_list_tool(self):
         data = {"keyword": "SQL", "page": 1, "page_size": 10}
@@ -233,9 +255,27 @@ class ToolResourceTestCase(TestCase):
         self.assertEqual(binding_type_map["SQL Tool"], BindingType.PLATFORM_BINDING)
         self.assertEqual(binding_type_map["BK Vision Tool"], BindingType.SCENE_BINDING)
 
+        extra_uid = str(uuid.uuid4())
+        Tool.objects.create(
+            uid=extra_uid,
+            version=1,
+            name="Extra Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            config=self.sql_tool.config,
+            is_deleted=False,
+            description="Extra Tool Desc",
+            updated_at=timezone.now(),
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=extra_uid,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
         data_paged = {"keyword": "", "page": 1, "page_size": 2}
         paged_result = self._call_resource_with_request(ListTool, data_paged)
-        self.assertEqual(len(paged_result), 2)
+        self.assertEqual(len(paged_result), 3)
 
         self.sql_tool.status = PanelStatus.PUBLISHED
         self.sql_tool.save(update_fields=["status"])
@@ -644,7 +684,8 @@ class ToolResourceTestCase(TestCase):
             _request=drf_request,
         )
 
-        self.assertEqual(response.data.get("results", []), [])
+        data = response.data if hasattr(response, "data") else response
+        self.assertEqual(data, [])
 
     def test_list_tool_filter_by_status_list(self):
         """测试按状态列表过滤工具"""

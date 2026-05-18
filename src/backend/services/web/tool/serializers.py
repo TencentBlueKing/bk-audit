@@ -29,7 +29,7 @@ from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeQueryField, ScopeType
 from services.web.common.serializers import ScopeQuerySerializer
-from services.web.scene.constants import BindingType, PanelStatus
+from services.web.scene.constants import BindingType, PanelStatus, VisibilityScope
 from services.web.scene.serializers import ResourceBindingInputSerializer
 from services.web.tool.constants import (
     ApiToolConfig,
@@ -282,6 +282,7 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tool
+        validators = []
         fields = [
             "uid",
             "name",
@@ -297,6 +298,33 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
         ]
 
 
+class ToolVisibilitySerializer(serializers.Serializer):
+    """工具绑定可见范围。"""
+
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        label=gettext_lazy("绑定类型"),
+    )
+    visibility_type = serializers.ChoiceField(
+        choices=VisibilityScope.choices,
+        required=False,
+        allow_null=True,
+        label=gettext_lazy("可见范围类型"),
+    )
+    scene_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        label=gettext_lazy("场景ID列表"),
+    )
+    system_ids = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        label=gettext_lazy("系统ID列表"),
+    )
+
+
 class ToolSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tool
@@ -308,6 +336,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
+    visibility = ToolVisibilitySerializer(required=False, label=gettext_lazy("可见范围"))
     binding_type = serializers.ChoiceField(
         choices=BindingType.choices,
         required=False,
@@ -318,6 +347,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tool
+        validators = []
         fields = [
             "uid",
             "name",
@@ -335,6 +365,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "is_bkvision",
             "favorite",
             "status",
+            "visibility",
             "binding_type",
         ]
 
