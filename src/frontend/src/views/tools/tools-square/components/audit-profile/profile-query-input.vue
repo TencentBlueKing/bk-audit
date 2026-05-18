@@ -51,6 +51,8 @@
     <div class="query-actions">
       <bk-button
         class="query-btn mr8"
+        :disabled="isThrottled || loading"
+        :loading="loading"
         theme="primary"
         @click="handleQuery">
         {{ t('查询') }}
@@ -70,6 +72,10 @@
 
   import useMessage from '@hooks/use-message';
 
+  interface Props {
+    loading?: boolean;
+  }
+
   interface Emits {
     (e: 'query', accountType: string, accountId: string): void;
     (e: 'reset'): void;
@@ -81,9 +87,16 @@
     getFormValues: () => { accountType: string; accountId: string };
   }
 
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const { messageWarn } = useMessage();
+
+
+  const isThrottled = ref(false);
+  const throttleDelay = 2000; // 2秒节流间隔
 
   const accountTypes = [
     { label: t('企业微信'), value: 'ctx' },
@@ -107,6 +120,9 @@
 
   // 查询
   const handleQuery = () => {
+    if (isThrottled.value || props.loading) {
+      return;
+    }
     const trimmedAccountId = accountId.value.trim();
     if (!trimmedAccountId) {
       messageWarn(t('账号标识不能为空'));
@@ -114,6 +130,12 @@
     }
     accountId.value = trimmedAccountId;
     emit('query', selectedAccountType.value, trimmedAccountId);
+
+
+    isThrottled.value = true;
+    setTimeout(() => {
+      isThrottled.value = false;
+    }, throttleDelay);
   };
 
   // 输入框 keydown 事件
