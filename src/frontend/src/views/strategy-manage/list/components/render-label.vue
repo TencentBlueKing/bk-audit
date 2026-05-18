@@ -103,6 +103,7 @@
     tag_name: string;
     strategy_count: number;
     icon: string;
+    imgIcon?: string;
   }
   interface Emits {
     (e: 'change', showLabel: boolean):void;
