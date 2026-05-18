@@ -37,6 +37,7 @@
     <div class="tools-square-body">
       <!-- 左侧标签 -->
       <div
+        v-show="!hasOpenedTools"
         class="sidebar-wrapper"
         :class="{ 'is-collapsed': isSidebarCollapsed }">
         <!-- 收缩状态 -->
@@ -116,6 +117,7 @@
           <tool-info-panel
             v-show="hasOpenedTools"
             :active-uid="activeToolUid"
+            :scene-name-map="sceneNameMap"
             :scope-params="scopeParams"
             :tags-enums="tagsEnums"
             :tool-list="openedTools"
@@ -152,7 +154,6 @@
   import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import ellipsisIcon from '@/images/ellipsis.svg';
-  import favoriteIcon from '@/images/favorite.svg';
   import foldLeftIcon from '@/images/fold-left.svg';
   import foldRightIcon from '@/images/fold-right.svg';
   import infoBlueSvg from '@/images/info-blue.svg';
@@ -398,11 +399,8 @@
         0: 'quanbu-xuanzhong',
         1: 'morentouxiang',
         2: 'shijian',
+        3: 'wodeguanzhu',
         4: 'weifenpei',
-      };
-      // index 3 为"我的收藏"，使用图片图标
-      const imgIconMap: Record<number, string> = {
-        3: favoriteIcon,
       };
       // 前5项为固定分类，不参与排序；后续为动态标签
       const fixedTags = data.slice(0, FIXED_TAG_COUNT);
@@ -412,7 +410,6 @@
           ...item,
           strategy_count: item.tool_count ?? 0,
           icon: iconMap[index] || 'tag',
-          ...(imgIconMap[index] ? { imgIcon: imgIconMap[index], icon: undefined } : {}),
         })),
         ...dynamicTags.map((item: any) => ({
           ...item,
