@@ -782,6 +782,8 @@
     };
     // 重置游戏列表
     gameList.value = [];
+    gameSearchKey.value = '';
+    sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.count = 0;
     pagination.value.current = 1;
   };
