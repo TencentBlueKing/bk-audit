@@ -91,12 +91,6 @@ class SceneViewSet(ResourceViewSet):
         ResourceRoute("PATCH", resource.scene.update_scene_info, endpoint="update_scene_info", pk_field="scene_id"),
         ResourceRoute(
             "GET",
-            resource.scene.get_scene_permission_systems,
-            endpoint="scene_permission_systems",
-            pk_field="scene_id",
-        ),
-        ResourceRoute(
-            "GET",
             resource.scene.get_scene_members,
             endpoint="scene_members",
             pk_field="scene_id",
