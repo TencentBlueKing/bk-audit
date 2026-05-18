@@ -102,10 +102,10 @@
     },
   });
 
-  // 执行工具
+  // 执行工具（使用 toolDetails.uid 作为真实工具uid来调用后端API）
   const executeTool = () => {
     fetchToolsExecute({
-      uid: props.uid,
+      uid: props.toolDetails?.uid || props.uid,
       params: {
         tool_variables: props.searchList.map(item => ({
           raw_name: item.raw_name,
