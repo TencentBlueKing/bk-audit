@@ -18,93 +18,113 @@
   <div
     class="tools-square"
     :class="{ 'is-animating': isSidebarAnimating }">
-    <!-- 左侧标签 -->
+    <!-- 正在使用中的工具提示条（置顶全宽） -->
     <div
-      class="sidebar-wrapper"
-      :class="{ 'is-collapsed': isSidebarCollapsed }">
-      <!-- 收缩状态 -->
-      <div
-        v-show="isSidebarCollapsed"
-        class="sidebar-collapsed"
-        @click="isSidebarCollapsed = false">
-        <div class="collapsed-inner">
-          <span class="collapsed-text">快捷筛选</span>
-          <img
-            class="collapsed-toggle-icon"
-            :src="foldRightIcon">
-        </div>
-      </div>
-      <!-- 展开状态 -->
-      <div
-        v-show="!isSidebarCollapsed"
-        class="sidebar-expanded">
-        <!-- 场景系统选择器 -->
-        <div class="scene-selector-wrapper">
-          <scene-system-selector
-            v-model="selectedScene"
-            :list-scope="['scene']"
-            :popover-width="210"
-            scene-permission="view_scene"
-            system-permission="view_system"
-            width="210px"
-            @change="handleSceneChange" />
-        </div>
-        <div class="sidebar-header">
-          <span class="sidebar-title">快捷筛选</span>
-          <img
-            class="sidebar-toggle-icon"
-            :src="foldLeftIcon"
-            @click="isSidebarCollapsed = true">
-        </div>
-        <render-label
-          ref="renderLabelRef"
-          active="-3"
-          :final="3"
-          :labels="strategyLabelList"
-          :render-style="renderStyle"
-          :total="0"
-          :upgrade-total="0"
-          @checked="handleChecked" />
-        <!-- 内侧折叠图标，垂直居中靠右 -->
-        <div
-          class="sidebar-collapse-trigger"
-          @click="isSidebarCollapsed = true">
-          <img
-            class="ellipsis-icon"
-            :src="ellipsisIcon">
-        </div>
-      </div>
+      v-if="activeToolsInScene.length > 0 && !hasOpenedTools"
+      class="tool-using-tip">
+      <img
+        class="tip-icon"
+        :src="infoBlueSvg">
+      <span class="tip-text">
+        {{ t('你有') }} <strong class="tip-count">{{ activeToolsInScene.length }}</strong> {{ t('个工具正在使用中') }}
+      </span>
+      <span
+        class="tip-link"
+        @click="handleContinueUsingTool">
+        {{ t('点击继续') }}
+      </span>
     </div>
-
-    <!-- 右侧内容-->
-    <div
-      class="content-content"
-      :class="{ 'has-shadow': hasOpenedTools }">
-      <div class="content-card">
+    <div class="tools-square-body">
+      <!-- 左侧标签 -->
+      <div
+        class="sidebar-wrapper"
+        :class="{ 'is-collapsed': isSidebarCollapsed }">
+        <!-- 收缩状态 -->
         <div
-          v-show="!hasOpenedTools"
-          class="content-card-wrapper">
-          <content-card
-            ref="ContentCardRef"
-            :my-created="tagId === '-4'"
-            :recent-used="tagId === '-5'"
-            :scope-params="scopeParams"
-            :tag-id="tagId"
-            :tags-enums="tagsEnums"
-            @change="handleChange"
-            @open-tool="handleOpenTool" />
+          v-show="isSidebarCollapsed"
+          class="sidebar-collapsed"
+          @click="isSidebarCollapsed = false">
+          <div class="collapsed-inner">
+            <span class="collapsed-text">快捷筛选</span>
+            <img
+              class="collapsed-toggle-icon"
+              :src="foldRightIcon">
+          </div>
         </div>
-        <tool-info-panel
-          v-show="hasOpenedTools"
-          :active-uid="activeToolUid"
-          :scope-params="scopeParams"
-          :tags-enums="tagsEnums"
-          :tool-list="openedTools"
-          @add-tool="handleAddToolFromPopover"
-          @close="handleCloseToolPanel"
-          @close-tab="handleCloseTab"
-          @go-home="handleGoHomePage"
-          @switch-tab="handleSwitchTab" />
+        <!-- 展开状态 -->
+        <div
+          v-show="!isSidebarCollapsed"
+          class="sidebar-expanded">
+          <!-- 场景系统选择器 -->
+          <div class="scene-selector-wrapper">
+            <scene-system-selector
+              v-model="selectedScene"
+              :list-scope="['scene']"
+              :popover-width="210"
+              scene-permission="view_scene"
+              system-permission="view_system"
+              width="210px"
+              @change="handleSceneChange" />
+          </div>
+          <div class="sidebar-header">
+            <span class="sidebar-title">快捷筛选</span>
+            <img
+              class="sidebar-toggle-icon"
+              :src="foldLeftIcon"
+              @click="isSidebarCollapsed = true">
+          </div>
+          <render-label
+            ref="renderLabelRef"
+            active="-3"
+            :final="4"
+            :labels="strategyLabelList"
+            :render-style="renderStyle"
+            :total="0"
+            :upgrade-total="0"
+            @checked="handleChecked" />
+          <!-- 内侧折叠图标，垂直居中靠右 -->
+          <div
+            class="sidebar-collapse-trigger"
+            @click="isSidebarCollapsed = true">
+            <img
+              class="ellipsis-icon"
+              :src="ellipsisIcon">
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧内容-->
+      <div
+        class="content-content"
+        :class="{ 'has-shadow': hasOpenedTools }">
+        <div class="content-card">
+          <div
+            v-show="!hasOpenedTools"
+            class="content-card-wrapper">
+            <content-card
+              ref="ContentCardRef"
+              :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
+              :my-created="tagId === '-4'"
+              :recent-used="tagId === '-5'"
+              :scene-name-map="sceneNameMap"
+              :scope-params="scopeParams"
+              :tag-id="tagId"
+              :tags-enums="tagsEnums"
+              @change="handleChange"
+              @open-tool="handleOpenTool" />
+          </div>
+          <tool-info-panel
+            v-show="hasOpenedTools"
+            :active-uid="activeToolUid"
+            :scope-params="scopeParams"
+            :tags-enums="tagsEnums"
+            :tool-list="openedTools"
+            @add-tool="handleAddToolFromPopover"
+            @close="handleCloseToolPanel"
+            @close-tab="handleCloseTab"
+            @go-home="handleGoHomePage"
+            @switch-tab="handleSwitchTab" />
+        </div>
       </div>
     </div>
   </div>
@@ -112,8 +132,10 @@
 
 <script setup lang='ts'>
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
 
   import ToolInfo from '@model/tool/tool-info';
@@ -130,8 +152,10 @@
   import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import ellipsisIcon from '@/images/ellipsis.svg';
+  import favoriteIcon from '@/images/favorite.svg';
   import foldLeftIcon from '@/images/fold-left.svg';
   import foldRightIcon from '@/images/fold-right.svg';
+  import infoBlueSvg from '@/images/info-blue.svg';
 
   interface TagItem {
     tag_id: string;
@@ -148,6 +172,23 @@
 
   const renderLabelRef = ref();
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
+
+  // 场景ID → 场景名称映射
+  const sceneNameMap = ref<Record<number, string>>({});
+  const {
+    run: fetchSceneAll,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+      const map: Record<number, string> = {};
+      data.forEach((item) => {
+        map[item.scene_id] = item.name;
+      });
+      sceneNameMap.value = map;
+    },
+  });
+  // 初始化获取场景列表
+  fetchSceneAll();
   const tagsEnums = ref<Array<TagItem>>([]);
   const tagId = ref('');
   const strategyLabelList = ref<Array<TagItem>>([]);
@@ -160,6 +201,7 @@
   const isReturningHome = ref(false);
   const route = useRoute();
   const router = useRouter();
+  const { t } = useI18n();
 
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
@@ -194,6 +236,36 @@
     setDrillDownParams,
     resetForDrillDown,
   } = useToolTabs();
+
+  // 当前场景下所有工具的 uid 集合
+  const sceneToolUids = ref<Set<string>>(new Set());
+
+  // 获取当前场景下的全量工具 uid
+  const {
+    run: fetchSceneAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      sceneToolUids.value = new Set(data.map(item => item.uid));
+    },
+  });
+
+  // 监听场景切换，刷新当前场景下的全量工具 uid
+  watch(() => scopeParams.value, () => {
+    fetchSceneAllTools({ ...scopeParams.value, status: 'published' });
+  }, { immediate: true, deep: true });
+
+  // 当前场景下正在使用的工具（openedTools 与场景全量工具的交集）
+  const activeToolsInScene = computed(() => openedTools.value.filter(tool => sceneToolUids.value.has(tool.uid)));
+
+  // 点击继续使用工具
+  const handleContinueUsingTool = () => {
+    const lastTool = openedTools.value[openedTools.value.length - 1];
+    if (lastTool) {
+      switchTab(lastTool.uid);
+      handleOpenTool(lastTool);
+    }
+  };
 
   const routeUid = route.params.uid as string;
   const isDrillDownRoute = !!(routeUid && (route.query.drillKey || route.query.drillConfig));
@@ -314,8 +386,8 @@
     refreshTagsList();
   };
 
-  // 固定分类数量（全部工具、我创建的、最近使用、无标签）
-  const FIXED_TAG_COUNT = 4;
+  // 固定分类数量（全部工具、我创建的、最近使用、我的收藏、无标签）
+  const FIXED_TAG_COUNT = 5;
 
   const {
     run: fetchToolsTagsList,
@@ -326,9 +398,13 @@
         0: 'quanbu-xuanzhong',
         1: 'morentouxiang',
         2: 'shijian',
-        3: 'weifenpei',
+        4: 'weifenpei',
       };
-      // 前4项为固定分类，不参与排序；后续为动态标签
+      // index 3 为"我的收藏"，使用图片图标
+      const imgIconMap: Record<number, string> = {
+        3: favoriteIcon,
+      };
+      // 前5项为固定分类，不参与排序；后续为动态标签
       const fixedTags = data.slice(0, FIXED_TAG_COUNT);
       const dynamicTags = data.slice(FIXED_TAG_COUNT);
       strategyLabelList.value = [
@@ -336,6 +412,7 @@
           ...item,
           strategy_count: item.tool_count ?? 0,
           icon: iconMap[index] || 'tag',
+          ...(imgIconMap[index] ? { imgIcon: imgIconMap[index], icon: undefined } : {}),
         })),
         ...dynamicTags.map((item: any) => ({
           ...item,
@@ -468,10 +545,58 @@
 .tools-square {
   position: absolute;
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100%;
   background-color: #f5f7fa;
   inset: 0;
+
+  .tool-using-tip {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    width: calc(100% - 2px);
+    height: 40px;
+    padding: 0 12px;
+    margin: 0 1px;
+    font-size: 12px;
+    line-height: 36px;
+    color: #4d4f56;
+    background: #f0f5ff;
+    border: 1px solid #cddffe;
+    border-top: none;
+    box-shadow: 0 2px 4px 0 #e1e8f4;
+    align-items: center;
+    flex-shrink: 0;
+
+    .tip-icon {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+
+    .tip-text {
+      margin-right: 8px;
+    }
+
+    .tip-link {
+      color: #5897ff;
+      cursor: pointer;
+
+      &:hover {
+        color: #1768ef;
+      }
+    }
+  }
+
+  .tools-square-body {
+    display: flex;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
 
   .sidebar-wrapper {
     height: 100%;
