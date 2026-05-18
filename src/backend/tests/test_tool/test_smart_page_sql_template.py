@@ -63,6 +63,34 @@ class TestSmartPageConfig(SimpleTestCase):
         self.assertEqual(model.data_sources[0].data_source_type, "sql_template")
         self.assertEqual(model.data_sources[0].config.sql_template, "SELECT 1")
 
+    def test_should_validate_custom_property(self):
+        cfg = {
+            "marker_type": "risk_profile",
+            "property": {
+                "frontend_component": "risk-profile",
+                "show_export": True,
+                "default_filters": {"risk_level": ["high"]},
+            },
+            "data_sources": [],
+        }
+        model = SmartPageToolConfig.model_validate(cfg)
+        self.assertEqual(
+            model.property,
+            {
+                "frontend_component": "risk-profile",
+                "show_export": True,
+                "default_filters": {"risk_level": ["high"]},
+            },
+        )
+
+    def test_should_default_custom_property_to_empty_dict(self):
+        model = SmartPageToolConfig.model_validate({"data_sources": []})
+        self.assertEqual(model.property, {})
+
+    def test_should_reject_non_dict_custom_property(self):
+        with self.assertRaises(ValidationError):
+            SmartPageToolConfig.model_validate({"property": ["invalid"]})
+
     def test_should_reject_duplicate_datasource_name(self):
         cfg = {
             "data_sources": [
