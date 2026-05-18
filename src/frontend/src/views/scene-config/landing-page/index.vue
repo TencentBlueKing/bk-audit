@@ -63,7 +63,7 @@
                 <img
                   class="qw-icon"
                   src="@/images/qw.svg">
-                iegsc_helper {{ t('IEG安全助手') }}
+                <span class="helper-text">iegsc_helper {{ t('IEG安全助手') }}</span>
               </span>
               {{ t('申请创建审计场景') }}
             </p>
@@ -245,7 +245,8 @@
 }
 
 .permission-desc {
-  margin: 0 0 10px;
+  position: relative;
+  display: inline-block;
   font-size: 15px;
   line-height: 1.7;
   color: #63656e;
@@ -253,7 +254,7 @@
   span {
     display: inline-flex;
     color: #3b7eff;
-    vertical-align: baseline;
+    vertical-align: middle;
     cursor: pointer;
     align-items: center;
     gap: 4px;
@@ -262,6 +263,12 @@
   .qw-icon {
     width: 18px;
     height: 18px;
+    margin-top: -4px;
+  }
+
+  .helper-text {
+    margin-top: -4px;
+    vertical-align: middle;
   }
 }
 
