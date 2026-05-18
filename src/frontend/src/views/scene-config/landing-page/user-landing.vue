@@ -42,65 +42,99 @@
 
         <!-- 场景列表卡片 -->
         <div class="landing-content">
-          <div class="section-header">
-            <span>{{ t('你已有') }}</span>
-            <span class="scene-count">{{ sceneList.length }}</span>
-            <span>{{ t('个场景的使用权限，可为其申请配置权限') }}</span>
-            <bk-icon
-              class="info-icon"
-              type="info-circle" />
-          </div>
+          <template v-if="sceneList.length > 0">
+            <div class="section-header">
+              <span>{{ t('你已有') }}</span>
+              <span class="scene-count">{{ sceneList.length }}</span>
+              <span>{{ t('个场景的使用权限，可为其申请配置权限') }}</span>
+              <bk-icon
+                class="info-icon"
+                type="info-circle" />
+            </div>
 
-          <div
-            v-if="sceneList.length > 0"
-            class="scene-list">
-            <div
-              v-for="item in sceneList"
-              :key="item.scene_id"
-              class="scene-item">
-              <div class="scene-info">
-                <div class="scene-name-row">
-                  <span class="scene-name">{{ item.name }}</span>
-                  <template v-if="(sceneManagers[item.scene_id] || []).length > 0">
-                    <audit-icon
-                      class="admin-icon"
-                      type="user" />
-                    <span class="admin-name">
-                      {{ sceneManagers[item.scene_id].map(m => `${m.id}(${m.name})`).join('、') }}
-                    </span>
-                  </template>
-                </div>
-                <div class="scene-desc">
-                  {{ item.description || t('暂无描述') }}
+            <div class="scene-list">
+              <div
+                v-for="item in sceneList"
+                :key="item.scene_id"
+                class="scene-item">
+                <div class="scene-info">
+                  <div class="scene-name-row">
+                    <span class="scene-name">{{ item.name }}</span>
+                    <template v-if="(sceneManagers[item.scene_id] || []).length > 0">
+                      <audit-icon
+                        class="admin-icon"
+                        type="user" />
+                      <span class="admin-name">
+                        {{ sceneManagers[item.scene_id].map(m => `${m.id}(${m.name})`).join('、') }}
+                      </span>
+                    </template>
+                  </div>
+                  <div class="scene-desc">
+                    {{ item.description || t('暂无描述') }}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div
-            v-else
-            class="list-empty">
-            {{ t('暂无已启用的场景') }}
-          </div>
 
-          <!-- 底部申请区域 -->
-          <div class="create-section">
-            <div class="create-title">
-              {{ t('需要创建新的业务场景？') }}
+            <!-- 底部申请区域 -->
+            <div class="create-section">
+              <div class="create-title">
+                {{ t('需要创建新的业务场景？') }}
+              </div>
+              <div class="create-desc">
+                {{ t('请通过企业微信联系') }}
+                <span
+                  class="contact-link"
+                  @click="contactHelper">
+                  <img
+                    alt=""
+                    class="qw-icon"
+                    src="@/images/qw.svg">
+                  iegsc_helper（{{ t('IEG安全助手') }}）
+                </span>
+                {{ t('申请创建审计场景') }}
+              </div>
             </div>
-            <div class="create-desc">
-              {{ t('请通过企业微信联系') }}
-              <span
-                class="contact-link"
-                @click="contactHelper">
-                <img
-                  alt=""
-                  class="qw-icon"
-                  src="@/images/qw.svg">
-                iegsc_helper（{{ t('IEG安全助手') }}）
-              </span>
-              {{ t('申请创建审计场景') }}
+          </template>
+
+          <!-- 无场景时与 index.vue 保持一致的引导页样式 -->
+          <template v-else>
+            <div class="section">
+              <div class="section-title">
+                {{ t('场景配置可以实现') }}
+              </div>
+              <ul class="feature-list">
+                <li>{{ t('配置审计策略自动发现业务中的安全风险') }}</li>
+                <li>{{ t('自定义巡表和工具满足您的分析需求') }}</li>
+              </ul>
+              <div
+                class="action-row"
+                @click="handleLearnMore">
+                <span class="link-text">
+                  {{ t('了解更多') }}
+                </span>
+                <audit-icon
+                  class="right-icon"
+                  type="right" />
+              </div>
             </div>
-          </div>
+
+            <div class="section">
+              <div class="section-title">
+                {{ t('怎么申请场景权限?') }}
+              </div>
+              <p class="permission-desc">
+                {{ t('请通过企业微信联系') }}
+                <span @click="contactHelper">
+                  <img
+                    class="qw-icon"
+                    src="@/images/qw.svg">
+                  iegsc_helper {{ t('IEG安全助手') }}
+                </span>
+                {{ t('申请创建审计场景') }}
+              </p>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -389,6 +423,87 @@
   text-align: center;
 }
 
+/* 无场景时的引导样式，与 index.vue 保持一致 */
+.section {
+  margin-bottom: 36px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.section-title {
+  margin-bottom: 16px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #21293b;
+}
+
+.feature-list {
+  padding-left: 20px;
+  margin: 0 0 20px;
+  list-style: none;
+
+  li {
+    position: relative;
+    padding-left: 18px;
+    margin-bottom: 10px;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #63656e;
+
+    &::before {
+      position: absolute;
+      top: 8px;
+      left: 0;
+      width: 4px;
+      height: 15px;
+      background: #3b7eff;
+      border-radius: 2px;
+      content: '';
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  cursor: pointer;
+
+  .right-icon {
+    margin-left: -10px;
+    font-size: 24px;
+    color: #3b7eff;
+  }
+}
+
+.permission-desc {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #63656e;
+
+  span {
+    color: #3b7eff;
+    white-space: nowrap;
+    cursor: pointer;
+
+    .qw-icon {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      vertical-align: text-bottom;
+    }
+  }
+}
+
 .create-section {
   padding-top: 16px;
   margin-top: 20px;
@@ -403,25 +518,21 @@
 }
 
 .create-desc {
-  display: inline-flex;
   font-size: 13px;
   line-height: 1.65;
   color: #63656e;
-  align-items: center;
-  flex-wrap: wrap;
 
   .contact-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     color: #3b7eff;
+    white-space: nowrap;
     cursor: pointer;
-  }
 
-  .qw-icon {
-    width: 17px;
-    height: 17px;
-    flex-shrink: 0;
+    .qw-icon {
+      display: inline-block;
+      width: 17px;
+      height: 17px;
+      vertical-align: text-bottom;
+    }
   }
 }
 </style>
