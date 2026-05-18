@@ -35,6 +35,8 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import { formatDate } from '@utils/assist/timestamp-conversion';
+
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
@@ -89,7 +91,19 @@
   const router = useRouter();
 
   const listRef = ref();
-  const dataSource = ToolManageService.fetchToolsList;
+  // 适配器：将 fetchToolsList 返回的数组包装为 tdesign-list 期望的分页结构
+  const dataSource = (params: any) => ToolManageService.fetchToolsList(params).then((list) => {
+    const page = params?.page || 1;
+    const pageSize = params?.page_size || 10;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return {
+      results: list.slice(start, end),
+      page,
+      num_pages: Math.ceil(list.length / pageSize),
+      total: list.length,
+    };
+  });
 
   const toolType: Record<ToolTypeKey, string> = {
     api: t('API接口'),
@@ -262,10 +276,13 @@
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 130,
+      width: 180,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span>{row.updated_at ? formatDate(row.updated_at) : '--'}</span>
+      ),
     },
     {
       title: t('操作'),

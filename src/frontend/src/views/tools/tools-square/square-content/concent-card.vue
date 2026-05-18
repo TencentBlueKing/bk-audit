@@ -16,24 +16,8 @@
 -->
 <template>
   <div class="card">
-    <!-- 正在使用中的工具提示条 -->
     <div
-      v-if="activeToolsInScene.length > 0"
-      class="tool-using-tip">
-      <img
-        class="tip-icon"
-        :src="infoBlueSvg">
-      <span class="tip-text">
-        {{ t('你有') }} <strong class="tip-count">{{ activeToolsInScene.length }}</strong> {{ t('个工具正在使用中') }}
-      </span>
-      <span
-        class="tip-link"
-        @click="handleContinueUsingTool">
-        {{ t('点击继续') }}
-      </span>
-    </div>
-    <div
-      v-if="dataList.length > 0 || searchValue"
+      v-if="dataList.length > 0 || searchValue || (isCrossScene && groupedByScene.length > 0)"
       class="card-search">
       <bk-input
         v-model="searchValue"
@@ -43,156 +27,288 @@
         @enter="handleSearch" />
     </div>
     <scroll-faker
-      :style="scrollStyle"
-      @reach-bottom="handleScroll">
+      :style="scrollStyle">
       <bk-loading
         :loading="loading"
         :z-index="10000">
-        <div
-          v-if="dataList.length > 0"
-          ref="cardListRef"
-          class="card-list"
-          @scroll="handleScroll">
-          <div class="card-list-box">
+        <!-- 跨场景分组展示模式 -->
+        <template v-if="isCrossScene && groupedByScene.length > 0">
+          <div
+            ref="cardListRef"
+            class="card-list">
             <div
-              v-for="(item, index) in dataList"
-              :key="index"
-              class="card-list-item"
-              @click="handleClickTool(item)"
-              @mouseenter="handleMouseenter(item)"
-              @mouseleave="handleMouseleave()">
-              <!-- 左上角收藏icon -->
+              v-for="group in groupedByScene"
+              :key="group.sceneId"
+              class="scene-group">
               <div
-                v-show="itemMouseenter === item.uid || item.favorite"
-                class="item-top-left-icon"
-                :class="{ 'with-bg': itemMouseenter === item.uid }">
-                <img
-                  v-bk-tooltips="{
-                    content: item.favorite ? t('取消收藏') : t('收藏'),
-                    placement: 'top',
-                  }"
-                  class="favorite-icon"
-                  :src="item.favorite ? pentagramFillIcon : pentagramIcon"
-                  @click.stop="handleToggleFavorite(item)">
+                class="scene-group-header"
+                @click="toggleSceneCollapse(group.sceneId)">
+                <span
+                  class="scene-group-arrow"
+                  :class="{ 'is-collapsed': collapsedScenes.has(group.sceneId) }" />
+                <span class="scene-group-title">{{ group.sceneName }}({{ group.sceneId }})</span>
               </div>
-
-
-              <div class="item-top">
-                <div class="item-top-left">
-                  <img
-                    v-if="item.tool_type === 'smart_page'"
-                    class="top-left-icon-img"
-                    :src="userProfileIcon">
-                  <audit-icon
-                    v-else
-                    class="top-left-icon"
-                    svg
-                    :type="itemIcon(item)" />
-                </div>
-                <div class="item-top-right">
-                  <div class="top-right-title">
+              <div
+                v-show="!collapsedScenes.has(group.sceneId)"
+                class="card-list-box">
+                <div
+                  v-for="(item, index) in group.tools"
+                  :key="index"
+                  class="card-list-item"
+                  @click="handleClickTool(item)"
+                  @mouseenter="handleMouseenter(item)"
+                  @mouseleave="handleMouseleave()">
+                  <!-- 右上角收藏icon -->
+                  <div
+                    v-show="itemMouseenter === item.uid || item.favorite"
+                    class="item-top-right-icon"
+                    :class="{ 'with-bg': itemMouseenter === item.uid }">
+                    <img
+                      v-bk-tooltips="{
+                        content: item.favorite ? t('取消收藏') : t('收藏'),
+                        placement: 'top',
+                      }"
+                      class="favorite-icon"
+                      :src="item.favorite ? pentagramFillIcon : pentagramIcon"
+                      @click.stop="handleToggleFavorite(item)">
+                  </div>
+                  <div class="item-top">
+                    <div class="item-top-left">
+                      <img
+                        v-if="item.tool_type === 'smart_page'"
+                        class="top-left-icon-img"
+                        :src="userProfileIcon">
+                      <audit-icon
+                        v-else
+                        class="top-left-icon"
+                        svg
+                        :type="itemIcon(item)" />
+                    </div>
+                    <div class="item-top-right">
+                      <div class="top-right-title">
+                        <span
+                          v-bk-tooltips="{
+                            disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                            content: item.name,
+                            placement: 'top',
+                            delay: [300, 0],
+                            extCls: 'name-tooltip'
+                          }"
+                          class="title-text"
+                          :class="{
+                            'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                          }">
+                          {{ item.name }}
+                        </span>
+                        <bk-tag
+                          v-if="item.is_bkvision"
+                          v-bk-tooltips="{ content: t('BKVision参数变量待更新') }"
+                          class="title-tag"
+                          size="small"
+                          theme="danger"
+                          type="filled">
+                          {{ t('待更新') }}
+                        </bk-tag>
+                      </div>
+                      <div class="top-right-desc">
+                        <bk-tag
+                          v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
+                          :key="tagIndex"
+                          class="desc-tag"
+                          size="small">
+                          {{ returnTagsName(tag) }}
+                        </bk-tag>
+                        <bk-tag
+                          v-if="item.tags.length > 3"
+                          v-bk-tooltips="{
+                            content: tagContent(item.tags),
+                            placement: 'top',
+                          }"
+                          class="desc-tag"
+                          size="small">
+                          + {{ item.tags.length - 3 }}
+                        </bk-tag>
+                        <bk-tag
+                          class="desc-tag tag-cursor"
+                          size="small"
+                          theme="info"
+                          @click="handlesStrategiesClick(item)">
+                          {{ t('运用在') }} {{ item.strategies.length }} {{ t('个策略中') }}
+                        </bk-tag>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-bk-tooltips="{
+                      disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+                      content: middleTtooltips(item.description),
+                      width: '200px',
+                      placement: 'bottom',
+                      allowHTML: true,
+                      extCls: 'tooltip-custom'
+                    }"
+                    class="item-middle">
+                    {{ item.description }}
+                  </div>
+                  <div class="item-footer">
+                    <div>
+                      <span
+                        v-bk-tooltips="{
+                          content: t('创建人'),
+                          theme: 'light',
+                        }">{{ item.created_by }}</span>
+                      <span class="line" />
+                      <span
+                        v-bk-tooltips="{
+                          content: t('更新人'),
+                          theme: 'light',
+                        }">{{ item.updated_by }}</span>
+                    </div>
                     <span
                       v-bk-tooltips="{
-                        disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                        content: item.name,
-                        placement: 'top',
-                        delay: [300, 0],
-                        extCls: 'name-tooltip'
-                      }"
-                      class="title-text"
-                      :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
-                      {{ item.name }}
-                    </span>
-                    <bk-tag
-                      v-if="item.is_bkvision"
-                      v-bk-tooltips="{ content: t('BKVision参数变量待更新') }"
-                      class="title-tag"
-                      size="small"
-                      theme="danger"
-                      type="filled">
-                      {{ t('待更新') }}
-                    </bk-tag>
-                  </div>
-                  <div class="top-right-desc">
-                    <bk-tag
-                      v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
-                      :key="tagIndex"
-                      class="desc-tag"
-                      size="small">
-                      {{ returnTagsName(tag) }}
-                    </bk-tag>
-                    <bk-tag
-                      v-if="item.tags.length > 3"
-                      v-bk-tooltips="{
-                        content: tagContent(item.tags),
-                        placement: 'top',
-                      }"
-                      class="desc-tag"
-                      size="small">
-                      + {{ item.tags.length - 3
-                      }}
-                    </bk-tag>
-                    <bk-tag
-                      class="desc-tag tag-cursor"
-                      size="small"
-                      theme="info"
-                      @click="handlesStrategiesClick(item)">
-                      {{ t('运用在') }} {{ item.strategies.length }} {{ t('个策略中') }}
-                    </bk-tag>
+                        content: t('更新时间'),
+                        theme: 'light',
+                      }">{{ formatDate(item.updated_at) }}</span>
                   </div>
                 </div>
-              </div>
-              <div
-                v-bk-tooltips="{
-                  disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
-                  content: middleTtooltips(item.description),
-                  width: '200px',
-                  placement: 'bottom',
-                  allowHTML: true,
-                  extCls: 'tooltip-custom'
-                }"
-                class="item-middle">
-                {{ item.description }}
-              </div>
-              <div class="item-footer">
-                <div>
-                  <span
-                    v-bk-tooltips="{
-                      content: t('创建人'),
-                      theme: 'light',
-                    }">{{ item.created_by }}</span>
-                  <span class="line" />
-
-                  <span
-                    v-bk-tooltips="{
-                      content: t('更新人'),
-                      theme: 'light',
-                    }">{{ item.updated_by }}</span>
-                </div>
-                <span
-                  v-bk-tooltips="{
-                    content: t('更新时间'),
-                    theme: 'light',
-                  }">{{ formatDate(item.updated_at) }}</span>
               </div>
             </div>
           </div>
+        </template>
+        <!-- 普通扁平展示模式 -->
+        <template v-else-if="dataList.length > 0">
           <div
-            v-show="hasMore"
-            class="has-more">
-            <bk-loading
-              :loading="hasMore"
-              mode="spin"
-              size="mini"
-              theme="primary" />
-            <span class="more-text">
-              {{ t('加载中...') }}
-            </span>
+            ref="cardListRef"
+            class="card-list">
+            <div class="card-list-box">
+              <div
+                v-for="(item, index) in dataList"
+                :key="index"
+                class="card-list-item"
+                @click="handleClickTool(item)"
+                @mouseenter="handleMouseenter(item)"
+                @mouseleave="handleMouseleave()">
+                <!-- 右上角收藏icon -->
+                <div
+                  v-show="itemMouseenter === item.uid || item.favorite"
+                  class="item-top-right-icon"
+                  :class="{ 'with-bg': itemMouseenter === item.uid }">
+                  <img
+                    v-bk-tooltips="{
+                      content: item.favorite ? t('取消收藏') : t('收藏'),
+                      placement: 'top',
+                    }"
+                    class="favorite-icon"
+                    :src="item.favorite ? pentagramFillIcon : pentagramIcon"
+                    @click.stop="handleToggleFavorite(item)">
+                </div>
+
+
+                <div class="item-top">
+                  <div class="item-top-left">
+                    <img
+                      v-if="item.tool_type === 'smart_page'"
+                      class="top-left-icon-img"
+                      :src="userProfileIcon">
+                    <audit-icon
+                      v-else
+                      class="top-left-icon"
+                      svg
+                      :type="itemIcon(item)" />
+                  </div>
+                  <div class="item-top-right">
+                    <div class="top-right-title">
+                      <span
+                        v-bk-tooltips="{
+                          disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                          content: item.name,
+                          placement: 'top',
+                          delay: [300, 0],
+                          extCls: 'name-tooltip'
+                        }"
+                        class="title-text"
+                        :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
+                        {{ item.name }}
+                      </span>
+                      <bk-tag
+                        v-if="item.is_bkvision"
+                        v-bk-tooltips="{ content: t('BKVision参数变量待更新') }"
+                        class="title-tag"
+                        size="small"
+                        theme="danger"
+                        type="filled">
+                        {{ t('待更新') }}
+                      </bk-tag>
+                    </div>
+                    <div class="top-right-desc">
+                      <bk-tag
+                        v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
+                        :key="tagIndex"
+                        class="desc-tag"
+                        size="small">
+                        {{ returnTagsName(tag) }}
+                      </bk-tag>
+                      <bk-tag
+                        v-if="item.tags.length > 3"
+                        v-bk-tooltips="{
+                          content: tagContent(item.tags),
+                          placement: 'top',
+                        }"
+                        class="desc-tag"
+                        size="small">
+                        + {{ item.tags.length - 3
+                        }}
+                      </bk-tag>
+                      <bk-tag
+                        class="desc-tag tag-cursor"
+                        size="small"
+                        theme="info"
+                        @click="handlesStrategiesClick(item)">
+                        {{ t('运用在') }} {{ item.strategies.length }} {{ t('个策略中') }}
+                      </bk-tag>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-bk-tooltips="{
+                    disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+                    content: middleTtooltips(item.description),
+                    width: '200px',
+                    placement: 'bottom',
+                    allowHTML: true,
+                    extCls: 'tooltip-custom'
+                  }"
+                  class="item-middle">
+                  {{ item.description }}
+                </div>
+                <div class="item-footer">
+                  <div>
+                    <span
+                      v-bk-tooltips="{
+                        content: t('创建人'),
+                        theme: 'light',
+                      }">{{ item.created_by }}</span>
+                    <span class="line" />
+
+                    <span
+                      v-bk-tooltips="{
+                        content: t('更新人'),
+                        theme: 'light',
+                      }">{{ item.updated_by }}</span>
+                  </div>
+                  <span
+                    v-bk-tooltips="{
+                      content: t('更新时间'),
+                      theme: 'light',
+                    }">{{ formatDate(item.updated_at) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </template>
 
         <div
-          v-else
+          v-if="dataList.length === 0 && groupedByScene.length === 0"
           class="card-empty">
           <bk-exception
             class="empty-exception"
@@ -227,7 +343,6 @@
 
   import useUrlSearch from '@hooks/use-url-search';
 
-  import infoBlueSvg from '@images/info-blue.svg';
   import pentagramIcon from '@images/pentagram.svg';
   import pentagramFillIcon from '@images/pentagram-fill.svg';
   import userProfileIcon from '@images/user.svg';
@@ -239,9 +354,7 @@
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
-  import useToolTabs from '@/hooks/use-tool-tabs';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-  import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
   interface Exposes {
@@ -254,11 +367,7 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  declare global {
-    interface Window {
-      scrollDebounceTimer: number | undefined;
-    }
-  }
+
   interface TagItem {
     tag_id: string
     tag_name: string
@@ -273,6 +382,8 @@
       scope_type?: string,
       scope_id?: string,
     },
+    isCrossScene: boolean,
+    sceneNameMap: Record<number, string>,
   }
 
 
@@ -280,42 +391,6 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
-
-  // 获取已打开的工具列表
-  const {
-    openedTools,
-    switchTab,
-  } = useToolTabs();
-
-  // 当前场景下所有工具的 uid 集合
-  const sceneToolUids = ref<Set<string>>(new Set());
-
-  // 获取当前场景下的全量工具 uid
-  const {
-    run: fetchSceneAllTools,
-  } = useRequest(ToolManageService.fetchAllTools, {
-    defaultValue: [],
-    onSuccess: (data: any[]) => {
-      sceneToolUids.value = new Set(data.map(item => item.uid));
-    },
-  });
-
-  // 监听场景切换，刷新当前场景下的全量工具 uid
-  watch(() => props.scopeParams, () => {
-    fetchSceneAllTools({ ...props.scopeParams, status: 'published' });
-  }, { immediate: true, deep: true });
-
-  // 当前场景下正在使用的工具（openedTools 与场景全量工具的交集）
-  const activeToolsInScene = computed(() => openedTools.value.filter(tool => sceneToolUids.value.has(tool.uid)));
-
-  // 点击继续使用工具
-  const handleContinueUsingTool = () => {
-    const lastTool = openedTools.value[openedTools.value.length - 1];
-    if (lastTool) {
-      switchTab(lastTool.uid);
-      emits('openTool', lastTool);
-    }
-  };
 
   // 使用工具对话框hooks
   const {
@@ -344,13 +419,56 @@
     return { tags: [id] };
   };
 
-  const currentPage = ref(1);
-  const currentPagSize = ref(50);
-  const hasMore = ref(false);
   const cardListRef = ref<HTMLElement | null>(null);
-  const total = ref(0);
   const loading = ref(false);
-  const isMoreLoading = ref(false);
+
+  // 场景分组折叠状态
+  const collapsedScenes = ref<Set<number>>(new Set());
+
+  // 按场景分组的工具列表
+  interface SceneGroup {
+    sceneId: number;
+    sceneName: string;
+    tools: ToolInfo[];
+  }
+  const groupedByScene = computed<SceneGroup[]>(() => {
+    if (!props.isCrossScene || dataList.value.length === 0) return [];
+    const groupMap = new Map<number, ToolInfo[]>();
+    // 收集所有出现的 scene_id 并保持顺序
+    const sceneOrder: number[] = [];
+    dataList.value.forEach((tool) => {
+      const sceneIds = tool.visibility?.scene_ids || [];
+      if (sceneIds.length === 0) {
+        // 没有场景ID的工具放入“未分类”组（用 0 代表）
+        if (!groupMap.has(0)) {
+          groupMap.set(0, []);
+          sceneOrder.push(0);
+        }
+        groupMap.get(0)!.push(tool);
+      } else {
+        sceneIds.forEach((sid: number) => {
+          if (!groupMap.has(sid)) {
+            groupMap.set(sid, []);
+            sceneOrder.push(sid);
+          }
+          groupMap.get(sid)!.push(tool);
+        });
+      }
+    });
+    return sceneOrder.map(sid => ({
+      sceneId: sid,
+      sceneName: sid === 0 ? t('未分类') : (props.sceneNameMap[sid] || `场景 ${sid}`),
+      tools: groupMap.get(sid) || [],
+    }));
+  });
+
+  const toggleSceneCollapse = (sceneId: number) => {
+    if (collapsedScenes.value.has(sceneId)) {
+      collapsedScenes.value.delete(sceneId);
+    } else {
+      collapsedScenes.value.add(sceneId);
+    }
+  };
   const scrollStyle = {
     width: '98%',
     'margin-top': '10px',
@@ -412,16 +530,12 @@
   //   }
   // };
 
-  // 工具列表
+  // 工具列表（不再分页，直接返回数组）
   const {
     run: fetchToolsList,
   } = useRequest(ToolManageService.fetchToolsList, {
-    defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
+    defaultValue: [] as ToolInfo[],
     onSuccess: () => {
-      // 触底拼接数据
-      // dataList.value = [...dataList.value, ...data.results];
-      // total.value = data.total;
-
       // 自动打开弹窗
       if (route.query.tool_id) {
         // openUrlTools();
@@ -469,8 +583,6 @@
       messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
       // 重新获取列表数据，后端会处理排序
       fetchToolsList({
-        page: 1,
-        page_size: currentPage.value * currentPagSize.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
         keyword: searchValue.value,
@@ -478,9 +590,10 @@
         ...getValidTagsParam(props.tagId),
         ...props.scopeParams,
       }).then((data) => {
-        dataList.value = data.results;
-        total.value = data.total;
+        dataList.value = data;
       });
+      // 通知父组件刷新标签列表，更新"我的收藏"等标签的数量
+      emits('change');
     })
       .catch(() => {
         messageError(t('操作失败，请重试'));
@@ -608,10 +721,7 @@
 
   const handleSearch = () => {
     loading.value = true;
-    currentPage.value = 1;
     fetchToolsList({
-      page: currentPage.value,
-      page_size: currentPagSize.value,
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
@@ -619,9 +729,7 @@
       ...getValidTagsParam(props.tagId),
       ...props.scopeParams,
     }).then((data) => {
-      // 非拼接模式，重新赋值
-      dataList.value = data.results;
-      total.value = data.total;
+      dataList.value = data;
     })
       .finally(() => {
         loading.value = false;
@@ -629,50 +737,11 @@
     emits('change');
   };
 
-  // 下拉加载
-  const handleScroll = () => {
-    if (total.value <= dataList.value.length || isMoreLoading.value) {
-      hasMore.value = false;
-      return;
-    }
-
-    // 防抖逻辑
-    clearTimeout(window.scrollDebounceTimer);
-    window.scrollDebounceTimer = window.setTimeout(() => {
-      loading.value = false;
-      isMoreLoading.value = true;
-      hasMore.value = true;
-      currentPage.value += 1;
-
-      fetchToolsList({
-        page: currentPage.value,
-        page_size: 50,
-        keyword: searchValue.value,
-        my_created: props.myCreated,
-        recent_used: props.recentUsed,
-        status: 'published',
-        ...getValidTagsParam(props.tagId),
-        ...props.scopeParams,
-      })
-        .then((data) => {
-          // 拼接模式，追加数据
-          dataList.value = [...dataList.value, ...data.results];
-          total.value = data.total;
-        })
-        .finally(() => {
-          hasMore.value = false;
-          isMoreLoading.value = false;
-        });
-    }, 1000);
-  };
 
   defineExpose<Exposes>({
     getToolsList(id: string) {
       nextTick(() => {
-        currentPage.value = 1;
         fetchToolsList({
-          page: currentPage.value,
-          page_size: 50,
           keyword: searchValue.value,
           my_created: props.myCreated,
           recent_used: props.recentUsed,
@@ -680,9 +749,7 @@
           ...getValidTagsParam(id),
           ...props.scopeParams,
         }).then((data) => {
-          // 非拼接模式，重新赋值
-          dataList.value = data.results;
-          total.value = data.total;
+          dataList.value = data;
         })
           .finally(() => {
             loading.value = false;
@@ -702,42 +769,6 @@
   padding-left: 20px;
   background-color: #f5f7fa;
   flex-direction: column;
-
-  .tool-using-tip {
-    display: flex;
-    align-items: center;
-    width: 98%;
-    height: 36px;
-    padding: 0 12px;
-    margin-bottom: 16px;
-    font-size: 12px;
-    line-height: 36px;
-    color: #4d4f56;
-    background: #f0f5ff;
-    border: 1px solid #a3c5fd;
-    border-radius: 2px;
-
-    .tip-icon {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      margin-right: 6px;
-      flex-shrink: 0;
-    }
-
-    .tip-text {
-      margin-right: 8px;
-    }
-
-    .tip-link {
-      color: #5897ff;
-      cursor: pointer;
-
-      &:hover {
-        color: #1768ef;
-      }
-    }
-  }
 
   .card-search {
     position: relative;
@@ -902,26 +933,26 @@
           }
         }
 
-        .item-top-left-icon {
+        .item-top-right-icon {
           position: absolute;
           top: 0;
-          left: 0;
+          right: 0;
           z-index: 1;
           display: flex;
           align-items: flex-start;
-          justify-content: flex-start;
+          justify-content: flex-end;
           width: 40px;
           height: 40px;
-          border-top-left-radius: 2px;
+          border-top-right-radius: 2px;
 
           &.with-bg {
-            background: linear-gradient(135deg, #f5f7fa 50%, transparent 50%);
+            background: linear-gradient(225deg, #f5f7fa 50%, transparent 50%);
           }
 
           .favorite-icon {
             position: relative;
             top: 4px;
-            left: 4px;
+            right: 4px;
             width: 16px;
             height: 16px;
             cursor: pointer;
@@ -937,18 +968,53 @@
       }
 
     }
+  }
 
-    .has-more {
+  .scene-group {
+    margin-bottom: 8px;
+
+    .scene-group-header {
       display: flex;
-      justify-content: center;
+      height: 36px;
+      padding: 0 12px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      background-color: #eaebf0;
+      border-radius: 2px;
+      user-select: none;
       align-items: center;
-      margin-top: 5px;
-      font-size: 14px;
-      color: #979ba5;
 
-      .more-text {
-        margin-left: 5px;
-        color: #3a84ff;
+      &:hover {
+        background-color: #e1e2e6;
+
+        .scene-group-title {
+          color: #3a84ff;
+        }
+      }
+
+      .scene-group-arrow {
+        display: inline-block;
+        width: 0;
+        height: 0;
+        margin-right: 8px;
+        border-color: #63656e transparent transparent;
+        border-style: solid;
+        border-width: 6px 5px 0;
+        transition: transform .2s ease;
+        flex-shrink: 0;
+
+        &.is-collapsed {
+          border-color: transparent transparent transparent #63656e;
+          border-width: 5px 0 5px 6px;
+        }
+      }
+
+      .scene-group-title {
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 22px;
+        color: #313238;
+        transition: color .2s;
       }
     }
   }
