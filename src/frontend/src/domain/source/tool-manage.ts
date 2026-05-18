@@ -24,7 +24,6 @@ import { processedParams } from '@utils/request/lib/utils';
 import ModuleBase from './module-base';
 
 import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
 class ToolManage extends ModuleBase {
@@ -32,21 +31,19 @@ class ToolManage extends ModuleBase {
     super();
     this.module = '/api/v1';
   }
-  // 获取工具列表
+  // 获取工具列表（不再分页，直接返回数组）
   getToolsList(params: {
-    offset?: number
-    limit?: number
     keyword?: string,
-    page: number,
-    page_size: number
     tags?: string[],
     scope_type?: string,
     scope_id?: string,
     binding_type?: string,
     status?: string[],
     sort?: string[],
+    my_created?: boolean,
+    recent_used?: boolean,
   }) {
-    return Request.get<IRequestResponsePaginationData<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
+    return Request.get<Array<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
   }
   // 获取工具tag列表
   getToolTags(params?: {

@@ -59,6 +59,12 @@ export default class ToolInfo {
   created_at: string;
   updated_by: string;
   updated_at: string;
+  visibility: {
+    binding_type: string;
+    visibility_type: string;
+    scene_ids: number[];
+    system_ids: number[];
+  };
   constructor(payload = {} as ToolInfo) {
     this.is_bkvision = payload.is_bkvision;
     this.name = payload.name;
@@ -75,5 +81,11 @@ export default class ToolInfo {
     this.updated_at = payload.updated_at;
     this.favorite = payload.favorite ?? false;
     this.status = payload.status || '';
+    this.visibility = payload.visibility || {
+      binding_type: '',
+      visibility_type: '',
+      scene_ids: [],
+      system_ids: [],
+    };
   }
 }
