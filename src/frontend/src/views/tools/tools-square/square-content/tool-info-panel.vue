@@ -16,16 +16,9 @@
 -->
 <template>
   <div class="tool-info-panel">
-    <div class="panel-header">
-      <span class="title-text">工具详情</span>
-      <div
-        class="header-close"
-        @click="handleClose">
-        <audit-icon type="close" />
-      </div>
-    </div>
     <div class="panel-tab">
       <div
+        v-bk-tooltips="{ content: '返回工具广场', delay: [300, 0] }"
         class="tab-icon"
         role="button"
         tabindex="0"
@@ -35,7 +28,7 @@
         <img
           alt="home"
           class="home-icon"
-          src="@images/home.svg">
+          src="@images/home-tool.svg">
       </div>
       <div class="tab-box">
         <div
@@ -44,7 +37,8 @@
           v-bk-tooltips="{ content: item.name, disabled: !isTabTextOverflow[`${item.uid}-${index}`], delay: [300, 0] }"
           class="panel-tab-item"
           :class="{ active: activeUid === item.uid }"
-          @click="handleTabClick(item.uid)">
+          @click="handleTabClick(item.uid)"
+          @contextmenu.prevent="handleTabContextMenu($event, item, index)">
           <img
             v-if="item.tool_type === 'smart_page'"
             alt="smart_page"
@@ -67,12 +61,59 @@
         <!-- 新增工具按钮 -->
         <add-tool-popover
           v-if="toolList.length > 0"
+          :scene-name-map="props.sceneNameMap"
           :scope-params="props.scopeParams"
           :tags-enums="tagsEnums"
           :tool-list="toolList"
-          @add-tool="(tool) => emit('addTool', tool)" />
+          @add-tool="(tool) => emit('addTool', tool)"
+          @switch-tool="(tool) => emit('switchTab', tool.uid)" />
       </div>
     </div>
+    <!-- 右键菜单 -->
+    <teleport to="body">
+      <div
+        v-show="contextMenu.visible"
+        ref="contextMenuRef"
+        class="tab-context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+        <div
+          class="context-menu-item"
+          @click="handleContextCopy">
+          复制工具
+        </div>
+        <div
+          class="context-menu-item"
+          @click="handleContextRename">
+          重命名标签
+        </div>
+        <div class="context-menu-divider" />
+        <div
+          class="context-menu-item"
+          @click="handleContextCloseCurrent">
+          关闭当前
+        </div>
+        <div
+          class="context-menu-item"
+          @click="handleContextCloseAll">
+          关闭所有
+        </div>
+      </div>
+    </teleport>
+    <!-- 重命名弹窗 -->
+    <bk-dialog
+      v-model:is-show="renameDialog.visible"
+      title="重命名"
+      width="480"
+      @confirm="handleRenameConfirm">
+      <div class="rename-form">
+        <div class="rename-label">
+          标签名称 <span class="rename-required">*</span>
+        </div>
+        <bk-input
+          v-model="renameDialog.value"
+          placeholder="请输入标签名称" />
+      </div>
+    </bk-dialog>
     <div class="panel-content">
       <template
         v-for="tool in toolList"
@@ -103,7 +144,7 @@
 
           :search-list="getSearchList(tool.uid)"
           :tool-details="toolDetailMap[tool.uid]"
-          :uid="toolDetailMap[tool.uid].uid"
+          :uid="tool.uid"
           @open-field-down="handleOpenFieldDown"
           @update:search-list="(val) => setSearchList(tool.uid, val)" />
       </template>
@@ -114,6 +155,8 @@
 <script setup lang="ts">
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
+
+  import { InfoBox } from 'bkui-vue';
 
   import ToolManageService from '@service/tool-manage';
 
@@ -162,6 +205,8 @@
       scope_type?: string;
       scope_id?: string;
     };
+    // eslint-disable-next-line vue/no-unused-properties
+    sceneNameMap?: Record<number, string>;
   }
 
   const props = defineProps<Props>();
@@ -209,10 +254,12 @@
     if (tabBox) {
       resizeObserver.observe(tabBox);
     }
+    document.addEventListener('click', handleDocumentClick);
   });
 
   onBeforeUnmount(() => {
     resizeObserver?.disconnect();
+    document.removeEventListener('click', handleDocumentClick);
   });
 
   watch(
@@ -225,10 +272,126 @@
     { deep: true },
   );
 
-  const handleClose = () => emit('close');
   const handleGoHome = () => emit('goHome');
   const handleTabClick = (uid: string) => emit('switchTab', uid);
   const handleTabClose = (uid: string) => emit('closeTab', uid);
+
+  // 右键菜单相关
+  const contextMenuRef = ref<HTMLElement | null>(null);
+  const contextMenu = ref({
+    visible: false,
+    x: 0,
+    y: 0,
+    tool: null as ToolInfo | null,
+    index: 0,
+  });
+
+  // 重命名弹窗
+  const renameDialog = ref({
+    visible: false,
+    value: '',
+    tool: null as ToolInfo | null,
+  });
+
+  // 关闭所有确认弹窗（使用 InfoBox）
+  const handleContextCloseAll = () => {
+    hideContextMenu();
+    InfoBox({
+      title: '确认关闭所有工具？',
+      subTitle: '关闭后将返回工具大厅',
+      confirmText: '关闭',
+      cancelText: '取消',
+      headerAlign: 'center' as any,
+      contentAlign: 'center' as any,
+      confirmButtonTheme: 'danger' as any,
+      onConfirm: () => {
+        emit('close');
+      },
+    });
+  };
+
+  const hideContextMenu = () => {
+    contextMenu.value.visible = false;
+  };
+
+  const handleTabContextMenu = (e: MouseEvent, tool: ToolInfo, index: number) => {
+    contextMenu.value = {
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      tool,
+      index,
+    };
+  };
+
+  // 复制工具 - 在右侧新增一个tab展示该工具副本
+  // 存储复制工具的原始uid映射：copyUid -> originalUid
+  const copyUidMap = ref<Record<string, string>>({});
+
+  const handleContextCopy = () => {
+    const { tool } = contextMenu.value;
+    if (!tool) return;
+    // 计算副本编号
+    const baseName = tool.name.replace(/\(\d+\)$/, '').trim();
+    let maxNum = 1;
+    props.toolList.forEach((t) => {
+      const match = t.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\((\\d+)\\)$`));
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num >= maxNum) maxNum = num + 1;
+      }
+    });
+    const newName = `${baseName}(${maxNum})`;
+    const copyUid = `${tool.uid}_copy_${Date.now()}`;
+    // 记录映射：获取原始 uid（如果本身也是 copy，追溯到源头）
+    const originalUid = copyUidMap.value[tool.uid] || tool.uid;
+    copyUidMap.value[copyUid] = originalUid;
+    const dupTool = new ToolInfo({
+      ...tool,
+      uid: copyUid,
+      name: newName,
+    } as any);
+    emit('addTool', dupTool);
+    hideContextMenu();
+  };
+
+  // 重命名标签
+  const handleContextRename = () => {
+    const { tool } = contextMenu.value;
+    if (!tool) return;
+    renameDialog.value = {
+      visible: true,
+      value: tool.name,
+      tool,
+    };
+    hideContextMenu();
+  };
+
+  const handleRenameConfirm = () => {
+    const { tool } = renameDialog.value;
+    if (!tool || !renameDialog.value.value.trim()) return;
+    // 直接修改 toolList 中对应的 name
+    const target = props.toolList.find(t => t.uid === tool.uid);
+    if (target) {
+      target.name = renameDialog.value.value.trim();
+    }
+    renameDialog.value.visible = false;
+  };
+
+  // 关闭当前
+  const handleContextCloseCurrent = () => {
+    const { tool } = contextMenu.value;
+    if (!tool) return;
+    emit('closeTab', tool.uid);
+    hideContextMenu();
+  };
+
+  // 点击其他区域关闭右键菜单
+  const handleDocumentClick = (e: MouseEvent) => {
+    if (contextMenuRef.value && !contextMenuRef.value.contains(e.target as Node)) {
+      hideContextMenu();
+    }
+  };
 
   const itemIcon = (item: { tool_type?: string }) => {
     switch (item.tool_type) {
@@ -286,6 +449,9 @@
     syncSearchListToStorage();
   };
 
+  // 记录当前正在请求详情的激活 uid（用于复制工具时区分原始uid和副本uid）
+  const pendingActiveUid = ref<string>('');
+
   // 获取工具详情
   const {
     run: fetchToolDetail,
@@ -293,6 +459,12 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       toolDetailMap.value[data.uid] = data;
+      // 对于复制的工具，也将详情映射到 copy uid 下
+      Object.entries(copyUidMap.value).forEach(([copyUid, originalUid]) => {
+        if (originalUid === data.uid && !toolDetailMap.value[copyUid]) {
+          toolDetailMap.value[copyUid] = data;
+        }
+      });
       const toolInList = props.toolList.find(t => t.uid === data.uid);
       if (toolInList && toolInList.name === data.uid && data.name) {
         toolInList.name = data.name;
@@ -301,7 +473,14 @@
         toolInList.tags = data.tags || [];
         toolInList.strategies = data.strategies || [];
       }
-      applyToolDetail(data);
+      // 如果是复制工具触发的请求，用 copyUid 作为 key 来初始化
+      const currentActiveUid = pendingActiveUid.value;
+      if (currentActiveUid && copyUidMap.value[currentActiveUid]) {
+        toolDetailMap.value[currentActiveUid] = data;
+        applyToolDetail(data, currentActiveUid);
+      } else {
+        applyToolDetail(data);
+      }
     },
   });
 
@@ -332,8 +511,8 @@
     });
   };
 
-  const applyToolDetail = (data: ToolDetailModel) => {
-    const { uid } = data;
+  const applyToolDetail = (data: ToolDetailModel, overrideUid?: string) => {
+    const uid = overrideUid || data.uid;
     // 检查是否有下钻参数
     const drillParams = getDrillDownParams(uid);
 
@@ -551,7 +730,10 @@
       const drillParams = getDrillDownParams(newUid);
       // 如果该工具详情尚未加载，或者有下钻参数需要重新填充，则请求
       if (!toolDetailMap.value[newUid] || drillParams) {
-        fetchToolDetail({ uid: newUid });
+        // 对于复制的工具，使用原始uid来获取详情
+        const realUid = copyUidMap.value[newUid] || newUid;
+        pendingActiveUid.value = newUid;
+        fetchToolDetail({ uid: realUid });
       }
       // 已加载的工具无需任何操作，v-show 会自动切换显示
     },
@@ -610,49 +792,12 @@
   background: #f5f7fa;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 16px;
-  background: #fff;
-  border-bottom: 1px solid #dcdee5;
-}
-
-.title-text {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 22px;
-  color: #313238;
-}
-
-.header-close {
-  width: 24px;
-  height: 24px;
-  font-size: 16px;
-  line-height: 24px;
-  color: #979ba5;
-  text-align: center;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: all .15s;
-  user-select: none;
-  flex: 0 0 auto;
-}
-
-.header-close:hover {
-  color: #63656e;
-  background: #f0f1f5;
-}
-
 .panel-tab {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 50px minmax(0, 1fr);
   align-items: center;
-  height: 42px;
-  padding: 0 12px 0 8px;
-  overflow: hidden;
+  height: 52px;
+  overflow: visible;
   background: #fff;
   border-bottom: 1px solid #dcdee5;
 }
@@ -669,25 +814,26 @@
 
 .tab-icon {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 100%;
+  height: 100%;
   color: #979ba5;
   cursor: pointer;
-  border-radius: 4px;
+  background-color: #fafbfd;
+  border-right: 1px solid #dcdee5;
   transition: all .15s;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-icon:hover {
   color: #3a84ff;
-  background: #f0f5ff;
+  background: #f0f1f5;
 }
 
 .home-icon {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 21px;
+  height: 24px;
   cursor: pointer;
 }
 
@@ -763,7 +909,7 @@
 }
 
 .panel-content {
-  height: calc(100% - 86px);
+  height: calc(100% - 52px);
   padding: 16px 24px;
   overflow: auto;
   background: #f5f7fa;
@@ -788,4 +934,50 @@
   background: #c4c6cc;
 }
 
+.rename-form {
+  padding: 8px 0;
+}
+
+.rename-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #313238;
+}
+
+.rename-required {
+  color: #ea3636;
+}
+
+</style>
+
+<style lang="postcss">
+.tab-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 80px;
+  padding: 4px 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgb(0 0 0 / 15%);
+}
+
+.tab-context-menu .context-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #dcdee5;
+}
+
+.tab-context-menu .context-menu-item {
+  padding: 8px 16px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #63656e;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.tab-context-menu .context-menu-item:hover {
+  color: #3a84ff;
+  background: #f0f5ff;
+}
 </style>
