@@ -33,13 +33,8 @@
             ]"
             @click="handleSelect(item.tag_id)">
             <div class="label-box">
-              <img
-                v-if="item?.imgIcon"
-                class="tag-icon-img"
-                :class="[{active: active===item.tag_id}]"
-                :src="item.imgIcon">
               <audit-icon
-                v-else-if="item?.icon"
+                v-if="item?.icon"
                 class="tag-icon"
                 :class="[{active: active===item.tag_id}]"
                 :type="item?.icon" />
@@ -103,7 +98,6 @@
     tag_name: string;
     strategy_count: number;
     icon: string;
-    imgIcon?: string;
   }
   interface Emits {
     (e: 'change', showLabel: boolean):void;
@@ -289,21 +283,6 @@
         margin-right: 5px;
         font-size: 16px;
         color: #dcdee5;
-      }
-
-      .tag-icon-img {
-        width: 16px;
-        height: 16px;
-        margin-right: 5px;
-        vertical-align: middle;
-        opacity: 50%;
-
-        &.active {
-          background: transparent !important;
-          opacity: 100%;
-          filter: brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(1352%)
-            hue-rotate(196deg) brightness(100%) contrast(101%);
-        }
       }
     }
   }
