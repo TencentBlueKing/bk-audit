@@ -113,7 +113,7 @@ export default {
       },
     ]),
   },
-  scope_id: {
+  scene_id: {
     label: '所属场景',
     type: 'select',
     required: false,
