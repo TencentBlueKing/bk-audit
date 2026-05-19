@@ -183,7 +183,7 @@ export const useGameOverviewFetcher = (
     );
   };
 
-  // 登录统计
+  // 登录统计（展示最近7天、最近14天、最近1个月三行数据）
   // 注：与明细 tab 默认"最近半年"保持一致，避免概览查不到数据但明细有数据的不一致情况
   // 后端字段名不变，仅将值改为半年前日期
   const fetchOverviewLoginStats = async () => {
@@ -196,7 +196,9 @@ export const useGameOverviewFetcher = (
       selected_gameid: ctx.gameid,
       selected_openid: ctx.openid,
     });
-    state.loginStatList.value = extractResults(res);
+    // 后端返回带有 line(1/2/3) 字段，按 line 升序排列确保展示顺序为：最近7天、最近14天、最近1个月
+    const results = extractResults(res);
+    state.loginStatList.value = results.sort((a: any, b: any) => (Number(a.line) || 0) - (Number(b.line) || 0));
   };
 
   // 最近记录（5个接口并行）

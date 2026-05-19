@@ -43,7 +43,8 @@ export const ROLE_FIELDS = {
 
 // ========== 登录统计相关字段 ==========
 export const LOGIN_STAT_FIELDS = {
-  DAYS_CLASS: 'days_class',
+  DAYS_CLASS: '统计频率',
+  LINE: 'line',
   LOGIN_COUNT: '登录次数',
   LOGIN_LOCATION_COUNT: '登录地点数',
   LOGIN_DEVICE_COUNT: '登录设备数',
@@ -184,4 +185,6 @@ export const PROFILE_FIELDS = {
   TOTAL_ISSUE_COUNT_YUAN: '累计发数（¥）',
   LOGIN_DAYS_31: '登录天数（31）',
   LOGIN_COUNT_7DAYS: '登录次数（7天）',
+  TOTAL_GIFT_COUNT: '累计赠送次数',
+  TOTAL_TRADE_COUNT: '累计交易次数',
 } as const;
