@@ -254,6 +254,16 @@
     return `${y}${m}${day}`;
   };
 
+  // 获取前一天日期，格式 YYYYMMDD
+  const getOneDayAgoYmd = (): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}${m}${day}`;
+  };
+
   const userInfo = ref({
     avatar: '',
     wecom: '',       // 企业微信
@@ -444,6 +454,7 @@
       params: {
         data_source_name: 'main_qqwechat_list',
         params: {
+          one_day_ago_Ymd: getOneDayAgoYmd(),
           username,
         },
       },
@@ -577,17 +588,17 @@
     return query;
   };
 
-  // 点击责任单数跳转 - 新开标签页至场景风险，带入openid筛选
-  const handleJumpToSceneRisk = (openid: string) => {
-    const routeData = router.resolve({
-      name: 'sceneRiskManageList',
-      query: buildSceneRiskQuery({ openid }),
-    });
-    window.open(routeData.href, '_blank');
-  };
+  // TODO: 点击责任单数跳转 - 待后端接口支持后取消注释
+  // const handleJumpToSceneRisk = (openid: string) => {
+  //   const routeData = router.resolve({
+  //     name: 'sceneRiskManageList',
+  //     query: buildSceneRiskQuery({ openid }),
+  //   });
+  //   window.open(routeData.href, '_blank');
+  // };
 
-  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(代) | 累计充值(代) | 累计赠送(¥)
-  // | 累计发放(¥) | 累计发数(¥) | 登录天数(31) | 登录次数(7天) | 登录次数/月 | 责任单数 | 操作）
+  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(代) | 累计充值(代)
+  // | 累计发放(¥) | 累计赠送次数(隐藏) | 累计交易次数(隐藏) | 登录次数/月(隐藏) | 责任单数(隐藏) | 操作）
   const gameColumns: Array<Record<string, any>> = [
     {
       label: () => t('游戏名称'),
@@ -633,38 +644,48 @@
     },
     { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
     { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
-    { label: () => `${t('累计赠送')} (¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_YUAN] ?? '--') },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
-    { label: () => `${t('登录次数')} / ${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_MONTH] ?? '--') },
-    {
-      label: () => t('责任单数'),
-      field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
-      sort: true,
-      render: ({ data }: { data: Record<string, any> }) => {
-        const count = data[PROFILE_FIELDS.RESPONSIBILITY_COUNT] ?? data.responsibility_count;
-        if (count === null || count === undefined) return h('span', {}, '--');
-        const hasRisk = count > 0;
-        return h(
-          'span',
-          {
-            style: hasRisk ? 'display: inline-flex; align-items: center; gap: 4px;' : '',
-          },
-          [
-            h('span', {}, count),
-            hasRisk
-              ? h('i', {
-                class: 'audit-icon audit-icon-jump-link hover-show-icon responsibility-jump-icon',
-                style: 'cursor: pointer;',
-                onClick: (e: Event) => {
-                  e.stopPropagation();
-                  handleJumpToSceneRisk(data.openid);
-                },
-              })
-              : null,
-          ],
-        );
-      },
-    },
+    // TODO: 后端暂未返回"累计赠送次数"与"累计交易次数"，待接口支持后取消注释
+    // { label: () => t('累计赠送次数'), field: PROFILE_FIELDS.TOTAL_GIFT_COUNT,
+    //   sort: true, render: ({ data }: { data: Record<string, any> }) =>
+    //   h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_COUNT] ?? '--') },
+    // { label: () => t('累计交易次数'), field: PROFILE_FIELDS.TOTAL_TRADE_COUNT,
+    //   sort: true, render: ({ data }: { data: Record<string, any> }) =>
+    //   h('span', {}, data[PROFILE_FIELDS.TOTAL_TRADE_COUNT] ?? '--') },
+    // TODO: 后端暂未返回"登录次数/月"与"责任单数"数据，待接口支持后取消注释
+    // { label: () => `${t('登录次数')} / ${t('月')}`,
+    //   field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, sort: true,
+    //   render: ({ data }: { data: Record<string, any> }) =>
+    //   h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_MONTH] ?? '--') },
+    // {
+    //   label: () => t('责任单数'),
+    //   field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
+    //   sort: true,
+    //   render: ({ data }: { data: Record<string, any> }) => {
+    //     const count = data[PROFILE_FIELDS.RESPONSIBILITY_COUNT] ?? data.responsibility_count;
+    //     if (count === null || count === undefined) return h('span', {}, '--');
+    //     const hasRisk = count > 0;
+    //     return h(
+    //       'span',
+    //       {
+    //         style: hasRisk ? 'display: inline-flex; align-items: center; gap: 4px;' : '',
+    //       },
+    //       [
+    //         h('span', {}, count),
+    //         hasRisk
+    //           ? h('i', {
+    //             class: 'audit-icon audit-icon-jump-link hover-show-icon responsibility-jump-icon',
+    //             style: 'cursor: pointer;',
+    //             onClick: (e: Event) => {
+    //               e.stopPropagation();
+    //               handleJumpToSceneRisk(data.openid);
+    //             },
+    //           })
+    //           : null,
+    //       ],
+    //     );
+    //   },
+    // },
     {
       label: () => t('操作'),
       field: 'action',
@@ -734,6 +755,7 @@
       // 2. 查询"游戏列表" main_openid_list（输入 form_ctx=填写的选项）
       lastQueryParams.value = { form_ctx: accountId };
       executeDataSource('main_openid_list', {
+        one_day_ago_Ymd: getOneDayAgoYmd(),
         form_ctx: accountId,
       }, fetchGameList);
     } else if (accountType === 'form_wechat' || accountType === 'form_qq') {
@@ -745,6 +767,7 @@
       //       用户信息成功后又自动触发 main_auditrisk_stat 和 main_qqwechat_list
       lastQueryParams.value = { [accountType]: accountId };
       executeDataSource('main_openid_list', {
+        one_day_ago_Ymd: getOneDayAgoYmd(),
         [accountType]: accountId,
       }, fetchGameList);
     } else if (accountType === 'openid') {
@@ -756,6 +779,7 @@
       hasQueried.value = false;
       lastQueryParams.value = { form_openid: accountId };
       executeDataSource('main_openid_list', {
+        one_day_ago_Ymd: getOneDayAgoYmd(),
         form_openid: accountId,
       }, fetchGameList);
     }
@@ -806,10 +830,17 @@
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
     { id: 'coinBalance', name: `${t('代币存量')}(${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
     { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
-    { id: 'totalGift', name: `${t('累计赠送')}(¥)`, field: PROFILE_FIELDS.TOTAL_GIFT_YUAN, fallbackField: 'totalGift' },
     { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
-    { id: 'loginCount', name: `${t('登录次数')}/${t('月')}`, field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, fallbackField: 'loginCount' },
-    { id: 'responsibilityCount', name: t('责任单数'), field: PROFILE_FIELDS.RESPONSIBILITY_COUNT, fallbackField: 'responsibility_count' },
+    // TODO: 后端暂未返回以下字段，待接口支持后取消注释
+    // { id: 'totalGiftCount', name: t('累计赠送次数'),
+    //   field: PROFILE_FIELDS.TOTAL_GIFT_COUNT, fallbackField: '' },
+    // { id: 'totalTradeCount', name: t('累计交易次数'),
+    //   field: PROFILE_FIELDS.TOTAL_TRADE_COUNT, fallbackField: '' },
+    // { id: 'loginCount', name: `${t('登录次数')}/${t('月')}`,
+    //   field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, fallbackField: 'loginCount' },
+    // { id: 'responsibilityCount', name: t('责任单数'),
+    //   field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
+    //   fallbackField: 'responsibility_count' },
   ];
   // 默认全选
   const exportContentChecked = ref<string[]>(exportContentOptions.map(item => item.id));
