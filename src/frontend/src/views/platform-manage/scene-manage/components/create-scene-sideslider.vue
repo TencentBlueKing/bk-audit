@@ -463,11 +463,11 @@
     name: formData.value.name,
     description: formData.value.description || undefined,
     managers: formData.value.managers as string[],
-    users: (formData.value.users as string[]).length > 0 ? (formData.value.users as string[]) : undefined,
+    users: (formData.value.users as string[]).length > 0 ? (formData.value.users as string[]) : [],
     systems: buildSystemsParam(),
     tables: formData.value.table_id.length > 0
       ? formData.value.table_id.map(id => ({ table_id: id, filter_rules: [] }))
-      : undefined,
+      : [],
   });
 
   const handleSubmit = async () => {
