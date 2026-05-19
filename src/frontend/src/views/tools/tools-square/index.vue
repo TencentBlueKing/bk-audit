@@ -227,6 +227,8 @@
     clearAll,
     setDrillDownParams,
     resetForDrillDown,
+    saveSceneState,
+    restoreSceneState,
   } = useToolTabs();
 
   // 当前场景下所有工具的 uid 集合
@@ -279,20 +281,25 @@
   const handleSceneChange = async (value: SceneItem | null) => {
     const newKey = getSceneKey(value);
     const isActualChange = lastSceneKey.value !== null && lastSceneKey.value !== newKey;
-    selectedScene.value = value;
-    lastSceneKey.value = newKey;
 
     if (isActualChange) {
-      // 用户主动切换场景 → 清空所有已打开的工具 tab，实现场景隔离
-      clearAll();
+      // 用户主动切换场景 → 保存当前场景的工具状态，再恢复目标场景的工具状态
+      saveSceneState(lastSceneKey.value!);
       try {
         sessionStorage.removeItem('tool_tabs_search_list_map');
         sessionStorage.removeItem('tool_tabs_game_detail_map');
       } catch {
         // 静默处理
       }
-      isSidebarCollapsed.value = false;
-      syncRouteToUrl();
+    }
+
+    selectedScene.value = value;
+    lastSceneKey.value = newKey;
+
+    if (isActualChange) {
+      restoreSceneState(newKey);
+      isSidebarCollapsed.value = hasOpenedTools.value;
+      syncRouteToUrl(activeToolUid.value || undefined);
     }
     // 无论是初始化还是切换，都重新拉取标签和工具列表
     refreshTagsList();
