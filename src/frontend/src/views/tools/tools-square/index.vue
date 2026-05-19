@@ -61,10 +61,10 @@
             <scene-system-selector
               v-model="selectedScene"
               :list-scope="['scene']"
-              :popover-width="210"
+              :popover-width="228"
               scene-permission="view_scene"
               system-permission="view_system"
-              width="210px"
+              width="228px"
               @change="handleSceneChange" />
           </div>
           <div class="sidebar-header">
@@ -83,14 +83,6 @@
             :total="0"
             :upgrade-total="0"
             @checked="handleChecked" />
-          <!-- 内侧折叠图标，垂直居中靠右 -->
-          <div
-            class="sidebar-collapse-trigger"
-            @click="isSidebarCollapsed = true">
-            <img
-              class="ellipsis-icon"
-              :src="ellipsisIcon">
-          </div>
         </div>
       </div>
 
@@ -153,7 +145,6 @@
   import useRequest from '@/hooks/use-request';
   import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
-  import ellipsisIcon from '@/images/ellipsis.svg';
   import foldLeftIcon from '@/images/fold-left.svg';
   import foldRightIcon from '@/images/fold-right.svg';
   import infoBlueSvg from '@/images/info-blue.svg';
@@ -656,7 +647,7 @@
 
   .sidebar-expanded {
     position: relative;
-    width: 240px;
+    width: 260px;
     height: 100%;
     background-color: #fff;
     border-radius: 4px;
@@ -665,6 +656,8 @@
     transition: opacity .2s ease .1s;
 
     .scene-selector-wrapper {
+      display: flex;
+      justify-content: center;
       padding: 16px 16px 0;
     }
 
@@ -702,10 +695,12 @@
       height: calc(100% - 52px - 48px);
 
       .render-label {
+        min-width: unset;
         padding: 0;
 
         .label-item {
-          padding: 0 26px;
+          width: 100%;
+          padding: 0 16px 0 26px;
 
           &.final {
             position: relative;
@@ -729,28 +724,6 @@
       }
     }
 
-    .sidebar-collapse-trigger {
-      position: absolute;
-      top: 50%;
-      right: 0;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 100%;
-      cursor: pointer;
-      transform: translateY(-50%);
-
-      &:hover {
-        color: #3a84ff;
-      }
-
-      .ellipsis-icon {
-        width: 14px;
-        height: 18px;
-      }
-    }
   }
 
   .content-content {
