@@ -19,6 +19,7 @@
     :is-show="isShow"
     :title="isEditMode ? t('编辑报表') : t('新建报表')"
     :width="640"
+    :z-index="9999"
     @closed="handleSliderClosed">
     <template #default>
       <div class="report-create-content">
@@ -38,6 +39,10 @@
                 :clearable="false"
                 filterable
                 :placeholder="t('选择项目')"
+                :popover-options="{
+                  boundary: 'parent',
+                  zIndex: 9999
+                }"
                 style="width: 500px;"
                 @change="handleReportChange">
                 <bk-option-group
@@ -92,7 +97,12 @@
             required>
             <bk-select
               v-model="formData.groupId"
+              :clearable="false"
               :placeholder="t('请选择')"
+              :popover-options="{
+                boundary: 'parent',
+                zIndex: 9999
+              }"
               style="flex: 1;"
               @change="handleGroupChange">
               <bk-option
@@ -197,7 +207,7 @@
     (e: 'update:isShow', value: boolean): void;
     (e: 'submit', data: ReportFormData): void;
     (e: 'cancel'): void;
-    (e: 'success'): void;
+    (e: 'success', panelId?: string): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -424,9 +434,9 @@
     loading: createLoading,
   } = useRequest(ReportConfigService.createPanel, {
     defaultValue: null,
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       messageSuccess(t('创建成功'));
-      emit('success'); // 通知父组件刷新列表
+      emit('success', res?.id); // 通知父组件刷新列表，并传递新建报表ID用于高亮
       handleClose();
     },
   });
