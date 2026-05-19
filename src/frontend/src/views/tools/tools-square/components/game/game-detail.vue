@@ -45,20 +45,25 @@
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('代币存量') }}</span>
-          <span class="info-value">{{ t('代') }} {{ gameData.coinBalance }}</span>
+          <span class="info-value"><span class="info-unit">{{ t('代') }}</span> {{ gameData.coinBalance }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('累计充值') }}</span>
-          <span class="info-value">{{ t('代') }} {{ gameData.totalRecharge }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">{{ t('累计赠送') }}</span>
-          <span class="info-value">¥ {{ gameData.totalGift }}</span>
+          <span class="info-value"><span class="info-unit">{{ t('代') }}</span> {{ gameData.totalRecharge }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('累计发放') }}</span>
-          <span class="info-value">¥ {{ gameData.totalIssue }}</span>
+          <span class="info-value"><span class="info-unit">¥</span> {{ gameData.totalIssue }}</span>
         </div>
+        <!-- 累计赠送次数、累计发放次数：后端暂未返回，有数据后再展示 -->
+        <!-- <div class="info-item">
+          <span class="info-label">{{ t('累计赠送次数') }}</span>
+          <span class="info-value">{{ gameData.totalGiftCount ?? '- -' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">{{ t('累计发放次数') }}</span>
+          <span class="info-value">{{ gameData.totalIssueCount ?? '- -' }}</span>
+        </div> -->
       </div>
       <bk-popover
         ref="exportPopoverRef"
@@ -1003,6 +1008,10 @@
       color: #313238;
       align-items: center;
       gap: 4px;
+    }
+
+    .info-unit {
+      font-weight: 700;
     }
   }
 
