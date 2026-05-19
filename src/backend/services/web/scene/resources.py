@@ -6,6 +6,7 @@ from bk_resource import resource
 from django.conf import settings
 from django.db import transaction
 from django.db.models import (
+    Case,
     CharField,
     Count,
     Exists,
@@ -15,6 +16,7 @@ from django.db.models import (
     Subquery,
     Sum,
     Value,
+    When,
 )
 from django.db.models.functions import Cast, Coalesce
 from django.utils.translation import gettext_lazy
@@ -148,10 +150,27 @@ class ListScene(SceneResource):
 
     @staticmethod
     def _annotate_list_queryset(queryset, include_related_stats=True):
+        is_all_systems_queryset = SceneSystem.objects.filter(scene_id=OuterRef("scene_id"), is_all_systems=True)
+        accessed_system_count_queryset = (
+            System.objects.filter(audit_status=SystemAuditStatusEnum.ACCESSED)
+            .exclude(system_id="")
+            .order_by()
+            .values("audit_status")
+            .annotate(count=Count("system_id", distinct=True))
+            .values("count")[:1]
+        )
         queryset = queryset.annotate(
-            system_count=Count("scene_systems", distinct=True),
             table_count=Count("scene_tables", distinct=True),
-            is_all_systems=Exists(SceneSystem.objects.filter(scene_id=OuterRef("scene_id"), is_all_systems=True)),
+            is_all_systems=Exists(is_all_systems_queryset),
+        ).annotate(
+            system_count=Case(
+                When(
+                    is_all_systems=True,
+                    then=Coalesce(Subquery(accessed_system_count_queryset, output_field=IntegerField()), Value(0)),
+                ),
+                default=Count("scene_systems", distinct=True),
+                output_field=IntegerField(),
+            ),
         )
         if not include_related_stats:
             return queryset
