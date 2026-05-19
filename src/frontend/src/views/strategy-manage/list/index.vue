@@ -744,6 +744,7 @@
           query: {
             scene_id: getSceneSystemParams().scope_id,
             scope_type: 'scene',
+            strategy_id: data.strategy_id,
           },
         };
         return data.risk_count ? <router-link to = {to} target='_blank'>
