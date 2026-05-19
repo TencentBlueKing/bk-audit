@@ -767,6 +767,39 @@ class TestSceneResource(TestCase):
         self.assertEqual(target["system_count"], 2)
         self.assertEqual(target["table_count"], 1)
 
+    def test_scene_list_all_systems_uses_accessed_system_count(self):
+        """测试全系统场景的系统数统计为所有已接入系统数"""
+        SceneSystem.objects.create(scene=self.scene, system_id="", is_all_systems=True, filter_rules=[])
+        System.objects.create(
+            system_id="bk_accessed_1",
+            instance_id="bk_accessed_1",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="已接入系统1",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
+        System.objects.create(
+            system_id="bk_accessed_2",
+            instance_id="bk_accessed_2",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="已接入系统2",
+            audit_status=SystemAuditStatusEnum.ACCESSED,
+        )
+        System.objects.create(
+            system_id="bk_pending_1",
+            instance_id="bk_pending_1",
+            namespace=settings.DEFAULT_NAMESPACE,
+            name="待接入系统",
+            audit_status=SystemAuditStatusEnum.PENDING,
+        )
+        expected_count = (
+            System.objects.filter(audit_status=SystemAuditStatusEnum.ACCESSED).exclude(system_id="").count()
+        )
+
+        result = self.resource.scene.list_scene.request({})
+        target = next(item for item in result if item["scene_id"] == self.scene.scene_id)
+
+        self.assertEqual(target["system_count"], expected_count)
+
     def test_scene_list_ignores_deleted_strategy_binding(self):
         """测试场景列表忽略已删除策略的残留绑定"""
         strategy = self._create_bound_strategy(self.scene, "已删除场景策略")
