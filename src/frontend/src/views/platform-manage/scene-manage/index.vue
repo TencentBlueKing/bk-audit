@@ -580,6 +580,7 @@
       manager: '',
       user: '',
       updated_by: '',
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
     } as Record<string, any>;
 
     keyword.forEach((item) => {
