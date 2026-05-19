@@ -36,11 +36,10 @@ class RiskManage extends ModuleBase {
   getRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
-    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/?page=${params.page}&page_size=${params.page_size}`, {
-      params: requestParams,
+      params,
     });
   }
   // 获取正在生成的事件列表
@@ -64,33 +63,30 @@ class RiskManage extends ModuleBase {
   getTodoRiskList(params: {
       page: number,
       page_size: number,
-      scope_id?: string,
+      scene_id?: string,
     }) {
-    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/?page=${params.page}&page_size=${params.page_size}`, {
-      params: requestParams,
+      params,
     });
   }
   // 我关注的获取风险列表
   getWatchRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
-    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/?page=${params.page}&page_size=${params.page_size}`, {
-      params: requestParams,
+      params,
     });
   }
   // 获取处理历史风险列表
   getProcessedRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
-    const requestParams = params.scope_id ? { ...params, scope_type: 'scene' } : params;
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/processed/?page=${params.page}&page_size=${params.page_size}`, {
-      params: requestParams,
+      params,
     });
   }
   // 获取风险可用字段
