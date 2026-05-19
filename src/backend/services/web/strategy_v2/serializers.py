@@ -1376,7 +1376,7 @@ class LinkTableDataPermissionMixin:
         if not links:
             return
 
-        # 收集所有表的 system_ids 和 rt_id
+        # 收集权限检查所需的数据
         all_system_ids = set()
         all_rt_ids = set()
         for link in links:
@@ -1384,12 +1384,19 @@ class LinkTableDataPermissionMixin:
                 table = link.get(table_key, {})
                 if not table:
                     continue
-                for sid in table.get("system_ids", []):
-                    if sid:
-                        all_system_ids.add(sid)
-                rt_id = table.get("rt_id")
-                if rt_id:
-                    all_rt_ids.add(rt_id)
+                table_type = table.get("table_type")
+                if table_type == LinkTableTableType.EVENT_LOG.value:
+                    for sid in table.get("system_ids", []):
+                        if sid:
+                            all_system_ids.add(sid)
+
+                if (
+                    table_type == RuleAuditConfigType.BIZ_RT.value
+                    or table_type == RuleAuditConfigType.BUILD_ID_ASSET.value
+                ):
+                    rt_id = table.get("rt_id")
+                    if rt_id:
+                        all_rt_ids.add(rt_id)
 
         # 校验系统授权
         if all_system_ids:
