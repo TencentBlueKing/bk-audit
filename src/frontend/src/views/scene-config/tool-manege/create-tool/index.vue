@@ -382,18 +382,32 @@
         data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
       }
       service(data)
-        .then(() => {
+        .then((res: any) => {
           isFailed.value = false;
-          // 成功后直接跳转回工具管理列表，不再展示引导页
-          window.changeConfirm = false;
-          router.push({
-            name: backRouteName,
-            query: {
-              scene_id: route.query?.scene_id,
-              scope_id: route.query?.scope_id,
-              scope_type: route.query?.scope_type,
-            },
-          });
+          const navigateBack = () => {
+            window.changeConfirm = false;
+            router.push({
+              name: backRouteName,
+              query: {
+                scene_id: route.query?.scene_id,
+                scope_id: route.query?.scope_id,
+                scope_type: route.query?.scope_type,
+              },
+            });
+          };
+          // 创建/编辑工具成功后默认启用
+          const toolUid = res?.uid || (isEditMode ? route.params.id : '');
+          if (toolUid) {
+            const sceneId = Number(route.query?.scope_id) || 0;
+            ToolManageService.publishPlatformTool({
+              uid: toolUid as string,
+              scene_id: sceneId,
+            }).finally(() => {
+              navigateBack();
+            });
+          } else {
+            navigateBack();
+          }
         })
         .catch(() => {
           isSuccessful.value = false;
