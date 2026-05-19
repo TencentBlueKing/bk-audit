@@ -24,7 +24,7 @@
         class="search-input"
         clearable
         :data="searchSelectData"
-        :placeholder="t('搜索工具名称、工具说明、工具类型、创建人')"
+        :placeholder="t('搜索工具名称、工具说明、工具类型、创建人、更新人')"
         unique-select
         @update:model-value="handleSearch" />
     </div>
@@ -438,6 +438,11 @@
       id: 'created_by',
       placeholder: t('请输入创建人'),
     },
+    {
+      name: t('更新人'),
+      id: 'updated_by',
+      placeholder: t('请输入更新人'),
+    },
   ];
 
   const itemMouseenter = ref(null);
@@ -756,6 +761,8 @@
           search.tool_type = value.split(',').map(v => v.trim());
         } else if (item.id === 'created_by') {
           search.keyword = value;
+        } else if (item.id === 'updated_by') {
+          search.updated_by = value;
         }
       }
     });
@@ -791,6 +798,8 @@
               search.tool_type = value.split(',').map(v => v.trim());
             } else if (item.id === 'created_by') {
               search.keyword = value;
+            } else if (item.id === 'updated_by') {
+              search.updated_by = value;
             }
           }
         });
