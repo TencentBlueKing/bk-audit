@@ -2,6 +2,7 @@
 import abc
 from collections.abc import Collection
 
+from bk_resource import resource
 from django.conf import settings
 from django.db import transaction
 from django.db.models import (
@@ -614,6 +615,39 @@ class UpdateSceneInfo(SceneResource):
         self._sync_iam_group_members(scene, validated_request_data)
 
         return scene
+
+
+class GetScenePermissionSystems(SceneResource):
+    """获取场景下有权限的系统列表"""
+
+    name = gettext_lazy("获取场景下有权限的系统列表")
+    audit_action = ActionEnum.VIEW_SCENE
+    many_response_data = True
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    class ResponseSerializer(serializers.Serializer):
+        system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+        system_name = serializers.CharField(label=gettext_lazy("系统名称"))
+
+    def perform_request(self, validated_request_data):
+        scene_id = validated_request_data["scene_id"]
+
+        # 通过 SystemListAllResource 的 scope 能力获取当前用户在该场景下有权限的系统列表
+        systems = resource.meta.system_list_all(
+            namespace=settings.DEFAULT_NAMESPACE,
+            scope_type="scene",
+            scope_id=str(scene_id),
+        )
+
+        return [
+            {
+                "system_id": system["system_id"],
+                "system_name": system["name"],
+            }
+            for system in systems
+        ]
 
 
 def get_scene_members_data(scene_id):
