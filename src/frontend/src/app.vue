@@ -26,18 +26,21 @@
         <router-back v-if="!(route.meta?.isNoBack)" />
         <span>{{ t(pageTitle) }}</span>
         <!-- 聚合模式下显示当前面板所属场景标签 -->
-        <bk-tag
-          v-if="panelSceneTag"
-          class="title-scene-tag"
-          :class="[`type-${panelSceneTag.type}`]">
-          {{ panelSceneTag.name }}({{ panelSceneTag.id }})
-        </bk-tag>
-        <span
-          v-if="panelDescription"
-          class="title-tip">
-          <span> | </span>
-          <span class="title-tip-text">{{ panelDescription }}</span>
+        <span v-if="route.name === 'statementManageDetail'">
+          <bk-tag
+            v-if="panelSceneTag"
+            class="title-scene-tag"
+            :class="[`type-${panelSceneTag.type}`]">
+            {{ panelSceneTag.name }}({{ panelSceneTag.id }})
+          </bk-tag>
+          <span
+            v-if="panelDescription"
+            class="title-tip">
+            <span> | </span>
+            <span class="title-tip-text">{{ panelDescription }}</span>
+          </span>
         </span>
+
         <span
           v-if="route.meta?.isShowTitleTip"
           class="title-tip">
