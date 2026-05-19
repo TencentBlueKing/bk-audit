@@ -2,6 +2,10 @@
 """
 strategy_v2 serializers 单测：覆盖复杂策略校验逻辑
 """
+import unittest.mock
+
+from rest_framework import serializers
+
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control, ControlVersion
 from services.web.scene.constants import (
@@ -583,3 +587,369 @@ class TestReportConfigValidation(TestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("processor_groups", str(serializer.errors))
+
+
+class TestLinkTableDataPermissionMixin(TestCase):
+    """LinkTableDataPermissionMixin 权限验证测试"""
+
+    def setUp(self):
+        super().setUp()
+        # 创建场景用于测试
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_permission_scene", description="test")
+        self.scene_id = self.scene.scene_id
+
+        # 创建用于测试的 LinkTableDataPermissionMixin 实例
+        from services.web.strategy_v2.serializers import LinkTableDataPermissionMixin
+
+        self.mixin_instance = LinkTableDataPermissionMixin()
+
+    def _create_mock_link_table_config(self, system_ids=None, rt_ids=None):
+        """创建模拟的联表配置"""
+        config = {"links": []}
+
+        if system_ids or rt_ids:
+            link = {}
+            if system_ids:
+                link["left_table"] = {"system_ids": system_ids[:1] if system_ids else []}
+                if len(system_ids) > 1:
+                    link["right_table"] = {"system_ids": system_ids[1:]}
+            if rt_ids:
+                link["left_table"] = link.get("left_table", {})
+                link["left_table"]["rt_id"] = rt_ids[0] if rt_ids else None
+                if len(rt_ids) > 1:
+                    link["right_table"] = link.get("right_table", {})
+                    link["right_table"]["rt_id"] = rt_ids[1]
+
+            config["links"].append(link)
+
+        return config
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_no_scene_id(self, mock_scene_data_filter, mock_system_resource):
+        """测试没有场景ID时不进行权限验证"""
+        attrs = {"config": self._create_mock_link_table_config(["system1"], ["rt1"])}
+
+        # 模拟 _get_link_table_scene_id 返回 None
+        with unittest.mock.patch.object(self.mixin_instance, '_get_link_table_scene_id', return_value=None):
+            self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 不应该调用权限检查方法
+        mock_system_resource.return_value.request.assert_not_called()
+        mock_scene_data_filter.get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_no_config(self, mock_scene_data_filter, mock_system_resource):
+        """测试没有配置时不进行权限验证"""
+        attrs = {"scene_id": self.scene_id}
+
+        self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 不应该调用权限检查方法
+        mock_system_resource.return_value.request.assert_not_called()
+        mock_scene_data_filter.get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_no_links(self, mock_scene_data_filter, mock_system_resource):
+        """测试没有联表时不进行权限验证"""
+        attrs = {"scene_id": self.scene_id, "config": {"links": []}}
+
+        self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 不应该调用权限检查方法
+        mock_system_resource.return_value.request.assert_not_called()
+        mock_scene_data_filter.get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_system_success(self, mock_scene_data_filter, mock_system_resource):
+        """测试系统权限验证成功"""
+        # 模拟授权的系统
+        mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}, {"system_id": "system2"}]
+
+        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1", "system2"])}
+
+        # 应该正常通过，不抛出异常
+        self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 验证权限检查被调用
+        mock_system_resource.return_value.request.assert_called_once()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_system_unauthorized(
+        self, mock_scene_data_filter, mock_system_resource
+    ):
+        """测试系统权限验证失败"""
+        # 模拟授权的系统
+        mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}]
+
+        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1", "system2"])}
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        self.assertIn("系统[system2]不在场景", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_link_table_data_permission_system_permission_check_failed(
+        self, mock_scene_data_filter, mock_system_resource
+    ):
+        """测试系统权限检查服务异常"""
+        # 模拟权限检查抛出异常
+        mock_system_resource.return_value.request.side_effect = Exception("Permission check failed")
+
+        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1"])}
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        self.assertIn("权限检查失败", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_link_table_data_permission_table_success(self, mock_get_table_ids, mock_system_resource):
+        """测试数据表权限验证成功"""
+        # 模拟授权的数据表
+        mock_get_table_ids.return_value = ["rt1", "rt2"]
+
+        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"])}
+
+        # 应该正常通过，不抛出异常
+        self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 验证权限检查被调用
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_link_table_data_permission_table_unauthorized(self, mock_get_table_ids, mock_system_resource):
+        """测试数据表权限验证失败"""
+        # 模拟授权的数据表
+        mock_get_table_ids.return_value = ["rt1"]
+
+        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"])}
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        self.assertIn("数据表[rt2]不在场景", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_link_table_data_permission_both_system_and_table_success(
+        self, mock_get_table_ids, mock_system_resource
+    ):
+        """测试系统和数据表权限验证同时成功"""
+        # 模拟授权的系统和数据表
+        mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}, {"system_id": "system2"}]
+        mock_get_table_ids.return_value = ["rt1", "rt2"]
+
+        attrs = {
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(["system1", "system2"], ["rt1", "rt2"]),
+        }
+
+        # 应该正常通过，不抛出异常
+        self.mixin_instance._validate_link_table_data_permission(attrs)
+
+        # 验证权限检查都被调用
+        mock_system_resource.return_value.request.assert_called_once()
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
+
+
+class TestStrategyDataPermissionValidation(TestCase):
+    """StrategySerializer 数据权限验证测试"""
+
+    def setUp(self):
+        super().setUp()
+        # 创建场景用于测试
+        from services.web.scene.models import Scene
+
+        self.scene = Scene.objects.create(name="test_strategy_permission_scene", description="test")
+        self.scene_id = self.scene.scene_id
+
+        # 创建用于测试的 StrategySerializer 实例
+        from services.web.strategy_v2.serializers import StrategySerializer
+
+        self.serializer = StrategySerializer()
+
+    def _create_mock_strategy_data(self, strategy_type, config_type=None, system_ids=None, rt_id=None):
+        """创建模拟策略数据"""
+        data = {
+            "scene_id": self.scene_id,
+            "strategy_type": strategy_type,
+            "configs": {"config_type": config_type, "data_source": {}},
+        }
+
+        if system_ids:
+            data["configs"]["data_source"]["system_ids"] = system_ids
+        if rt_id:
+            data["configs"]["data_source"]["rt_id"] = rt_id
+
+        return data
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_event_log_success(self, mock_scene_data_filter, mock_system_resource):
+        """测试事件日志策略系统权限验证成功"""
+        # 模拟授权的系统
+        mock_system_resource.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkssm"}]
+
+        data = self._create_mock_strategy_data(
+            strategy_type="rule", config_type="EventLog", system_ids=["bklog", "bkssm"]
+        )
+
+        # 应该正常通过，不抛出异常
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查被调用
+        mock_system_resource.return_value.request.assert_called_once()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_event_log_unauthorized_system(
+        self, mock_scene_data_filter, mock_system_resource
+    ):
+        """测试事件日志策略系统权限验证失败"""
+        # 模拟授权的系统
+        mock_system_resource.return_value.request.return_value = [{"system_id": "bklog"}]
+
+        data = self._create_mock_strategy_data(
+            strategy_type="rule", config_type="EventLog", system_ids=["bklog", "bkssm"]  # bkssm 未授权
+        )
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.serializer._validate_strategy_data_permission(data)
+
+        self.assertIn("系统[bkssm]不在场景", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_biz_rt_success(self, mock_get_table_ids, mock_system_resource):
+        """测试业务RT策略数据表权限验证成功"""
+        # 模拟授权的数据表
+        mock_get_table_ids.return_value = ["rt_table_1", "rt_table_2"]
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRt", rt_id="rt_table_1")
+
+        # 应该正常通过，不抛出异常
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查被调用
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_biz_rt_unauthorized_table(
+        self, mock_get_table_ids, mock_system_resource
+    ):
+        """测试业务RT策略数据表权限验证失败"""
+        # 模拟授权的数据表
+        mock_get_table_ids.return_value = ["rt_table_1"]
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRt", rt_id="rt_table_2")  # 未授权的表
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.serializer._validate_strategy_data_permission(data)
+
+        self.assertIn("数据表[rt_table_2]不在场景", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_model_strategy_skip(self, mock_scene_data_filter, mock_system_resource):
+        """测试模型策略跳过权限验证"""
+        data = self._create_mock_strategy_data(strategy_type="model")
+
+        # 模型策略不应该进行权限验证
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查没有被调用
+        mock_system_resource.return_value.request.assert_not_called()
+        mock_scene_data_filter.get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_system_permission_check_failed(
+        self, mock_scene_data_filter, mock_system_resource
+    ):
+        """测试系统权限检查服务异常"""
+        # 模拟权限检查抛出异常
+        mock_system_resource.return_value.request.side_effect = Exception("Permission check failed")
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="EventLog", system_ids=["bklog"])
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.serializer._validate_strategy_data_permission(data)
+
+        self.assertIn("权限检查失败", str(cm.exception))
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_no_scene_id_skip(self, mock_scene_data_filter, mock_system_resource):
+        """测试没有场景ID时跳过权限验证"""
+        data = {
+            "strategy_type": "rule",
+            "configs": {"config_type": "EventLog", "data_source": {"system_ids": ["bklog"]}},
+        }
+
+        # 没有scene_id时应该跳过验证
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查没有被调用
+        mock_system_resource.return_value.request.assert_not_called()
+        mock_scene_data_filter.get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
+    def test_validate_strategy_data_permission_empty_system_ids_skip(
+        self, mock_scene_data_filter, mock_system_resource
+    ):
+        """测试空系统ID列表时跳过验证"""
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="EventLog", system_ids=[])
+
+        # 空系统ID列表应该跳过验证
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查没有被调用
+        mock_system_resource.return_value.request.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_empty_rt_id(self, mock_get_table_ids, mock_system_resource):
+        """测试空RT ID跳过权限验证"""
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRT", rt_id="")
+
+        # 空RT ID应该跳过验证
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查没有被调用
+        mock_get_table_ids.assert_not_called()
+
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_build_id_asset_config_type(
+        self, mock_get_table_ids, mock_system_resource
+    ):
+        """测试BuildID Asset配置类型的权限验证"""
+        # 模拟授权的数据表
+        mock_get_table_ids.return_value = ["asset_table"]
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="BuildIn", rt_id="asset_table")
+
+        # 应该正常通过，不抛出异常
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证权限检查被调用
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
