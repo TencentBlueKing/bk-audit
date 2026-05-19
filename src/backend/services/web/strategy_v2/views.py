@@ -183,14 +183,17 @@ class StrategyTableViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "scene_id")
 
     def get_permissions(self):
-        return [
-            AnyOfPermissions(
-                IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+        if self.action in ["scene_permission_tables"]:
+            return [
                 InstanceActionPermission(
                     actions=[ActionEnum.MANAGE_SCENE],
                     resource_meta=ResourceEnum.SCENE,
                     get_instance_id=self.get_scene_id,
-                ),
+                )
+            ]
+        return [
+            AnyOfPermissions(
+                IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
                 ActionPermission(
                     actions=[
                         ActionEnum.CREATE_STRATEGY,

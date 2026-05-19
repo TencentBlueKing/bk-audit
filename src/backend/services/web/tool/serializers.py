@@ -451,6 +451,15 @@ class ListToolAllRequestSerializer(ScopeBindingRequestSerializer):
         default=None,
         label=gettext_lazy("上架状态"),
     )
+    name = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="工具名称")
+    description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="工具说明")
+    tool_type = FlexibleListField(
+        child=serializers.ChoiceField(choices=ToolTypeEnum.choices),
+        required=False,
+        label=gettext_lazy("工具类型"),
+    )
+    created_by = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="创建人")
+    updated_by = FlexibleListField(child=serializers.CharField(allow_blank=False), required=False, label="更新人")
 
 
 class OptionalScopeBindingRequestSerializer(ScopeBindingRequestSerializer):
