@@ -66,6 +66,35 @@ const activeToolUid = ref(loadActiveToolUid());
 // 下钻参数存储（按工具 uid 索引，模块级别共享）
 const drillDownParamsMap = ref<Record<string, DrillDownParams>>({});
 
+// 场景级别的工具状态缓存（按 sceneKey 索引）
+const STORAGE_KEY_SCENE_CACHE = 'tool_tabs_scene_cache';
+
+interface SceneToolState {
+  tools: ToolInfo[];
+  activeUid: string;
+}
+
+// 从 sessionStorage 恢复场景缓存
+const loadSceneCache = (): Record<string, SceneToolState> => {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_SCENE_CACHE);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const sceneToolCache = ref<Record<string, SceneToolState>>(loadSceneCache());
+
+const syncSceneCacheToStorage = () => {
+  try {
+    sessionStorage.setItem(STORAGE_KEY_SCENE_CACHE, JSON.stringify(sceneToolCache.value));
+  } catch {
+    // 静默处理
+  }
+};
+
 export default function useToolTabs() {
   // 是否有打开的工具（用于判断是否显示详情面板）
   const hasOpenedTools = computed(() => openedTools.value.length > 0 && activeToolUid.value !== '');
@@ -149,6 +178,33 @@ export default function useToolTabs() {
       } catch {
         // 静默处理
       }
+    },
+    // 保存当前工具状态到场景缓存
+    saveSceneState: (sceneKey: string) => {
+      if (!sceneKey) return;
+      sceneToolCache.value[sceneKey] = {
+        tools: [...openedTools.value],
+        activeUid: activeToolUid.value,
+      };
+      syncSceneCacheToStorage();
+    },
+    // 从场景缓存恢复工具状态
+    restoreSceneState: (sceneKey: string) => {
+      if (!sceneKey) {
+        openedTools.value = [];
+        activeToolUid.value = '';
+        syncToStorage(openedTools.value, activeToolUid.value);
+        return;
+      }
+      const cached = sceneToolCache.value[sceneKey];
+      if (cached) {
+        openedTools.value = cached.tools.map(item => new ToolInfo(item));
+        activeToolUid.value = cached.activeUid;
+      } else {
+        openedTools.value = [];
+        activeToolUid.value = '';
+      }
+      syncToStorage(openedTools.value, activeToolUid.value);
     },
   };
 }
