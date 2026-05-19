@@ -409,23 +409,56 @@
   };
 
   const toolContentRefs = ref<Record<string, any>>({});
-  // 从 sessionStorage 恢复 searchListMap
-  const STORAGE_KEY_SEARCH_LIST = 'tool_tabs_search_list_map';
-  const loadSearchListMap = (): Record<string, SearchItem[]> => {
+  // 从 sessionStorage 恢复用户输入值映射（精简存储：只存 raw_name → value）
+  const STORAGE_KEY_SEARCH_VALUES = 'tool_tabs_search_values_map';
+  const loadSearchValuesMap = (): Record<string, Record<string, any>> => {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY_SEARCH_LIST);
-      return raw ? JSON.parse(raw) : {};
+      const raw = sessionStorage.getItem(STORAGE_KEY_SEARCH_VALUES);
+      if (raw) return JSON.parse(raw);
+      // 兼容迁移：从旧的完整存储格式中提取 value
+      const oldRaw = sessionStorage.getItem('tool_tabs_search_list_map');
+      if (oldRaw) {
+        const oldMap = JSON.parse(oldRaw) as Record<string, Array<{ raw_name: string; value: any }>>;
+        const migrated: Record<string, Record<string, any>> = {};
+        Object.entries(oldMap).forEach(([uid, list]) => {
+          const valuesObj: Record<string, any> = {};
+          list.forEach((item) => {
+            valuesObj[item.raw_name] = item.value;
+          });
+          migrated[uid] = valuesObj;
+        });
+        // 存储迁移后的精简数据并清理旧 key
+        sessionStorage.setItem(STORAGE_KEY_SEARCH_VALUES, JSON.stringify(migrated));
+        sessionStorage.removeItem('tool_tabs_search_list_map');
+        return migrated;
+      }
+      return {};
     } catch {
       return {};
     }
   };
-  const searchListMap = ref<Record<string, SearchItem[]>>(loadSearchListMap());
-  const syncSearchListToStorage = () => {
+  // 精简存储：{ [uid]: { [raw_name]: value } }
+  const searchValuesMap = ref<Record<string, Record<string, any>>>(loadSearchValuesMap());
+  // 运行时完整 searchList（不持久化，由工具详情 + 存储的 value 合并生成）
+  const searchListMap = ref<Record<string, SearchItem[]>>({});
+
+  const syncSearchValuesToStorage = () => {
     try {
-      sessionStorage.setItem(STORAGE_KEY_SEARCH_LIST, JSON.stringify(searchListMap.value));
+      sessionStorage.setItem(STORAGE_KEY_SEARCH_VALUES, JSON.stringify(searchValuesMap.value));
     } catch {
       // 静默处理
     }
+  };
+  // 从完整 searchList 提取用户输入值并同步到 sessionStorage
+  const syncSearchListToStorage = () => {
+    Object.entries(searchListMap.value).forEach(([uid, list]) => {
+      const valuesObj: Record<string, any> = {};
+      list.forEach((item) => {
+        valuesObj[item.raw_name] = item.value;
+      });
+      searchValuesMap.value[uid] = valuesObj;
+    });
+    syncSearchValuesToStorage();
   };
   const toolDetailMap = ref<Record<string, ToolDetailModel>>({});
   const {
@@ -557,8 +590,16 @@
         // 清除下钻参数，避免重复使用
         clearDrillDownParams(uid);
       } else if (!searchListMap.value[uid]) {
-        // 非下钻：仅在该工具尚未初始化搜索列表时才设置
-        searchListMap.value[uid] = (data.config?.input_variable || []).map(createSearchItem);
+        // 非下钻：从工具配置构建完整 searchList，并尝试恢复缓存的用户输入值
+        const cachedValues = searchValuesMap.value[uid];
+        searchListMap.value[uid] = (data.config?.input_variable || []).map((item: any) => {
+          const searchItem = createSearchItem(item);
+          // 如果有缓存的用户输入值，优先使用缓存值
+          if (cachedValues && cachedValues[searchItem.raw_name] !== undefined) {
+            searchItem.value = cachedValues[searchItem.raw_name];
+          }
+          return searchItem;
+        });
         syncSearchListToStorage();
       }
 
@@ -753,6 +794,7 @@
         if (!activeUids.has(uid)) {
           delete toolDetailMap.value[uid];
           delete searchListMap.value[uid];
+          delete searchValuesMap.value[uid];
           delete toolContentRefs.value[uid];
         }
       });
@@ -777,7 +819,7 @@
       } catch {
         // 静默处理
       }
-      syncSearchListToStorage();
+      syncSearchValuesToStorage();
       syncGameDetailToStorage();
     },
     { deep: true },

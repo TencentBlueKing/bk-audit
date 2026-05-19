@@ -235,6 +235,8 @@
         return;
       }
       target.value = val;
+      // 显式通知父组件同步到 sessionStorage，确保离开页面后能恢复用户输入
+      emit('update:searchList', [...localSearchList.value]);
     }
   };
 
