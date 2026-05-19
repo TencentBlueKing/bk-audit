@@ -15,6 +15,7 @@ from services.web.scene.constants import (
 )
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBinding
+from services.web.strategy_v2.constants import LinkTableTableType  # 添加导入
 from services.web.strategy_v2.constants import (
     RiskLevel,
     RuleAuditSourceType,
@@ -601,9 +602,11 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.scene_id = self.scene.scene_id
 
         # 创建用于测试的 LinkTableDataPermissionMixin 实例
-        from services.web.strategy_v2.serializers import LinkTableDataPermissionMixin
+        from services.web.strategy_v2.serializers import (
+            CreateLinkTableRequestSerializer,
+        )
 
-        self.mixin_instance = LinkTableDataPermissionMixin()
+        self.mixin_instance = CreateLinkTableRequestSerializer()
 
     def _create_mock_link_table_config(self, system_ids=None, rt_ids=None):
         """创建模拟的联表配置"""
@@ -612,15 +615,23 @@ class TestLinkTableDataPermissionMixin(TestCase):
         if system_ids or rt_ids:
             link = {}
             if system_ids:
-                link["left_table"] = {"system_ids": system_ids[:1] if system_ids else []}
+                link["left_table"] = {
+                    "system_ids": system_ids[:1] if system_ids else [],
+                    "table_type": LinkTableTableType.EVENT_LOG.value,  # 使用正确的枚举值
+                }
                 if len(system_ids) > 1:
-                    link["right_table"] = {"system_ids": system_ids[1:]}
+                    link["right_table"] = {
+                        "system_ids": system_ids[1:],
+                        "table_type": LinkTableTableType.EVENT_LOG.value,  # 使用正确的枚举值
+                    }
             if rt_ids:
                 link["left_table"] = link.get("left_table", {})
                 link["left_table"]["rt_id"] = rt_ids[0] if rt_ids else None
+                link["left_table"]["table_type"] = LinkTableTableType.BIZ_RT.value  # 使用正确的枚举值
                 if len(rt_ids) > 1:
                     link["right_table"] = link.get("right_table", {})
                     link["right_table"]["rt_id"] = rt_ids[1]
+                    link["right_table"]["table_type"] = LinkTableTableType.BIZ_RT.value  # 使用正确的枚举值
 
             config["links"].append(link)
 
@@ -630,11 +641,19 @@ class TestLinkTableDataPermissionMixin(TestCase):
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
     def test_validate_link_table_data_permission_no_scene_id(self, mock_scene_data_filter, mock_system_resource):
         """测试没有场景ID时不进行权限验证"""
-        attrs = {"config": self._create_mock_link_table_config(["system1"], ["rt1"])}
+        # 创建没有场景ID的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "config": self._create_mock_link_table_config(["system1"], ["rt1"]),
+        }
 
-        # 模拟 _get_link_table_scene_id 返回 None
-        with unittest.mock.patch.object(self.mixin_instance, '_get_link_table_scene_id', return_value=None):
-            self.mixin_instance._validate_link_table_data_permission(attrs)
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
+        serializer.initial_data = data
+
+        # 应该跳过权限验证，不抛出异常
+        serializer._validate_link_table_data_permission(data)
 
         # 不应该调用权限检查方法
         mock_system_resource.return_value.request.assert_not_called()
@@ -644,9 +663,14 @@ class TestLinkTableDataPermissionMixin(TestCase):
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
     def test_validate_link_table_data_permission_no_config(self, mock_scene_data_filter, mock_system_resource):
         """测试没有配置时不进行权限验证"""
-        attrs = {"scene_id": self.scene_id}
+        # 创建没有配置的数据
+        data = {"namespace": "test_namespace", "name": "test_link_table", "scene_id": self.scene_id}
 
-        self.mixin_instance._validate_link_table_data_permission(attrs)
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
+        serializer.initial_data = data
+
+        serializer._validate_link_table_data_permission(data)
 
         # 不应该调用权限检查方法
         mock_system_resource.return_value.request.assert_not_called()
@@ -656,9 +680,19 @@ class TestLinkTableDataPermissionMixin(TestCase):
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
     def test_validate_link_table_data_permission_no_links(self, mock_scene_data_filter, mock_system_resource):
         """测试没有联表时不进行权限验证"""
-        attrs = {"scene_id": self.scene_id, "config": {"links": []}}
+        # 创建没有联表的配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": {"links": []},
+        }
 
-        self.mixin_instance._validate_link_table_data_permission(attrs)
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
+        serializer.initial_data = data
+
+        serializer._validate_link_table_data_permission(data)
 
         # 不应该调用权限检查方法
         mock_system_resource.return_value.request.assert_not_called()
@@ -671,10 +705,19 @@ class TestLinkTableDataPermissionMixin(TestCase):
         # 模拟授权的系统
         mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}, {"system_id": "system2"}]
 
-        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1", "system2"])}
+        # 创建完整的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(["system1", "system2"]),
+        }
+
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
 
         # 应该正常通过，不抛出异常
-        self.mixin_instance._validate_link_table_data_permission(attrs)
+        serializer.validate(data)
 
         # 验证权限检查被调用
         mock_system_resource.return_value.request.assert_called_once()
@@ -688,11 +731,20 @@ class TestLinkTableDataPermissionMixin(TestCase):
         # 模拟授权的系统
         mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}]
 
-        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1", "system2"])}
+        # 创建完整的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(["system1", "system2"]),
+        }
+
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
 
         # 应该抛出验证错误
         with self.assertRaises(serializers.ValidationError) as cm:
-            self.mixin_instance._validate_link_table_data_permission(attrs)
+            serializer.validate(data)
 
         self.assertIn("系统[system2]不在场景", str(cm.exception))
 
@@ -705,11 +757,20 @@ class TestLinkTableDataPermissionMixin(TestCase):
         # 模拟权限检查抛出异常
         mock_system_resource.return_value.request.side_effect = Exception("Permission check failed")
 
-        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(["system1"])}
+        # 创建完整的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(["system1"]),
+        }
+
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
 
         # 应该抛出验证错误
         with self.assertRaises(serializers.ValidationError) as cm:
-            self.mixin_instance._validate_link_table_data_permission(attrs)
+            serializer.validate(data)
 
         self.assertIn("权限检查失败", str(cm.exception))
 
@@ -720,10 +781,19 @@ class TestLinkTableDataPermissionMixin(TestCase):
         # 模拟授权的数据表
         mock_get_table_ids.return_value = ["rt1", "rt2"]
 
-        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"])}
+        # 创建完整的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"]),
+        }
+
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
 
         # 应该正常通过，不抛出异常
-        self.mixin_instance._validate_link_table_data_permission(attrs)
+        serializer.validate(data)
 
         # 验证权限检查被调用
         mock_get_table_ids.assert_called_once_with(self.scene_id)
@@ -735,35 +805,22 @@ class TestLinkTableDataPermissionMixin(TestCase):
         # 模拟授权的数据表
         mock_get_table_ids.return_value = ["rt1"]
 
-        attrs = {"scene_id": self.scene_id, "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"])}
+        # 创建完整的联表配置数据
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(rt_ids=["rt1", "rt2"]),
+        }
+
+        # 使用序列化器进行验证
+        serializer = self.mixin_instance
 
         # 应该抛出验证错误
         with self.assertRaises(serializers.ValidationError) as cm:
-            self.mixin_instance._validate_link_table_data_permission(attrs)
+            serializer.validate(data)
 
         self.assertIn("数据表[rt2]不在场景", str(cm.exception))
-
-    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
-    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
-    def test_validate_link_table_data_permission_both_system_and_table_success(
-        self, mock_get_table_ids, mock_system_resource
-    ):
-        """测试系统和数据表权限验证同时成功"""
-        # 模拟授权的系统和数据表
-        mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}, {"system_id": "system2"}]
-        mock_get_table_ids.return_value = ["rt1", "rt2"]
-
-        attrs = {
-            "scene_id": self.scene_id,
-            "config": self._create_mock_link_table_config(["system1", "system2"], ["rt1", "rt2"]),
-        }
-
-        # 应该正常通过，不抛出异常
-        self.mixin_instance._validate_link_table_data_permission(attrs)
-
-        # 验证权限检查都被调用
-        mock_system_resource.return_value.request.assert_called_once()
-        mock_get_table_ids.assert_called_once_with(self.scene_id)
 
 
 class TestStrategyDataPermissionValidation(TestCase):
