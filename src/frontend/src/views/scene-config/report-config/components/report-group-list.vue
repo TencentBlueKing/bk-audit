@@ -135,6 +135,7 @@
                   <template #item="{ element: report }">
                     <div
                       class="custom-table-row"
+                      :class="{ 'is-new-created': props.highlightReportId === report.id }"
                       @mouseenter="hoveredReportId = report.id"
                       @mouseleave="hoveredReportId = null">
                       <div class="custom-table-cell drag-cell">
@@ -488,6 +489,9 @@
     groups: ReportGroup[];
     activeGroups?: number[];
     forceExpandAll?: boolean;
+    /** 新建报表的高亮ID（刷新后消失） */
+    // eslint-disable-next-line vue/no-unused-properties
+    highlightReportId?: string | null;
   }
 
   // 拖拽排序结果
@@ -528,6 +532,7 @@
     groups: () => [],
     activeGroups: () => [],
     forceExpandAll: false,
+    highlightReportId: null,
   });
 
   const emit = defineEmits<Emits>();
@@ -536,14 +541,13 @@
   const router = useRouter();
   const { messageSuccess } = useMessage();
 
-  // 格式化更新时间：将 T 替换为空格，去掉毫秒，时区用空格分隔
-  // 例: "2026-04-08T11:37:31.736326+08:00" → "2026-04-08 11:37:31 08:00"
+  // 格式化更新时间：将 T 替换为空格，去掉毫秒和时区
+  // 例: "2026-04-08T11:37:31.736326+08:00" → "2026-04-08 11:37:31"
   const formatUpdateTime = (timeStr: string): string => {
     if (!timeStr) return '-';
     return timeStr
-      .replace('T', ' ')        // 替换 T 为空格
-      .replace(/\.\d{6}/, '')    // 移除毫秒部分
-      .replace(/\+/, ' ');       // 时区 + 号替换为空格
+      .replace('T', ' ')              // 替换 T 为空格
+      .replace(/\.\d{6}.*/, '');     // 移除毫秒及时区部分
   };
 
   // 展开的分组（内部管理，用持久备份防止 bk-collapse 重置）
@@ -987,25 +991,26 @@
 
     // 有数据时恢复展开状态
     if (groups.length > 0) {
-      if (savedActiveGroups.value.length > 0) {
-        // 从持久备份恢复（清理已删除/不存在的分组）
+      if (isInitialized) {
+        // 已初始化后（数据刷新）：仅清理已删除的分组 ID，保持用户展开/收起状态不变
         const validIds = new Set(groups.map(g => g.id));
         const restored = savedActiveGroups.value.filter(id => validIds.has(id));
-        // 切换场景后旧ID全部失效时，回退到展开第一个
+        activeGroups.value = restored;
+      } else if (savedActiveGroups.value.length > 0) {
+        // 首次初始化但有持久备份（如从父组件传入）
+        const validIds = new Set(groups.map(g => g.id));
+        const restored = savedActiveGroups.value.filter(id => validIds.has(id));
         activeGroups.value = restored.length > 0 ? restored : [groups[0].id];
-        // 同步更新持久备份（场景切换后应使用新数据）
+        // 切换场景后旧ID全部失效时，回退到展开第一个
         if (restored.length === 0) {
           savedActiveGroups.value = [groups[0].id];
         }
       } else {
-        // 首次加载，默认展开第一个（即使 expandAll 为 true 也只展开第一个）
+        // 首次加载无持久备份，默认展开第一个
         activeGroups.value = [groups[0].id];
         savedActiveGroups.value = [groups[0].id];
       }
-      // 标记首次初始化完成
-      if (!isInitialized) {
-        isInitialized = true;
-      }
+      isInitialized = true;
     }
   }, { immediate: true, deep: true });
 
@@ -1013,6 +1018,17 @@
   watch(activeGroups, (val) => {
     savedActiveGroups.value = [...val];
     emit('update:activeGroups', [...val]);
+  }, { deep: true });
+
+  // 监听父组件传入的 activeGroups 变化（如点击"全部展开/收起"按钮）
+  watch(() => props.activeGroups, (val) => {
+    if (!isInitialized) return;
+    const current = JSON.stringify([...activeGroups.value].sort());
+    const incoming = JSON.stringify([...(val || [])].sort());
+    if (current !== incoming) {
+      activeGroups.value = [...(val || [])];
+      savedActiveGroups.value = [...(val || [])];
+    }
   }, { deep: true });
 
   // 监听 forceExpandAll：父组件强制全展开（搜索后使用）
@@ -1210,6 +1226,15 @@
 
     .jump-link {
       opacity: 100%;
+    }
+  }
+
+  /* 新建报表高亮绿底（刷新后消失） */
+  &.is-new-created {
+    background-color: #e8fbf0;
+
+    &:hover {
+      background-color: #d4f3e1;
     }
   }
 }

@@ -93,6 +93,7 @@
             :active-groups="expandedGroupIds"
             :force-expand-all="forceExpandAll"
             :groups="reportGroups"
+            :highlight-report-id="highlightReportId"
             @add-report="handleAddReport"
             @deleted="handleDeleted"
             @drag-sort="handleDragSort"
@@ -190,7 +191,7 @@
     && expandedGroupIds.value.length === reportGroups.value.length);
   // 搜索选择器数据
   const searchSelectData = [
-    { name: '名称', id: 'name', placeholder: '请输入名称' },
+    { name: '名称', id: 'name', placeholder: '请输入名称', noValidate: true },
     { name: '描述', id: 'description', placeholder: '请输入描述' },
     { name: 'BKVision 报表', id: 'bkvision_report', placeholder: '请输入BKVision报表' },
     { name: '更新人', id: 'updated_by', placeholder: '请输入更新人' },
@@ -263,6 +264,8 @@
   const forceExpandAll = ref(false);
   // 数据加载状态（覆盖 fetchGroups + fetchPanels 完整链路）
   const isDataLoading = ref(false);
+  // 新建报表高亮ID（内存变量，刷新后消失）
+  const highlightReportId = ref<string | null>(null);
 
   // 图表列表数据
   interface ChartListModel {
@@ -535,9 +538,13 @@
   };
 
 
-  // 启用/停用成功后刷新列表
+  // 启用/停用成功后刷新列表（保持当前展开/收起状态）
   const handleStatusUpdated = () => {
-    handleSearch();
+    isDataLoading.value = true;
+    fetchGroups({
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    });
   };
 
   // 删除成功后刷新列表
@@ -581,7 +588,11 @@
   };
 
   // 创建成功后刷新列表
-  const handleCreateSuccess = () => {
+  const handleCreateSuccess = (panelId?: string) => {
+    // 设置新建报表高亮ID（内存变量，刷新后消失）
+    if (panelId) {
+      highlightReportId.value = panelId;
+    }
     // 重新获取分组和Panel列表
     isDataLoading.value = true;
     reportGroups.value = [];
