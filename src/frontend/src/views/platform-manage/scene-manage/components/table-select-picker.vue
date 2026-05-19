@@ -33,7 +33,8 @@
     }"
     :scroll-height="600"
     @clear="handleClearTable"
-    @tag-remove="handleRemoveTableTag">
+    @tag-remove="handleRemoveTableTag"
+    @toggle="(val: boolean) => { if (val) tableSearchKey = '' }">
     <div
       class="table-select-panel"
       @click.stop>
@@ -72,6 +73,7 @@
           children="children"
           :data="currentTableTreeData"
           :empty-text="t('数据搜索为空')"
+          :expand-all="!!tableSearchKey"
           label="label"
           :node-content-action="['click']"
           node-key="value"
