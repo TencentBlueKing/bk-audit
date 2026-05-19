@@ -39,13 +39,20 @@
             @click="handleToggleStatus">
             {{ detailData.status === 'enabled' ? t('停用') : t('启用') }}
           </bk-button>
-          <bk-button
-            class="mr8"
-            :disabled="detailData.status === 'enabled'"
-            outline
-            @click="handleDelete">
-            {{ t('删除') }}
-          </bk-button>
+          <bk-popover
+            :disabled="detailData.status !== 'enabled'"
+            placement="top">
+            <bk-button
+              class="mr8"
+              :disabled="detailData.status === 'enabled'"
+              outline
+              @click="handleDelete">
+              {{ t('删除') }}
+            </bk-button>
+            <template #content>
+              {{ t('删除场景需先停用场景') }}
+            </template>
+          </bk-popover>
         </div>
       </div>
     </template>

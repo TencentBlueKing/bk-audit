@@ -176,6 +176,7 @@
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
     ref,
     watch,
   } from 'vue';
@@ -247,7 +248,11 @@
   // 加载数据表选择器数据
   const loadTablePickerData = () => {
     typeTableLoading.value = true;
-    tableSelectPickerRef.value?.loadData();
+    // 使用 nextTick 等待子组件 table-select-picker 挂载完成后再调用 loadData，
+    // 避免首次打开时 ref 尚未就绪导致加载动画卡住
+    nextTick(() => {
+      tableSelectPickerRef.value?.loadData();
+    });
   };
 
   // 数据表选择器加载完成回调
