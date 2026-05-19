@@ -879,18 +879,19 @@
 .setings {
   position: absolute;
   top: 0;
-  right: 5px;
+  right: 0;
   z-index: 1000;
   height: 42px;
   border-radius: 4px;
 
   .setting-btn-icon {
     display: block;
-    padding: 0;
+    padding: 0 5px;
     font-size: 16px;
     line-height: 42px;
     color: #c4c6cc;
     cursor: pointer;
+    background-color: #fafbfd;
 
     &:hover {
       color: #979ba5;
