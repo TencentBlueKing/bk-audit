@@ -288,6 +288,8 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "tool_type",
+            "created_by",
+            "updated_by",
             "version",
             "namespace",
             "status",
