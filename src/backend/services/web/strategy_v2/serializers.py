@@ -397,6 +397,73 @@ class StrategySerializer(serializers.Serializer):
         if report_enabled and not report_config:
             raise serializers.ValidationError(gettext("report_config is required when report_enabled is True"))
 
+    def _validate_strategy_data_permission(self, validated_request_data: dict):
+        """
+        校验策略配置中的系统和数据表是否在场景授权范围内
+        """
+
+        scene_id = self.get_scene_id(validated_request_data)
+        if scene_id is None:
+            return
+
+        strategy_type = validated_request_data.get("strategy_type")
+        configs = validated_request_data.get("configs", {})
+        data_source = configs.get("data_source", {})
+        config_type = configs.get("config_type")
+
+        if strategy_type == StrategyType.RULE.value:
+            if (
+                config_type == RuleAuditConfigType.BIZ_RT.value
+                or config_type == RuleAuditConfigType.BUILD_ID_ASSET.value
+            ):
+                self._check_table_permission(data_source.get("rt_id"), scene_id)
+            if config_type == RuleAuditConfigType.EVENT_LOG.value:
+                self._check_systems_permission(data_source.get("system_ids", []), scene_id)
+
+    def _check_systems_permission(self, system_ids: list, scene_id: int):
+        """校验系统是否在场景授权范围内"""
+        from django.conf import settings
+
+        from apps.meta.resources import SystemListAllResource
+        from apps.permission.handlers.actions import ActionEnum
+        from services.web.common.constants import ScopeType
+
+        if not system_ids:
+            return
+
+        # 检查系统权限
+        try:
+            # 获取场景下有权限的系统列表
+            authorized_systems = SystemListAllResource().request(
+                namespace=settings.DEFAULT_NAMESPACE,
+                action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id,
+                scope_type=ScopeType.SCENE,
+                scope_id=str(scene_id),
+            )
+            authorized_system_ids = {system["system_id"] for system in authorized_systems}
+        except Exception:
+            raise serializers.ValidationError({"system_ids": gettext("权限检查失败，无法验证系统在场景[%s]的授权范围") % scene_id})
+
+        unauthorized_systems = [sid for sid in system_ids if sid not in authorized_system_ids]
+        if unauthorized_systems:
+            raise serializers.ValidationError(
+                {"system_ids": gettext("系统[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_systems), scene_id)}
+            )
+
+    def _check_table_permission(self, rt_id: str, scene_id: int):
+        """校验数据表是否在场景授权范围内"""
+        from services.web.scene.data_filter import SceneDataFilter
+
+        if not rt_id:
+            return
+
+        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+        if not scene_table_ids:
+            return
+
+        if rt_id not in set(scene_table_ids):
+            raise serializers.ValidationError({"rt_id": gettext("数据表[%s]不在场景[%s]的授权范围内") % (rt_id, scene_id)})
+
 
 class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
     """
@@ -486,6 +553,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_event_basic_field_configs(data)
         # check report_config
         self._validate_report_config(data)
+        # check strategy data permission (system & table authorization)
+        self._validate_strategy_data_permission(data)
         return data
 
 
@@ -593,6 +662,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_event_basic_field_configs(data)
         # check report_config
         self._validate_report_config(data)
+        # check strategy(system & table authorization)
+        self._validate_strategy_data_permission(data)
         return data
 
 
@@ -1259,7 +1330,102 @@ class LinkTableConfigSerializer(serializers.Serializer):
     links = serializers.ListField(label=gettext_lazy("Links"), child=LinkTableLinkSerializer(), allow_empty=False)
 
 
-class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
+class LinkTableDataPermissionMixin:
+    """联表配置中系统和数据表授权校验 Mixin"""
+
+    def _get_link_table_scene_id(self, attrs: dict) -> int | None:
+        """获取联表关联的场景ID"""
+        # 创建时直接从请求数据中获取
+        scene_id = attrs.get("scene_id")
+        if scene_id is not None:
+            return scene_id
+        # 更新时查绑定的场景
+        uid = attrs.get("uid")
+        if uid:
+            return (
+                ResourceBindingScene.objects.filter(
+                    scene__is_deleted=False,
+                    binding__resource_type=ResourceVisibilityType.LINK_TABLE,
+                    binding__resource_id=str(uid),
+                )
+                .values_list("scene_id", flat=True)
+                .first()
+            )
+        return None
+
+    def _validate_link_table_data_permission(self, attrs: dict):
+        """
+        校验联表配置中的系统和数据表是否在场景授权范围内
+        """
+        from django.conf import settings
+
+        from apps.meta.resources import SystemListAllResource
+        from apps.permission.handlers.actions import ActionEnum
+        from services.web.common.constants import ScopeType
+        from services.web.scene.data_filter import SceneDataFilter
+
+        scene_id = self._get_link_table_scene_id(attrs)
+        if scene_id is None:
+            return
+
+        config = attrs.get("config")
+        if not config:
+            return
+
+        links = config.get("links", [])
+        if not links:
+            return
+
+        # 收集所有表的 system_ids 和 rt_id
+        all_system_ids = set()
+        all_rt_ids = set()
+        for link in links:
+            for table_key in ("left_table", "right_table"):
+                table = link.get(table_key, {})
+                if not table:
+                    continue
+                for sid in table.get("system_ids", []):
+                    if sid:
+                        all_system_ids.add(sid)
+                rt_id = table.get("rt_id")
+                if rt_id:
+                    all_rt_ids.add(rt_id)
+
+        # 校验系统授权
+        if all_system_ids:
+
+            # 使用 SystemListAllResource 检查系统权限
+            try:
+                authorized_systems = SystemListAllResource().request(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id,
+                    scope_type=ScopeType.SCENE,
+                    scope_id=str(scene_id),
+                )
+                authorized_system_ids = {system["system_id"] for system in authorized_systems}
+            except Exception:
+                # 如果权限检查失败，默认拒绝所有系统访问（安全原则：默认拒绝）
+                raise serializers.ValidationError({"config": gettext("权限检查失败，无法验证系统在场景[%s]的授权范围") % scene_id})
+
+            unauthorized_systems = sorted(all_system_ids - authorized_system_ids)
+            if unauthorized_systems:
+                raise serializers.ValidationError(
+                    {"config": gettext("系统[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_systems), scene_id)}
+                )
+
+        # 校验数据表授权
+        if all_rt_ids:
+            scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+            if scene_table_ids:
+                scene_table_ids_set = set(scene_table_ids)
+                unauthorized_tables = sorted(all_rt_ids - scene_table_ids_set)
+                if unauthorized_tables:
+                    raise serializers.ValidationError(
+                        {"config": gettext("数据表[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_tables), scene_id)}
+                    )
+
+
+class CreateLinkTableRequestSerializer(LinkTableDataPermissionMixin, serializers.ModelSerializer):
     scene_id = serializers.IntegerField(
         label=gettext_lazy("场景ID"), required=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
     )
@@ -1279,6 +1445,8 @@ class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
         # 联合唯一校验
         if LinkTable.objects.filter(namespace=namespace, name=name).exists():
             raise LinkTableNameExist()
+        # 校验联表配置中的系统和数据表授权
+        self._validate_link_table_data_permission(attrs)
 
         return attrs
 
@@ -1292,7 +1460,7 @@ class CreateLinkTableResponseSerializer(serializers.ModelSerializer):
         ]
 
 
-class UpdateLinkTableRequestSerializer(serializers.ModelSerializer):
+class UpdateLinkTableRequestSerializer(LinkTableDataPermissionMixin, serializers.ModelSerializer):
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), required=False
     )
@@ -1316,6 +1484,8 @@ class UpdateLinkTableRequestSerializer(serializers.ModelSerializer):
         # 联合唯一校验
         if LinkTable.objects.filter(namespace=namespace, name=name).exclude(uid=uid).exists():
             raise LinkTableNameExist()
+        # 校验联表配置中的系统和数据表权限
+        self._validate_link_table_data_permission(attrs)
 
         return attrs
 
