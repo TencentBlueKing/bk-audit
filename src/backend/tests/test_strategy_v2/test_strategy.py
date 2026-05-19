@@ -145,7 +145,13 @@ class StrategyTest(TestCase):
         ]
 
     def _build_rule_strategy_payload(self, name_suffix=""):
-        strategy_name = f"test_rule_strategy{name_suffix and '_' + name_suffix}"
+        base_name = "test_rule"
+        suffix = f"{name_suffix and '_' + name_suffix}"
+        # 确保策略名称不超过64字符限制
+        max_length = 64
+        if len(base_name + suffix) > max_length:
+            suffix = suffix[: max_length - len(base_name)]
+        strategy_name = base_name + suffix
         return {
             "namespace": settings.DEFAULT_NAMESPACE,
             "strategy_name": strategy_name,
@@ -273,7 +279,10 @@ class StrategyTest(TestCase):
         return resource.strategy_v2.create_strategy(**params)
 
     @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
-    def _create_rule_strategy(self, name_suffix="") -> dict:
+    @mock.patch("apps.meta.resources.SystemListAllResource")
+    def _create_rule_strategy(self, mock_system_list, name_suffix="") -> dict:
+        # 设置mock返回值，模拟授权的系统列表
+        mock_system_list.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkmonitor"}]
         params = self._build_rule_strategy_payload(name_suffix)
         return CreateStrategy()(**params)
 
@@ -526,7 +535,10 @@ class StrategyTest(TestCase):
         self.assertNotEqual(strategy.strategy_name, "不应更新")
 
     @mock.patch("services.web.strategy_v2.resources.call_controller")
-    def test_create_rule_strategy_with_manual_sql(self, mock_call_controller):
+    @mock.patch("apps.meta.resources.SystemListAllResource")
+    def test_create_rule_strategy_with_manual_sql(self, mock_system_list, mock_call_controller):
+        # 设置mock返回值，模拟授权的系统列表
+        mock_system_list.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkmonitor"}]
         mock_call_controller.return_value = None
         params = self._build_rule_strategy_payload(name_suffix="manual")
         params["sql"] = "SELECT 1"
@@ -538,7 +550,7 @@ class StrategyTest(TestCase):
         mock_call_controller.assert_called_once()
 
     def test_update_rule_strategy_manual_sql_skips_auto_builder(self):
-        created = self._create_rule_strategy()
+        created = self._create_rule_strategy(name_suffix="skip_auto_builder")
         self._mark_strategy_running(created["strategy_id"])
         strategy = Strategy.objects.get(strategy_id=created["strategy_id"])
         update_data = self._build_update_request_from_strategy(strategy)
@@ -563,7 +575,7 @@ class StrategyTest(TestCase):
         self.assertEqual(strategy.sql, "SELECT custom_sql")
 
     def test_update_rule_strategy_manual_sql_updates_remote_only_on_change(self):
-        created = self._create_rule_strategy()
+        created = self._create_rule_strategy(name_suffix="remote_only_change")
         strategy_id = created["strategy_id"]
         self._mark_strategy_running(strategy_id)
         strategy = Strategy.objects.get(strategy_id=strategy_id)
