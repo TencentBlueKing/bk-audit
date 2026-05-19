@@ -25,7 +25,7 @@ export default {
   fetchRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
     return RiskManageSource.getRiskList(params)
       .then(({ data }) => ({
@@ -59,7 +59,7 @@ export default {
   fetchTodoRiskList(params: {
       page: number,
       page_size: number,
-      scope_id?: string,
+      scene_id?: string,
     }) {
     return RiskManageSource.getTodoRiskList(params)
       .then(({ data }) => ({
@@ -73,7 +73,7 @@ export default {
   fetchWatchRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
     return RiskManageSource.getWatchRiskList(params)
       .then(({ data }) => ({
@@ -87,7 +87,7 @@ export default {
   fetchProcessedRiskList(params: {
     page: number,
     page_size: number,
-    scope_id?: string,
+    scene_id?: string,
   }) {
     return RiskManageSource.getProcessedRiskList(params)
       .then(({ data }) => ({
