@@ -296,7 +296,7 @@
     hideContextMenu();
     InfoBox({
       title: '确认关闭所有工具？',
-      subTitle: '关闭后将返回工具大厅',
+      subTitle: '关闭后将返回工具广场',
       confirmText: '关闭',
       cancelText: '取消',
       headerAlign: 'center' as any,
