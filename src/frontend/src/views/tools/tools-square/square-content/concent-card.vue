@@ -17,14 +17,16 @@
 <template>
   <div class="card">
     <div
-      v-if="dataList.length > 0 || searchValue || (isCrossScene && groupedByScene.length > 0)"
+      v-if="dataList.length > 0 || searchValue.length > 0 || (isCrossScene && groupedByScene.length > 0)"
       class="card-search">
-      <bk-input
+      <bk-search-select
         v-model="searchValue"
         class="search-input"
-        :placeholder="t('搜索 工具名称、工具说明、工具类型、创建人')"
-        type="search"
-        @enter="handleSearch" />
+        clearable
+        :data="searchSelectData"
+        :placeholder="t('搜索工具名称、工具说明、工具类型、创建人')"
+        unique-select
+        @update:model-value="handleSearch" />
     </div>
     <scroll-faker
       :style="scrollStyle">
@@ -333,7 +335,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -400,14 +402,43 @@
     // handleOpenTool,
   } = useToolDialog();
 
-  const searchValue = ref<string>('');
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
 
-  // 监听搜索值变化，清空时自动重新搜索
-  watch(searchValue, (newVal) => {
-    if (newVal === '') {
-      handleSearch();
-    }
-  });
+  const searchValue = ref<SearchKey[]>([]);
+
+  // bk-search-select 搜索条件配置
+  const searchSelectData = [
+    {
+      name: t('工具名称'),
+      id: 'name',
+      placeholder: t('请输入工具名称'),
+    },
+    {
+      name: t('工具说明'),
+      id: 'description',
+      placeholder: t('请输入工具说明'),
+    },
+    {
+      name: t('工具类型'),
+      id: 'tool_type',
+      placeholder: t('请选择工具类型'),
+      multiple: false,
+      children: [
+        { id: 'data_search', name: t('数据查询') },
+        { id: 'api', name: 'API' },
+        { id: 'bk_vision', name: 'BK-Vision' },
+      ],
+    },
+    {
+      name: t('创建人'),
+      id: 'created_by',
+      placeholder: t('请输入创建人'),
+    },
+  ];
 
   const itemMouseenter = ref(null);
   const dataList = ref<ToolInfo[]>([]);
@@ -582,16 +613,7 @@
     }).then(() => {
       messageSuccess(newFavoriteStatus ? t('收藏成功') : t('取消收藏成功'));
       // 重新获取列表数据，后端会处理排序
-      fetchToolsList({
-        my_created: props.myCreated,
-        recent_used: props.recentUsed,
-        keyword: searchValue.value,
-        status: 'published',
-        ...getValidTagsParam(props.tagId),
-        ...props.scopeParams,
-      }).then((data) => {
-        dataList.value = data;
-      });
+      handleSearch();
       // 通知父组件刷新标签列表，更新"我的收藏"等标签的数量
       emits('change');
     })
@@ -719,10 +741,26 @@
     }
   };
 
-  const handleSearch = () => {
+  const handleSearch = (keyword?: SearchKey[]) => {
     loading.value = true;
+    const search: Record<string, any> = {};
+    const searchKeys = keyword || searchValue.value;
+    searchKeys.forEach((item) => {
+      if (item.values && item.values.length) {
+        const value = item.values.map(v => v.id).join(',');
+        if (item.id === 'name') {
+          search.name = value;
+        } else if (item.id === 'description') {
+          search.description = value;
+        } else if (item.id === 'tool_type') {
+          search.tool_type = value.split(',').map(v => v.trim());
+        } else if (item.id === 'created_by') {
+          search.keyword = value;
+        }
+      }
+    });
     fetchToolsList({
-      keyword: searchValue.value,
+      ...search,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
       status: 'published',
@@ -741,8 +779,23 @@
   defineExpose<Exposes>({
     getToolsList(id: string) {
       nextTick(() => {
+        const search: Record<string, any> = {};
+        searchValue.value.forEach((item) => {
+          if (item.values && item.values.length) {
+            const value = item.values.map(v => v.id).join(',');
+            if (item.id === 'name') {
+              search.name = value;
+            } else if (item.id === 'description') {
+              search.description = value;
+            } else if (item.id === 'tool_type') {
+              search.tool_type = value.split(',').map(v => v.trim());
+            } else if (item.id === 'created_by') {
+              search.keyword = value;
+            }
+          }
+        });
         fetchToolsList({
-          keyword: searchValue.value,
+          ...search,
           my_created: props.myCreated,
           recent_used: props.recentUsed,
           status: 'published',
