@@ -483,6 +483,8 @@
 
   const dataSource = () => StrategyManageService.fetchStrategyList({
     order_type: 'asc',
+    strategy_type: 'model',
+    tag: leftLabelFilterCondition.value,
   });
   const initStatusFilterList = [
     {
