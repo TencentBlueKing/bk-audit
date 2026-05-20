@@ -62,7 +62,11 @@ from services.web.strategy_v2.constants import StrategySource, StrategyStatusCho
 from services.web.strategy_v2.models import Strategy
 from services.web.tool.models import Tool
 from services.web.vision.constants import ReportGroupType
-from services.web.vision.models import SceneReportGroup, VisionPanel
+from services.web.vision.models import (
+    SceneReportGroup,
+    SceneReportGroupItem,
+    VisionPanel,
+)
 from tests.base import TestCase
 
 # ==================== Fixtures ====================
@@ -2044,6 +2048,22 @@ class TestPanelResources(TestCase):
         self.assertTrue(binding.binding_scenes.filter(scene_id=self.scene.scene_id).exists())
         self.assertEqual(panel.status, PanelStatus.PUBLISHED)
 
+    def test_create_scene_panel_uses_group_max_priority_index(self):
+        """创建场景级报表时，分组内排序默认追加到当前最大值之后"""
+        SceneReportGroupItem.objects.create(group=self.scene_group, panel=self.scene_panel, priority_index=9)
+
+        result = self.resource.vision.create_scene_panel.request(
+            {
+                "scene_id": self.scene.scene_id,
+                "group_id": self.scene_group.id,
+                "name": "新场景报表",
+                "category": PanelCategory.BEHAVIOR_ANALYSIS,
+            }
+        )
+
+        item = SceneReportGroupItem.objects.get(group=self.scene_group, panel_id=str(result["id"]))
+        self.assertEqual(item.priority_index, 10)
+
     def test_update_scene_panel(self):
         """测试编辑场景级报表"""
         result = self.resource.vision.update_scene_panel(
@@ -2058,6 +2078,30 @@ class TestPanelResources(TestCase):
         self.assertEqual(result["name"], "更新后的场景报表")
         self.scene_panel.refresh_from_db()
         self.assertEqual(self.scene_panel.status, PanelStatus.PUBLISHED)
+
+    def test_update_scene_panel_move_group_uses_target_group_max_priority_index(self):
+        """编辑场景级报表移动分组时，排序默认追加到目标分组当前最大值之后"""
+        target_group = SceneReportGroup.objects.create(
+            scene=self.scene,
+            name="目标分组",
+            group_type=ReportGroupType.CUSTOM,
+            priority_index=1,
+        )
+        SceneReportGroupItem.objects.create(group=self.scene_group, panel=self.scene_panel, priority_index=3)
+        SceneReportGroupItem.objects.create(group=target_group, panel=self.platform_panel, priority_index=7)
+
+        self.resource.vision.update_scene_panel.request(
+            {
+                "scene_id": self.scene.scene_id,
+                "group_id": target_group.id,
+                "panel_id": self.scene_panel.pk,
+                "name": "更新后的场景报表",
+            }
+        )
+
+        item = SceneReportGroupItem.objects.get(panel=self.scene_panel, group__scene_id=self.scene.scene_id)
+        self.assertEqual(item.group_id, target_group.id)
+        self.assertEqual(item.priority_index, 8)
 
     def test_delete_scene_panel(self):
         """测试删除场景级报表"""

@@ -19,6 +19,7 @@ import importlib
 
 from bk_audit.log.models import AuditInstance
 from django.db import models
+from django.db.models import Max
 from django.db.models.enums import TextChoices
 from django.utils.translation import gettext_lazy
 
@@ -116,6 +117,14 @@ class SceneReportGroupItem(OperateRecordModel):
         verbose_name_plural = verbose_name
         ordering = ["-priority_index", "id"]
         unique_together = [("group", "panel")]
+
+    @classmethod
+    def get_next_priority_index(cls, group_id: int) -> int:
+        SceneReportGroup.objects.select_for_update().get(id=group_id)
+        max_priority_index = cls.objects.filter(group_id=group_id).aggregate(max_priority_index=Max("priority_index"))[
+            "max_priority_index"
+        ]
+        return 0 if max_priority_index is None else max_priority_index + 1
 
 
 class ReportUserPreference(models.Model):
