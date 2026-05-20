@@ -271,7 +271,6 @@
       order_type: orderType,
       sort,
     } = getSearchParams();
-    console.log('!!!!!', getSearchParams());
 
     const pageValue = isUnload.value ? 1 : page;
     if (pageValue && pageSize) {
@@ -385,8 +384,6 @@
   };
   onMounted(() => {
     parseURL();
-    console.log('parseUR加载！！！！');
-
     calcTableHeight();
   });
 

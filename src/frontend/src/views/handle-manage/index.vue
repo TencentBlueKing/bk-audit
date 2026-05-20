@@ -392,7 +392,6 @@
     searchModel.value = {
       ...value,
       event_filters: exValue };
-    console.log(value);
     listRef.value.initTableHeight();
     fetchList();
   };
