@@ -77,7 +77,7 @@
             class="search-input"
             clearable
             :data="searchSelectData"
-            :placeholder="t('搜索工具名称、工具说明、工具类型、更新人')"
+            :placeholder="t('搜索工具名称、工具说明、工具类型、标签、更新人')"
             unique-select
             @update:model-value="handleSearch" />
         </div>
@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, onUnmounted, reactive, ref } from 'vue';
+  import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -165,7 +165,9 @@
   const searchValue = ref<SearchKey[]>([]);
 
   // bk-search-select 搜索条件配置（对应接口参数）
-  const searchSelectData = [
+  const tagSelectOptions = ref<Array<{ id: string; name: string }>>([]);
+
+  const buildSearchSelectData = () => [
     {
       name: '工具名称',
       id: 'name',
@@ -188,12 +190,26 @@
       ],
     },
     {
+      name: '标签',
+      id: 'tags',
+      placeholder: '请选择标签',
+      multiple: true,
+      children: [...tagSelectOptions.value],
+    },
+    {
       name: '更新人',
       id: 'updated_by',
       placeholder: '请选择更新人',
       multiple: false,
     },
   ];
+
+  const searchSelectData = ref(buildSearchSelectData());
+
+  // 标签数据变化时重建搜索配置，确保下拉列表刷新
+  watch(tagSelectOptions, () => {
+    searchSelectData.value = buildSearchSelectData();
+  });
 
   // 表格引用
   const toolListRef = ref();
@@ -294,6 +310,7 @@
       name: undefined,
       description: '',
       tool_type: undefined,
+      tags: [],
       updated_by: '',
     };
 
@@ -307,6 +324,9 @@
         } else if (item.id === 'tool_type') {
           // tool_type 接口期望 array<string>
           search.tool_type = value.split(',').map(v => v.trim());
+        } else if (item.id === 'tags') {
+          // tags 接口期望 array<string>
+          search.tags = value.split(',').map(v => v.trim());
         } else if (item.id === 'updated_by') {
           search.updated_by = value;
         }
@@ -327,9 +347,8 @@
     toolListRef.value?.fetchData({ sort: ['-created_at'] });
   };
 
-  const handleRequestSuccess = (data: any) => {
+  const handleRequestSuccess = () => {
     isLoading.value = false;
-    console.log('handleRequestSuccess', data);
   };
 
   // 获取全局状态统计（分别请求各状态数量）
@@ -350,8 +369,12 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      console.log('fetchToolsTagsList', data);
       tagsEnums.value = data;
+      // 同步标签下拉选项
+      tagSelectOptions.value = data.map((tag: TagItem) => ({
+        id: String(tag.tag_id),
+        name: tag.tag_name,
+      }));
     },
   });
 

@@ -560,7 +560,6 @@
       page_size: pageSize,
       sort,
     } = getSearchParams();
-    console.log('!!!!!》》》》》》》', getSearchParams());
 
     const pageValue = isUnload.value ? 1 : page;
     // 非首次加载时，才从 URL 读取 page_size
@@ -685,8 +684,6 @@
   };
   onMounted(() => {
     parseURL();
-    console.log('parseUR加载！！！！');
-
     calcTableHeight();
     window.addEventListener('resize', handleWindowResize);
     // 初始化时加载数据
