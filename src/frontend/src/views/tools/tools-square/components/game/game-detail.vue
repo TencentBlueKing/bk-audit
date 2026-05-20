@@ -153,21 +153,17 @@
               :key="section.key"
               class="section">
               <!-- 标题行（始终显示） -->
-              <div
-                v-if="section.tabKey"
-                class="section-title-row">
+              <div class="section-title-row">
                 <span class="section-title">{{ section.title }}</span>
                 <span
+                  v-if="section.tabKey"
                   class="view-detail-link"
                   @click.stop="handleViewDetail(section.tabKey!)">
+                  <img
+                    class="view-detail-icon"
+                    src="@/images/file.svg">
                   {{ t('查看详情') }}
-                  <audit-icon type="jump-link" />
                 </span>
-              </div>
-              <div
-                v-else
-                class="section-title">
-                {{ section.title }}
               </div>
 
               <!-- loading 时显示简洁占位 -->
@@ -1167,21 +1163,30 @@
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
   margin-bottom: 12px;
+
+  .section-title {
+    margin-bottom: 0;
+  }
 }
 
 .view-detail-link {
   display: flex;
+  margin-left: 20px;
   font-size: 12px;
   color: #3a84ff;
   cursor: pointer;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 
   &:hover {
     color: #1768ef;
+  }
+
+  .view-detail-icon {
+    width: 14px;
+    height: 14px;
   }
 }
 
