@@ -408,6 +408,14 @@
 
   watch(() => props.conditions, (data) => {
     localConditions.value = JSON.parse(JSON.stringify(data));
+    // 编辑回填：eq操作符后端将值存入 filter 字段，
+    // 但 audit-user-selector 等组件绑定的是 filters 数组，需同步
+    localConditions.value.conditions.forEach((cond: any) => {
+      const c = cond.condition;
+      if (c.operator === 'eq' && c.filter && (!c.filters?.length)) {
+        c.filters = [c.filter];
+      }
+    });
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();
