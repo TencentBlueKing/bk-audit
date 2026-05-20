@@ -16,155 +16,174 @@
 -->
 <template>
   <div class="statement-sidebar">
-    <!-- 场景系统选择器 -->
-    <div class="scene-selector-wrapper">
-      <scene-system-selector
-        ref="sceneSystemSelectorRef"
-        v-model="selectedScene"
-        dark
-        :list-scope="['scene']"
-        :popover-width="250"
-        scene-permission="view_scene"
-        system-permission="view_system"
-        width="250px"
-        @change="(val: any) => handleSceneChange(val as SceneItem)" />
-    </div>
+    <!-- 固定顶部区域 -->
+    <div class="sidebar-header">
+      <!-- 场景系统选择器 -->
+      <div class="scene-selector-wrapper">
+        <scene-system-selector
+          ref="sceneSystemSelectorRef"
+          v-model="selectedScene"
+          dark
+          :list-scope="['scene']"
+          :popover-width="250"
+          scene-permission="view_scene"
+          system-permission="view_system"
+          width="264px"
+          @change="(val: any) => handleSceneChange(val as SceneItem)" />
+      </div>
 
-    <!-- 我的收藏分组 -->
-    <div
-      class="side-group">
+      <!-- 我的收藏分组 -->
       <div
-        class="side-group-header"
-        style="background-color: #1b2132;"
-        @click="toggleFavoritesGroup">
-        <img
-          class="side-pentagram-title"
-          :src="favoriteItems.length === 0 ? pentagramSvg : pentagramFillSvg">
-        <span class="side-group-name">
-          {{ t('我的收藏') }}
-          <span class="favorite-count">{{ favoriteItems.length }}</span>
-        </span>
-        <audit-icon
-          class="side-group-arrow"
-          :class="{ expanded: isFavoritesExpanded }"
-          type="angle-line-down" />
-      </div>
-      <div
-        v-show="isFavoritesExpanded"
-        class="side-group-children"
-        @click="handleMenuClick('favorite')">
-        <audit-menu-item
-          v-for="child in favoriteItems"
-          :key="child.id"
-          class="favorite-item"
-          :class="[(child.id === route.params.id && !clickFavorite) ? 'active-weak' :
-            ((child.id === route.params.id && clickFavorite) ? 'active' : '')]"
-          :index="child.id"
-          @mouseenter="hoveredFavoriteItemId = child.id"
-          @mouseleave="hoveredFavoriteItemId = null">
-          <span class="side-child-dot" />
-          <tool-tip-text
-            :data="child.name"
-            :line="1"
-            style="display: inline-block;max-width: 200px; vertical-align: middle;"
-            theme="light" />
-
-          <audit-icon
-            v-if="!collapsed && hoveredFavoriteItemId === child.id"
-            class="side-pentagram-close"
-            type="close"
-            @click.stop="handleToggleFavorite(child, false)" />
-        </audit-menu-item>
-      </div>
-    </div>
-    <!-- 搜索框 -->
-    <div
-      v-if="allSideRoutes.length > 0"
-      class="search-wrapper">
-      <bk-input
-        v-model="searchKeyword"
-        class="search-input"
-        clearable
-        :placeholder="t('搜索 报表名称')"
-        type="search" />
-    </div>
-    <!-- 分组列表 -->
-    <div
-      v-for="side in filteredSideRoutes"
-      :key="side.id">
-      <div
-        v-if="sceneChangeItem.type === 'aggregate'"
-        class="side-scene-header">
-        <bk-tag
-          class="type-tag"
-          :class="[`type-${side.type}`]">
-          {{ side.type === 'scene' ? t('场景') : t('系统') }}
-        </bk-tag>
-        <span class="side-scene-name">
-          <tool-tip-text
-            :data="`${side.name}(${side.id})`"
-            :line="1"
-            style="display: inline-block;max-width: 200px; vertical-align: middle;"
-            theme="light" />
-        </span>
-      </div>
-      <div
-        v-for="group in side.children"
-        :key="group.id"
         class="side-group">
-        <!-- 分组标题 -->
         <div
           class="side-group-header"
-          @click="toggleGroup(group.id)">
+          style="background-color: #1b2132;"
+          @click="toggleFavoritesGroup">
           <img
             class="side-pentagram-title"
-            src="@images/folder.svg">
-          <span class="side-group-name">{{ group.name }}</span>
+            :src="favoriteItems.length === 0 ? pentagramSvg : pentagramFillSvg">
+          <span class="side-group-name">
+            {{ t('我的收藏') }}
+            <span class="favorite-count">{{ favoriteItems.length }}</span>
+          </span>
           <audit-icon
             class="side-group-arrow"
-            :class="{ expanded: expandedGroups.includes(group.id) }"
+            :class="{ expanded: isFavoritesExpanded }"
             type="angle-line-down" />
         </div>
-        <!-- 子表项 -->
         <div
-          v-show="expandedGroups.includes(group.id)"
+          v-show="isFavoritesExpanded"
           class="side-group-children"
-          @click="handleMenuClick('group')">
+          @click="handleMenuClick('favorite')">
           <audit-menu-item
-            v-for="child in group.children"
+            v-for="child in favoriteItems"
             :key="child.id"
-            class="menu-item-with-favorite"
-            :class="[(child.id === route.params.id && clickFavorite) ? 'active-weak' :
-              ((child.id === route.params.id && !clickFavorite) ? 'active' : '')]"
+            class="favorite-item"
+            :class="[(child.id === route.params.id && !clickFavorite) ? 'active-weak' :
+              ((child.id === route.params.id && clickFavorite) ? 'active' : '')]"
             :index="child.id"
-            @mouseenter="hoveredItemId = child.id"
-            @mouseleave="hoveredItemId = null">
+            @mouseenter="hoveredFavoriteItemId = child.id"
+            @mouseleave="hoveredFavoriteItemId = null">
             <span class="side-child-dot" />
             <tool-tip-text
               :data="child.name"
               :line="1"
+              placement="right"
               style="display: inline-block;max-width: 200px; vertical-align: middle;"
-              theme="light" />
-            <img
-              v-if="!collapsed && child.favorite_created_at"
-              v-show="hoveredItemId === child.id || child.id === route.params.id"
-              class="side-pentagram-fill"
-              src="@images/pentagram-fill.svg"
-              @click.stop="handleToggleFavorite(child, false)">
-            <img
-              v-else-if="!collapsed"
-              v-show="hoveredItemId === child.id || child.id === route.params.id"
-              class="side-pentagram"
-              src="@images/pentagram.svg"
-              @click.stop="handleToggleFavorite(child, true)">
+              theme="dark"
+              :tip="isAggregateMode && getItemSource(child.id)
+                ? `${child.name}\n${getItemSource(child.id)}`
+                : undefined" />
+
+            <audit-icon
+              v-if="!collapsed && hoveredFavoriteItemId === child.id"
+              class="side-pentagram-close"
+              type="close"
+              @click.stop="handleToggleFavorite(child, false)" />
           </audit-menu-item>
         </div>
       </div>
-      <!-- 暂无数据 -->
+      <!-- 搜索框 -->
       <div
-        v-if="showEmpty"
-        class="side-empty">
-        {{ t('暂无数据') }}
+        v-if="allSideRoutes.length > 0"
+        class="search-wrapper">
+        <bk-input
+          v-model="searchKeyword"
+          class="search-input"
+          clearable
+          :placeholder="t('搜索 报表名称')"
+          type="search" />
+      </div>
+    </div>
+
+    <!-- 可滚动列表区域 -->
+    <div class="sidebar-list">
+      <!-- 分组列表 -->
+      <div
+        v-for="side in filteredSideRoutes"
+        :key="side.id">
+        <div
+          v-if="sceneChangeItem.type === 'aggregate'"
+          class="side-scene-header">
+          <bk-tag
+            class="type-tag"
+            :class="[`type-${side.type}`]">
+            {{ side.type === 'scene' ? t('场景') : t('系统') }}
+          </bk-tag>
+          <span class="side-scene-name">
+            <tool-tip-text
+              :data="`${side.name}(${side.id})`"
+              :line="1"
+              placement="right"
+              style="display: inline-block;max-width: 200px; vertical-align: middle;"
+              theme="dark" />
+          </span>
+        </div>
+        <div
+          v-for="group in side.children"
+          :key="group.id"
+          class="side-group">
+          <!-- 分组标题 -->
+          <div
+            class="side-group-header"
+            @click="toggleGroup(group.id)">
+            <img
+              class="side-pentagram-title"
+              src="@images/folder.svg">
+            <span class="side-group-name">
+              <tool-tip-text
+                :data="group.name"
+                :line="1"
+                placement="right"
+                style="display: inline-block;max-width: 200px; vertical-align: middle;"
+                theme="dark" /></span>
+            <audit-icon
+              class="side-group-arrow"
+              :class="{ expanded: expandedGroups.includes(group.id) }"
+              type="angle-line-down" />
+          </div>
+          <!-- 子表项 -->
+          <div
+            v-show="expandedGroups.includes(group.id)"
+            class="side-group-children"
+            @click="handleMenuClick('group')">
+            <audit-menu-item
+              v-for="child in group.children"
+              :key="child.id"
+              class="menu-item-with-favorite"
+              :class="[(child.id === route.params.id && clickFavorite) ? 'active-weak' :
+                ((child.id === route.params.id && !clickFavorite) ? 'active' : '')]"
+              :index="child.id"
+              @mouseenter="hoveredItemId = child.id"
+              @mouseleave="hoveredItemId = null">
+              <span class="side-child-dot" />
+              <tool-tip-text
+                :data="child.name"
+                :line="1"
+                placement="right"
+                style="display: inline-block;max-width: 200px; vertical-align: middle;"
+                theme="dark" />
+              <img
+                v-if="!collapsed && child.favorite_created_at"
+                v-show="hoveredItemId === child.id || child.id === route.params.id"
+                class="side-pentagram-fill"
+                src="@images/pentagram-fill.svg"
+                @click.stop="handleToggleFavorite(child, false)">
+              <img
+                v-else-if="!collapsed"
+                v-show="hoveredItemId === child.id || child.id === route.params.id"
+                class="side-pentagram"
+                src="@images/pentagram.svg"
+                @click.stop="handleToggleFavorite(child, true)">
+            </audit-menu-item>
+          </div>
+        </div>
+        <!-- 暂无数据 -->
+        <div
+          v-if="showEmpty"
+          class="side-empty">
+          {{ t('暂无数据') }}
+        </div>
       </div>
     </div>
   </div>
@@ -235,6 +254,7 @@
   const handleSceneChange = (val: SceneItem) => {
     sceneSystemSelectorList.value = sceneSystemSelectorRef.value.getLists();
     sceneChangeItem.value = val;
+    searchKeyword.value = '';
 
     emit('refresh-menu');
     fetchPanelPreference();
@@ -295,6 +315,26 @@
   // 鼠标悬停的收藏菜单项ID
   const hoveredFavoriteItemId = ref<string | null>(null);
 
+  // 聚合模式下，获取子菜单项所属的所有场景来源信息（一个场景一行）
+  const getItemSource = (childId: string): string => {
+    if (sceneChangeItem.value?.type !== 'aggregate') {
+      return '';
+    }
+    const sources: string[] = [];
+    for (const scene of allSideRoutes.value) {
+      for (const group of scene.children || []) {
+        if (group.children?.some(child => String(child.id) === String(childId))) {
+          sources.push(`${scene.name}(${scene.id})`);
+          break; // 同一场景只需加入一次
+        }
+      }
+    }
+    return sources.join('\n');
+  };
+
+  // 判断是否为聚合模式
+  const isAggregateMode = computed(() => sceneChangeItem.value?.type === 'aggregate');
+
   // 侧边路由数组变量，与reportGroups类型相同
   const sideRoutes = ref<SideRouteItem[]>([]);
 
@@ -326,8 +366,23 @@
   // 我的收藏分组是否展开
   const isFavoritesExpanded = ref(true);
 
-  // 获取收藏的菜单项
-  const favoriteItems = computed(() => props.menuData.filter(item => item.favorite_created_at !== null));
+  // 本地菜单数据副本，支持乐观更新
+  const localMenuData = ref<MenuDataType[]>([]);
+
+  // 乐观更新标记，防止被 props 覆盖
+  let optimisticUpdateTime = 0;
+  const OPTIMISTIC_DEBOUNCE = 2000; // 2秒内不同步
+
+  // 同步 props 数据到本地副本（跳过最近的乐观更新）
+  watch(() => props.menuData, (val) => {
+    if (Date.now() - optimisticUpdateTime < OPTIMISTIC_DEBOUNCE) {
+      return; // 跳过，保留乐观更新状态
+    }
+    localMenuData.value = val.map(item => ({ ...item }));
+  }, { immediate: true, deep: true });
+
+  // 获取收藏的菜单项（基于本地数据，支持乐观更新）
+  const favoriteItems = computed(() => localMenuData.value.filter(item => item.favorite_created_at !== null));
   const handleMenuClick = (type: 'favorite' | 'group') => {
     clickFavorite.value = type === 'favorite';
   };
@@ -361,11 +416,17 @@
           scope_id: getSceneSystemParams().scope_id,
           scope_type: getSceneSystemParams().scope_type,
         });
-      }, 500);
+      }, 0);
     },
   });
 
   const handleToggleFavorite = (item: MenuDataType, isFavorite: boolean) => {
+    // 乐观更新：立即更新本地状态，高亮即时生效
+    optimisticUpdateTime = Date.now();
+    const target = localMenuData.value.find(i => i.id === item.id);
+    if (target) {
+      target.favorite_created_at = isFavorite ? new Date().toISOString() : null;
+    }
     updateFavorite({
       panel_id: item.id,
       favorite: isFavorite,
@@ -555,17 +616,30 @@
 
 <style lang="postcss" scoped>
   .statement-sidebar {
+    display: flex;
+    flex-direction: column;
     width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    flex-shrink: 0;
+  }
+
+  .sidebar-list {
+    flex: 1;
+    overflow-y: auto;
   }
 
   .scene-selector-wrapper {
-    width: 90%;
-    margin: 10px auto 16px;
+    width: calc(100%);
+    padding: 10px 8px;
   }
 
   .search-wrapper {
-    width: 84%;
-    margin: 8px auto 12px;
+    width: calc(100%);
+    padding: 10px 8px;
 
     :deep(.bk-input) {
       background-color: #31394f !important;
@@ -717,7 +791,6 @@
   .side-group-children {
     :deep(.audit-menu-item) {
       position: relative;
-      padding-left: 36px;
     }
   }
 
