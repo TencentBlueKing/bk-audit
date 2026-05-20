@@ -117,7 +117,7 @@ export default {
     创建审计场景让审计中心为你的业务提供审计服务: 'Create audit scenarios and let Audit Center provide audit services for your business',
     场景配置可以实现: 'Scene Configuration enables:',
     配置审计策略自动发现业务中的安全风险: 'Configure audit strategies to automatically detect security risks in your business',
-    自定义巡表和工具满足您的分析需求: 'Customize reports and tools to meet your analysis needs',
+    自定义报表和工具满足您的分析需求: 'Customize reports and tools to meet your analysis needs',
     了解更多: 'Learn More',
     '怎么申请场景权限?': 'How to apply for scene permissions?',
     请通过企业微信联系: 'Please contact via Enterprise WeChat',
