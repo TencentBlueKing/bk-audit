@@ -692,6 +692,14 @@
     }
   });
 
+  // 编辑模式：标签数据加载完成后，清除初始化时触发的误报校验
+  // （编辑进入时 tags 先于 strategyTagMap 赋值，验证器查不到映射导致误报）
+  watch(tagLoading, (loading, prevLoading) => {
+    if (prevLoading && !loading && (isEditMode || isCloneMode) && formData.value.tags.length > 0) {
+      formRef.value?.clearValidate('tags');
+    }
+  });
+
   const handleCancel = () => {
     router.push({
       name: 'strategyList',
