@@ -77,6 +77,8 @@
             class="search-input"
             clearable
             :data="searchSelectData"
+            :defaut-using-item="{ inputHtml: t('请选择') }"
+            :get-menu-list="getMenuList"
             :placeholder="t('搜索工具名称、工具说明、工具类型、标签、更新人')"
             unique-select
             @update:model-value="handleSearch" />
@@ -123,6 +125,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
   import ToolManageService from '@service/tool-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import ToolDetailModel from '@model/tool/tool-detail';
 
@@ -199,8 +202,7 @@
     {
       name: '更新人',
       id: 'updated_by',
-      placeholder: '请选择更新人',
-      multiple: false,
+      placeholder: '请输入更新人',
     },
   ];
 
@@ -378,6 +380,32 @@
     },
   });
 
+  // 获取用户列表（用于更新人远程搜索）
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 远程搜索菜单列表（更新人输入时实时搜索）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData.value;
+    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
+    if (searchItem && item.id === 'updated_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+  };
+
   const {
     run: fetchStrategyList,
   } = useRequest(StrategyManageService.fetchAllStrategyList, {
@@ -404,6 +432,7 @@
   const refreshAllData = () => {
     const scopeParams = getSceneSystemParams();
     fetchToolsTagsList(scopeParams);
+    fetchUserList();
     fetchAllToolsData();
     refreshList();
     // 场景切换时也需要刷新状态统计
@@ -413,6 +442,7 @@
   onMounted(() => {
     const scopeParams = getSceneSystemParams();
     fetchToolsTagsList(scopeParams);
+    fetchUserList();
     fetchStrategyList();
     fetchAllToolsData();
     // 初始化时获取一次状态统计
