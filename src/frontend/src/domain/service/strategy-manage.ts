@@ -31,7 +31,7 @@ export default {
     order_type?: string
     page?: number,
     page_size?: number
-    strategy_type: string
+    strategy_type?: string
     tag?: string
   }) {
     return StrategySource.getStrategyList(
