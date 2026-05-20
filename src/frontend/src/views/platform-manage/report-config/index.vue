@@ -581,6 +581,7 @@
       .bk-radio-button-label {
         display: flex;
         align-items: center;
+        padding: 0 12px;
       }
     }
   }
