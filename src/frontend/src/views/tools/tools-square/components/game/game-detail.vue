@@ -1188,7 +1188,7 @@
 .last-record-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 80px;
   margin-bottom: 12px;
   font-size: 14px;
   line-height: 22px;
