@@ -564,7 +564,6 @@
     }
   };
   const handlFetchData = () => {
-    console.log('11');
     isChangeScene.value = true;
     total.value = 0;
     listRef.value.fetchData();
