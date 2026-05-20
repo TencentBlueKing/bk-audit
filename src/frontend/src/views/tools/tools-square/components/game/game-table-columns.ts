@@ -73,10 +73,10 @@ export const useGameTableColumns = () => {
   // ========== 概览 - 登录统计列 ==========
   const loginStatColumns = [
     { label: () => t('统计频率'), field: LOGIN_STAT_FIELDS.DAYS_CLASS },
-    { label: () => t('登录次数'), field: LOGIN_STAT_FIELDS.LOGIN_COUNT, sort: true },
-    { label: () => t('登录地点数'), field: LOGIN_STAT_FIELDS.LOGIN_LOCATION_COUNT, sort: true },
-    { label: () => t('登录设备数'), field: LOGIN_STAT_FIELDS.LOGIN_DEVICE_COUNT, sort: true },
-    { label: () => `${t('登录IP')}${t('数')}`, field: LOGIN_STAT_FIELDS.LOGIN_IP_COUNT, sort: true },
+    { label: () => t('登录次数'), field: LOGIN_STAT_FIELDS.LOGIN_COUNT },
+    { label: () => t('登录地点数'), field: LOGIN_STAT_FIELDS.LOGIN_LOCATION_COUNT },
+    { label: () => t('登录设备数'), field: LOGIN_STAT_FIELDS.LOGIN_DEVICE_COUNT },
+    { label: () => `${t('登录IP')}${t('数')}`, field: LOGIN_STAT_FIELDS.LOGIN_IP_COUNT },
   ];
 
   // ========== 登录记录明细列 ==========
