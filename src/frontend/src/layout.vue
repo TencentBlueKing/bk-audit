@@ -159,7 +159,7 @@
             {{ t('场景风险') }}
           </audit-menu-item>
           <audit-menu-item
-            v-if="hasAllRiskPermission"
+            v-if="hasAllRiskPermission && userRole.includes('saas_admin')"
             index="riskManage">
             <audit-icon
               class="menu-item-icon"
