@@ -52,31 +52,30 @@
         class="scene-system-dropdown"
         :class="{ 'is-dark': dark }"
         @click.stop>
+        <div class="group-search">
+          <span class="search-prefix-wrap">
+            <audit-icon
+              class="search-prefix"
+              type="search1" />
+          </span>
+          <bk-input
+            v-model="sceneSearchKey"
+            behavior="simplicity"
+            :placeholder="t('搜索场景/系统名称、ID')"
+            size="small" />
+        </div>
         <!-- 审计场景分组 -->
         <div
           v-if="listScope.includes('scene') && (
             userRole.includes('scene_admin') || userRole.includes('scene_user') || userRole.includes('saas_admin')
           )"
           class="dropdown-group">
-          <div class="group-title">
+          <div
+            v-show="filteredSceneList.length > 0"
+            class="group-title">
             {{ t('审计场景') }}
           </div>
-          <div class="group-search">
-            <span class="search-prefix-wrap">
-              <audit-icon
-                class="search-prefix"
-                type="search1" />
-            </span>
-            <bk-input
-              v-model="sceneSearchKey"
-              behavior="simplicity"
-              :placeholder="t('搜索场景名称、场景ID')"
-              size="small">
-              <!-- <template #prefix>
 
-              </template> -->
-            </bk-input>
-          </div>
           <div class="group-list">
             <div
               v-for="item in filteredSceneList"
@@ -106,7 +105,7 @@
           </div>
           <div class="group-list">
             <div
-              v-for="item in systemList"
+              v-for="item in filteredSystemList"
               :key="item.id"
               class="dropdown-item"
               :class="{ 'is-selected': isSelected(item) }"
@@ -210,6 +209,14 @@
     const keyword = sceneSearchKey.value.trim().toLowerCase();
     if (!keyword) return sceneList.value;
     return sceneList.value.filter(item => item.name.toLowerCase().includes(keyword)
+      || item.id.toLowerCase().includes(keyword));
+  });
+
+  // 过滤后的系统列表（支持按名称和ID搜索）
+  const filteredSystemList = computed(() => {
+    const keyword = sceneSearchKey.value.trim().toLowerCase();
+    if (!keyword) return systemList.value;
+    return systemList.value.filter(item => item.name.toLowerCase().includes(keyword)
       || item.id.toLowerCase().includes(keyword));
   });
 
@@ -431,6 +438,7 @@
   // 弹出层显示
   const handlePopoverShow = () => {
     isPopoverShow.value = true;
+    sceneSearchKey.value = '';
   };
 
   // 弹出层隐藏
@@ -701,6 +709,10 @@
   &.is-dark {
     background: #1a2233;
 
+    .group-search {
+      background: #1a2233;
+    }
+
     &::-webkit-scrollbar {
       width: 4px;
     }
@@ -753,6 +765,16 @@
     }
   }
 
+  .group-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    padding: 0 12px 8px;
+    background: #fff;
+    align-items: center;
+  }
+
   .dropdown-group {
     &:not(:last-child) {
       margin-bottom: 8px;
@@ -764,11 +786,6 @@
       color: #979ba5;
     }
 
-    .group-search {
-      display: flex;
-      padding: 0 12px 8px;
-      align-items: center;
-    }
 
     .group-list {
       .dropdown-item {
