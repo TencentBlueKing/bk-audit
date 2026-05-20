@@ -1486,6 +1486,52 @@ class TestApiToolExecutor(TestCase):
     def tearDown(self):
         mock.patch.stopall()
 
+    def _build_pagination_config(self, position, enable_pagination=True, input_variable=None):
+        from services.web.tool.constants import (
+            ApiAuthMethod,
+            ApiConfig,
+            ApiOutputConfiguration,
+            ApiPaginationConfig,
+            ApiPaginationField,
+            ApiRequestMethod,
+            ApiToolConfig,
+            NoAuthItem,
+        )
+
+        return ApiToolConfig(
+            api_config=ApiConfig(
+                url="https://api.example.com/v1/users",
+                method=ApiRequestMethod.GET,
+                auth_config=NoAuthItem(method=ApiAuthMethod.NONE),
+                headers=[],
+            ),
+            input_variable=input_variable or [],
+            output_config=ApiOutputConfiguration(
+                enable_grouping=False,
+                groups=[],
+                enable_pagination=enable_pagination,
+                pagination_config=[
+                    ApiPaginationConfig(
+                        list_field=ApiPaginationField(
+                            json_path="data.list",
+                            raw_name="list",
+                            display_name="List",
+                        ),
+                        total_field=ApiPaginationField(
+                            json_path="data.total",
+                            raw_name="total",
+                            display_name="Total",
+                        ),
+                        page_param_name="pageNum",
+                        page_size_param_name="pageSize",
+                        default_page=1,
+                        default_page_size=10,
+                        position=position,
+                    )
+                ],
+            ),
+        )
+
     @mock.patch('services.web.tool.executor.tool.requests.request')
     def test_execute_with_no_auth(self, mock_request):
         """测试无认证方式执行API工具"""
@@ -1896,6 +1942,208 @@ class TestApiToolExecutor(TestCase):
         # 验证查询参数
         call_kwargs = mock_request.call_args
         self.assertEqual(call_kwargs[1]["params"], {"page": 1, "page_size": 10})
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_pagination_params_from_tool_variables(self, mock_request):
+        """测试分页参数从 tool_variables 渲染到查询参数"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.QUERY)
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "total": 0}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        result = executor.execute(
+            {
+                "tool_variables": [
+                    {"raw_name": "pageNum", "value": 2},
+                    {"raw_name": "pageSize", "value": 20},
+                ]
+            }
+        )
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(mock_request.call_args[1]["params"], {"pageNum": 2, "pageSize": 20})
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_pagination_defaults_when_tool_variables_missing(self, mock_request):
+        """测试分页参数未传时使用配置默认值"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.QUERY)
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "total": 0}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        executor.execute({"tool_variables": []})
+
+        self.assertEqual(mock_request.call_args[1]["params"], {"pageNum": 1, "pageSize": 10})
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_invalid_pagination_value(self, mock_request):
+        """测试分页参数值格式错误时抛出异常"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.QUERY)
+        executor = ApiToolExecutor(config.model_dump())
+
+        with self.assertRaises(InvalidVariableFormatError):
+            executor.execute(
+                {
+                    "tool_variables": [
+                        {"raw_name": "pageNum", "value": "not-a-number"},
+                        {"raw_name": "pageSize", "value": 20},
+                    ]
+                }
+            )
+
+        mock_request.assert_not_called()
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_multiple_pagination_configs(self, mock_request):
+        """测试多组分页配置同时渲染"""
+        from services.web.tool.constants import ApiPaginationConfig, ApiPaginationField
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.QUERY)
+        config.output_config.pagination_config.append(
+            ApiPaginationConfig(
+                list_field=ApiPaginationField(
+                    json_path="data.risks",
+                    raw_name="risks",
+                    display_name="Risks",
+                ),
+                total_field=ApiPaginationField(
+                    json_path="data.risk_total",
+                    raw_name="risk_total",
+                    display_name="Risk Total",
+                ),
+                page_param_name="riskPage",
+                page_size_param_name="riskPageSize",
+                default_page=1,
+                default_page_size=20,
+                position=ApiVariablePosition.BODY,
+            )
+        )
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "risks": []}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        executor.execute(
+            {
+                "tool_variables": [
+                    {"raw_name": "pageNum", "value": 2},
+                    {"raw_name": "pageSize", "value": 10},
+                    {"raw_name": "riskPage", "value": 3},
+                    {"raw_name": "riskPageSize", "value": 50},
+                ]
+            }
+        )
+
+        self.assertEqual(mock_request.call_args[1]["params"], {"pageNum": 2, "pageSize": 10})
+        self.assertEqual(mock_request.call_args[1]["json"], {"riskPage": 3, "riskPageSize": 50})
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_pagination_params_in_body(self, mock_request):
+        """测试分页参数按配置渲染到请求体"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.BODY)
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "total": 0}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        executor.execute(
+            {
+                "tool_variables": [
+                    {"raw_name": "pageNum", "value": 3},
+                    {"raw_name": "pageSize", "value": 50},
+                ]
+            }
+        )
+
+        self.assertEqual(mock_request.call_args[1]["json"], {"pageNum": 3, "pageSize": 50})
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_with_pagination_params_in_path(self, mock_request):
+        """测试分页参数按配置渲染到路径参数"""
+        from services.web.tool.constants import (
+            ApiAuthMethod,
+            ApiConfig,
+            ApiRequestMethod,
+            ApiToolConfig,
+            NoAuthItem,
+        )
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.PATH)
+        config = ApiToolConfig(
+            api_config=ApiConfig(
+                url="https://api.example.com/v1/users/page/{pageNum}/size/{pageSize}",
+                method=ApiRequestMethod.GET,
+                auth_config=NoAuthItem(method=ApiAuthMethod.NONE),
+                headers=[],
+            ),
+            input_variable=config.input_variable,
+            output_config=config.output_config,
+        )
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "total": 0}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        executor.execute(
+            {
+                "tool_variables": [
+                    {"raw_name": "pageNum", "value": 4},
+                    {"raw_name": "pageSize", "value": 100},
+                ]
+            }
+        )
+
+        self.assertEqual(mock_request.call_args[1]["url"], "https://api.example.com/v1/users/page/4/size/100")
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_ignores_pagination_config_when_disabled(self, mock_request):
+        """测试关闭分页时不注入分页参数"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(position=ApiVariablePosition.QUERY, enable_pagination=False)
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"list": [], "total": 0}}
+        mock_request.return_value = mock_response
+
+        executor = ApiToolExecutor(config.model_dump())
+        executor.execute({"tool_variables": []})
+
+        self.assertNotIn("params", mock_request.call_args[1])
+
+    @mock.patch('services.web.tool.executor.tool.requests.request')
+    def test_execute_pagination_defaults_do_not_skip_required_input_validation(self, mock_request):
+        """测试分页默认值不绕过普通输入变量必填校验"""
+        from services.web.tool.executor.tool import ApiToolExecutor
+
+        config = self._build_pagination_config(
+            position=ApiVariablePosition.QUERY,
+            input_variable=[self.base_input_variable],
+        )
+
+        executor = ApiToolExecutor(config.model_dump())
+
+        with self.assertRaises(InputVariableMissingError):
+            executor.execute({"tool_variables": []})
+
+        mock_request.assert_not_called()
 
     @mock.patch('services.web.tool.executor.tool.requests.request')
     def test_execute_missing_required_variable(self, mock_request):

@@ -21,7 +21,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from django.utils.translation import gettext, gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from rest_framework.fields import CharField, DictField, JSONField, ListField
 from typing_extensions import TypedDict
 
@@ -508,6 +508,12 @@ class ApiTableOutputField(ApiJsonField):
     pass
 
 
+class ApiPaginationField(ApiJsonField):
+    """API 分页字段选择"""
+
+    pass
+
+
 class TableFieldTypeConfig(BaseModel):
     """
     表格字段类型配置
@@ -538,6 +544,20 @@ class ApiOutputGroup(BaseModel):
     output_fields: List[ApiOutputField] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
 
 
+class ApiPaginationConfig(BaseModel):
+    """
+    API 分页配置
+    """
+
+    list_field: ApiPaginationField = PydanticField(title=gettext_lazy("数据列表字段"))
+    total_field: ApiPaginationField = PydanticField(title=gettext_lazy("数据总条数字段"))
+    page_param_name: str = PydanticField(min_length=1, title=gettext_lazy("页码参数名"))
+    page_size_param_name: str = PydanticField(min_length=1, title=gettext_lazy("每页条数参数名"))
+    default_page: int = PydanticField(1, ge=0, title=gettext_lazy("默认页码"))
+    default_page_size: int = PydanticField(10, gt=0, title=gettext_lazy("默认每页条数"))
+    position: ApiVariablePosition = PydanticField(ApiVariablePosition.QUERY, title=gettext_lazy("页参数位置"))
+
+
 class ApiOutputConfiguration(BaseModel):
     """
     API 输出整体配置
@@ -550,6 +570,8 @@ class ApiOutputConfiguration(BaseModel):
 
     # 2. 统一的数据结构
     groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
+    enable_pagination: bool = PydanticField(False, title=gettext_lazy("启用分页"))
+    pagination_config: List[ApiPaginationConfig] = PydanticField(default_factory=list, title=gettext_lazy("分页配置"))
     result_schema: Annotated[Dict[str, Any], JSONField(allow_null=True),] = PydanticField(
         default_factory=dict,
         title=gettext_lazy("调试输出Schema"),
@@ -588,6 +610,23 @@ class ApiToolConfig(BaseModel):
             key_field="raw_name",
             error_msg=lambda key: gettext("输入变量 raw_name %s 重复") % key,
         )
+
+    @model_validator(mode="after")
+    def validate_pagination_config(self):
+        if self.output_config.enable_pagination and not self.output_config.pagination_config:
+            raise ValueError(gettext("启用分页时分页配置不能为空"))
+
+        input_raw_names = {var.raw_name for var in self.input_variable}
+        pagination_raw_names = set()
+        for pagination in self.output_config.pagination_config:
+            pagination_raw_names.add(pagination.page_param_name)
+            pagination_raw_names.add(pagination.page_size_param_name)
+
+        duplicated_raw_names = input_raw_names & pagination_raw_names
+        if duplicated_raw_names:
+            raise ValueError(gettext("分页参数名不能与输入变量 raw_name 重复: %s") % ",".join(sorted(duplicated_raw_names)))
+
+        return self
 
 
 # ==========================================
