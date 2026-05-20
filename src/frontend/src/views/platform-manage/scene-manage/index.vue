@@ -834,6 +834,7 @@
     .bk-radio-button-label {
       display: flex;
       align-items: center;
+      padding: 0 12px;
     }
   }
 }
@@ -845,6 +846,7 @@
   margin-left: 4px;
   font-size: 12px;
   line-height: 18px;
+  pointer-events: none;
 }
 
 .search-input {
