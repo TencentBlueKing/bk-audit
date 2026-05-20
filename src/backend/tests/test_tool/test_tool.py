@@ -1355,6 +1355,28 @@ class ApiToolResourceTestCase(TestCase):
             ],
             "output_config": {
                 "enable_grouping": True,
+                "enable_pagination": True,
+                "pagination_config": [
+                    {
+                        "list_field": {
+                            "json_path": "data.list",
+                            "raw_name": "list",
+                            "display_name": "List",
+                            "description": "Data list",
+                        },
+                        "total_field": {
+                            "json_path": "data.total",
+                            "raw_name": "total",
+                            "display_name": "Total",
+                            "description": "Total count",
+                        },
+                        "page_param_name": "pageNum",
+                        "page_size_param_name": "pageSize",
+                        "default_page": 1,
+                        "default_page_size": 10,
+                        "position": ApiVariablePosition.QUERY.value,
+                    }
+                ],
                 "groups": [
                     {
                         "name": "Default Group",
@@ -1436,6 +1458,14 @@ class ApiToolResourceTestCase(TestCase):
         # Verify enable_grouping
         output_config = tool.config['output_config']
         self.assertTrue(output_config['enable_grouping'])
+        self.assertTrue(output_config["enable_pagination"])
+        self.assertEqual(output_config["pagination_config"][0]["list_field"]["json_path"], "data.list")
+        self.assertEqual(output_config["pagination_config"][0]["total_field"]["json_path"], "data.total")
+        self.assertEqual(output_config["pagination_config"][0]["page_param_name"], "pageNum")
+        self.assertEqual(output_config["pagination_config"][0]["page_size_param_name"], "pageSize")
+        self.assertEqual(output_config["pagination_config"][0]["default_page"], 1)
+        self.assertEqual(output_config["pagination_config"][0]["default_page_size"], 10)
+        self.assertEqual(output_config["pagination_config"][0]["position"], ApiVariablePosition.QUERY.value)
 
         # Verify enum mapping calls still work
         self.assertEqual(self.mock_meta.batch_update_enum_mappings.call_count, 2)
@@ -1456,6 +1486,64 @@ class ApiToolResourceTestCase(TestCase):
             related_object_id=tool.uid,
             related_type="tool",
         )
+
+    def test_create_api_tool_rejects_enabled_pagination_without_config(self):
+        """Test that enabled pagination requires at least one pagination config."""
+        data = {
+            "uid": self.uid,
+            "name": "Test API Tool",
+            "namespace": "default",
+            "tool_type": self.tool_type,
+            "config": deepcopy(self.api_config_data),
+            "description": "Test Description",
+            "tags": [],
+            "version": 1,
+        }
+        data["config"]["output_config"]["enable_pagination"] = True
+        data["config"]["output_config"]["pagination_config"] = []
+
+        with patch('services.web.tool.resources.get_request_username', return_value="admin"):
+            with self.assertRaises(Exception):
+                CreateTool()(data)
+
+    def test_create_api_tool_rejects_pagination_param_conflicting_with_input_raw_name(self):
+        """Test that pagination params cannot reuse input variable raw_name."""
+        data = {
+            "uid": self.uid,
+            "name": "Test API Tool",
+            "namespace": "default",
+            "tool_type": self.tool_type,
+            "config": deepcopy(self.api_config_data),
+            "description": "Test Description",
+            "tags": [],
+            "version": 1,
+        }
+        data["config"]["output_config"]["enable_pagination"] = True
+        data["config"]["output_config"]["pagination_config"] = [
+            {
+                "list_field": {
+                    "json_path": "data.list",
+                    "raw_name": "list",
+                    "display_name": "List",
+                    "description": "",
+                },
+                "total_field": {
+                    "json_path": "data.total",
+                    "raw_name": "total",
+                    "display_name": "Total",
+                    "description": "",
+                },
+                "page_param_name": "query_param",
+                "page_size_param_name": "pageSize",
+                "default_page": 1,
+                "default_page_size": 10,
+                "position": ApiVariablePosition.QUERY.value,
+            }
+        ]
+
+        with patch('services.web.tool.resources.get_request_username', return_value="admin"):
+            with self.assertRaises(Exception):
+                CreateTool()(data)
 
     def test_update_api_tool_syncs_enum_mappings(self):
         """Test that updating an API tool re-syncs enum mappings"""
@@ -1495,3 +1583,50 @@ class ApiToolResourceTestCase(TestCase):
             related_object_id=self.uid,
             related_type="tool",
         )
+
+    def test_update_api_tool_persists_pagination_config(self):
+        """Test that updating an API tool persists pagination config in the new version."""
+        Tool.objects.create(
+            uid=self.uid,
+            version=1,
+            name="Original Tool",
+            namespace="default",
+            tool_type=ToolTypeEnum.API.value,
+            config=ApiToolConfig.model_validate(self.api_config_data).model_dump(),
+            created_by="admin",
+        )
+
+        new_config_data = deepcopy(self.api_config_data)
+        new_config_data["output_config"]["enable_pagination"] = True
+        new_config_data["output_config"]["pagination_config"] = [
+            {
+                "list_field": {
+                    "json_path": "data.list",
+                    "raw_name": "list",
+                    "display_name": "List",
+                    "description": "",
+                },
+                "total_field": {
+                    "json_path": "data.total",
+                    "raw_name": "total",
+                    "display_name": "Total",
+                    "description": "",
+                },
+                "page_param_name": "pageNum",
+                "page_size_param_name": "pageSize",
+                "default_page": 1,
+                "default_page_size": 10,
+                "position": ApiVariablePosition.QUERY.value,
+            }
+        ]
+
+        update_data = {"uid": self.uid, "config": new_config_data, "tags": []}
+
+        with patch('services.web.tool.resources.get_request_username', return_value="admin"):
+            result = UpdateTool()(update_data)
+
+        self.assertEqual(result["version"], 2)
+        tool = Tool.objects.get(uid=self.uid, version=2)
+        output_config = tool.config["output_config"]
+        self.assertTrue(output_config["enable_pagination"])
+        self.assertEqual(output_config["pagination_config"][0]["page_param_name"], "pageNum")

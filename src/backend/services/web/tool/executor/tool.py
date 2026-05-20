@@ -36,6 +36,7 @@ from services.web.tool.constants import (
     ApiVariablePosition,
     BkVisionConfig,
     DataSearchConfigTypeEnum,
+    FieldCategory,
     SmartPageDataSourceConfigUnion,
     SmartPageDataSourceTypeEnum,
     SmartPageSqlTemplateDataSourceConfig,
@@ -49,6 +50,7 @@ from services.web.tool.exceptions import (
     BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
+    InvalidVariableFormatError,
     SmartPageDataSourceNotFound,
     SmartPageDataSourceTypeNotSupport,
     ToolTypeNotSupport,
@@ -392,6 +394,53 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             return [cls._sanitize_log_payload(item) for item in payload]
         return payload
 
+    @staticmethod
+    def _parse_pagination_value(value: Any) -> int:
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            raise InvalidVariableFormatError(var_type=FieldCategory.NUMBER_INPUT, value=value)
+
+    def _render_pagination_request_params(self, params: APIToolExecuteParams) -> List["ApiRequestParam"]:
+        """
+        渲染输出分页配置派生出的请求参数
+
+        分页参数不属于 input_variable，不参与 required 校验；前端未传或传入 None 时使用配置默认值。
+        """
+
+        output_config = self.config.output_config
+        if not output_config.enable_pagination:
+            return []
+
+        tool_vars_map = {var.raw_name: var.value for var in params.tool_variables}
+        request_params = []
+        for pagination in output_config.pagination_config:
+            page_value = tool_vars_map.get(pagination.page_param_name)
+            if page_value is None:
+                page_value = pagination.default_page
+            page_value = self._parse_pagination_value(page_value)
+
+            page_size_value = tool_vars_map.get(pagination.page_size_param_name)
+            if page_size_value is None:
+                page_size_value = pagination.default_page_size
+            page_size_value = self._parse_pagination_value(page_size_value)
+
+            request_params.extend(
+                [
+                    ApiRequestParam(
+                        name=pagination.page_param_name,
+                        value=page_value,
+                        position=pagination.position,
+                    ),
+                    ApiRequestParam(
+                        name=pagination.page_size_param_name,
+                        value=page_size_value,
+                        position=pagination.position,
+                    ),
+                ]
+            )
+        return request_params
+
     def _render_request_params(self, params: APIToolExecuteParams) -> List["ApiRequestParam"]:
         """
         渲染请求参数：校验、格式化、转换为请求参数
@@ -419,6 +468,7 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             # 4. 通过多态方法转换为请求参数
             final_params.extend(var_config.to_request_params(parsed_value))
 
+        final_params.extend(self._render_pagination_request_params(params))
         return final_params
 
     def _execute(self, params: APIToolExecuteParams) -> ApiToolExecuteResult:
