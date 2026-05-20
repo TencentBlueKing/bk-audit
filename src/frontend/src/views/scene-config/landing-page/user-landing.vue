@@ -105,7 +105,7 @@
               </div>
               <ul class="feature-list">
                 <li>{{ t('配置审计策略自动发现业务中的安全风险') }}</li>
-                <li>{{ t('自定义巡表和工具满足您的分析需求') }}</li>
+                <li>{{ t('自定义报表和工具满足您的分析需求') }}</li>
               </ul>
               <div
                 class="action-row"
