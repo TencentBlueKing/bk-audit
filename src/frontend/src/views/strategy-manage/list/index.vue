@@ -375,7 +375,8 @@
   const showRecords = ref(false);
   const currentDetailTab = ref<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther'>('riskDetection');
   const styles = shallowRef({ left: '216px' });
-  const strategyLabelList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
+  // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
+  const strategyLabelList = ref<any[]>([]);
   const searchKey = ref<Array<SearchKey>>([]);
   const strategyItem = ref({} as StrategyModel);
   const permissionCheckData = ref();
@@ -481,9 +482,9 @@
     },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
-  const dataSource = () => StrategyManageService.fetchStrategyList({
+  const dataSource = (params: Record<string, any> = {}) => StrategyManageService.fetchStrategyList({
+    ...params,
     order_type: 'asc',
-    strategy_type: 'model',
     tag: leftLabelFilterCondition.value,
   });
   const initStatusFilterList = [
@@ -1202,7 +1203,15 @@
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-strategy-manage-list-setting', JSON.stringify(setting));
   };
-  // 将新建的tr高亮
+  // 判断是否是新建数据
+  const isNewData = (data: StrategyModel) => {
+    const time = new Date(data.created_at).getTime();
+    const now = new Date().getTime();
+    const diff = Math.abs(now - time);
+    const isNew = diff < (5 * 60 * 1000);
+    return isNew;
+  };
+  // 将新建的tr高亮（仅在首次加载时生效，刷新/切换场景后不再高亮）
   const setNewCreateTrHighlight = (index: number, isNew : boolean) => {
     const domList = document.querySelectorAll(`.audit-highlight-table .bk-table-body tbody tr:nth-child(${index + 1}) td`);
     if (domList) {
@@ -1212,14 +1221,8 @@
       });
     }
   };
-  // 判断是否是新建数据
-  const isNewData = (data: StrategyModel) => {
-    const time = new Date(data.created_at).getTime();
-    const now = new Date().getTime();
-    const diff = Math.abs(now - time);
-    const isNew = diff < (5 * 60 * 1000);
-    return isNew;
-  };
+  // 是否应该高亮新建行（首次进入页面时为true，场景切换后设为false）
+  const shouldHighlightNewRow = ref(true);
   // 复制分享链接
   const handleCopyLink = () => {
     replaceSearchParams({ strategy_id: strategyItem.value.strategy_id });
@@ -1485,12 +1488,16 @@
       strategyLabelList.value = labelList.value;
     }
 
-    setTimeout(() => {
-      data.results.forEach((item, index) => {
-        const isNew = isNewData(item);
-        setNewCreateTrHighlight(index, isNew);
-      });
-    }, 1000);
+    // 仅在首次加载时高亮新建行，刷新/场景切换后不再高亮
+    if (shouldHighlightNewRow.value) {
+      setTimeout(() => {
+        data.results.forEach((item, index) => {
+          const isNew = isNewData(item);
+          setNewCreateTrHighlight(index, isNew);
+        });
+      }, 1000);
+      shouldHighlightNewRow.value = false;
+    }
   };
 
   const startPollingStatus = () => {
@@ -1551,6 +1558,7 @@
     total.value = 0;
     groupList.value.results = [];
     isRequest = false;
+    shouldHighlightNewRow.value = false; // 场景切换后不再高亮新建行
     listRef.value.fetchData();
   };
   onMounted(() => {
