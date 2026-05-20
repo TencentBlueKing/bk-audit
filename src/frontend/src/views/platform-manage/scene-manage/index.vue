@@ -77,6 +77,8 @@
             class="search-input"
             clearable
             :data="searchSelectData"
+            :defaut-using-item="{ inputHtml: t('请选择') }"
+            :get-menu-list="getMenuList"
             :placeholder="t('搜索场景 ID、场景名称、场景描述、管理员、使用者、更新人')"
             unique-select
             @update:model-value="handleSearch" />
@@ -220,10 +222,12 @@
   import { useRouter } from 'vue-router';
 
   import SceneManageService from '@service/scene-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import SceneModel from '@model/scene/scene';
 
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
@@ -250,7 +254,7 @@
   const searchValue = ref<SearchKey[]>([]);
 
   // bk-search-select 搜索条件配置
-  const searchSelectData = [
+  const searchSelectData = ref([
     {
       name: '场景ID',
       id: 'scene_id',
@@ -270,21 +274,47 @@
       name: '场景管理员',
       id: 'manager',
       placeholder: '请选择场景管理员',
-      multiple: false,
+      children: [] as Array<{ id: string; name: string }>,
     },
     {
       name: '场景使用者',
       id: 'user',
       placeholder: '请选择场景使用者',
-      multiple: false,
+      children: [] as Array<{ id: string; name: string }>,
     },
     {
       name: '更新人',
       id: 'updated_by',
       placeholder: '请选择更新人',
-      multiple: false,
+      children: [] as Array<{ id: string; name: string }>,
     },
-  ];
+  ]);
+
+  // 获取用户列表（用于远程搜索人员字段）
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 远程搜索菜单列表（管理员/使用者/更新人输入时实时搜索）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData.value;
+    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
+    if (searchItem && ['manager', 'user', 'updated_by'].includes(item.id)) {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+  };
   // 表格引用
   const listRef = ref<InstanceType<typeof TdesignList>>();
 

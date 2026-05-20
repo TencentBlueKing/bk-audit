@@ -75,6 +75,8 @@
             v-model="searchKeyword"
             class="search-input"
             :data="searchSelectData"
+            :defaut-using-item="{ inputHtml: t('请选择') }"
+            :get-menu-list="getMenuList"
             :placeholder="t('搜索 名称、描述、BKVision 报表、更新人')"
             unique-select
             @update:model-value="handleSearch" />
@@ -159,6 +161,7 @@
 
   import PanelModelService from '@service/report-config';
   import ToolManageService from '@service/tool-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import PanelModel from '@model/report-config/panel';
 
@@ -190,12 +193,38 @@
   const isAllExpanded = computed(() => reportGroups.value.length > 0
     && expandedGroupIds.value.length === reportGroups.value.length);
   // 搜索选择器数据
-  const searchSelectData = [
+  const searchSelectData = ref([
     { name: '名称', id: 'name', placeholder: '请输入名称', noValidate: true },
     { name: '描述', id: 'description', placeholder: '请输入描述' },
     { name: 'BKVision 报表', id: 'bkvision_report', placeholder: '请输入BKVision报表' },
-    { name: '更新人', id: 'updated_by', placeholder: '请输入更新人' },
-  ];
+    { name: '更新人', id: 'updated_by', placeholder: '请输入更新人', children: [] as Array<{ id: string; name: string }> },
+  ]);
+
+  // 获取用户列表（用于更新人远程搜索）
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 远程搜索菜单列表（更新人输入时实时搜索）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData.value;
+    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
+    if (searchItem && item.id === 'updated_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+  };
 
   // 从 searchSelect 数组中提取对应字段参数（仿造 scene-manage）
   const getSearchParams = (keyword?: any[]): Record<string, any> => {
