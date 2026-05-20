@@ -448,11 +448,15 @@ class CreateScene(SceneResource):
                 group=platform_group, panel_id__in=panels.values_list("id", flat=True)
             ).values_list("panel_id", flat=True)
         )
-        to_create = [
-            SceneReportGroupItem(group=platform_group, panel=panel, priority_index=0)
-            for panel in panels
-            if panel.id not in existing_panel_ids
-        ]
+        next_priority_index = SceneReportGroupItem.get_next_priority_index(platform_group.id)
+        to_create = []
+        for panel in panels:
+            if panel.id in existing_panel_ids:
+                continue
+            to_create.append(
+                SceneReportGroupItem(group=platform_group, panel=panel, priority_index=next_priority_index)
+            )
+            next_priority_index += 1
         if to_create:
             SceneReportGroupItem.objects.bulk_create(to_create, ignore_conflicts=True)
 

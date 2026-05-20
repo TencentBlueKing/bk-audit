@@ -155,7 +155,13 @@ class BKVision(AuditMixinResource, abc.ABC):
                 if scene_id in panel_scene_ids:
                     continue
                 group = cls._get_or_create_platform_group(scene_id=scene_id)
-                to_create.append(SceneReportGroupItem(panel_id=panel_id, group=group, priority_index=0))
+                to_create.append(
+                    SceneReportGroupItem(
+                        panel_id=panel_id,
+                        group=group,
+                        priority_index=SceneReportGroupItem.get_next_priority_index(group.id),
+                    )
+                )
             if to_create:
                 SceneReportGroupItem.objects.bulk_create(to_create, ignore_conflicts=True)
 
@@ -182,13 +188,18 @@ class BKVision(AuditMixinResource, abc.ABC):
             .order_by("id")
         )
         if not items:
-            SceneReportGroupItem.objects.create(group=target_group, panel=panel, priority_index=0)
+            SceneReportGroupItem.objects.create(
+                group=target_group,
+                panel=panel,
+                priority_index=SceneReportGroupItem.get_next_priority_index(target_group.id),
+            )
             return
 
         primary = items[0]
         if primary.group_id != target_group.id:
             primary.group = target_group
-            primary.save(update_fields=["group_id"])
+            primary.priority_index = SceneReportGroupItem.get_next_priority_index(target_group.id)
+            primary.save(update_fields=["group_id", "priority_index"])
 
         if len(items) > 1:
             SceneReportGroupItem.objects.filter(id__in=[item.id for item in items[1:]]).delete()
