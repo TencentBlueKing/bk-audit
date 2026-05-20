@@ -133,6 +133,7 @@
               @input="handleSearch">
               <template #prefix>
                 <audit-icon
+                  class="search-icon"
                   type="search1" />
               </template>
             </bk-input>
@@ -629,6 +630,10 @@
   border-radius: 10px;
   box-shadow: 0 4px 24px rgb(59 126 255 / 12%);
   grid-column: 1 / -1;
+
+  .search-icon {
+    margin-top: 10px;
+  }
 
   :deep(.bk-input) {
     margin-bottom: 8px;

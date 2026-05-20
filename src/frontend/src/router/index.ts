@@ -162,9 +162,14 @@ export default (config: ConfigModel) => {
       // 包含 system_admin 或 saas_admin 时可访问系统管理页面
       const hasSystemOrSaasAdmin = userRole.includes('system_admin') || userRole.includes('saas_admin');
 
+      // 从 systemLanding页 发起的子路由跳转应放行（如接入新系统、选择已有系统）
+      const fromSystemLanding = (from.name as string) === 'systemLandingPage';
+      const toChildOfNewSystem = to.path.startsWith('/nwe-system-manage');
+
       if (
         (hasSceneRole && ['/statement-manage', '/tools'].some(p => to.path.startsWith(p)))
         || (hasSystemOrSaasAdmin && ['/nwe-system-manage', '/system-manage'].some(p => to.path.startsWith(p)))
+        || (fromSystemLanding && toChildOfNewSystem)
       ) {
         // 放行，继续后续检查
       } else {
