@@ -14,6 +14,24 @@ class TestPlatformPanelGroupBinding(TestCase):
         self.scene2 = Scene.objects.create(name="s2")
 
     def test_create_platform_panel_auto_create_group_item(self):
+        group = SceneReportGroup.objects.create(
+            scene=self.scene1,
+            name="平台报表",
+            group_type=ReportGroupType.PLATFORM,
+        )
+        existing_resp = CreatePlatformPanel().request(
+            {
+                "name": "已有平台报表",
+                "status": "published",
+                "visibility": {
+                    "visibility_type": VisibilityScope.SPECIFIC_SCENES,
+                    "scene_ids": [self.scene1.scene_id],
+                    "system_ids": [],
+                },
+            }
+        )
+        SceneReportGroupItem.objects.filter(group=group, panel_id=existing_resp["id"]).update(priority_index=9)
+
         resp = CreatePlatformPanel().request(
             {
                 "name": "平台报表A",
@@ -28,7 +46,8 @@ class TestPlatformPanelGroupBinding(TestCase):
 
         group = SceneReportGroup.objects.get(scene_id=self.scene1.scene_id, group_type=ReportGroupType.PLATFORM)
         self.assertEqual(group.name, "平台报表")
-        self.assertTrue(SceneReportGroupItem.objects.filter(group=group, panel_id=resp["id"]).exists())
+        item = SceneReportGroupItem.objects.get(group=group, panel_id=resp["id"])
+        self.assertEqual(item.priority_index, 10)
 
     def test_update_platform_panel_auto_sync_new_scene(self):
         resp = CreatePlatformPanel().request(
