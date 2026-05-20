@@ -30,7 +30,7 @@
       ref="templateRef"
       style="display: none;max-height: 90vh;overflow: auto;">
       <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
-        {{ data }}
+        {{ props.tip || data }}
       </div>
     </div>
   </div>
@@ -55,7 +55,8 @@
     placement?: Placement,
     isShow?: boolean,
     maxWidth?: string | number,
-    line?: number,  // 新增行数控制属性
+    line?: number,  // 行数控制属性
+    tip?: string,   // 自定义 tooltip 提示内容（有值时 tooltip 显示此内容，不影响文本溢出判断）
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -63,7 +64,8 @@
     placement: 'top',
     isShow: true,
     maxWidth: 'none',
-    line: 1,  // 默认一行
+    line: 1,
+    tip: '',
   });
 
   const rootRef = ref();
@@ -111,8 +113,12 @@
       resizeObserver.observe(rootRef.value);
     }
   });
-  // 当文本溢出省略号则hover显示全部内容
+  // 当文本溢出省略号或有自定义 tip 时 hover 显示提示
   const handleIsShowTippy = () => {
+    // 有自定义 tip 时始终显示
+    if (props.tip) {
+      return true;
+    }
     const { clientWidth, clientHeight } = rootRef.value;
     const { scrollWidth, scrollHeight } = rootRef.value;
     // 多行溢出判断：宽度或高度超出都显示tooltip
