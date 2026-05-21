@@ -638,15 +638,24 @@
 
   // 下一步
   const handleNext = () => {
-    const tastQueue = [formRef.value.validate()];
-    // 有配置组件
-    if (formData.value.strategy_type) {
-      tastQueue.push(comRef.value.getValue?.());
+    const doValidate = () => {
+      // 使用 setTimeout 确保审计组件（尤其是 audit-user-selector 基于 bk-select 封装）
+      // 的值已同步到 step1.formData 后再校验
+      setTimeout(() => {
+        formRef.value.validate().then(() => {
+          const params = buildStepParams();
+          emits('nextStep', 2, params);
+        });
+      }, 0);
+    };
+    // 有配置组件时，先用 getFields() 获取 Customize 组件内部最新完整数据，
+    // 直接覆盖 formData.configs，确保校验数据和组件内部一致
+    // （解决 audit-user-selector 等 bk-select 封装组件的值同步链路断裂问题）
+    if (formData.value.strategy_type && comRef.value?.getFields) {
+      const fields = comRef.value.getFields();
+      formData.value.configs = fields.configs;
     }
-    Promise.all(tastQueue).then(() => {
-      const params = buildStepParams();
-      emits('nextStep', 2, params);
-    });
+    doValidate();
   };
 
   // 构建当前步骤提交参数（与下一步一致）
