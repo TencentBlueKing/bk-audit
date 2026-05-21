@@ -26,7 +26,7 @@
     :min-height="400"
     multiple
     multiple-mode="tag"
-    :placeholder="t('搜索数据名称、别名、数据ID等')"
+    :placeholder="t('请选择')"
     :popover-options="{
       extCls: 'scene-table-select-popover',
       width: 660,
@@ -55,7 +55,7 @@
         <bk-input
           v-model.trim="tableSearchKey"
           behavior="simplicity"
-          :placeholder="t('搜索')"
+          :placeholder="t('请输入关键字搜索')"
           size="small" />
       </div>
       <div
@@ -68,7 +68,7 @@
       <div class="table-tree-wrapper">
         <bk-tree
           v-if="currentTableTreeData.length"
-          :key="`${activeTableType}-${tableSearchKey}`"
+          :key="activeTableType"
           ref="tableTreeRef"
           children="children"
           :data="currentTableTreeData"
@@ -77,6 +77,7 @@
           label="label"
           :node-content-action="['click']"
           node-key="value"
+          :search="tableSearchKey"
           show-checkbox
           :show-node-type-icon="false"
           @node-checked="handleTableTreeChecked">
@@ -163,10 +164,10 @@
   const tableSearchKey = ref('');
   const isSyncingTableTree = ref(false);
 
-  // 全部数据选择模式：'all' | 'system'(系统级) | null(叶子节点)
-  const tableSelectMode = ref<'all' | 'system' | null>(null);
-  // 系统级选择时，选中的系统 value 列表
-  const selectedTableSystems = ref<string[]>([]);
+  // 全部数据选择模式：按类型独立，key 为类型 value
+  const tableSelectModeMap = ref<Record<string, 'all' | 'system'>>({});
+  // 系统级选择时，选中的系统 value 列表（按类型）
+  const selectedTableSystemsMap = ref<Record<string, string[]>>({});
 
   // ========== 计算属性 ==========
 
@@ -177,40 +178,21 @@
 
   const isSelectableTableNode = (node: ConfigTypeTableNode) => isTableLeafNode(node) && !node.disabled;
 
-  const isSelectAllTableData = computed(() => tableSelectMode.value === 'all');
+  const isSelectAllTableData = computed(() => tableSelectModeMap.value[activeTableType.value] === 'all');
 
   const currentTableTreeData = computed(() => {
-    let children = currentTableType.value?.children || [];
-    // 先过滤掉所有禁用叶子节点
+    const children = currentTableType.value?.children || [];
+    // 过滤掉所有禁用叶子节点
     const filterDisabled = (nodes: ConfigTypeTableNode[]): ConfigTypeTableNode[] => nodes
       .filter(node => !node.disabled || !isTableLeafNode(node))
       .map(node => ({
         ...node,
         children: node.children ? filterDisabled(node.children) : undefined,
       }));
-    children = filterDisabled(children);
-    const keyword = tableSearchKey.value.trim();
-    return keyword ? filterTableTree(children, keyword) : children;
+    return filterDisabled(children);
   });
 
   // ========== 工具方法 ==========
-
-  const filterTableTree = (nodes: ConfigTypeTableNode[], keyword: string): ConfigTypeTableNode[] => {
-    const lowercaseKey = keyword.toLowerCase();
-    return nodes.reduce<ConfigTypeTableNode[]>((result, node) => {
-      if (node.disabled && isTableLeafNode(node)) return result;
-      const children = node.children ? filterTableTree(node.children, keyword) : [];
-      const isMatch = node.label.toLowerCase().includes(lowercaseKey)
-        || node.value.toLowerCase().includes(lowercaseKey);
-      if (isMatch || children.length) {
-        result.push({
-          ...node,
-          children,
-        });
-      }
-      return result;
-    }, []);
-  };
 
   const getTableLeafNodes = (nodes: ConfigTypeTableNode[]) => nodes.reduce<ConfigTypeTableNode[]>((result, node) => {
     if (isTableLeafNode(node)) {
@@ -221,26 +203,6 @@
     return result;
   }, []);
 
-  const findTableNodePath = (
-    nodes: ConfigTypeTableNode[],
-    value: string,
-    path: ConfigTypeTableNode[] = [],
-  ): ConfigTypeTableNode[] | null => {
-    for (const node of nodes) {
-      const nextPath = [...path, node];
-      if (node.value === value) {
-        return nextPath;
-      }
-      if (node.children?.length) {
-        const result = findTableNodePath(node.children, value, nextPath);
-        if (result) {
-          return result;
-        }
-      }
-    }
-    return null;
-  };
-
   /** 发送值变更事件 */
   const emitValueChange = (value: string[]) => {
     emits('update:modelValue', value);
@@ -250,44 +212,23 @@
   // ========== 同步方法 ==========
 
   const syncSelectedTableNodes = () => {
-    if (tableSelectMode.value === 'all') {
-      selectedTableNodes.value = allConfigTypeTable.value.map(typeItem => ({
-        value: `__all__${typeItem.value}`,
-        label: `${typeItem.label}：全部`,
-      }));
-    } else {
-      const result: SelectedTableNode[] = [];
-      const selectedIdSet = new Set(props.modelValue);
+    const result: SelectedTableNode[] = [];
+    const selectedIdSet = new Set(props.modelValue);
 
-      // 当前标签页
-      const systems = currentTableType.value?.children || [];
-      for (const sysNode of systems) {
-        const sysLeaves = getTableLeafNodes(sysNode.children || []);
-        const selectableLeaves = sysLeaves.filter(leaf => !leaf.disabled);
-        const selectedInSys = selectableLeaves.filter(leaf => selectedIdSet.has(leaf.value));
+    // 遍历所有类型
+    for (const typeItem of allConfigTypeTable.value) {
+      const typeValue = typeItem.value;
+      const isTypeAll = tableSelectModeMap.value[typeValue] === 'all';
 
-        if (selectableLeaves.length > 0 && selectedInSys.length === selectableLeaves.length) {
-          const typeLabel = currentTableType.value?.label || '';
-          result.push({
-            value: `__system__${sysNode.value}`,
-            label: `${typeLabel}：${sysNode.label}`,
-          });
-        } else if (selectedInSys.length > 0) {
-          for (const leaf of selectedInSys) {
-            const path = findTableNodePath(systems, leaf.value) || [leaf];
-            result.push({
-              value: leaf.value,
-              label: `${currentTableType.value?.label}/${path.map(item => item.label).join('/')}`,
-            });
-          }
-        }
-      }
-
-      // 其他标签页（跨标签页）
-      for (const typeItem of allConfigTypeTable.value) {
-        if (typeItem.value === activeTableType.value) continue;
-        const otherSystems = typeItem.children || [];
-        for (const sysNode of otherSystems) {
+      if (isTypeAll) {
+        // 当前类型为全选模式
+        result.push({
+          value: `__all__${typeValue}`,
+          label: `${typeItem.label}：全部`,
+        });
+      } else {
+        const systems = typeItem.children || [];
+        for (const sysNode of systems) {
           const sysLeaves = getTableLeafNodes(sysNode.children || []);
           const selectableLeaves = sysLeaves.filter(leaf => !leaf.disabled);
           const selectedInSys = selectableLeaves.filter(leaf => selectedIdSet.has(leaf.value));
@@ -307,9 +248,9 @@
           }
         }
       }
-
-      selectedTableNodes.value = result;
     }
+
+    selectedTableNodes.value = result;
     nextTick(() => {
       if (tableSelectRef.value) {
         tableSelectRef.value.selected = selectedTableNodes.value.map(item => ({
@@ -324,8 +265,9 @@
     nextTick(() => {
       if (!tableTreeRef.value) return;
       const selectedIdSet = new Set(props.modelValue);
-      const allLeaves = getTableLeafNodes(currentTableTreeData.value);
-      const treeSystems = currentTableTreeData.value;
+      const treeData = currentTableTreeData.value;
+      const allLeaves = getTableLeafNodes(treeData);
+      const treeSystems = treeData;
       isSyncingTableTree.value = true;
 
       // 先取消全部
@@ -368,19 +310,28 @@
   // ========== 事件处理 ==========
 
   const handleToggleAllTableData = () => {
+    const typeValue = activeTableType.value;
     if (isSelectAllTableData.value) {
-      tableSelectMode.value = null;
-      selectedTableSystems.value = [];
-      emitValueChange([]);
+      // 取消当前类型的全选：移除当前类型的所有叶子节点
+      delete tableSelectModeMap.value[typeValue];
+      delete selectedTableSystemsMap.value[typeValue];
+      const currentLeaves = getTableLeafNodes(currentTableType.value?.children || [])
+        .filter(leaf => !leaf.disabled);
+      const currentLeafIds = new Set(currentLeaves.map(leaf => leaf.value));
+      const newIds = props.modelValue.filter(id => !currentLeafIds.has(id));
+      emitValueChange(newIds);
     } else {
-      tableSelectMode.value = 'all';
-      selectedTableSystems.value = [];
-      const allLeaves: string[] = [];
-      for (const typeItem of allConfigTypeTable.value) {
-        const leaves = getTableLeafNodes(typeItem.children || []).filter(leaf => !leaf.disabled);
-        allLeaves.push(...leaves.map(leaf => leaf.value));
-      }
-      emitValueChange(allLeaves);
+      // 选中当前类型全部数据
+      tableSelectModeMap.value[typeValue] = 'all';
+      selectedTableSystemsMap.value[typeValue] = [];
+      const currentLeaves = getTableLeafNodes(currentTableType.value?.children || [])
+        .filter(leaf => !leaf.disabled);
+      const currentLeafIds = new Set(currentLeaves.map(leaf => leaf.value));
+      // 并集：保留其他类型 + 当前类型全部
+      const otherIds = props.modelValue.filter(id => !currentLeafIds.has(id));
+      const newIds = [...otherIds, ...currentLeaves.map(leaf => leaf.value)]
+        .filter((id, index, list) => list.indexOf(id) === index);
+      emitValueChange(newIds);
     }
     syncSelectedTableNodes();
     syncCurrentTreeChecked();
@@ -394,8 +345,9 @@
 
   const handleTableTreeChecked = (nodes: ConfigTypeTableNode[]) => {
     if (isSyncingTableTree.value) return;
-    if (tableSelectMode.value === 'all') return;
+    if (isSelectAllTableData.value) return;
 
+    const typeValue = activeTableType.value;
     const allCurrentPageLeaves = getTableLeafNodes(currentTableType.value?.children || [])
       .filter(leaf => !leaf.disabled);
     const currentPageLeafIds = new Set(allCurrentPageLeaves.map(leaf => leaf.value));
@@ -429,16 +381,16 @@
       const sys = systems.find(item => item.value === s);
       return sys ? getTableLeafNodes(sys.children || []) : [];
     }).length) {
-      tableSelectMode.value = 'system';
-      selectedTableSystems.value = fullSelectedSystems;
+      tableSelectModeMap.value[typeValue] = 'system';
+      selectedTableSystemsMap.value[typeValue] = fullSelectedSystems;
       emitValueChange(resultTableIds);
     } else if (fullSelectedSystems.length > 0) {
-      tableSelectMode.value = 'system';
-      selectedTableSystems.value = fullSelectedSystems;
+      tableSelectModeMap.value[typeValue] = 'system';
+      selectedTableSystemsMap.value[typeValue] = fullSelectedSystems;
       emitValueChange(resultTableIds);
     } else {
-      tableSelectMode.value = null;
-      selectedTableSystems.value = [];
+      delete tableSelectModeMap.value[typeValue];
+      delete selectedTableSystemsMap.value[typeValue];
       emitValueChange(resultTableIds);
     }
     syncSelectedTableNodes();
@@ -449,28 +401,41 @@
     let newTableIds = [...props.modelValue];
 
     if (id.startsWith('__all__')) {
-      tableSelectMode.value = null;
-      newTableIds = [];
-      selectedTableSystems.value = [];
+      // 移除某个类型的全选
+      const typeValue = id.replace('__all__', '');
+      delete tableSelectModeMap.value[typeValue];
+      delete selectedTableSystemsMap.value[typeValue];
+      // 找到该类型并移除其所有叶子节点
+      const typeItem = allConfigTypeTable.value.find(item => item.value === typeValue);
+      if (typeItem) {
+        const leaves = getTableLeafNodes(typeItem.children || []).map(leaf => leaf.value);
+        newTableIds = newTableIds.filter(tableId => !leaves.includes(tableId));
+      }
     } else if (id.startsWith('__system__')) {
       const sysId = id.replace('__system__', '');
-      selectedTableSystems.value = selectedTableSystems.value.filter(s => s !== sysId);
-      if (selectedTableSystems.value.length === 0) {
-        tableSelectMode.value = null;
+      const typeValue = activeTableType.value;
+      if (selectedTableSystemsMap.value[typeValue]) {
+        selectedTableSystemsMap.value[typeValue] = selectedTableSystemsMap.value[typeValue].filter(s => s !== sysId);
+        if (selectedTableSystemsMap.value[typeValue].length === 0) {
+          delete tableSelectModeMap.value[typeValue];
+          delete selectedTableSystemsMap.value[typeValue];
+        }
       }
-      const sysNode = currentTableType.value?.children?.find(item => item.value === sysId);
-      if (sysNode) {
-        const sysLeaves = getTableLeafNodes(sysNode.children || []).map(leaf => leaf.value);
-        newTableIds = newTableIds.filter(tableId => !sysLeaves.includes(tableId));
-      }
-      if (newTableIds.length === 0) {
-        tableSelectMode.value = null;
+      // 需要在所有类型中查找该系统
+      for (const typeItem of allConfigTypeTable.value) {
+        const sysNode = typeItem.children?.find(item => item.value === sysId);
+        if (sysNode) {
+          const sysLeaves = getTableLeafNodes(sysNode.children || []).map(leaf => leaf.value);
+          newTableIds = newTableIds.filter(tableId => !sysLeaves.includes(tableId));
+          break;
+        }
       }
     } else {
       newTableIds = newTableIds.filter(item => item !== id);
       if (newTableIds.length === 0) {
-        tableSelectMode.value = null;
-        selectedTableSystems.value = [];
+        // 清空所有类型的选择模式
+        tableSelectModeMap.value = {};
+        selectedTableSystemsMap.value = {};
       }
     }
     emitValueChange(newTableIds);
@@ -478,8 +443,8 @@
   };
 
   const handleClearTable = () => {
-    tableSelectMode.value = null;
-    selectedTableSystems.value = [];
+    tableSelectModeMap.value = {};
+    selectedTableSystemsMap.value = {};
     emitValueChange([]);
     syncSelectedTableNodes();
   };
@@ -488,28 +453,20 @@
 
   const detectAndSetSelectMode = () => {
     if (!props.modelValue || props.modelValue.length === 0) {
-      tableSelectMode.value = null;
-      selectedTableSystems.value = [];
+      tableSelectModeMap.value = {};
+      selectedTableSystemsMap.value = {};
       return;
     }
-    const allSelectableLeaves: string[] = [];
+    const selectedIdSet = new Set(props.modelValue);
+    // 检测每个类型是否全选
+    const newModeMap: Record<string, 'all'> = {};
     for (const typeItem of allConfigTypeTable.value) {
       const leaves = getTableLeafNodes(typeItem.children || []).filter(leaf => !leaf.disabled);
-      allSelectableLeaves.push(...leaves.map(leaf => leaf.value));
-    }
-    const selectedIdSet = new Set(props.modelValue);
-    const selectedCountInAll = allSelectableLeaves.filter(id => selectedIdSet.has(id)).length;
-    if (allSelectableLeaves.length > 0 && selectedCountInAll === allSelectableLeaves.length) {
-      tableSelectMode.value = 'all';
-      selectedTableSystems.value = [];
-    } else if (allSelectableLeaves.length > 0 && selectedCountInAll === 0) {
-      tableSelectMode.value = null;
-      selectedTableSystems.value = [];
-    } else {
-      if (tableSelectMode.value === 'all') {
-        tableSelectMode.value = null;
+      if (leaves.length > 0 && leaves.every(leaf => selectedIdSet.has(leaf.value))) {
+        newModeMap[typeItem.value] = 'all';
       }
     }
+    tableSelectModeMap.value = newModeMap;
   };
 
   // ========== 数据加载 ==========
@@ -566,8 +523,8 @@
   const resetState = () => {
     selectedTableNodes.value = [];
     tableSearchKey.value = '';
-    tableSelectMode.value = null;
-    selectedTableSystems.value = [];
+    tableSelectModeMap.value = {};
+    selectedTableSystemsMap.value = {};
     syncCurrentTreeChecked();
   };
 
@@ -699,6 +656,7 @@
 
 .table-tree-node {
   width: 100%;
+  padding-left: 8px;
   margin: 0;
   overflow: hidden;
   line-height: 32px;
