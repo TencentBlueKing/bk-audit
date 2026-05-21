@@ -17,8 +17,14 @@
 import { type Ref, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { CHART_FIELDS } from './game-field-keys';
+import { CHART_FIELDS, LOGIN_DETAIL_FIELDS } from './game-field-keys';
 import type { SearchFieldItem } from './game-search-fields';
+
+// 登录时段完整列表（正向排序：0-3 → 3-6 → ... → 21-24）
+const ALL_TIME_PERIODS = [
+  '0:00~3:00', '3:00~6:00', '6:00~9:00', '9:00~12:00',
+  '12:00~15:00', '15:00~18:00', '18:00~21:00', '21:00~24:00',
+];
 
 // 饼图配置项
 export interface ChartConfig {
@@ -81,16 +87,55 @@ export const useGameChartBuilders = () => {
   const { t } = useI18n();
 
   // ========== 登录记录 tab ==========
-  const buildLoginChartRows = (stats: Array<Record<string, any>>): ChartConfig[][] => {
+  const buildLoginChartRows = (
+    stats: Array<Record<string, any>>,
+    detailList: Array<Record<string, any>> = [],
+  ): ChartConfig[][] => {
     if (stats.length === 0) return [];
-    const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE, CHART_FIELDS.LOGIN_TOTAL);
-    const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION, CHART_FIELDS.LOGIN_TOTAL);
-    const timeData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_TIME_PERIOD, CHART_FIELDS.LOGIN_TOTAL);
-    const total = stats.reduce((sum, row) => sum + (Number(row[CHART_FIELDS.LOGIN_TOTAL]) || 0), 0);
+
+    // 构建 设备UUID → 机型 映射（从明细列表获取）
+    const deviceModelMap: Record<string, string> = {};
+    detailList.forEach((row) => {
+      const deviceId = row[LOGIN_DETAIL_FIELDS.LOGIN_DEVICE];
+      const model = row[LOGIN_DETAIL_FIELDS.DEVICE_MODEL];
+      if (deviceId && model) {
+        deviceModelMap[deviceId] = model;
+      }
+    });
+
+    // 登录设备：将 UUID 转换为"机型(UUID)"格式，按数量逆序排序
+    const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE, CHART_FIELDS.LOGIN_TOTAL)
+      .map(item => ({
+        name: deviceModelMap[item.name] ? `${deviceModelMap[item.name]}(${item.name})` : item.name,
+        value: item.value,
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // 登录地点：按数量逆序排序
+    const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION, CHART_FIELDS.LOGIN_TOTAL)
+      .sort((a, b) => b.value - a.value);
+
+    // 登录时段：按时间正向排序，只展示有数据的时段（过滤掉值为0的）
+    const timeDataMap: Record<string, number> = {};
+    buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_TIME_PERIOD, CHART_FIELDS.LOGIN_TOTAL)
+      .forEach((item) => {
+        timeDataMap[item.name] = item.value;
+      });
+    const timeData = ALL_TIME_PERIODS
+      .map(period => ({
+        name: period,
+        value: timeDataMap[period] || 0,
+      }))
+      .filter(item => item.value > 0);
+
+    // 每个饼图的 total 只计算各自分组的数据之和
+    const deviceTotal = deviceData.reduce((s, d) => s + d.value, 0);
+    const locationTotal = locationData.reduce((s, d) => s + d.value, 0);
+    const timeTotal = timeData.reduce((s, d) => s + d.value, 0);
     const charts: ChartConfig[] = [];
-    if (deviceData.length > 0) charts.push({ title: t('登录设备分析'), data: deviceData, total, centerLabel: t('登录次数') });
-    if (locationData.length > 0) charts.push({ title: t('登录地点分布'), data: locationData, total, centerLabel: t('登录次数') });
-    if (timeData.length > 0) charts.push({ title: t('登录时段分布'), data: timeData, total, centerLabel: t('登录次数') });
+    if (deviceData.length > 0) charts.push({ title: t('登录设备分析'), data: deviceData, total: deviceTotal, centerLabel: t('登录总数') });
+    if (locationData.length > 0) charts.push({ title: t('登录地点分布'), data: locationData, total: locationTotal, centerLabel: t('登录总数') });
+    if (timeTotal > 0) charts.push({ title: t('登录时段分布'), data: timeData, total: timeTotal, centerLabel: t('登录总数') });
     return charts.length > 0 ? [charts] : [];
   };
 
@@ -162,11 +207,19 @@ export const useGameChartBuilders = () => {
     const demandTypeData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_TYPE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
     const issuerData = buildChartFromGroupStats(stats, CHART_FIELDS.ISSUER, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
     const sourceData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_SOURCE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
-    const total = stats.reduce((sum, row) => sum + (Number(row[CHART_FIELDS.ISSUE_AMOUNT_YUAN]) || 0), 0);
     const charts: ChartConfig[] = [];
-    if (demandTypeData.length > 0) charts.push({ title: t('需求类型分布统计'), data: demandTypeData, total, centerLabel: t('发放金额（元）') });
-    if (issuerData.length > 0) charts.push({ title: t('发放人分布统计'), data: issuerData, total, centerLabel: t('发放金额（元）') });
-    if (sourceData.length > 0) charts.push({ title: t('需求来源分布统计'), data: sourceData, total, centerLabel: t('发放金额（元）') });
+    if (demandTypeData.length > 0) {
+      const total = demandTypeData.reduce((s, d) => s + d.value, 0);
+      charts.push({ title: t('需求类型分布统计'), data: demandTypeData, total, centerLabel: t('发放金额（元）') });
+    }
+    if (issuerData.length > 0) {
+      const total = issuerData.reduce((s, d) => s + d.value, 0);
+      charts.push({ title: t('发放人分布统计'), data: issuerData, total, centerLabel: t('发放金额（元）') });
+    }
+    if (sourceData.length > 0) {
+      const total = sourceData.reduce((s, d) => s + d.value, 0);
+      charts.push({ title: t('需求来源分布统计'), data: sourceData, total, centerLabel: t('发放金额（元）') });
+    }
     return charts.length > 0 ? [charts] : [];
   };
 
