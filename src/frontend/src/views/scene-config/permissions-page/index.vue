@@ -48,7 +48,7 @@
                     v-if="managerList.length > 0"
                     class="admin-icon"
                     type="user" />
-                  <span class="admin-name"> {{ managerText }}</span>
+                  <span class="admin-name"> {{ item.managers.join('、') }}</span>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
@@ -155,7 +155,7 @@
     status: 'enabled' | 'disabled';
     permission: Record<string, boolean>;
     description?: string;
-    managers?: string[];
+    managers: string[];
   }
 
   interface managerItem {
@@ -175,7 +175,6 @@
 
   const managerList = ref<Array<managerItem>>([]);
 
-  const managerText = computed(() => managerList.value.map(item => `${item.id}(${item.name})`).join(','));
   const currentManagers = computed(() => sceneList.value[0]?.managers || []);
 
   const permHintText = computed(() => {
@@ -186,23 +185,11 @@
   });
 
   const {
-    run: fetchSceneMembers,
-  } = useRequest(SceneManageService.fetchSceneMembers, {
-    defaultValue: [],
-    onSuccess: (data: managerItem[]) => {
-      managerList.value = data.filter(item => item.role === 'manager');
-    },
-  });
-
-  const {
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
     onSuccess: (data) => {
       sceneList.value = data.filter(item => item.scene_id === Number(route.query.scene_id));
-      fetchSceneMembers({
-        scene_id: Number(route.query.scene_id),
-      });
     },
   });
 
