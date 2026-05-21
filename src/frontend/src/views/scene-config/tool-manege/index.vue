@@ -372,8 +372,11 @@
     defaultValue: [],
     onSuccess: (data) => {
       tagsEnums.value = data;
+      // 过滤掉内置的快捷筛选标签（-3全部工具、-4我创建的、-5最近使用、-6我的收藏），保留无标签等
+      const excludeIds = ['-3', '-4', '-5', '-6'];
+      const realTags = data.filter((tag: TagItem) => !excludeIds.includes(String(tag.tag_id)));
       // 同步标签下拉选项
-      tagSelectOptions.value = data.map((tag: TagItem) => ({
+      tagSelectOptions.value = realTags.map((tag: TagItem) => ({
         id: String(tag.tag_id),
         name: tag.tag_name,
       }));
