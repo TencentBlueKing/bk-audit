@@ -65,7 +65,7 @@
           {{ t('工具广场') }}
         </router-link>
         <router-link
-          v-if="!userRole.includes('risk_handler')"
+          v-if="userRolePermission.show_log_search"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditConfigurationManage'
@@ -376,6 +376,7 @@
   const { t } = useI18n();
 
   const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
+  const userRolePermission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}') as Record<string, string[]>;
 
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
