@@ -105,6 +105,7 @@
         v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         allow-create
+        :auto-focus="false"
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
         :popover-options="{ placement: 'top-start' }"
