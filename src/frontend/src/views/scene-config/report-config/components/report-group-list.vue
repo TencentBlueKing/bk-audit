@@ -1072,6 +1072,7 @@
 .group-collapse-item {
   :deep(.bk-collapse-item) {
     border-radius: 2px;
+    box-shadow: none;
 
     .bk-collapse-header {
       padding: 0;
