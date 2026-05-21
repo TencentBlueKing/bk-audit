@@ -917,10 +917,14 @@ class ListRiskStrategy(ListRiskMetaBase):
         strategy_id_qs = (
             self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_ids=scene_ids)
             .order_by()
-            .values("strategy_id")
+            .values_list("strategy_id", flat=True)
             .distinct()
         )
-        return strategies.filter(strategy_id__in=strategy_id_qs)
+        # 元数据接口只需要策略维度结果。先物化 distinct strategy_id，可以把风险过滤 SQL
+        # 与后续策略/场景维表查询拆开，避免 MySQL 将嵌套子查询改写成 strategy -> risk 的执行计划，
+        # 从而在大量风险行上执行 JSON_CONTAINS 等高成本条件。
+        strategy_ids = list(strategy_id_qs)
+        return strategies.filter(strategy_id__in=strategy_ids)
 
 
 class ListRiskScenes(ListRiskStrategy):

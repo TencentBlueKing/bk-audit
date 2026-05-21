@@ -7,7 +7,9 @@ from unittest import mock
 import sqlglot
 from blueapps.utils.local import request_local
 from django.conf import settings
+from django.db import connection
 from django.db.models import Q
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.settings import api_settings
@@ -1180,8 +1182,8 @@ class TestListRiskResource(TestCase):
         self.assertIn(self.scene_id, scene_ids)
         self.assertNotIn(other_scene.scene_id, scene_ids)
 
-    def test_list_risk_scenes_no_memory_materialization(self):
-        """ListRiskScenes 应复用策略子查询，不将风险或策略 ID 物化到内存"""
+    def test_list_risk_scenes_returns_queryset(self):
+        """ListRiskScenes 应返回 QuerySet，便于资源层保持统一响应序列化"""
         from services.web.risk.resources.risk import ListRiskScenes
 
         result = ListRiskScenes().perform_request(
@@ -1189,6 +1191,39 @@ class TestListRiskResource(TestCase):
         )
 
         self.assertFalse(isinstance(result, list))
+
+    def test_list_risk_scenes_keeps_risk_filter_out_of_scene_query(self):
+        """场景列表应先计算策略 ID，避免最终场景查询嵌入风险过滤子查询"""
+        from services.web.risk.resources.risk import ListRiskScenes
+
+        self._make_request()
+        self.risk.current_operator = [self.username]
+        self.risk.save(update_fields=["current_operator"])
+
+        for risk_view_type in ("all", "todo"):
+            with self.subTest(risk_view_type=risk_view_type), CaptureQueriesContext(connection) as queries:
+                result = list(
+                    ListRiskScenes().perform_request(
+                        {
+                            "risk_view_type": risk_view_type,
+                            "event_time__gte": [datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc)],
+                            "event_time__lt": [datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)],
+                        }
+                    )
+                )
+
+            scene_ids = {scene.scene_id for scene in result}
+            self.assertIn(self.scene_id, scene_ids)
+            scene_queries = [
+                query["sql"].lower()
+                for query in queries.captured_queries
+                if "from" in query["sql"].lower()
+                and "scene_scene" in query["sql"].lower()
+                and "scene_resourcebindingscene" in query["sql"].lower()
+            ]
+            self.assertTrue(scene_queries)
+            self.assertNotIn("risk_risk", scene_queries[-1])
+            self.assertNotIn("risk_ticketpermission", scene_queries[-1])
 
     def test_list_risk_scenes_without_view_type_reuses_strategy_scope(self):
         """未传 risk_view_type 时沿用 ListRiskStrategy 的全量策略逻辑"""
