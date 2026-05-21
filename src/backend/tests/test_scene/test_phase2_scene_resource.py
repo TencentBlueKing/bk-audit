@@ -442,7 +442,12 @@ class TestLinkTableSceneId:
     @pytest.mark.django_db
     def test_create_link_table_rolls_back_when_binding_fails(self, scene):
         """测试联表绑定创建失败时回滚业务对象"""
+        from services.web.scene.models import SceneDataTable
         from services.web.strategy_v2.resources import CreateLinkTable
+
+        # 为场景授权测试数据表
+        SceneDataTable.objects.create(scene=scene, table_id="rt_rollback_a")
+        SceneDataTable.objects.create(scene=scene, table_id="rt_rollback_b")
 
         before = LinkTable.objects.count()
         with mock.patch(
@@ -486,7 +491,12 @@ class TestLinkTableSceneId:
     @pytest.mark.django_db
     def test_create_link_table_compensates_when_grant_fails(self, scene):
         """测试联表创建后授权失败会清理业务对象和绑定关系"""
+        from services.web.scene.models import SceneDataTable
         from services.web.strategy_v2.resources import CreateLinkTable
+
+        # 为场景授权测试数据表
+        SceneDataTable.objects.create(scene=scene, table_id="rt_grant_a")
+        SceneDataTable.objects.create(scene=scene, table_id="rt_grant_b")
 
         before_binding_count = ResourceBinding.objects.filter(resource_type=ResourceVisibilityType.LINK_TABLE).count()
         with (
