@@ -160,6 +160,8 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import { compareValues } from '@utils/assist/timestamp-conversion';
+
   import type { SearchFieldItem } from './game-search-fields';
 
   // 条件 tag 数据结构
@@ -218,46 +220,6 @@
   // 当前页码（本地管理）
   const currentPage = ref(props.pagination?.current || 1);
   const currentLimit = ref(props.pagination?.limit || 10);
-
-  // 通用比较器：优先按数字 / 时间戳比较，否则退化为字符串本地比较
-  const compareValues = (a: any, b: any): number => {
-    // null / undefined / '' 统一视为最小
-    const isEmpty = (v: any) => v === null || v === undefined || v === '';
-    if (isEmpty(a) && isEmpty(b)) return 0;
-    if (isEmpty(a)) return -1;
-    if (isEmpty(b)) return 1;
-
-    // 纯数字
-    const numA = Number(a);
-    const numB = Number(b);
-    if (!Number.isNaN(numA) && !Number.isNaN(numB)
-      && String(a).trim() !== '' && String(b).trim() !== '') {
-      return numA - numB;
-    }
-
-    // 时间字符串：尝试解析 ISO 8601 或 "YYYY-MM-DD HH:mm:ss" 格式
-    const parseDateTime = (v: string): number => {
-      // 先尝试 Date.parse（支持 ISO 8601）
-      const t = Date.parse(v);
-      if (!Number.isNaN(t)) return t;
-      // 尝试解析 "YYYY-MM-DD HH:mm:ss" 格式
-      const match = v.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-      if (match) {
-        const d = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`);
-        const ts = d.getTime();
-        if (!Number.isNaN(ts)) return ts;
-      }
-      return Number.NaN;
-    };
-    const tA = parseDateTime(String(a));
-    const tB = parseDateTime(String(b));
-    if (!Number.isNaN(tA) && !Number.isNaN(tB)) {
-      return tA - tB;
-    }
-
-    // 字符串
-    return String(a).localeCompare(String(b));
-  };
 
   // 排序后的数据
   const sortedData = computed(() => {
