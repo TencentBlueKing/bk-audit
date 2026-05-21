@@ -214,6 +214,7 @@
     group_ids: number[];
     priority_index?: number;
     favorite_created_at?: string | null;
+    groups?: { group_id: number; priority_index: number }[];
   }
 
   interface SideRouteItem {
@@ -512,7 +513,14 @@
         children: props.menuData
           .filter(menuItem => Array.isArray(menuItem.group_ids)
             && menuItem.group_ids.map(String).includes(String(item.id)))
-          .sort((a, b) => (b.priority_index ?? 0) - (a.priority_index ?? 0)),
+          .map((menuItem) => {
+            // 从 groups 数组中找到当前分组的 priority_index
+            const groupInfo = Array.isArray(menuItem.groups)
+              ? menuItem.groups.find(g => String(g.group_id) === String(item.id))
+              : undefined;
+            return { ...menuItem, priorityIndexForSort: groupInfo?.priority_index ?? 0 };
+          })
+          .sort((a, b) => (b.priorityIndexForSort ?? 0) - (a.priorityIndexForSort ?? 0)),
       }))
         .sort((a, b) => b.priority_index - a.priority_index)
         .filter(group => group.children.length > 0);
