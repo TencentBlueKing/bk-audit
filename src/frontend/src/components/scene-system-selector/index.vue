@@ -91,7 +91,8 @@
               <show-tooltips-text
                 class="item-name"
                 :class="{ 'is-highlight': item.type !== 'aggregate' }"
-                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name" />
+                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name"
+                placement="right" />
             </div>
           </div>
         </div>
@@ -118,7 +119,8 @@
               <show-tooltips-text
                 class="item-name"
                 :class="{ 'is-highlight': item.type !== 'aggregate' }"
-                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name" />
+                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name"
+                placement="right" />
             </div>
           </div>
         </div>
