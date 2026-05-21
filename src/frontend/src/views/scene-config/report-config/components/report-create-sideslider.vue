@@ -17,6 +17,8 @@
 <template>
   <bk-sideslider
     :is-show="isShow"
+    :quick-close="false"
+    show-mask
     :title="isEditMode ? t('编辑报表') : t('新建报表')"
     :width="640"
     :z-index="9999"
@@ -110,6 +112,14 @@
                 :key="group.id"
                 :label="group.name"
                 :value="group.id" />
+              <template #extension>
+                <div
+                  class="create-group-btn"
+                  @click="handleCreateGroup">
+                  <audit-icon type="plus-circle" />
+                  {{ t('新建分组') }}
+                </div>
+              </template>
             </bk-select>
           </bk-form-item>
 
@@ -208,6 +218,7 @@
     (e: 'submit', data: ReportFormData): void;
     (e: 'cancel'): void;
     (e: 'success', panelId?: string): void;
+    (e: 'create-group'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -275,6 +286,11 @@
   };
   const handleGroupChange = () => {
     formRef.value?.validate('groupId');
+  };
+
+  // 新建分组
+  const handleCreateGroup = () => {
+    emit('create-group');
   };
   // 填充编辑数据的通用逻辑
   const fillEditFormData = (data: ReportFormData) => {
@@ -584,4 +600,19 @@
   }
 }
 
+.create-group-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  font-size: 12px;
+  color: #3a84ff;
+  cursor: pointer;
+  border-top: 1px solid #dcdee5;
+
+  &:hover {
+    background-color: #f5f7fa;
+  }
+}
 </style>
