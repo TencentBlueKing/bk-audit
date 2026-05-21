@@ -144,9 +144,11 @@
     </div>
     <bk-table
       :columns="processedColumns"
-      :data="data"
+      :data="paginatedData"
       :pagination="simple ? false : localPagination"
+      remote-pagination
       stripe
+      @column-sort="handleColumnSort"
       @page-limit-change="handlePageLimitChange"
       @page-value-change="handlePageChange" />
   </div>
@@ -210,13 +212,12 @@
 
   const { t } = useI18n();
 
-  // 本地分页：使用前端分页，让 bk-table 自身管理 sort/filter/pagination
-  // count 始终跟随当前 data 长度（已经过外部 searchConditions 过滤后的数据）
-  const localPagination = computed(() => ({
-    count: props.data?.length || 0,
-    current: props.pagination?.current || 1,
-    limit: props.pagination?.limit || 10,
-  }));
+  // 排序状态：column 为排序字段名，type 为排序方向
+  const sortState = ref<{ column: string; type: string }>({ column: '', type: '' });
+
+  // 当前页码（本地管理）
+  const currentPage = ref(props.pagination?.current || 1);
+  const currentLimit = ref(props.pagination?.limit || 10);
 
   // 通用比较器：优先按数字 / 时间戳比较，否则退化为字符串本地比较
   const compareValues = (a: any, b: any): number => {
@@ -234,9 +235,22 @@
       return numA - numB;
     }
 
-    // 时间字符串：用 Date.parse 尝试解析
-    const tA = Date.parse(String(a));
-    const tB = Date.parse(String(b));
+    // 时间字符串：尝试解析 ISO 8601 或 "YYYY-MM-DD HH:mm:ss" 格式
+    const parseDateTime = (v: string): number => {
+      // 先尝试 Date.parse（支持 ISO 8601）
+      const t = Date.parse(v);
+      if (!Number.isNaN(t)) return t;
+      // 尝试解析 "YYYY-MM-DD HH:mm:ss" 格式
+      const match = v.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+      if (match) {
+        const d = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`);
+        const ts = d.getTime();
+        if (!Number.isNaN(ts)) return ts;
+      }
+      return Number.NaN;
+    };
+    const tA = parseDateTime(String(a));
+    const tB = parseDateTime(String(b));
     if (!Number.isNaN(tA) && !Number.isNaN(tB)) {
       return tA - tB;
     }
@@ -245,11 +259,41 @@
     return String(a).localeCompare(String(b));
   };
 
+  // 排序后的数据
+  const sortedData = computed(() => {
+    const list = [...(props.data || [])];
+    const { column, type } = sortState.value;
+    if (!column || !type || type === 'null') return list;
+    list.sort((a, b) => {
+      const r = compareValues(a?.[column], b?.[column]);
+      return type === 'desc' ? -r : r;
+    });
+    return list;
+  });
+
+  // 分页后的数据（用于传给 bk-table 的 :data）
+  const paginatedData = computed(() => {
+    if (props.simple) return sortedData.value;
+    const start = (currentPage.value - 1) * currentLimit.value;
+    return sortedData.value.slice(start, start + currentLimit.value);
+  });
+
+  // 本地分页配置
+  const localPagination = computed(() => ({
+    count: props.data?.length || 0,
+    current: currentPage.value,
+    limit: currentLimit.value,
+  }));
+
+  // 数据变化时重置页码到第一页
+  watch(() => props.data, () => {
+    currentPage.value = 1;
+  });
+
   // 处理列定义：
   // 1. 将 filter: true 自动展开为 { list, filterFn }（list 来源于当前 data 中该列所有非空唯一值）
   //    这样点击表头筛选图标时才能展示候选项，而不是出现"暂无数据"
-  // 2. 将 sort: true 自动展开为 { sortFn }，使用通用比较器（兼容数字、时间、字符串），
-  //    避免 bk-table 默认的字符串字典序对"赠送时间"等格式不友好导致点击无效
+  // 2. sort: true 保留为 true，排序由组件通过 @column-sort 事件手动处理
   // 3. 其他属性（render 等）原样保留
   const processedColumns = computed(() => (props.columns || []).map((col) => {
     const next: Record<string, any> = { ...col };
@@ -274,17 +318,7 @@
       };
     }
 
-    // 处理 sort：提供显式 sortFn，确保点击表头排序立即生效
-    if (col.sort === true && col.field) {
-      const field = col.field as string;
-      next.sort = {
-        sortFn: (rowA: Record<string, any>, rowB: Record<string, any>, type: 'asc' | 'desc' | 'null') => {
-          if (type === 'null') return 0;
-          const r = compareValues(rowA?.[field], rowB?.[field]);
-          return type === 'desc' ? -r : r;
-        },
-      };
-    }
+    // sort: true 不做额外处理，保持原值传给 bk-table，排序逻辑由 handleColumnSort 处理
 
     return next;
   }));
@@ -550,11 +584,22 @@
   };
 
   const handlePageChange = (page: number) => {
+    currentPage.value = page;
     emit('page-change', page);
   };
 
   const handlePageLimitChange = (limit: number) => {
+    currentLimit.value = limit;
+    currentPage.value = 1;
     emit('page-limit-change', limit);
+  };
+
+  // 排序事件处理
+  const handleColumnSort = ({ column, type }: { column: any; type: string }) => {
+    // column 是列配置对象，需要取 column.field 作为排序字段名
+    const field = column?.field || column;
+    sortState.value = { column: field, type };
+    currentPage.value = 1;
   };
 
   const handleSearch = () => {
