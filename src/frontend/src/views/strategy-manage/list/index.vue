@@ -1561,7 +1561,18 @@
     shouldHighlightNewRow.value = false; // 场景切换后不再高亮新建行
     listRef.value.fetchData();
   };
+  // 页面刷新前标记，刷新后不再高亮
+  const handleBeforeUnload = () => {
+    sessionStorage.setItem('audit-strategy-page-reloaded', '1');
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
   onMounted(() => {
+    // 如果是页面刷新，则不高亮新建行
+    if (sessionStorage.getItem('audit-strategy-page-reloaded')) {
+      sessionStorage.removeItem('audit-strategy-page-reloaded');
+      shouldHighlightNewRow.value = false;
+    }
     fetchData();
     setTimeout(() => {
       onEvent('scene:change', handlFetchData);
@@ -1569,6 +1580,7 @@
   });
   onUnmounted(() => {
     off('scene:change', handlFetchData);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
   });
   onBeforeRouteLeave(() => {
     clearTimeout(timeout);

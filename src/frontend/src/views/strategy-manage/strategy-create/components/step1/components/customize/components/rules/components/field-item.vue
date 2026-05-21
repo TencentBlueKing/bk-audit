@@ -74,13 +74,12 @@
         !(dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
           condition.condition.field.raw_name !== 'action_id' &&
-          props.configType === 'EventLog') &&
-        !condition.condition.field.raw_name.includes('username')) ?
+          props.configType === 'EventLog')) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
-        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
+        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
       ]">
       <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
@@ -109,7 +108,14 @@
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
         :popover-options="{ placement: 'top-start' }"
-        @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
+        @change="(value: Array<string>) => {
+          const val = Array.isArray(value) ? value : [value];
+          handleFilter(val, index);
+          // 同步写入 filter 字段（字符串），确保 eq 等单值操作符走 filter 校验路径时数据一致
+          if (!tagInput.includes(condition.condition.operator)) {
+            emits('updateFieldItem', val.join(','), props.conditionsIndex, index, 'filter');
+          }
+        }" />
 
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
@@ -258,7 +264,12 @@
     defaultValue: [],
   });
 
-  const handleValidate = (value: any) => value.length > 0;
+  const handleValidate = (value: any) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return value !== '' && value !== undefined && value !== null;
+  };
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
 
