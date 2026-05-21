@@ -18,14 +18,16 @@
   <bk-sideslider
     :is-show="isShow"
     :title="sliderTitle"
-    :width="640"
+    :width="800"
     @closed="handleClose">
     <template #header>
       <div class="scene-detail-header">
         <div class="header-left">
           <span class="header-title">{{ t('场景详情') }}</span>
           <span class="header-divider">|</span>
-          <span class="header-scene-info">{{ detailData.name }}（{{ detailData.scene_id }}）</span>
+          <show-tooltips-text
+            class="header-scene-info"
+            :data="`${detailData.name}（${detailData.scene_id}）`" />
         </div>
         <div class="header-right">
           <bk-button
@@ -119,15 +121,15 @@
             <div class="section-title">
               {{ t('关联系统') }}
               <bk-tag class="count-tag">
-                {{ detailData.systems.length }}
+                {{ displaySystems.length }}
               </bk-tag>
             </div>
             <div class="system-list">
               <bk-tag
-                v-for="system in detailData.systems"
-                :key="system.system_id"
+                v-for="(system, index) in displaySystems"
+                :key="index"
                 class="system-tag">
-                {{ textSystemTag(system.system_id) }}
+                {{ system.name }}
               </bk-tag>
             </div>
           </div>
@@ -168,9 +170,10 @@
   import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
-  import SystemModel from '@model/meta/system';
   import SceneModel from '@model/scene/scene';
   import CommonDataModel from '@model/strategy/common-data';
+
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -196,10 +199,21 @@
 
   const detailData = ref<SceneModel>(new SceneModel());
   const sliderTitle = computed(() => t('场景详情'));
-  const systemList = ref<SystemModel[]>([]);
+  // 有权限的系统列表（is_all_systems 时展示）
+  const permissionSystems = ref<Array<{ system_id: string; name: string }>>([]);
+
+  // 当 is_all_systems 为 true 时展示有权限的系统，否则展示关联的系统
+  const displaySystems = computed(() => {
+    const isAllSystems = detailData.value.systems?.some(s => s.is_all_systems);
+    if (isAllSystems) {
+      return permissionSystems.value;
+    }
+    return (detailData.value.systems || []).map(s => ({ system_id: s.system_id, name: textSystemTag(s.system_id) }));
+  });
+
   const textSystemTag = (id: string) => {
-    const systemItem = systemList.value.find(item => item.system_id === id);
-    return systemItem ? systemItem.name : id;
+    const item = permissionSystems.value.find(item => item.system_id === id);
+    return item ? item.name : id;
   };
 
   // 级联表数据，用于反查 table_id 对应的显示名
@@ -292,18 +306,13 @@
     emits('update:isShow', false);
   };
 
-  // 获取系统列表
+  // 获取有权限的系统列表（用于 is_all_systems 时展示）
   const {
-    run: fetchSystemList,
-  } = useRequest(MetaManageService.fetchSystemList, {
-    defaultValue: {
-      results: [] as SystemModel[],
-      page: 1,
-      num_pages: 0,
-      total: 0,
-    },
-    onSuccess: (res) => {
-      systemList.value = res.results;
+    run: fetchPermissionSystems,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [] as any[],
+    onSuccess: (data: any[]) => {
+      permissionSystems.value = data.map((item: any) => ({ system_id: item.system_id, name: item.name }));
     },
   });
 
@@ -323,9 +332,14 @@
   const loadDetail = () => {
     isLoading.value = true;
     fetchStrategyCommon();
-    fetchSystemList({
-      page: 1,
-      page_size: 1000,
+    fetchPermissionSystems({
+      action_ids: 'view_system,edit_system',
+      audit_status__in: 'accessed',
+      namespace: 'default',
+      order_type: 'asc',
+      sort_keys: 'name',
+      with_favorite: false,
+      with_system_status: false,
     }).then(() => {
       fetchSceneDetail(props.sceneId as any);
     });
@@ -360,6 +374,7 @@
     align-items: center;
 
     .header-title {
+      width: 70px;
       font-weight: 700;
     }
 
