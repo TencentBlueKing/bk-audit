@@ -153,11 +153,11 @@ class SceneManage extends ModuleBase {
       status: 'enabled' | 'disabled';
       permission: Record<string, boolean>;
       description?: string;
-      managers?: string[];
+      managers: string[];
     }>>(`${this.module}/all/`, { params, payload });
   }
 
-  // 获取场景下用户组成员列表
+  // 获取场景下用户组成员列表s
   getSceneMembers(params: {
     scene_id: string | number;
   }) {
