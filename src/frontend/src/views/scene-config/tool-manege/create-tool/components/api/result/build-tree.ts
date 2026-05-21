@@ -60,6 +60,8 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
         // 其他类型（字符串、数字、布尔值等）不需要子节点
         node.children = [];
         node.type = 'kv'; // 可以添加类型标识
+        // 存储原始值的 JavaScript 类型，用于分页配置筛选数值型字段
+        (node as any).valueType = typeof obj[key];
       }
 
       result.push(node);
