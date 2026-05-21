@@ -458,8 +458,6 @@ class StrategySerializer(serializers.Serializer):
             return
 
         scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
-        if not scene_table_ids:
-            return
 
         if rt_id not in set(scene_table_ids):
             raise serializers.ValidationError({"rt_id": gettext("数据表[%s]不在场景[%s]的授权范围内") % (rt_id, scene_id)})
@@ -1423,13 +1421,12 @@ class LinkTableDataPermissionMixin:
         # 校验数据表授权
         if all_rt_ids:
             scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
-            if scene_table_ids:
-                scene_table_ids_set = set(scene_table_ids)
-                unauthorized_tables = sorted(all_rt_ids - scene_table_ids_set)
-                if unauthorized_tables:
-                    raise serializers.ValidationError(
-                        {"config": gettext("数据表[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_tables), scene_id)}
-                    )
+            scene_table_ids_set = set(scene_table_ids)
+            unauthorized_tables = sorted(all_rt_ids - scene_table_ids_set)
+            if unauthorized_tables:
+                raise serializers.ValidationError(
+                    {"config": gettext("数据表[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_tables), scene_id)}
+                )
 
 
 class CreateLinkTableRequestSerializer(LinkTableDataPermissionMixin, serializers.ModelSerializer):
