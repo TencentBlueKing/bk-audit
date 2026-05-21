@@ -511,7 +511,7 @@
           filteredReports = filteredReports.filter(r => r.updatedBy !== '--'
             && r.updatedBy.toLowerCase().includes(searchParams.updated_by.toLowerCase()));
         }
-        return { ...group, reports: filteredReports };
+        return { ...group, reports: filteredReports,  disabled: filteredReports.length === 0 };
       })
       // 保留所有分组（包括 reports 为空的），仅在搜索/状态筛选时隐藏不匹配的空分组
       .filter((group) => {

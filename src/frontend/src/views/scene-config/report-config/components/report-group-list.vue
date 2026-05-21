@@ -97,7 +97,9 @@
               </div>
             </template>
             <template #content>
-              <div class="custom-table">
+              <div
+                v-if="group.reports.length > 0"
+                class="custom-table">
                 <!-- 表头 -->
                 <div class="custom-table-header">
                   <div class="custom-table-cell drag-cell" />
@@ -259,12 +261,6 @@
                     </div>
                   </template>
                 </vuedraggable>
-                <!-- 空状态 -->
-                <div
-                  v-if="group.reports.length === 0"
-                  class="custom-table-empty">
-                  {{ t('暂无数据') }}
-                </div>
               </div>
             </template>
           </bk-collapse-panel>
@@ -1066,7 +1062,7 @@
 .report-collapse {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 
 .group-collapse-item {
