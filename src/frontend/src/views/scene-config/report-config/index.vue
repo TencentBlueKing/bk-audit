@@ -559,6 +559,14 @@
         }
         return false;
       });
+
+    // 首次加载时，默认展开第一个非0的分组
+    if (expandedGroupIds.value.length === 0 && reportGroups.value.length > 0) {
+      const firstNonEmptyGroup = reportGroups.value.find(g => g.reports.length > 0);
+      if (firstNonEmptyGroup) {
+        expandedGroupIds.value = [firstNonEmptyGroup.id];
+      }
+    }
   };
 
   // 搜索/筛选（前端JS过滤）
@@ -684,6 +692,7 @@
   const handleSceneChange = () => {
     isDataLoading.value = true;
     reportGroups.value = [];
+    expandedGroupIds.value = [];
     fetchChartLists().then(() => {
       fetchGroups({
         scope_id: getSceneSystemParams().scope_id,
