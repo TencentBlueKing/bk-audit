@@ -61,7 +61,7 @@
           <bk-input
             v-model="sceneSearchKey"
             behavior="simplicity"
-            :placeholder="t('搜索场景/系统名称、ID')"
+            :placeholder="t('请输入关键字搜索')"
             size="small" />
         </div>
         <!-- 审计场景分组 -->

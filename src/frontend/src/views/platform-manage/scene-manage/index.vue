@@ -867,6 +867,14 @@
       padding: 0 12px;
     }
   }
+
+  :deep(.bk-radio-button:not(.is-checked)) {
+    .status-count {
+      color: #979ba5;
+      background-color: #fff !important;
+      border-color: #fff !important;
+    }
+  }
 }
 
 .status-count {
