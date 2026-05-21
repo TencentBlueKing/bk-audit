@@ -341,14 +341,26 @@
   };
 
   // 执行工具（使用 toolDetails.uid 作为真实工具uid来调用后端API）
-  const executeTool = () => {
+  const executeTool = (paginationParams?: Array<{ raw_name: string; value: any }>) => {
+    const toolVariables = props.searchList.map(item => ({
+      raw_name: item.raw_name,
+      value: formatToolVariableValue(item),
+    }));
+
+    // 合入分页参数（如果有）
+    if (paginationParams && paginationParams.length > 0) {
+      paginationParams.forEach((param) => {
+        toolVariables.push({
+          raw_name: param.raw_name,
+          value: param.value,
+        });
+      });
+    }
+
     fetchToolsExecute({
       uid: props.toolDetails?.uid || props.uid,
       params: {
-        tool_variables: props.searchList.map(item => ({
-          raw_name: item.raw_name,
-          value: formatToolVariableValue(item),
-        })),
+        tool_variables: toolVariables,
       },
       ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
     });

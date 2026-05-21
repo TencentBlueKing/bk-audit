@@ -202,8 +202,13 @@
       </audit-form>
     </template>
   </card-part-vue>
+  <pagination-config
+    v-if="(isSuccess && isDoneDeBug) || hasInitPagination"
+    ref="paginationConfigRef"
+    :input-variable-names="inputVariableNames"
+    :result-data="resultData" />
   <result-config
-    v-if="(isSuccess && isDoneDeBug) || isEditMode"
+    v-if="(isSuccess && isDoneDeBug) || hasInitResultConfig"
     ref="resultConfigRef"
     :is-edit-mode="isEditMode"
     :result-data="resultData" />
@@ -231,6 +236,7 @@
   import deDug from './result.vue';
   import { buildTree } from './result/build-tree';
   import resultConfig from './result/index.vue';
+  import paginationConfig from './result/pagination-config.vue';
 
 
   interface Props {
@@ -241,6 +247,7 @@
     getFields: () => void;
     setConfigs: (data: any) => void;
     getDebugResult: () => void;
+    validate: () => boolean;
   }
 
   interface Emits {
@@ -258,6 +265,7 @@
   const isSetConfigsSuccess = ref(false);
   const editModeIseditInfo = ref(false); // 编辑模式是否编辑信息
   const resultConfigRef = ref();
+  const paginationConfigRef = ref();
   const paramsConfigRef = ref();
   const isParams = ref(true);
   const formData = ref({
@@ -342,6 +350,12 @@
     }
     return apiVariablePositionList.value;
   });
+  // 获取参数名列表，供分页配置校验重名使用
+  const inputVariableNames = computed(() => {
+    const params = paramsConfigRef.value?.getData() || formData.value.input_variable || [];
+    return params.map((item: any) => item.raw_name).filter(Boolean);
+  });
+
   // 获取字段类型
   const {
     run: fetchGlobalChoices,
@@ -361,6 +375,10 @@
 
   const isSuccess = ref(false);
   const isDoneDeBug = ref(false);
+  // 编辑模式下，之前是否已设置过分页（用于回显时直接展示分页设置模块）
+  const hasInitPagination = ref(false);
+  // 编辑模式下，之前是否已设置过查询结果（一般编辑模式下都设置过，用于回显时直接展示查询结果设置模块）
+  const hasInitResultConfig = ref(false);
   const resultData = ref<Array<resultDataModel> | string>('');
   const isHeadersPass = ref(true);
   const isHeadersNoPassIndex = ref<number[]>([]);
@@ -425,6 +443,13 @@
       isSuccess.value = isSucc;
       isDoneDeBug.value = true;
       isSameInitParamsConfig.value = isSucc;
+
+      // 调试成功后，分页设置与查询结果设置同时出现，共享同一次调试结果
+      if (isSucc) {
+        hasInitPagination.value = true;
+        hasInitResultConfig.value = true;
+      }
+
       emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
       // 编辑模式下，重新调试更改查询结果设置 删除已经不存在的字段
       if (isSucc && props.isEditMode) {
@@ -452,6 +477,12 @@
     isSuccess.value = false;
     isDoneDeBug.value = false;
     editModeIseditInfo.value = true;
+    // 参数配置发生实质变更时，已存的分页/查询结果配置不再适用，
+    // 隐藏对应模块，等用户重新调试成功后再展示
+    if (isNOSame) {
+      hasInitPagination.value = false;
+      hasInitResultConfig.value = false;
+    }
     emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
   };
 
@@ -483,9 +514,10 @@
   };
 
   watch(() => formData.value.api_config, (newValue) => {
-    isSuccess.value = false;
-    isDoneDeBug.value = false;
     if (isSetConfigsSuccess.value) {
+      // 仅在初始化完成后，配置变更才需要重置调试状态
+      isSuccess.value = false;
+      isDoneDeBug.value = false;
       // 判断newValue 与initformData.value是否完全相同
       if (initformData.value && JSON.stringify(newValue) === JSON.stringify(initformData.value.api_config)) {
         editModeIseditInfo.value = false;
@@ -500,6 +532,10 @@
         } else {
           isSameInitApiConfig.value = false;
           editModeIseditInfo.value = true;
+          // api 配置发生实质变更时，已存的分页/查询结果配置不再适用，
+          // 隐藏对应模块，等用户重新调试成功后再展示
+          hasInitPagination.value = false;
+          hasInitResultConfig.value = false;
           emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
         }
       }
@@ -524,8 +560,15 @@
         ? resultData.value
         : JSON.stringify(resultData.value);
 
+      // 获取分页配置
+      const paginationData = paginationConfigRef.value?.getPaginationConfig() || {
+        enable_pagination: false,
+        pagination_config: [],
+      };
+
       formData.value.output_config = {
         ...resultConfigRef.value?.handleGetResultConfig(),
+        ...paginationData,
         result_schema: {
           tree_data: Array.isArray(JSON.parse(resultDataString))
             ? resultDataString :  JSON.stringify(buildTree(JSON.parse(resultDataString))),
@@ -559,12 +602,33 @@
             config[fieldKey] = '';
           }
         });
+        // 编辑模式下进入页面时，根据已存配置决定分页/查询结果设置模块是否回显展示：
+        // - 查询结果设置：编辑态下一般都已设置过，直接回显展示
+        // - 分页设置：仅当之前启用过分页或保存过分页配置时才回显展示
+        if (props.isEditMode) {
+          resultData.value = data.output_config?.result_schema?.tree_data || '';
+          hasInitResultConfig.value = !!data.output_config?.result_schema?.tree_data;
+          hasInitPagination.value = !!(
+            data.output_config?.enable_pagination
+            || (Array.isArray(data.output_config?.pagination_config) && data.output_config.pagination_config.length > 0)
+          );
+        }
         setTimeout(() => {
           emits('getIsDoneDeBug', false, false, true,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
           initformData.value = JSON.parse(JSON.stringify(formData.value));
           isSetConfigsSuccess.value = true;
         }, 0);
-        initResultConfig(data);
+        // 等待 v-if 控制的 result-config / pagination-config 组件挂载后再回填
+        nextTick(() => {
+          initResultConfig(data);
+          // 恢复分页配置
+          if (data.output_config) {
+            paginationConfigRef.value?.setPaginationConfig({
+              enable_pagination: data.output_config.enable_pagination || false,
+              pagination_config: data.output_config.pagination_config || [],
+            });
+          }
+        });
       });
     },
     getDebugResult() {
@@ -572,6 +636,13 @@
         isDoneDeBug: isDoneDeBug.value,
         isSuccess: isSuccess.value,
       };
+    },
+    validate() {
+      // 校验分页配置
+      if (paginationConfigRef.value?.validate) {
+        return paginationConfigRef.value.validate();
+      }
+      return true;
     },
   });
 
