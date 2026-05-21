@@ -79,3 +79,45 @@ export const convertToUnixTimestamp = (dateInput: string | Date): number => {
   const timestampMs = convertToTimestamp(dateInput);
   return Math.floor(timestampMs / 1000);
 };
+
+// 解析时间字符串为时间戳（毫秒）：支持 ISO 8601 / "YYYY-MM-DD HH:mm:ss"，解析失败返回 NaN
+export const parseDateTimeToTimestamp = (value: string): number => {
+  // 先尝试 Date.parse（支持 ISO 8601）
+  const parsed = Date.parse(value);
+  if (!Number.isNaN(parsed)) return parsed;
+  // 尝试解析 "YYYY-MM-DD HH:mm:ss" 格式
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (match) {
+    const date = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`);
+    const timestamp = date.getTime();
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+  return Number.NaN;
+};
+
+// 通用比较器：优先按数字 / 时间戳比较，否则退化为字符串本地比较
+// null / undefined / '' 统一视为最小值
+export const compareValues = (valueA: any, valueB: any): number => {
+  const isEmpty = (v: any) => v === null || v === undefined || v === '';
+  if (isEmpty(valueA) && isEmpty(valueB)) return 0;
+  if (isEmpty(valueA)) return -1;
+  if (isEmpty(valueB)) return 1;
+
+  // 纯数字
+  const numA = Number(valueA);
+  const numB = Number(valueB);
+  if (!Number.isNaN(numA) && !Number.isNaN(numB)
+    && String(valueA).trim() !== '' && String(valueB).trim() !== '') {
+    return numA - numB;
+  }
+
+  // 时间字符串
+  const timestampA = parseDateTimeToTimestamp(String(valueA));
+  const timestampB = parseDateTimeToTimestamp(String(valueB));
+  if (!Number.isNaN(timestampA) && !Number.isNaN(timestampB)) {
+    return timestampA - timestampB;
+  }
+
+  // 字符串
+  return String(valueA).localeCompare(String(valueB));
+};
