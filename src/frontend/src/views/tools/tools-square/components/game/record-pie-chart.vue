@@ -144,6 +144,7 @@
         trigger: 'item',
         formatter: '{b}：{c}（{d}%）',
         appendToBody: true,
+        position: 'right' as const,
       },
       legend: {
         orient: 'vertical' as const,
@@ -161,6 +162,19 @@
           fontSize: 12,
           color: '#63656e',
           lineHeight: 18,
+          width: 260,
+          overflow: 'truncate' as const,
+          ellipsis: '...',
+        },
+        tooltip: {
+          show: true,
+          position: 'right' as const,
+          formatter: (params: any) => {
+            const item = props.data.find(d => d.name === params.name);
+            if (!item) return params.name;
+            const percent = props.total > 0 ? ((item.value / props.total) * 100).toFixed(2) : '0';
+            return `${params.name}：${formatNumber(item.value)}（${percent}%）`;
+          },
         },
         formatter: (name: string) => {
           const item = props.data.find(d => d.name === name);
@@ -245,31 +259,42 @@
     chartInstance.on('legendselectchanged', (params: any) => {
       const clickedName = params?.name as string;
       if (!clickedName) return;
+      handlePieItemClick(clickedName);
+    });
 
-      // 计算"用户点击后期望的 activeName"
-      let nextActiveName = '';
-      if (!props.activeName) {
-        // 当前全部显示 → 点击则切换到仅显示该项
-        nextActiveName = clickedName;
-      } else if (props.activeName === clickedName) {
-        // 当前仅显示该项 → 再次点击复位
-        nextActiveName = '';
-      } else {
-        // 当前显示其它项 → 切换到刚点击的项
-        nextActiveName = clickedName;
-      }
+    // 饼图扇区点击：与图例点击触发相同的筛选效果
+    chartInstance.on('click', 'series.pie', (params: any) => {
+      const clickedName = params?.name as string;
+      if (!clickedName) return;
+      handlePieItemClick(clickedName);
+    });
+  };
 
-      // 立即用受控状态覆盖 echarts 默认行为，避免视图与父组件不同步
-      chartInstance?.setOption({
-        legend: { selected: buildLegendSelected() },
-      });
+  // 统一处理点击逻辑（图例点击 / 扇区点击）
+  const handlePieItemClick = (clickedName: string) => {
+    // 计算"用户点击后期望的 activeName"
+    let nextActiveName = '';
+    if (!props.activeName) {
+      // 当前全部显示 → 点击则切换到仅显示该项
+      nextActiveName = clickedName;
+    } else if (props.activeName === clickedName) {
+      // 当前仅显示该项 → 再次点击复位
+      nextActiveName = '';
+    } else {
+      // 当前显示其它项 → 切换到刚点击的项
+      nextActiveName = clickedName;
+    }
 
-      emit('legend-click', {
-        title: props.title,
-        name: nextActiveName,
-        // 是否处于"仅显示某项"状态：nextActiveName 非空时为 true
-        selected: !!nextActiveName,
-      });
+    // 立即用受控状态覆盖 echarts 默认行为，避免视图与父组件不同步
+    chartInstance?.setOption({
+      legend: { selected: buildLegendSelected() },
+    });
+
+    emit('legend-click', {
+      title: props.title,
+      name: nextActiveName,
+      // 是否处于"仅显示某项"状态：nextActiveName 非空时为 true
+      selected: !!nextActiveName,
     });
   };
 

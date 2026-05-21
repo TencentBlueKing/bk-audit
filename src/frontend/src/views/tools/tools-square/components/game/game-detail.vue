@@ -485,7 +485,10 @@
     buildLoginChartRows, buildGiveChartRows,
     buildDealChartRows, buildSapChartRows,
   } = useGameChartBuilders();
-  const loginChartRows = computed<ChartConfig[][]>(() => buildLoginChartRows(loginGroupStats.value));
+  const loginChartRows = computed<ChartConfig[][]>(() => buildLoginChartRows(
+    loginGroupStats.value,
+    loginDetailList.value,
+  ));
   const giveChartRows = computed<ChartConfig[][]>(() => buildGiveChartRows(giveGroupStats.value));
   const dealChartRows = computed<ChartConfig[][]>(() => buildDealChartRows(dealGroupStats.value));
   const sapChartRows = computed<ChartConfig[][]>(() => buildSapChartRows(sapGroupStats.value));
@@ -527,6 +530,7 @@
       // 通过 fieldId 查找对应的 fieldKey（后端数据字段名），用于匹配行数据
       const fieldConfig = searchFields.find(f => f.id === fieldId);
       const dataKey = fieldConfig?.fieldKey || fieldId;
+
       const cellValue = String(row[dataKey] ?? '');
       const cellValueLower = cellValue.toLowerCase();
 
