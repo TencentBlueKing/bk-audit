@@ -55,6 +55,11 @@
             @change="handleStatusFilterChange">
             <bk-radio-button label="all">
               {{ t('全部') }}
+              <bk-tag
+                class="status-count"
+                theme="info">
+                {{ statusCounts.all }}
+              </bk-tag>
             </bk-radio-button>
             <bk-radio-button label="enabled">
               <audit-icon
@@ -62,6 +67,11 @@
                 svg
                 type="normal" />
               {{ t('启用') }}
+              <bk-tag
+                class="status-count"
+                theme="success">
+                {{ statusCounts.published }}
+              </bk-tag>
             </bk-radio-button>
             <bk-radio-button label="disabled">
               <audit-icon
@@ -69,6 +79,11 @@
                 svg
                 type="unknown" />
               {{ t('停用') }}
+              <bk-tag
+                class="status-count"
+                theme="warning">
+                {{ statusCounts.unpublished }}
+              </bk-tag>
             </bk-radio-button>
           </bk-radio-group>
           <bk-search-select
@@ -158,7 +173,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, onMounted, onUnmounted, ref } from 'vue';
+  import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import PanelModelService from '@service/report-config';
@@ -189,6 +204,24 @@
 
   // 状态筛选
   const statusFilter = ref('all');
+  const statusCounts = reactive({
+    all: 0,
+    published: 0,
+    unpublished: 0,
+  });
+
+  // 更新状态统计（基于全量数据）
+  const updateStatusCounts = () => {
+    statusCounts.all = allReportGroups.value.reduce((sum, g) => sum + g.reports.length, 0);
+    statusCounts.published = allReportGroups.value.reduce(
+      (sum, g) => sum + g.reports.filter(r => r.status === 'published').length,
+      0,
+    );
+    statusCounts.unpublished = allReportGroups.value.reduce(
+      (sum, g) => sum + g.reports.filter(r => r.status === 'unpublished').length,
+      0,
+    );
+  };
   // 搜索关键词
   const searchKeyword = ref<any[]>([]);
   // 是否全部展开（根据当前展开的分组数动态计算）
@@ -384,6 +417,8 @@
 
       // 保存全量数据
       allReportGroups.value = processedGroups;
+      // 更新状态统计
+      updateStatusCounts();
       // 应用当前筛选条件到展示数据
       applyFilters();
     },
@@ -719,8 +754,27 @@
       .bk-radio-button-label {
         display: flex;
         align-items: center;
+        padding: 0 12px;
       }
     }
+
+    :deep(.bk-radio-button:not(.is-checked)) {
+      .status-count {
+        color: #979ba5;
+        background-color: #fff !important;
+        border-color: #fff !important;
+      }
+    }
+  }
+
+  .status-count {
+    height: 18px;
+    min-width: 18px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 12px;
+    line-height: 18px;
+    pointer-events: none;
   }
 
   .search-input {
