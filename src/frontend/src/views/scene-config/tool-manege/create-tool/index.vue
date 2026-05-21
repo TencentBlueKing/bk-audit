@@ -342,6 +342,13 @@
       }
     }
 
+    // api 类型校验分页配置等
+    if (comRef.value && formData.value.tool_type === 'api' && comRef.value.validate) {
+      if (!comRef.value.validate()) {
+        return;
+      }
+    }
+
     Promise.all(tastQueue).then(() => {
       // 获取组件配置
       if (comRef.value?.getFields) {
