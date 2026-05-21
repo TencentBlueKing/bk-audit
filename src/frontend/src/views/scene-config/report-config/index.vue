@@ -111,7 +111,8 @@
       <bk-dialog
         v-model:is-show="createGroupDialogVisible"
         :title="t('新建分组')"
-        width="480">
+        width="480"
+        :z-index="9999">
         <bk-form
           ref="createGroupFormRef"
           form-type="vertical"
@@ -149,6 +150,7 @@
         :edit-data="editReportData"
         :group-list="groupListForSelect"
         @cancel="handleReportSidesliderCancel"
+        @create-group="handleCreateGroup"
         @submit="handleReportSubmit"
         @success="handleCreateSuccess" />
     </div>
@@ -511,8 +513,17 @@
         }
         return { ...group, reports: filteredReports };
       })
-      // 过滤掉 reports 为空的分组
-      .filter(group => group.reports.length > 0);
+      // 保留所有分组（包括 reports 为空的），仅在搜索/状态筛选时隐藏不匹配的空分组
+      .filter((group) => {
+        // 有内容时始终保留
+        if (group.reports.length > 0) return true;
+        // 无内容且未做任何筛选时，保留空分组以便展示
+        if (!statusParam && !searchParams.name && !searchParams.description
+          && !searchParams.bkvision_report && !searchParams.updated_by) {
+          return true;
+        }
+        return false;
+      });
   };
 
   // 搜索/筛选（前端JS过滤）
