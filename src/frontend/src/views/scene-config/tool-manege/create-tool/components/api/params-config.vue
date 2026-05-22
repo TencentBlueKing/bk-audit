@@ -737,6 +737,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     getData() {
       const data = paramList.value.map((item: any) => ({
         ...item,
+        // 生成唯一row_name
         raw_name: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger')
           ? (item.split_config.end_field + item.split_config.start_field  + item.position)
           : (item.var_name + item.position),

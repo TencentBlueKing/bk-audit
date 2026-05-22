@@ -76,8 +76,14 @@ export interface FormData {
       pagination_config?: Array<{
         list_field: string;
         total_field: string;
-        page_param_name: string;
-        page_size_param_name: string;
+        page_param: {
+          raw_name: string;
+          var_name: string;
+        };
+        page_size_param: {
+          raw_name: string;
+          var_name: string;
+        };
         default_page: number;
         default_page_size: number;
         position: string;
