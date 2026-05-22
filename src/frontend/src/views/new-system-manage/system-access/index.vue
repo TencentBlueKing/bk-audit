@@ -239,8 +239,8 @@
     defaultValue: [],
     onSuccess: (data) => {
       originDataList.value = data;
-      dataList.value = data;
-      pendingList.value = data.filter(item => item.audit_status === 'pending');
+      dataList.value = data.filter(item => item.permission.edit_system && item.permission.view_system);
+      pendingList.value = data.filter(item => item.audit_status === 'pending').filter(item => item.permission.edit_system && item.permission.view_system);
     },
   });
   // 全局数据
@@ -275,6 +275,8 @@
       with_favorite: false,
       with_system_status: false,
       source_type__in: 'iam_v3,iam_v4',
+      action_ids: 'edit_system,view_system',
+      audit_status__in: 'pending',
     });
   });
 </script>
