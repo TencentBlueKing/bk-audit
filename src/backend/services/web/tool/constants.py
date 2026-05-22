@@ -544,6 +544,15 @@ class ApiOutputGroup(BaseModel):
     output_fields: List[ApiOutputField] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
 
 
+class ApiPaginationParam(BaseModel):
+    """
+    API 分页参数
+    """
+
+    raw_name: str = PydanticField(min_length=1, title=gettext_lazy("系统内参数名"))
+    var_name: str = PydanticField(min_length=1, title=gettext_lazy("请求参数名"))
+
+
 class ApiPaginationConfig(BaseModel):
     """
     API 分页配置
@@ -551,8 +560,8 @@ class ApiPaginationConfig(BaseModel):
 
     list_field: ApiPaginationField = PydanticField(title=gettext_lazy("数据列表字段"))
     total_field: ApiPaginationField = PydanticField(title=gettext_lazy("数据总条数字段"))
-    page_param_name: str = PydanticField(min_length=1, title=gettext_lazy("页码参数名"))
-    page_size_param_name: str = PydanticField(min_length=1, title=gettext_lazy("每页条数参数名"))
+    page_param: ApiPaginationParam = PydanticField(title=gettext_lazy("页码参数"))
+    page_size_param: ApiPaginationParam = PydanticField(title=gettext_lazy("每页条数参数"))
     default_page: int = PydanticField(1, ge=0, title=gettext_lazy("默认页码"))
     default_page_size: int = PydanticField(10, gt=0, title=gettext_lazy("默认每页条数"))
     position: ApiVariablePosition = PydanticField(ApiVariablePosition.QUERY, title=gettext_lazy("页参数位置"))
@@ -619,12 +628,21 @@ class ApiToolConfig(BaseModel):
         input_raw_names = {var.raw_name for var in self.input_variable}
         pagination_raw_names = set()
         for pagination in self.output_config.pagination_config:
-            pagination_raw_names.add(pagination.page_param_name)
-            pagination_raw_names.add(pagination.page_size_param_name)
+            pagination_raw_names.add(pagination.page_param.raw_name)
+            pagination_raw_names.add(pagination.page_size_param.raw_name)
 
         duplicated_raw_names = input_raw_names & pagination_raw_names
         if duplicated_raw_names:
             raise ValueError(gettext("分页参数名不能与输入变量 raw_name 重复: %s") % ",".join(sorted(duplicated_raw_names)))
+
+        if len(pagination_raw_names) != len(
+            [
+                param.raw_name
+                for pagination in self.output_config.pagination_config
+                for param in [pagination.page_param, pagination.page_size_param]
+            ]
+        ):
+            raise ValueError(gettext("分页参数 raw_name 重复"))
 
         return self
 

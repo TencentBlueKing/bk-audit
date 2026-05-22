@@ -415,12 +415,12 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         tool_vars_map = {var.raw_name: var.value for var in params.tool_variables}
         request_params = []
         for pagination in output_config.pagination_config:
-            page_value = tool_vars_map.get(pagination.page_param_name)
+            page_value = tool_vars_map.get(pagination.page_param.raw_name)
             if page_value is None:
                 page_value = pagination.default_page
             page_value = self._parse_pagination_value(page_value)
 
-            page_size_value = tool_vars_map.get(pagination.page_size_param_name)
+            page_size_value = tool_vars_map.get(pagination.page_size_param.raw_name)
             if page_size_value is None:
                 page_size_value = pagination.default_page_size
             page_size_value = self._parse_pagination_value(page_size_value)
@@ -428,12 +428,12 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             request_params.extend(
                 [
                     ApiRequestParam(
-                        name=pagination.page_param_name,
+                        name=pagination.page_param.var_name,
                         value=page_value,
                         position=pagination.position,
                     ),
                     ApiRequestParam(
-                        name=pagination.page_size_param_name,
+                        name=pagination.page_size_param.var_name,
                         value=page_size_value,
                         position=pagination.position,
                     ),
