@@ -24,6 +24,8 @@
         class="search-input"
         clearable
         :data="searchSelectData"
+        :defaut-using-item="{ inputHtml: t('请选择') }"
+        :get-menu-list="getMenuList"
         :placeholder="t('搜索工具名称、工具说明、工具类型、创建人、更新人')"
         unique-select
         @update:model-value="handleSearch" />
@@ -340,6 +342,7 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import ToolInfo from '@model/tool/tool-info';
 
@@ -437,13 +440,41 @@
       name: t('创建人'),
       id: 'created_by',
       placeholder: t('请输入创建人'),
+      children: [] as Array<{ id: string; name: string }>,
     },
     {
       name: t('更新人'),
       id: 'updated_by',
       placeholder: t('请输入更新人'),
+      children: [] as Array<{ id: string; name: string }>,
     },
   ];
+
+  // 获取用户列表（用于创建人/更新人远程搜索）
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 远程搜索菜单列表（创建人/更新人输入时实时搜索）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData;
+    const searchItem = searchSelectData.find(s => s.id === item?.id);
+    if (searchItem && (item.id === 'created_by' || item.id === 'updated_by')) {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.find(s => s.id === item?.id)?.children) || [];
+  };
 
   const itemMouseenter = ref(null);
   const dataList = ref<ToolInfo[]>([]);
