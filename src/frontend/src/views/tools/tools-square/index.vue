@@ -453,12 +453,12 @@
 
   const handleGoHomePage = async () => {
     isReturningHome.value = true;
-    tagId.value = '-3';
     goHome();
     syncRouteToUrl();
     await nextTick();
-    renderLabelRef.value?.setLabel('-3');
-    ContentCardRef.value?.getToolsList(tagId.value);
+    // 保持用户之前选择的标签，不强制重置为"全部工具"
+    renderLabelRef.value?.setLabel(tagId.value || '-3');
+    ContentCardRef.value?.getToolsList(tagId.value || '-3');
     isReturningHome.value = false;
   };
 
