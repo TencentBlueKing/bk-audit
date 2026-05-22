@@ -65,7 +65,9 @@
         <span class="all-data-icon">ALL</span>
         <span>{{ t('全部数据') }}</span>
       </div>
-      <div class="table-tree-wrapper">
+      <div
+        class="table-tree-wrapper"
+        :class="{ 'is-disabled': isSelectAllTableData }">
         <bk-tree
           v-if="currentTableTreeData.length"
           :key="activeTableType"
@@ -652,6 +654,14 @@
   padding: 8px 12px 12px;
   overflow: hidden auto;
   flex: 1;
+
+  &.is-disabled {
+    /* 只禁用复选框，保留展开箭头可用 */
+    :deep(.bk-checkbox) {
+      pointer-events: none;
+      opacity: 50%;
+    }
+  }
 }
 
 .table-tree-node {
