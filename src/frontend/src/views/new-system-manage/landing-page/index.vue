@@ -255,8 +255,8 @@
     defaultValue: [],
     onSuccess: (data) => {
       originDataList.value = data;
-      dataList.value = data;
-      pendingList.value = data.filter(item => item.audit_status === 'pending');
+      dataList.value = data.filter(item => item.permission.edit_system);
+      pendingList.value = data.filter(item => item.audit_status === 'pending').filter(item => item.permission.edit_system);
     },
   });
 
