@@ -1370,8 +1370,8 @@ class ApiToolResourceTestCase(TestCase):
                             "display_name": "Total",
                             "description": "Total count",
                         },
-                        "page_param_name": "pageNum",
-                        "page_size_param_name": "pageSize",
+                        "page_param": {"raw_name": "page_num", "var_name": "pageNum"},
+                        "page_size_param": {"raw_name": "page_size", "var_name": "pageSize"},
                         "default_page": 1,
                         "default_page_size": 10,
                         "position": ApiVariablePosition.QUERY.value,
@@ -1461,8 +1461,10 @@ class ApiToolResourceTestCase(TestCase):
         self.assertTrue(output_config["enable_pagination"])
         self.assertEqual(output_config["pagination_config"][0]["list_field"]["json_path"], "data.list")
         self.assertEqual(output_config["pagination_config"][0]["total_field"]["json_path"], "data.total")
-        self.assertEqual(output_config["pagination_config"][0]["page_param_name"], "pageNum")
-        self.assertEqual(output_config["pagination_config"][0]["page_size_param_name"], "pageSize")
+        self.assertEqual(output_config["pagination_config"][0]["page_param"]["raw_name"], "page_num")
+        self.assertEqual(output_config["pagination_config"][0]["page_param"]["var_name"], "pageNum")
+        self.assertEqual(output_config["pagination_config"][0]["page_size_param"]["raw_name"], "page_size")
+        self.assertEqual(output_config["pagination_config"][0]["page_size_param"]["var_name"], "pageSize")
         self.assertEqual(output_config["pagination_config"][0]["default_page"], 1)
         self.assertEqual(output_config["pagination_config"][0]["default_page_size"], 10)
         self.assertEqual(output_config["pagination_config"][0]["position"], ApiVariablePosition.QUERY.value)
@@ -1533,8 +1535,47 @@ class ApiToolResourceTestCase(TestCase):
                     "display_name": "Total",
                     "description": "",
                 },
-                "page_param_name": "query_param",
-                "page_size_param_name": "pageSize",
+                "page_param": {"raw_name": "query_param", "var_name": "pageNum"},
+                "page_size_param": {"raw_name": "page_size", "var_name": "pageSize"},
+                "default_page": 1,
+                "default_page_size": 10,
+                "position": ApiVariablePosition.QUERY.value,
+            }
+        ]
+
+        with patch('services.web.tool.resources.get_request_username', return_value="admin"):
+            with self.assertRaises(Exception):
+                CreateTool()(data)
+
+    def test_create_api_tool_rejects_duplicate_pagination_param_raw_name(self):
+        """Test that pagination param raw_name must be unique."""
+        data = {
+            "uid": self.uid,
+            "name": "Test API Tool",
+            "namespace": "default",
+            "tool_type": self.tool_type,
+            "config": deepcopy(self.api_config_data),
+            "description": "Test Description",
+            "tags": [],
+            "version": 1,
+        }
+        data["config"]["output_config"]["enable_pagination"] = True
+        data["config"]["output_config"]["pagination_config"] = [
+            {
+                "list_field": {
+                    "json_path": "data.list",
+                    "raw_name": "list",
+                    "display_name": "List",
+                    "description": "",
+                },
+                "total_field": {
+                    "json_path": "data.total",
+                    "raw_name": "total",
+                    "display_name": "Total",
+                    "description": "",
+                },
+                "page_param": {"raw_name": "page", "var_name": "pageNum"},
+                "page_size_param": {"raw_name": "page", "var_name": "pageSize"},
                 "default_page": 1,
                 "default_page_size": 10,
                 "position": ApiVariablePosition.QUERY.value,
@@ -1612,8 +1653,8 @@ class ApiToolResourceTestCase(TestCase):
                     "display_name": "Total",
                     "description": "",
                 },
-                "page_param_name": "pageNum",
-                "page_size_param_name": "pageSize",
+                "page_param": {"raw_name": "page_num", "var_name": "pageNum"},
+                "page_size_param": {"raw_name": "page_size", "var_name": "pageSize"},
                 "default_page": 1,
                 "default_page_size": 10,
                 "position": ApiVariablePosition.QUERY.value,
@@ -1629,4 +1670,4 @@ class ApiToolResourceTestCase(TestCase):
         tool = Tool.objects.get(uid=self.uid, version=2)
         output_config = tool.config["output_config"]
         self.assertTrue(output_config["enable_pagination"])
-        self.assertEqual(output_config["pagination_config"][0]["page_param_name"], "pageNum")
+        self.assertEqual(output_config["pagination_config"][0]["page_param"]["var_name"], "pageNum")
