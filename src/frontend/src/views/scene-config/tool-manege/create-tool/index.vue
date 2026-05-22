@@ -410,6 +410,15 @@
               uid: toolUid as string,
               scene_id: sceneId,
             }).finally(() => {
+              if (!isEditMode) {
+                // 记录新建的工具 ID，用于列表页绿底高亮（刷新后消失）
+                try {
+                  const raw = sessionStorage.getItem('tool_manage_new_uids');
+                  const uids: string[] = raw ? JSON.parse(raw) : [];
+                  uids.push(toolUid as string);
+                  sessionStorage.setItem('tool_manage_new_uids', JSON.stringify(uids));
+                } catch { /* ignore */ }
+              }
               navigateBack();
             });
           } else {
