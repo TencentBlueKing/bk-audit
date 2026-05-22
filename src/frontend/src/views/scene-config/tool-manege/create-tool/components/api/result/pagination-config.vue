@@ -310,10 +310,6 @@
     { id: 'body', name: 'Body' },
   ];
 
-  // 解析结果数据，统一转换为与"查询结果设置"一致的 tree 节点结构
-  // - 编辑模式：result_schema.tree_data 已是 build 后的数组，直接使用
-  // - 调试模式：原始 JSON 对象，调用 buildTree 转换
-  // tree 节点判定规则与查询结果设置完全一致：node.type === 'table' 即"表格"字段（数据列表字段）
   const parsedTreeNodes = computed<any[]>(() => {
     if (!props.resultData) return [];
     try {
@@ -332,11 +328,6 @@
     }
   });
 
-  /**
-   * 判断指定子树（兄弟节点列表）中是否存在 table 节点（不深入 table 的 list 内部）
-   * 用于：只有当某个对象层级（含其后代对象层级）下存在 table 节点时，
-   *      该层级才被视为"分页相关"的范围；与分页无关的根字段（如 code、message）不进入候选树。
-   */
   const containsTable = (nodes: any[]): boolean => {
     if (!nodes || nodes.length === 0) return false;
     return nodes.some((node) => {
@@ -348,16 +339,6 @@
     });
   };
 
-  /**
-   * 基于查询结果设置同款的 tree 数据构建分页字段候选树
-   * 复用 build-tree 的判断：node.type === 'table' 即数组型表格字段（数据列表字段）
-   * - 数据列表字段（type='array'）候选项：节点 type === 'table'，且不进入其 list 内部
-   * - 数据总条数字段（type='number'）候选项：与 table 节点同处一个对象层级（含其祖先对象层级）的 number 字段
-   *   不进入 table 节点的 list（内部为业务字段，不作为分页字段候选）
-   *
-   * 关键约束：仅保留"与分页相关"的对象层级 —— 即该对象内部（含后代对象）必须存在 table 节点。
-   * 这样可避免如根级 code、message 等与分页无关的根字段出现在候选树中。
-   */
   const buildPaginationNodes = (
     nodes: any[],
     rawData: any,
@@ -527,35 +508,6 @@
     activePopoverField.value = null;
   };
 
-  // 点击弹层外部时关闭所有弹层
-  const handleDocumentClick = (e: MouseEvent) => {
-    // 当前没有打开的弹层，直接返回
-    const hasOpen = paginationRows.value.some(r => r.showListFieldPopover || r.showTotalFieldPopover);
-    if (!hasOpen) return;
-
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-
-    // 点击在触发器或弹层内容内，不关闭
-    if (target.closest('.pagination-field-trigger')) return;
-    if (target.closest('.pagination-field-popover')) return;
-    // 兼容 bk-select 下拉等 teleport 到 body 的弹层
-    if (target.closest('.bk-select-popover')
-      || target.closest('.bk-select-content-wrapper')
-      || target.closest('.bk-popover2')
-      || target.closest('.tippy-box')) return;
-
-    closeAllPopovers();
-  };
-
-  onMounted(() => {
-    document.addEventListener('mousedown', handleDocumentClick, true);
-  });
-
-  onBeforeUnmount(() => {
-    document.removeEventListener('mousedown', handleDocumentClick, true);
-  });
-
   // 打开弹层
   const openPopover = (rowIndex: number, field: 'list_field' | 'total_field') => {
     closeAllPopovers();
@@ -631,12 +583,19 @@
     /* eslint-enable no-param-reassign */
   };
 
-  // 校验分页参数名不能与 input_variable.raw_name 重名
   const validate = (): boolean => {
     if (!enablePagination.value) return true;
 
     let isValid = true;
     const inputNames = props.inputVariableNames || [];
+    const rawNameRows: Array<{ pageRaw: string; sizeRaw: string }> = paginationRows.value.map(r => ({
+      pageRaw: r.page_param_name && r.position
+        ? `${r.page_param_name}${r.position}`
+        : '',
+      sizeRaw: r.page_size_param_name && r.position
+        ? `${r.page_size_param_name}${r.position}`
+        : '',
+    }));
 
     paginationRows.value.forEach((row, index) => {
       /* eslint-disable no-param-reassign */
@@ -670,12 +629,32 @@
         isValid = false;
       }
 
-      // 校验分页参数名不能与 input_variable.raw_name 重名
-      if (row.page_param_name && inputNames.includes(row.page_param_name)) {
+      // 校验生成的 raw_name 不能与 input_variable.raw_name 重名
+      const { pageRaw, sizeRaw } = rawNameRows[index];
+      if (pageRaw && inputNames.includes(pageRaw)) {
         row.pageParamError = true;
         isValid = false;
       }
-      if (row.page_size_param_name && inputNames.includes(row.page_size_param_name)) {
+      if (sizeRaw && inputNames.includes(sizeRaw)) {
+        row.pageSizeParamError = true;
+        isValid = false;
+      }
+
+      // 校验 raw_name 不重复
+      // 由于规则改为 var_name + position（无后缀），同一行内 page 与 page_size 也可能撞名，需要校验
+      const collidesWith = (target: string, currentIdx: number, isPage: boolean): boolean => {
+        if (!target) return false;
+        // 同一行内：page 与 page_size 互查
+        const sameRowOther = isPage ? rawNameRows[currentIdx].sizeRaw : rawNameRows[currentIdx].pageRaw;
+        if (sameRowOther && sameRowOther === target) return true;
+        // 跨行：page/page_size 互不撞
+        return rawNameRows.some((r, i) => i !== currentIdx && (r.pageRaw === target || r.sizeRaw === target));
+      };
+      if (pageRaw && collidesWith(pageRaw, index, true)) {
+        row.pageParamError = true;
+        isValid = false;
+      }
+      if (sizeRaw && collidesWith(sizeRaw, index, false)) {
         row.pageSizeParamError = true;
         isValid = false;
       }
@@ -718,61 +697,109 @@
     // 数据变更后不清空配置，让用户手动调整
   });
 
-  defineExpose<Exposes>({
-    getPaginationConfig() {
-      // 将路径字符串转换为后端 ApiPaginationField 要求的 dict 格式
-      const pathToFieldDict = (path: string) => {
-        if (!path) return null;
-        const parts = path.split('.');
-        const rawName = parts[parts.length - 1];
-        return {
-          raw_name: rawName,
-          json_path: path,
-          display_name: rawName,
-        };
-      };
+  const buildParamRawName = (varName: string, position: string): string => `${varName}${position}`;
+
+  const getPaginationConfig = () => {
+    // 将路径字符串转换为后端 ApiPaginationField 要求的 dict 格式
+    const pathToFieldDict = (path: string) => {
+      if (!path) return null;
+      const parts = path.split('.');
+      const rawName = parts[parts.length - 1];
       return {
-        enable_pagination: enablePagination.value,
-        pagination_config: enablePagination.value
-          ? paginationRows.value.map(row => ({
-            list_field: pathToFieldDict(row.list_field),
-            total_field: pathToFieldDict(row.total_field),
-            page_param_name: row.page_param_name,
-            page_size_param_name: row.page_size_param_name,
-            default_page: Number(row.default_page),
-            default_page_size: Number(row.default_page_size),
-            position: row.position,
-          }))
-          : [],
+        raw_name: rawName,
+        json_path: path,
+        display_name: rawName,
       };
-    },
-    setPaginationConfig(data: any) {
-      if (!data) return;
-      enablePagination.value = data.enable_pagination || false;
-      // 从后端 dict 格式或旧字符串格式中提取 json_path
-      const extractPath = (field: any): string => {
-        if (!field) return '';
-        if (typeof field === 'string') return field;
-        return field.json_path || '';
-      };
-      if (data.pagination_config && data.pagination_config.length > 0) {
-        paginationRows.value = data.pagination_config.map((item: any) => ({
-          ...createEmptyRow(),
-          list_field: extractPath(item.list_field),
-          total_field: extractPath(item.total_field),
-          page_param_name: item.page_param_name || '',
-          page_size_param_name: item.page_size_param_name || '',
-          default_page: item.default_page ?? 1,
-          default_page_size: item.default_page_size ?? 10,
-          position: item.position || 'query',
-        }));
-      } else if (enablePagination.value) {
-        paginationRows.value = [createEmptyRow()];
-      }
-    },
-    validate() {
-      return validate();
-    },
+    };
+    return {
+      enable_pagination: enablePagination.value,
+      pagination_config: enablePagination.value
+        ? paginationRows.value.map(row => ({
+          list_field: pathToFieldDict(row.list_field),
+          total_field: pathToFieldDict(row.total_field),
+          page_param: {
+            raw_name: buildParamRawName(row.page_param_name, row.position),
+            var_name: row.page_param_name,
+          },
+          page_size_param: {
+            raw_name: buildParamRawName(row.page_size_param_name, row.position),
+            var_name: row.page_size_param_name,
+          },
+          default_page: Number(row.default_page),
+          default_page_size: Number(row.default_page_size),
+          position: row.position,
+        }))
+        : [],
+    };
+  };
+
+  // 回填分页配置（兼容后端 dict 格式与旧字符串格式）
+  const setPaginationConfig = (data: any) => {
+    if (!data) return;
+    enablePagination.value = data.enable_pagination || false;
+    // 从后端 dict 格式或旧字符串格式中提取 json_path
+    const extractPath = (field: any): string => {
+      if (!field) return '';
+      if (typeof field === 'string') return field;
+      return field.json_path || '';
+    };
+    // 兼容新协议（page_param / page_size_param 为对象）与旧协议（page_param_name / page_size_param_name 为字符串）
+    const extractParamVarName = (item: any, key: 'page_param' | 'page_size_param'): string => {
+      const obj = item?.[key];
+      if (obj && typeof obj === 'object') return obj.var_name || obj.raw_name || '';
+      // 旧字段兜底
+      const legacyKey = key === 'page_param' ? 'page_param_name' : 'page_size_param_name';
+      return item?.[legacyKey] || '';
+    };
+    if (data.pagination_config && data.pagination_config.length > 0) {
+      paginationRows.value = data.pagination_config.map((item: any) => ({
+        ...createEmptyRow(),
+        list_field: extractPath(item.list_field),
+        total_field: extractPath(item.total_field),
+        page_param_name: extractParamVarName(item, 'page_param'),
+        page_size_param_name: extractParamVarName(item, 'page_size_param'),
+        default_page: item.default_page ?? 1,
+        default_page_size: item.default_page_size ?? 10,
+        position: item.position || 'query',
+      }));
+    } else if (enablePagination.value) {
+      paginationRows.value = [createEmptyRow()];
+    }
+  };
+
+  defineExpose<Exposes>({
+    getPaginationConfig,
+    setPaginationConfig,
+    validate,
+  });
+
+  // 点击弹层外部时关闭所有弹层
+  const handleDocumentClick = (e: MouseEvent) => {
+    // 当前没有打开的弹层，直接返回
+    const hasOpen = paginationRows.value.some(r => r.showListFieldPopover || r.showTotalFieldPopover);
+    if (!hasOpen) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // 点击在触发器或弹层内容内，不关闭
+    if (target.closest('.pagination-field-trigger')) return;
+    if (target.closest('.pagination-field-popover')) return;
+    // 兼容 bk-select 下拉等 teleport 到 body 的弹层
+    if (target.closest('.bk-select-popover')
+      || target.closest('.bk-select-content-wrapper')
+      || target.closest('.bk-popover2')
+      || target.closest('.tippy-box')) return;
+
+    closeAllPopovers();
+  };
+
+  onMounted(() => {
+    document.addEventListener('mousedown', handleDocumentClick, true);
+  });
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('mousedown', handleDocumentClick, true);
   });
 </script>
 
