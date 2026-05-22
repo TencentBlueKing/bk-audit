@@ -1493,6 +1493,7 @@ class TestApiToolExecutor(TestCase):
             ApiOutputConfiguration,
             ApiPaginationConfig,
             ApiPaginationField,
+            ApiPaginationParam,
             ApiRequestMethod,
             ApiToolConfig,
             NoAuthItem,
@@ -1522,8 +1523,8 @@ class TestApiToolExecutor(TestCase):
                             raw_name="total",
                             display_name="Total",
                         ),
-                        page_param_name="pageNum",
-                        page_size_param_name="pageSize",
+                        page_param=ApiPaginationParam(raw_name="page_num", var_name="pageNum"),
+                        page_size_param=ApiPaginationParam(raw_name="page_size", var_name="pageSize"),
                         default_page=1,
                         default_page_size=10,
                         position=position,
@@ -1958,8 +1959,8 @@ class TestApiToolExecutor(TestCase):
         result = executor.execute(
             {
                 "tool_variables": [
-                    {"raw_name": "pageNum", "value": 2},
-                    {"raw_name": "pageSize", "value": 20},
+                    {"raw_name": "page_num", "value": 2},
+                    {"raw_name": "page_size", "value": 20},
                 ]
             }
         )
@@ -1995,8 +1996,8 @@ class TestApiToolExecutor(TestCase):
             executor.execute(
                 {
                     "tool_variables": [
-                        {"raw_name": "pageNum", "value": "not-a-number"},
-                        {"raw_name": "pageSize", "value": 20},
+                        {"raw_name": "page_num", "value": "not-a-number"},
+                        {"raw_name": "page_size", "value": 20},
                     ]
                 }
             )
@@ -2006,7 +2007,11 @@ class TestApiToolExecutor(TestCase):
     @mock.patch('services.web.tool.executor.tool.requests.request')
     def test_execute_with_multiple_pagination_configs(self, mock_request):
         """测试多组分页配置同时渲染"""
-        from services.web.tool.constants import ApiPaginationConfig, ApiPaginationField
+        from services.web.tool.constants import (
+            ApiPaginationConfig,
+            ApiPaginationField,
+            ApiPaginationParam,
+        )
         from services.web.tool.executor.tool import ApiToolExecutor
 
         config = self._build_pagination_config(position=ApiVariablePosition.QUERY)
@@ -2022,8 +2027,8 @@ class TestApiToolExecutor(TestCase):
                     raw_name="risk_total",
                     display_name="Risk Total",
                 ),
-                page_param_name="riskPage",
-                page_size_param_name="riskPageSize",
+                page_param=ApiPaginationParam(raw_name="risk_page", var_name="pageNum"),
+                page_size_param=ApiPaginationParam(raw_name="risk_page_size", var_name="pageSize"),
                 default_page=1,
                 default_page_size=20,
                 position=ApiVariablePosition.BODY,
@@ -2038,16 +2043,16 @@ class TestApiToolExecutor(TestCase):
         executor.execute(
             {
                 "tool_variables": [
-                    {"raw_name": "pageNum", "value": 2},
-                    {"raw_name": "pageSize", "value": 10},
-                    {"raw_name": "riskPage", "value": 3},
-                    {"raw_name": "riskPageSize", "value": 50},
+                    {"raw_name": "page_num", "value": 2},
+                    {"raw_name": "page_size", "value": 10},
+                    {"raw_name": "risk_page", "value": 3},
+                    {"raw_name": "risk_page_size", "value": 50},
                 ]
             }
         )
 
         self.assertEqual(mock_request.call_args[1]["params"], {"pageNum": 2, "pageSize": 10})
-        self.assertEqual(mock_request.call_args[1]["json"], {"riskPage": 3, "riskPageSize": 50})
+        self.assertEqual(mock_request.call_args[1]["json"], {"pageNum": 3, "pageSize": 50})
 
     @mock.patch('services.web.tool.executor.tool.requests.request')
     def test_execute_with_pagination_params_in_body(self, mock_request):
@@ -2064,8 +2069,8 @@ class TestApiToolExecutor(TestCase):
         executor.execute(
             {
                 "tool_variables": [
-                    {"raw_name": "pageNum", "value": 3},
-                    {"raw_name": "pageSize", "value": 50},
+                    {"raw_name": "page_num", "value": 3},
+                    {"raw_name": "page_size", "value": 50},
                 ]
             }
         )
@@ -2104,8 +2109,8 @@ class TestApiToolExecutor(TestCase):
         executor.execute(
             {
                 "tool_variables": [
-                    {"raw_name": "pageNum", "value": 4},
-                    {"raw_name": "pageSize", "value": 100},
+                    {"raw_name": "page_num", "value": 4},
+                    {"raw_name": "page_size", "value": 100},
                 ]
             }
         )
