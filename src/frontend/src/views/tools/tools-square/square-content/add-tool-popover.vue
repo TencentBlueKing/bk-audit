@@ -40,7 +40,7 @@
           <input
             v-model="popoverSearchValue"
             class="search-input"
-            placeholder="搜索"
+            :placeholder="t('请输入关键字搜索')"
             type="text">
         </div>
         <div class="add-tool-body">
