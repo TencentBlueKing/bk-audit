@@ -3,11 +3,9 @@
 Scope 权限组件
 
 提供统一的 scope 解析、入口校验、资源级校验、资源筛选能力。
-业务模块三类权限需求均通过本文件组件承接：
-1. ScopeEntryPermission —— 仅负责挂载 scope 上下文（DRF BasePermission）
-2. ScopeEntryActionPermission —— 带 action 的严格入口鉴权（DRF BasePermission）
-3. ScopeInstancePermission —— 资源实例级鉴权（DRF BasePermission）
-4. ScopePermission —— 通用 scope 服务类（业务主调用方式）
+业务模块权限需求通过本文件组件承接：
+1. ScopeInstancePermission —— 资源实例级鉴权（DRF BasePermission）
+2. ScopePermission —— 通用 scope 服务类（业务主调用方式）
 
 """
 
@@ -15,8 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
-
-from rest_framework.permissions import BasePermission
 
 from apps.meta.converter import SystemDjangoQuerySetConverter
 from apps.meta.models import System
@@ -39,14 +35,6 @@ from services.web.scene.models import ResourceBinding, Scene, SceneSystem
 # IAM 资源类型 ID 常量（用于判断 action 关联的 resource_type）
 _SCENE_RESOURCE_TYPE_ID = ResourceEnum.SCENE.id  # "scene"
 _SYSTEM_RESOURCE_TYPE_ID = ResourceEnum.SYSTEM.id  # "system"
-
-
-def _is_scope_action(action: ActionMeta) -> bool:
-    """判断 action 的 related_resource_types 是否为 scene 或 system
-
-    只要 action 关联的 IAM 资源类型中包含 scene 或 system，即视为可走 check_scope_entry。
-    """
-    return any(rt.id in {_SCENE_RESOURCE_TYPE_ID, _SYSTEM_RESOURCE_TYPE_ID} for rt in action.related_resource_types)
 
 
 def _is_scene_action(action: ActionMeta) -> bool:
@@ -471,80 +459,6 @@ class ScopePermission:
             return list(scene_systems.exclude(system_id="").values_list("system_id", flat=True).distinct())
         else:
             return self.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
-
-
-# ---------------------------------------------------------------------------
-# ScopeEntryPermission / ScopeEntryActionPermission — DRF 入口权限
-# ---------------------------------------------------------------------------
-
-
-class ScopeEntryPermission(BasePermission):
-    """基础 scope 入口挂载器。
-
-    职责仅包括：
-    - 解析并校验 scope 参数
-    - 创建 ScopePermission 实例
-    - 将 scope 与 scope_permission 挂载到 request 上供后续 Resource 层复用
-
-    不负责 action 鉴权，因此不会主动抛出 403。
-
-    业务侧常见使用场景：
-    - 列表页、筛选页、统计页这类"无权限时返回空结果"的接口
-    - 需要让后续 serializer / resource / filter 通过 `request.scope_permission` 继续做数据过滤的接口
-
-    使用示例：
-        permission_classes = [ScopeEntryPermission]
-    """
-
-    def __init__(self, allowed_scope_types: Optional[List[ScopeType]] = None):
-        """可选限制入口允许的 scope_type。"""
-        self.allowed_scope_types = allowed_scope_types
-
-    def _validate_allowed_scope_type(self, scope: ScopeContext) -> None:
-        if not self.allowed_scope_types:
-            return
-
-        if scope.scope_type in self.allowed_scope_types:
-            return
-
-        allowed_values = [scope_type.value for scope_type in ScopeType if scope_type in self.allowed_scope_types]
-        raise ValidationError(f"scope_type={scope.scope_type.value} 不支持，允许值：{', '.join(allowed_values)}")
-
-    def has_permission(self, request, view) -> bool:
-        scope = ScopeContext.from_request(request, view)
-        self._validate_allowed_scope_type(scope)
-
-        username = get_request_username()
-        scope_perm = ScopePermission(username)
-
-        request.scope_permission = scope_perm
-        request.scope = scope
-        return True
-
-
-class ScopeEntryActionPermission(ScopeEntryPermission):
-    """带 action 的严格入口鉴权。
-
-    业务侧常见使用场景：
-    - 创建、编辑、删除、启停等必须在入口阶段明确返回 403 的场景/系统接口
-    - 进入场景管理页、系统详情页、策略配置页这类"没有权限就不应进入"的操作页
-
-    说明：
-    - 只接受 scene/system 方向的 action
-    - 非 scene/system action 应直接使用普通 IAM 权限类，不应混入 scope 入口权限
-    """
-
-    def __init__(self, action: ActionMeta, allowed_scope_types: Optional[List[ScopeType]] = None):
-        super().__init__(allowed_scope_types=allowed_scope_types)
-        if not _is_scope_action(action):
-            raise ValueError("ScopeEntryActionPermission 仅支持 scene/system 方向的 action")
-        self.action = action
-
-    def has_permission(self, request, view) -> bool:
-        super().has_permission(request, view)
-        scope = request.scope
-        scope_perm = request.scope_permission
-        return scope_perm.check_scope_entry(scope=scope, action=self.action, raise_exception=True)
 
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ ScopePermission 权限组件单元测试
 - ScopePermission.check_scope_entry 四种 scope_type 路由
 - ScopePermission.get_scene_ids / get_system_ids 请求级缓存
 - ScopePermission.get_scene_ids / get_system_ids 方向不匹配返回空列表
-- ScopeEntryPermission scope action vs 业务 action 路由（无 allowed_scope_types）
 - ScopeInstancePermission 列表接口直接通过
 - ScopePermission.check_resource_permission（不传 scope）
 - ScopePermission 的 binding_type 过滤与校验
@@ -32,12 +31,9 @@ from services.web.common.constants import (
 )
 from services.web.common.scope_permission import (
     ScopeContext,
-    ScopeEntryActionPermission,
-    ScopeEntryPermission,
     ScopeInstancePermission,
     ScopePermission,
     _is_scene_action,
-    _is_scope_action,
     _is_system_action,
 )
 from services.web.scene.constants import BindingType, SceneStatus, VisibilityScope
@@ -113,29 +109,21 @@ class TestScopeQueryField(TestCase):
 class TestActionTypeChecks(TestCase):
     """测试 action 关联资源类型判断函数"""
 
-    def test_is_scope_action_scene(self):
+    def test_is_scene_action(self):
         """VIEW_SCENE 的 related_resource_types 包含 scene"""
-        assert _is_scope_action(ActionEnum.VIEW_SCENE) is True
         assert _is_scene_action(ActionEnum.VIEW_SCENE) is True
 
-    def test_is_scope_action_system(self):
+    def test_is_system_action(self):
         """VIEW_SYSTEM 的 related_resource_types 包含 system"""
-        assert _is_scope_action(ActionEnum.VIEW_SYSTEM) is True
         assert _is_system_action(ActionEnum.VIEW_SYSTEM) is True
 
-    def test_is_scope_action_list_strategy(self):
+    def test_list_strategy_is_scene_action(self):
         """LIST_STRATEGY 的 related_resource_types 包含 scene"""
-        assert _is_scope_action(ActionEnum.LIST_STRATEGY) is True
         assert _is_scene_action(ActionEnum.LIST_STRATEGY) is True
 
-    def test_is_scope_action_search_regular_event(self):
+    def test_search_regular_event_is_system_action(self):
         """SEARCH_REGULAR_EVENT 的 related_resource_types 包含 system"""
-        assert _is_scope_action(ActionEnum.SEARCH_REGULAR_EVENT) is True
         assert _is_system_action(ActionEnum.SEARCH_REGULAR_EVENT) is True
-
-    def test_not_scope_action(self):
-        """MANAGE_PLATFORM 没有 related_resource_types，不是 scope action"""
-        assert _is_scope_action(ActionEnum.MANAGE_PLATFORM) is False
 
     def test_scene_action_not_system(self):
         """VIEW_SCENE 是 scene action 但不是 system action"""
@@ -654,143 +642,6 @@ class TestScopePermissionCache(TestCase):
         assert result == []
         # 不应该有缓存条目
         assert len(sp._scene_ids_cache) == 0
-
-
-# ==================== ScopeEntryPermission Tests ====================
-
-
-@pytest.mark.django_db
-class TestScopeEntryPermission(TestCase):
-    """测试基础 ScopeEntryPermission 仅负责挂载"""
-
-    def setUp(self):
-        self.rf = RequestFactory()
-        self.user = MockUser("admin")
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.Permission")
-    def test_mounts_scope_and_scope_permission(self, mock_perm_cls, mock_get_username):
-        """基础类始终挂载 scope 和 scope_permission 到 request"""
-        mock_instance = MagicMock()
-        mock_perm_cls.return_value = mock_instance
-
-        perm = ScopeEntryPermission()
-        request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-
-        result = perm.has_permission(request, MagicMock())
-
-        assert result is True
-        assert hasattr(request, "scope_permission")
-        assert hasattr(request, "scope")
-        request_scope = getattr(request, "scope")
-        assert request_scope.scope_type == ScopeType.CROSS_SCENE
-        mock_instance.has_action_any_permission.assert_not_called()
-        mock_instance.is_allowed.assert_not_called()
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.Permission")
-    def test_no_scope_direction_restriction(self, mock_perm_cls, mock_get_username):
-        """基础类不限制 scope_type，任何合法 scope 都能挂载通过"""
-        mock_perm_cls.return_value = MagicMock()
-        perm = ScopeEntryPermission()
-
-        cross_scene_request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-        system_request = _make_request(
-            self.rf,
-            self.user,
-            {ScopeQueryField.SCOPE_TYPE: "system", ScopeQueryField.SCOPE_ID: "bk_monitor"},
-        )
-
-        assert perm.has_permission(cross_scene_request, MagicMock()) is True
-        assert perm.has_permission(system_request, MagicMock()) is True
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.Permission")
-    def test_allowed_scope_types_limit_applies(self, mock_perm_cls, mock_get_username):
-        """基础入口支持按 allowed_scope_types 限制 scope_type"""
-        mock_perm_cls.return_value = MagicMock()
-        perm = ScopeEntryPermission(allowed_scope_types=[ScopeType.SCENE])
-
-        scene_request = _make_request(
-            self.rf,
-            self.user,
-            {ScopeQueryField.SCOPE_TYPE: "scene", ScopeQueryField.SCOPE_ID: "1"},
-        )
-        cross_scene_request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-
-        assert perm.has_permission(scene_request, MagicMock()) is True
-        with pytest.raises(ValidationError):
-            perm.has_permission(cross_scene_request, MagicMock())
-
-
-@pytest.mark.django_db
-class TestScopeEntryActionPermission(TestCase):
-    """测试严格 ScopeEntryActionPermission 路由"""
-
-    def setUp(self):
-        self.rf = RequestFactory()
-        self.user = MockUser("admin")
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.Permission")
-    def test_scope_action_routes_to_check_scope_entry(self, mock_perm_cls, mock_get_username):
-        """scope action（VIEW_SCENE）走 check_scope_entry"""
-        mock_instance = MagicMock()
-        mock_instance.has_action_any_permission.return_value = True
-        mock_perm_cls.return_value = mock_instance
-
-        perm = ScopeEntryActionPermission(action=ActionEnum.VIEW_SCENE)
-        request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-
-        result = perm.has_permission(request, MagicMock())
-        assert result is True
-        mock_instance.has_action_any_permission.assert_called()
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.Permission")
-    def test_list_strategy_routes_to_check_scope_entry(self, mock_perm_cls, mock_get_username):
-        """LIST_STRATEGY（related_resource_types=[SCENE]）走 check_scope_entry"""
-        mock_instance = MagicMock()
-        mock_instance.has_action_any_permission.return_value = True
-        mock_perm_cls.return_value = mock_instance
-
-        perm = ScopeEntryActionPermission(action=ActionEnum.LIST_STRATEGY)
-        request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-
-        result = perm.has_permission(request, MagicMock())
-        assert result is True
-        mock_instance.has_action_any_permission.assert_called()
-
-    def test_non_scope_action_raises_value_error(self):
-        """严格入口权限类只接受 scene/system 方向 action"""
-        with pytest.raises(ValueError, match="仅支持 scene/system 方向的 action"):
-            ScopeEntryActionPermission(action=ActionEnum.MANAGE_PLATFORM)
-
-    @patch("services.web.common.scope_permission.get_request_username", return_value="admin")
-    @patch("services.web.common.scope_permission.System.get_managed_system_ids", return_value=[])
-    @patch("services.web.common.scope_permission.Permission")
-    def test_system_scope_with_scene_action_raises_value_error(self, mock_perm_cls, mock_managed, mock_get_username):
-        """scene action 传 system 方向 scope 时仍由严格类报方向错误"""
-        mock_instance = MagicMock()
-        mock_perm_cls.return_value = mock_instance
-
-        perm = ScopeEntryActionPermission(action=ActionEnum.VIEW_SCENE)
-        request = _make_request(
-            self.rf,
-            self.user,
-            {ScopeQueryField.SCOPE_TYPE: "cross_system"},
-        )
-
-        with pytest.raises(ValueError):
-            perm.has_permission(request, MagicMock())
-
-    def test_allowed_scope_types_rejects_unexpected_scope(self):
-        """严格入口权限支持额外限定 allowed_scope_types"""
-        perm = ScopeEntryActionPermission(action=ActionEnum.MANAGE_SCENE, allowed_scope_types=[ScopeType.SCENE])
-        request = _make_request(self.rf, self.user, {ScopeQueryField.SCOPE_TYPE: "cross_scene"})
-
-        with pytest.raises(ValidationError):
-            perm.has_permission(request, MagicMock())
 
 
 # ==================== ScopeInstancePermission Tests ====================
