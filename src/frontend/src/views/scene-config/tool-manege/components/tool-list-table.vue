@@ -376,6 +376,50 @@
 
   const handleRequestSuccess = (data: any) => {
     emit('request-success', data);
+    // 新建行绿底高亮（基于 sessionStorage 中记录的 ID）
+    nextTick(() => {
+      highlightNewRows(data?.results || []);
+    });
+  };
+
+  // sessionStorage key：记录新建工具 uid（刷新后消失）
+  const STORAGE_KEY_NEW_TOOLS = 'tool_manage_new_uids';
+
+  // 获取新建工具 ID 列表
+  const getNewUids = (): Set<string> => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY_NEW_TOOLS);
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch { /* ignore */ }
+    return new Set();
+  };
+
+  // 判断是否是新建数据（ID 在 sessionStorage 的记录中）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const isNewData = (item: ToolModel) => getNewUids().has(item.uid);
+
+  // 给新建的行添加绿底背景（高亮后清除该 ID，避免重复高亮）
+  const highlightNewRows = (list: ToolModel[]) => {
+    setTimeout(() => {
+      const newUids = getNewUids();
+      list.forEach((item, index) => {
+        if (newUids.has(item.uid)) {
+          const rows = document.querySelectorAll('.report-config-list .t-table__body tr');
+          const row = rows[index];
+          if (row) {
+            /* eslint-disable no-param-reassign */
+            Array.from(row.querySelectorAll('td')).forEach((tdEl: HTMLElement) => {
+              tdEl.style.background = '#f2fff4';
+            });
+            /* eslint-enable no-param-reassign */
+          }
+        }
+      });
+      // 高亮完成后清除记录
+      try {
+        sessionStorage.removeItem(STORAGE_KEY_NEW_TOOLS);
+      } catch { /* ignore */ }
+    }, 100);
   };
 
   // 暴露刷新方法
