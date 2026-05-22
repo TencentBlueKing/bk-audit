@@ -105,13 +105,30 @@ export default class ToolDetail {
       }>;
       enable_pagination?: boolean;
       pagination_config?: Array<{
-        list_field: string;
-        total_field: string;
-        page_param_name: string;
-        page_size_param_name: string;
+        list_field: {
+          raw_name: string;
+          json_path: string;
+          display_name?: string;
+          description?: string;
+        };
+        total_field: {
+          raw_name: string;
+          json_path: string;
+          display_name?: string;
+          description?: string;
+        };
+        page_param: {
+          raw_name: string;
+          var_name: string;
+        };
+        page_size_param: {
+          raw_name: string;
+          var_name: string;
+        };
         default_page: number;
         default_page_size: number;
         position: string;
+        result_schema?: any;
       }>;
     };
     sql: string;
