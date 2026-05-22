@@ -526,7 +526,7 @@
       sceneId: sid,
       sceneName: sid === 0 ? t('未分类') : (props.sceneNameMap[sid] || `场景 ${sid}`),
       tools: groupMap.get(sid) || [],
-    }));
+    })).sort((a, b) => b.sceneId - a.sceneId);
   });
 
   const toggleSceneCollapse = (sceneId: number) => {

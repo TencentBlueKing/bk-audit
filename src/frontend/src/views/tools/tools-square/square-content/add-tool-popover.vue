@@ -150,14 +150,14 @@
                 :class="{ active: rightActiveTab === 'recent' }"
                 @click="rightActiveTab = 'recent'">
                 <i class="right-tab-icon right-tab-icon-clock" />
-                最近使用
+                {{ t('最近使用') }}
               </div>
               <div
                 class="right-tab-item"
                 :class="{ active: rightActiveTab === 'favorite' }"
                 @click="rightActiveTab = 'favorite'">
                 <i class="right-tab-icon right-tab-icon-star" />
-                我的收藏
+                {{ t('我的收藏') }}
               </div>
             </div>
             <div class="right-tab-content">
@@ -363,6 +363,8 @@
   import ToolManageService from '@service/tool-manage';
 
   import ToolInfo from '@model/tool/tool-info';
+  import { useI18n } from 'vue-i18n';
+
 
   import useRequest from '@/hooks/use-request';
   import userProfileIcon from '@/images/user.svg';
@@ -391,6 +393,7 @@
     switchTool: [tool: ToolInfo];
   }>();
 
+  const { t } = useI18n();
   const addPopoverRef = ref();
   const popoverSearchValue = ref('');
   const rightActiveTab = ref<'recent' | 'favorite'>('recent');
@@ -516,7 +519,7 @@
       sceneId: sid,
       sceneName: sid === 0 ? '未分类' : (nameMap[sid] || `场景 ${sid}`),
       tools: groupMap.get(sid) || [],
-    }));
+    })).sort((a, b) => b.sceneId - a.sceneId);
   };
 
   // 跨场景模式：按场景分组（左侧）
