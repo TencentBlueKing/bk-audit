@@ -385,7 +385,6 @@
   const upgradeTotal = ref(0);
   const { locale, t } = useI18n();
   const switchStrategyParams = ref({ strategy_id: 0, toggle: false });
-  const isNeedShowDetail = ref(false);
   const leftLabelFilterCondition = ref('');
   const strategyTagMap = ref<Record<string, string>>({});
   const statusMap = ref<Record<string, string>>({});
@@ -1479,12 +1478,7 @@
 
     total.value = data.total > total.value ? data.total : total.value;
 
-    const { strategy_id: strategyId } = getSearchParams();
-    if (strategyId && strategyId.split(',').length === 1  && isNeedShowDetail.value) {
-      handleDetail(data.results[0]);
-      isNeedShowDetail.value = false;
-      strategyLabelList.value = [];
-    } else if (!strategyLabelList.value.length) {
+    if (!strategyLabelList.value.length) {
       strategyLabelList.value = labelList.value;
     }
 
@@ -1529,14 +1523,9 @@
           name: nameList.map(nameItem => item.children?.find(cItem => cItem.id === nameItem)?.name || nameItem).join(','),
         }],
       });
-      switch (id) {
-      case 'strategy_id':
-        isNeedShowDetail.value = true;
-        break;
-      case 'tag':
+      if (id === 'tag') {
         renderLabelRef.value.setLabel(content);
         leftLabelFilterCondition.value = content;
-        break;
       }
       hasKey = true;
     });
