@@ -102,14 +102,15 @@
               :key="op.id"
               :name="op.name" />
           </bk-select>
-          <!-- 枚举类型使用下拉选择 -->
+          <!-- 枚举类型使用下拉选择（多值时支持多选） -->
           <bk-select
             v-if="currentFieldHasChildren"
             v-model="inputValue"
             class="value-input"
             :clearable="false"
             filterable
-            :placeholder="t('多个值之间用逗号分隔')"
+            :multiple="isMultiValueOperator"
+            :placeholder="valueInputPlaceholder"
             @change="handleValueSelectChange">
             <bk-option
               v-for="child in currentFieldChildren"
@@ -117,12 +118,25 @@
               :key="child.id"
               :name="child.name" />
           </bk-select>
-          <!-- 普通文本输入 -->
+          <!-- 多值操作符（IN / NOT IN）使用 tag 输入，输入逗号自动转 tag -->
+          <bk-tag-input
+            v-else-if="isMultiValueOperator"
+            v-model="inputTagValues"
+            allow-create
+            class="value-input"
+            collapse-tags
+            has-delete-icon
+            :list="[]"
+            :paste-fn="pasteTagFn"
+            :placeholder="valueInputPlaceholder"
+            :separator="[',', '，']"
+            trigger="focus" />
+          <!-- 单值操作符使用普通文本输入 -->
           <bk-input
             v-else
             v-model="inputValue"
             class="value-input"
-            :placeholder="t('多个值之间用逗号分隔')"
+            :placeholder="valueInputPlaceholder"
             @enter="handleConfirm" />
           <bk-button
             class="confirm-btn"
@@ -156,11 +170,13 @@
 
 <script setup lang="ts">
   import {
-    computed, onBeforeUnmount, onMounted, ref, watch,
+    computed, h, onBeforeUnmount, onMounted, ref, watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import { compareValues } from '@utils/assist/timestamp-conversion';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import type { SearchFieldItem } from './game-search-fields';
 
@@ -256,7 +272,9 @@
   // 1. 将 filter: true 自动展开为 { list, filterFn }（list 来源于当前 data 中该列所有非空唯一值）
   //    这样点击表头筛选图标时才能展示候选项，而不是出现"暂无数据"
   // 2. sort: true 保留为 true，排序由组件通过 @column-sort 事件手动处理
-  // 3. 其他属性（render 等）原样保留
+  // 3. 未自定义 render 的列统一注入默认 render，使用 show-tooltips-text 组件，
+  //    在单元格内容溢出时 hover 展示完整内容（如「操作原因」等长文本列）
+  // 4. 其他属性（render 等）原样保留
   const processedColumns = computed(() => (props.columns || []).map((col) => {
     const next: Record<string, any> = { ...col };
 
@@ -281,6 +299,18 @@
     }
 
     // sort: true 不做额外处理，保持原值传给 bk-table，排序逻辑由 handleColumnSort 处理
+
+    // 未自定义 render 的列统一注入默认 render：
+    // 渲染 show-tooltips-text 组件，溢出时 hover 显示完整内容
+    if (!col.render && col.field) {
+      const field = col.field as string;
+      next.render = ({ data }: { data: Record<string, any> }) => {
+        const value = data?.[field];
+        return h(Tooltips, {
+          data: value === null || value === undefined || value === '' ? '--' : value,
+        });
+      };
+    }
 
     return next;
   }));
@@ -367,9 +397,19 @@
   const showPopover = ref(false);
   const selectedFieldId = ref('');
   const selectedOperator = ref('');
-  const inputValue = ref('');
+  // 单值输入（普通输入框 / 枚举单选）
+  const inputValue = ref<string | string[]>('');
+  // 多值输入（IN / NOT IN 操作符使用，bk-tag-input）
+  const inputTagValues = ref<string[]>([]);
   const conditionTags = ref<ConditionTag[]>([]);
   const editingIndex = ref(-1); // -1 表示新增模式
+
+  // bk-tag-input 粘贴处理：将粘贴文本按中英文逗号拆分为多个 tag
+  const pasteTagFn = (text: string) => text
+    .split(/[,，]/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => ({ id: s, name: s }));
 
   // 搜索框 placeholder（显示所有可搜索字段名）
   const searchBoxPlaceholder = computed(() => {
@@ -377,12 +417,24 @@
     return `${t('搜索')} ${names}`;
   });
 
-  // 可用的搜索字段（剔除已选条件中的字段，编辑模式下保留当前编辑的字段）
+  // 多值操作符（仅 IN / NOT IN 支持多个值；其余单值）
+  const MULTI_VALUE_OPERATORS = ['in', 'not_in'];
+  const isMultiValueOperator = computed(() => MULTI_VALUE_OPERATORS.includes(selectedOperator.value));
+
+  // 可用的搜索字段：
+  // - 单值操作符占用的字段需剔除（同字段同操作符不可重复）
+  // - IN / NOT IN 允许同字段多个 tag（多值），所以不剔除
+  // - 编辑模式下保留当前编辑的字段
   const availableSearchFields = computed(() => {
-    const usedFieldIds = conditionTags.value
-      .filter((_, idx) => idx !== editingIndex.value) // 编辑模式下排除当前编辑的 tag
-      .map(tag => tag.fieldId);
-    return props.searchFields.filter(f => !usedFieldIds.includes(f.id));
+    const blockedFieldIds = new Set<string>();
+    conditionTags.value.forEach((tag, idx) => {
+      if (idx === editingIndex.value) return;
+      // 仅单值操作符占用的字段会从可选列表移除
+      if (!MULTI_VALUE_OPERATORS.includes(tag.operator)) {
+        blockedFieldIds.add(tag.fieldId);
+      }
+    });
+    return props.searchFields.filter(f => !blockedFieldIds.has(f.id));
   });
 
   // 当前选中字段的配置
@@ -402,6 +454,11 @@
 
   // 当前字段的子选项
   const currentFieldChildren = computed(() => currentField.value?.children || []);
+
+  // 值输入框 placeholder：多值时提示逗号分隔，单值时提示单值
+  const valueInputPlaceholder = computed(() => (
+    isMultiValueOperator.value ? t('请输入，多个值用逗号分隔') : t('请输入')
+  ));
 
   // 初始化默认选中第一个字段
   watch(() => props.searchFields, (fields) => {
@@ -434,6 +491,7 @@
       selectedOperator.value = operators[0].id;
     }
     inputValue.value = '';
+    inputTagValues.value = [];
   };
 
   // 初始化默认操作符
@@ -442,6 +500,27 @@
       selectedOperator.value = ops[0].id;
     }
   }, { immediate: true });
+
+  // 操作符切换时，在单值/多值输入间同步已输入内容
+  watch(selectedOperator, (newOp, oldOp) => {
+    if (!oldOp || newOp === oldOp) return;
+    const wasMulti = MULTI_VALUE_OPERATORS.includes(oldOp);
+    const isMulti = MULTI_VALUE_OPERATORS.includes(newOp);
+    if (wasMulti === isMulti) return;
+    if (isMulti) {
+      // 单值 -> 多值：把单值输入按逗号拆为 tag 列表
+      const raw = String(inputValue.value || '').trim();
+      inputTagValues.value = raw
+        ? raw.split(/[,，]/).map((s: string) => s.trim())
+          .filter(Boolean)
+        : [];
+      inputValue.value = '';
+    } else {
+      // 多值 -> 单值：仅保留第一个值
+      inputValue.value = inputTagValues.value[0] || '';
+      inputTagValues.value = [];
+    }
+  });
 
   // 点击搜索框，显示浮层
   const handleBoxClick = () => {
@@ -470,11 +549,41 @@
     }
   };
 
+
+  let headFilterObserver: MutationObserver | null = null;
+  const updateHeadFilterPlaceholder = (root: ParentNode | Document) => {
+    const inputs = root.querySelectorAll<HTMLInputElement>('.bk-table-head-filter input');
+    inputs.forEach((input) => {
+      if (input.placeholder !== t('请输入关键字')) {
+        // eslint-disable-next-line no-param-reassign
+        input.placeholder = t('请输入关键字');
+      }
+    });
+  };
+
   onMounted(() => {
     document.addEventListener('click', handleClickOutside);
+    // 首次先尝试更新一次（弹层可能此时未渲染，但保险）
+    updateHeadFilterPlaceholder(document);
+    // 监听 body 子树变化，发现 head-filter 弹层挂载后立即修改 placeholder
+    headFilterObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        mutation.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          if (node.matches?.('.bk-table-head-filter') || node.querySelector?.('.bk-table-head-filter')) {
+            updateHeadFilterPlaceholder(node);
+          }
+        });
+      }
+    });
+    headFilterObserver.observe(document.body, { childList: true, subtree: true });
   });
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside);
+    if (headFilterObserver) {
+      headFilterObserver.disconnect();
+      headFilterObserver = null;
+    }
   });
 
   // 枚举值选择变化
@@ -484,23 +593,37 @@
 
   // 确定按钮
   const handleConfirm = () => {
-    if (
-      !selectedFieldId.value
-      || !selectedOperator.value
-      || !inputValue.value
-    ) {
+    if (!selectedFieldId.value || !selectedOperator.value) {
       return;
     }
     const field = currentField.value;
     const operator = currentOperators.value.find(op => op.id === selectedOperator.value);
     if (!field || !operator) return;
 
+    // 根据操作符类型读取对应的输入值
+    let displayValue = '';
+    if (isMultiValueOperator.value) {
+      // 多值：bk-tag-input 的数组值或枚举多选数组
+      const arr = Array.isArray(inputValue.value) && inputValue.value.length > 0
+        ? (inputValue.value as string[])
+        : inputTagValues.value;
+      const cleaned = (arr || []).map(v => String(v).trim()).filter(Boolean);
+      if (cleaned.length === 0) return;
+      displayValue = cleaned.join(', ');
+    } else {
+      // 单值：仅取第一个有效值，避免误传逗号分隔多值
+      const raw = Array.isArray(inputValue.value) ? inputValue.value[0] : inputValue.value;
+      const cleaned = String(raw || '').trim();
+      if (!cleaned) return;
+      displayValue = cleaned;
+    }
+
     const tag: ConditionTag = {
       fieldId: field.id,
       fieldName: field.name,
       operator: operator.id,
       operatorName: operator.name,
-      value: inputValue.value,
+      value: displayValue,
     };
 
     if (editingIndex.value >= 0) {
@@ -514,6 +637,7 @@
 
     // 重置输入并关闭浮层
     inputValue.value = '';
+    inputTagValues.value = [];
     showPopover.value = false;
     emitConditions();
   };
@@ -535,7 +659,26 @@
     // 等字段变化后再设置操作符和值
     setTimeout(() => {
       selectedOperator.value = tag.operator;
-      inputValue.value = tag.value;
+      const isMulti = MULTI_VALUE_OPERATORS.includes(tag.operator);
+      if (isMulti) {
+        // 多值：把字符串按逗号拆回 tag 数组
+        const arr = String(tag.value || '').split(/[,，]/)
+          .map(s => s.trim())
+          .filter(Boolean);
+        // 枚举多选使用 inputValue（数组），普通文本使用 inputTagValues
+        const isEnum = !!(currentField.value?.children?.length
+          && currentField.value?.onlyRecommendChildren);
+        if (isEnum) {
+          inputValue.value = arr;
+          inputTagValues.value = [];
+        } else {
+          inputTagValues.value = arr;
+          inputValue.value = '';
+        }
+      } else {
+        inputValue.value = tag.value;
+        inputTagValues.value = [];
+      }
       editingIndex.value = index;
     });
   };

@@ -74,15 +74,35 @@ export const getDateParams = () => {
 };
 
 // 合并三个角色统计接口的数据（按角色ID合并）
+// 以登录接口（loginData）返回的角色ID为准：
+// - 聊天/交易接口若返回的角色ID与登录接口不一致（即不在登录角色ID集合内），则忽略不展示
+// - 登录数据中缺失的统计字段统一补 0（避免页面展示为 -- 不直观）
 export const mergeRoleStats = (loginData: any[], chatData: any[], dealData: any[]) => {
   const roleMap = new Map<string, Record<string, any>>();
+  // 1. 以登录数据初始化角色集合，并为所有数值统计字段提供默认值 0
   loginData.forEach((row) => {
     const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
-    roleMap.set(id, { ...row });
+    roleMap.set(id, {
+      ...row,
+      [ROLE_FIELDS.LOGIN_LOCATION_MONTH]: row[ROLE_FIELDS.LOGIN_LOCATION_MONTH] ?? 0,
+      [ROLE_FIELDS.LOGIN_LOCATION_YEAR]: row[ROLE_FIELDS.LOGIN_LOCATION_YEAR] ?? 0,
+      [ROLE_FIELDS.LOGIN_COUNT_MONTH]: row[ROLE_FIELDS.LOGIN_COUNT_MONTH] ?? 0,
+      [ROLE_FIELDS.LOGIN_COUNT_YEAR]: row[ROLE_FIELDS.LOGIN_COUNT_YEAR] ?? 0,
+      [ROLE_FIELDS.TRADE_TARGET_MONTH]: 0,
+      [ROLE_FIELDS.TRADE_TARGET_YEAR]: 0,
+      [ROLE_FIELDS.TRADE_COUNT_MONTH]: 0,
+      [ROLE_FIELDS.TRADE_COUNT_YEAR]: 0,
+      [ROLE_FIELDS.CHAT_TARGET_MONTH]: 0,
+      [ROLE_FIELDS.CHAT_TARGET_YEAR]: 0,
+      [ROLE_FIELDS.CHAT_COUNT_MONTH]: 0,
+      [ROLE_FIELDS.CHAT_COUNT_YEAR]: 0,
+    });
   });
+  // 2. 聊天数据：仅当角色ID存在于登录角色集合内才合并，否则忽略
   chatData.forEach((row) => {
     const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
-    const existing = roleMap.get(id) || { [ROLE_FIELDS.ROLE_ID]: id };
+    const existing = roleMap.get(id);
+    if (!existing) return;
     roleMap.set(id, {
       ...existing,
       [ROLE_FIELDS.CHAT_TARGET_MONTH]: row[ROLE_FIELDS.CHAT_TARGET_MONTH] ?? 0,
@@ -91,9 +111,11 @@ export const mergeRoleStats = (loginData: any[], chatData: any[], dealData: any[
       [ROLE_FIELDS.CHAT_COUNT_YEAR]: row[ROLE_FIELDS.CHAT_COUNT_YEAR] ?? 0,
     });
   });
+  // 3. 交易数据：仅当角色ID存在于登录角色集合内才合并，否则忽略
   dealData.forEach((row) => {
     const id = row[ROLE_FIELDS.ROLE_ID] || row.roleId || '';
-    const existing = roleMap.get(id) || { [ROLE_FIELDS.ROLE_ID]: id };
+    const existing = roleMap.get(id);
+    if (!existing) return;
     roleMap.set(id, {
       ...existing,
       [ROLE_FIELDS.TRADE_TARGET_MONTH]: row[ROLE_FIELDS.TRADE_TARGET_MONTH] ?? 0,
