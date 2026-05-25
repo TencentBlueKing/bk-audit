@@ -55,7 +55,7 @@
               {{ t('已启用') }}
               <bk-tag
                 class="status-count"
-                theme="success">
+                theme="info">
                 {{ statusCounts.enabled }}
               </bk-tag>
             </bk-radio-button>
@@ -67,7 +67,7 @@
               {{ t('已停用') }}
               <bk-tag
                 class="status-count"
-                theme="warning">
+                theme="info">
                 {{ statusCounts.disabled }}
               </bk-tag>
             </bk-radio-button>
