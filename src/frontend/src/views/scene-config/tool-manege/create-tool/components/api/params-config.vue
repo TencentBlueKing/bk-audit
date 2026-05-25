@@ -292,6 +292,7 @@
                     <div style="position: relative; width: 100%; height: 100%;">
                       <date-picker
                         v-model="item.time_range"
+                        append-to-body
                         class="time-range-picker"
                         :placeholder="t('请选择')"
                         style="width: 100%; height: 100%; border: none;"
