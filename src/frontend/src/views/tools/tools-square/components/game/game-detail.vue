@@ -180,13 +180,7 @@
                 <div
                   v-if="isSectionEmpty(section.key)"
                   class="section-empty">
-                  <bk-exception
-                    scene="part"
-                    type="empty">
-                    <div class="section-empty-text">
-                      {{ t('暂无数据') }}
-                    </div>
-                  </bk-exception>
+                  <span class="section-empty-text">{{ t('暂无数据') }}</span>
                 </div>
                 <template v-else>
                   <!-- 最近记录行 -->
@@ -1136,14 +1130,9 @@
 
 /* section 无数据提示 */
 .section-empty {
-  position: relative;
-  z-index: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
   max-height: 50px;
-
-  /* overflow: hidden; */
 
   .section-empty-text {
     font-size: 12px;
