@@ -292,7 +292,6 @@
                     <div style="position: relative; width: 100%; height: 100%;">
                       <date-picker
                         v-model="item.time_range"
-                        append-to-body
                         class="time-range-picker"
                         :placeholder="t('请选择')"
                         style="width: 100%; height: 100%; border: none;"
@@ -530,6 +529,12 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
   // 处理时间范围选择器的更新事件
   const handelTimeVarItem = (item: Record<string, any>) => {
+    // 规范化：确保 time_range 始终为数组（date-picker 首次选择可能发出非数组值）
+    // eslint-disable-next-line no-param-reassign
+    if (!Array.isArray(item.time_range)) {
+      // eslint-disable-next-line no-param-reassign
+      item.time_range = item.time_range !== null && item.time_range !== undefined ? [item.time_range] : [];
+    }
     // eslint-disable-next-line no-param-reassign
     item.isDefaultValuePass = true;
     haveSameName.value = false;
@@ -563,6 +568,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
           return {
             ...listItem,
             default_value: [],
+            time_range: Array.isArray(listItem.time_range) ? listItem.time_range : [],
           };
         }
         return listItem;
@@ -799,7 +805,6 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   flex: 1;
 
   /* width: 180px; */
-  overflow: hidden;
   border-left: 1px solid #dcdee5;
   align-items: center;
 
@@ -911,7 +916,6 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
 .field-row {
   display: flex;
-  overflow: hidden;
   font-size: 12px;
   line-height: 42px;
   color: #63656e;

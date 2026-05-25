@@ -319,4 +319,27 @@
   text-underline-offset: 5px;
   cursor: pointer;
 }
+
+/* 修复 resizable 列调整后蓝色竖线残留问题 */
+:deep(.bk-table) {
+  .col-resize-drag {
+    background-color: transparent !important;
+
+    &::after {
+      display: none !important;
+    }
+  }
+
+  /* 隐藏固定列的阴影线（如果有） */
+  .bk-fixed-right-shadow,
+  .bk-fixed-left-shadow {
+    display: none !important;
+  }
+
+  /* 确保列边框颜色一致 */
+  .bk-table-body-wrapper td,
+  .bk-table-head-wrapper th {
+    border-right: 1px solid #dcdee5 !important;
+  }
+}
 </style>
