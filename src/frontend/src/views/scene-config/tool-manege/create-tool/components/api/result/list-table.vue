@@ -291,8 +291,6 @@
             class="add-field">
             <bk-popover
               ref="requiredListRef"
-              allow-html
-              :content="`#${popoverContentId}`"
               ext-cls="field-required-pop"
               placement="top"
               theme="light"
@@ -301,22 +299,20 @@
                 <audit-icon
                   class="plus-circle"
                   type="plus-circle" />
-                <span class="plus-circle-text"> 添加字段</span>
+                <span class="plus-circle-text"> {{ t('添加字段') }}</span>
               </span>
-            </bk-popover>
-            <div style="display: none">
-              <div
-                :id="popoverContentId"
-                class="field-required-pop-hideen">
-                <div
-                  v-for="(item, index) in addList"
-                  :key="index"
-                  class="field-required-item"
-                  @click="handleAddList(item)">
-                  {{ item.name }}
+              <template #content>
+                <div class="field-required-pop-hideen">
+                  <div
+                    v-for="(item, index) in addList"
+                    :key="index"
+                    class="field-required-item"
+                    @click="handleAddList(item)">
+                    {{ item.name }}
+                  </div>
                 </div>
-              </div>
-            </div>
+              </template>
+            </bk-popover>
           </div>
         </div>
       </div>
@@ -417,13 +413,6 @@
   const fieldDictId = ref('');
 
   const newToolDataName = inject<ComputedRef<string>>('newToolDataName', computed(() => ''));
-
-  // 为每个表格实例生成唯一的 popover content ID
-  const popoverContentId = computed(() => {
-    // 使用 json_path 生成唯一 ID，替换特殊字符
-    const uniqueId = props.data?.json_path?.replace(/[^a-zA-Z0-9]/g, '_') || `popover_${Date.now()}`;
-    return `hidden_pop_content_add_${uniqueId}`;
-  });
 
   // 转换树形数据
   const transformTreeData = (nodes: any[]): FieldItem[] => {

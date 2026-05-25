@@ -853,41 +853,40 @@
 
     .table-cell {
       box-sizing: border-box;
-      flex-shrink: 0;
     }
 
+    /* 数据列表字段 / 数据总条数字段：占据较多空间，可伸缩 */
     .col-list-field,
     .col-total-field {
-      flex: 0 0 540px;
-      width: 540px;
+      flex: 2 1 220px;
+      min-width: 180px;
     }
 
+    /* 页码参数名 / 每页条数参数名：可伸缩 */
     .col-page-param,
     .col-page-size-param {
-      flex: 0 0 249px;
-      width: 249px;
+      flex: 1 1 150px;
+      min-width: 130px;
     }
 
-    .col-default-page {
-      flex: 0 0 180px;
-      width: 180px;
-    }
-
+    /* 起始页码 / 每页条数 / 参数位置：可伸缩 */
+    .col-default-page,
     .col-default-page-size,
     .col-position {
-      flex: 0 0 180px;
-      width: 180px;
+      flex: 1 1 110px;
+      min-width: 100px;
     }
 
+    /* 操作列：固定窄宽 */
     .col-operation {
       flex: 0 0 80px;
-      width: 80px;
+      min-width: 80px;
     }
 
     .table-header-row,
     .table-body-row {
-      /* 表头与表体宽度一致，超出滚动 */
-      min-width: max-content;
+      /* 整体最小宽度：保证小屏下表格仍可横向滚动而不挤压 */
+      min-width: 960px;
     }
 
     .table-header-row {
