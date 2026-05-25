@@ -751,19 +751,21 @@
 
 .rules-header-key-span {
   position: relative;
-  display: inline-block;
+  display: inline-flex; /* 改为 inline-flex 以适应 flex 父容器 */
   width: 20%;
-  vertical-align: top;
+  min-width: 0;
+  align-items: center; /* 与父容器的 align-items: center 保持一致 */
 }
 
 .rules-header-key {
-  border: 1px solid red;
+  border: 1px solid red !important;
 }
 
 .rules-header-key-icon {
   position: absolute;
   top: 50%;
-  right: 16px;
+  right: 12px; /* 调整位置，避免超出边界 */
+  z-index: 10;
   font-size: 16px;
   color: #ea3636;
   cursor: pointer;
