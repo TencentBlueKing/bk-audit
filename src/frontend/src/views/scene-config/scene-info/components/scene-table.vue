@@ -18,25 +18,37 @@
   <div
     class="scene-table-wrapper"
     :class="[{ 'scene-table-section': !!title }]">
-    <!-- 可选的标题区域（合并自 related-table-section） -->
+    <!-- 标题 + 搜索框 -->
     <div
-      v-if="title"
-      class="section-title">
-      {{ title }}
-      <bk-popover
-        v-if="tooltip"
-        :max-width="400"
-        placement="top"
-        theme="dark">
-        <span style="display: inline-flex; align-items: center; width: 14px; height: 14px;">
-          <audit-icon
-            class="info-icon"
-            type="info-fill" />
-        </span>
-        <template #content>
-          <div>{{ tooltip }}</div>
-        </template>
-      </bk-popover>
+      v-if="title || enableSearch"
+      class="scene-table-header">
+      <div
+        v-if="title"
+        class="section-title">
+        {{ title }}
+        <bk-popover
+          v-if="tooltip"
+          :max-width="400"
+          placement="top"
+          theme="dark">
+          <span style="display: inline-flex; align-items: center; width: 14px; height: 14px;">
+            <audit-icon
+              class="info-icon"
+              type="info-fill" />
+          </span>
+          <template #content>
+            <div>{{ tooltip }}</div>
+          </template>
+        </bk-popover>
+      </div>
+      <bk-search-select
+        v-if="enableSearch"
+        v-model="searchKeyword"
+        class="scene-table-search"
+        :data="searchData"
+        :defaut-using-item="{ inputHtml: t('请选择') }"
+        :placeholder="searchPlaceholder || t('请输入关键字搜索')"
+        unique-select />
     </div>
     <!-- PrimaryTable 表格 -->
     <primary-table
@@ -49,36 +61,18 @@
       :style="{ '--row-height': rowHeight + 'px' }" />
     <!-- 分页器 -->
     <div
-      v-if="showPagination && data.length > 0"
+      v-if="showPagination && filteredData.length > 0"
       class="scene-table-pagination">
-      <div class="pagination-left">
-        <span class="pagination-total">{{ t('共计') }} {{ data.length }} {{ t('条') }}</span>
-        <span class="pagination-limit">
-          {{ t('每页') }}
-          <bk-select
-            v-model="currentLimit"
-            class="pagination-limit-select"
-            :clearable="false"
-            @change="handleLimitChange">
-            <bk-option
-              v-for="item in limitList"
-              :key="item"
-              :label="item"
-              :value="item" />
-          </bk-select>
-          {{ t('条') }}
-        </span>
-      </div>
-      <div class="pagination-right">
-        <bk-pagination
-          v-model="currentPage"
-          :count="data.length"
-          :limit="currentLimit"
-          :show-limit="false"
-          :show-total-count="false"
-          small
-          @change="handlePageChange" />
-      </div>
+      <bk-pagination
+        v-model="currentPage"
+        align="left"
+        :count="filteredData.length"
+        :layout="['total', 'limit', 'list']"
+        :limit="currentLimit"
+        :limit-list="limitList"
+        location="left"
+        @change="handlePageChange"
+        @limit-change="handleLimitChange" />
     </div>
   </div>
 </template>
@@ -95,6 +89,17 @@
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
+  interface SearchDataItem {
+    id: string;
+    name: string;
+    placeholder?: string;
+    children?: Array<{ id: string; name: string }>;
+    /** 过滤时使用的字段 key，默认与 id 同名 */
+    field?: string;
+    /** 自定义匹配函数（可选） */
+    match?: (row: Record<string, any>, keyword: string) => boolean;
+  }
+
   interface Props {
     columns: Array<Record<string, any>>;
     data: Array<Record<string, any>>;
@@ -107,24 +112,31 @@
     resizable?: boolean;
     stripe?: boolean;
     rowHeight?: number;
+    enableSearch?: boolean;
+    searchData?: SearchDataItem[];
+    searchPlaceholder?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     maxHeight: undefined,
     showPagination: false,
     limit: 10,
-    limitList: () => [10, 20, 50],
+    limitList: () => [10, 20, 50, 100, 1000],
     title: '',
     tooltip: '',
     resizable: false,
     stripe: true,
     rowHeight: 36,
+    enableSearch: false,
+    searchData: () => [],
+    searchPlaceholder: '',
   });
 
   const { t } = useI18n();
 
   const currentPage = ref(1);
   const currentLimit = ref(props.limit);
+  const searchKeyword = ref<any[]>([]);
 
   // 监听 limit prop 变化
   watch(() => props.limit, (val) => {
@@ -136,13 +148,64 @@
     currentPage.value = 1;
   });
 
+  // 搜索条件变化时重置页码
+  watch(searchKeyword, () => {
+    currentPage.value = 1;
+  }, { deep: true });
+
+  // 把单元格值规范为可搜索字符串
+  const stringify = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (Array.isArray(val)) return val.map(stringify).join(' ');
+    if (typeof val === 'object') return Object.values(val).map(stringify)
+      .join(' ');
+    return String(val);
+  };
+
+  // 搜索过滤
+  const filteredData = computed(() => {
+    if (!props.enableSearch || !searchKeyword.value || searchKeyword.value.length === 0) {
+      return props.data;
+    }
+    const searchDataMap = new Map<string, SearchDataItem>();
+    props.searchData.forEach((item) => {
+      searchDataMap.set(item.id, item);
+    });
+    return props.data.filter(row => searchKeyword.value.every((cond) => {
+      // 按条件取关键字字符串
+      const keywords = (cond.values || []).map((v: any) => v.name || v.id).filter(Boolean);
+      // 没有 values 时，cond.id 本身就是关键字（自由输入）
+      const freeKeyword = (!cond.values || cond.values.length === 0) ? cond.id : '';
+      const matchKeywords = freeKeyword ? [freeKeyword] : keywords;
+      if (matchKeywords.length === 0) return true;
+
+      // 命中字段：有 cond.id 对应的搜索项时，使用其 field/id；否则全字段匹配
+      const cfg = searchDataMap.get(cond.id);
+      // 自由输入（不选择字段）：全字段匹配
+      const isFree = !cfg && !!freeKeyword;
+
+      return matchKeywords.some((kw: string) => {
+        const lowerKw = kw.toLowerCase();
+        if (cfg?.match) return cfg.match(row, kw);
+        if (isFree) {
+          // 全字段模糊匹配
+          return Object.keys(row).some(k => stringify(row[k]).toLowerCase()
+            .includes(lowerKw));
+        }
+        const field = cfg?.field || cfg?.id || cond.id;
+        return stringify(row[field]).toLowerCase()
+          .includes(lowerKw);
+      });
+    }));
+  });
+
   // 计算当前页数据
   const pageData = computed(() => {
     if (!props.showPagination) {
-      return props.data;
+      return filteredData.value;
     }
     const start = (currentPage.value - 1) * currentLimit.value;
-    return props.data.slice(start, start + currentLimit.value);
+    return filteredData.value.slice(start, start + currentLimit.value);
   });
 
   const handlePageChange = (page: number) => {
@@ -168,12 +231,25 @@
     border-radius: 2px;
   }
 
+  .scene-table-header {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .scene-table-search {
+    width: 400px;
+    margin-left: auto;
+  }
+
   .section-title {
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
     align-items: center;
-    margin-bottom: 16px;
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
@@ -292,44 +368,14 @@
     }
   }
 
-  /* 分页器样式 */
+  /* 分页器样式（使用 bk-pagination 内置 layout: total/limit/list） */
   .scene-table-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 15px;
-  }
+    padding: 12px 0 0;
 
-  .pagination-left {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font-size: 12px;
-    color: #63656e;
-  }
-
-  .pagination-total {
-    white-space: nowrap;
-  }
-
-  .pagination-limit {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    white-space: nowrap;
-  }
-
-  .pagination-limit-select {
-    width: 56px;
-
-    :deep(.bk-input) {
-      height: 24px;
-    }
-  }
-
-  .pagination-right {
     :deep(.bk-pagination) {
-      justify-content: flex-end;
+      .is-last {
+        margin-left: auto;
+      }
     }
   }
 </style>
