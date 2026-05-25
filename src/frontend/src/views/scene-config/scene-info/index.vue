@@ -39,7 +39,11 @@
         <scene-table
           :columns="systemColumns"
           :data="systemTableData"
+          enable-search
           resizable
+          :search-data="systemSearchData"
+          :search-placeholder="t('搜索 系统名称、系统管理员、系统域名')"
+          show-pagination
           stripe
           :title="t('关联系统')"
           :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，如需调整请联系 审计中心平台管理员: ') + configData.platform_admin_users.join(',')" />
@@ -48,7 +52,11 @@
         <scene-table
           :columns="dataTableColumns"
           :data="dataTableData"
+          enable-search
           resizable
+          :search-data="dataTableSearchData"
+          :search-placeholder="t('搜索 数据表名称、管理员')"
+          show-pagination
           stripe
           :title="t('关联数据表')"
           :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
@@ -385,6 +393,12 @@
   });
 
   // ==================== 关联系统表格列配置 ====================
+  const systemSearchData = [
+    { name: t('系统名称'), id: 'name', placeholder: t('请输入系统名称') },
+    { name: t('系统管理员'), id: 'managers', placeholder: t('请输入系统管理员') },
+    { name: t('系统域名'), id: 'system_url', placeholder: t('请输入系统域名') },
+  ];
+
   const systemColumns = [
     {
       colKey: 'name',
@@ -438,6 +452,23 @@
   ];
 
   // ==================== 关联数据报表表格列配置 ====================
+  const dataTableSearchData = [
+    {
+      name: t('数据表名称'),
+      id: 'result_table_name_alias',
+      placeholder: t('请输入数据表名称'),
+      // 数据表名称同时匹配别名/英文ID
+      match: (row: Record<string, any>, kw: string) => {
+        const lower = kw.toLowerCase();
+        return String(row.result_table_name_alias || '').toLowerCase()
+          .includes(lower)
+          || String(row.result_table_id || '').toLowerCase()
+            .includes(lower);
+      },
+    },
+    { name: t('管理员'), id: 'managers', placeholder: t('请输入管理员') },
+  ];
+
   const dataTableColumns = [
     {
       colKey: 'result_table_name_alias',
