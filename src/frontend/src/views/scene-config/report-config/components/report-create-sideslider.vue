@@ -27,6 +27,7 @@
       <div class="report-create-content">
         <bk-form
           ref="formRef"
+          class="report-create-form"
           form-type="vertical"
           :model="formData"
           :rules="formRules">
@@ -613,6 +614,12 @@
 
   &:hover {
     background-color: #f5f7fa;
+  }
+}
+
+.report-create-form {
+  :deep(.bk-form-label) {
+    font-size: 12px;
   }
 }
 </style>
