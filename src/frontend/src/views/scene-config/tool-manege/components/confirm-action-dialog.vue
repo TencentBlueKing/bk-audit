@@ -14,58 +14,9 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
-<template>
-  <!-- 删除模式：保留 bk-dialog（含输入框验证） -->
-  <bk-dialog
-    v-if="actionType === 'delete'"
-    v-model:is-show="isShow"
-    ext-cls="confirm-action-dialog"
-    footer-align="center"
-    :show-head="false"
-    :width="480">
-    <div class="delete-dialog-content">
-      <img
-        class="tip-icon"
-        src="@images/tip-icon.svg">
-      <div class="delete-title">
-        {{ t('确定删除该工具？') }}
-      </div>
-      <div class="delete-warning">
-        {{ t('此操作将') }}
-        <span class="danger-text">{{ t('永久删除该工具') }}</span>
-        {{ t('，且不可恢复，请谨慎操作！') }}
-      </div>
-      <div class="delete-confirm-tip">
-        {{ t('请输入工具名称') }}「<span
-          v-bk-tooltips="{ content: t('点击复制') }"
-          class="tool-name"
-          @click="handleCopyToolName">{{ target?.name }}</span>」{{ t('以确认删除') }}
-      </div>
-      <bk-input
-        v-model="confirmInput"
-        :placeholder="t('请输入工具名称')" />
-    </div>
-    <template #footer>
-      <bk-button
-        class="mr8 confirm-action-btn"
-        :disabled="confirmInput !== target?.name"
-        :loading="deleteLoading"
-        theme="danger"
-        @click="handleDeleteConfirm">
-        {{ t('删除') }}
-      </bk-button>
-      <bk-button
-        class="confirm-action-btn"
-        @click="handleCancel">
-        {{ t('取消') }}
-      </bk-button>
-    </template>
-  </bk-dialog>
-</template>
-
 <script setup lang="ts">
+  import { h, ref } from 'vue';
   import { InfoBox } from 'bkui-vue';
-  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -98,15 +49,120 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
 
-  const isShow = defineModel<boolean>('isShow', { default: false });
-  const confirmInput = ref('');
+  // 删除 — 使用全局 InfoBox
+  const showDeleteInfoBox = (target?: ToolItem | null) => {
+    const currentTarget = target || props.target;
+    if (!currentTarget) return;
+    const confirmName = ref('');
+    let deleteInfoInstance: any; // eslint-disable-line prefer-const -- 赋值在闭包定义之后，必须使用 let
+    const handleConfirm = () => {
+      if (confirmName.value !== currentTarget.name) return;
+      const scopeParams = getSceneSystemParams();
+      ToolManageService.fetchDeleteSceneTool({
+        uid: currentTarget.uid,
+        scene_id: Number(scopeParams.scope_id) || 0,
+      }).then(() => {
+        messageSuccess(t('删除成功'));
+        deleteInfoInstance?.hide();
+        emit('success');
+      });
+    };
+    deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: t('确定删除该工具？'),
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            color: '#63656e',
+            textAlign: 'center',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, [
+          t('此操作将'),
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, t('永久删除该工具')),
+          t('，且不可恢复，请谨慎操作！'),
+        ]),
+        h('div', {
+          style: { marginBottom: '8px', fontSize: '14px', color: '#63656e', textAlign: 'left' },
+        }, [
+          t('请输入工具名称「'),
+          h('span', {
+            style: { color: '#4D4F56', cursor: 'pointer', fontSize: '12px', fontWeight: 700 },
+            onClick: () => handleCopyToolName(currentTarget.name),
+          }, currentTarget.name),
+          t('」以确认删除'),
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: t('请输入工具名称'),
+          onInput: (e: any) => {
+            confirmName.value = e.target.value;
+          },
+          style: {
+            width: '100%',
+            height: '32px',
+            padding: '0 10px',
+            fontSize: '14px',
+            border: '1px solid #c4c6cc',
+            borderRadius: '2px',
+            outline: 'none',
+            boxSizing: 'border-box',
+          },
+        }),
+      ]),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      footer: () => h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center' } }, [
+        h('button', {
+          class: 'info-box-confirm-btn',
+          style: getConfirmBtnStyle(confirmName.value === currentTarget.name),
+          onClick: handleConfirm,
+        }, t('删除')),
+        h('button', {
+          style: cancelBtnStyle,
+          onClick: () => deleteInfoInstance?.hide(),
+        }, t('取消')),
+      ]),
+      onClose() {
+        confirmName.value = '';
+      },
+    });
+  };
 
-  // 监听弹窗显示状态：删除时清空输入
-  watch(isShow, (val) => {
-    if (val && props.actionType === 'delete') {
-      confirmInput.value = '';
-    }
+  // 确认按钮样式（根据输入是否匹配切换禁用态）
+  const getConfirmBtnStyle = (isMatch: boolean) => ({
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid',
+    outline: 'none',
+    marginRight: '8px',
+    backgroundColor: isMatch ? '#ea3636' : '#fff',
+    borderColor: isMatch ? '#ea3636' : '#dcdee5',
+    color: isMatch ? '#fff' : '#c4c6cc',
+    cursor: isMatch ? 'pointer' : 'not-allowed',
   });
+
+  const cancelBtnStyle = {
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid #c4c6cc',
+    outline: 'none',
+    marginRight: '0',
+    backgroundColor: '#fff',
+    color: '#63656e',
+    cursor: 'pointer',
+  };
 
   // 启用/停用 — 使用全局 InfoBox
   const showToggleStatusInfoBox = (target?: ToolItem | null, actionType?: ActionType) => {
@@ -135,19 +191,6 @@
     });
   };
 
-  // 删除接口
-  const {
-    loading: deleteLoading,
-    run: runDeleteSceneTool,
-  } = useRequest(ToolManageService.fetchDeleteSceneTool, {
-    defaultValue: null,
-    onSuccess: () => {
-      messageSuccess(t('删除成功'));
-      close();
-      emit('success');
-    },
-  });
-
   // 启用/停用接口
   const {
     run: publishPlatformTool,
@@ -160,33 +203,15 @@
     },
   });
 
-  // 删除确认
-  const handleDeleteConfirm = () => {
-    if (!props.target || confirmInput.value !== props.target.name) return;
-    const scopeParams = getSceneSystemParams();
-    runDeleteSceneTool({
-      uid: props.target.uid,
-      scene_id: Number(scopeParams.scope_id) || 0,
-    });
-  };
-
-  const close = () => {
-    isShow.value = false;
-    confirmInput.value = '';
-  };
-
-  const handleCancel = () => {
-    close();
-  };
-
   defineExpose({
     showToggleStatusInfoBox,
+    showDeleteInfoBox,
   });
 
   // 复制工具名称到剪贴板
-  const handleCopyToolName = () => {
-    if (props.target?.name) {
-      navigator.clipboard.writeText(props.target.name)
+  const handleCopyToolName = (name: string) => {
+    if (name) {
+      navigator.clipboard.writeText(name)
         .then(() => {
           messageSuccess(t('复制成功'));
         })
@@ -197,72 +222,3 @@
   };
 </script>
 
-<style lang="postcss">
-  .confirm-action-dialog {
-    .bk-dialog-footer {
-      background: none !important;
-      border-top: none !important;
-    }
-
-    .confirm-action-btn {
-      min-width: 120px;
-    }
-  }
-
-  /* 删除确认弹窗样式 */
-  .delete-dialog-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 0 8px;
-
-    .tip-icon {
-      position: absolute;
-      top: -25px;
-      left: 50%;
-      width: 50px;
-      height: 50px;
-      margin-bottom: 16px;
-      transform: translateX(-50%);
-    }
-
-    .delete-title {
-      margin-bottom: 24px;
-      font-size: 20px;
-      font-weight: 700;
-      color: #313238;
-    }
-
-    .delete-warning {
-      width: 100%;
-      padding: 12px 16px;
-      margin-bottom: 16px;
-      font-size: 14px;
-      color: #63656e;
-      text-align: center;
-      border-radius: 2px;
-    }
-
-    .danger-text {
-      font-weight: 600;
-      color: #ea3636;
-    }
-
-    .delete-confirm-tip {
-      width: 100%;
-      margin-bottom: 8px;
-      font-size: 14px;
-      color: #63656e;
-      text-align: left;
-    }
-
-    .tool-name {
-      color: #3a84ff;
-      cursor: pointer;
-    }
-
-    .bk-input {
-      width: 100%;
-    }
-  }
-</style>

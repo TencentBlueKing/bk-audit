@@ -237,7 +237,7 @@
                                     class="action-item"
                                     :class="{ disableddel: report.binding_type === 'platform_binding' }"
                                     @click="report.binding_type !== 'platform_binding'
-                                      && handleShowToggleStatusConfirm(report)">
+                                      && handleConfirmToggleStatus(report)">
                                     {{ report.status === 'published' ? t('停用') : t('启用') }}
                                   </div>
                                 </bk-dropdown-item>
@@ -267,81 +267,6 @@
         </bk-collapse>
       </template>
     </vuedraggable>
-
-    <!-- 删除确认弹窗 -->
-    <bk-dialog
-      v-model:is-show="deleteDialogVisible"
-      footer-align="center"
-      :show-head="false"
-      width="480">
-      <div class="delete-dialog-content">
-        <img
-          class="tip-icon"
-          src="@images/tip-icon.svg">
-        <div class="delete-title">
-          {{ t('确定删除该报告？') }}
-        </div>
-        <div class="delete-warning">
-          {{ t('删除的报告将') }}
-          <span class="danger-text">{{ t('无法找回') }}</span>
-          {{ t('，请谨慎操作！') }}
-        </div>
-        <div class="delete-confirm-tip">
-          {{ t('请输入报表名称') }}
-          <span
-            v-bk-tooltips="{ content: '点击复制' }"
-            class="report-name"
-            @click="handleCopyReportName">
-            {{ deleteTarget?.name }}
-          </span>
-          {{ t('以确认删除') }}
-        </div>
-        <bk-input
-          v-model="deleteConfirmInput"
-          :placeholder="t('请输入待删除的报表名称')" />
-      </div>
-      <template #footer>
-        <bk-button
-          class="mr8"
-          :disabled="deleteConfirmInput !== deleteTarget?.name"
-          :loading="deleteLoading"
-          theme="danger"
-          @click="handleConfirmDelete">
-          {{ t('删除') }}
-        </bk-button>
-        <bk-button @click="handleCancelDelete">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
-
-    <!-- 启用/停用确认弹窗 -->
-    <bk-dialog
-      v-model:is-show="toggleStatusDialogVisible"
-      footer-align="center"
-      :show-head="false"
-      width="400">
-      <div class="toggle-status-dialog-content">
-        <div class="toggle-status-title">
-          {{ toggleStatusTarget?.status === 'published' ? t('确认停用该报表？') : t('确认启用该报表？') }}
-        </div>
-        <div class="toggle-status-tip">
-          {{ toggleStatusTarget?.status === 'published' ? t('停用后，该报表将从审计报表菜单中隐藏') : t('启用后，该报表将在审计报表菜单中展示') }}
-        </div>
-      </div>
-      <template #footer>
-        <bk-button
-          class="mr8"
-          :loading="toggleStatusLoading"
-          :theme="toggleStatusTarget?.status === 'published' ? 'danger' : 'primary'"
-          @click="handleConfirmToggleStatus">
-          {{ toggleStatusTarget?.status === 'published' ? t('停用') : t('启用') }}
-        </bk-button>
-        <bk-button @click="handleCancelToggleStatus">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
 
     <!-- 移动到分组弹窗 -->
     <bk-dialog
@@ -410,39 +335,12 @@
         </bk-button>
       </template>
     </bk-dialog>
-
-    <!-- 删除分组确认弹窗 -->
-    <bk-dialog
-      v-model:is-show="deleteGroupDialogVisible"
-      footer-align="center"
-      :show-head="false"
-      width="400">
-      <div class="toggle-status-dialog-content">
-        <div class="toggle-status-title">
-          {{ t('是否删除该分组？') }}
-        </div>
-        <div class="delete-group-info">
-          {{ t('分组：') }}<span class="group-name-highlight">{{ deleteGroupTarget?.name }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <bk-button
-          class="mr8"
-          :loading="deleteGroupLoading"
-          theme="danger"
-          @click="handleConfirmDeleteGroup">
-          {{ t('删除') }}
-        </bk-button>
-        <bk-button @click="handleCancelDeleteGroup">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { ref, watch } from 'vue';
+  import { h, ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
@@ -563,15 +461,6 @@
   // 本地分组数据（用于拖拽排序）
   const localGroups = ref<ReportGroup[]>([]);
 
-  // 删除相关状态
-  const deleteDialogVisible = ref(false);
-  const deleteTarget = ref<Report | null>(null);
-  const deleteConfirmInput = ref('');
-
-  // 启用/停用确认相关状态
-  const toggleStatusDialogVisible = ref(false);
-  const toggleStatusTarget = ref<Report | null>(null);
-
   // 移动到分组相关状态
   const moveToGroupDialogVisible = ref(false);
   const moveToGroupTarget = ref<Report | null>(null);
@@ -595,10 +484,6 @@
       },
     ],
   };
-
-  // 删除分组相关状态
-  const deleteGroupDialogVisible = ref(false);
-  const deleteGroupTarget = ref<ReportGroup | null>(null);
 
   // 更新报表-分组映射
   const updateReportGroupMap = () => {
@@ -766,98 +651,152 @@
     moveToGroupTargetId.value = null;
   };
 
-  // 显示启用/停用确认弹窗
-  const handleShowToggleStatusConfirm = (report: Report) => {
-    toggleStatusTarget.value = report;
-    toggleStatusDialogVisible.value = true;
-  };
-
   // 更新 Panel 状态
-  const {
-    run: updatePanelStatus,
-    loading: toggleStatusLoading,
-  } = useRequest(ReportConfigService.updatePanel, {
+  const { run: updatePanelStatus } = useRequest(ReportConfigService.updatePanel, {
     defaultValue: null,
     onSuccess: () => {
-      const isEnabling = toggleStatusTarget.value?.status === 'unpublished';
-      messageSuccess(isEnabling ? t('启用成功') : t('停用成功'));
-      toggleStatusDialogVisible.value = false;
-      toggleStatusTarget.value = null;
-      emit('status-updated'); // 通知父组件刷新列表
+      messageSuccess(t('操作成功'));
+      emit('status-updated');
     },
   });
 
-  // 确认启用/停用
-  const handleConfirmToggleStatus = () => {
-    if (toggleStatusTarget.value) {
-      // 查找报表所属分组
-      const group = localGroups.value.find(g => g.reports.some(r => r.id === toggleStatusTarget.value!.id));
-      const groupId = group?.id ?? 0;
-      const isEnabling = toggleStatusTarget.value.status !== 'published';
-      updatePanelStatus({
-        id: toggleStatusTarget.value.id,
-        scene_id: getSceneSystemParams().scope_id,
-        group_id: groupId,
-        panel_id: toggleStatusTarget.value.id,
-        name: toggleStatusTarget.value.name,
-        status: isEnabling ? 'published' : 'unpublished',
-      });
-    }
+  // 显示启用/停用确认弹窗（使用 InfoBox）
+  const handleConfirmToggleStatus = (report: Report) => {
+    const isDisabling = report.status === 'published';
+    InfoBox({
+      title: isDisabling ? t('确认停用该报表？') : t('确认启用该报表？'),
+      subTitle: isDisabling
+        ? t('停用后，该报表将从审计报表菜单中隐藏')
+        : t('启用后，该报表将在审计报表菜单中展示'),
+      confirmText: isDisabling ? t('停用') : t('启用'),
+      cancelText: t('取消'),
+      confirmButtonTheme: isDisabling ? 'danger' : 'primary',
+      onConfirm() {
+        const group = localGroups.value.find(g => g.reports.some(r => r.id === report.id));
+        const groupId = group?.id ?? 0;
+        return updatePanelStatus({
+          id: report.id,
+          scene_id: getSceneSystemParams().scope_id,
+          group_id: groupId,
+          panel_id: report.id,
+          name: report.name,
+          status: isDisabling ? 'unpublished' : 'published',
+        });
+      },
+    });
   };
 
-  // 取消启用/停用
-  const handleCancelToggleStatus = () => {
-    toggleStatusDialogVisible.value = false;
-    toggleStatusTarget.value = null;
-  };
-
-  // 显示删除确认弹窗
+  // 显示删除确认弹窗（使用 InfoBox）
   const handleShowDeleteConfirm = (report: Report) => {
-    deleteTarget.value = report;
-    deleteConfirmInput.value = '';
-    deleteDialogVisible.value = true;
-  };
-
-  // 删除 Panel
-  const {
-    run: deletePanel,
-    loading: deleteLoading,
-  } = useRequest(ReportConfigService.deletePanel, {
-    defaultValue: null,
-    onSuccess: () => {
-      messageSuccess(t('删除成功'));
-      deleteDialogVisible.value = false;
-      deleteTarget.value = null;
-      deleteConfirmInput.value = '';
-      emit('deleted'); // 通知父组件刷新列表
-    },
-  });
-
-  // 确认删除
-  const handleConfirmDelete = () => {
-    if (deleteTarget.value && deleteConfirmInput.value === deleteTarget.value.name) {
-      deletePanel({ id: deleteTarget.value.id, scene_id: getSceneSystemParams().scope_id });
-    }
-  };
-
-  // 取消删除
-  const handleCancelDelete = () => {
-    deleteDialogVisible.value = false;
-    deleteTarget.value = null;
-    deleteConfirmInput.value = '';
+    const confirmName = ref('');
+    /* eslint-disable prefer-const -- 赋值在闭包定义之后，必须使用 let */
+    let deleteInfoInstance: any;
+    deleteInfoInstance = InfoBox({
+      /* eslint-enable prefer-const */
+      title: t('确定删除该报告？'),
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: { marginBottom: '16px', fontSize: '14px', color: '#63656e' },
+        }, [
+          t('删除的报告将'),
+          h('span', { style: { color: '#ea3636' } }, t('无法找回')),
+          t('，请谨慎操作！'),
+        ]),
+        h('div', {
+          style: { marginBottom: '8px', fontSize: '14px', color: '#63656e' },
+        }, [
+          t('请输入报表名称 '),
+          h('span', {
+            style: { color: '#3a84ff', cursor: 'pointer' },
+            onClick: () => handleCopyReportName(report.name),
+          }, report.name),
+          t(' 以确认删除'),
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: t('请输入待删除的报表名称'),
+          onInput: (e: any) => {
+            confirmName.value = e.target.value;
+          },
+          style: {
+            width: '100%',
+            height: '32px',
+            padding: '0 10px',
+            fontSize: '14px',
+            border: '1px solid #c4c6cc',
+            borderRadius: '2px',
+            outline: 'none',
+            boxSizing: 'border-box',
+          },
+        }),
+      ]),
+      footerAlign: 'center',
+      footer: () => h('div', { style: { display: 'flex', justifyContent: 'center' } }, [
+        h('button', {
+          class: 'info-box-confirm-btn',
+          style: getConfirmBtnStyle(confirmName.value === report.name),
+          onClick: () => {
+            if (confirmName.value !== report.name) return;
+            deletePanel({ id: report.id, scene_id: getSceneSystemParams().scope_id }).then(() => {
+              messageSuccess(t('删除成功'));
+              deleteInfoInstance?.hide();
+              emit('deleted');
+            });
+          },
+        }, t('删除')),
+        h('button', { style: cancelBtnStyle, onClick: () => deleteInfoInstance?.hide() }, t('取消')),
+      ]),
+      onClose() {
+        confirmName.value = '';
+      },
+    });
   };
 
   // 复制报表名称到剪贴板
-  const handleCopyReportName = () => {
-    if (deleteTarget.value?.name) {
-      navigator.clipboard.writeText(deleteTarget.value.name)
-        .then(() => {
-          messageSuccess(t('复制成功'));
-        })
-        .catch((err) => {
+  const handleCopyReportName = (name?: string) => {
+    if (name) {
+      navigator.clipboard.writeText(name).then(() => {
+        messageSuccess(t('复制成功'));
+      })
+        .catch((err: Error) => {
           console.error('复制失败:', err);
         });
     }
+  };
+
+  // 删除 Panel 接口
+  const { run: deletePanel } = useRequest(ReportConfigService.deletePanel, {
+    defaultValue: null,
+  });
+
+  // 确认按钮禁用态样式
+  const getConfirmBtnStyle = (isMatch: boolean) => ({
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid',
+    outline: 'none',
+    marginRight: '8px',
+    backgroundColor: isMatch ? '#ea3636' : '#fff',
+    borderColor: isMatch ? '#ea3636' : '#dcdee5',
+    color: isMatch ? '#fff' : '#c4c6cc',
+    cursor: isMatch ? 'pointer' : 'not-allowed',
+  });
+
+  const cancelBtnStyle = {
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid #c4c6cc',
+    outline: 'none',
+    marginRight: '0',
+    backgroundColor: '#fff',
+    color: '#63656e',
+    cursor: 'pointer',
   };
 
   // 调用分组排序接口
@@ -942,38 +881,31 @@
     renameGroupFormData.value.name = '';
   };
 
-  // 显示删除分组确认弹窗
+  // 显示删除分组确认弹窗（使用 InfoBox）
   const handleShowDeleteGroupConfirm = (group: ReportGroup) => {
-    deleteGroupTarget.value = group;
-    deleteGroupDialogVisible.value = true;
+    InfoBox({
+      title: t('是否删除该分组？'),
+      subTitle: () => h('div', {}, [
+        t('分组：'),
+        h('span', { style: { fontWeight: 600, color: '#313238' } }, group.name),
+      ]),
+      confirmText: t('删除'),
+      cancelText: t('取消'),
+      footerAlign: 'center',
+      confirmButtonTheme: 'danger',
+      onConfirm() {
+        return deleteGroup({ id: group.id, scene_id: getSceneSystemParams().scope_id }).then(() => {
+          messageSuccess(t('删除成功'));
+          emit('order-updated');
+        });
+      },
+    });
   };
 
   // 删除分组
-  const {
-    run: deleteGroup,
-    loading: deleteGroupLoading,
-  } = useRequest(ReportConfigService.deleteGroup, {
+  const { run: deleteGroup } = useRequest(ReportConfigService.deleteGroup, {
     defaultValue: null,
-    onSuccess: () => {
-      messageSuccess(t('删除成功'));
-      deleteGroupDialogVisible.value = false;
-      deleteGroupTarget.value = null;
-      emit('order-updated'); // 通知父组件刷新列表
-    },
   });
-
-  // 确认删除分组
-  const handleConfirmDeleteGroup = () => {
-    if (deleteGroupTarget.value) {
-      deleteGroup({ id: deleteGroupTarget.value.id, scene_id: getSceneSystemParams().scope_id });
-    }
-  };
-
-  // 取消删除分组
-  const handleCancelDeleteGroup = () => {
-    deleteGroupDialogVisible.value = false;
-    deleteGroupTarget.value = null;
-  };
 
   // 同步 props.groups 到 localGroups
   watch(() => props.groups, (groups) => {
@@ -1408,82 +1340,6 @@
 .disableddel {
   color: #c4c6cc;
   cursor: not-allowed;
-}
-
-/* 删除确认弹窗样式 */
-.delete-dialog-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 50px 0 8px;
-
-  .tip-icon {
-    position: absolute;
-    top: 5px;
-    left: 50%;
-    width: 50px;
-    height: 50px;
-    margin-bottom: 16px;
-    transform: translateX(-50%)
-  }
-
-  .delete-title {
-    margin-bottom: 24px;
-    font-size: 20px;
-    color: #313238;
-  }
-
-  .delete-warning {
-    width: 100%;
-    padding: 12px 16px;
-    margin-bottom: 16px;
-    font-size: 14px;
-    color: #63656e;
-    background: #f5f7fa;
-    border-radius: 2px;
-  }
-
-  .danger-text {
-    font-weight: 600;
-    color: #ea3636;
-  }
-
-  .delete-confirm-tip {
-    width: 100%;
-    margin-bottom: 8px;
-    font-size: 14px;
-    color: #63656e;
-    text-align: left;
-  }
-
-  .report-name {
-    color: #3a84ff;
-    cursor: pointer;
-  }
-
-  .bk-input {
-    width: 100%;
-  }
-}
-
-/* 启用/停用确认弹窗样式 */
-.toggle-status-dialog-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 0;
-  text-align: center;
-
-  .toggle-status-title {
-    margin-bottom: 16px;
-    font-size: 20px;
-    color: #313238;
-  }
-
-  .toggle-status-tip {
-    font-size: 14px;
-    color: #63656e;
-  }
 }
 
 /* 删除分组确认弹窗样式 */
