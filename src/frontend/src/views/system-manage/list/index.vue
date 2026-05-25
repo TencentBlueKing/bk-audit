@@ -457,10 +457,9 @@
   };
 
   const handleCreate = () => {
-    const route = router.resolve({
+    router.push({
       name: 'systemAccess',
     });
-    window.open(route.href, '_blank');
   };
 
   // 判断是否是新建数据

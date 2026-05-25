@@ -97,7 +97,7 @@
     },
     {
       key: 'strategy',
-      label: t('审计策略'),
+      label: t('已启用策略'),
       value: props.sceneData.strategyCount,
       icon: sceneInfo3,
       linkEvent: 'go-strategy' as const,

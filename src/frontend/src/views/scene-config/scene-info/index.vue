@@ -307,20 +307,25 @@
       });
   };
 
-  // 跳转到审计策略列表页（携带 strategy_ids）
+  // 新开标签页跳转到审计策略列表页（带已启用状态筛选，不带策略ID）
   const handleGoStrategy = () => {
-    const strategyIds = sceneInfoData.value.strategy_ids || [];
-    router.push({
+    const routeData = router.resolve({
       name: 'strategyList',
-      query: strategyIds.length ? { strategy_id: strategyIds.join(',') } : {},
+      query: { status: 'running' },
     });
+    window.open(routeData.href, '_blank');
   };
 
-  // 新开标签页跳转到场景风险列表页
+  // 新开标签页跳转到场景风险列表页（带活跃状态筛选）
   const handleGoRisk = () => {
+    // 活跃状态：录入中、待处理、处理中、自动处理审批中、套餐处理中
+    const activeStatuses = ['new', 'await_deal', 'processing', 'for_approve', 'auto_process'];
     const routeData = router.resolve({
       name: 'sceneRiskManageList',
-      query: { scene_id: sceneId.value },
+      query: {
+        scene_id: sceneId.value,
+        status: activeStatuses.join(','),
+      },
     });
     window.open(routeData.href, '_blank');
   };
