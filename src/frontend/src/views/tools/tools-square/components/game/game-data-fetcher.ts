@@ -206,17 +206,13 @@ export const useGameOverviewFetcher = (
   };
 
   // 登录统计（展示最近7天、最近14天、最近1个月三行数据）
-  // 实际传参：one_month_ago_Ymd 传三个月前，one_week_ago_Ymd_dashed 传一个月前，two_week_ago_Ymd_dashed 传两周前
   const fetchOverviewLoginStats = async () => {
     const dp = getDateParams();
     const ctx = getCtx();
-    const now = new Date();
-    const threeMonthAgo = new Date(now);
-    threeMonthAgo.setMonth(threeMonthAgo.getMonth() - 3);
     const res = await executeDataSource('overview_login_stats', {
-      one_month_ago_Ymd: formatYmd(threeMonthAgo),
-      one_week_ago_Ymd_dashed: dp.two_week_ago_Ymd_dashed,
-      two_week_ago_Ymd_dashed: dp.one_month_ago_Ymd_dashed,
+      one_month_ago_Ymd: dp.one_month_ago_Ymd,
+      one_week_ago_Ymd_dashed: dp.one_week_ago_Ymd_dashed,
+      two_week_ago_Ymd_dashed: dp.two_week_ago_Ymd_dashed,
       selected_gameid: ctx.gameid,
       selected_openid: ctx.openid,
     });
