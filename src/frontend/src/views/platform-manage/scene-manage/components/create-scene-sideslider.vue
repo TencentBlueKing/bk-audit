@@ -19,7 +19,6 @@
     :before-close="handleBeforeClose"
     :esc-close="false"
     :is-show="isShow"
-    :show-mask="false"
     :title="isEditMode ? t('编辑场景') : t('新建场景')"
     :width="740"
     @closed="handleClose">

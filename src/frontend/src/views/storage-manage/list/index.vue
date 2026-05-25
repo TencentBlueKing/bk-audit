@@ -37,7 +37,6 @@
       <bk-loading :loading="isLoading">
         <bk-table
           ref="listRef"
-          :border="['outer']"
           :columns="tableColumn"
           :data="data"
           :settings="settings"
