@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from services.web.risk.models import Risk
 from services.web.scene.binding_validation import validate_platform_visibility_payload
 from services.web.scene.constants import (
+    SCENE_RISK_COUNT_DEFAULT_MONTHS,
     ResourceVisibilityType,
     SceneStatus,
     VisibilityScope,
@@ -21,7 +24,7 @@ from services.web.scene.models import (
     SceneDataTable,
     SceneSystem,
 )
-from services.web.strategy_v2.constants import StrategySource
+from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 SCENE_LIST_SORT_FIELDS = ("scene_id", "strategy_count", "risk_count", "updated_at")
@@ -77,6 +80,9 @@ class SceneTableInputSerializer(serializers.Serializer):
 class SceneRelatedStatsMixin:
     """场景关联策略与风险统计"""
 
+    risk_count_default_months = None
+    strategy_count_statuses = None
+
     def _get_scene_related_ids_map(self):
         if hasattr(self, "_scene_related_ids_map"):
             return self._scene_related_ids_map
@@ -123,22 +129,48 @@ class SceneRelatedStatsMixin:
                 .values_list("strategy_id", flat=True)
             )
 
+        strategy_count_ids = valid_strategy_ids
+        if valid_strategy_ids and self.strategy_count_statuses:
+            strategy_count_ids = set(
+                Strategy.objects.filter(
+                    strategy_id__in=valid_strategy_ids,
+                    status__in=self.strategy_count_statuses,
+                ).values_list("strategy_id", flat=True)
+            )
+
         strategy_risk_count_map = {}
         if valid_strategy_ids:
+            risk_queryset = Risk.objects.filter(strategy_id__in=valid_strategy_ids)
+            if self.risk_count_default_months:
+                # 场景详情 risk_count 对齐前端 ListRisk 默认传入的 start_time/end_time：按首次发现时间统计近 6 个月风险。
+                risk_count_end_time = timezone.now()
+                risk_count_start_time = risk_count_end_time - relativedelta(months=self.risk_count_default_months)
+                risk_queryset = risk_queryset.filter(
+                    event_time__gte=risk_count_start_time,
+                    event_time__lt=risk_count_end_time,
+                )
             strategy_risk_count_map = {
                 item["strategy_id"]: item["count"]
-                for item in Risk.objects.filter(strategy_id__in=valid_strategy_ids)
-                .values("strategy_id")
-                .annotate(count=Count("risk_id"))
+                for item in risk_queryset.values("strategy_id").annotate(count=Count("risk_id"))
             }
+
+        scene_risk_count_map = {}
+        for scene_id in scene_ids:
+            scene_strategy_ids = sorted(raw_scene_strategy_ids_map.get(scene_id, set()) & valid_strategy_ids)
+            scene_risk_count_map[scene_id] = sum(
+                strategy_risk_count_map.get(strategy_id, 0) for strategy_id in scene_strategy_ids
+            )
 
         self._scene_related_ids_map = {}
         for scene_id in scene_ids:
             scene_strategy_ids = sorted(raw_scene_strategy_ids_map.get(scene_id, set()) & valid_strategy_ids)
-            scene_risk_count = sum(strategy_risk_count_map.get(strategy_id, 0) for strategy_id in scene_strategy_ids)
+            display_strategy_ids = scene_strategy_ids
+            if self.strategy_count_statuses:
+                display_strategy_ids = sorted(set(scene_strategy_ids) & strategy_count_ids)
             self._scene_related_ids_map[scene_id] = {
-                "strategy_ids": scene_strategy_ids,
-                "risk_count": scene_risk_count,
+                "strategy_ids": display_strategy_ids,
+                "strategy_count": len(display_strategy_ids),
+                "risk_count": scene_risk_count_map.get(scene_id, 0),
             }
         return self._scene_related_ids_map
 
@@ -153,7 +185,7 @@ class SceneRelatedStatsMixin:
     def get_strategy_count(self, obj):
         if hasattr(obj, "strategy_count"):
             return obj.strategy_count or 0
-        return len(self.get_strategy_ids(obj))
+        return self._get_scene_related_ids_map().get(obj.scene_id, {}).get("strategy_count", 0)
 
 
 class SceneListSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
@@ -204,6 +236,9 @@ class SceneSimpleListSerializer(serializers.ModelSerializer):
 
 class SceneDetailSerializer(SceneRelatedStatsMixin, serializers.ModelSerializer):
     """场景详情序列化器"""
+
+    risk_count_default_months = SCENE_RISK_COUNT_DEFAULT_MONTHS
+    strategy_count_statuses = (StrategyStatusChoices.RUNNING,)
 
     systems = SceneSystemSerializer(source="scene_systems", many=True, read_only=True)
     tables = SceneDataTableSerializer(source="scene_tables", many=True, read_only=True)

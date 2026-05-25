@@ -19,6 +19,7 @@ from unittest import mock
 import pytest
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db import IntegrityError, connection
 from django.db.models import Q
@@ -975,7 +976,7 @@ class TestSceneResource(TestCase):
         recent_risk_scene = Scene.objects.create(name="风险数排序近期风险场景")
         historical_strategy = self._create_bound_strategy(historical_risk_scene, "风险数排序历史风险策略")
         recent_strategy = self._create_bound_strategy(recent_risk_scene, "风险数排序近期风险策略")
-        old_time = timezone.now() - timezone.timedelta(days=181)
+        old_time = timezone.now() - relativedelta(months=6, days=1)
         for index in range(2):
             Risk.objects.create(
                 raw_event_id=f"scene-sort-old-risk-{index}",
@@ -1049,7 +1050,11 @@ class TestSceneResource(TestCase):
 
     def test_scene_retrieve_contains_related_strategy_ids_and_risk_count(self):
         """测试场景详情返回关联策略ID和风险数量"""
-        strategy = Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="详情场景策略")
+        strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="详情场景策略",
+            status=StrategyStatusChoices.RUNNING,
+        )
         binding = ResourceBinding.objects.create(
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id=str(strategy.strategy_id),
@@ -1067,16 +1072,22 @@ class TestSceneResource(TestCase):
         self.assertEqual(result["strategy_ids"], [strategy.strategy_id])
         self.assertEqual(result["risk_count"], 1)
 
-    def test_scene_retrieve_risk_count_includes_historical_risks(self):
-        """测试场景详情风险数量统计全量历史风险"""
+    def test_scene_retrieve_risk_count_uses_default_recent_window(self):
+        """测试场景详情风险数量默认仅统计近 6 个月风险"""
         strategy = self._create_bound_strategy(self.scene, "详情风险时间窗口策略")
         Risk.objects.create(
-            raw_event_id="raw-scene-detail-recent",
+            raw_event_id="raw-scene-detail-recent-1",
             strategy=strategy,
             event_time=timezone.now(),
             event_end_time=timezone.now(),
         )
-        old_time = timezone.now() - timezone.timedelta(days=181)
+        Risk.objects.create(
+            raw_event_id="raw-scene-detail-recent-2",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+        old_time = timezone.now() - relativedelta(months=6, days=1)
         Risk.objects.create(
             raw_event_id="raw-scene-detail-old",
             strategy=strategy,
@@ -1088,31 +1099,94 @@ class TestSceneResource(TestCase):
 
         self.assertEqual(result["risk_count"], 2)
 
-    def test_scene_retrieve_strategy_count_matches_scene_strategy_list_scope(self):
-        """测试场景详情策略统计与场景下策略列表默认口径一致"""
-        visible_strategy = self._create_bound_strategy(self.scene, "详情可见策略")
-        another_visible_strategy = self._create_bound_strategy(self.scene, "详情另一个可见策略")
+    def test_get_scene_info_risk_count_uses_default_recent_window(self):
+        """测试场景管理员详情风险数量默认仅统计近 6 个月风险"""
+        strategy = self._create_bound_strategy(self.scene, "管理员详情风险时间窗口策略")
+        Risk.objects.create(
+            raw_event_id="raw-scene-info-recent-1",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+        Risk.objects.create(
+            raw_event_id="raw-scene-info-recent-2",
+            strategy=strategy,
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+        )
+        old_time = timezone.now() - relativedelta(months=6, days=1)
+        Risk.objects.create(
+            raw_event_id="raw-scene-info-old",
+            strategy=strategy,
+            event_time=old_time,
+            event_end_time=old_time,
+        )
+
+        result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(result["risk_count"], 2)
+
+    def test_scene_retrieve_strategy_count_counts_running_strategies(self):
+        """测试场景详情策略数量仅统计运行中策略"""
+        visible_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="详情可见策略",
+            status=StrategyStatusChoices.RUNNING,
+        )
+        self._bind_strategy_to_scene(visible_strategy, self.scene)
+        another_visible_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="详情另一个可见策略",
+            status=StrategyStatusChoices.RUNNING,
+        )
+        self._bind_strategy_to_scene(another_visible_strategy, self.scene)
+        disabled_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="详情停用策略",
+            status=StrategyStatusChoices.DISABLED,
+        )
+        self._bind_strategy_to_scene(disabled_strategy, self.scene)
         system_strategy = Strategy.objects.create(
             namespace=settings.DEFAULT_NAMESPACE,
             strategy_name="详情系统内置策略",
             source=StrategySource.SYSTEM,
+            status=StrategyStatusChoices.RUNNING,
         )
         self._bind_strategy_to_scene(system_strategy, self.scene)
-        other_namespace_strategy = Strategy.objects.create(namespace="other", strategy_name="详情其他命名空间策略")
+        other_namespace_strategy = Strategy.objects.create(
+            namespace="other",
+            strategy_name="详情其他命名空间策略",
+            status=StrategyStatusChoices.RUNNING,
+        )
         self._bind_strategy_to_scene(other_namespace_strategy, self.scene)
 
         detail = self.resource.scene.retrieve_scene({"scene_id": self.scene.scene_id})
-        strategies = self.resource.strategy_v2.list_strategy(
-            namespace=settings.DEFAULT_NAMESPACE, scene_id=self.scene.scene_id
-        )
-        list_strategy_ids = [strategy["strategy_id"] for strategy in strategies]
 
-        self.assertSetEqual(set(detail["strategy_ids"]), set(list_strategy_ids))
         self.assertSetEqual(
             set(detail["strategy_ids"]),
             {visible_strategy.strategy_id, another_visible_strategy.strategy_id},
         )
-        self.assertEqual(detail["strategy_count"], len(list_strategy_ids))
+        self.assertEqual(detail["strategy_count"], 2)
+
+    def test_get_scene_info_strategy_count_counts_running_strategies(self):
+        """测试场景管理员详情策略数量仅统计运行中策略"""
+        running_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="管理员详情运行策略",
+            status=StrategyStatusChoices.RUNNING,
+        )
+        self._bind_strategy_to_scene(running_strategy, self.scene)
+        disabled_strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="管理员详情停用策略",
+            status=StrategyStatusChoices.DISABLED,
+        )
+        self._bind_strategy_to_scene(disabled_strategy, self.scene)
+
+        result = self.resource.scene.get_scene_info({"scene_id": self.scene.scene_id})
+
+        self.assertEqual(result["strategy_ids"], [running_strategy.strategy_id])
+        self.assertEqual(result["strategy_count"], 1)
 
     def test_create_scene_all_systems_without_system_id(self):
         """创建场景选择全系统时允许不传 system_id"""
