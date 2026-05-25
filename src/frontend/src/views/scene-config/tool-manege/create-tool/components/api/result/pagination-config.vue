@@ -16,32 +16,30 @@
 -->
 <template>
   <card-part-vue
-    :is-open="false"
-    :show-content="enablePagination && !isCollapsed"
+    is-open
+    :show-content="!isCollapsed"
     :show-icon="false">
     <template #title>
       <div class="pagination-title-bar">
         <audit-icon
           class="collapse-icon"
-          :class="[
-            { 'is-disabled': !enablePagination },
-            { 'is-collapsed': isCollapsed || !enablePagination },
-          ]"
+          :class="[{ 'is-collapsed': isCollapsed }]"
           type="angle-line-down"
           @click.stop="handleToggleCollapse" />
         <span class="title-text">{{ t('分页设置') }}</span>
-        <bk-switcher
-          v-model="enablePagination"
-          class="title-switch"
-          theme="primary"
-          @change="handleSwitchChange"
-          @click.stop />
       </div>
     </template>
     <template #content>
       <div
         ref="paginationRootRef"
         class="pagination-setting">
+        <div class="enable-pagination-row">
+          <span class="enable-pagination-label">{{ t('启用分页') }}</span>
+          <bk-switcher
+            v-model="enablePagination"
+            theme="primary"
+            @change="handleSwitchChange" />
+        </div>
         <div
           v-if="enablePagination"
           class="pagination-table">
@@ -528,14 +526,9 @@
     if (val && paginationRows.value.length === 0) {
       paginationRows.value.push(createEmptyRow());
     }
-    // 开启时自动展开
-    if (val) {
-      isCollapsed.value = false;
-    }
   };
 
   const handleToggleCollapse = () => {
-    if (!enablePagination.value) return;
     isCollapsed.value = !isCollapsed.value;
   };
 
@@ -808,6 +801,18 @@
   padding-bottom: 10px;
 }
 
+.enable-pagination-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+
+  .enable-pagination-label {
+    margin-right: 12px;
+    font-size: 12px;
+    color: #63656e;
+  }
+}
+
 .pagination-title-bar {
   display: flex;
   align-items: center;
@@ -822,11 +827,6 @@
 
     &.is-collapsed {
       transform: rotate(-90deg);
-    }
-
-    &.is-disabled {
-      color: #c4c6cc;
-      cursor: not-allowed;
     }
   }
 
@@ -843,7 +843,7 @@
 }
 
 .pagination-table {
-  margin-top: 16px;
+  margin-top: 12px;
 
   .pagination-table-content {
     width: 100%;

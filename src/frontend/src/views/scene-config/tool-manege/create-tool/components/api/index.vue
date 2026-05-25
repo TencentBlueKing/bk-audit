@@ -602,16 +602,11 @@
             config[fieldKey] = '';
           }
         });
-        // 编辑模式下进入页面时，根据已存配置决定分页/查询结果设置模块是否回显展示：
-        // - 查询结果设置：编辑态下一般都已设置过，直接回显展示
-        // - 分页设置：仅当之前启用过分页或保存过分页配置时才回显展示
         if (props.isEditMode) {
           resultData.value = data.output_config?.result_schema?.tree_data || '';
-          hasInitResultConfig.value = !!data.output_config?.result_schema?.tree_data;
-          hasInitPagination.value = !!(
-            data.output_config?.enable_pagination
-            || (Array.isArray(data.output_config?.pagination_config) && data.output_config.pagination_config.length > 0)
-          );
+          const hasSchema = !!data.output_config?.result_schema?.tree_data;
+          hasInitResultConfig.value = hasSchema;
+          hasInitPagination.value = hasSchema;
         }
         setTimeout(() => {
           emits('getIsDoneDeBug', false, false, true,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
