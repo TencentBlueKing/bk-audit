@@ -112,7 +112,6 @@
   <!-- 确认操作弹窗（删除/启用/停用） -->
   <confirm-action-dialog
     ref="confirmDialogRef"
-    v-model:is-show="confirmDialogVisible"
     :action-type="confirmActionType"
     :target="confirmTarget"
     @success="handleActionSuccess" />
@@ -232,7 +231,6 @@
   });
 
   // 确认操作弹窗相关（删除/启用/停用）
-  const confirmDialogVisible = ref(false);
   const confirmActionType = ref<ActionType>('delete');
   const confirmTarget = ref<ToolItem | null>(null);
 
@@ -270,8 +268,7 @@
   // 显示删除确认弹窗
   const handleDelete = (row: ToolItem) => {
     confirmTarget.value = row;
-    confirmActionType.value = 'delete';
-    confirmDialogVisible.value = true;
+    confirmDialogRef.value?.showDeleteInfoBox(row);
   };
 
   // 显示启用/停用确认弹窗

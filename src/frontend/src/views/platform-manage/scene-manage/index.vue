@@ -99,101 +99,6 @@
           @request-success="handleRequestSuccess" />
       </div>
 
-      <!-- 删除确认弹窗 -->
-      <bk-dialog
-        v-model:is-show="deleteDialogVisible"
-        dialog-type="confirm"
-        footer-align="center"
-        header-align="center"
-        :quick-close="false"
-        :title="t('')">
-        <div class="confirm-dialog-content">
-          <div class="dialog-title-row">
-            <img
-              class="tip-icon"
-              src="@images/tip-icon.svg">
-            <div class="dialog-title-text">
-              {{ t('确定删除该场景？') }}
-            </div>
-          </div>
-          <div class="warning-message">
-            <span>{{ t('此操作将') }}</span>
-            <span class="warning-text">{{ t(' 永久删除该场景及其所有关联配置（策略、规则、通知组等）') }}</span>
-            <span>{{ t('，不可恢复，请谨慎操作！') }}</span>
-          </div>
-          <div class="confirm-input-label">
-            {{ t('请输入场景名称「') }}
-            <span
-              v-bk-tooltips="t('点击复制')"
-              class="scene-name"
-              @click="handleCopySceneName(currentDeleteScene?.name)">
-              {{ currentDeleteScene?.name }}
-            </span>{{ t('」以确认删除') }}
-          </div>
-          <bk-input
-            v-model="deleteConfirmName"
-            :placeholder="t('请输入待删除的场景名称')" />
-        </div>
-        <template #footer>
-          <bk-button
-            class="mr8"
-            :disabled="deleteConfirmName !== currentDeleteScene?.name"
-            theme="danger"
-            @click="handleConfirmDelete">
-            {{ t('删除') }}
-          </bk-button>
-          <bk-button @click="handleCancelDelete">
-            {{ t('取消') }}
-          </bk-button>
-        </template>
-      </bk-dialog>
-
-      <!-- 停用确认弹窗 -->
-      <bk-dialog
-        v-model:is-show="disableDialogVisible"
-        dialog-type="confirm"
-        footer-align="center"
-        header-align="center"
-        :quick-close="false"
-        :title="t('')">
-        <div class="confirm-dialog-content">
-          <div class="dialog-title-row">
-            <img
-              class="tip-icon"
-              src="@images/tip-icon.svg">
-            <div class="dialog-title-text">
-              {{ t('确定停用该场景？') }}
-            </div>
-          </div>
-          <div class="warning-message">
-            {{ t('停用后，该场景下的所有资源将不可用，已产生的风险数据不受影响，请谨慎操作！') }}
-          </div>
-          <div class="confirm-input-label">
-            {{ t('请输入场景名称「') }}<span
-              v-bk-tooltips="t('点击复制')"
-              class="scene-name copyable"
-              @click="handleCopySceneName(currentDisableScene?.name)">{{
-                currentDisableScene?.name
-              }}</span>{{ t('」以确认停用') }}
-          </div>
-          <bk-input
-            v-model="disableConfirmName"
-            :placeholder="t('请输入场景名称')" />
-        </div>
-        <template #footer>
-          <bk-button
-            class="mr8"
-            :disabled="disableConfirmName !== currentDisableScene?.name"
-            theme="danger"
-            @click="handleConfirmDisable">
-            {{ t('停用') }}
-          </bk-button>
-          <bk-button @click="handleCancelDisable">
-            {{ t('取消') }}
-          </bk-button>
-        </template>
-      </bk-dialog>
-
       <!-- 新建/编辑场景侧边栏 -->
       <create-scene-sideslider
         v-model:is-show="createSceneVisible"
@@ -214,12 +119,14 @@
 
 <script setup lang='tsx'>
   import {
+    h,
     onMounted,
     reactive,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
+  import { InfoBox } from 'bkui-vue';
 
   import SceneManageService from '@service/scene-manage';
   import MetaManageService from '@service/meta-manage';
@@ -317,16 +224,6 @@
   };
   // 表格引用
   const listRef = ref<InstanceType<typeof TdesignList>>();
-
-  // 删除弹窗相关
-  const deleteDialogVisible = ref(false);
-  const deleteConfirmName = ref('');
-  const currentDeleteScene = ref<SceneModel | null>(null);
-
-  // 停用弹窗相关
-  const disableDialogVisible = ref(false);
-  const disableConfirmName = ref('');
-  const currentDisableScene = ref<SceneModel | null>(null);
 
   // 新建/编辑场景侧边栏
   const createSceneVisible = ref(false);
@@ -734,10 +631,79 @@
   // 切换状态
   const handleToggleStatus = (row: SceneModel) => {
     if (row.status === 'enabled') {
-      // 停用需要二次确认
-      currentDisableScene.value = row;
-      disableConfirmName.value = '';
-      disableDialogVisible.value = true;
+      // 停用需要二次确认 - 使用 InfoBox
+      const confirmName = ref('');
+      let disableInfoInstance: any;
+      // eslint-disable-next-line prefer-const -- 赋值在闭包定义之后，必须使用 let
+      disableInfoInstance = InfoBox({
+        type: 'warning',
+        title: t('确定停用该场景？'),
+        subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+          h('div', {
+            style: {
+              padding: '12px 16px',
+              marginBottom: '16px',
+              lineHeight: '22px',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '2px',
+              fontSize: '14px',
+              color: '#63656e',
+            },
+          }, t('停用后，该场景下的所有资源将不可用，已产生的风险数据不受影响，请谨慎操作！')),
+          h('div', {
+            style: { marginBottom: '8px', fontSize: '14px', color: '#63656e' },
+          }, [
+            t('请输入场景名称「'),
+            h('span', {
+              style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+              onClick: () => handleCopySceneName(row.name),
+            }, row.name),
+            t('」以确认停用'),
+          ]),
+          h('input', {
+            value: confirmName.value,
+            placeholder: t('请输入场景名称'),
+            onInput: (e: any) => {
+              confirmName.value = e.target.value;
+            },
+            style: {
+              width: '100%',
+              height: '32px',
+              padding: '0 10px',
+              fontSize: '14px',
+              border: '1px solid #c4c6cc',
+              borderRadius: '2px',
+              outline: 'none',
+              boxSizing: 'border-box',
+            },
+          }),
+        ]),
+        headerAlign: 'center',
+        contentAlign: 'center',
+        footerAlign: 'center',
+        footer: () => h('div', { style: { display: 'flex', justifyContent: 'center' } }, [
+          h('button', {
+            class: 'info-box-confirm-btn',
+            style: getConfirmBtnStyle(confirmName.value === row.name, true),
+            onClick: () => {
+              if (confirmName.value !== row.name) return;
+              SceneManageService.disableScene(row.scene_id).then(() => {
+                messageSuccess(t('停用成功'));
+                disableInfoInstance?.hide();
+                listRef.value?.fetchData({});
+                sceneDetailRef.value?.refresh();
+              });
+            },
+          }, t('停用')),
+          h('button', {
+            style: cancelBtnStyle,
+            onClick: () => disableInfoInstance?.hide(),
+          }, t('取消')),
+        ]),
+        onClose() {
+          confirmName.value = '';
+        },
+      });
     } else {
       // 启用直接执行
       SceneManageService.enableScene(row.scene_id).then(() => {
@@ -748,56 +714,83 @@
     }
   };
 
-  // 确认停用
-  const handleConfirmDisable = () => {
-    if (!currentDisableScene.value) return;
-    if (disableConfirmName.value !== currentDisableScene.value.name) {
-      return;
-    }
-    SceneManageService.disableScene(currentDisableScene.value.scene_id).then(() => {
-      messageSuccess(t('停用成功'));
-      disableDialogVisible.value = false;
-      disableConfirmName.value = '';
-      currentDisableScene.value = null;
-      listRef.value?.fetchData({});
-      sceneDetailRef.value?.refresh();
-    });
-  };
-
-  // 取消停用
-  const handleCancelDisable = () => {
-    disableDialogVisible.value = false;
-    disableConfirmName.value = '';
-    currentDisableScene.value = null;
-  };
-
   // 删除场景
   const handleDeleteScene = (row: SceneModel) => {
-    currentDeleteScene.value = row;
-    deleteConfirmName.value = '';
-    deleteDialogVisible.value = true;
-  };
-
-  // 确认删除
-  const handleConfirmDelete = () => {
-    if (!currentDeleteScene.value) return;
-    if (deleteConfirmName.value !== currentDeleteScene.value.name) {
-      return;
-    }
-    SceneManageService.deleteScene(currentDeleteScene.value.scene_id).then(() => {
-      messageSuccess(t('删除成功'));
-      deleteDialogVisible.value = false;
-      deleteConfirmName.value = '';
-      currentDeleteScene.value = null;
-      listRef.value?.fetchData({});
+    const confirmName = ref('');
+    let deleteInfoInstance: any;
+    // eslint-disable-next-line prefer-const -- 赋值在闭包定义之后，必须使用 let
+    deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: t('确定删除该场景？'),
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            lineHeight: '22px',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          h('span', {}, t('此操作将')),
+          h('span', { style: { color: '#e71818' } }, t(' 永久删除该场景及其所有关联配置（策略、规则、通知组等）')),
+          h('span', {}, t('，不可恢复，请谨慎操作！')),
+        ]),
+        h('div', {
+          style: { marginBottom: '8px', fontSize: '14px', color: '#63656e' },
+        }, [
+          t('请输入场景名称「'),
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: () => handleCopySceneName(row.name),
+          }, row.name),
+          t('」以确认删除'),
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: t('请输入待删除的场景名称'),
+          onInput: (e: any) => {
+            confirmName.value = e.target.value;
+          },
+          style: {
+            width: '100%',
+            height: '32px',
+            padding: '0 10px',
+            fontSize: '14px',
+            border: '1px solid #c4c6cc',
+            borderRadius: '2px',
+            outline: 'none',
+            boxSizing: 'border-box',
+          },
+        }),
+      ]),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      footer: () => h('div', { style: { display: 'flex', justifyContent: 'center' } }, [
+        h('button', {
+          class: 'info-box-confirm-btn',
+          style: getConfirmBtnStyle(confirmName.value === row.name, true),
+          onClick: () => {
+            if (confirmName.value !== row.name) return;
+            SceneManageService.deleteScene(row.scene_id).then(() => {
+              messageSuccess(t('删除成功'));
+              deleteInfoInstance?.hide();
+              listRef.value?.fetchData({});
+            });
+          },
+        }, t('删除')),
+        h('button', {
+          style: cancelBtnStyle,
+          onClick: () => deleteInfoInstance?.hide(),
+        }, t('取消')),
+      ]),
+      onClose() {
+        confirmName.value = '';
+      },
     });
-  };
-
-  // 取消删除
-  const handleCancelDelete = () => {
-    deleteDialogVisible.value = false;
-    deleteConfirmName.value = '';
-    currentDeleteScene.value = null;
   };
 
   // 复制场景名称到剪贴板
@@ -806,6 +799,36 @@
     navigator.clipboard.writeText(name).then(() => {
       messageSuccess(t('复制成功'));
     });
+  };
+
+  // 确认按钮样式（根据输入是否匹配切换禁用态）
+  const getConfirmBtnStyle = (isMatch: boolean, isDanger = true) => ({
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid',
+    outline: 'none',
+    marginRight: '8px',
+    backgroundColor: isMatch ? (isDanger ? '#ea3636' : '#3a84ff') : '#fff',
+    borderColor: isMatch ? (isDanger ? '#ea3636' : '#3a84ff') : '#dcdee5',
+    color: isMatch ? '#fff' : '#c4c6cc',
+    cursor: isMatch ? 'pointer' : 'not-allowed',
+  });
+
+  const cancelBtnStyle = {
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid #c4c6cc',
+    outline: 'none',
+    marginRight: '0',
+    backgroundColor: '#fff',
+    color: '#63656e',
+    cursor: 'pointer',
   };
 
   onMounted(() => {
@@ -946,63 +969,6 @@
   }
 }
 
-/* 确认弹窗内容 */
-.confirm-dialog-content {
-  padding: 0 24px;
-
-  .dialog-title-row {
-    display: flex;
-    align-items: center;
-  }
-
-  .tip-icon {
-    position: absolute;
-    top: 15px;
-    left: 50%;
-    width: 50px;
-    height: 50px;
-    margin-bottom: 16px;
-    transform: translateX(-50%)
-  }
-
-  .dialog-title-text {
-    width: 100%;
-    margin-top: 65px;
-    margin-bottom: 16px;
-    font-size: 20px;
-    font-weight: 400;
-    color: #313238;
-    text-align: center;
-  }
-
-  .warning-message {
-    padding: 12px 16px;
-    margin-bottom: 16px;
-    line-height: 22px;
-    background-color: #f5f7fa;
-    border-radius: 2px;
-
-    .warning-text {
-      color: #e71818;
-    }
-  }
-
-  .disable-warning {
-    color: #63656e;
-  }
-
-  .confirm-input-label {
-    margin-bottom: 8px;
-    font-size: 14px;
-    color: #63656e;
-
-    .scene-name {
-      font-weight: 600;
-      color: #313238;
-      cursor: pointer;
-    }
-  }
-}
 </style>
 
 <style lang="postcss">
