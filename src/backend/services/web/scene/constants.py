@@ -97,3 +97,15 @@ DEFAULT_SCENE_NAME = "system_default"
 
 # 场景ID自增起始值
 SCENE_ID_START = 100001
+
+# 场景详情 risk_count 对齐前端 ListRisk 默认传入的首次发现时间范围：近 6 个自然月。
+SCENE_RISK_COUNT_DEFAULT_MONTHS = 6
+
+# 场景详情 risk_count 统计活跃风险，状态口径与风险列表默认活跃筛选保持一致。
+SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES = (
+    "new",
+    "await_deal",
+    "processing",
+    "for_approve",
+    "auto_process",
+)

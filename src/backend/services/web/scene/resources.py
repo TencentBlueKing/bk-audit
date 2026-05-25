@@ -48,6 +48,7 @@ from services.web.scene.models import (
 from services.web.scene.serializers import (
     CreateSceneSerializer,
     MyRolePermissionSerializer,
+    SceneDetailRequestSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
     SceneInfoUpdateSerializer,
@@ -130,6 +131,24 @@ class SceneResource(AuditMixinResource, abc.ABC):
 
         if update_fields:
             scene.save(update_fields=update_fields)
+
+
+class SceneDetailResponseContextMixin:
+    """场景详情响应序列化上下文"""
+
+    def _set_scene_detail_serializer_context(self, validated_request_data):
+        self.scene_detail_serializer_context = {
+            "risk_count_start_time": validated_request_data.get("start_time"),
+            "risk_count_end_time": validated_request_data.get("end_time"),
+        }
+
+    def validate_response_data(self, response_data):
+        response_serializer = self.ResponseSerializer(
+            response_data,
+            context=getattr(self, "scene_detail_serializer_context", {}),
+        )
+        self._response_serializer = response_serializer
+        return response_serializer.data
 
 
 # ==================== 场景管理 ====================
@@ -461,13 +480,15 @@ class CreateScene(SceneResource):
             SceneReportGroupItem.objects.bulk_create(to_create, ignore_conflicts=True)
 
 
-class RetrieveScene(SceneResource):
+class RetrieveScene(SceneDetailResponseContextMixin, SceneResource):
     """场景详情"""
 
     name = gettext_lazy("场景详情")
+    RequestSerializer = SceneDetailRequestSerializer
     ResponseSerializer = SceneDetailSerializer
 
     def perform_request(self, validated_request_data):
+        self._set_scene_detail_serializer_context(validated_request_data)
         scene_id = validated_request_data["scene_id"]
         try:
             scene = Scene.objects.get(scene_id=scene_id)
@@ -600,13 +621,15 @@ class EnableScene(SceneResource):
         return scene
 
 
-class GetSceneInfo(SceneResource):
+class GetSceneInfo(SceneDetailResponseContextMixin, SceneResource):
     """场景信息（场景管理员可查看）"""
 
     name = gettext_lazy("获取场景信息")
+    RequestSerializer = SceneDetailRequestSerializer
     ResponseSerializer = SceneDetailSerializer
 
     def perform_request(self, validated_request_data):
+        self._set_scene_detail_serializer_context(validated_request_data)
         scene_id = validated_request_data["scene_id"]
         try:
             scene = Scene.objects.get(scene_id=scene_id)
