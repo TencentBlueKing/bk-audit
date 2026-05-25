@@ -81,7 +81,8 @@
             <div class="detail-group">
               <span class="detail-label">{{ t('在职状态') }}：</span>
               <bk-tag
-                :theme="userInfo.status === '在职' ? 'success' : 'danger'">
+                :class="{ 'status-resigned': userInfo.status !== '在职' }"
+                :theme="userInfo.status === '在职' ? 'success' : ''">
                 {{ userInfo.status }}
               </bk-tag>
             </div>
@@ -327,6 +328,10 @@
       color: #3a84ff;
     }
   }
+}
+
+:deep(.status-resigned) {
+  color: #c4c6cc !important;
 }
 
 .user-info-right {
