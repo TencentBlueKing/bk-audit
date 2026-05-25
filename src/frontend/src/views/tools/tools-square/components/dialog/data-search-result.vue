@@ -15,21 +15,21 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-table
-    :border="['row','outer','col']"
-    :columns="columns"
-    :data="tableData"
-    header-align="left"
-    :max-height="maxHeight"
-    :pagination="pagination"
-    :remote-pagination="remotePagination"
-    show-overflow-tooltip
-    @page-limit-change="handlePageLimitChange"
-    @page-value-change="handlePageValueChange" />
+  <div class="data-search-result-wrapper">
+    <primary-table
+      bordered
+      :columns="columns"
+      :data="tableData"
+      hover
+      :max-height="tableMaxHeight"
+      :pagination="paginationConfig"
+      show-header
+      @page-change="handlePageValueChange"
+      @page-size-change="handlePageLimitChange" />
+  </div>
 </template>
 
 <script setup lang="tsx">
-  import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -38,14 +38,9 @@
   import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import useRequest from '@hooks/use-request';
+  import { PrimaryTable } from '@blueking/tdesign-ui';
 
-  interface Pagination {
-    current: number;
-    limit: number;
-    count: number;
-    limitList?: number[];
-  }
+  import useRequest from '@hooks/use-request';
 
   interface SearchItem {
     value: any;
@@ -60,7 +55,6 @@
     uid: string;
     toolDetails: ToolDetailModel;
     maxHeight?: string | number;
-    remotePagination?: boolean;
     searchList: SearchItem[];
     getToolNameAndType: (uid: string) => { name: string, type: string };
     riskToolParams?: Record<string, any>;
@@ -72,12 +66,29 @@
 
   const props = withDefaults(defineProps<Props>(), {
     maxHeight: '300px',
-    remotePagination: false,
     riskToolParams: () => ({}),
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
-  const pagination = ref<Pagination>({
+
+  // 表格实际最大高度 = 总高度 - 分页区域高度(约56px)
+  const tableMaxHeight = computed(() => {
+    const h = typeof props.maxHeight === 'number' ? props.maxHeight : parseInt(String(props.maxHeight), 10);
+    return `${Math.max(h - 56, 100)}px`;
+  });
+
+  // TDesign 分页配置
+  const paginationConfig = computed(() => ({
+    current: pagination.value.current,
+    pageSize: pagination.value.limit,
+    total: pagination.value.count,
+    pageSizeOptions: pagination.value.limitList,
+    showJumper: false,
+    showPageSize: true,
+    showPageNumber: true,
+  }));
+
+  const pagination = ref({
     count: 0,
     limit: 10,
     current: 1,
@@ -152,9 +163,11 @@
     return [];
   });
 
-  // 创建 columns
-  const columns = computed<Column[]>(() => outputFields.value.map((item): Column => ({
-    label: () => (
+  // 创建 columns（TDesign 格式：colKey / title / cell）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns = computed<any[]>(() => outputFields.value.map(item => ({
+    colKey: item.raw_name,
+    title: () => (
       <span
         class={item.description ? 'tips' : ''}
         v-bk-tooltips={{
@@ -164,16 +177,18 @@
         {item.display_name || item.raw_name}
       </span>
     ),
-    field: item.raw_name,
     width: 200,
     minWidth: 100,
-    resizable: true,
-    showOverflowTooltip: true,
-    render: ({ data }: { data?: Record<any, any> }) => {
-      if (!data) {
+    ellipsis: true,
+    cell: (_h: any, { row }: any) => {
+      if (!row) {
         return '--';
       }
-      const rawVal = data[item.raw_name];
+      const rawVal = row[item.raw_name];
+      // 空值直接返回
+      if (rawVal === undefined || rawVal === null || rawVal === '') {
+        return '--';
+      }
       // 如果有enum映射，优先用映射的name
       const mappings = item.enum_mappings?.mappings;
       const mapped = Array.isArray(mappings) && mappings.length
@@ -244,7 +259,7 @@
                 class={{ tips: mapped }}
                 onClick={(e: any) => {
                   e.stopPropagation(); // 阻止事件冒泡
-                  handleFieldDownClick(item, data);
+                  handleFieldDownClick(item, row);
                 }}>
                 {display}
               </span>
@@ -264,7 +279,7 @@
                           text
                           onClick={(e: any) => {
                             e.stopPropagation(); // 阻止事件冒泡
-                            handleFieldDownClick(item, data, config.tool.uid);
+                            handleFieldDownClick(item, row, config.tool.uid);
                           }}>
                           {t('去查看')}
                           <audit-icon
@@ -286,7 +301,7 @@
               }}
               onClick={(e: any) => {
                 e.stopPropagation(); // 阻止事件冒泡
-                handleFieldDownClick(item, data);
+                handleFieldDownClick(item, row);
               }}>
                 {item.drill_config.length}
               </span>
@@ -294,7 +309,8 @@
           </div>
       );
     },
-  }))) as unknown as Column[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  })) as any);
 
   const handleFieldDownClick = (item: OutputFields, data: Record<any, any>, uid?: string) => {
     emit('handleFieldDownClick', item, data, uid);
@@ -306,40 +322,29 @@
     executeTool();
   };
 
-  const handlePageValueChange = (val: number) => {
-    pagination.value.current = val;
+  const handlePageValueChange = (pageInfo: any) => {
+    pagination.value.current = pageInfo.current;
     executeTool();
   };
 </script>
 <style lang="postcss" scoped>
+.data-search-result-wrapper {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  :deep(.t-table--scroll-horizontal) {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
 .tips {
   text-decoration: underline;
   text-decoration-style: dashed;
   text-decoration-color: #c4c6cc;
   text-underline-offset: 5px;
   cursor: pointer;
-}
-
-/* 修复 resizable 列调整后蓝色竖线残留问题 */
-:deep(.bk-table) {
-  .col-resize-drag {
-    background-color: transparent !important;
-
-    &::after {
-      display: none !important;
-    }
-  }
-
-  /* 隐藏固定列的阴影线（如果有） */
-  .bk-fixed-right-shadow,
-  .bk-fixed-left-shadow {
-    display: none !important;
-  }
-
-  /* 确保列边框颜色一致 */
-  .bk-table-body-wrapper td,
-  .bk-table-head-wrapper th {
-    border-right: 1px solid #dcdee5 !important;
-  }
 }
 </style>
