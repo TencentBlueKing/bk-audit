@@ -138,6 +138,7 @@
               </div>
             </div>
             <bk-table
+              :border="['none']"
               :columns="gameColumns"
               :data="paginatedGameList"
               :pagination="frontendPagination"
