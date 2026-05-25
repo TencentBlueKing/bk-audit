@@ -163,15 +163,17 @@
                 placement="right"
                 style="display: inline-block;max-width: 200px; vertical-align: middle;"
                 theme="dark" />
+              <!-- 已收藏：选中或hover时都显示实心星 -->
               <img
                 v-if="!collapsed && child.favorite_created_at"
                 v-show="hoveredItemId === child.id || child.id === route.params.id"
                 class="side-pentagram-fill"
                 src="@images/pentagram-fill.svg"
                 @click.stop="handleToggleFavorite(child, false)">
+              <!-- 未收藏：仅hover时显示空心星，选中时默认不展示 -->
               <img
                 v-else-if="!collapsed"
-                v-show="hoveredItemId === child.id || child.id === route.params.id"
+                v-show="hoveredItemId === child.id && !(child.id === route.params.id)"
                 class="side-pentagram"
                 src="@images/pentagram.svg"
                 @click.stop="handleToggleFavorite(child, true)">
@@ -840,6 +842,12 @@
 
   /* 其他分组 - 激活/悬停背景色 */
   :deep(.audit-menu-item.menu-item-with-favorite.active) {
+    color: #fff;
+    background: #3a84ff;
+  }
+
+  /* 选中状态hover时保持蓝色背景不变 */
+  :deep(.audit-menu-item.menu-item-with-favorite.active:hover) {
     color: #fff;
     background: #3a84ff;
   }
