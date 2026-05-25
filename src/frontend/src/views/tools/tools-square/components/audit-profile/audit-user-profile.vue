@@ -35,11 +35,11 @@
 
     <template v-else-if="hasQueried || isQuerying || gameListLoading || userInfoLoading">
       <bk-loading
-        v-if="isQuerying || userInfoLoading || !isUserInfoEmpty"
+        v-if="isQuerying || userInfoLoading || gameListLoading || !isUserInfoEmpty"
         class="user-info-loading-wrapper"
-        :loading="isQuerying || userInfoLoading">
+        :loading="isQuerying || userInfoLoading || gameListLoading">
         <div
-          v-if="isQuerying || userInfoLoading"
+          v-if="isQuerying || userInfoLoading || gameListLoading"
           class="user-info-loading-placeholder" />
         <profile-user-info
           v-else
@@ -55,9 +55,9 @@
       <bk-loading
         v-if="!hideGameList"
         class="game-list-loading-wrapper"
-        :loading="isQuerying || gameListLoading">
+        :loading="isQuerying || userInfoLoading || gameListLoading">
         <div
-          v-if="isQuerying || gameListLoading"
+          v-if="isQuerying || userInfoLoading || gameListLoading"
           class="game-list-loading-placeholder" />
         <template v-else>
           <!-- 游戏列表为空 -->
@@ -955,21 +955,28 @@
 /* 用户信息 loading 容器 */
 .user-info-loading-wrapper {
   min-height: 120px;
+  margin-top: 12px;
+  background: #fff;
 }
 
 /* 用户信息 loading 占位 */
 .user-info-loading-placeholder {
   height: 120px;
+  padding: 16px 24px 22px;
+  background: #fff;
 }
 
 /* 游戏列表 loading 容器 */
 .game-list-loading-wrapper {
   min-height: 200px;
+  background: #fff;
 }
 
 /* 游戏列表 loading 占位 */
 .game-list-loading-placeholder {
   height: 200px;
+  padding: 16px 24px 22px;
+  background: #fff;
 }
 
 /* 游戏列表为空 */
