@@ -32,6 +32,7 @@ export interface ChartConfig {
   data: Array<{ name: string; value: number }>; // 饼图数据
   total: number;                                // 总数
   centerLabel: string;                          // 中心文字
+  tooltipNameMap?: Record<string, string>;      // 图例名称 → hover 展示名称 映射（如 UUID → 机型(UUID)）
 }
 
 /**
@@ -103,13 +104,15 @@ export const useGameChartBuilders = () => {
       }
     });
 
-    // 登录设备：将 UUID 转换为"机型(UUID)"格式，按数量逆序排序
+    // 登录设备：name 保持 UUID，hover 名称映射单独维护，按数量逆序排序
     const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE, CHART_FIELDS.LOGIN_TOTAL)
-      .map(item => ({
-        name: deviceModelMap[item.name] ? `${deviceModelMap[item.name]}(${item.name})` : item.name,
-        value: item.value,
-      }))
       .sort((a, b) => b.value - a.value);
+    const deviceTooltipNameMap: Record<string, string> = {};
+    deviceData.forEach((item) => {
+      if (deviceModelMap[item.name]) {
+        deviceTooltipNameMap[item.name] = `${deviceModelMap[item.name]}(${item.name})`;
+      }
+    });
 
     // 登录地点：按数量逆序排序
     const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION, CHART_FIELDS.LOGIN_TOTAL)
@@ -133,7 +136,15 @@ export const useGameChartBuilders = () => {
     const locationTotal = locationData.reduce((s, d) => s + d.value, 0);
     const timeTotal = timeData.reduce((s, d) => s + d.value, 0);
     const charts: ChartConfig[] = [];
-    if (deviceData.length > 0) charts.push({ title: t('登录设备分析'), data: deviceData, total: deviceTotal, centerLabel: t('登录总数') });
+    if (deviceData.length > 0) {
+      charts.push({
+        title: t('登录设备分析'),
+        data: deviceData,
+        total: deviceTotal,
+        centerLabel: t('登录总数'),
+        tooltipNameMap: deviceTooltipNameMap,
+      });
+    }
     if (locationData.length > 0) charts.push({ title: t('登录地点分布'), data: locationData, total: locationTotal, centerLabel: t('登录总数') });
     if (timeTotal > 0) charts.push({ title: t('登录时段分布'), data: timeData, total: timeTotal, centerLabel: t('登录总数') });
     return charts.length > 0 ? [charts] : [];
