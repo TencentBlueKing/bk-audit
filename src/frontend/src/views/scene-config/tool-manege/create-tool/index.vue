@@ -391,39 +391,28 @@
       service(data)
         .then((res: any) => {
           isFailed.value = false;
-          const navigateBack = () => {
-            window.changeConfirm = false;
-            router.push({
-              name: backRouteName,
-              query: {
-                scene_id: route.query?.scene_id,
-                scope_id: route.query?.scope_id,
-                scope_type: route.query?.scope_type,
-              },
-            });
-          };
-          // 创建/编辑工具成功后默认启用
-          const toolUid = res?.uid || (isEditMode ? route.params.id : '');
-          if (toolUid) {
-            const sceneId = Number(route.query?.scope_id) || 0;
-            ToolManageService.publishPlatformTool({
-              uid: toolUid as string,
-              scene_id: sceneId,
-            }).finally(() => {
-              if (!isEditMode) {
-                // 记录新建的工具 ID，用于列表页绿底高亮（刷新后消失）
-                try {
-                  const raw = sessionStorage.getItem('tool_manage_new_uids');
-                  const uids: string[] = raw ? JSON.parse(raw) : [];
-                  uids.push(toolUid as string);
-                  sessionStorage.setItem('tool_manage_new_uids', JSON.stringify(uids));
-                } catch { /* ignore */ }
-              }
-              navigateBack();
-            });
-          } else {
-            navigateBack();
+          // 新建/编辑成功后不再由前端变更状态，状态以后端默认返回为准
+          if (!isEditMode) {
+            const toolUid = res?.uid || '';
+            if (toolUid) {
+              // 记录新建的工具 ID，用于列表页绿底高亮（刷新后消失）
+              try {
+                const raw = sessionStorage.getItem('tool_manage_new_uids');
+                const uids: string[] = raw ? JSON.parse(raw) : [];
+                uids.push(toolUid as string);
+                sessionStorage.setItem('tool_manage_new_uids', JSON.stringify(uids));
+              } catch { /* ignore */ }
+            }
           }
+          window.changeConfirm = false;
+          router.push({
+            name: backRouteName,
+            query: {
+              scene_id: route.query?.scene_id,
+              scope_id: route.query?.scope_id,
+              scope_type: route.query?.scope_type,
+            },
+          });
         })
         .catch(() => {
           isSuccessful.value = false;
