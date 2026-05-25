@@ -355,12 +355,9 @@
             },
           });
         } else {
-          // 其他来源保持原逻辑
+          // 其他来源返回 systemAccess 页面
           router.push({
-            name: 'nweSystemManage',
-            params: {
-              id: route.params.id || sessionStorage.getItem('systemProjectId'),
-            },
+            name: 'systemAccess',
           });
         }
       },

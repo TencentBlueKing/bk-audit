@@ -859,7 +859,7 @@
   width: 100%;
   height: 100%;
   padding-top: 20px;
-  padding-left: 20px;
+  padding-left: 16px;
   background-color: #f5f7fa;
   flex-direction: column;
 
