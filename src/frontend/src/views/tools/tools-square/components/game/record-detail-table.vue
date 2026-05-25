@@ -421,18 +421,13 @@
   const MULTI_VALUE_OPERATORS = ['in', 'not_in'];
   const isMultiValueOperator = computed(() => MULTI_VALUE_OPERATORS.includes(selectedOperator.value));
 
-  // 可用的搜索字段：
-  // - 单值操作符占用的字段需剔除（同字段同操作符不可重复）
-  // - IN / NOT IN 允许同字段多个 tag（多值），所以不剔除
-  // - 编辑模式下保留当前编辑的字段
+  // 可用的搜索字段：已添加的字段需从可选下拉中剔除（不允许重复添加同一字段）
+  // 编辑模式下保留当前正在编辑的 tag 对应字段
   const availableSearchFields = computed(() => {
     const blockedFieldIds = new Set<string>();
     conditionTags.value.forEach((tag, idx) => {
       if (idx === editingIndex.value) return;
-      // 仅单值操作符占用的字段会从可选列表移除
-      if (!MULTI_VALUE_OPERATORS.includes(tag.operator)) {
-        blockedFieldIds.add(tag.fieldId);
-      }
+      blockedFieldIds.add(tag.fieldId);
     });
     return props.searchFields.filter(f => !blockedFieldIds.has(f.id));
   });
@@ -448,12 +443,36 @@
     return defaultConditions;
   });
 
-  // 当前字段是否有枚举子选项
-  const currentFieldHasChildren = computed(() => !!(currentField.value?.children?.length
-    && currentField.value?.onlyRecommendChildren));
+  // 当前字段是否有枚举子选项（静态 children 或 动态 dynamicChildren 都视为枚举）
+  const currentFieldHasChildren = computed(() => {
+    const f = currentField.value;
+    if (!f?.onlyRecommendChildren) return false;
+    if (Array.isArray(f.children) && f.children.length > 0) return true;
+    return !!f.dynamicChildren;
+  });
 
-  // 当前字段的子选项
-  const currentFieldChildren = computed(() => currentField.value?.children || []);
+  // 当前字段的子选项：
+  // - 静态：直接使用配置的 children
+  // - 动态：根据当前 props.data 中该字段（fieldKey）的非空唯一值生成
+  const currentFieldChildren = computed(() => {
+    const f = currentField.value;
+    if (!f) return [];
+    if (Array.isArray(f.children) && f.children.length > 0) {
+      return f.children;
+    }
+    if (f.dynamicChildren) {
+      const fieldKey = f.fieldKey || f.id;
+      const valueSet = new Set<string>();
+      (props.data || []).forEach((row) => {
+        const v = row?.[fieldKey];
+        if (v !== null && v !== undefined && v !== '') {
+          valueSet.add(String(v));
+        }
+      });
+      return Array.from(valueSet).map(v => ({ id: v, name: v }));
+    }
+    return [];
+  });
 
   // 值输入框 placeholder：多值时提示逗号分隔，单值时提示单值
   const valueInputPlaceholder = computed(() => (
@@ -485,19 +504,29 @@
   }, { immediate: true, deep: true });
 
   // 字段变化时，重置操作符为该字段的默认操作符
+  // 枚举字段（onlyRecommendChildren）优先默认 IN（值为下拉多选）
   const handleFieldChange = () => {
     const operators = currentOperators.value;
+    let nextOp = operators.length > 0 ? operators[0].id : '';
     if (operators.length > 0) {
-      selectedOperator.value = operators[0].id;
+      const isEnum = !!currentField.value?.onlyRecommendChildren;
+      const preferIn = isEnum && operators.some(op => op.id === 'in');
+      nextOp = preferIn ? 'in' : operators[0].id;
+      selectedOperator.value = nextOp;
     }
-    inputValue.value = '';
+    // 枚举多选场景下，bk-select 期望数组；其余场景使用字符串
+    const isEnum = !!currentField.value?.onlyRecommendChildren;
+    const isMulti = MULTI_VALUE_OPERATORS.includes(nextOp);
+    inputValue.value = isEnum && isMulti ? [] : '';
     inputTagValues.value = [];
   };
 
   // 初始化默认操作符
   watch(currentOperators, (ops) => {
     if (ops.length > 0 && !selectedOperator.value) {
-      selectedOperator.value = ops[0].id;
+      const isEnum = !!currentField.value?.onlyRecommendChildren;
+      const preferIn = isEnum && ops.some(op => op.id === 'in');
+      selectedOperator.value = preferIn ? 'in' : ops[0].id;
     }
   }, { immediate: true });
 
@@ -507,16 +536,34 @@
     const wasMulti = MULTI_VALUE_OPERATORS.includes(oldOp);
     const isMulti = MULTI_VALUE_OPERATORS.includes(newOp);
     if (wasMulti === isMulti) return;
+    const isEnum = !!currentField.value?.onlyRecommendChildren
+      && (Boolean(currentField.value?.children?.length) || !!currentField.value?.dynamicChildren);
     if (isMulti) {
-      // 单值 -> 多值：把单值输入按逗号拆为 tag 列表
-      const raw = String(inputValue.value || '').trim();
-      inputTagValues.value = raw
-        ? raw.split(/[,，]/).map((s: string) => s.trim())
-          .filter(Boolean)
-        : [];
-      inputValue.value = '';
+      if (isEnum) {
+        // 枚举单选 -> 枚举多选：inputValue 字符串 -> 数组
+        const v = inputValue.value;
+        if (Array.isArray(v)) {
+          inputValue.value = v;
+        } else {
+          inputValue.value = v ? [String(v)] : [];
+        }
+        inputTagValues.value = [];
+      } else {
+        // 普通文本单值 -> 多值：把单值输入按逗号拆为 tag 列表
+        const raw = String(inputValue.value || '').trim();
+        inputTagValues.value = raw
+          ? raw.split(/[,，]/).map((s: string) => s.trim())
+            .filter(Boolean)
+          : [];
+        inputValue.value = '';
+      }
+    } else if (isEnum) {
+      // 枚举多选 -> 枚举单选：仅保留第一个值
+      const arr = Array.isArray(inputValue.value) ? inputValue.value : [];
+      inputValue.value = arr[0] || '';
+      inputTagValues.value = [];
     } else {
-      // 多值 -> 单值：仅保留第一个值
+      // 普通文本多值 -> 单值：仅保留第一个值
       inputValue.value = inputTagValues.value[0] || '';
       inputTagValues.value = [];
     }
@@ -666,8 +713,8 @@
           .map(s => s.trim())
           .filter(Boolean);
         // 枚举多选使用 inputValue（数组），普通文本使用 inputTagValues
-        const isEnum = !!(currentField.value?.children?.length
-          && currentField.value?.onlyRecommendChildren);
+        const isEnum = !!(currentField.value?.onlyRecommendChildren
+          && (currentField.value?.children?.length || currentField.value?.dynamicChildren));
         if (isEnum) {
           inputValue.value = arr;
           inputTagValues.value = [];
