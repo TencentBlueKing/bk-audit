@@ -54,6 +54,7 @@
                   :center-label="chart.centerLabel"
                   :data="chart.data"
                   :title="chart.title"
+                  :tooltip-name-map="chart.tooltipNameMap"
                   :total="chart.total"
                   @legend-click="handleLegendClick" />
               </div>
@@ -123,6 +124,7 @@
     data: Array<{ name: string; value: number }>;     // 饼图数据
     total: number;                                    // 总数
     centerLabel: string;                              // 中心文字
+    tooltipNameMap?: Record<string, string>;          // 图例名称 → hover 展示名称 映射
   }
 
   interface Props {
