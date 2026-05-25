@@ -352,6 +352,13 @@
     }
   });
 
+  // 监听 defaultGroupId 变化（新建分组成功后自动选中新建的分组）
+  watch(() => props.defaultGroupId, (newId) => {
+    if (props.isShow && newId !== null && !props.editData) {
+      formData.value.groupId = newId;
+    }
+  });
+
   // 监听 chartLists 加载完成，编辑模式下设置选择器的值
   // bkvisionReport 直接存储 uid，无需额外处理
 
