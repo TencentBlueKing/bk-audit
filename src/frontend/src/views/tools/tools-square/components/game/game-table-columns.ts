@@ -57,17 +57,76 @@ export const useGameTableColumns = () => {
   const { t } = useI18n();
 
   // ========== 概览 - 角色总览列 ==========
+  // 数值统计列空数据展示为 0（而非默认的 --）
+  const renderNumberOrZero = (field: string) => ({ data }: { data: Record<string, any> }) => {
+    const v = data?.[field];
+    return v === null || v === undefined || v === '' ? 0 : v;
+  };
   const roleColumns = [
     { label: () => t('角色名称'), field: ROLE_FIELDS.ROLE_NAME },
     { label: () => t('角色ID'), field: ROLE_FIELDS.ROLE_ID },
     { label: () => t('平台'), field: ROLE_FIELDS.PLATFORM },
     { label: () => t('大区'), field: ROLE_FIELDS.ZONE },
-    { label: () => `${t('登录地点数')}/${t('月')}`, field: ROLE_FIELDS.LOGIN_LOCATION_MONTH, sort: true },
-    { label: () => `${t('登录地点数')}/${t('年')}`, field: ROLE_FIELDS.LOGIN_LOCATION_YEAR, sort: true },
-    { label: () => `${t('登录次数')}/${t('月')}`, field: ROLE_FIELDS.LOGIN_COUNT_MONTH, sort: true },
-    { label: () => `${t('登录次数')}/${t('年')}`, field: ROLE_FIELDS.LOGIN_COUNT_YEAR, sort: true },
-    { label: () => `${t('交易对象数')}/${t('月')}`, field: ROLE_FIELDS.TRADE_TARGET_MONTH, sort: true },
-    { label: () => `${t('交易对象数')}/${t('年')}`, field: ROLE_FIELDS.TRADE_TARGET_YEAR, sort: true },
+    {
+      label: () => `${t('登录地点数')}/${t('月')}`,
+      field: ROLE_FIELDS.LOGIN_LOCATION_MONTH,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.LOGIN_LOCATION_MONTH),
+    },
+    {
+      label: () => `${t('登录地点数')}/${t('年')}`,
+      field: ROLE_FIELDS.LOGIN_LOCATION_YEAR,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.LOGIN_LOCATION_YEAR),
+    },
+    {
+      label: () => `${t('登录次数')}/${t('月')}`,
+      field: ROLE_FIELDS.LOGIN_COUNT_MONTH,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.LOGIN_COUNT_MONTH),
+    },
+    {
+      label: () => `${t('登录次数')}/${t('年')}`,
+      field: ROLE_FIELDS.LOGIN_COUNT_YEAR,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.LOGIN_COUNT_YEAR),
+    },
+    {
+      label: () => `${t('交易对象数')}/${t('月')}`,
+      field: ROLE_FIELDS.TRADE_TARGET_MONTH,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.TRADE_TARGET_MONTH),
+    },
+    {
+      label: () => `${t('交易对象数')}/${t('年')}`,
+      field: ROLE_FIELDS.TRADE_TARGET_YEAR,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.TRADE_TARGET_YEAR),
+    },
+    {
+      label: () => `${t('聊天对象')}/${t('月')}`,
+      field: ROLE_FIELDS.CHAT_TARGET_MONTH,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.CHAT_TARGET_MONTH),
+    },
+    {
+      label: () => `${t('聊天对象')}/${t('年')}`,
+      field: ROLE_FIELDS.CHAT_TARGET_YEAR,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.CHAT_TARGET_YEAR),
+    },
+    {
+      label: () => `${t('聊天数量')}/${t('月')}`,
+      field: ROLE_FIELDS.CHAT_COUNT_MONTH,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.CHAT_COUNT_MONTH),
+    },
+    {
+      label: () => `${t('聊天数量')}/${t('年')}`,
+      field: ROLE_FIELDS.CHAT_COUNT_YEAR,
+      sort: true,
+      render: renderNumberOrZero(ROLE_FIELDS.CHAT_COUNT_YEAR),
+    },
   ];
 
   // ========== 概览 - 登录统计列 ==========

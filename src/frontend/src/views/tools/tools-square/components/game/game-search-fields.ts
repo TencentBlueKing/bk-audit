@@ -74,7 +74,7 @@ export const useGameSearchFields = () => {
     { id: 'login_location', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_LOCATION, name: t('登录地点'), placeholder: t('请输入登录地点，多个值之间用逗号分隔'), conditions: textConditions },
     { id: 'zone_id', fieldKey: LOGIN_DETAIL_FIELDS.ZONE, name: t('大区ID'), placeholder: t('请输入大区ID'), conditions: numberConditions },
     { id: 'role_id', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_ID, name: t('角色ID'), placeholder: t('请输入角色ID'), conditions: numberConditions },
-    { id: 'role_name', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_NAME, name: t('角色名'), placeholder: t('请输入角色名'), conditions: textConditions },
+    { id: 'role_name', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_NAME, name: t('角色名称'), placeholder: t('请输入角色名称'), conditions: textConditions },
     { id: 'level', fieldKey: LOGIN_DETAIL_FIELDS.LEVEL, name: t('等级'), placeholder: t('请输入等级'), conditions: numberConditions },
     { id: 'login_device', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_DEVICE, name: t('登录设备'), placeholder: t('请输入登录设备'), conditions: textConditions },
     { id: 'device_model', fieldKey: LOGIN_DETAIL_FIELDS.DEVICE_MODEL, name: t('机型'), placeholder: t('请输入机型'), conditions: textConditions },
