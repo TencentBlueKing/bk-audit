@@ -45,6 +45,7 @@
         v-if="searchFields.length > 0"
         ref="searchBoxRef"
         class="search-condition-box"
+        :class="{ 'is-active': showPopover }"
         @click="handleBoxClick">
         <!-- 已生成的条件 tag -->
         <div
@@ -55,6 +56,7 @@
             placement: 'top',
           }"
           class="condition-tag"
+          :class="{ 'is-editing': editingIndex === index }"
           @click.stop="handleEditTag(index)">
           <span class="tag-field">{{ tag.fieldName }}</span>
           <span class="tag-operator">{{ tag.operatorName }}</span>
@@ -72,13 +74,21 @@
         <!-- 搜索图标 -->
         <audit-icon
           class="search-icon"
+          :class="{ 'has-tags': conditionTags.length > 0 }"
           type="search1" />
+        <!-- 清空图标 -->
+        <audit-icon
+          v-if="conditionTags.length > 0"
+          class="clear-icon"
+          type="close"
+          @click.stop="handleClearAllTags" />
         <!-- 三段式筛选浮层 -->
         <div
           v-if="showPopover"
           class="condition-popover"
           @click.stop>
           <bk-select
+            ref="fieldSelectRef"
             v-model="selectedFieldId"
             class="field-select"
             :clearable="false"
@@ -157,6 +167,7 @@
         @enter="handleSearch" />
     </div>
     <bk-table
+      :border="['none']"
       :columns="processedColumns"
       :data="paginatedData"
       :pagination="simple ? false : localPagination"
@@ -170,7 +181,7 @@
 
 <script setup lang="ts">
   import {
-    computed, h, onBeforeUnmount, onMounted, ref, watch,
+    computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -394,6 +405,7 @@
 
   // 三段式搜索状态
   const searchBoxRef = ref<HTMLElement | null>(null);
+  const fieldSelectRef = ref<{ showPopover?:() => void; hidePopover?: () => void } | null>(null);
   const showPopover = ref(false);
   const selectedFieldId = ref('');
   const selectedOperator = ref('');
@@ -582,14 +594,36 @@
           handleFieldChange();
         }
       }
+      // 用 nextTick + 双 requestAnimationFrame 确保 DOM 已渲染且原始 click 事件已处理完毕，
+      // 再调用字段下拉的 showPopover()，避免与 bk-select 内部 outside-click 监听冲突导致闪屏
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fieldSelectRef.value?.showPopover?.();
+          });
+        });
+      });
     }
   };
 
   // 点击外部关闭浮层
   const handleClickOutside = (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    // 兼容 bk-select / bk-tag-input 等 teleport 到 body 的下拉弹层，
+    // 这些元素不在 searchBoxRef 内，但属于浮层逻辑的一部分，点击它们不应关闭三段式浮层
+    if (
+      target.closest?.('.bk-select-popover')
+      || target.closest?.('.bk-select-content-wrapper')
+      || target.closest?.('.bk-popover2')
+      || target.closest?.('.bk-pop2-content')
+      || target.closest?.('.tippy-box')
+    ) {
+      return;
+    }
     if (
       searchBoxRef.value
-      && !searchBoxRef.value.contains(e.target as Node)
+      && !searchBoxRef.value.contains(target)
     ) {
       showPopover.value = false;
       editingIndex.value = -1;
@@ -695,6 +729,14 @@
     if (editingIndex.value === index) {
       editingIndex.value = -1;
     }
+    emitConditions();
+  };
+
+  // 清空所有 tag
+  const handleClearAllTags = () => {
+    conditionTags.value = [];
+    editingIndex.value = -1;
+    showPopover.value = false;
     emitConditions();
   };
 
@@ -818,6 +860,10 @@
       border-color: #979ba5;
     }
 
+    &.is-active {
+      border-color: #3a84ff;
+    }
+
     .search-placeholder {
       overflow: hidden;
       font-size: 12px;
@@ -834,6 +880,29 @@
       color: #979ba5;
       pointer-events: none;
       transform: translateY(-50%);
+
+      &.has-tags {
+        display: none;
+      }
+    }
+
+    .clear-icon {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      display: none;
+      font-size: 14px;
+      color: #c4c6cc;
+      cursor: pointer;
+      transform: translateY(-50%);
+
+      &:hover {
+        color: #979ba5;
+      }
+    }
+
+    &:hover .clear-icon {
+      display: block;
     }
 
     .condition-tag {
@@ -848,20 +917,33 @@
       background: #f0f1f5;
       border-radius: 2px;
 
-      &:hover {
-        background: #e1ecff;
-      }
-
-      .tag-field {
-        color: #3a84ff;
+      .tag-field,
+      .tag-value {
+        color: #63656e;
       }
 
       .tag-operator {
         color: #ff9c01;
       }
 
-      .tag-value {
-        color: #3a84ff;
+      &:hover {
+        background: #e1ecff;
+
+        .tag-field,
+        .tag-value {
+          color: #3a84ff;
+        }
+
+      }
+
+      &.is-editing {
+        background: #e1ecff;
+
+        .tag-field,
+        .tag-value {
+          color: #3a84ff;
+        }
+
       }
 
       .tag-close {
