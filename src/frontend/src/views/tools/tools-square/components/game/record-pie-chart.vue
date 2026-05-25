@@ -62,11 +62,12 @@
   }
 
   interface Props {
-    title: string;                // 图表标题
-    data: ChartDataItem[];        // 饼图数据
-    total: number;                // 总数
-    centerLabel: string;          // 中心文字，如"登录总数"、"总额（元）"
-    activeName?: string;          // 当前激活项的 name；为空表示全部显示（默认）
+    title: string;                          // 图表标题
+    data: ChartDataItem[];                  // 饼图数据
+    total: number;                          // 总数
+    centerLabel: string;                    // 中心文字，如"登录总数"、"总额（元）"
+    activeName?: string;                    // 当前激活项的 name；为空表示全部显示（默认）
+    tooltipNameMap?: Record<string, string>; // 图例名称 → hover 展示名称 映射
   }
 
   const chartRef = ref<HTMLElement>();
@@ -142,7 +143,10 @@
     return {
       tooltip: {
         trigger: 'item',
-        formatter: '{b}：{c}（{d}%）',
+        formatter: (params: any) => {
+          const name = props.tooltipNameMap?.[params.name] || params.name;
+          return `${name}：${formatNumber(params.value)}（${params.percent}%）`;
+        },
         appendToBody: true,
         position: 'right' as const,
       },
@@ -162,7 +166,7 @@
           fontSize: 12,
           color: '#63656e',
           lineHeight: 18,
-          width: 260,
+          width: 360,
           overflow: 'truncate' as const,
           ellipsis: '...',
         },
@@ -173,7 +177,8 @@
             const item = props.data.find(d => d.name === params.name);
             if (!item) return params.name;
             const percent = props.total > 0 ? ((item.value / props.total) * 100).toFixed(2) : '0';
-            return `${params.name}：${formatNumber(item.value)}（${percent}%）`;
+            const name = props.tooltipNameMap?.[params.name] || params.name;
+            return `${name}：${formatNumber(item.value)}（${percent}%）`;
           },
         },
         formatter: (name: string) => {
