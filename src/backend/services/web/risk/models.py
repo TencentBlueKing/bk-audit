@@ -206,6 +206,9 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ["risk_id", "event_time"],
             ["risk_id", "last_operate_time"],
         ]
+        indexes = [
+            models.Index(fields=["strategy", "display_status", "event_time"], name="idx_risk_strategy_status_time"),
+        ]
 
     # ──── 单一权限 ────
 
