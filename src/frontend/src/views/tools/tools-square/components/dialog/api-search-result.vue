@@ -357,7 +357,7 @@
 
     const enablePagination = !!props.toolDetails?.config?.output_config?.enable_pagination;
     const paginationConfigs = Array.isArray(props.toolDetails?.config?.output_config?.pagination_config)
-      ? props.toolDetails.config.output_config.pagination_config!
+      ? props.toolDetails!.config!.output_config!.pagination_config!
       : [];
     if (!enablePagination || paginationConfigs.length === 0) return result;
 
