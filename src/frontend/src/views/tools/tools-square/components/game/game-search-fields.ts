@@ -34,6 +34,11 @@ export interface SearchFieldItem {
   onlyRecommendChildren?: boolean;
   multiple?: boolean;
   conditions?: Array<{ id: string; name: string }>; // 字段级别操作符配置
+  /**
+   * 动态枚举：children 为空时，搜索组件会根据表格 data 中该字段的去重值自动生成下拉选项
+   * 适用于"需求类型 / 需求来源 / 信息类型"等业务枚举（值由后端返回，不在前端写死）
+   */
+  dynamicChildren?: boolean;
 }
 
 /**
@@ -62,8 +67,10 @@ export const useGameSearchFields = () => {
     { id: 'in', name: 'IN' },
     { id: 'not_in', name: 'NOT IN' },
   ];
-  // 枚举值类型默认操作符：等于（值为下拉选择）
+  // 枚举值类型默认操作符：IN（值为下拉多选）
   const enumConditions = [
+    { id: 'in', name: 'IN' },
+    { id: 'not_in', name: 'NOT IN' },
     { id: 'eq', name: t('等于') },
     { id: 'neq', name: t('不等于') },
   ];
@@ -71,13 +78,13 @@ export const useGameSearchFields = () => {
   // ========== 登录记录搜索字段 ==========
   const loginSearchFields: SearchFieldItem[] = [
     { id: 'login_ip', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_IP, name: t('登录IP'), placeholder: t('请输入登录IP'), conditions: textConditions },
-    { id: 'login_location', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_LOCATION, name: t('登录地点'), placeholder: t('请输入登录地点，多个值之间用逗号分隔'), conditions: textConditions },
+    { id: 'login_location', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_LOCATION, name: t('登录地点'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
     { id: 'zone_id', fieldKey: LOGIN_DETAIL_FIELDS.ZONE, name: t('大区ID'), placeholder: t('请输入大区ID'), conditions: numberConditions },
     { id: 'role_id', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_ID, name: t('角色ID'), placeholder: t('请输入角色ID'), conditions: numberConditions },
     { id: 'role_name', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_NAME, name: t('角色名称'), placeholder: t('请输入角色名称'), conditions: textConditions },
     { id: 'level', fieldKey: LOGIN_DETAIL_FIELDS.LEVEL, name: t('等级'), placeholder: t('请输入等级'), conditions: numberConditions },
-    { id: 'login_device', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_DEVICE, name: t('登录设备'), placeholder: t('请输入登录设备'), conditions: textConditions },
-    { id: 'device_model', fieldKey: LOGIN_DETAIL_FIELDS.DEVICE_MODEL, name: t('机型'), placeholder: t('请输入机型'), conditions: textConditions },
+    { id: 'login_device', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_DEVICE, name: t('登录设备'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
+    { id: 'device_model', fieldKey: LOGIN_DETAIL_FIELDS.DEVICE_MODEL, name: t('机型'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
   ];
 
   // ========== 赠送记录搜索字段 ==========
@@ -117,8 +124,8 @@ export const useGameSearchFields = () => {
     { id: 'issue_count', fieldKey: COIN_DETAIL_FIELDS.ISSUE_COUNT, name: t('发放数量'), placeholder: t('请输入发放数量'), conditions: numberConditions },
     { id: 'issue_amount', fieldKey: COIN_DETAIL_FIELDS.ISSUE_AMOUNT, name: t('发放金额'), placeholder: t('请输入发放金额'), conditions: numberConditions },
     { id: 'operation_reason', fieldKey: COIN_DETAIL_FIELDS.OPERATION_REASON, name: t('操作原因'), placeholder: t('请输入操作原因'), conditions: textConditions },
-    { id: 'demand_type', fieldKey: COIN_DETAIL_FIELDS.DEMAND_TYPE, name: t('需求类型'), placeholder: t('请输入需求类型'), conditions: textConditions },
-    { id: 'demand_source', fieldKey: COIN_DETAIL_FIELDS.DEMAND_SOURCE, name: t('需求来源'), placeholder: t('请输入需求来源'), conditions: textConditions },
+    { id: 'demand_type', fieldKey: COIN_DETAIL_FIELDS.DEMAND_TYPE, name: t('需求类型'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
+    { id: 'demand_source', fieldKey: COIN_DETAIL_FIELDS.DEMAND_SOURCE, name: t('需求来源'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
   ];
 
   // ========== 聊天记录搜索字段 ==========
@@ -130,7 +137,7 @@ export const useGameSearchFields = () => {
     { id: 'zone_id', fieldKey: CHAT_DETAIL_FIELDS.ZONE_ID, name: t('大区'), placeholder: t('请输入大区ID'), conditions: numberConditions },
     { id: 'is_employee', fieldKey: CHAT_DETAIL_FIELDS.IS_EMPLOYEE, name: t('是否员工'), placeholder: t('请选择'), conditions: enumConditions,
       children: [{ id: 'yes', name: t('是') }, { id: 'no', name: t('否') }], onlyRecommendChildren: true },
-    { id: 'message_type', fieldKey: CHAT_DETAIL_FIELDS.MESSAGE_TYPE, name: t('信息类型'), placeholder: t('请输入信息类型'), conditions: textConditions },
+    { id: 'message_type', fieldKey: CHAT_DETAIL_FIELDS.MESSAGE_TYPE, name: t('信息类型'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
   ];
 
   return {
