@@ -151,8 +151,8 @@
             {{ t('我的关注') }}
           </audit-menu-item>
           <audit-menu-item
-            v-if="hasAllRiskPermission &&
-              (userRole.includes('saas_admin') || userRole.includes('scene_admin') || userRole.includes('scene_user'))"
+            v-if="(userRole.includes('saas_admin') ||
+              userRole.includes('scene_admin') || userRole.includes('scene_user'))"
             index="sceneRiskManage">
             <audit-icon
               class="menu-item-icon"
