@@ -1170,7 +1170,7 @@
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 12px;
 
   .section-title {
