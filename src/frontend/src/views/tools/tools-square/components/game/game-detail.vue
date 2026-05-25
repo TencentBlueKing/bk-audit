@@ -531,33 +531,36 @@
       const fieldConfig = searchFields.find(f => f.id === fieldId);
       const dataKey = fieldConfig?.fieldKey || fieldId;
 
-      const cellValue = String(row[dataKey] ?? '');
+      // 取数据值并去除前后空白，避免后端返回数据带空格导致匹配失败
+      const cellValue = String(row[dataKey] ?? '').trim();
       const cellValueLower = cellValue.toLowerCase();
 
-      // 支持逗号分隔多值（中英文逗号均支持）
-      const searchValues = searchValue.split(/[,，]/).map((s: string) => s.trim())
+      // 单值（eq/neq/like/gt/lt/...）：直接整体使用 searchValue
+      // 多值（in/not_in）：按中英文逗号分隔为多个值
+      const singleValue = searchValue.trim();
+      const multiValues = searchValue.split(/[,，]/).map((s: string) => s.trim())
         .filter(Boolean);
 
       switch (operator) {
-      case 'eq': // 等于（多值时任一匹配即可）
-        return searchValues.some((sv: string) => cellValue === sv);
-      case 'neq': // 不等于（多值时全部不等才通过）
-        return searchValues.every((sv: string) => cellValue !== sv);
+      case 'eq': // 等于（单值，忽略大小写）
+        return cellValueLower === singleValue.toLowerCase();
+      case 'neq': // 不等于（单值，忽略大小写）
+        return cellValueLower !== singleValue.toLowerCase();
       case 'gt': // 大于
-        return Number(cellValue) > Number(searchValue);
+        return Number(cellValue) > Number(singleValue);
       case 'lt': // 小于
-        return Number(cellValue) < Number(searchValue);
+        return Number(cellValue) < Number(singleValue);
       case 'gte': // 大于等于
-        return Number(cellValue) >= Number(searchValue);
+        return Number(cellValue) >= Number(singleValue);
       case 'lte': // 小于等于
-        return Number(cellValue) <= Number(searchValue);
-      case 'in': // IN（逗号分隔多值）
-        return searchValues.some((sv: string) => sv.toLowerCase() === cellValueLower);
-      case 'not_in': // NOT IN（逗号分隔多值）
-        return searchValues.every((sv: string) => sv.toLowerCase() !== cellValueLower);
-      case 'like': // 包含（默认，多值时任一包含即可）
+        return Number(cellValue) <= Number(singleValue);
+      case 'in': // IN（多值，命中任一即通过，忽略大小写）
+        return multiValues.some((sv: string) => sv.toLowerCase() === cellValueLower);
+      case 'not_in': // NOT IN（多值，全部不命中才通过，忽略大小写）
+        return multiValues.every((sv: string) => sv.toLowerCase() !== cellValueLower);
+      case 'like': // 包含（单值，子串匹配，忽略大小写）
       default:
-        return searchValues.some((sv: string) => cellValueLower.includes(sv.toLowerCase()));
+        return cellValueLower.includes(singleValue.toLowerCase());
       }
     }));
   };
@@ -569,7 +572,7 @@
       label: t('登录记录'),
       chartRows: loginChartRows.value,
       chartTitle: t('登录分布总览'),
-      searchPlaceholder: t('搜索 登录地点、登录IP、大区ID、角色ID、角色名、等级、登录设备、机型'),
+      searchPlaceholder: t('搜索 登录地点、登录IP、大区ID、角色ID、角色名称、等级、登录设备、机型'),
       searchFields: loginSearchFields,
       table: {
         columns: loginDetailColumns,
