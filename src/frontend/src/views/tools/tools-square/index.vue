@@ -393,21 +393,24 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      const iconMap: Record<number, string> = {
-        0: 'quanbu-xuanzhong',
-        1: 'morentouxiang',
-        2: 'shijian',
-        3: 'wodeguanzhu',
-        4: 'weifenpei',
+      const fixedTagOrder = ['-3', '-5', '-6', '-4', '-2'];
+      const iconMap: Record<string, string> = {
+        '-3': 'quanbu-xuanzhong',
+        '-4': 'morentouxiang',
+        '-5': 'shijian',
+        '-6': 'wodeguanzhu',
+        '-2': 'weifenpei',
       };
-      // 前5项为固定分类，不参与排序；后续为动态标签
-      const fixedTags = data.slice(0, FIXED_TAG_COUNT);
+      // 前5项为固定分类，按目标顺序重排；后续为动态标签
+      const fixedTags = data
+        .slice(0, FIXED_TAG_COUNT)
+        .sort((a: any, b: any) => fixedTagOrder.indexOf(a.tag_id) - fixedTagOrder.indexOf(b.tag_id));
       const dynamicTags = data.slice(FIXED_TAG_COUNT);
       strategyLabelList.value = [
-        ...fixedTags.map((item: any, index: number) => ({
+        ...fixedTags.map((item: any) => ({
           ...item,
           strategy_count: item.tool_count ?? 0,
-          icon: iconMap[index] || 'tag',
+          icon: iconMap[item.tag_id] || 'tag',
         })),
         ...dynamicTags.map((item: any) => ({
           ...item,
