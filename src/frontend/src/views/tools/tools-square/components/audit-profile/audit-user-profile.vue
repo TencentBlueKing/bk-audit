@@ -531,6 +531,11 @@
     platformAccountType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     totalRechargeYuan: row[PROFILE_FIELDS.TOTAL_RECHARGE_YUAN] || row.totalRechargeYuan || 0,
     accountNature: row[PROFILE_FIELDS.ACCOUNT_NATURE] || row.accountNature || '',
+    // 平台账号类型和平台账号（用于游戏详情顶栏动态展示微信/QQ）
+    platType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
+    platAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
+    // 登录天数（31天）（用于传递给游戏详情）
+    loginDays31: row[PROFILE_FIELDS.LOGIN_DAYS_31] || row.loginDays31 || 0,
   });
 
   // 封装：通过 ctx（企业微信）查询用户信息（用于微信/QQ/openid搜索的级联查询）
@@ -653,11 +658,11 @@
     // { label: () => t('累计交易次数'), field: PROFILE_FIELDS.TOTAL_TRADE_COUNT,
     //   sort: true, render: ({ data }: { data: Record<string, any> }) =>
     //   h('span', {}, data[PROFILE_FIELDS.TOTAL_TRADE_COUNT] ?? '--') },
-    // TODO: 后端暂未返回"登录次数/月"与"责任单数"数据，待接口支持后取消注释
-    // { label: () => `${t('登录次数')} / ${t('月')}`,
-    //   field: PROFILE_FIELDS.LOGIN_COUNT_MONTH, sort: true,
-    //   render: ({ data }: { data: Record<string, any> }) =>
-    //   h('span', {}, data[PROFILE_FIELDS.LOGIN_COUNT_MONTH] ?? '--') },
+    // TODO: 后端暂未返回"责任单数"数据，待接口支持后取消注释
+    {
+      label: () => t('登录天数（31天）'),
+      field: PROFILE_FIELDS.LOGIN_DAYS_31, sort: true,
+      render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--') },
     // {
     //   label: () => t('责任单数'),
     //   field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
@@ -832,6 +837,7 @@
     { id: 'coinBalance', name: `${t('代币存量')}(${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
     { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
     { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
+    { id: 'loginDays', name: t('登录天数（31天）'), field: PROFILE_FIELDS.LOGIN_DAYS_31, fallbackField: '' },
     // TODO: 后端暂未返回以下字段，待接口支持后取消注释
     // { id: 'totalGiftCount', name: t('累计赠送次数'),
     //   field: PROFILE_FIELDS.TOTAL_GIFT_COUNT, fallbackField: '' },
