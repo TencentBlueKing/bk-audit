@@ -163,10 +163,9 @@
                 placement="right"
                 style="display: inline-block;max-width: 200px; vertical-align: middle;"
                 theme="dark" />
-              <!-- 已收藏：选中或hover时都显示实心星 -->
+              <!-- 已收藏：常量显示实心星 -->
               <img
-                v-if="!collapsed && child.favorite_created_at"
-                v-show="hoveredItemId === child.id || child.id === route.params.id"
+                v-if="!collapsed && favoriteIdSet.has(String(child.id))"
                 class="side-pentagram-fill"
                 src="@images/pentagram-fill.svg"
                 @click.stop="handleToggleFavorite(child, false)">
@@ -318,6 +317,11 @@
   // 鼠标悬停的收藏菜单项ID
   const hoveredFavoriteItemId = ref<string | null>(null);
 
+  // 收藏状态 ID 集合（独立响应式，确保 UI 即时更新）
+  const favoriteIdSet = computed(() => new Set(localMenuData.value
+    .filter(item => item.favorite_created_at !== null)
+    .map(item => String(item.id))));
+
   // 聚合模式下，获取子菜单项所属的所有场景来源信息（一个场景一行）
   const getItemSource = (childId: string): string => {
     if (sceneChangeItem.value?.type !== 'aggregate') {
@@ -424,7 +428,7 @@
   });
 
   const handleToggleFavorite = (item: MenuDataType, isFavorite: boolean) => {
-    // 乐观更新：立即更新本地状态，高亮即时生效
+    // 乐观更新：只更新 localMenuData，通过 favoriteIdSet computed 派发到所有 UI
     optimisticUpdateTime = Date.now();
     const target = localMenuData.value.find(i => i.id === item.id);
     if (target) {
