@@ -23,7 +23,7 @@
       class="layout-box"
       :config-data="configData">
       <template #header>
-        <router-back v-if="!(route.meta?.isNoBack)" />
+        <router-back v-if="!(route.meta?.isNoBack) || route.params?.isShowSideBar === 'true'" />
         <span>{{ t(pageTitle) }}</span>
         <!-- 聚合模式下显示当前面板所属场景标签 -->
         <span v-if="route.name === 'statementManageDetail'">
@@ -130,11 +130,11 @@
         </bk-dropdown>
       </template>
       <template
-        v-if="route.meta?.nodeSideContent"
+        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true'))"
         #nodeSideContent>
         <router-view />
       </template>
-      <router-view v-if="!route.meta?.nodeSideContent" />
+      <router-view v-if="(!route.meta?.nodeSideContent || (route.params?.isShowSideBar === 'true'))" />
       <version-log v-model:is-show="isShowVersionLog" />
     </layout>
   </bk-config-provider>
