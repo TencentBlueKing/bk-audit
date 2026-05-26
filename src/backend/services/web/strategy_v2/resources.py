@@ -1258,9 +1258,10 @@ class BulkGetRTFields(StrategyV2Base):
         ]
 
 
-class GetRTMeta(StrategyV2Base):
+class GetRTMeta(StrategyV2Base, CacheResource):
     name = gettext_lazy("Get RT Meta")
     RequestSerializer = GetRTMetaRequestSerializer
+    cache_type = CacheTypeItem(key="GetRTMeta", timeout=10 * 60, user_related=False)
 
     def perform_request(self, validated_request_data):
         """获取数据表完整元信息"""
