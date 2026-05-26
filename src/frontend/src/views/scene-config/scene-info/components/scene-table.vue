@@ -45,8 +45,10 @@
         v-if="enableSearch"
         v-model="searchKeyword"
         class="scene-table-search"
+        clearable
         :data="searchData"
         :defaut-using-item="{ inputHtml: t('请选择') }"
+        :get-menu-list="getMenuList"
         :placeholder="searchPlaceholder || t('请输入关键字搜索')"
         unique-select />
     </div>
@@ -86,6 +88,9 @@
   import { useI18n } from 'vue-i18n';
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
+  import MetaManageService from '@service/meta-manage';
+
+  import useRequest from '@hooks/use-request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -134,6 +139,32 @@
 
   const { t } = useI18n();
 
+  // 获取用户列表（用于远程搜索人员字段）
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 需要远程搜索的用户字段 id 列表
+  const userSearchFieldIds = computed(() => props.searchData
+    .filter(item => item.children !== undefined)
+    .map(item => item.id));
+
+  // 远程搜索菜单列表（管理员等人员字段输入时实时搜索）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return props.searchData;
+    if (userSearchFieldIds.value.includes(item.id) && keyword) {
+      const userList = await fetchUserList({ fuzzy_lookups: keyword });
+      return userList.results.map((u: any) => ({
+        id: u.username,
+        name: `${u.username}(${u.display_name})`,
+      }));
+    }
+    return [];
+  };
+
   const currentPage = ref(1);
   const currentLimit = ref(props.limit);
   const searchKeyword = ref<any[]>([]);
@@ -153,15 +184,6 @@
     currentPage.value = 1;
   }, { deep: true });
 
-  // 把单元格值规范为可搜索字符串
-  const stringify = (val: any): string => {
-    if (val === null || val === undefined) return '';
-    if (Array.isArray(val)) return val.map(stringify).join(' ');
-    if (typeof val === 'object') return Object.values(val).map(stringify)
-      .join(' ');
-    return String(val);
-  };
-
   // 搜索过滤
   const filteredData = computed(() => {
     if (!props.enableSearch || !searchKeyword.value || searchKeyword.value.length === 0) {
@@ -171,32 +193,32 @@
     props.searchData.forEach((item) => {
       searchDataMap.set(item.id, item);
     });
-    return props.data.filter(row => searchKeyword.value.every((cond) => {
-      // 按条件取关键字字符串
-      const keywords = (cond.values || []).map((v: any) => v.name || v.id).filter(Boolean);
-      // 没有 values 时，cond.id 本身就是关键字（自由输入）
-      const freeKeyword = (!cond.values || cond.values.length === 0) ? cond.id : '';
-      const matchKeywords = freeKeyword ? [freeKeyword] : keywords;
-      if (matchKeywords.length === 0) return true;
+    return props.data.filter((row) => {
+      // 用 JSON.stringify 将整行序列化为字符串，确保兼容 Vue Proxy 响应式对象
+      // 预计算：避免每个关键字重复序列化
+      const rowJsonStr = JSON.stringify(row).toLowerCase();
+      return searchKeyword.value.every((cond) => {
+        const cfg = searchDataMap.get(cond.id);
+        const isRemoteUserField = !!cfg?.children;
+        // 远程搜索人员字段用 v.id（纯 username），其他字段用 v.name
+        const keywords = (cond.values || []).map((v: any) => {
+          if (isRemoteUserField) return v.id || '';
+          return v.name || v.id;
+        }).filter(Boolean);
+        // 自由输入：cond.id 本身就是关键字
+        const freeKeyword = (!cond.values || cond.values.length === 0) ? cond.id : '';
+        const matchKeywords = freeKeyword ? [freeKeyword] : keywords;
+        if (matchKeywords.length === 0) return true;
 
-      // 命中字段：有 cond.id 对应的搜索项时，使用其 field/id；否则全字段匹配
-      const cfg = searchDataMap.get(cond.id);
-      // 自由输入（不选择字段）：全字段匹配
-      const isFree = !cfg && !!freeKeyword;
-
-      return matchKeywords.some((kw: string) => {
-        const lowerKw = kw.toLowerCase();
-        if (cfg?.match) return cfg.match(row, kw);
-        if (isFree) {
-          // 全字段模糊匹配
-          return Object.keys(row).some(k => stringify(row[k]).toLowerCase()
-            .includes(lowerKw));
+        // 自定义匹配函数优先
+        if (cfg?.match) {
+          return matchKeywords.some((kw: string) => cfg.match!(row, kw));
         }
-        const field = cfg?.field || cfg?.id || cond.id;
-        return stringify(row[field]).toLowerCase()
-          .includes(lowerKw);
+
+        // 全行 JSON 匹配：兼容所有数据类型（数组、Proxy、嵌套对象）
+        return matchKeywords.some((kw: string) => rowJsonStr.includes(kw.toLowerCase()));
       });
-    }));
+    });
   });
 
   // 计算当前页数据
@@ -241,7 +263,7 @@
   }
 
   .scene-table-search {
-    width: 400px;
+    width: 600px;
     margin-left: auto;
   }
 
