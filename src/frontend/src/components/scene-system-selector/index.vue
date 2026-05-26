@@ -162,8 +162,8 @@
     popoverWidth?: number;
     dark?: boolean;
     listScope?:  string[],
-    systemPermission: 'edit_system' | 'view_system';
-    scenePermission: 'manage_scene' | 'view_scene';
+    systemPermission: 'edit_system' | 'view_system' | 'edit_system,view_system';
+    scenePermission: 'manage_scene' | 'view_scene' | 'manage_scene,view_scene';
     isAllSystem?: boolean; // 是否展示全部接入系统
     isAllSecen?: boolean; // 是否展示全部审计场景
   }
@@ -454,8 +454,14 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
+      // 根据权限字符串（支持单权限或多权限逗号分隔）过滤
+      const checkPermission = (permission: Record<string, any> | undefined, permKey: string) => {
+        if (!permission) return false;
+        const keys = permKey.split(',');
+        return keys.some(key => permission[key.trim()] === true);
+      };
       const list = data
-        .filter(item => item.permission && item.permission[props.systemPermission] === true)
+        .filter(item => checkPermission(item.permission, props.systemPermission))
         .map(item => ({
           id: item.system_id,
           name: item.name,
@@ -472,8 +478,14 @@
   } = useRequest(sceneManageService.fetchSceneAll, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
+      // 根据权限字符串（支持单权限或多权限逗号分隔）过滤
+      const checkPermission = (permission: Record<string, any> | undefined, permKey: string) => {
+        if (!permission) return false;
+        const keys = permKey.split(',');
+        return keys.some(key => permission[key.trim()] === true);
+      };
       const list = data
-        .filter(item => item.permission && item.permission[props.scenePermission] === true)
+        .filter(item => checkPermission(item.permission, props.scenePermission))
         .map(item => ({
           id: String(item.scene_id),
           name: item.name,
