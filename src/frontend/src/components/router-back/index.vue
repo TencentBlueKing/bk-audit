@@ -16,19 +16,28 @@
 -->
 <template>
   <div
-    v-if="routerBack"
+    v-if="isShowSideBar || routerBack"
     class="audit-router-back"
     @click="handleRouterBack">
     <audit-icon type="back" />
   </div>
 </template>
 <script setup lang="ts">
+  import { useRoute } from 'vue-router';
+
   import useRouterBack from '@hooks/use-router-back';
 
+  const route = useRoute();
   const routerBack = useRouterBack();
+  const isShowSideBar = route.params?.isShowSideBar === 'true';
 
   const handleRouterBack = () => {
-    routerBack.value?.();
+    // isShowSideBar 模式下使用浏览器后退，否则走注册的回调
+    if (!routerBack.value) {
+      window.history.back();
+      return;
+    }
+    routerBack.value();
   };
 
 </script>
