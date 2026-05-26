@@ -815,7 +815,9 @@
     border: '1px solid',
     outline: 'none',
     marginRight: '8px',
+    // eslint-disable-next-line no-nested-ternary
     backgroundColor: isMatch ? (isDanger ? '#ea3636' : '#3a84ff') : '#fff',
+    // eslint-disable-next-line no-nested-ternary
     borderColor: isMatch ? (isDanger ? '#ea3636' : '#3a84ff') : '#dcdee5',
     color: isMatch ? '#fff' : '#c4c6cc',
     cursor: isMatch ? 'pointer' : 'not-allowed',
