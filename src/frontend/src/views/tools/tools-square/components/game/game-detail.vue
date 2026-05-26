@@ -34,13 +34,13 @@
           </span>
         </div>
         <div class="info-item">
-          <span class="info-label">{{ t('微信') }}</span>
+          <span class="info-label">{{ gameData.platType === 'qq' ? 'QQ' : '微信' }}</span>
           <span class="info-value">
-            {{ isWechatVisible ? gameData.wechat : '******' }}
+            {{ isPlatAccountVisible ? gameData.platAccount : '******' }}
             <audit-icon
               class="eye-icon"
-              :type="isWechatVisible ? 'view' : 'unview'"
-              @click="isWechatVisible = !isWechatVisible" />
+              :type="isPlatAccountVisible ? 'view' : 'unview'"
+              @click="isPlatAccountVisible = !isPlatAccountVisible" />
           </span>
         </div>
         <div class="info-item">
@@ -308,6 +308,9 @@
     gameid: string | number;
     ctx: string;
     wechat: string;
+    platType: string;
+    platAccount: string;
+    loginDays31: number;
     coinBalance: number;
     totalRecharge: number;
     totalGift: number;
@@ -327,6 +330,9 @@
       gameid: '',
       ctx: '',
       wechat: '',
+      platType: '',
+      platAccount: '',
+      loginDays31: 0,
       coinBalance: 0,
       totalRecharge: 0,
       totalGift: 0,
@@ -361,7 +367,7 @@
   const executeDataSource = createDataSourceExecutor(getCtx);
 
   // 微信号显示/隐藏
-  const isWechatVisible = ref(false);
+  const isPlatAccountVisible = ref(false);
 
   // 复制
   const handleCopy = (text: string) => {
