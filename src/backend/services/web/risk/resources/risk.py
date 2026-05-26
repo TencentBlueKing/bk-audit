@@ -51,7 +51,7 @@ from core.exporter.constants import ExportField
 from core.models import get_request_username
 from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
 from core.utils.page import paginate_queryset
-from core.utils.time import mstimestamp_to_date_string
+from core.utils.time import ceil_to_second, mstimestamp_to_date_string
 from core.utils.tools import get_app_info
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
@@ -1243,7 +1243,8 @@ class RiskExport(RiskMeta):
             risk = risk_map[risk_id]
             # 时间转为 +8 时间字符串
             start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
-            end_time = mstimestamp_to_date_string(int(datetime.now().timestamp() * 1000))
+            event_end_time = ceil_to_second(risk.event_end_time) or datetime.now()
+            end_time = mstimestamp_to_date_string(int(event_end_time.timestamp() * 1000))
             risk_id = risk.risk_id
             bulk_events_params.append(
                 {"risk_id": risk_id, "start_time": start_time, "end_time": end_time, "page": 1, "page_size": 10}

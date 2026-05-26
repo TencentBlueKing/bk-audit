@@ -22,6 +22,7 @@ from unittest import mock
 import openpyxl
 from bk_resource import resource
 
+from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import RAW_EVENT_ID_REMARK, RiskExportField, RiskStatus
 from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
@@ -198,6 +199,21 @@ class TestRiskExport(TestCase):
         # Row 3 (risk004, no events)
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_queries_events_with_risk_time_range(self, mock_get_event_list, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_get_event_list.return_value = [{"results": []}]
+
+        resource.risk.risk_export(risk_ids=[self.risk_1.risk_id])
+
+        params = mock_get_event_list.call_args.args[0][0]
+        risk = Risk.objects.get(risk_id=self.risk_1.risk_id)
+        expected_start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
+        expected_end_time = mstimestamp_to_date_string(int(risk.event_end_time.timestamp() * 1000))
+        self.assertEqual(params["start_time"], expected_start_time)
+        self.assertEqual(params["end_time"], expected_end_time)
 
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     def test_risk_export_blocks_unauthed_risks(self, mock_load_authed_risks):
