@@ -17,6 +17,7 @@
 <template>
   <div
     class="access"
+    :class="{ 'with-sidebar': withSidebar, 'sidebar-folded': isSideFolded }"
     @click="handleCloseSelect($event)">
     <img
       class="access-empty"
@@ -165,15 +166,16 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRouter, useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
   import ImportSvg from '@images/Import.svg';
   import ImportActiveSvg from '@images/Import-active.svg';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
 
   interface SystemItem {
@@ -185,12 +187,20 @@
 
   const { t } = useI18n();
   const router = useRouter();
-  // const route = useRoute();
+  const route = useRoute();
+  const { on: onEvent } = useEventBus();
+
+  // 是否在带侧边栏模式（isShowSideBar==='true' 时页面自适应侧边栏）
+  const withSidebar = computed(() => route.params?.isShowSideBar === 'true');
+  // 侧边栏是否折叠（折叠时宽度60px，展开时220/280px）
+  const isSideFolded = ref(false);
+
   const isShowSelect = ref(false);
 
   const handleRouterChange = (name: string, isNewSystem: boolean) => {
     router.push({
       name,
+      params: withSidebar.value ? { isShowSideBar: 'true' } : undefined,
       query: {
         step: '1',
         showModelType: 'false',
@@ -208,6 +218,7 @@
     activeItemId.value = activeItemId.value === id ? '' : id;
     router.push({
       name: 'systemAccessSteps',
+      params: withSidebar.value ? { isShowSideBar: 'true' } : undefined,
       query: {
         step: '1',  // 改为字符串类型
         showModelType: 'false',  // 改为字符串类型
@@ -279,6 +290,10 @@
       audit_status__in: 'pending',
     });
   });
+  // 监听侧边栏折叠/展开事件
+  (onEvent as (type: string, handler: (...args: any[]) => void) => void)('menu-flod', (folded: boolean) => {
+    isSideFolded.value = folded;
+  });
 </script>
 
 <style scoped lang="postcss">
@@ -287,6 +302,13 @@
   width: 100vw;
   height: 100vh;
   background-color: #f5f7fa;
+  transition: width .3s;
+
+  &.with-sidebar {
+    width: 100%;
+    height: auto;
+    min-height: calc(100vh - 160px);
+  }
 
   .access-empty {
     position: absolute;

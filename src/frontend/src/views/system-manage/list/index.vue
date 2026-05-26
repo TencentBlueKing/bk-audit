@@ -459,6 +459,9 @@
   const handleCreate = () => {
     const routeUrl = router.resolve({
       name: 'systemAccess',
+      params: {
+        isShowSideBar: 'true',
+      },
     });
     window.open(routeUrl.href, '_blank');
   };
