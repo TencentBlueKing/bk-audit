@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="step">
+  <div
+    class="step"
+    :class="{ 'with-sidebar': withSidebar }">
     <div class="step-head">
       <div
         class="head-left">
@@ -111,7 +113,7 @@
 
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
-  import { computed, ref, watch } from 'vue';
+  import { computed, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -125,6 +127,7 @@
   import Step3 from './step3/index.vue';
   import Step4 from './step4/index.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
@@ -137,6 +140,12 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const { on: onEvent } = useEventBus();
+
+  // 是否在带侧边栏模式
+  const withSidebar = computed(() => route.params?.isShowSideBar === 'true');
+  // 侧边栏是否折叠
+  const isSideFolded = ref(false);
   const { messageSuccess } = useMessage();
 
   const isStep3Disabled = ref(true);
@@ -350,7 +359,7 @@
           // 从引导页跳转过来的，返回引导页
           router.push({
             name: 'systemLandingPage',
-            params: {
+            params: withSidebar.value ? { isShowSideBar: 'true', ...(route.params.id ? { id: route.params.id } : { id: sessionStorage.getItem('systemProjectId') }) } : {
               id: route.params.id || sessionStorage.getItem('systemProjectId'),
             },
           });
@@ -358,6 +367,7 @@
           // 其他来源返回 systemAccess 页面
           router.push({
             name: 'systemAccess',
+            params: withSidebar.value ? { isShowSideBar: 'true' } : undefined,
           });
         }
       },
@@ -395,6 +405,12 @@
     deep: true,
     immediate: true,
   });
+  // 监听侧边栏折叠/展开事件
+  onMounted(() => {
+    (onEvent as (type: string, handler: (...args: any[]) => void) => void)('menu-flod', (folded: boolean) => {
+      isSideFolded.value = folded;
+    });
+  });
 </script>
 
 <style scoped lang="postcss">
@@ -407,6 +423,13 @@
 
   /* overflow: auto; */
   background-color: #f5f7fa;
+  transition: width .3s;
+
+  &.with-sidebar {
+    width: 100%;
+    height: auto;
+    min-height: calc(100vh - 104px);
+  }
 
   .step-head {
     position: relative;
@@ -466,6 +489,7 @@
 
   .step-footer {
     position: fixed;
+    right: 0;
     bottom: 0;
     width: 100vw;
     height: 48px;
