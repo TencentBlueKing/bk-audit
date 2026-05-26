@@ -47,12 +47,12 @@
       </div>
       <slot name="sideAppendBefore" />
       <div
-        v-if="route.meta?.nodeSideContent && !route.meta?.hideSidebar"
+        v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true')) && !route.meta?.hideSidebar"
         class="none-side">
         <slot name="nodeSideContent" />
       </div>
       <div
-        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar"
+        v-if="(!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true') && !route.meta?.hideSidebar"
         class="audit-side-menu"
         :class="{
           'show-notice-side-menu': showNotice.enabled && showAlert
@@ -64,7 +64,8 @@
         </scroll-faker>
       </div>
       <div
-        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar && !route.meta?.hideToggleBtn"
+        v-if="((!route.meta?.nodeSideContent || route.params?.isShowSideBar === 'true')
+          && !route.meta?.hideSidebar && !route.meta?.hideToggleBtn) || route.params?.isShowSideBar === 'true'"
         class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
