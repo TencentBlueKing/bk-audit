@@ -463,10 +463,16 @@
   const toolDetailMap = ref<Record<string, ToolDetailModel>>({});
   const {
     data: allToolsData,
+    run: fetchAllToolsList,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    manual: true,
   });
+
+  // 监听场景切换，按当前场景拉取全量工具列表，避免缺少 scope_type/scope_id 导致的请求失败
+  watch(() => props.scopeParams, (val) => {
+    if (!val || !val.scope_type) return;
+    fetchAllToolsList({ ...val, status: 'published' });
+  }, { immediate: true, deep: true });
 
   const setToolContentRef = (uid: string, el: any) => {
     if (el) {
@@ -682,6 +688,9 @@
       gameid: gameData.gameid || '',
       ctx: gameData.ctx || '',
       wechat: gameData.wechat || '',
+      platType: gameData.platType || '',
+      platAccount: gameData.platAccount || '',
+      loginDays31: gameData.loginDays31 || 0,
       coinBalance: gameData.coinBalance || 0,
       totalRecharge: gameData.totalRecharge || 0,
       totalGift: gameData.totalGift || 0,

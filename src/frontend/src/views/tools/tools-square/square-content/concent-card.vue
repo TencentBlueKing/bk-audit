@@ -337,7 +337,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, nextTick, ref } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -551,13 +551,19 @@
     appendSearchParams,
   } = useUrlSearch();
 
-  // 获取所有工具
+  // 获取所有工具（按场景过滤）
   const {
     data: allToolsData,
+    run: fetchAllToolsList,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    manual: true,
   });
+
+  // 监听场景切换，按当前场景拉取全量工具列表，避免缺少 scope_type/scope_id 导致的请求失败
+  watch(() => props.scopeParams, (val) => {
+    if (!val || !val.scope_type) return;
+    fetchAllToolsList({ ...val, status: 'published' });
+  }, { immediate: true, deep: true });
 
   // 收藏/取消收藏
   const {
