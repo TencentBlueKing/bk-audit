@@ -7,6 +7,7 @@ import datetime
 from types import SimpleNamespace
 from unittest import mock
 
+from django.core.cache import cache, caches
 from django.test import override_settings
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
@@ -29,7 +30,7 @@ from services.web.strategy_v2.constants import (
     StrategyType,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
-from services.web.strategy_v2.resources import ListStrategyFields, ListTables
+from services.web.strategy_v2.resources import GetRTMeta, ListStrategyFields, ListTables
 from services.web.strategy_v2.serializers import ListStrategyAllRequestSerializer
 from tests.base import TestCase
 
@@ -283,6 +284,38 @@ class StrategyResourcesTest(TestCase):
         )
         self.assertEqual(result["managers"], ["tom"])
         self.assertEqual(result["formatted_fields"], [{"field_name": "formatted"}])
+
+    @mock.patch("services.web.strategy_v2.resources.enhance_rt_fields")
+    @mock.patch.object(GetRTMeta, "get_sensitivity_info")
+    @mock.patch.object(GetRTMeta, "get_data_manager")
+    @mock.patch.object(GetRTMeta, "get_meta")
+    def test_get_rt_meta_uses_resource_cache(
+        self,
+        mock_get_meta,
+        mock_get_data_manager,
+        mock_get_sensitivity_info,
+        mock_enhance_fields,
+    ):
+        cache.clear()
+        try:
+            caches["locmem"].clear()
+        except Exception:
+            pass
+        mock_get_meta.return_value = {"fields": [{"field_name": "raw", "field_alias": "RAW", "field_type": "string"}]}
+        mock_get_data_manager.return_value = {"managers": ["tom"], "viewers": ["jerry"]}
+        mock_get_sensitivity_info.return_value = {"sensitivity_info": {"level": "private"}}
+        mock_enhance_fields.return_value = [{"field_name": "formatted"}]
+
+        resource = GetRTMeta()
+        first_result = resource.request({"table_id": "cache_rt"})
+        second_result = resource.request({"table_id": "cache_rt"})
+
+        self.assertEqual(first_result, second_result)
+        self.assertEqual(GetRTMeta.cache_type.timeout, 10 * 60)
+        mock_get_meta.assert_called_once()
+        mock_get_data_manager.assert_called_once()
+        mock_get_sensitivity_info.assert_called_once()
+        mock_enhance_fields.assert_called_once()
 
     @mock.patch("strategy_v2.resources.resource.strategy_v2.get_rt_fields.bulk_request")
     def test_bulk_get_rt_fields_aligns_results(self, mock_bulk_request):
