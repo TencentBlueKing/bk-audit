@@ -315,8 +315,8 @@
     const userRole = JSON.parse(sessionStorage.getItem('userRole') || '[]');
     // 如果是 saas_admin\system_admin 直接跳转到系统列表
     if (userRole.includes('saas_admin') || userRole.includes('system_admin')) {
-      router.push({ name: 'systemList' });
-      return;
+      // router.push({ name: 'systemList' });
+      // return;
     }
 
     fetchSystemWithAction({

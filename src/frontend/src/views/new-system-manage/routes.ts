@@ -88,7 +88,7 @@ export default {
       },
     },
     {
-      path: 'system-access',
+      path: 'system-access/:isShowSideBar?',
       component: () => import('@views/new-system-manage/system-access/index.vue'),
       name: 'systemAccess',
       meta: {
@@ -99,11 +99,11 @@ export default {
       },
     },
     {
-      path: 'system-access-steps',
+      path: 'system-access-steps/:isShowSideBar?',
       component: () => import('@views/new-system-manage/system-access/steps/index.vue'),
       name: 'systemAccessSteps',
       meta: {
-        title: '系统接入步骤',
+        title: '接入系统',
         skeleton: 'system-access-steps',
         headerTips: 'systemAccessSteps',
         nodeSideContent: true,
