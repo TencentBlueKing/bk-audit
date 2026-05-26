@@ -419,6 +419,8 @@
         })),
       ];
       tagsEnums.value = strategyLabelList.value;
+      // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
+      if (hasOpenedTools.value) return;
       // 始终清空 all，避免 render-label 顶部出现空白行
       renderLabelRef.value?.resetAll([]);
       // 初始化阶段（tagId 为空）：通过 resetAll 触发 handleChecked 来加载工具列表
@@ -446,12 +448,16 @@
     openTool(tool);
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid);
+    // 打开工具后刷新标签数量（如最近使用计数）
+    refreshTagsList();
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo) => {
     openTool(tool);
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid);
+    // 打开工具后刷新标签数量（如最近使用计数）
+    refreshTagsList();
   };
 
   const handleGoHomePage = async () => {
@@ -486,6 +492,10 @@
 
   watch(hasOpenedTools, (val) => {
     isSidebarCollapsed.value = val;
+    if (!val) {
+      // 工具全部关闭，回到广场时刷新标签数量（如最近使用计数）
+      refreshTagsList();
+    }
   }, { immediate: true });
 
   watch(isSidebarCollapsed, (val) => {
