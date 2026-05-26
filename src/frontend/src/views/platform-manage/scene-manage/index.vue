@@ -276,22 +276,22 @@
       minWidth: 180,
       ellipsis: true,
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span
-        class="scene-name-cell"
-        style="color: #3A84FF;">
+      <span class="scene-name-cell" style="color: #3A84FF;">
         <span
           class="scene-name-link"
           onClick={() => handleShowSceneDetail(row)}>
           {row.name}
         </span>
-        <audit-icon
-          v-bk-tooltips={t('跳转至「场景信息」查看')}
-          class="ml8 jump-link hover-show-icon"
-          type="jump-link"
-          onClick={(e: Event) => {
-            e.stopPropagation();
-            handleJumpToSceneInfo(row);
-          }} />
+        {row.status !== 'disabled' && (
+          <audit-icon
+            v-bk-tooltips={t('跳转至「场景信息」查看')}
+            class="ml8 jump-link hover-show-icon"
+            type="jump-link"
+            onClick={(e: Event) => {
+              e.stopPropagation();
+              handleJumpToSceneInfo(row);
+            }} />
+        )}
       </span>
     ),
     },
@@ -363,14 +363,16 @@
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="strategy-count-cell">
         {row.strategy_ids.length}
-        <audit-icon
-          v-bk-tooltips={t('跳转至「审计策略」查看')}
-          class="ml8 jump-link hover-show-icon"
-          type="jump-link"
-          onClick={(e: Event) => {
-            e.stopPropagation();
-            handleJumpToStrategy(row);
-          }} />
+        {row.status !== 'disabled' && (
+          <audit-icon
+            v-bk-tooltips={t('跳转至「审计策略」查看')}
+            class="ml8 jump-link hover-show-icon"
+            type="jump-link"
+            onClick={(e: Event) => {
+              e.stopPropagation();
+              handleJumpToStrategy(row);
+            }} />
+        )}
       </span>
     ),
     },
@@ -384,14 +386,16 @@
       cell: (_: any, { row }: { row: SceneModel }) => (
       <span class="risk-count-cell">
         {row.risk_count}
-        <audit-icon
-          v-bk-tooltips={t('跳转至「风险」查看')}
-          class="ml8 jump-link hover-show-icon"
-          type="jump-link"
-          onClick={(e: Event) => {
-            e.stopPropagation();
-            handleJumpToRisk(row);
-          }} />
+        {row.status !== 'disabled' && (
+          <audit-icon
+            v-bk-tooltips={t('跳转至「风险」查看')}
+            class="ml8 jump-link hover-show-icon"
+            type="jump-link"
+            onClick={(e: Event) => {
+              e.stopPropagation();
+              handleJumpToRisk(row);
+            }} />
+        )}
       </span>
     ),
     },
