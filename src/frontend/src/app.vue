@@ -54,7 +54,7 @@
             v-model="selectedScene"
             :list-scope="['scene']"
             :popover-width="400"
-            scene-permission="manage_scene"
+            scene-permission="view_scene"
             system-permission="view_system"
             width="400px"
             @change="handleSceneChange" />
