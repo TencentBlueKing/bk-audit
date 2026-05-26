@@ -55,7 +55,7 @@
           enable-search
           resizable
           :search-data="dataTableSearchData"
-          :search-placeholder="t('搜索 数据表名称、管理员')"
+          :search-placeholder="t('搜索 数据表名称(ID)、管理员')"
           show-pagination
           stripe
           :title="t('关联数据表')"
@@ -118,7 +118,137 @@
       return false;
     }
   });
+  // ==================== 关联系统表格列配置 ====================
+  const systemSearchData = [
+    { name: t('系统名称'), id: 'name', placeholder: t('请输入系统名称') },
+    {
+      name: t('系统管理员'),
+      id: 'managers',
+      placeholder: t('请选择系统管理员'),
+      children: [] as Array<{ id: string; name: string }>,
+    },
+    { name: t('系统域名'), id: 'system_url', placeholder: t('请输入系统域名') },
+  ];
 
+  const systemColumns = [
+    {
+      colKey: 'name',
+      title: () => t('系统名称'),
+      width: 180,
+      resizable: true,
+    },
+    {
+      colKey: 'managers',
+      title: () => t('系统管理员'),
+      width: 180,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => (
+        <EditTag data={row.managers || []} />
+      ),
+    },
+    {
+      colKey: 'system_url',
+      title: () => t('系统域名'),
+      width: 220,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => (
+        row.system_url
+          ? <span class="domain-cell">
+              <span class="domain-text">{row.system_url}</span>
+              <a
+                href={row.system_url}
+                target="_blank"
+                class="domain-jump-icon"
+                onClick={(e: Event) => e.stopPropagation()}>
+                <audit-icon type="jump-link" />
+              </a>
+            </span>
+          : <span>--</span>
+      ),
+    },
+    {
+      colKey: 'data_scope',
+      title: () => t('数据范围'),
+      width: 150,
+      resizable: true,
+      cell: () => <span>{t('全部数据')}</span>,
+    },
+    {
+      colKey: 'last_time',
+      title: () => t('最近数据时间'),
+      width: 280,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'last_time'),
+    },
+  ];
+
+  // ==================== 关联数据报表表格列配置 ====================
+  const dataTableSearchData = [
+    {
+      name: t('数据表名称'),
+      id: 'result_table_name_alias',
+      placeholder: t('请输入数据表名称'),
+      // 数据表名称同时匹配别名/英文ID
+      match: (row: Record<string, any>, kw: string) => {
+        const lower = kw.toLowerCase();
+        return String(row.result_table_name_alias || '').toLowerCase()
+          .includes(lower)
+          || String(row.result_table_id || '').toLowerCase()
+            .includes(lower);
+      },
+    },
+    {
+      name: t('数据表ID'),
+      id: 'result_table_id',
+      placeholder: t('请输入数据表ID'),
+    },
+    {
+      name: t('管理员'),
+      id: 'managers',
+      placeholder: t('请选择管理员'),
+      children: [] as Array<{ id: string; name: string }>,
+    },
+  ];
+
+  const dataTableColumns = [
+    {
+      colKey: 'result_table_name_alias',
+      title: () => t('数据表名称'),
+      width: 250,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => {
+        const text = `${row.result_table_name_alias}${row.result_table_id ? `(${row.result_table_id})` : ''}`;
+        return (
+          <div style="max-width: 450px;">
+            <ShowTooltipsText data={text} />
+          </div>
+        );
+      },
+    },
+    {
+      colKey: 'managers',
+      title: () => t('管理员'),
+      width: 180,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => (
+        <EditTag data={row.managers || []}  />
+      ),
+    },
+    {
+      colKey: 'data_scope',
+      title: () => t('数据范围'),
+      width: 150,
+      resizable: true,
+      cell: () => <span>{t('全部数据')}</span>,
+    },
+    {
+      colKey: 'updated_at',
+      title: () => t('最近数据时间'),
+      width: 280,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'updated_at'),
+    },
+  ];
   const {
     data: configData,
   } =  useRequest(RootManageService.config, {
@@ -378,134 +508,20 @@
     }
   };
 
-  // 监听场景变化（场景选择器切换 / 自动选中第一个场景时触发）
-  onEvent('scene:change', handleSceneChange);
 
   // 进入页面时主动加载一次，解决"同场景下切 tab 回来选择器不再 emit"的问题。
   // 仅当 sessionStorage 里是有效的 scene 类型时才会真正发起请求；
   // 否则（如从系统页面切过来，残留的是 system 类型）会跳过，等待选择器自动选场景后 emit 事件触发。
   onMounted(() => {
     handleSceneChange();
+    setTimeout(() => {
+      // 监听场景变化（场景选择器切换 / 自动选中第一个场景时触发）
+      onEvent('scene:change', handleSceneChange);
+    }, 1000);
   });
 
   onUnmounted(() => {
     off('scene:change', handleSceneChange);
   });
 
-  // ==================== 关联系统表格列配置 ====================
-  const systemSearchData = [
-    { name: t('系统名称'), id: 'name', placeholder: t('请输入系统名称') },
-    { name: t('系统管理员'), id: 'managers', placeholder: t('请输入系统管理员') },
-    { name: t('系统域名'), id: 'system_url', placeholder: t('请输入系统域名') },
-  ];
-
-  const systemColumns = [
-    {
-      colKey: 'name',
-      title: () => t('系统名称'),
-      width: 180,
-      resizable: true,
-    },
-    {
-      colKey: 'managers',
-      title: () => t('系统管理员'),
-      width: 180,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => (
-        <EditTag data={row.managers || []} />
-      ),
-    },
-    {
-      colKey: 'system_url',
-      title: () => t('系统域名'),
-      width: 220,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => (
-        row.system_url
-          ? <span class="domain-cell">
-              <span class="domain-text">{row.system_url}</span>
-              <a
-                href={row.system_url}
-                target="_blank"
-                class="domain-jump-icon"
-                onClick={(e: Event) => e.stopPropagation()}>
-                <audit-icon type="jump-link" />
-              </a>
-            </span>
-          : <span>--</span>
-      ),
-    },
-    {
-      colKey: 'data_scope',
-      title: () => t('数据范围'),
-      width: 150,
-      resizable: true,
-      cell: () => <span>{t('全部数据')}</span>,
-    },
-    {
-      colKey: 'last_time',
-      title: () => t('最近数据时间'),
-      width: 280,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'last_time'),
-    },
-  ];
-
-  // ==================== 关联数据报表表格列配置 ====================
-  const dataTableSearchData = [
-    {
-      name: t('数据表名称'),
-      id: 'result_table_name_alias',
-      placeholder: t('请输入数据表名称'),
-      // 数据表名称同时匹配别名/英文ID
-      match: (row: Record<string, any>, kw: string) => {
-        const lower = kw.toLowerCase();
-        return String(row.result_table_name_alias || '').toLowerCase()
-          .includes(lower)
-          || String(row.result_table_id || '').toLowerCase()
-            .includes(lower);
-      },
-    },
-    { name: t('管理员'), id: 'managers', placeholder: t('请输入管理员') },
-  ];
-
-  const dataTableColumns = [
-    {
-      colKey: 'result_table_name_alias',
-      title: () => t('数据表名称'),
-      width: 250,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => {
-        const text = `${row.result_table_name_alias}${row.result_table_id ? `(${row.result_table_id})` : ''}`;
-        return (
-          <div style="max-width: 450px;">
-            <ShowTooltipsText data={text} />
-          </div>
-        );
-      },
-    },
-    {
-      colKey: 'managers',
-      title: () => t('管理员'),
-      width: 180,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => (
-        <EditTag data={row.managers || []}  />
-      ),
-    },
-    {
-      colKey: 'data_scope',
-      title: () => t('数据范围'),
-      width: 150,
-      resizable: true,
-      cell: () => <span>{t('全部数据')}</span>,
-    },
-    {
-      colKey: 'updated_at',
-      title: () => t('最近数据时间'),
-      width: 280,
-      resizable: true,
-      cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'updated_at'),
-    },
-  ];
 </script>
