@@ -128,7 +128,9 @@
             <div
               v-if="group.kv_fields && group.kv_fields.length > 0 || tableIndex > 0"
               class="table-field-divider" />
-            <div class="top-search-table-title">
+            <div
+              v-if="tableField.display_name !== 'list' || tableField.raw_name !== 'list'"
+              class="top-search-table-title">
               <span
                 v-bk-tooltips="{
                   disabled: !tableField.description,
@@ -138,24 +140,39 @@
                 {{ tableField.display_name || tableField.raw_name }}
               </span>
             </div>
-            <bk-table
-              v-if="tableReady"
-              :key="key"
-              :border="['row','col']"
-              class="api-search-result-table"
-              :columns="tableField.columns"
-              :data="tableField.tableData"
-              header-align="left"
-              :max-height="maxHeight"
-              :pagination="tableField.pagination"
-              :remote-pagination="!!tableField.paginationConfig"
-              show-overflow-tooltip
-              @page-limit-change="(val: number) => {
-                handleGroupTablePageLimitChange(groupIndex, tableIndex, val);
-              }"
-              @page-value-change="(val: number) => {
-                handleGroupTablePageChange(groupIndex, tableIndex, val);
-              }" />
+            <div class="top-search-table">
+              <primary-table
+                v-if="tableReady"
+                :key="key"
+                align="left"
+                bordered
+                class="api-search-result-table"
+                :columns="tableField.columns"
+                :data="tableField.tableData"
+                location="left"
+                :max-height="tableMaxHeight" />
+              <div class="pagination-wrapper api-result-pagination">
+                <bk-pagination
+                  v-model="tableField.pagination.current"
+                  align="left"
+                  :count="tableField.pagination.count"
+                  :layout="['total', 'limit', 'list']"
+                  :limit="tableField.pagination.limit"
+                  :limit-list="tableField.pagination.limitList"
+                  location="left"
+                  @change="(current: any) => {
+                    const page = typeof current === 'number' ? current :
+                      (current?.current ?? tableField.pagination.current);
+                    tableField.pagination.current = page;
+                    handleGroupPaginationChange(groupIndex, tableIndex, page);
+                  }"
+                  @limit-change="(limit: number) => {
+                    tableField.pagination.limit = limit;
+                    tableField.pagination.current = 1;
+                    handleGroupPaginationChange(groupIndex, tableIndex);
+                  }" />
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -195,12 +212,14 @@
 </template>
 
 <script setup lang="tsx">
-  import type { Column } from 'bkui-vue/lib/table/props';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import _ from 'lodash';
   import { computed, nextTick, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
+
+  import { PrimaryTable } from '@blueking/tdesign-ui';
 
   import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
@@ -261,12 +280,13 @@
       display_name: string;
       description: string;
       path: string;
-      columns: Column[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      columns: any[];
       tableData: any[];
       pagination: {
-        count: number;
-        limit: number;
         current: number;
+        limit: number;
+        count: number;
         limitList?: number[];
       };
       // 分页配置（启用分页且匹配到 pagination_config 时存在）
@@ -290,7 +310,6 @@
   interface Props {
     uid: string;
     toolDetails: ToolDetailModel;
-    maxHeight?: string | number;
     searchList: SearchItem[];
     getToolNameAndType: (uid: string) => { name: string, type: string };
     riskToolParams?: Record<string, any>;
@@ -301,7 +320,6 @@
   }
 
   const props = withDefaults(defineProps<Props>(), {
-    maxHeight: '300px',
     remotePagination: false,
     riskToolParams: () => ({}),
   });
@@ -314,6 +332,19 @@
   // bk-table 渲染门闸：只有当 groupData 的 pagination.count 等数据全部填充完毕后才允许挂载，
   // 否则 bk-table 在 count=0/中间值时挂载，分页器会用初值快照，后续更新不再生效。
   const tableReady = ref(false);
+
+  // 表格响应式高度：大屏600px / 小屏400px - 分页区域高度(约56px)
+  const isLargeScreen = ref(window.innerWidth >= 1440);
+  const tableMaxHeight = computed(() => {
+    const baseH = isLargeScreen.value ? 800 : 600;
+    return `${Math.max(baseH - 56, 100)}px`;
+  });
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', () => {
+      isLargeScreen.value = window.innerWidth >= 1440;
+    });
+  }
 
   const linkUsers = computed(() => [...new Set([props.toolDetails.created_by, props.toolDetails.updated_by]
     .filter(Boolean))]);
@@ -483,23 +514,22 @@
     link.click();
   };
 
-  const handleGroupTablePageChange = (groupIndex: number, tableIndex: number, newPage: number) => {
-    const tableField = groupData.value[groupIndex]?.table_fields[tableIndex];
-    if (!tableField) return;
-    tableField.pagination.current = newPage;
-    if (tableField.paginationConfig) {
-      executeTool();
-    }
-  };
+  // 记录用户主动翻页/切条数的意图（用独立变量，不依赖响应式对象引用）
+  const pendingPageMap = new Map<string, { current?: number; limit?: number }>();
+  let _isUserPaginating = false;
 
-  const handleGroupTablePageLimitChange = (groupIndex: number, tableIndex: number, newLimit: number) => {
-    const tableField = groupData.value[groupIndex]?.table_fields[tableIndex];
-    if (!tableField) return;
-    tableField.pagination.limit = newLimit;
-    tableField.pagination.current = 1; // 重置到第一页
-    if (tableField.paginationConfig) {
-      executeTool();
-    }
+  // bk-pagination 翻页/切条数后触发请求
+  const handleGroupPaginationChange = (groupIndex: number, tableIndex: number, targetPage?: number) => {
+    const tf = groupData.value[groupIndex]?.table_fields[tableIndex];
+    if (!tf?.paginationConfig) return;
+    // 直接从参数或最新状态记录用户意图
+    const key = `${groupIndex}-${tableIndex}-${tf.raw_name}`;
+    pendingPageMap.set(key, {
+      current: targetPage ?? tf.pagination.current,
+      limit: tf.pagination.limit,
+    });
+    _isUserPaginating = true;
+    executeTool();
   };
 
   // 根据 json_path 提取数据
@@ -635,7 +665,8 @@
         } else if (fieldType === 'table' && Array.isArray(fieldConfig.output_fields)) {
           // Table 模式：用 field_config.output_fields 生成 columns
           const tableColumns = fieldConfig.output_fields.map((item: OutputFields) => ({
-            label: () => (
+            colKey: item.raw_name,
+            title: () => (
               <span
                 class={item.description ? 'tips' : ''}
                 v-bk-tooltips={{
@@ -645,11 +676,11 @@
                 {item.display_name || item.raw_name}
               </span>
             ),
-            field: item.raw_name,
-            minWidth: 200,
-            showOverflowTooltip: true,
-            render: ({ data }: { data?: Record<any, any> }) => {
-              if (!data) {
+            width: 200,
+            minWidth: 100,
+            ellipsis: true,
+            cell: (_h: any, { row }: any) => {
+              if (!row) {
                 return '--';
               }
               // 将值转换为可渲染的字符串
@@ -659,7 +690,7 @@
                 return String(val);
               };
 
-              const rawVal = data[item.raw_name];
+              const rawVal = row[item.raw_name];
               const rawValStr = toDisplayString(rawVal);
               // 如果有enum映射，优先用映射的name
               const mappings = item.enum_mappings?.mappings;
@@ -697,6 +728,7 @@
                     v-slots={{
                       content: () => (
                         <>
+
                           {
                             mapped && (
                               <>
@@ -732,7 +764,7 @@
                       class={{ tips: mapped }}
                       onClick={(e: any) => {
                         e.stopPropagation(); // 阻止事件冒泡
-                        handleFieldDownClick(item, data);
+                        handleFieldDownClick(item, row);
                       }}>
                       {display}
                     </span>
@@ -752,7 +784,7 @@
                                 text
                                 onClick={(e: any) => {
                                   e.stopPropagation(); // 阻止事件冒泡
-                                  handleFieldDownClick(item, data, config.tool.uid);
+                                  handleFieldDownClick(item, row, config.tool.uid);
                                 }}>
                                 {t('去查看')}
                                 <audit-icon
@@ -774,7 +806,7 @@
                     }}
                     onClick={(e: any) => {
                       e.stopPropagation(); // 阻止事件冒泡
-                      handleFieldDownClick(item, data);
+                      handleFieldDownClick(item, row);
                     }}>
                       {item.drill_config.length}
                     </span>
@@ -787,7 +819,7 @@
           const matchedPaginationConfig = findPaginationConfig(field);
           const initialLimit = matchedPaginationConfig?.default_page_size ?? 10;
           const initialCurrent = matchedPaginationConfig?.default_page ?? 1;
-          // 保证默认值在 limitList 内，避免 bk-table 下拉显示异常
+          // bk-pagination 分页配置：保证默认值在 limitList 内
           const baseLimitList = [10, 20, 50, 100, 200, 500, 1000];
           const limitList = baseLimitList.includes(initialLimit)
             ? baseLimitList
@@ -801,9 +833,9 @@
             columns: tableColumns,
             tableData: [],
             pagination: {
-              count: 0,
-              limit: initialLimit,
               current: initialCurrent,
+              limit: initialLimit,
+              count: 0,
               limitList,
             },
             paginationConfig: matchedPaginationConfig
@@ -833,7 +865,89 @@
       return;
     }
 
+    // 如果是用户主动翻页/切条数触发的请求（pendingPageMap 有记录），
+    // 则只更新数据，不重建 groupData 结构（保留分页状态和 DOM 实例）
+    if (_isUserPaginating && pendingPageMap.size > 0 && groupData.value.length > 0) {
+      _isUserPaginating = false;
+      nextTick(() => {
+        if (!data.data?.result) return;
+        const { result } = data.data;
+        // 只更新数据，不动分页状态
+        groupData.value.forEach((group) => {
+          group.kv_fields.forEach((kvField) => {
+            // eslint-disable-next-line no-param-reassign
+            kvField.resolvePathValue = extractDataByPath(result, kvField.path) === null
+              || extractDataByPath(result, kvField.path) === undefined ? '--'
+              : extractDataByPath(result, kvField.path);
+          });
+          group.table_fields.forEach((tableField) => {
+            const tableData = extractDataByPath(result, tableField.path);
+            let finalTableData: any[] = [];
+            if (Array.isArray(tableData)) {
+              finalTableData = tableData.map((item, index) => ({
+                ...item,
+                __uniqueId: index + 1,
+              }));
+            } else if (tableData) {
+              finalTableData = [{ ...tableData, __uniqueId: 1 }];
+            }
+            // eslint-disable-next-line no-param-reassign
+            tableField.tableData = finalTableData;
 
+            // 更新 total（同原有逻辑）
+            const enablePagination = !!props.toolDetails?.config?.output_config?.enable_pagination;
+            const paginationConfigs = props.toolDetails?.config?.output_config?.pagination_config || [];
+            const totalPathCandidates: string[] = [];
+            if (tableField.paginationConfig?.total_path) {
+              totalPathCandidates.push(tableField.paginationConfig.total_path);
+            }
+            if (enablePagination) {
+              paginationConfigs.forEach((cfg: any) => {
+                const p = cfg?.total_field?.json_path;
+                if (p && !totalPathCandidates.includes(p)) totalPathCandidates.push(p);
+              });
+            }
+            let resolved: any;
+            const tryRoots = [result, data.data, data];
+            for (const path of totalPathCandidates) {
+              for (const root of tryRoots) {
+                const v = extractDataByPath(root, path);
+                if (v !== null && v !== undefined) {
+                  resolved = v; break;
+                }
+              }
+              if (resolved !== undefined) break;
+            }
+
+            if (resolved === undefined && totalPathCandidates.length > 0) {
+              const keys = totalPathCandidates
+                .map((p: string) => (p.split('.').pop() || '').trim())
+                .filter(Boolean);
+              for (const k of keys) {
+                const v = deepFindNumberByKey(result, k);
+                if (v !== null) {
+                  resolved = v; break;
+                }
+              }
+            }
+            const totalNum = Number(resolved);
+            if (Number.isFinite(totalNum) && totalNum >= 0) {
+              // eslint-disable-next-line no-param-reassign
+              tableField.pagination.count = Math.max(totalNum, tableField.tableData.length);
+            } else {
+              // eslint-disable-next-line no-param-reassign
+              tableField.pagination.count = tableField.tableData.length;
+            }
+          });
+        });
+        key.value += 1;
+        tableReady.value = true;
+      });
+      return; // 翻页请求：增量更新完毕，不执行后续的完整重建逻辑
+    }
+
+    // 首次加载或非翻页请求：完整重建 groupData
+    _isUserPaginating = false;
     const previousPaginationState = new Map<string, { current: number; limit: number }>();
     groupData.value.forEach((group, gIdx) => {
       group.table_fields.forEach((tf, tIdx) => {
@@ -848,11 +962,22 @@
     tableReady.value = false;
     groupData.value = createGroupData(props.toolDetails);
 
-    // 还原用户已调整的后端分页状态（默认 default_page/default_page_size 仅在首次生效）
+    // 还原用户已调整的后端分页状态（优先级：pendingPageMap > previousPaginationState > 默认值）
     groupData.value.forEach((group, gIdx) => {
       group.table_fields.forEach((tf, tIdx) => {
         if (!tf.paginationConfig) return;
-        const prev = previousPaginationState.get(`${gIdx}-${tIdx}-${tf.raw_name}`);
+        const key = `${gIdx}-${tIdx}-${tf.raw_name}`;
+        // 1. 优先使用用户最近一次翻页/切条数的意图
+        const pending = pendingPageMap.get(key);
+        if (pending) {
+          // eslint-disable-next-line no-param-reassign
+          if (pending.current !== undefined) tf.pagination.current = pending.current;
+          // eslint-disable-next-line no-param-reassign
+          if (pending.limit !== undefined) tf.pagination.limit = pending.limit;
+          return; // 已恢复，跳过后续逻辑
+        }
+        // 2. 其次使用上一次的状态
+        const prev = previousPaginationState.get(key);
         if (prev) {
           // eslint-disable-next-line no-param-reassign
           tf.pagination.current = prev.current;
@@ -944,8 +1069,9 @@
 
             const totalNum = Number(resolved);
             if (Number.isFinite(totalNum) && totalNum >= 0) {
+              // 取后端返回的 total 和当前页实际数据量的较大值（防止 total 不准确）
               // eslint-disable-next-line no-param-reassign
-              tableField.pagination.count = totalNum;
+              tableField.pagination.count = Math.max(totalNum, tableField.tableData.length);
               return;
             }
 
@@ -956,7 +1082,7 @@
                 { totalPathCandidates, sampleResult: result },
               );
             }
-            // 兜底：使用当前页返回的数据条数（仅在未配置或解析失败时）
+            // 兜底：使用当前页返回的数据条数
             // eslint-disable-next-line no-param-reassign
             tableField.pagination.count = count;
           });
@@ -998,6 +1124,31 @@
       min-width: 120px !important;
     }
   }
+
+  .pagination-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 8px 16px;
+
+    :deep(.bk-pagination) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    /* 页码列表推到右边（多选器兜底） */
+    :deep(.bk-pagination .bk-paging-list),
+    :deep(.bk-pagination .bk-page-list),
+    :deep(.bk-pagination .bk-pagination-list),
+    :deep(.bk-pagination .is-last),
+    :deep(.bk-pagination > *:nth-last-child(1)) {
+      margin-left: auto;
+    }
+
+
+  }
 }
 
 .single-content {
@@ -1005,19 +1156,38 @@
   background-color: #fff;
 }
 
+.top-search-table {
+  /* 防止父容器产生额外的滚动条，只保留表格自身的内部滚动 */
+  overflow: hidden;
+
+  :deep(.t-table--scroll-vertical) {
+    overflow: auto !important;
+  }
+
+  :deep(.t-table--scroll-horizontal) {
+    overflow: auto !important;
+  }
+}
 </style>
 <style  lang="postcss">
 .api-search-result-table {
-  .bk-table-head table thead th,
-  .bk-table-body table thead th,
-  table thead th,
-  .bk-table .bk-table-head table thead th,
-  .bk-table .bk-table-body table thead th {
+  :deep(.t-table--header-wrapper) {
     background-color: #f0f1f5 !important;
   }
 
-  .bk-table-footer {
+  :deep(.t-table__footer) {
     background-color: #fff;
   }
+}
+
+/* 分页器：共x条/每页x条 在左，页码在右 */
+.api-result-pagination .bk-pagination {
+  display: flex !important;
+  align-items: center;
+  width: 100%;
+}
+
+.api-result-pagination .bk-pagination > *:nth-last-child(1) {
+  margin-left: auto !important;
 }
 </style>
