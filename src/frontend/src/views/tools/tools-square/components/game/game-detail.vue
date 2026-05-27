@@ -883,9 +883,9 @@
 
       // 赠送记录 sheet
       if (exportContentChecked.value.includes('gift')) {
-        const dp = getDateParams();
         const res = await executeDataSource('give_detail_list', {
-          one_year_ago_Ymd: dp.one_year_ago_Ymd,
+          detail_startdate_Ymd: startYmd,
+          detail_enddate_Ymd: endYmd,
           ...baseParams,
         });
         const data = extractResults(res);
