@@ -26,27 +26,39 @@ const ALL_TIME_PERIODS = [
   '12:00~15:00', '15:00~18:00', '18:00~21:00', '21:00~24:00',
 ];
 
+// 饼图数据项（与 API 返回格式一致）
+export interface ChartDataItem {
+  dim_type: string;       // 维度类型，如"登录地点"、"登录设备"等
+  metric_type: string;    // 指标类型，如"登录总数"等
+  dim_value: string;      // 维度值，如"北京市"等
+  metric_value: number;   // 指标值
+  rn: string;             // 排名，"其他"分类时rn为"99999"
+}
+
 // 饼图配置项
 export interface ChartConfig {
   title: string;                                // 图表标题
-  data: Array<{ name: string; value: number }>; // 饼图数据
+  data: ChartDataItem[];                        // 饼图数据（新格式）
   total: number;                                // 总数
   centerLabel: string;                          // 中心文字
   tooltipNameMap?: Record<string, string>;      // 图例名称 → hover 展示名称 映射（如 UUID → 机型(UUID)）
 }
 
 /**
- * 将 groupdim_stats 数据按"分组"拆分为饼图数据
+ * 将 groupdim_stats 数据按 dim_type 过滤，返回新格式的饼图数据
+ * 新数据格式：{ dim_type, metric_type, dim_value, metric_value, rn }
  */
 export const buildChartFromGroupStats = (
   data: Array<Record<string, any>>,
-  groupName: string,
-  valueField: string,
-): Array<{ name: string; value: number }> => data
-  .filter(row => row[CHART_FIELDS.GROUP] === groupName)
+  dimType: string,
+): ChartDataItem[] => data
+  .filter(row => row.dim_type === dimType)
   .map(row => ({
-    name: row[CHART_FIELDS.DIMENSION] || '',
-    value: Number(row[valueField]) || 0,
+    dim_type: row.dim_type || '',
+    metric_type: row.metric_type || '',
+    dim_value: row.dim_value || '',
+    metric_value: Number(row.metric_value) || 0,
+    rn: String(row.rn ?? ''),
   }));
 
 /**
@@ -63,14 +75,14 @@ export const useChartTitleToFieldIdMap = () => {
     gift: {
       [t('赠送对象分布（总额）')]: 'target_openid',
       [t('赠送对象分布（次数）')]: 'target_openid',
-      [t('赠送道具分布（总额）')]: 'item_name',
-      [t('赠送道具分布（数量）')]: 'item_name',
+      [t('赠送道具分布（总额）')]: 'item_id',
+      [t('赠送道具分布（数量）')]: 'item_id',
     },
     trade: {
       [t('交易对象分布（总额）')]: 'trade_target',
       [t('交易对象分布（次数）')]: 'trade_target',
-      [t('交易道具分布（总额）')]: 'item_name',
-      [t('交易道具分布（数量）')]: 'item_name',
+      [t('交易道具分布（总额）')]: 'item_id',
+      [t('交易道具分布（数量）')]: 'item_id',
     },
     coin: {
       [t('需求类型分布统计')]: 'demand_type',
@@ -104,37 +116,32 @@ export const useGameChartBuilders = () => {
       }
     });
 
-    // 登录设备：name 保持 UUID，hover 名称映射单独维护，按数量逆序排序
-    const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE, CHART_FIELDS.LOGIN_TOTAL)
-      .sort((a, b) => b.value - a.value);
+    // 登录设备：按 rn 排序（rn=99999 的"其他"自动排最后）
+    const deviceData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_DEVICE);
     const deviceTooltipNameMap: Record<string, string> = {};
     deviceData.forEach((item) => {
-      if (deviceModelMap[item.name]) {
-        deviceTooltipNameMap[item.name] = `${deviceModelMap[item.name]}(${item.name})`;
+      if (deviceModelMap[item.dim_value]) {
+        deviceTooltipNameMap[item.dim_value] = `${deviceModelMap[item.dim_value]}(${item.dim_value})`;
       }
     });
 
-    // 登录地点：按数量逆序排序
-    const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION, CHART_FIELDS.LOGIN_TOTAL)
-      .sort((a, b) => b.value - a.value);
+    // 登录地点
+    const locationData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_LOCATION);
 
-    // 登录时段：按时间正向排序，只展示有数据的时段（过滤掉值为0的）
-    const timeDataMap: Record<string, number> = {};
-    buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_TIME_PERIOD, CHART_FIELDS.LOGIN_TOTAL)
-      .forEach((item) => {
-        timeDataMap[item.name] = item.value;
-      });
+    // 登录时段：按时间正向排序，只展示有数据的时段
+    const rawTimeData = buildChartFromGroupStats(stats, CHART_FIELDS.LOGIN_TIME_PERIOD);
+    const timeDataMap: Record<string, ChartDataItem> = {};
+    rawTimeData.forEach((item) => {
+      timeDataMap[item.dim_value] = item;
+    });
     const timeData = ALL_TIME_PERIODS
-      .map(period => ({
-        name: period,
-        value: timeDataMap[period] || 0,
-      }))
-      .filter(item => item.value > 0);
+      .map(period => timeDataMap[period])
+      .filter((item): item is ChartDataItem => !!item && item.metric_value > 0);
 
     // 每个饼图的 total 只计算各自分组的数据之和
-    const deviceTotal = deviceData.reduce((s, d) => s + d.value, 0);
-    const locationTotal = locationData.reduce((s, d) => s + d.value, 0);
-    const timeTotal = timeData.reduce((s, d) => s + d.value, 0);
+    const deviceTotal = deviceData.reduce((s, d) => s + d.metric_value, 0);
+    const locationTotal = locationData.reduce((s, d) => s + d.metric_value, 0);
+    const timeTotal = timeData.reduce((s, d) => s + d.metric_value, 0);
     const charts: ChartConfig[] = [];
     if (deviceData.length > 0) {
       charts.push({
@@ -153,28 +160,33 @@ export const useGameChartBuilders = () => {
   // ========== 赠送记录 tab ==========
   const buildGiveChartRows = (stats: Array<Record<string, any>>): ChartConfig[][] => {
     if (stats.length === 0) return [];
-    const targetAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET, CHART_FIELDS.GIFT_AMOUNT_YUAN);
-    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET, CHART_FIELDS.TIMES);
-    const itemAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM, CHART_FIELDS.GIFT_AMOUNT_YUAN);
-    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM, CHART_FIELDS.TIMES);
+    // 按 metric_type 区分金额和次数
+    const targetAmountOnly = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET)
+      .filter(d => d.metric_type === CHART_FIELDS.GIFT_AMOUNT_YUAN);
+    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_TARGET)
+      .filter(d => d.metric_type === CHART_FIELDS.TIMES);
+    const itemAmountOnly = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM)
+      .filter(d => d.metric_type === CHART_FIELDS.GIFT_AMOUNT_YUAN);
+    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.GIFT_ITEM)
+      .filter(d => d.metric_type === CHART_FIELDS.GIFT_QUANTITY);
     const rows: ChartConfig[][] = [];
     const row1: ChartConfig[] = [];
-    if (targetAmountData.length > 0) {
-      const total = targetAmountData.reduce((s, d) => s + d.value, 0);
-      row1.push({ title: t('赠送对象分布（总额）'), data: targetAmountData, total, centerLabel: t('总额（元）') });
+    if (targetAmountOnly.length > 0) {
+      const total = targetAmountOnly.reduce((s, d) => s + d.metric_value, 0);
+      row1.push({ title: t('赠送对象分布（总额）'), data: targetAmountOnly, total, centerLabel: t('总额（元）') });
     }
     if (targetCountData.length > 0) {
-      const total = targetCountData.reduce((s, d) => s + d.value, 0);
+      const total = targetCountData.reduce((s, d) => s + d.metric_value, 0);
       row1.push({ title: t('赠送对象分布（次数）'), data: targetCountData, total, centerLabel: t('总次数') });
     }
     if (row1.length > 0) rows.push(row1);
     const row2: ChartConfig[] = [];
-    if (itemAmountData.length > 0) {
-      const total = itemAmountData.reduce((s, d) => s + d.value, 0);
-      row2.push({ title: t('赠送道具分布（总额）'), data: itemAmountData, total, centerLabel: t('总额（元）') });
+    if (itemAmountOnly.length > 0) {
+      const total = itemAmountOnly.reduce((s, d) => s + d.metric_value, 0);
+      row2.push({ title: t('赠送道具分布（总额）'), data: itemAmountOnly, total, centerLabel: t('总额（元）') });
     }
     if (itemCountData.length > 0) {
-      const total = itemCountData.reduce((s, d) => s + d.value, 0);
+      const total = itemCountData.reduce((s, d) => s + d.metric_value, 0);
       row2.push({ title: t('赠送道具分布（数量）'), data: itemCountData, total, centerLabel: t('总数量') });
     }
     if (row2.length > 0) rows.push(row2);
@@ -184,28 +196,32 @@ export const useGameChartBuilders = () => {
   // ========== 交易记录 tab ==========
   const buildDealChartRows = (stats: Array<Record<string, any>>): ChartConfig[][] => {
     if (stats.length === 0) return [];
-    const targetAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
-    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET, CHART_FIELDS.TIMES);
-    const itemAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
-    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM, CHART_FIELDS.TIMES);
+    const targetAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET)
+      .filter(d => d.metric_type === CHART_FIELDS.TRADE_AMOUNT_YUAN);
+    const targetCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_TARGET)
+      .filter(d => d.metric_type === CHART_FIELDS.TRADE_TIMES);
+    const itemAmountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM)
+      .filter(d => d.metric_type === CHART_FIELDS.TRADE_AMOUNT_YUAN);
+    const itemCountData = buildChartFromGroupStats(stats, CHART_FIELDS.TRADE_ITEM)
+      .filter(d => d.metric_type === CHART_FIELDS.TRADE_QUANTITY);
     const rows: ChartConfig[][] = [];
     const row1: ChartConfig[] = [];
     if (targetAmountData.length > 0) {
-      const total = targetAmountData.reduce((s, d) => s + d.value, 0);
+      const total = targetAmountData.reduce((s, d) => s + d.metric_value, 0);
       row1.push({ title: t('交易对象分布（总额）'), data: targetAmountData, total, centerLabel: t('总额（元）') });
     }
     if (targetCountData.length > 0) {
-      const total = targetCountData.reduce((s, d) => s + d.value, 0);
+      const total = targetCountData.reduce((s, d) => s + d.metric_value, 0);
       row1.push({ title: t('交易对象分布（次数）'), data: targetCountData, total, centerLabel: t('总次数') });
     }
     if (row1.length > 0) rows.push(row1);
     const row2: ChartConfig[] = [];
     if (itemAmountData.length > 0) {
-      const total = itemAmountData.reduce((s, d) => s + d.value, 0);
+      const total = itemAmountData.reduce((s, d) => s + d.metric_value, 0);
       row2.push({ title: t('交易道具分布（总额）'), data: itemAmountData, total, centerLabel: t('总额（元）') });
     }
     if (itemCountData.length > 0) {
-      const total = itemCountData.reduce((s, d) => s + d.value, 0);
+      const total = itemCountData.reduce((s, d) => s + d.metric_value, 0);
       row2.push({ title: t('交易道具分布（数量）'), data: itemCountData, total, centerLabel: t('总数量') });
     }
     if (row2.length > 0) rows.push(row2);
@@ -215,20 +231,20 @@ export const useGameChartBuilders = () => {
   // ========== 发放记录 tab ==========
   const buildSapChartRows = (stats: Array<Record<string, any>>): ChartConfig[][] => {
     if (stats.length === 0) return [];
-    const demandTypeData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_TYPE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
-    const issuerData = buildChartFromGroupStats(stats, CHART_FIELDS.ISSUER, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
-    const sourceData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_SOURCE, CHART_FIELDS.ISSUE_AMOUNT_YUAN);
+    const demandTypeData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_TYPE);
+    const issuerData = buildChartFromGroupStats(stats, CHART_FIELDS.ISSUER);
+    const sourceData = buildChartFromGroupStats(stats, CHART_FIELDS.DEMAND_SOURCE);
     const charts: ChartConfig[] = [];
     if (demandTypeData.length > 0) {
-      const total = demandTypeData.reduce((s, d) => s + d.value, 0);
+      const total = demandTypeData.reduce((s, d) => s + d.metric_value, 0);
       charts.push({ title: t('需求类型分布统计'), data: demandTypeData, total, centerLabel: t('发放金额（元）') });
     }
     if (issuerData.length > 0) {
-      const total = issuerData.reduce((s, d) => s + d.value, 0);
+      const total = issuerData.reduce((s, d) => s + d.metric_value, 0);
       charts.push({ title: t('发放人分布统计'), data: issuerData, total, centerLabel: t('发放金额（元）') });
     }
     if (sourceData.length > 0) {
-      const total = sourceData.reduce((s, d) => s + d.value, 0);
+      const total = sourceData.reduce((s, d) => s + d.metric_value, 0);
       charts.push({ title: t('需求来源分布统计'), data: sourceData, total, centerLabel: t('发放金额（元）') });
     }
     return charts.length > 0 ? [charts] : [];

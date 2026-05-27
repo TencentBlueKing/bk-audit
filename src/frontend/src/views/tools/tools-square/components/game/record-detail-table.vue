@@ -816,7 +816,7 @@
 
 <style scoped lang="postcss">
 .record-detail-table {
-  padding: 16px;
+  padding: 16px 16px 2px;
   background: #fff;
   border-radius: 2px;
 
@@ -924,16 +924,6 @@
 
       .tag-operator {
         color: #ff9c01;
-      }
-
-      &:hover {
-        background: #e1ecff;
-
-        .tag-field,
-        .tag-value {
-          color: #3a84ff;
-        }
-
       }
 
       &.is-editing {
