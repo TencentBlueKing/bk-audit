@@ -959,12 +959,11 @@
 }
 
 .panel-content {
-  height: calc(100% - 52px);
+  /* 不再固定高度，避免与表格 max-height 产生嵌套滚动条 */
+  min-height: 0;
   padding: 16px 24px;
-  overflow: auto;
+  overflow: visible;
   background: #f5f7fa;
-  scrollbar-width: thin;
-  scrollbar-color: #dcdee5 transparent;
 }
 
 .panel-content::-webkit-scrollbar {
