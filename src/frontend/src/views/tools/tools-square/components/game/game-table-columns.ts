@@ -163,7 +163,6 @@ export const useGameTableColumns = () => {
     { label: () => `${t('赠送总额')}(${t('元')})`, field: GIFT_DETAIL_FIELDS.GIFT_AMOUNT, sort: true },
     { label: () => `${t('赠送单价')}(${t('元')})`, field: GIFT_DETAIL_FIELDS.GIFT_UNIT_PRICE, sort: true },
     { label: () => t('赠送数量'), field: GIFT_DETAIL_FIELDS.ITEM_COUNT, sort: true },
-    { label: () => t('赠送次数'), field: GIFT_DETAIL_FIELDS.GIFT_TIMES, sort: true },
   ];
 
   // ========== 交易记录明细列 ==========
@@ -178,7 +177,6 @@ export const useGameTableColumns = () => {
     { label: () => `${t('交易总额')}(${t('元')})`, field: TRADE_DETAIL_FIELDS.TRADE_AMOUNT, sort: true },
     { label: () => `${t('交易单价')}(${t('元')})`, field: TRADE_DETAIL_FIELDS.TRADE_UNIT_PRICE, sort: true },
     { label: () => t('交易数量'), field: TRADE_DETAIL_FIELDS.TRADE_COUNT, sort: true },
-    { label: () => t('交易次数'), field: TRADE_DETAIL_FIELDS.TRADE_TIMES, sort: true },
   ];
 
   // ========== 代币发放记录明细列 ==========
