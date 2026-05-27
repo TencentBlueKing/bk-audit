@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Any, Optional
 
+from jinja2 import StrictUndefined
 from pymysql.converters import escape_string
 
 from core.render import jinja2_environment
@@ -131,7 +132,7 @@ def render_sql_template(sql_template: str, params: dict) -> str:
     - has(key): 判断参数是否存在且非空
     - bind(key, output_type=None): 参数转为裸字符串，output_type 为可选枚举
     """
-    env = jinja2_environment(autoescape=False)
+    env = jinja2_environment(autoescape=False, undefined=StrictUndefined)
 
     def has(key: str) -> bool:
         return key in params and params.get(key) not in (None, "")
@@ -143,7 +144,7 @@ def render_sql_template(sql_template: str, params: dict) -> str:
 
     try:
         template = env.from_string(sql_template)
-        return template.render(params=params, has=has, bind=bind)
+        return template.render(has=has, bind=bind)
     except (SmartPageBindParamMissingError, SmartPageSqlTemplateRenderError):
         raise
     except Exception as e:
