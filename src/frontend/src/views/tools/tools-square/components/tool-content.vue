@@ -346,9 +346,15 @@
 
   .top-search-result {
     position: relative;
-    height: auto;
     padding-right: 16px;
     margin-top: 12px;
+
+    /* 不再固定 height，避免与表格 max-height 产生嵌套滚动条 */
+    overflow: visible;
+
+    :deep(.bk-loading) {
+      display: block;
+    }
 
     .top-search-table-title {
       margin-bottom: 8px;

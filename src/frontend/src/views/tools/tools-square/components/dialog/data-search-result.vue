@@ -7,8 +7,8 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  software distributed under the License is distributed
+  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
@@ -22,10 +22,19 @@
       :data="tableData"
       hover
       :max-height="tableMaxHeight"
-      :pagination="paginationConfig"
-      show-header
-      @page-change="handlePageValueChange"
-      @page-size-change="handlePageLimitChange" />
+      show-header />
+    <div class="pagination-wrapper data-result-pagination">
+      <bk-pagination
+        v-model="pagination.current"
+        align="left"
+        :count="pagination.count"
+        :layout="['total', 'limit', 'list']"
+        :limit="pagination.limit"
+        :limit-list="pagination.limitList"
+        location="left"
+        @change="handlePaginationChange"
+        @limit-change="handleLimitChange" />
+    </div>
   </div>
 </template>
 
@@ -54,7 +63,6 @@
   interface Props {
     uid: string;
     toolDetails: ToolDetailModel;
-    maxHeight?: string | number;
     searchList: SearchItem[];
     getToolNameAndType: (uid: string) => { name: string, type: string };
     riskToolParams?: Record<string, any>;
@@ -65,35 +73,33 @@
   }
 
   const props = withDefaults(defineProps<Props>(), {
-    maxHeight: '300px',
     riskToolParams: () => ({}),
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  // 表格实际最大高度 = 总高度 - 分页区域高度(约56px)
+  // 表格响应式高度：大屏800px / 小屏600px - 分页区域高度(约56px)
+  const isLargeScreen = ref(window.innerWidth >= 1440);
   const tableMaxHeight = computed(() => {
-    const h = typeof props.maxHeight === 'number' ? props.maxHeight : parseInt(String(props.maxHeight), 10);
-    return `${Math.max(h - 56, 100)}px`;
+    const baseH = isLargeScreen.value ? 800 : 600;
+    return `${Math.max(baseH - 56, 100)}px`;
   });
 
-  // TDesign 分页配置
-  const paginationConfig = computed(() => ({
-    current: pagination.value.current,
-    pageSize: pagination.value.limit,
-    total: pagination.value.count,
-    pageSizeOptions: pagination.value.limitList,
-    showJumper: false,
-    showPageSize: true,
-    showPageNumber: true,
-  }));
+  // 监听窗口变化
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', () => {
+      isLargeScreen.value = window.innerWidth >= 1440;
+    });
+  }
 
+  // bk-pagination 分页状态
   const pagination = ref({
     count: 0,
     limit: 10,
     current: 1,
     limitList: [10, 20, 50, 100, 200, 500, 1000],
   });
+
   const tableData = ref<Record<string, any>[]>([]);
 
   // 获取工具执行结果
@@ -103,12 +109,22 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      if (data === undefined) {
+      if (!data?.data) {
         tableData.value = [];
-      } else if (data?.data) {
-        tableData.value = data.data.results || [];
-        pagination.value.count = data.data.total || 0;
+        pagination.value.count = 0;
+        return;
       }
+
+      const results = data.data.results || [];
+      tableData.value = results;
+
+      // 从响应中提取 total：按优先级尝试多个路径
+      const rawTotal = data.data.total
+        ?? data.data?.data?.total
+        ?? data?.total
+        ?? 0;
+
+      pagination.value.count = Math.max(rawTotal, results.length);
     },
   });
 
@@ -309,21 +325,23 @@
           </div>
       );
     },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   })) as any);
 
   const handleFieldDownClick = (item: OutputFields, data: Record<any, any>, uid?: string) => {
     emit('handleFieldDownClick', item, data, uid);
   };
 
-  const handlePageLimitChange = (val: number) => {
-    pagination.value.limit = val;
-    pagination.value.current = 1;
+  // bk-pagination 翻页事件
+  const handlePaginationChange = (current: number) => {
+    pagination.value.current = current;
     executeTool();
   };
 
-  const handlePageValueChange = (pageInfo: any) => {
-    pagination.value.current = pageInfo.current;
+  // bk-pagination 切换每页条数事件
+  const handleLimitChange = (limit: number) => {
+    pagination.value.limit = limit;
+    pagination.value.current = 1;
     executeTool();
   };
 </script>
@@ -331,12 +349,26 @@
 .data-search-result-wrapper {
   display: flex;
   flex-direction: column;
+
+  /* 防止父容器产生额外滚动条，只保留表格自身内部滚动 */
   overflow: hidden;
 
   :deep(.t-table--scroll-horizontal) {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+    overflow: auto !important;
+  }
+
+  :deep(.t-table--scroll-vertical) {
+    overflow: auto !important;
+  }
+
+  .pagination-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 12px 16px;
+    background-color: #fff;
+
+    /* 分页样式由底部非 scoped style 块统一处理 */
   }
 }
 
@@ -346,5 +378,18 @@
   text-decoration-color: #c4c6cc;
   text-underline-offset: 5px;
   cursor: pointer;
+}
+</style>
+
+<style lang="postcss">
+/* 分页器：共x条/每页x条 在左，页码在右（非 scoped，确保穿透组件边界） */
+.data-result-pagination .bk-pagination {
+  display: flex !important;
+  align-items: center;
+  width: 100%;
+}
+
+.data-result-pagination .bk-pagination > *:nth-last-child(1) {
+  margin-left: auto !important;
 }
 </style>
