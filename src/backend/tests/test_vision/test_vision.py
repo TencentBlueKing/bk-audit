@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from copy import deepcopy
 from unittest import mock
 
 from services.web.vision.models import VisionPanel
@@ -86,6 +87,30 @@ class TestVision(TestCase):
             **DATASET_QUERY_PARAMS,
             **{"constants[scope_type]": "system", "constants[scope_id]": "bk_a"},
         )
+        self.assertTrue(result['result'])
+        self.assertEqual(
+            mock_scope_filter_cls.call_args.args[0]["constants"],
+            {"scope_type": "system", "scope_id": "bk_a"},
+        )
+
+    @mock.patch(
+        "services.web.vision.handlers.query.api.bk_vision.query_dataset",
+        mock.Mock(return_value=DATASET_QUERY_RESPONSE['data']),
+    )
+    @mock.patch("services.web.vision.handlers.query.SystemScopeFilter")
+    def test_dataset_query_normalizes_option_constants(self, mock_scope_filter_cls):
+        VisionPanel.objects.filter(id="just_test").update(handler="CommonVisionHandler")
+        mock_scope_filter_cls.return_value.check_data.return_value = CHECK_DATA
+        params = deepcopy(DATASET_QUERY_PARAMS)
+        params["option"]["constants"].extend(
+            [
+                {"flag": "scope_type", "value": "system"},
+                {"flag": "scope_id", "value": "bk_a"},
+            ]
+        )
+
+        result = self.resource.vision.query_dataset(**params)
+
         self.assertTrue(result['result'])
         self.assertEqual(
             mock_scope_filter_cls.call_args.args[0]["constants"],
