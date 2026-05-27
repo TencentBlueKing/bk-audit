@@ -525,6 +525,7 @@ export default {
   请输入标签名称: 'Please enter the Tag name',
   请输入命中策略ID: 'Please enter the Strategy ID',
   请选择当前状态: 'Please select the Status',
+  此账号未关联平台账号: 'This account is not associated with a platform account',
   请输入通知人: 'Please enter the notifier',
   部署中: 'Deploying',
   等待中: 'Waiting',

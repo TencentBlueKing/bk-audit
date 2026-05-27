@@ -100,7 +100,7 @@ export const useGameSearchFields = () => {
     { id: 'gift_amount', fieldKey: GIFT_DETAIL_FIELDS.GIFT_AMOUNT, name: t('赠送总额'), placeholder: t('请输入赠送总额'), conditions: numberConditions },
     { id: 'gift_unit_price', fieldKey: GIFT_DETAIL_FIELDS.GIFT_UNIT_PRICE, name: t('赠送单价'), placeholder: t('请输入赠送单价'), conditions: numberConditions },
     { id: 'item_count', fieldKey: GIFT_DETAIL_FIELDS.ITEM_COUNT, name: t('赠送数量'), placeholder: t('请输入赠送数量'), conditions: numberConditions },
-    { id: 'gift_times', fieldKey: GIFT_DETAIL_FIELDS.GIFT_TIMES, name: t('赠送次数'), placeholder: t('请输入赠送次数'), conditions: numberConditions },
+
   ];
 
   // ========== 交易记录搜索字段 ==========
@@ -115,7 +115,6 @@ export const useGameSearchFields = () => {
     { id: 'trade_amount', fieldKey: TRADE_DETAIL_FIELDS.TRADE_AMOUNT, name: t('交易总额'), placeholder: t('请输入交易总额'), conditions: numberConditions },
     { id: 'trade_unit_price', fieldKey: TRADE_DETAIL_FIELDS.TRADE_UNIT_PRICE, name: t('交易单价'), placeholder: t('请输入交易单价'), conditions: numberConditions },
     { id: 'trade_count', fieldKey: TRADE_DETAIL_FIELDS.TRADE_COUNT, name: t('交易数量'), placeholder: t('请输入交易数量'), conditions: numberConditions },
-    { id: 'trade_times', fieldKey: TRADE_DETAIL_FIELDS.TRADE_TIMES, name: t('交易次数'), placeholder: t('请输入交易次数'), conditions: numberConditions },
   ];
 
   // ========== 代币发放记录搜索字段 ==========
