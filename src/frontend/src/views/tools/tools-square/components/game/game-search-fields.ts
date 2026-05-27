@@ -79,7 +79,8 @@ export const useGameSearchFields = () => {
   const loginSearchFields: SearchFieldItem[] = [
     { id: 'login_ip', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_IP, name: t('登录IP'), placeholder: t('请输入登录IP'), conditions: textConditions },
     { id: 'login_location', fieldKey: LOGIN_DETAIL_FIELDS.LOGIN_LOCATION, name: t('登录地点'), placeholder: t('请选择'), conditions: enumConditions, onlyRecommendChildren: true, dynamicChildren: true },
-    { id: 'zone_id', fieldKey: LOGIN_DETAIL_FIELDS.ZONE, name: t('大区ID'), placeholder: t('请输入大区ID'), conditions: numberConditions },
+    { id: 'zone_id', fieldKey: LOGIN_DETAIL_FIELDS.ZONE, name: t('大区'), placeholder: t('请选择'), conditions: enumConditions,
+      children: [{ id: '手Q', name: '手Q' }, { id: '微信', name: '微信' }], onlyRecommendChildren: true },
     { id: 'role_id', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_ID, name: t('角色ID'), placeholder: t('请输入角色ID'), conditions: numberConditions },
     { id: 'role_name', fieldKey: LOGIN_DETAIL_FIELDS.ROLE_NAME, name: t('角色名称'), placeholder: t('请输入角色名称'), conditions: textConditions },
     { id: 'level', fieldKey: LOGIN_DETAIL_FIELDS.LEVEL, name: t('等级'), placeholder: t('请输入等级'), conditions: numberConditions },
@@ -92,7 +93,7 @@ export const useGameSearchFields = () => {
     { id: 'target_openid', fieldKey: GIFT_DETAIL_FIELDS.TARGET_OPENID, name: t('赠送对象'), placeholder: t('请输入赠送对象openid'), conditions: textConditions },
     { id: 'nickname', fieldKey: GIFT_DETAIL_FIELDS.NICKNAME, name: t('昵称'), placeholder: t('请输入昵称'), conditions: textConditions },
     { id: 'is_employee', fieldKey: GIFT_DETAIL_FIELDS.IS_EMPLOYEE, name: t('是否员工'), placeholder: t('请选择'), conditions: enumConditions,
-      children: [{ id: 'yes', name: t('是') }, { id: 'no', name: t('否') }], onlyRecommendChildren: true },
+      children: [{ id: '1', name: '1' }, { id: '0', name: '0' }], onlyRecommendChildren: true },
     { id: 'zone_id', fieldKey: GIFT_DETAIL_FIELDS.ZONE, name: t('大区'), placeholder: t('请输入大区'), conditions: numberConditions },
     { id: 'item_id', fieldKey: GIFT_DETAIL_FIELDS.ITEM_ID, name: t('道具ID'), placeholder: t('请输入道具ID'), conditions: numberConditions },
     { id: 'item_name', fieldKey: GIFT_DETAIL_FIELDS.ITEM_NAME, name: t('道具名称'), placeholder: t('请输入道具名称'), conditions: textConditions },

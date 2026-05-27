@@ -215,6 +215,7 @@
           :name="tab.key">
           <game-record-tab
             :chart-active-names="tabChartActiveNames[tab.key]"
+            :chart-columns="tab.chartColumns"
             :chart-loading="tabChartLoadingMap[tab.key]"
             :chart-rows="tab.chartRows"
             :chart-title="tab.chartTitle"
@@ -290,6 +291,7 @@
     label: string;
     chartRows: ChartConfig[][];
     chartTitle?: string;
+    chartColumns?: number;
     searchPlaceholder: string;
     searchFields: SearchFieldItem[];
     table: {
@@ -572,6 +574,7 @@
       label: t('登录记录'),
       chartRows: loginChartRows.value,
       chartTitle: t('登录分布总览'),
+      chartColumns: 3,
       searchPlaceholder: t('搜索 登录地点、登录IP、大区ID、角色ID、角色名称、等级、登录设备、机型'),
       searchFields: loginSearchFields,
       table: {
@@ -614,6 +617,7 @@
       label: t('代币发放记录'),
       chartRows: sapChartRows.value,
       chartTitle: t('发放分布总览'),
+      chartColumns: 3,
       searchPlaceholder: t('搜索 发放人、大区、发放数量、发放金额、操作原因、需求类型、需求来源'),
       searchFields: coinSearchFields,
       table: {
@@ -1096,8 +1100,6 @@
 
 /* Tab 标签页 */
 .game-tabs {
-  /* 顶部预留 12px 给阴影向上扩散的空间，避免被外层容器 overflow 裁剪 */
-  padding-top: 12px;
   margin-top: 4px;
 }
 
