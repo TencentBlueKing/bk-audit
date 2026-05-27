@@ -410,20 +410,13 @@ export const useGameDetailFetcher = (
     );
   };
 
-  // 赠送记录（图表用 detail 日期范围；表格固定使用一年前~今天）
+  // 赠送记录（图表和表格都使用 detail 日期范围）
   const fetchGiveData = () => {
-    const dp = getDateParams();
-    const ctx = getCtx();
     const chartParams = buildRangeParams('gift');
-    const tableParams = {
-      one_year_ago_Ymd: dp.one_year_ago_Ymd,
-      selected_gameid: ctx.gameid,
-      selected_openid: ctx.openid,
-    };
     loadChartAndTable(
       'gift',
       'give_groupdim_stats', chartParams,
-      'give_detail_list', tableParams,
+      'give_detail_list', chartParams,
       state.giveGroupStats, state.giveDetailList, state.giftPagination,
     );
   };
