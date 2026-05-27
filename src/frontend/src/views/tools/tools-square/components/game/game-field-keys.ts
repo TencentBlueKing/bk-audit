@@ -76,7 +76,6 @@ export const GIFT_DETAIL_FIELDS = {
   GIFT_AMOUNT: '赠送总额（元）',
   GIFT_UNIT_PRICE: '赠送单价（元）',
   ITEM_COUNT: '赠送数量',
-  GIFT_TIMES: '赠送次数',
 } as const;
 
 // ========== 交易明细相关字段 ==========
@@ -91,7 +90,6 @@ export const TRADE_DETAIL_FIELDS = {
   TRADE_AMOUNT: '交易总额',
   TRADE_UNIT_PRICE: '交易单价',
   TRADE_COUNT: '交易数量',
-  TRADE_TIMES: '交易次数',
   TRADE_TOTAL: '交易金额',
 } as const;
 

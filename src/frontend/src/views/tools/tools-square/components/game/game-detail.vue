@@ -36,11 +36,16 @@
         <div class="info-item">
           <span class="info-label">{{ gameData.platType === 'qq' ? 'QQ' : '微信' }}</span>
           <span class="info-value">
-            {{ isPlatAccountVisible ? gameData.platAccount : '******' }}
-            <audit-icon
-              class="eye-icon"
-              :type="isPlatAccountVisible ? 'view' : 'unview'"
-              @click="isPlatAccountVisible = !isPlatAccountVisible" />
+            <template v-if="gameData.platType || gameData.platAccount">
+              {{ isPlatAccountVisible ? gameData.platAccount : '******' }}
+              <audit-icon
+                class="eye-icon"
+                :type="isPlatAccountVisible ? 'view' : 'unview'"
+                @click="isPlatAccountVisible = !isPlatAccountVisible" />
+            </template>
+            <template v-else>
+              {{ t('此账号未关联平台账号') }}
+            </template>
           </span>
         </div>
         <div class="info-item">

@@ -293,8 +293,8 @@
 
   // 排序状态：默认不排序
   const sortState = ref<{ column: string; type: string }>({
-    column: '',
-    type: '',
+    column: PROFILE_FIELDS.COIN_BALANCE_UNIT,
+    type: 'desc',
   });
 
   // 搜索过滤（main_openid_list 改用账号宽表后，旧的总支出字段不再返回，按接口返回顺序展示）
@@ -649,7 +649,7 @@
         );
       },
     },
-    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
+    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
     { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
     // TODO: 后端暂未返回"累计赠送次数"与"累计交易次数"，待接口支持后取消注释
@@ -747,6 +747,9 @@
     gameList.value = [];
     // 重置游戏列表隐藏标识（仅 openid 单条结果时会再次置 true）
     hideGameList.value = false;
+    // 重置排序状态为默认：按代币存量降序
+    sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
+    pagination.value.current = 1;
     userInfo.value = {
       avatar: '', wecom: '', username: '', wechat: '', qq: '',
       status: '', department: '',
@@ -813,7 +816,7 @@
     // 重置游戏列表
     gameList.value = [];
     gameSearchKey.value = '';
-    sortState.value = { column: '', type: '' };
+    sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.count = 0;
     pagination.value.current = 1;
   };
