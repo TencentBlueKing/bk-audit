@@ -516,7 +516,7 @@
 
   // 记录用户主动翻页/切条数的意图（用独立变量，不依赖响应式对象引用）
   const pendingPageMap = new Map<string, { current?: number; limit?: number }>();
-  let _isUserPaginating = false;
+  let isUserPaginating = false;
 
   // bk-pagination 翻页/切条数后触发请求
   const handleGroupPaginationChange = (groupIndex: number, tableIndex: number, targetPage?: number) => {
@@ -528,7 +528,7 @@
       current: targetPage ?? tf.pagination.current,
       limit: tf.pagination.limit,
     });
-    _isUserPaginating = true;
+    isUserPaginating = true;
     executeTool();
   };
 
@@ -867,8 +867,8 @@
 
     // 如果是用户主动翻页/切条数触发的请求（pendingPageMap 有记录），
     // 则只更新数据，不重建 groupData 结构（保留分页状态和 DOM 实例）
-    if (_isUserPaginating && pendingPageMap.size > 0 && groupData.value.length > 0) {
-      _isUserPaginating = false;
+    if (isUserPaginating && pendingPageMap.size > 0 && groupData.value.length > 0) {
+      isUserPaginating = false;
       nextTick(() => {
         if (!data.data?.result) return;
         const { result } = data.data;
@@ -947,7 +947,7 @@
     }
 
     // 首次加载或非翻页请求：完整重建 groupData
-    _isUserPaginating = false;
+    isUserPaginating = false;
     const previousPaginationState = new Map<string, { current: number; limit: number }>();
     groupData.value.forEach((group, gIdx) => {
       group.table_fields.forEach((tf, tIdx) => {
