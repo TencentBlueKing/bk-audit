@@ -323,7 +323,16 @@
           label: {
             show: true,
             position: 'center',
-            formatter: () => `{total|${props.centerLabel}}\n{count|${formatNumber(filteredTotal.value)}}`,
+            formatter: () => {
+              // 选中单个图例时，中心显示该图例的名称和数值
+              if (props.activeName) {
+                const activeItem = filteredData.value.find(item => item.dim_value === props.activeName);
+                if (activeItem) {
+                  return `{total|${props.centerLabel}}\n{count|${formatNumber(activeItem.metric_value)}}`;
+                }
+              }
+              return `{total|${props.centerLabel}}\n{count|${formatNumber(filteredTotal.value)}}`;
+            },
             rich: {
               total: {
                 fontSize: layout.centerFontSize,
