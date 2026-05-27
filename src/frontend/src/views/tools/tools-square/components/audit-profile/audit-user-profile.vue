@@ -80,6 +80,7 @@
                 <bk-input
                   v-model="gameSearchKey"
                   class="game-search-input"
+                  clearable
                   :placeholder="t('搜索 游戏名称、openid')"
                   type="search" />
                 <bk-popover
@@ -996,10 +997,11 @@
 /* 全部为空时的统一空状态 */
 .profile-all-empty {
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 360px;
+  margin-top: 12px;
   background: #fff;
+  align-items: center;
+  justify-content: center
 }
 
 .top-search {
