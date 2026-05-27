@@ -164,6 +164,16 @@ class TestSqlTemplateRenderer(SimpleTestCase):
         with self.assertRaises(SmartPageBindParamMissingError):
             render_sql_template(sql, {})
 
+    def test_render_template_should_support_missing_param_default_expression(self):
+        sql = "SELECT * FROM t WHERE gameid = {{ bind('gameid', output_type='int') if has('gameid') else 1329 }}"
+        rendered = render_sql_template(sql, {})
+        self.assertEqual(normalize_sql(rendered), "SELECT * FROM t WHERE gameid = 1329")
+
+    def test_render_template_should_not_expose_raw_params(self):
+        sql = "SELECT * FROM t WHERE name='{{ params.kw }}'"
+        with self.assertRaises(SmartPageSqlTemplateRenderError):
+            render_sql_template(sql, {"kw": "alice"})
+
     def test_bind_should_convert_by_output_type_enum(self):
         sql = "SELECT * FROM t WHERE id = {{ bind('id', output_type='int') }}"
         rendered = render_sql_template(sql, {"id": "42"})
