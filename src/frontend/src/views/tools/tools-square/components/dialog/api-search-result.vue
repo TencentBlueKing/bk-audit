@@ -333,11 +333,11 @@
   // 否则 bk-table 在 count=0/中间值时挂载，分页器会用初值快照，后续更新不再生效。
   const tableReady = ref(false);
 
-  // 表格响应式高度：大屏600px / 小屏400px - 分页区域高度(约56px)
+  // 表格响应式高度：大屏600px / 小屏400px - 分页区域高度(约68px)
   const isLargeScreen = ref(window.innerWidth >= 1440);
   const tableMaxHeight = computed(() => {
     const baseH = isLargeScreen.value ? 800 : 600;
-    return `${Math.max(baseH - 56, 100)}px`;
+    return `${Math.max(baseH - 80, 100)}px`;
   });
 
   if (typeof window !== 'undefined') {
@@ -1099,6 +1099,7 @@
 </script>
 
 <style scoped lang="postcss">
+/* stylelint-disable */
 :deep(.card-content) {
   padding: 16px;
   background-color: #fafbfd;
@@ -1160,12 +1161,81 @@
   /* 防止父容器产生额外的滚动条，只保留表格自身的内部滚动 */
   overflow: hidden;
 
-  :deep(.t-table--scroll-vertical) {
-    overflow: auto !important;
+  :deep(.t-table) {
+    overflow: clip;
+  }
+
+  /* 核心修复：裁剪 TDesign Table 底部 L 型多余滚动条轨道 */
+  :deep(.t-table__inner-wrapper),
+  :deep(.t-table__scroll-container) {
+    overflow: hidden;
   }
 
   :deep(.t-table--scroll-horizontal) {
-    overflow: auto !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  :deep(.t-table--scroll-vertical) {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  /* 固定滚动条宽度：hover 时不变宽，避免布局抖动 */
+  :deep(.t-table--scroll-horizontal),
+  :deep(.t-table--scroll-vertical),
+  :deep(.t-table__inner-wrapper),
+  :deep(.t-table__scroll-container) {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c6cc transparent;
+  }
+
+  /* WebKit: 固定尺寸，禁止 hover 变宽（覆盖 scroll-faker 组件的 14px !important） */
+  :deep(.t-table--scroll-horizontal),
+  :deep(.t-table--scroll-vertical),
+  :deep(.t-table__inner-wrapper),
+  :deep(.t-table__scroll-container) {
+    &::-webkit-scrollbar,
+    & .scrollbar-vertical::-webkit-scrollbar,
+    & .scrollbar-horizontal::-webkit-scrollbar {
+      height: 6px !important;
+      width: 6px !important;
+    }
+
+    &:hover::-webkit-scrollbar,
+    & .scrollbar-vertical:hover::-webkit-scrollbar,
+    & .scrollbar-horizontal:hover::-webkit-scrollbar {
+      height: 6px !important;
+      width: 6px !important;
+    }
+
+    & .scrollbar-vertical,
+    & .scrollbar-horizontal {
+      &:hover::-webkit-scrollbar {
+        height: 6px !important;
+        width: 6px !important;
+      }
+    }
+
+    &::-webkit-scrollbar-thumb,
+    & .scrollbar-vertical::-webkit-scrollbar-thumb,
+    & .scrollbar-horizontal::-webkit-scrollbar-thumb {
+      background-color: #c4c6cc !important;
+      border-radius: 3px !important;
+    }
+
+    &:hover::-webkit-scrollbar-thumb,
+    & .scrollbar-vertical:hover::-webkit-scrollbar-thumb,
+    & .scrollbar-horizontal:hover::-webkit-scrollbar-thumb {
+      background-color: #a3a6ad !important;
+      border-radius: 3px !important;
+    }
+
+    &::-webkit-scrollbar-track,
+    & .scrollbar-vertical::-webkit-scrollbar-track,
+    & .scrollbar-horizontal::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
   }
 }
 </style>
