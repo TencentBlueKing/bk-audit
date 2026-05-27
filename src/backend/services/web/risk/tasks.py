@@ -101,11 +101,12 @@ def render_risk_report(self, risk_id: str, task_id: str):
         logger_celery.info("[RenderRiskReportFailed] risk_id=%s, task_id=%s, error=%s", risk_id, task_id, exc)
         # 注意：handler.run() 的 finally 块已经释放了锁，这里不需要再释放
         try:
-            # 失败重试
-            self.retry(exc=exc, countdown=settings.RENDER_RETRY_DELAY)
+            # 失败重试（不传 exc 参数，确保达到上限时 raise MaxRetriesExceededError）
+            self.retry(countdown=settings.RENDER_RETRY_DELAY)
         except MaxRetriesExceededError:
             # 达到最大重试次数
             handler.handle_max_retries_exceeded(exc)
+            raise
 
 
 @periodic_task(run_every=crontab(minute="*/10"), queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)

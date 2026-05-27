@@ -14,9 +14,11 @@ from services.web.common.monitor import RiskReportRenderFailedEvent
 from services.web.risk.constants import (
     RISK_EVENT_LATEST_TIME_KEY,
     RISK_RENDER_LOCK_KEY,
+    ContentQualityError,
     RiskReportStatus,
 )
 from services.web.risk.models import Risk, RiskReport
+from services.web.risk.report.quality import check_and_report_quality
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
 
@@ -87,6 +89,9 @@ class RiskReportHandler:
                     self.task_id,
                 )
                 return
+
+            # 5.5 内容质量检测（有问题则抛异常触发重试）
+            self._check_content_quality(report_content)
 
             # 6. 更新报告
             self._update_report(content=report_content)
@@ -211,6 +216,20 @@ class RiskReportHandler:
             # 2. 如果已存在（违反唯一约束），则更新
             RiskReport.objects.filter(risk_id=self.risk_id).update(content=content, status=RiskReportStatus.AUTO)
             logger.info("[RiskReportHandler] Report updated. risk_id=%s", self.risk_id)
+
+    def _check_content_quality(self, content: str):
+        """检测报告内容质量，异常时上报监控事件并抛出异常触发重试
+
+        调用公共函数 check_and_report_quality() 执行检测和上报，
+        如果发现质量问题则抛出 ContentQualityError，
+        由 render_risk_report 任务的 except 块捕获并触发 self.retry()。
+        """
+        issues = check_and_report_quality(
+            content=content,
+            risk_id=self.risk_id,
+        )
+        if issues:
+            raise ContentQualityError(issues)
 
     def _handle_tail_trigger(self):
         """
