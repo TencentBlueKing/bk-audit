@@ -42,7 +42,7 @@
             <!-- 图表有数据 -->
             <div
               v-if="chartRows.length > 0"
-              class="charts-content">
+              :class="chartsContentClass">
               <div
                 v-for="(row, rowIndex) in chartRows"
                 :key="rowIndex"
@@ -52,6 +52,7 @@
                   :key="chartIndex"
                   :active-name="chartActiveNames[chart.title] || ''"
                   :center-label="chart.centerLabel"
+                  :col-count="row.length"
                   :data="chart.data"
                   :title="chart.title"
                   :tooltip-name-map="chart.tooltipNameMap"
@@ -112,24 +113,18 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import type { ChartConfig } from './game-chart-builder';
   import type { SearchFieldItem } from './game-search-fields';
   import RecordDetailTable from './record-detail-table.vue';
   import RecordPieChart from './record-pie-chart.vue';
 
-  interface ChartConfig {
-    title: string;                                    // 图表标题
-    data: Array<{ name: string; value: number }>;     // 饼图数据
-    total: number;                                    // 总数
-    centerLabel: string;                              // 中心文字
-    tooltipNameMap?: Record<string, string>;          // 图例名称 → hover 展示名称 映射
-  }
-
   interface Props {
     chartRows?: ChartConfig[][];                      // 图表行配置，每个子数组代表一行
-    chartTitle?: string;                              // 图表区域总览标题（如"赠送分布总览"）
+    chartTitle?: string;                              // 图表区域总览标题（如“赠送分布总览”）
+    chartColumns?: number;                            // 图表每行列数（3=固定三列，默认为响应式2/4列）
     tableTitle: string;                               // 表格标题
     tableColumns: Array<Record<string, any>>;         // 表格列配置
     tableData: Array<Record<string, any>>;            // 表格数据
@@ -147,10 +142,10 @@
     externalConditions?: any[];                       // 外部注入的搜索条件（用于图表联动）
     chartActiveNames?: Record<string, string>;        // 各饼图当前激活项（key=图表title，value=激活的图例名）
   }
-
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     chartRows: () => [],
     chartTitle: '',
+    chartColumns: 0,
     showDatePicker: true,
     searchFields: () => [],
     chartLoading: false,
@@ -168,6 +163,12 @@
     'search-condition-change': [conditions: any[]];
     'legend-click': [payload: { title: string; name: string; selected: boolean }];
   }>();
+
+  // 根据 chartColumns 生成图表容器的 CSS 类名
+  const chartsContentClass = computed(() => {
+    if (props.chartColumns === 3) return 'charts-content charts-content--fixed-3';
+    return 'charts-content';
+  });
 
   const { t } = useI18n();
 
@@ -202,13 +203,13 @@
 
 <style scoped lang="postcss">
 .game-record-tab {
-  padding-top: 16px;
+  padding-top: 5px;
 }
 
 /* 图表区域容器 */
 .chart-section-wrapper {
   position: relative;
-  padding: 12px 16px 16px;
+  padding: 8px 12px 12px;
   background: #fff;
   border-radius: 2px 2px 0 0;
 
@@ -228,7 +229,7 @@
 .chart-overview-header {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   cursor: pointer;
   user-select: none;
 
@@ -239,9 +240,9 @@
   }
 
   .chart-overview-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
-    line-height: 22px;
+    line-height: 20px;
     color: #313238;
   }
 }
@@ -283,11 +284,12 @@
   height: 300px;
 }
 
+/* 默认：每行展示 2 个（赠送记录、交易记录） */
 .charts-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 0;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   overflow: hidden;
   background: #fff;
   border-radius: 2px;
@@ -298,7 +300,7 @@
 
   :deep(.record-pie-chart) {
     min-width: 0;
-    padding: 16px 20px 0;
+    padding: 8px 12px 0;
     background: transparent;
     border-right: 1px solid #dcdee5;
     border-radius: 0;
@@ -307,14 +309,67 @@
   :deep(.record-pie-chart:last-child) {
     border-right: none;
   }
+
+  /* 每行最后一个（第2个）去掉右边框 */
+  :deep(.record-pie-chart:nth-child(2n)) {
+    border-right: none;
+  }
 }
 
-@media (width <= 1200px) {
+/* 固定 3 列布局（登录记录、代币发放记录） */
+.charts-content--fixed-3 {
   .charts-section {
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
 
-    :deep(.record-pie-chart) {
-      padding: 16px;
+    :deep(.record-pie-chart:nth-child(2n)) {
+      border-right: 1px solid #dcdee5;
+    }
+
+    :deep(.record-pie-chart:nth-child(3n)) {
+      border-right: none;
+    }
+
+    :deep(.record-pie-chart:last-child) {
+      border-right: none;
+    }
+  }
+}
+
+/* 屏幕宽度超过 2300px 时，响应式布局一行展示 4 个（仅对非固定列数的生效） */
+
+/* 通过 .charts-content 作为 grid 容器，.charts-section 使用 display:contents 打平子元素 */
+@media (width >= 2300px) {
+  .charts-content:not(.charts-content--fixed-3) {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    overflow: hidden;
+    background: #fff;
+    border-radius: 2px;
+
+    .charts-section {
+      display: contents;
+
+      :deep(.record-pie-chart) {
+        min-width: 0;
+        padding: 5px 12px 0;
+        background: transparent;
+        border-right: 1px solid #dcdee5;
+        border-radius: 0;
+      }
+
+      :deep(.record-pie-chart:nth-child(2n)) {
+        border-right: 1px solid #dcdee5;
+      }
+
+      :deep(.record-pie-chart:last-child) {
+        border-right: 1px solid #dcdee5;
+      }
+    }
+
+    /* 只有最后一个 section 的最后一个饼图去掉右边框 */
+    .charts-section:last-child :deep(.record-pie-chart:last-child) {
+      border-right: none;
     }
   }
 }
@@ -328,8 +383,20 @@
       border-bottom: 1px solid #f0f1f5;
     }
 
+    :deep(.record-pie-chart:nth-child(2n)) {
+      border-right: none;
+    }
+
     :deep(.record-pie-chart:last-child) {
       border-bottom: none;
+    }
+  }
+
+  .charts-content--fixed-3 .charts-section {
+    grid-template-columns: 1fr;
+
+    :deep(.record-pie-chart:nth-child(3n)) {
+      border-right: none;
     }
   }
 }
