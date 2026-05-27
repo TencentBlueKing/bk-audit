@@ -55,7 +55,7 @@
           enable-search
           resizable
           :search-data="dataTableSearchData"
-          :search-placeholder="t('搜索 数据表名称(ID)、管理员')"
+          :search-placeholder="t('搜索 数据表名称、数据表ID、管理员')"
           show-pagination
           stripe
           :title="t('关联数据表')"
@@ -213,7 +213,7 @@
   const dataTableColumns = [
     {
       colKey: 'result_table_name_alias',
-      title: () => t('数据表名称'),
+      title: () => t('数据表名称（ID）'),
       width: 250,
       resizable: true,
       cell: (_h: any, { row }: { row: any }) => {
