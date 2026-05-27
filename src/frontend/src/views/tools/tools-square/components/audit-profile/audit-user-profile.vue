@@ -291,10 +291,10 @@
   // 缓存最近一次查询的账号类型
   const lastAccountType = ref('');
 
-  // 排序状态：默认按代币存量(代)逆序
+  // 排序状态：默认不排序
   const sortState = ref<{ column: string; type: string }>({
-    column: PROFILE_FIELDS.COIN_BALANCE_UNIT,
-    type: 'desc',
+    column: '',
+    type: '',
   });
 
   // 搜索过滤（main_openid_list 改用账号宽表后，旧的总支出字段不再返回，按接口返回顺序展示）
@@ -312,7 +312,7 @@
   const sortedGameList = computed(() => {
     const list = [...filteredGameList.value];
     const { column, type } = sortState.value;
-    if (!column || !type) return list;
+    if (!column || !type || type === 'null') return list;
     list.sort((a, b) => {
       const valA = Number(a[column]) || 0;
       const valB = Number(b[column]) || 0;
@@ -649,7 +649,7 @@
         );
       },
     },
-    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
+    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
     { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
     // TODO: 后端暂未返回"累计赠送次数"与"累计交易次数"，待接口支持后取消注释
@@ -725,8 +725,10 @@
   };
 
   // 排序事件处理
-  const handleColumnSort = ({ column, type }: { column: string; type: string }) => {
-    sortState.value = { column, type };
+  const handleColumnSort = ({ column, type }: { column: any; type: string }) => {
+    // bk-table 的 column-sort 事件中 column 是列配置对象，需要取 column.field 作为排序字段名
+    const field = column?.field || column;
+    sortState.value = { column: field, type };
     pagination.value.current = 1;
   };
 
@@ -811,7 +813,7 @@
     // 重置游戏列表
     gameList.value = [];
     gameSearchKey.value = '';
-    sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
+    sortState.value = { column: '', type: '' };
     pagination.value.count = 0;
     pagination.value.current = 1;
   };
