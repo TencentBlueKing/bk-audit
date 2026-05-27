@@ -108,7 +108,7 @@ export const useGameSearchFields = () => {
     { id: 'trade_target', fieldKey: TRADE_DETAIL_FIELDS.TRADE_TARGET, name: t('交易对象'), placeholder: t('请输入交易对象'), conditions: textConditions },
     { id: 'nickname', fieldKey: TRADE_DETAIL_FIELDS.NICKNAME, name: t('昵称'), placeholder: t('请输入昵称'), conditions: textConditions },
     { id: 'is_employee', fieldKey: TRADE_DETAIL_FIELDS.IS_EMPLOYEE, name: t('是否员工'), placeholder: t('请选择'), conditions: enumConditions,
-      children: [{ id: 'yes', name: t('是') }, { id: 'no', name: t('否') }], onlyRecommendChildren: true },
+      children: [{ id: '1', name: '1' }, { id: '0', name: '0' }], onlyRecommendChildren: true },
     { id: 'zone_id', fieldKey: TRADE_DETAIL_FIELDS.ZONE_ID, name: t('大区'), placeholder: t('请输入大区ID'), conditions: numberConditions },
     { id: 'item_id', fieldKey: TRADE_DETAIL_FIELDS.ITEM_ID, name: t('道具ID'), placeholder: t('请输入道具ID'), conditions: numberConditions },
     { id: 'item_name', fieldKey: TRADE_DETAIL_FIELDS.ITEM_NAME, name: t('道具名称'), placeholder: t('请输入道具名称'), conditions: textConditions },
