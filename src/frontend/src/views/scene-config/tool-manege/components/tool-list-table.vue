@@ -155,6 +155,15 @@
     window.open(url, '_blank');
   };
 
+  // 跳转至工具广场并打开该工具
+  const handleOpenToolInSquare = (uid: string) => {
+    const url = router.resolve({
+      name: 'toolDetail',
+      params: { uid },
+    }).href;
+    window.open(url, '_blank');
+  };
+
   // 引用策略hover弹窗内容
   const renderStrategiesTooltipContent = (strategies: number[]) => (
     <div class="strategies-tooltip-content">
@@ -179,6 +188,17 @@
       colKey: 'name',
       width: 120,
       ellipsis: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span class="tool-name-cell">
+          {row.name}
+          {row.status === 'published' && (
+            <audit-icon
+              class="jump-link hover-show-icon"
+              type="jump-link"
+              onClick={() => handleOpenToolInSquare(row.uid)} />
+          )}
+        </span>
+      ),
     },
     {
       title: t('工具说明'),
@@ -445,6 +465,12 @@
     align-items: center;
   }
 
+  .tool-name-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
   .action-cell {
     display: flex;
     gap: 16px;
@@ -469,6 +495,21 @@
   .report-config-list {
     :deep(.t-table__row--hover) {
       background-color: #fff !important;
+    }
+  }
+
+  :deep(.jump-link) {
+    color: #3a84ff;
+    cursor: pointer;
+  }
+
+  :deep(.hover-show-icon) {
+    visibility: hidden;
+  }
+
+  :deep(tr:hover) {
+    .hover-show-icon {
+      visibility: visible;
     }
   }
 </style>
