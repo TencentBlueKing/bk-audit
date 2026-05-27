@@ -19,6 +19,11 @@ to the current version of the project delivered to anyone in the future.
 from unittest import mock
 from unittest.mock import Mock
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import ProhibitNullCharactersValidator
+
+from api.bk_log.serializers import GetCollectorTailLogResponseSerializer
 from apps.exceptions import JoinDataPreCheckFailed, SnapshotPreparingException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
@@ -41,6 +46,8 @@ from tests.test_databus.collector.constants import (
     COLLECTOR_STATUS_RESULT,
     COLLECTOR_STATUS_RESULT_NODATA,
     COLLECTOR_STATUS_RESULT_NORMAL,
+    CREATE_API_PUSH_DATA,
+    CREATE_API_PUSH_RESP,
     CREATE_BCS_COLLECTOR_API_RESP,
     CREATE_BCS_COLLECTOR_DATA,
     CREATE_BCS_COLLECTOR_RESULT,
@@ -53,6 +60,8 @@ from tests.test_databus.collector.constants import (
     ETL_FIELD_HISTORY_RESULT,
     ETL_PREVIEW_DATA,
     ETL_PREVIEW_RESULT,
+    GET_API_PUSH_DATA,
+    GET_API_PUSH_RESP,
     GET_BCS_YAML_TEMPLATE_RESULT,
     GET_COLLECTOR_INFO_DATA,
     GET_COLLECTOR_RESULT_DATA,
@@ -83,6 +92,7 @@ class CollectorTest(TestCase):
     """
 
     def setUp(self) -> None:
+        super().setUp()
         self.collector = CollectorConfig.objects.create(**COLLECTOR_DATA)
         CollectorPlugin.objects.create(**PLUGIN_DATA)
         System.objects.create(
@@ -91,6 +101,8 @@ class CollectorTest(TestCase):
             provider_config={"host": SYSTEM_HOST, "token": SYSTEM_TOKEN},
             callback_url=SYSTEM_HOST,
             auth_token=SYSTEM_TOKEN,
+            created_by="admin",
+            updated_by="admin",
         )
         ResourceType.objects.create(
             system_id=self.system_id,
@@ -118,6 +130,16 @@ class CollectorTest(TestCase):
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
+        # 避免测试触发 Celery broker（Redis）连接
+        self._create_api_push_etl_delay_patch = mock.patch(
+            "databus.collector.resources.create_api_push_etl.delay",
+            mock.Mock(),
+        )
+        self._create_api_push_etl_delay_patch.start()
+
+    def tearDown(self) -> None:
+        self._create_api_push_etl_delay_patch.stop()
+        super().tearDown()
 
     def test_get_collectors(self):
         """GetCollectorsResource"""
@@ -332,3 +354,112 @@ class CollectorTest(TestCase):
         s.save()
         with self.assertRaises(SecurityForbiddenError):
             self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": True})
+
+    def __create_api_push(self):
+        with mock.patch("databus.collector.resources.create_api_push_etl.delay", mock.Mock()):
+            create_result = self.resource.databus.collector.create_api_push(**CREATE_API_PUSH_DATA)
+        return create_result
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value=CREATE_API_PUSH_RESP),
+    )
+    def test_create_api_push(self):
+        """CreateAPIPushResource"""
+        result = self.__create_api_push()
+        self.assertIsNotNone(result.get("collector_config_id"))
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.get_report_token",
+        mock.Mock(return_value=GET_API_PUSH_RESP),
+    )
+    def test_get_api_push(self):
+        """GetAPIPushResource"""
+        self.test_create_api_push()
+
+        search_result = self.resource.databus.collector.get_api_push(**GET_API_PUSH_DATA)
+        self.assertEqual(search_result.get("token"), GET_API_PUSH_RESP.get("bk_data_token"))
+        self.assertEqual(
+            list(search_result.keys()),
+            ['token', 'collector_config_id', 'bk_data_id', 'collector_config_name', 'collector_config_name_en'],
+        )
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value=CREATE_API_PUSH_RESP),
+    )
+    def test_create_api_push_idempotent(self):
+        """
+        CreateAPIPushResource 幂等性测试
+        测试重复创建API Push时的行为，应该返回已存在的配置而不是创建新的
+        """
+        # 第一次创建
+        result1 = self.__create_api_push()
+        collector_config_id = result1.get("collector_config_id")
+        self.assertIsNotNone(collector_config_id)
+
+        # 第二次创建（相同参数），应该返回已存在的配置
+        result2 = self.__create_api_push()
+        self.assertEqual(result2.get("collector_config_id"), collector_config_id)
+
+    @mock.patch(
+        "databus.collector.resources.api.bk_log.create_api_push",
+        mock.Mock(return_value={"bk_data_id": None, "collector_config_id": COLLECTOR_ID + 2}),
+    )
+    def test_create_api_push_with_custom_name(self):
+        """
+        CreateAPIPushResource 自定义名称测试
+        测试使用 custom_collector_config_name 参数创建API Push
+        """
+        custom_name = "自定义采集器名称"
+        request_data = {
+            "namespace": settings.DEFAULT_NAMESPACE,
+            "system_id": COLLECTOR_DATA.get("system_id"),
+            "custom_collector_config_name": custom_name,
+        }
+        with mock.patch("databus.collector.resources.create_api_push_etl.delay", mock.Mock()):
+            result = self.resource.databus.collector.create_api_push(**request_data)
+        self.assertIsNotNone(result.get("collector_config_id"))
+
+        # 验证自定义名称已被保存到英文名字段
+        collector = CollectorConfig.objects.get(collector_config_id=result.get("collector_config_id"))
+        self.assertEqual(collector.collector_config_name_en, custom_name)
+
+    def test_null_char_allowed_in_collector_log_data(self):
+        """
+        验证NullCharAllowedCharField允许null字符
+        """
+
+        # 构造包含null字符的测试数据
+        test_data = {
+            "origin": {
+                "datetime": "2023-01-01 00:00:00",
+                "items": [{"data": "a\x00b", "iterationindex": 1}],
+            }
+        }
+
+        # 验证序列化器可以正常处理包含null字符的数据
+        serializer = GetCollectorTailLogResponseSerializer(data=test_data)
+        self.assertTrue(serializer.is_valid(), f"Serializer validation failed: {serializer.errors}")
+
+        # 验证数据被正确反序列化
+        validated_data = serializer.validated_data
+        self.assertEqual(validated_data["origin"]["items"][0]["data"], "a\x00b")
+
+    def test_normal_char_field_rejects_null_char(self):
+        """
+        对比测试：验证ProhibitNullCharactersValidator会拒绝null字符
+        """
+
+        # 直接测试ProhibitNullCharactersValidator
+        validator = ProhibitNullCharactersValidator()
+
+        # 测试包含null字符的字符串应该抛出ValidationError
+        with self.assertRaises(ValidationError):
+            validator("a\x00b")
+
+        # 测试普通字符串应该通过验证
+        try:
+            validator("normal string")
+        except ValidationError:
+            self.fail("ProhibitNullCharactersValidator should accept normal strings")
