@@ -24,6 +24,7 @@ from bk_resource.utils.common_utils import get_md5
 from django.conf import settings
 from django.core.cache import cache
 
+from services.web.common.constants import ScopeQueryField
 from services.web.vision.constants import KeyVariable, PanelType
 from services.web.vision.handlers.filter import (
     DataFilter,
@@ -133,12 +134,31 @@ class BasicVisionHandlerMixIn(abc.ABC):
 class CommonVisionHandler(VisionHandler):
     """通用审计报表数据处理器，支持通用组织架构和标签过滤"""
 
+    SCOPE_CONSTANT_FLAGS = {ScopeQueryField.SCOPE_TYPE, ScopeQueryField.SCOPE_ID}
+
+    def normalize_scope_constants(self, params: dict) -> dict:
+        constants = params.get("constants") or {}
+        if not isinstance(constants, dict):
+            constants = {}
+
+        option_constants = params.get("option", {}).get("constants") or []
+        if isinstance(option_constants, list):
+            for item in option_constants:
+                flag = item.get("flag")
+                if flag in self.SCOPE_CONSTANT_FLAGS:
+                    constants.setdefault(flag, item.get("value"))
+
+        if constants:
+            params["constants"] = constants
+        return params
+
     def parse_flag(self, flag: str) -> str:
         if flag == KeyVariable.DEPARTMENT_NAME:
             return KeyVariable.DEPARTMENT
         return flag
 
     def query_meta(self, params: dict) -> dict:
+        params = self.normalize_scope_constants(params)
         vision_data = super().query_meta(params)
         for panel in vision_data["data"]["panels"]:
             category = panel.get("category")
@@ -160,6 +180,7 @@ class CommonVisionHandler(VisionHandler):
         return vision_data
 
     def query_dataset(self, params: dict) -> dict:
+        params = self.normalize_scope_constants(params)
         option = params.get("option", {})
         # 检测过滤条件是否合法
         variables = option.get("variables", {})
