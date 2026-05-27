@@ -539,7 +539,15 @@
   const checkRequiredFieldsFilled = (searchList: SearchItem[]): boolean => {
     if (!searchList || searchList.length === 0) return false;
     const requiredFields = searchList.filter(item => item.required);
-    if (requiredFields.length === 0) return false;
+    if (requiredFields.length === 0) {
+      // 没有必填项时，如果所有字段都为空，也触发自动查询
+      return searchList.every((item) => {
+        if (Array.isArray(item.value)) {
+          return item.value.length === 0;
+        }
+        return item.value === null || item.value === undefined || item.value === '';
+      });
+    }
     return requiredFields.every((item) => {
       if (Array.isArray(item.value)) {
         return item.value.length > 0;
