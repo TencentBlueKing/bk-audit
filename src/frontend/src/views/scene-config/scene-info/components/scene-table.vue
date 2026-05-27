@@ -137,6 +137,9 @@
     searchPlaceholder: '',
   });
 
+  const emit = defineEmits<{(e: 'search-change', value: any[]): void;
+  }>();
+
   const { t } = useI18n();
 
   // 获取用户列表（用于远程搜索人员字段）
@@ -180,8 +183,9 @@
   });
 
   // 搜索条件变化时重置页码
-  watch(searchKeyword, () => {
+  watch(searchKeyword, (val) => {
     currentPage.value = 1;
+    emit('search-change', val);
   }, { deep: true });
 
   // 搜索过滤
