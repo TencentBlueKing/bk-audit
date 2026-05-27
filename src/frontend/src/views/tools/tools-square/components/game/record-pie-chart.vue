@@ -338,6 +338,10 @@
               },
             },
           },
+          itemStyle: {
+            borderColor: '#fff',
+            borderWidth: 2,
+          },
           emphasis: {
             scaleSize: HOVER_SCALE_SIZE,
             label: {
