@@ -259,6 +259,7 @@
   interface Props {
     resultData: any;
     inputVariableNames: string[];
+    defaultPosition: string;
   }
 
   interface PaginationRow {
@@ -457,7 +458,7 @@
     page_size_param_name: '',
     default_page: 1,
     default_page_size: 10,
-    position: 'query',
+    position: props.defaultPosition || 'query',
     showListFieldPopover: false,
     showTotalFieldPopover: false,
     listFieldSearch: '',

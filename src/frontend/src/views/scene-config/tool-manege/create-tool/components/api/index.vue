@@ -205,6 +205,7 @@
   <pagination-config
     v-if="(isSuccess && isDoneDeBug) || hasInitPagination"
     ref="paginationConfigRef"
+    :default-position="defaultPosition"
     :input-variable-names="inputVariableNames"
     :result-data="resultData" />
   <result-config
@@ -354,6 +355,16 @@
   const inputVariableNames = computed(() => {
     const params = paramsConfigRef.value?.getData() || formData.value.input_variable || [];
     return params.map((item: any) => item.raw_name).filter(Boolean);
+  });
+
+  // 获取查询输入设置中最后一条参数的传参方式，供分页设置新增行时作为 position 默认值
+  const defaultPosition = computed(() => {
+    const params = paramsConfigRef.value?.getData() || formData.value.input_variable || [];
+    if (params.length > 0) {
+      const lastParam = params[params.length - 1];
+      return lastParam.position || 'query';
+    }
+    return 'query';
   });
 
   // 获取字段类型
