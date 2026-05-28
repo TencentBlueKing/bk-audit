@@ -81,6 +81,7 @@ export default {
     暂无数据: 'No data',
     // hover jump tips
     点击查看审计报表: 'Click to view audit report',
+    点击查看工具: 'Click to view tool',
     跳转至BKVision查看: 'Jump to BKVision to view',
     暂无权限: 'No permission',
     // Scene Info

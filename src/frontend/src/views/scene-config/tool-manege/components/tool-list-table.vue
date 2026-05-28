@@ -193,6 +193,7 @@
           {row.name}
           {row.status === 'published' && (
             <audit-icon
+              v-bk-tooltips={t('点击查看工具')}
               class="jump-link hover-show-icon"
               type="jump-link"
               onClick={() => handleOpenToolInSquare(row.uid)} />
@@ -499,6 +500,8 @@
   }
 
   :deep(.jump-link) {
+    padding-left: 4px;
+    font-size: 14px;
     color: #3a84ff;
     cursor: pointer;
   }
