@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from rest_framework import permissions
 
-from apps.permission.handlers.drf import AnyOfPermissions
-from core.exceptions import PermissionException
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import AnyOfPermissions, InstanceActionPermission
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException, ValidationError
 from tests.base import TestCase
 
 
@@ -66,3 +68,19 @@ class AnyOfPermissionsTest(TestCase):
 
         with self.assertRaises(CustomDeniedError):
             permission.has_permission(None, None)
+
+
+class InstanceActionPermissionTest(TestCase):
+    def test_has_permission_rejects_empty_instance_id(self):
+        invalid_instance_ids = [None, "", "None", "null"]
+
+        for instance_id in invalid_instance_ids:
+            with self.subTest(instance_id=instance_id):
+                permission = InstanceActionPermission(
+                    actions=[ActionEnum.LIST_RULE],
+                    resource_meta=ResourceEnum.SCENE,
+                    get_instance_id=lambda instance_id=instance_id: instance_id,
+                )
+
+                with self.assertRaises(ValidationError):
+                    permission.has_permission(None, None)

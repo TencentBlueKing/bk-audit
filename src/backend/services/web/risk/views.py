@@ -54,7 +54,7 @@ class EventsViewSet(ResourceViewSet):
         return []
 
     def get_instance_id(self) -> str:
-        return self.request.query_params.get("risk_id", "--")
+        return self.request.query_params.get("risk_id")
 
     resource_routes = [
         ResourceRoute("POST", resource.risk.create_event),
