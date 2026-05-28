@@ -845,8 +845,10 @@
 
 <style scoped lang="postcss">
 .tool-info-panel {
+  display: flex;
   width: 100%;
   height: 100%;
+  flex-direction: column;
   background: #f5f7fa;
 }
 
@@ -967,10 +969,11 @@
 }
 
 .panel-content {
-  /* 不再固定高度，避免与表格 max-height 产生嵌套滚动条 */
+  /* flex:1 填满 tab 之外的所有空间，内容溢出时可滚动 */
+  flex: 1;
   min-height: 0;
   padding: 16px 24px;
-  overflow: visible;
+  overflow-y: auto;
   background: #f5f7fa;
 }
 
