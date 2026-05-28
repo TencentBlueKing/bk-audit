@@ -17,12 +17,12 @@
 
 /**
  * @desc 获取场景系统参数
- * 优先级：sessionStorage > URL参数(scene_id/scope_id) > 默认空值
+ * 优先级：localStorage > URL参数(scene_id/scope_id) > 默认空值
  */
 export const getSceneSystemParams = ()  => {
-  const scopeInfo = JSON.parse(sessionStorage.getItem('scene-system-selector:selected') || '{}');
+  const scopeInfo = JSON.parse(localStorage.getItem('scene-system-selector:selected') || '{}');
 
-  // 如果 sessionStorage 没有有效值，尝试从 URL 参数获取（防止初始化竞态）
+  // 如果 localStorage 没有有效值，尝试从 URL 参数获取（防止初始化竞态）
   if (!scopeInfo?.id) {
     try {
       const urlParams = new URLSearchParams(window.location.search);
