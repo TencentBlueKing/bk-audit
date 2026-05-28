@@ -21,7 +21,7 @@
     :class="[{ 'is-loading': isLoading }]">
     <bk-loading
       :loading="isLoading"
-      style="z-index: 9999;">
+      style="z-index: 1999;">
       <div
         v-if="settings.length > 0"
         class="setings">
@@ -94,12 +94,17 @@
       <primary-table
         ref="tableRef"
         v-model:selected-row-keys="selectedRowKeys"
+        :active-row-keys="[]"
+        active-row-type="multiple"
+        :allow-multiple-sort="allowMultipleSort"
         :bordered="border"
         class="tdesign-list"
         :columns="tableColumns"
         :data="tableData"
         :height="height"
+        hover
         :max-height="effectiveTableMaxHeight"
+        :row-class-name="rowClassName"
         :row-key="rowKey as any"
         v-bind="$attrs"
         @filter-change="handleFilterChange"
@@ -192,6 +197,7 @@
   import type { IRequestResponsePaginationData } from '@utils/request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
     count: number;
@@ -216,10 +222,17 @@
     noUseRresults?: boolean;
     settings?: any[];
     rowKey?: string | ((row: any) => string | number);
+    rowClassName?: string | ((row: Record<string, any>) => string);
     /** 表格最大高度，传入时优先使用，不传则使用内部计算值 */
     tableMaxHeight?: number | string;
     /** 搜索参数（含 event_filters 等），排序时合并以保留其他参数 */
     searchParams?: Record<string, any>;
+    isNeedSceneParams?: boolean;
+    // 是否需要场景ID
+    isNeedSceneId?: boolean,
+    sceneIdKey?: string,
+    /** 是否允许多列同时排序（按住 Ctrl/Shift 点击多个列头），默认 false */
+    allowMultipleSort?: boolean,
   }
 
   interface Emits {
@@ -250,8 +263,13 @@
     noUseRresults: false,
     settings: () => [],
     rowKey: 'id',
+    rowClassName: undefined,
     tableMaxHeight: undefined,
     searchParams: undefined,
+    isNeedSceneParams: false,
+    isNeedSceneId: false,
+    sceneIdKey: 'scope_id',
+    allowMultipleSort: false,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -306,9 +324,9 @@
     if (visibleColumnKeys.value.length === 0) {
       initVisibleColumns();
     } else {
-      // 将新增的列（如 event_filters 动态列）合并进可见列，默认勾选
+      // 仅将新增的动态关联事件列(event_data.xxx)合并进可见列，其他列不自动勾选
       const currentKeys = new Set(visibleColumnKeys.value);
-      const addedKeys = newKeys.filter((key: string) => !currentKeys.has(key));
+      const addedKeys = newKeys.filter((key: string) => !currentKeys.has(key) && key.startsWith('event_data.'));
       if (addedKeys.length > 0) {
         visibleColumnKeys.value = [...visibleColumnKeys.value, ...addedKeys];
         tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
@@ -480,10 +498,24 @@
         if (result) {
           // 确保使用当前的 pagination.limit 值
           const currentLimit = pagination.limit;
+          const { isNeedSceneParams, isNeedSceneId } = props;
+
+          const needSceneParams = isNeedSceneParams || isNeedSceneId;
+          const sceneParams: Record<string, string> = needSceneParams ? getSceneSystemParams() : {};
+
+          // 场景参数为空时跳过请求（避免首次加载时 scope_id/scope_type 为空导致报错）
+          if (needSceneParams && !sceneParams.scope_id && !sceneParams.scope_type) {
+            console.warn('[tdesign-list] 场景参数为空，跳过本次请求，等待 scene-change 事件');
+            return;
+          }
+
           const params: Record<string, any> = {
             ...paramsMemo,
             page: isUnload.value ? 1 : pagination.current,
             page_size: currentLimit < 10 ? 10 : currentLimit,
+            ...(isNeedSceneParams ? sceneParams : {}),
+            ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
+
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
@@ -526,9 +558,9 @@
     const {
       page,
       page_size: pageSize,
-      order_field: orderField,
-      order_type: orderType,
+      sort,
     } = getSearchParams();
+
     const pageValue = isUnload.value ? 1 : page;
     // 非首次加载时，才从 URL 读取 page_size
     if (pageValue && pageSize) {
@@ -542,11 +574,10 @@
       }
       pagination.limitList = Array.from(new Set([...pagination.limitList, pagination.limit])).sort((a, b) => a - b);
     }
-    if (orderField && orderType) {
+    if (sort) {
       paramsMemo = {
         ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
+        sort: [sort],
       };
     }
     isReady = false;
@@ -570,41 +601,41 @@
       // 清除排序
       paramsMemo = {
         ...paramsMemo,
-        order_field: undefined,
-        order_type: undefined,
         sort: undefined,
       };
     } else {
-      const firstSort = sortInfo[0];
-      let orderType = firstSort.descending ? 'desc' : 'asc';
-
-      // 颠倒排序（兼容旧逻辑）
-      if (props.reverseSortFields && props.reverseSortFields.includes(firstSort.sortBy)) {
-        orderType = orderType === 'asc' ? 'desc' : 'asc';
-      }
-
-      // 同时兼容两种后端参数形式：order_field/order_type 和 sort 数组
-      const sortPrefix = orderType === 'desc' ? '-' : '';
-      const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
-
       // 合并 searchParams 以保留 event_filters 等搜索参数，避免排序时丢失
       const baseParams = { ...(props.searchParams || {}), ...paramsMemo };
       const nextParams = { ...baseParams };
 
-      // event_data.xxx 列排序时 sort 只保留该字段，不追加 secondarySortField
-      const isEventDataSort = firstSort.sortBy.startsWith('event_data.');
-      if (props.secondarySortField && !isEventDataSort) {
-        if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
-          sortArray.push(props.secondarySortField);
+      if (props.allowMultipleSort) {
+        // 多列排序：遍历所有排序列，生成完整 sort 数组（如 ["-strategy_count", "risk_count"]）
+        nextParams.sort = sortInfo.map((s) => {
+          let prefix = s.descending ? '-' : '';
+          if (props.reverseSortFields && props.reverseSortFields.includes(s.sortBy)) {
+            prefix = s.descending ? '' : '-';
+          }
+          return `${prefix}${s.sortBy}`;
+        });
+      } else {
+        // 单列排序：只取第一个排序项
+        const firstSort = sortInfo[0];
+        let orderType = firstSort.descending ? 'desc' : 'asc';
+        if (props.reverseSortFields && props.reverseSortFields.includes(firstSort.sortBy)) {
+          orderType = orderType === 'asc' ? 'desc' : 'asc';
         }
-      }
-      if (props.secondarySortField || isEventDataSort) {
+        const sortPrefix = orderType === 'desc' ? '-' : '';
+        const sortArray = [`${sortPrefix}${firstSort.sortBy}`];
+
+        // event_data.xxx 列排序时 sort 只保留该字段，不追加 secondarySortField
+        const isEventDataSort = firstSort.sortBy.startsWith('event_data.');
+        if (props.secondarySortField && !isEventDataSort) {
+          if (firstSort.sortBy !== props.secondarySortField.replace(/^-/, '')) {
+            sortArray.push(props.secondarySortField);
+          }
+        }
         delete nextParams.order_field;
         delete nextParams.order_type;
-        nextParams.sort = sortArray;
-      } else {
-        nextParams.order_field = firstSort.sortBy;
-        nextParams.order_type = orderType;
         nextParams.sort = sortArray;
       }
 
@@ -766,14 +797,14 @@
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
-      const {
-        order_field: orderField,
-        order_type: orderType,
-      } = getSearchParams();
+      const { sort } = getSearchParams();
+      const urlSortParams: Record<string, any> = {};
+      if (sort) {
+        urlSortParams.sort = [sort];
+      }
       paramsMemo = {
         ...paramsMemo,
-        order_field: orderField,
-        order_type: orderType,
+        ...urlSortParams,
         ...params,
       };
       if (isReady) {
@@ -845,18 +876,19 @@
 .setings {
   position: absolute;
   top: 0;
-  right: 5px;
+  right: 0;
   z-index: 1000;
   height: 42px;
   border-radius: 4px;
 
   .setting-btn-icon {
     display: block;
-    padding: 0;
+    padding: 0 5px;
     font-size: 16px;
     line-height: 42px;
     color: #c4c6cc;
     cursor: pointer;
+    background-color: #fafbfd;
 
     &:hover {
       color: #979ba5;
@@ -864,11 +896,16 @@
   }
 }
 
-.tdesign-list {
-  :deep(.new-row) {
-    td {
-      background-color: #e4faf0 !important;
-    }
+/* 新增行绿色高亮 - 使用多重选择器确保覆盖 TDesign 默认样式 */
+.audit-tdesign-list .tdesign-list tr.new-row {
+  td,
+  th {
+    background-color: #e4faf0 !important;
+  }
+
+  &:hover td,
+  &:hover th {
+    background-color: #d8f5e6 !important;
   }
 }
 

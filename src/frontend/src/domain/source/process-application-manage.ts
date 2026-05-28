@@ -24,6 +24,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class ProcessApplicationManage extends ModuleBase {
   constructor() {
     super();
@@ -47,13 +49,21 @@ class ProcessApplicationManage extends ModuleBase {
     });
   }
   // 获取处理套餐下拉列表
-  getApplicationsAll() {
+  getApplicationsAll(params:{
+    scene_id?: string
+  }) {
+    const sceneParams = getSceneSystemParams();
     return Request.get<Array<{
       id: string,
       name: string,
       sops_template_id: number,
       is_enabled: boolean,
-    }>>(`${this.module}/all/`);
+    }>>(`${this.module}/all/`, {
+      params: {
+        ...params,
+        scene_id: params.scene_id ?? sceneParams.scope_id,
+      },
+    });
   }
 
   // 获取审批内置字段

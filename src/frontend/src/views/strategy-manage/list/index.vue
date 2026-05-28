@@ -35,9 +35,10 @@
         :style="styles">
         <div class="action-header">
           <auth-button
-            action-id="create_strategy"
+            action-id="create_strategy_v2"
             class="w88"
             :permission="permissionCheckData"
+            resource-is-scene
             theme="primary"
             @click="handleCreate">
             {{ t('新建') }}
@@ -121,12 +122,13 @@
               content: t('处理中，不能克隆'),
               disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
             }"
-            action-id="create_strategy"
+            action-id="create_strategy_v2"
             class="ml8"
             :class="{
               'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
             }"
             :permission="permissionCheckData"
+            resource-is-scene
             style="width: 64px;"
             @click="handleClone(strategyItem)">
             {{ t('克隆') }}
@@ -260,6 +262,7 @@
   import {
     computed,
     onMounted,
+    onUnmounted,
     ref,
     shallowRef,
   } from 'vue';
@@ -296,6 +299,9 @@
   import StrategyDetail from './components/detail.vue';
   import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
+
+  import useEventBus from '@/hooks/use-event-bus';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   enum FullEnum {
     FULL = 'full',
@@ -354,6 +360,8 @@
   };
   let timeout: number | undefined = undefined;
   const isLoading = ref(false);
+  const { on: onEvent, off } = useEventBus();
+
   const router = useRouter();
   const {
     recordPageParams,
@@ -367,7 +375,8 @@
   const showRecords = ref(false);
   const currentDetailTab = ref<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther'>('riskDetection');
   const styles = shallowRef({ left: '216px' });
-  const strategyLabelList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
+  // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
+  const strategyLabelList = ref<any[]>([]);
   const searchKey = ref<Array<SearchKey>>([]);
   const strategyItem = ref({} as StrategyModel);
   const permissionCheckData = ref();
@@ -376,7 +385,6 @@
   const upgradeTotal = ref(0);
   const { locale, t } = useI18n();
   const switchStrategyParams = ref({ strategy_id: 0, toggle: false });
-  const isNeedShowDetail = ref(false);
   const leftLabelFilterCondition = ref('');
   const strategyTagMap = ref<Record<string, string>>({});
   const statusMap = ref<Record<string, string>>({});
@@ -473,7 +481,11 @@
     },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
-  const dataSource = StrategyManageService.fetchStrategyList;
+  const dataSource = (params: Record<string, any> = {}) => StrategyManageService.fetchStrategyList({
+    ...params,
+    order_type: 'asc',
+    tag: leftLabelFilterCondition.value,
+  });
   const initStatusFilterList = [
     {
       text: t('已停用', 2),
@@ -730,8 +742,10 @@
       sort: 'custom',
       render: ({ data }: { data: StrategyModel }) => {
         const to = {
-          name: 'riskManageList',
+          name: 'sceneRiskManageList',
           query: {
+            scene_id: getSceneSystemParams().scope_id,
+            scope_type: 'scene',
             strategy_id: data.strategy_id,
           },
         };
@@ -871,8 +885,9 @@
             {t('克隆')}
           </bk-button>
           : <auth-button
-            actionId="create_strategy"
+            actionId="create_strategy_v2"
             permission={permissionCheckData.value}
+            resource-is-scene
             class="ml8"
             theme="primary"
             onClick={() => handleClone(data)}
@@ -1018,12 +1033,13 @@
   // 获取策略新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_strategy',
+      action_ids: 'create_strategy_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
     onSuccess: (data) => {
-      permissionCheckData.value = data.create_strategy;
+      permissionCheckData.value = data.create_strategy_v2;
     },
   });
   // 获取标签列表
@@ -1186,7 +1202,15 @@
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-strategy-manage-list-setting', JSON.stringify(setting));
   };
-  // 将新建的tr高亮
+  // 判断是否是新建数据
+  const isNewData = (data: StrategyModel) => {
+    const time = new Date(data.created_at).getTime();
+    const now = new Date().getTime();
+    const diff = Math.abs(now - time);
+    const isNew = diff < (5 * 60 * 1000);
+    return isNew;
+  };
+  // 将新建的tr高亮（仅在首次加载时生效，刷新/切换场景后不再高亮）
   const setNewCreateTrHighlight = (index: number, isNew : boolean) => {
     const domList = document.querySelectorAll(`.audit-highlight-table .bk-table-body tbody tr:nth-child(${index + 1}) td`);
     if (domList) {
@@ -1196,14 +1220,8 @@
       });
     }
   };
-  // 判断是否是新建数据
-  const isNewData = (data: StrategyModel) => {
-    const time = new Date(data.created_at).getTime();
-    const now = new Date().getTime();
-    const diff = Math.abs(now - time);
-    const isNew = diff < (5 * 60 * 1000);
-    return isNew;
-  };
+  // 是否应该高亮新建行（首次进入页面时为true，场景切换后设为false）
+  const shouldHighlightNewRow = ref(true);
   // 复制分享链接
   const handleCopyLink = () => {
     replaceSearchParams({ strategy_id: strategyItem.value.strategy_id });
@@ -1460,21 +1478,20 @@
 
     total.value = data.total > total.value ? data.total : total.value;
 
-    const { strategy_id: strategyId } = getSearchParams();
-    if (strategyId && strategyId.split(',').length === 1  && isNeedShowDetail.value) {
-      handleDetail(data.results[0]);
-      isNeedShowDetail.value = false;
-      strategyLabelList.value = [];
-    } else if (!strategyLabelList.value.length) {
+    if (!strategyLabelList.value.length) {
       strategyLabelList.value = labelList.value;
     }
 
-    setTimeout(() => {
-      data.results.forEach((item, index) => {
-        const isNew = isNewData(item);
-        setNewCreateTrHighlight(index, isNew);
-      });
-    }, 1000);
+    // 仅在首次加载时高亮新建行，刷新/场景切换后不再高亮
+    if (shouldHighlightNewRow.value) {
+      setTimeout(() => {
+        data.results.forEach((item, index) => {
+          const isNew = isNewData(item);
+          setNewCreateTrHighlight(index, isNew);
+        });
+      }, 1000);
+      shouldHighlightNewRow.value = false;
+    }
   };
 
   const startPollingStatus = () => {
@@ -1506,14 +1523,9 @@
           name: nameList.map(nameItem => item.children?.find(cItem => cItem.id === nameItem)?.name || nameItem).join(','),
         }],
       });
-      switch (id) {
-      case 'strategy_id':
-        isNeedShowDetail.value = true;
-        break;
-      case 'tag':
+      if (id === 'tag') {
         renderLabelRef.value.setLabel(content);
         leftLabelFilterCondition.value = content;
-        break;
       }
       hasKey = true;
     });
@@ -1522,18 +1534,48 @@
   const fetchData = () => {
     const hasKey = setSearchKey();
     if (hasKey) {
-      handleSearch(searchKey.value);
+      fetchStrategyTags().then(() => {
+        handleSearch(searchKey.value);
+      });
     } else {
-      listRef.value.fetchData();
+      fetchStrategyTags().then(() => {
+        listRef.value.fetchData();
+      });
     }
   };
+  const handlFetchData = () => {
+    total.value = 0;
+    groupList.value.results = [];
+    isRequest = false;
+    shouldHighlightNewRow.value = false; // 场景切换后不再高亮新建行
+    listRef.value.fetchData();
+  };
+  // 页面刷新前标记，刷新后不再高亮
+  const handleBeforeUnload = () => {
+    sessionStorage.setItem('audit-strategy-page-reloaded', '1');
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
 
   onMounted(() => {
+    // 如果是页面刷新，则不高亮新建行
+    if (sessionStorage.getItem('audit-strategy-page-reloaded')) {
+      sessionStorage.removeItem('audit-strategy-page-reloaded');
+      shouldHighlightNewRow.value = false;
+    }
     fetchData();
+    setTimeout(() => {
+      onEvent('scene:change', handlFetchData);
+    }, 1000);
+  });
+  onUnmounted(() => {
+    off('scene:change', handlFetchData);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
   });
   onBeforeRouteLeave(() => {
     clearTimeout(timeout);
   });
+
+
 </script>
 <style lang="postcss">
 .table-new-tip {
@@ -1681,3 +1723,4 @@
   }
 }
 </style>
+

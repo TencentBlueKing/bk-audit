@@ -217,6 +217,13 @@
           @click="handleNext">
           {{ t('下一步') }}
         </bk-button>
+        <!-- <bk-button
+          v-if="isEditMode"
+          class="ml8"
+          theme="primary"
+          @click="handleSaveCurrentStep">
+          {{ t('提交') }}
+        </bk-button> -->
         <bk-button
           class="ml8"
           @click="handleCancel">
@@ -282,6 +289,7 @@
 
   interface Emits {
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: Record<string, any>): void;
   }
   interface Props {
     editData: StrategyModel
@@ -630,41 +638,74 @@
 
   // 下一步
   const handleNext = () => {
-    const tastQueue = [formRef.value.validate()];
-    // 有配置组件
-    if (formData.value.strategy_type) {
-      tastQueue.push(comRef.value.getValue?.());
-    }
-    Promise.all(tastQueue).then(() => {
-      if (!isEditMode) {
-        delete formData.value.strategy_id;
-      }
-      const baseParams = { ...formData.value };
-      if (baseParams.tags) {
-        baseParams.tags = baseParams.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
-      }
-      // 获取审计参数（自定义规则审计、引入模型审计）
+    const doValidate = () => {
+      // 使用 setTimeout 确保审计组件（尤其是 audit-user-selector 基于 bk-select 封装）
+      // 的值已同步到 step1.formData 后再校验
+      setTimeout(() => {
+        formRef.value.validate().then(() => {
+          const params = buildStepParams();
+          emits('nextStep', 2, params);
+        });
+      }, 0);
+    };
+    // 有配置组件时，先用 getFields() 获取 Customize 组件内部最新完整数据，
+    // 直接覆盖 formData.configs，确保校验数据和组件内部一致
+    // （解决 audit-user-selector 等 bk-select 封装组件的值同步链路断裂问题）
+    if (formData.value.strategy_type && comRef.value?.getFields) {
       const fields = comRef.value.getFields();
-      // 非联表不需要link_table参数
-      if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
-        fields.configs.data_source.link_table = null;
-      }
-      // 非周期不需要schedule_config
-      if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
-        fields.configs.schedule_config = undefined;
-      }
-      // 合并参数
-      const params = {
-        ...baseParams,
-        ...fields,
-      };
-      emits('nextStep', 2, params);
-    });
+      formData.value.configs = fields.configs;
+    }
+    doValidate();
   };
+
+  // 构建当前步骤提交参数（与下一步一致）
+  const buildStepParams = () => {
+    if (!isEditMode) {
+      delete formData.value.strategy_id;
+    }
+    const baseParams = { ...formData.value };
+    if (baseParams.tags) {
+      baseParams.tags = baseParams.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+    }
+    // 获取审计参数（自定义规则审计、引入模型审计）
+    const fields = comRef.value.getFields();
+    // 非联表不需要link_table参数
+    if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
+      fields.configs.data_source.link_table = null;
+    }
+    // 非周期不需要schedule_config
+    if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
+      fields.configs.schedule_config = undefined;
+    }
+    return {
+      ...baseParams,
+      ...fields,
+    };
+  };
+
+  // 提交（编辑态）：校验后提交，效果与「其他配置」的提交一致
+  // const handleSaveCurrentStep = () => {
+  //   const tastQueue = [formRef.value.validate()];
+  //   if (formData.value.strategy_type) {
+  //     tastQueue.push(comRef.value.getValue?.());
+  //   }
+  //   Promise.all(tastQueue).then(() => {
+  //     const params = buildStepParams();
+  //     emits('saveCurrentStep', params);
+  //   });
+  // };
 
   watch(() => props.editData, (data) => {
     if (isEditMode || isCloneMode) {
       setFormData(data);
+    }
+  });
+
+  // 编辑模式：标签数据加载完成后，清除初始化时触发的误报校验
+  // （编辑进入时 tags 先于 strategyTagMap 赋值，验证器查不到映射导致误报）
+  watch(tagLoading, (loading, prevLoading) => {
+    if (prevLoading && !loading && (isEditMode || isCloneMode) && formData.value.tags.length > 0) {
+      formRef.value?.clearValidate('tags');
     }
   });
 

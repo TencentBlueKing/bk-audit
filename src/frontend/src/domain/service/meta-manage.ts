@@ -98,10 +98,36 @@ export default {
     {
       page:number,
       page_size: number,
-      keyword?: string
-      audit_status: 'accessed'
+      keyword?: string,
+      audit_status: string,
+      filter_actions?: string,
     }) {
-    return MetaManageSource.getAllSysetem(params, {
+    const finalParams = { ...params };
+    if (!finalParams.filter_actions) {
+      try {
+        const permissionStr = sessionStorage.getItem('userScenePermission');
+        if (permissionStr) {
+          const permission = JSON.parse(permissionStr);
+          if (permission.manage_platform) {
+            finalParams.filter_actions = 'view_system,edit_system';
+          } else {
+            const actions: string[] = [];
+            if (permission.view_system) {
+              actions.push('view_system');
+            }
+            if (permission.edit_system) {
+              actions.push('edit_system');
+            }
+            if (actions.length > 0) {
+              finalParams.filter_actions = actions.join(',');
+            }
+          }
+        }
+      } catch (e) {
+        // 解析失败，不传 filter_actions
+      }
+    }
+    return MetaManageSource.getAllSysetem(finalParams, {
       permission: 'page',
     }).then(({ data }) => ({
       ...data,
@@ -112,7 +138,17 @@ export default {
    * @desc 获取系统列表(All)
    * @param { String } action_ids
    */
-  fetchSystemWithAction(params: { action_ids?: string }) {
+  fetchSystemWithAction(params: {
+    action_ids?: string;
+    audit_status__in?: string;
+    namespace?: string;
+    order_type?: string;
+    sort_keys?: string;
+    with_favorite?: boolean;
+    with_system_status?: boolean;
+    scope_id?: string;
+    scope_type?: string;
+  }) {
     return MetaManageSource.getAllSysetemByActionId(params, {
       permission: 'page',
     })

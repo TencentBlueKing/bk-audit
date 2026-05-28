@@ -17,6 +17,7 @@
 import {
   computed,
   onMounted,
+  unref,
 } from 'vue';
 
 import IamManageService from '@service/iam-manage';
@@ -26,7 +27,7 @@ import useRequest from '@hooks/use-request';
 import { permissionDialog } from '@utils/assist';
 
 export interface Props {
-  permission?: string | boolean,
+  permission?: string | boolean | import('vue').Ref<string | boolean>,
   actionId: string,
   resource?: string | number,
 }
@@ -41,10 +42,11 @@ export default function (props: Props) {
   });
 
   const isShowRaw = computed(() => {
-    if (props.permission === true) {
-      return true;
-    }
-    return Boolean(checkResultMap.value[props.actionId]);
+    const perm = unref(props.permission);
+    const result = perm === true || perm === 'true'
+      ? true
+      : Boolean(checkResultMap.value[props.actionId]);
+    return result;
   });
 
   // 检测权限

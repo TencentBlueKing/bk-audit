@@ -22,7 +22,7 @@ export default {
     name: 'noticeGroupList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {

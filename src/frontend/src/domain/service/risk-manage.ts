@@ -24,11 +24,10 @@ export default {
    */
   fetchRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scene_id?: string,
   }) {
-    return RiskManageSource.getRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -59,7 +58,8 @@ export default {
    */
   fetchTodoRiskList(params: {
       page: number,
-      page_size: number
+      page_size: number,
+      scene_id?: string,
     }) {
     return RiskManageSource.getTodoRiskList(params)
       .then(({ data }) => ({
@@ -72,11 +72,10 @@ export default {
    */
   fetchWatchRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scene_id?: string,
   }) {
-    return RiskManageSource.getWatchRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getWatchRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -87,11 +86,10 @@ export default {
    */
   fetchProcessedRiskList(params: {
     page: number,
-    page_size: number
+    page_size: number,
+    scene_id?: string,
   }) {
-    return RiskManageSource.getProcessedRiskList(params, {
-      permission: 'page',
-    })
+    return RiskManageSource.getProcessedRiskList(params)
       .then(({ data }) => ({
         ...data,
         results: data.results.map(item => new RiskManageModel(item)),
@@ -297,6 +295,114 @@ export default {
     task_id: string,
   }) {
     return RiskManageSource.getTaskRiskReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 自然语言转风险筛选条件（nl2risk_filter）
+   */
+  nl2RiskFilter(params: {
+    query: string,
+    tags?: Array<{ id: number; name: string }>,
+    strategies?: Array<{ id: number; name: string }>,
+  }) {
+    return RiskManageSource.nl2RiskFilter(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取智能分析列表
+   */
+  getAiAnalyseList() {
+    return RiskManageSource.getAiAnalyseList()
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 生成AI分析报告
+   */
+  getAiAnalyseReport(params: {
+    scenario_key: string,
+    report_type: string,
+    title: string,
+    analysis_scope: string,
+    custom_prompt: string,
+    target_risks_filter: any,
+    }) {
+    return RiskManageSource.getAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 查询AI报告任务结果
+   */
+  getAiAnalyseTaskReport(params: {
+    task_id: string,
+  }) {
+    return RiskManageSource.getAiAnalyseTaskReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取AI报告详情
+   */
+  getAiAnalyseReportDetail(params: {
+    report_id : string | number,
+  }) {
+    return RiskManageSource.getAiAnalyseReportDetail(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取历史报告列表
+   */
+  getHistoryReportList(params: {
+    page: number,
+    page_size: number,
+    keyword?: string,
+    report_type?: string,
+    sort?: any,
+  }) {
+    return RiskManageSource.getHistoryReportList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 编辑AI报告
+   */
+  updateAiAnalyseReport(params: {
+    report_id: string | number,
+    title: string,
+    content: string,
+  }) {
+    return RiskManageSource.updateAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 导出AI报告
+   */
+  exportAiAnalyseReport(params: {
+    report_id: string | number,
+    export_format: string,
+  }) {
+    return RiskManageSource.exportAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 报告关联风险列表
+   */
+  getReportRiskList(params: {
+    report_id: string | number,
+    page: number,
+    page_size: number,
+  }) {
+    return RiskManageSource.getReportRiskList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取风险关联的场景
+   */
+  fetchRiskScenes(params: {
+    end_time?: string,
+    risk_view_type?: string,
+    scope_id?: string,
+    scope_type?: string,
+    start_time?: string,
+  }) {
+    return RiskManageSource.getRiskScenes(params)
       .then(({ data }) => data);
   },
 };

@@ -36,22 +36,12 @@ export default {
       },
     },
     {
-      path: 'tools-add',
-      component: () => import('@views/tools/tools-square/add/index.vue'),
-      name: 'toolsAdd',
+      path: 'tools-square/:uid',
+      component: () => import('@views/tools/tools-square/index.vue'),
+      name: 'toolDetail',
       meta: {
-        title: '创建工具',
-        hideSidebar: true,
-      },
-    },
-    {
-      path: 'tools-edit/:id',
-      component: () => import('@views/tools/tools-square/add/index.vue'),
-      name: 'toolsEdit',
-      meta: {
-        title: '编辑工具',
-        skeleton: 'strategyEdit',
-        hideSidebar: true,
+        title: '工具详情',
+        nodeSideContent: true,
       },
     },
   ],

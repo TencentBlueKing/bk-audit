@@ -21,6 +21,7 @@ export default class RiskRuleCreate {
   pa_id: string;
   pa_params: Record<string, any>;
   auto_close_risk: boolean;
+  scene_id: string | number;
 
   constructor(payload = {} as RiskRuleCreate) {
     this.rule_id = payload.rule_id;
@@ -29,5 +30,6 @@ export default class RiskRuleCreate {
     this.pa_id = payload.pa_id;
     this.pa_params = payload.pa_params || {};
     this.auto_close_risk = payload.auto_close_risk || false;
+    this.scene_id = payload.scene_id;
   }
 }

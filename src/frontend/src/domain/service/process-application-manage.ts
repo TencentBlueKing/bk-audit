@@ -19,6 +19,8 @@ import type ApplicationCreateManageModel from '@model/application/application-cr
 
 import ProcessApplicationManageSource from '../source/process-application-manage';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export default {
   /**
  * @desc 获取处理套餐列表
@@ -42,14 +44,16 @@ export default {
      * @desc 创建处理套餐
      */
   create(params: ApplicationCreateManageModel) {
-    return ProcessApplicationManageSource.create(params)
+    return ProcessApplicationManageSource.create({ ...params, scene_id: getSceneSystemParams().scope_id })
       .then(({ data }) => data);
   },
   /**
    * @desc 获取处理套餐列表(下拉列表)
    */
-  fetchApplicationsAll() {
-    return ProcessApplicationManageSource.getApplicationsAll()
+  fetchApplicationsAll(params:{
+    scene_id?: string
+  }) {
+    return ProcessApplicationManageSource.getApplicationsAll(params)
       .then(({ data }) => data);
   },
   /**

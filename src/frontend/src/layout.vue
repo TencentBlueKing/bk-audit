@@ -41,18 +41,22 @@
             active: curNavName === 'auditRiskManage'
           }"
           :to="{ name:'handleManage', query: {} }">
-          {{ t('审计风险') }}
+          {{ t('风险') }}
         </router-link>
+
         <router-link
-          v-if="hasBkvision.enabled"
+          v-if="hasBkvision.enabled &&
+            (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
           }"
           :to="{ name:'statementManage', query: {} }">
-          {{ t('审计报表') }}
+          {{ t('报表') }}
         </router-link>
         <router-link
+          v-if="!userRole.includes('risk_handler') &&
+            (userRole.includes('saas_admin') || userRole.includes('scene_user') || userRole.includes('scene_admin'))"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'toolsSquare'
@@ -61,22 +65,40 @@
           {{ t('工具广场') }}
         </router-link>
         <router-link
+          v-if="userRolePermission.show_log_search"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
           :to="{ name:'analysisManage', query: {} }">
-          {{ t('审计配置') }}
+          {{ t('日志检索') }}
+        </router-link>
+        <!-- 风险使用者、系统管理员要跳转到应到页 -->
+        <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'sceneConfiguration'
+          }"
+          :to="{ name: sceneConfigRouterName, query: {} }">
+          {{ t('场景配置') }}
         </router-link>
         <router-link
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name:'nweSystemManage', params: {
-            id: systemId
-          } }">
-          {{ t('系统管理') }}
+          :to="{ name: (isSystemListEmpty || !(userRole.includes('saas_admin') || userRole.includes('system_admin')))
+            ? 'systemLandingPage' : 'systemList' }">
+          {{ t('系统接入') }}
+        </router-link>
+        <router-link
+          v-if="userRole.includes('saas_admin')"
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'platformManage'
+          }"
+          :to="{ name:'platformManage' }">
+          {{ t('平台管理') }}
         </router-link>
       </div>
     </template>
@@ -90,102 +112,8 @@
       <audit-menu
         :floded="isMenuFlod"
         @change="handleRouterChange">
-        <template v-if="curNavName === 'auditConfigurationManage'">
-          <audit-menu-item-group>
-            <template #title>
-              <div> {{ t('分析') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('分析') }}</div>
-            </template>
-            <audit-menu-item index="analysisManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="search" />
-              {{ t('检索') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('跟踪') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('跟踪') }}</div>
-            </template>
-            <audit-menu-item index="strategyManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="celve" />
-              {{ t('审计策略') }}
-            </audit-menu-item>
-            <!-- <audit-menu-item index="eventManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="gaojingshijian" />
-              {{ t('审计风险') }}
-            </audit-menu-item> -->
-            <audit-menu-item index="linkDataManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="lianbiao" />
-              {{ t('联表管理') }}
-            </audit-menu-item>
-            <audit-menu-item index="noticeGroup">
-              <audit-icon
-                class="menu-item-icon"
-                type="tongzhizu" />
-              {{ t('通知组') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('风险') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('风险') }}</div>
-            </template>
-            <audit-menu-item index="ruleManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="insert" />
-              {{ t('处理规则') }}
-            </audit-menu-item>
-            <audit-menu-item index="applicationManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="taocanchulizhong" />
-              {{ t('处理套餐') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group>
-            <template #title>
-              <div>{{ t('接入') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('接入') }}</div>
-            </template>
-            <audit-menu-item index="systemManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="insert" />
-              {{ t('系统列表') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
-          <audit-menu-item-group v-if="configData.super_manager">
-            <template #title>
-              <div>{{ t('管理') }}</div>
-            </template>
-            <template #flod-title>
-              <div>{{ t('管理') }}</div>
-            </template>
-            <audit-menu-item index="storageManage">
-              <audit-icon
-                class="menu-item-icon"
-                type="data-storage" />
-              {{ t('数据存储') }}
-            </audit-menu-item>
-          </audit-menu-item-group>
+        <template v-if="curNavName === 'sceneConfiguration'">
+          <scene-config-sidebar />
         </template>
         <template v-else-if="curNavName === 'toolsSquare'">
           <audit-menu-item-group>
@@ -223,7 +151,16 @@
             {{ t('我的关注') }}
           </audit-menu-item>
           <audit-menu-item
-            v-if="hasAllRiskPermission"
+            v-if="(userRole.includes('saas_admin') ||
+              userRole.includes('scene_admin') || userRole.includes('scene_user'))"
+            index="sceneRiskManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="gaojingshijian" />
+            {{ t('场景风险') }}
+          </audit-menu-item>
+          <audit-menu-item
+            v-if="hasAllRiskPermission && userRole.includes('saas_admin')"
             index="riskManage">
             <audit-icon
               class="menu-item-icon"
@@ -231,20 +168,12 @@
             {{ t('所有风险') }}
           </audit-menu-item>
         </template>
-        <template v-else-if="menuData.length && curNavName === 'auditStatement'">
-          <audit-menu-item
-            v-for="item in menuData"
-            :key="item.id"
-            :class="[item.id === route.params.id ? 'active' : '']"
-            :index="item.id">
-            <audit-icon
-              class="menu-item-icon"
-              type="baobiao" />
-            {{ item.name }}
-          </audit-menu-item>
+        <template v-else-if="curNavName === 'auditStatement'">
+          <reports-sidebar :menu-data="menuData" />
         </template>
         <template v-else-if="curNavName === 'nweSystemManage'">
-          <div class="system-select">
+          <system-manage-sidebar />
+          <!-- <div class="system-select">
             <bk-select
               v-model="systemId"
               auto-focus
@@ -351,15 +280,10 @@
             </bk-select>
           </div>
           <template v-if="route.meta.isGroup">
-            <audit-menu-item-group
+            <div
               v-for="item in route.meta.sideMenus as unknown as SideMenuItem[]"
-              :key="item.pathName">
-              <template #title>
-                <div>{{ t(item.groupName) }}</div>
-              </template>
-              <template #flod-title>
-                <div>{{ t(item.groupName) }}</div>
-              </template>
+              :key="item.pathName"
+              class="group">
               <audit-menu-item
                 :index="item.pathName"
                 is-self-router-change
@@ -369,11 +293,11 @@
                   :type="item?.icon" />
                 {{ t(item.title) }}
               </audit-menu-item>
-            </audit-menu-item-group>
-          </template>
-          <template v-else>
-            //
-          </template>
+            </div>
+          </template> -->
+        </template>
+        <template v-else-if="curNavName === 'platformManage'">
+          <platform-sidebar />
         </template>
       </audit-menu>
     </template>
@@ -387,18 +311,18 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     onBeforeUnmount,
     onMounted,
     type Ref,
     ref,
     watch  } from 'vue';
-
-  interface SideMenuItem {
-    pathName: string;
-    icon: string;
-    title: string;
-    groupName: string
-  }
+  // interface SideMenuItem {
+  //   pathName: string;
+  //   icon: string;
+  //   title: string;
+  //   groupName: string
+  // }
   import { useI18n } from 'vue-i18n';
   import {
     useRoute,
@@ -408,8 +332,7 @@
   import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
-  import ConfigModel from '@model/root/config';
-
+  // import ConfigModel from '@model/root/config';
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
   import usePlatformConfig from '@hooks/use-platform-config';
@@ -418,24 +341,34 @@
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
-  import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  // import Tooltips from '@components/show-tooltips-text/index.vue';
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
+  import PlatformSidebar from '@/components/statement-sidebar/platfrom.vue';
+  import ReportsSidebar from '@/components/statement-sidebar/reports.vue';
+  import SceneConfigSidebar from '@/components/statement-sidebar/scene-config.vue';
+  import SystemManageSidebar from '@/components/statement-sidebar/system-manage.vue';
   import useRequest from '@/hooks/use-request';
 
   interface Exposes {
     titleRef: Ref<string>
+    descriptionRef: Ref<string>
+    currentPanelScene: Ref<{ id: string; name: string; type: string } | null>
   }
   interface MenuDataType {
     id: string;
     name: string;
+    description?: string;
+    group_ids: number[];
+    priority_index?: number;
+    favorite_created_at?: string | null;
   }
-  interface Props {
-    configData: ConfigModel,
-  }
+  // interface Props {
+  //   configData: ConfigModel,
+  // }
 
-  defineProps<Props>();
+  // defineProps<Props>();
 
   const router = useRouter();
   const route = useRoute();
@@ -443,52 +376,95 @@
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
 
+  const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["risk_handler"]') as string[];
+  const userRolePermission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}') as Record<string, string[]>;
+
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
 
   const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
-  const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref<string | null>(null);
-  // 项目列表
-  interface SystemItem {
-    id: string;
-    name: string;
-    permission: {
-      view_system: boolean;
-    };
-    permission_type: 'simple' | 'complex';
-    system_status: 'pending' | 'incomplete' | 'abnormal' | 'normal';
-    system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
-    favorite: boolean;
-  }
-
-  const projectList = ref<SystemItem[]>([]);
-  const permissionCreateSystem = ref(false);
-
-  const contentText = (stage: string | undefined) => {
-    if (stage === 'permission_model') {
-      return t('系统尚未完成确实模型配置，请继续设置');
-    } if (stage === 'collector') {
-      return t('系统尚未完成日志数据上报，请继续上报');
+  const descriptionRef = ref<string>('');
+  // 聚合模式下当前面板所属场景信息（供 header 显示场景标签）
+  const currentPanelScene = ref<{ id: string; name: string; type: string } | null>(null);
+  // 从 scene-system-selector 缓存的稳定场景列表
+  const cachedSceneList = ref<Array<{ id: string; name: string; type: string }>>([]);
+  // 尝试从 sessionStorage 恢复已缓存的 sceneList
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('scene-system-selector:sceneList') || '[]');
+    if (Array.isArray(saved)) {
+      cachedSceneList.value = saved;
     }
-    return '';
-  };
-  const isSelectOpen = ref(false);
+  } catch { /* ignore */ }
+  const menuData = ref<Array<MenuDataType>>([]);
+  // const systemId = ref<string | null>(null);
+  // 项目列表
+  // interface SystemItem {
+  //   id: string;
+  //   name: string;
+  //   permission: {
+  //     view_system: boolean;
+  //   };
+  //   permission_type: 'simple' | 'complex';
+  //   system_status: 'pending' | 'incomplete' | 'abnormal' | 'normal';
+  //   system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
+  //   favorite: boolean;
+  // }
 
-  const handleSelectToggle = (val: boolean) => {
-    isSelectOpen.value = val;
-  };
-  // 获取新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'create_system',
-    },
-    defaultValue: {},
+  // const projectList = ref<SystemItem[]>([]);
+  // const permissionCreateSystem = ref(false);
+  // 系统列表是否为空（用于决定跳转引导页还是列表页）
+  const isSystemListEmpty = ref(true);
+
+  // const contentText = (stage: string | undefined) => {
+  //   if (stage === 'permission_model') {
+  //     return t('系统尚未完成确实模型配置，请继续设置');
+  //   } if (stage === 'collector') {
+  //     return t('系统尚未完成日志数据上报，请继续上报');
+  //   }
+  //   return '';
+  // };
+  // const isSelectOpen = ref(false);
+
+  // const handleSelectToggle = (val: boolean) => {
+  //   isSelectOpen.value = val;
+  // };
+  // 计算属性根据 userRole 计算sceneConfigRouterName
+  const sceneConfigRouterName = computed(() => {
+    if (userRole.includes('saas_admin') || userRole.includes('scene_admin')) { // 管理员 和 场景管理员
+      return 'sceneInfo';
+    }
+    if (userRole.includes('risk_handler')) {  // 风险处理人
+      return 'landingPage';
+    }
+    if (userRole.includes('system_admin') || userRole.includes('scene_user')) { //  系统管理员 场景使用者
+      return 'userLandingPage';
+    }
+    return 'landingPage';
+  });
+  // // 获取新建权限
+  // useRequest(IamManageService.check, {
+  //   defaultParams: {
+  //     action_ids: 'create_system',
+  //   },
+  //   defaultValue: {},
+  //   manual: true,
+  //   onSuccess: (data) => {
+  //     permissionCreateSystem.value = data.create_system;
+  //   },
+  // });
+
+  // 获取系统列表，判断是否为空以决定跳转目标
+  useRequest(MetaManageService.fetchSystemList, {
+    defaultValue: { total: 0 } as { total: number },
     manual: true,
-    onSuccess: (data) => {
-      permissionCreateSystem.value = data.create_system;
+    defaultParams: {
+      audit_status: 'accessed',
+      filter_actions: 'edit_system,view_system',
+    },
+    onSuccess: (data: any) => {
+      isSystemListEmpty.value = data.total === 0;
     },
   });
 
@@ -505,35 +481,63 @@
     },
   });
 
-  const {
-    run: fetchSystemWithAction,
-  } = useRequest(MetaManageService.fetchSystemWithAction, {
-    defaultValue: [],
-    onSuccess: (data: any[]) => {
-      projectList.value = data;
-      if (route.params.id) {
-        systemId.value = route.params.id as string;
-      } else {
-        systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
-        if (route.name === 'systemInfo') {
-          router.push({
-            name: 'systemInfo',
-            params: {
-              id: systemId.value,
-            },
-          });
-        }
-      }
-    },
-  });
+  // // 检查平台管理权限
+  // const hasPlatformManagePermission = ref(false);
+  // useRequest(IamManageService.check, {
+  //   defaultParams: {
+  //     action_ids: 'manage_platform',
+  //   },
+  //   defaultValue: {},
+  //   manual: true,
+  //   onSuccess: (data) => {
+  //     hasPlatformManagePermission.value = data.manage_platform || false;
+  //   },
+  // });
+
+  // const {
+  //   run: fetchSystemWithAction,
+  // } = useRequest(MetaManageService.fetchSystemWithAction, {
+  //   defaultValue: [],
+  //   onSuccess: (data: any[]) => {
+  //     projectList.value = data;
+  //     if (route.params.id) {
+  //       systemId.value = route.params.id as string;
+  //     } else {
+  //       systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+  //       if (route.name === 'systemInfo') {
+  //         router.push({
+  //           name: 'systemInfo',
+  //           params: {
+  //             id: systemId.value,
+  //           },
+  //         });
+  //       }
+  //     }
+  //   },
+  // });
 
   on('statement-menuData', (data) => {
     menuData.value = data as Array<MenuDataType>;
     if (route.params.id) {
-      titleRef.value = menuData.value.find(item => item.id === route.params.id)?.name || '';
+      const matched = menuData.value.find(item => item.id === route.params.id);
+      titleRef.value = matched?.name || '';
+      descriptionRef.value = matched?.description || '';
     } else {
       titleRef.value =  menuData.value[0]?.name;
+      descriptionRef.value = menuData.value[0]?.description || '';
     }
+  });
+
+  // 聚合模式下监听当前面板所属场景变化
+  on('panel-scene-change', (scene) => {
+    currentPanelScene.value = scene as { id: string; name: string; type: string } | null;
+    // 缓存到 sessionStorage，刷新后可恢复
+    sessionStorage.setItem('layout:currentPanelScene', JSON.stringify(scene));
+  });
+
+  // 监听 scene-system-selector 的 sceneList 就绪事件（稳定数据源，刷新也可用）
+  on('scene-list-ready', (list) => {
+    cachedSceneList.value = list as Array<{ id: string; name: string; type: string }>;
   });
 
   const handleSideMenuFlodChange = (value: boolean) => {
@@ -548,12 +552,13 @@
         params: {
           id: routerName,
         },
+        query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
       });
       titleRef.value = menuData.value.find(item => item.id === routerName)?.name || '';
       return;
     }
     if (routerName === 'systemAccess') {
-      sessionStorage.setItem('systemProjectId', systemId.value || '');
+      // sessionStorage.setItem('systemProjectId', systemId.value || '');
       const routePath = router.resolve({ name: routerName }).href;
       window.open(routePath, '_blank');
       return;
@@ -563,59 +568,82 @@
     });
   };
 
-  // 系统切换
-  const handleSystemChange = (value: string) => {
-    // 找到对应选中item
-    const project = projectList.value.find(item => item.id === value);
-    if (!project) {
-      return;
-    }
-    // 在route.meta中添加systemId
-    sessionStorage.setItem('systemProjectId', value);
-    router.push({
-      name: 'systemInfo',
-      params: {
-        id: value,
-      },
-      query: {
-        type: project.permission_type,
-      },
-    });
-  };
+  // // 系统切换
+  // const handleSystemChange = (value: string) => {
+  //   // 找到对应选中item
+  //   const project = projectList.value.find(item => item.id === value);
+  //   if (!project) {
+  //     return;
+  //   }
+  //   // 在route.meta中添加systemId
+  //   sessionStorage.setItem('systemProjectId', value);
+  //   router.push({
+  //     name: 'systemInfo',
+  //     params: {
+  //       id: value,
+  //     },
+  //     query: {
+  //       type: project.permission_type,
+  //     },
+  //   });
+  // };
 
-  // 更新系统收藏
-  const {
-    run: fetchSystemAuditFavoriteUpdate,
-  } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
-    defaultValue: {},
-  });
-  const selfRouterChange = (item: SideMenuItem) => {
-    router.push({
-      name: item.pathName,
-      params: {
-        id: systemId.value,
-      },
-    });
-  };
-  // 系统收藏
-  const handlerFavorite = (item: Record<string, any>, val: boolean) => {
-    fetchSystemAuditFavoriteUpdate({
-      system_id: item.id,
-      favorite: val,
-    }).then(() => {
-      projectList.value = projectList.value.map((i) => {
-        if (i.id === item.id) {
-          return {
-            ...i,
-            favorite: val,
-          };
-        }
-        return i;
-      });
-    });
-  };
+  // // 更新系统收藏
+  // const {
+  //   run: fetchSystemAuditFavoriteUpdate,
+  // } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
+  //   defaultValue: {},
+  // });
+  // const selfRouterChange = (item: SideMenuItem) => {
+  //   router.push({
+  //     name: item.pathName,
+  //     params: {
+  //       id: systemId.value,
+  //     },
+  //   });
+  // };
+  // // 系统收藏
+  // const handlerFavorite = (item: Record<string, any>, val: boolean) => {
+  //   fetchSystemAuditFavoriteUpdate({
+  //     system_id: item.id,
+  //     favorite: val,
+  //   }).then(() => {
+  //     projectList.value = projectList.value.map((i) => {
+  //       if (i.id === item.id) {
+  //         return {
+  //           ...i,
+  //           favorite: val,
+  //         };
+  //       }
+  //       return i;
+  //     });
+  //   });
+  // };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
+    // 切换菜单项时同步更新 descriptionRef
+    if (curNavName.value === 'auditStatement' && route.params.id && menuData.value.length > 0) {
+      const matched = menuData.value.find(item => item.id === route.params.id);
+      titleRef.value = matched?.name || '';
+      descriptionRef.value = matched?.description || '';
+    }
+    // 切换单场景时立即清除场景标签（scope_type 不再是 cross_scene/cross_system）
+    const isAggregateMode = route.query.scope_type === 'cross_scene'
+      || route.query.scope_type === 'cross_system';
+    if (curNavName.value === 'auditStatement' && !isAggregateMode) {
+      currentPanelScene.value = null;
+    }
+    // 聚合模式下，刷新页面时从 sessionStorage 恢复场景标签
+    if (curNavName.value === 'auditStatement'
+      && !currentPanelScene.value
+      && isAggregateMode) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('layout:currentPanelScene') || 'null');
+        if (saved) {
+          currentPanelScene.value = saved;
+        }
+      } catch { /* ignore */ }
+    }
   }, {
     deep: true,
     immediate: true,
@@ -623,13 +651,13 @@
 
 
   onMounted(() => {
-    fetchSystemWithAction({
-      sort_keys: 'favorite,permission',
-      action_ids: 'view_system',
-      with_favorite: true,
-      with_system_status: true,
-      audit_status__in: 'accessed',
-    });
+    // fetchSystemWithAction({
+    //   sort_keys: 'favorite,permission',
+    //   action_ids: 'view_system',
+    //   with_favorite: true,
+    //   with_system_status: true,
+    //   audit_status__in: 'accessed',
+    // });
   }),
   onBeforeUnmount(() => {
     off('statement-menuData');
@@ -637,6 +665,8 @@
 
   defineExpose<Exposes>({
     titleRef,
+    descriptionRef,
+    currentPanelScene,
   });
 </script>
 <style lang="postcss">
@@ -747,5 +777,9 @@
       }
     }
   }
+}
+
+.group {
+  margin-top: 10px;
 }
 </style>

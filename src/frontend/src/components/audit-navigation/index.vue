@@ -64,7 +64,7 @@
         </scroll-faker>
       </div>
       <div
-        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar"
+        v-if="!route.meta?.nodeSideContent && !route.meta?.hideSidebar && !route.meta?.hideToggleBtn"
         class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
@@ -331,7 +331,7 @@
     display: flex;
     width: 220px;
     font-size: 14px;
-    background: #2c354d;
+    background: #242b3b;
     transition: all .3s;
     flex-direction: column;
 

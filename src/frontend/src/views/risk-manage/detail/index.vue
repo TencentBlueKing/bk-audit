@@ -253,7 +253,7 @@
         id: route.params.riskId,
       });
     };
-    // 立即执行一次
+    // 立即执行一次 +++
     poll();
     // 每5秒轮询一次
     reportGeneratingTimer = window.setInterval(poll, 5000);

@@ -23,7 +23,7 @@ import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
 
-import type { IRequestResponsePaginationData } from '@/utils/request';
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
 
 class ToolManage extends ModuleBase {
@@ -31,29 +31,47 @@ class ToolManage extends ModuleBase {
     super();
     this.module = '/api/v1';
   }
-  // 获取工具列表
+  // 获取工具列表（不再分页，直接返回数组）
   getToolsList(params: {
-    offset?: number
-    limit?: number
     keyword?: string,
-    page: number,
-    page_size: number
     tags?: string[],
+    scope_type?: string,
+    scope_id?: string,
+    binding_type?: string,
+    status?: string[],
+    sort?: string[],
+    my_created?: boolean,
+    recent_used?: boolean,
   }) {
-    return Request.get<IRequestResponsePaginationData<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
+    return Request.get<Array<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
   }
   // 获取工具tag列表
-  getToolTags() {
+  getToolTags(params?: {
+    scope_type?: string,
+    scope_id?: string,
+    status?: string[],
+  }) {
+    const sceneParams = getSceneSystemParams();
+    const mergedParams = {
+      scope_type: sceneParams.scope_type,
+      scope_id: sceneParams.scope_id,
+      ...params,
+    };
+    const query = `?${processedParams(mergedParams).toString()}`;
     return Request.get<Array<{
       tag_id: string;
       tag_name: string;
       tool_count: number,
-    }>>(`${this.path}/tool/tags/`);
+    }>>(`${this.path}/tool/tags/${query}`);
   }
-  // 新建工具
-  createTool(params: Record<string, any>) {
-    return Request.post(`${this.path}/tool/`, {
-      params,
+  // 创建场景级工具
+  createSceneTool(params: Record<string, any>) {
+    const sceneId = getSceneSystemParams().scope_id;
+    return Request.post(`${this.path}/tool/scene/?scene_id=${sceneId}`, {
+      params: {
+        ...params,
+        scene_id: sceneId,
+      },
     });
   }
   // 解析sql
@@ -75,14 +93,28 @@ class ToolManage extends ModuleBase {
     return Request.get<ToolDetailModel>(`${this.path}/tool/${params.uid}/`);
   }
   // 编辑工具
-  updateTool(params: Record<string, any>) {
-    return Request.put(`${this.path}/tool/${params.uid}/`, {
-      params,
+  updateSceneTool(params: Record<string, any>) {
+    const sceneId = getSceneSystemParams().scope_id;
+    return Request.put(`${this.path}/tool/scene/${params.uid}/?scene_id=${sceneId}`, {
+      params: {
+        ...params,
+        scene_id: sceneId,
+      },
     });
   }
   // 获取全部工具
-  getAllTools() {
-    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/`);
+  getAllTools(params?: {
+    scope_type?: string,
+    scope_id?: string,
+    status?: string[],
+  }) {
+    const sceneParams = getSceneSystemParams();
+    const mergedParams = {
+      scope_type: sceneParams.scope_type,
+      scope_id: sceneParams.scope_id,
+      ...params,
+    };
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?${processedParams(mergedParams).toString()}`);
   }
   // 工具执行
   getToolsExecute(params: {
@@ -99,11 +131,24 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.post(`${this.path}/tool/tool_execute_debug/`, { params });
   }
-  // 工具删除
-  deleteTool(params: {
+  // 删除场景级工具
+  deleteSceneTool(params: {
     uid: string,
+    scene_id: number,
   }) {
-    return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
+    return Request.delete(`${this.path}/tool/scene/${params.uid}/`, { params });
+  }
+  // 上架/下架场景级工具
+  publishPlatformTool(params: {
+    uid: string,
+    scene_id: number,
+  }) {
+    return Request.post(`${this.path}/tool/scene/${params.uid}/publish/`, {
+      params: {
+        uid: params.uid,
+        scene_id: params.scene_id,
+      },
+    });
   }
   // 收藏/取消收藏工具
   toggleFavorite(params: {

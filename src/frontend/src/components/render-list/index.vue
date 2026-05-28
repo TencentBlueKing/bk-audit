@@ -104,6 +104,7 @@
     useSlots,
     watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
@@ -115,6 +116,8 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
     reverseSortFields?:Array<string>, // 颠倒排序的字段数组
@@ -124,6 +127,11 @@
     settings?: Settings,
     border?: string | ('col' | 'none' | 'row' | 'horizontal' | 'outer')[],
     needEmptySearchTip?:boolean,
+    // 是否需要场景参数
+    isNeedSceneParams?: boolean,
+    // 是否需要场景ID
+    isNeedSceneId?: boolean,
+    sceneIdKey?: string
   }
 
   interface ISettings{
@@ -154,6 +162,10 @@
     needEmptySearchTip: true,
     paginationValidator: undefined,
     settings: undefined,
+    cc: false,
+    isNeedSceneParams: false,
+    isNeedSceneId: false,
+    sceneIdKey: 'scope_id',
   }) ;
   const emits = defineEmits<Emits>();
   const isUnload = ref(true);
@@ -163,6 +175,7 @@
   const tableRef = ref();
   const rootRef = ref();
   const { t } = useI18n();
+  const route = useRoute();
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
@@ -216,15 +229,29 @@
       .then((result: boolean) => {
         if (result) {
           // 如果存在 sort，则删除 order_field 和 order_type 字段
+          const { isNeedSceneParams, isNeedSceneId } = props;
           const cleanedParams = { ...paramsMemo };
           if (cleanedParams.sort) {
             delete cleanedParams.order_field;
             delete cleanedParams.order_type;
           }
+          const pageSize = Math.max(pagination.limit, 10);
+          // 优先使用 URL query 中的场景参数，避免 sessionStorage 中 UUID 导致类型错误
+          const sceneParams = isNeedSceneParams ? {
+            scope_id: (route.query.scope_id as string) || getSceneSystemParams().scope_id,
+            scope_type: (route.query.scope_type as string) || getSceneSystemParams().scope_type,
+          } : {};
+          const sceneIdParam = isNeedSceneId ? {
+            [props.sceneIdKey]: (route.query[props.sceneIdKey] as string)
+              || (route.query.scope_id as string)
+              || getSceneSystemParams().scope_id,
+          } : {};
           const params = {
             ...cleanedParams,
-            page: isUnload.value ? 1 :  pagination.current,
-            page_size: Math.max(pagination.limit, 1) < 10 ? 10 :  Math.max(pagination.limit, 1),
+            page: isUnload.value ? 1 : pagination.current,
+            page_size: pageSize,
+            ...sceneParams,
+            ...sceneIdParam,
           };
           isSearching.value = Object.keys(cleanedParams).length > 0;
           cancel();
@@ -244,6 +271,7 @@
       order_type: orderType,
       sort,
     } = getSearchParams();
+
     const pageValue = isUnload.value ? 1 : page;
     if (pageValue && pageSize) {
       pagination.current = ~~pageValue;

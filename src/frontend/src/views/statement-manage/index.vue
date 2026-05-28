@@ -18,7 +18,18 @@
   <bk-loading
     class="loading"
     :loading="isLoading">
-    <div class="audit-router-view">
+    <div
+      v-if="!isLoading && isEmpty"
+      class="empty-wrapper">
+      <bk-exception
+        class="empty-content"
+        :description="t('暂无数据')"
+        scene="part"
+        type="empty" />
+    </div>
+    <div
+      v-else
+      class="audit-router-view">
       <permission-page
         v-if="needApplyPermission"
         :data="permissionResult" />
@@ -27,7 +38,8 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
-  import { ref, watch  } from 'vue';
+  import { computed, ref, watch  } from 'vue';
+  import { useI18n } from 'vue-i18n';
   import {
     useRoute,
     useRouter,
@@ -43,9 +55,14 @@
   import PermissionPage from '@components/apply-permission/page.vue';
 
   const { on } = useEventBus();
+  const { t } = useI18n();
 
   const permissionResult = ref(new ApplyDataModel());
   const needApplyPermission = ref(false);
+  // 存储菜单数据用于判断是否为空
+  const currentMenuData = ref<Array<{ id: string; name: string }>>([]);
+  // 是否显示暂无数据
+  const isEmpty = computed(() => !isLoading.value && currentMenuData.value.length === 0);
 
   const { emit } = useEventBus();
   const router = useRouter();
@@ -67,6 +84,7 @@
 
   // 获取审计报表左侧菜单
   const {
+    run: fetchMenuListRun,
     loading: isLoading,
   } = useRequest(StatementManageService.fetchMenuList, {
     manual: true,
@@ -75,21 +93,52 @@
     },
     defaultValue: [],
     onSuccess: (menuData) => {
+      currentMenuData.value = menuData;
       emit('statement-menuData', menuData);
-      // 仅当没有id且menuData有数据时才进行路由跳转
-      if (!(route.params?.id) && menuData.length > 0 && menuData[0]?.id) {
+      // 菜单为空时，清空路由参数并显示空状态
+      if (menuData.length === 0 && route.params?.id) {
+        router.replace({ name: 'statementManage' });
+      } else if (!(route.params?.id) && menuData.length > 0 && menuData[0]?.id) {
+        // 仅当没有id且menuData有数据时才进行路由跳转
         router.push({
           name: 'statementManageDetail',
           params: {
             id: menuData[0].id,
-          } });
+          },
+          query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
+        });
       }
     },
+  });
+
+  // 监听子组件的刷新菜单事件
+  on('refresh-menu', () => {
+    fetchMenuListRun();
   });
 </script>
 <style lang="postcss">
   .loading {
+    position: relative;
     height: 500px;
+  }
+
+  .empty-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 400px;
+
+    .empty-content {
+      font-size: 20px;
+    }
+  }
+
+  .audit-router-view {
+    height: 100%;
   }
 </style>
 

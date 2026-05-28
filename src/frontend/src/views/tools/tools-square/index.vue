@@ -15,43 +15,139 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="tools-square">
-    <!-- 左侧标签-->
-    <render-label
-      ref="renderLabelRef"
-      active="-3"
-      :final="3"
-      :labels="strategyLabelList"
-      :render-style="renderStyle"
-      :total="total"
-      :upgrade-total="upgradeTotal"
-      @checked="handleChecked" />
+  <div
+    class="tools-square"
+    :class="{ 'is-animating': isSidebarAnimating }">
+    <!-- 正在使用中的工具提示条（置顶全宽） -->
+    <div
+      v-if="activeToolsInScene.length > 0 && !hasOpenedTools"
+      class="tool-using-tip">
+      <img
+        class="tip-icon"
+        :src="infoBlueSvg">
+      <span class="tip-text">
+        {{ t('你有') }} <strong class="tip-count">{{ activeToolsInScene.length }}</strong> {{ t('个工具正在使用中') }}
+      </span>
+      <span
+        class="tip-link"
+        @click="handleContinueUsingTool">
+        {{ t('点击继续') }}
+      </span>
+    </div>
+    <div class="tools-square-body">
+      <!-- 左侧标签 -->
+      <div
+        v-show="!hasOpenedTools"
+        class="sidebar-wrapper"
+        :class="{ 'is-collapsed': isSidebarCollapsed }">
+        <!-- 收缩状态 -->
+        <div
+          v-show="isSidebarCollapsed"
+          class="sidebar-collapsed"
+          @click="isSidebarCollapsed = false">
+          <div class="collapsed-inner">
+            <span class="collapsed-text">快捷筛选</span>
+            <img
+              class="collapsed-toggle-icon"
+              :src="foldRightIcon">
+          </div>
+        </div>
+        <!-- 展开状态 -->
+        <div
+          v-show="!isSidebarCollapsed"
+          class="sidebar-expanded">
+          <!-- 场景系统选择器 -->
+          <div class="scene-selector-wrapper">
+            <scene-system-selector
+              v-model="selectedScene"
+              :list-scope="['scene']"
+              :popover-width="228"
+              scene-permission="view_scene"
+              system-permission="view_system"
+              width="228px"
+              @change="handleSceneChange" />
+          </div>
+          <div class="sidebar-header">
+            <span class="sidebar-title">快捷筛选</span>
+            <img
+              class="sidebar-toggle-icon"
+              :src="foldLeftIcon"
+              @click="isSidebarCollapsed = true">
+          </div>
+          <render-label
+            ref="renderLabelRef"
+            active="-3"
+            :final="4"
+            :labels="strategyLabelList"
+            :render-style="renderStyle"
+            :total="0"
+            :upgrade-total="0"
+            @checked="handleChecked" />
+        </div>
+      </div>
 
-    <!-- 右侧内容-->
-    <div class="content-content">
-      <div class="content-card">
-        <content-card
-          ref="ContentCardRef"
-          :my-created="tagId === '-4'"
-          :recent-used="tagId === '-5'"
-          :tag-id="tagId"
-          :tags-enums="tagsEnums"
-          @change="handleChange" />
+      <!-- 右侧内容-->
+      <div
+        class="content-content"
+        :class="{ 'has-shadow': hasOpenedTools }">
+        <div class="content-card">
+          <div
+            v-show="!hasOpenedTools"
+            class="content-card-wrapper">
+            <content-card
+              ref="ContentCardRef"
+              :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
+              :my-created="tagId === '-4'"
+              :recent-used="tagId === '-5'"
+              :scene-name-map="sceneNameMap"
+              :scope-params="scopeParams"
+              :tag-id="tagId"
+              :tags-enums="tagsEnums"
+              @change="handleChange"
+              @open-tool="handleOpenTool" />
+          </div>
+          <tool-info-panel
+            v-show="hasOpenedTools"
+            :active-uid="activeToolUid"
+            :scene-name-map="sceneNameMap"
+            :scope-params="scopeParams"
+            :tags-enums="tagsEnums"
+            :tool-list="openedTools"
+            @add-tool="handleAddToolFromPopover"
+            @close="handleCloseToolPanel"
+            @close-tab="handleCloseTab"
+            @go-home="handleGoHomePage"
+            @switch-tab="handleSwitchTab" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  import { useRoute, useRouter } from 'vue-router';
 
+  import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
+
+  import ToolInfo from '@model/tool/tool-info';
+
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
   import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
 
   import ContentCard from './square-content/concent-card.vue';
+  import ToolInfoPanel from './square-content/tool-info-panel.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
+  import type { DrillDownParams } from '@/hooks/use-tool-tabs';
+  import useToolTabs from '@/hooks/use-tool-tabs';
+  import foldLeftIcon from '@/images/fold-left.svg';
+  import foldRightIcon from '@/images/fold-right.svg';
+  import infoBlueSvg from '@/images/info-blue.svg';
 
   interface TagItem {
     tag_id: string;
@@ -59,55 +155,397 @@
     tool_count: number;
     icon?: string;
   }
-  const renderLabelRef = ref();
 
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
+
+  const renderLabelRef = ref();
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
 
-
+  // 场景ID → 场景名称映射
+  const sceneNameMap = ref<Record<number, string>>({});
+  const {
+    run: fetchSceneAll,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+      const map: Record<number, string> = {};
+      data.forEach((item) => {
+        map[item.scene_id] = item.name;
+      });
+      sceneNameMap.value = map;
+    },
+  });
+  // 初始化获取场景列表
+  fetchSceneAll();
   const tagsEnums = ref<Array<TagItem>>([]);
-  const upgradeTotal = ref(0);
-  const total = ref(0);
   const tagId = ref('');
   const strategyLabelList = ref<Array<TagItem>>([]);
   const renderStyle = ref({
     backgroundColor: '#fff',
   });
-  // 选中左侧label
-  const handleChecked = (name: string) => {
+  const isSidebarCollapsed = ref(false);
+  const isSidebarAnimating = ref(false);
+  let sidebarAnimateTimer: ReturnType<typeof setTimeout> | null = null;
+  const isReturningHome = ref(false);
+  const route = useRoute();
+  const router = useRouter();
+  const { t } = useI18n();
+
+  // 场景选择器
+  const selectedScene = ref<SceneItem | null>();
+  // 记录上一次场景的唯一标识，用于区分"初始化选中"和"用户主动切换场景"
+  const lastSceneKey = ref<string | null>(null);
+
+  // 将选择器值转换为 scope 参数
+  const scopeParams = computed(() => {
+    const item = selectedScene.value;
+    // 未选择场景时，默认使用跨场景类型（scope_type 为后端必填字段）
+    if (!item) return { scope_type: 'cross_scene' };
+    if (item.type === 'aggregate') {
+      return {
+        scope_type: item.id === 'allSecen' ? 'cross_scene' : 'cross_system',
+      };
+    }
+    return {
+      scope_type: item.type, // 'scene' | 'system'
+      scope_id: item.id,
+    };
+  });
+
+  const {
+    openedTools,
+    activeToolUid,
+    hasOpenedTools,
+    openTool,
+    closeTab,
+    switchTab,
+    goHome,
+    clearAll,
+    setDrillDownParams,
+    resetForDrillDown,
+    saveSceneState,
+    restoreSceneState,
+  } = useToolTabs();
+
+  // 当前场景下所有工具的 uid 集合
+  const sceneToolUids = ref<Set<string>>(new Set());
+
+  // 获取当前场景下的全量工具 uid
+  const {
+    run: fetchSceneAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      sceneToolUids.value = new Set(data.map(item => item.uid));
+    },
+  });
+
+  // 监听场景切换，刷新当前场景下的全量工具 uid
+  watch(() => scopeParams.value, () => {
+    fetchSceneAllTools({ ...scopeParams.value, status: 'published' });
+  }, { immediate: true, deep: true });
+
+  // 当前场景下正在使用的工具（openedTools 与场景全量工具的交集）
+  const activeToolsInScene = computed(() => openedTools.value.filter(tool => sceneToolUids.value.has(tool.uid)));
+
+  // 点击继续使用工具
+  const handleContinueUsingTool = () => {
+    const lastTool = openedTools.value[openedTools.value.length - 1];
+    if (lastTool) {
+      switchTab(lastTool.uid);
+      handleOpenTool(lastTool);
+    }
+  };
+
+  const routeUid = route.params.uid as string;
+  const isDrillDownRoute = !!(routeUid && (route.query.drillKey || route.query.drillConfig));
+  const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
+  const isProgrammaticReset = ref(false);
+
+  // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
+  // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
+  if (!routeUid && openedTools.value.length > 0) {
+    if (activeToolUid.value) {
+      // activeToolUid 有值说明离开前在工具详情，恢复 URL 到对应的工具详情路由
+      router.replace({ name: 'toolDetail', params: { uid: activeToolUid.value } });
+    }
+    // activeToolUid 为空说明离开前在工具列表（首页），保持在工具列表页面，不自动打开工具详情
+  }
+
+  // 场景切换
+  const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
+  const handleSceneChange = async (value: SceneItem | null) => {
+    const newKey = getSceneKey(value);
+    const isActualChange = lastSceneKey.value !== null && lastSceneKey.value !== newKey;
+
+    if (isActualChange) {
+      // 用户主动切换场景 → 保存当前场景的工具状态，再恢复目标场景的工具状态
+      saveSceneState(lastSceneKey.value!);
+      try {
+        sessionStorage.removeItem('tool_tabs_search_list_map');
+        sessionStorage.removeItem('tool_tabs_game_detail_map');
+      } catch {
+        // 静默处理
+      }
+    }
+
+    selectedScene.value = value;
+    lastSceneKey.value = newKey;
+
+    if (isActualChange) {
+      restoreSceneState(newKey);
+      isSidebarCollapsed.value = hasOpenedTools.value;
+      syncRouteToUrl(activeToolUid.value || undefined);
+    }
+    // 无论是初始化还是切换，都重新拉取标签和工具列表
+    refreshTagsList();
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
+
+  if (isDrillDownRoute) {
+    resetForDrillDown();
+    const drillUid = routeUid;
+    let drillConfig = null;
+    let rowData = null;
+    try {
+      const drillKey = route.query.drillKey as string;
+      if (drillKey) {
+        const storedRaw = sessionStorage.getItem(drillKey);
+        if (storedRaw) {
+          const storedData = JSON.parse(storedRaw);
+          drillConfig = storedData.drillConfig;
+          rowData = storedData.rowData;
+          sessionStorage.removeItem(drillKey);
+        }
+      } else {
+        // 兼容旧的 URL 参数方式
+        const drillConfigRaw = route.query.drillConfig as string;
+        const rowDataRaw = route.query.rowData as string;
+        if (drillConfigRaw) drillConfig = JSON.parse(decodeURIComponent(drillConfigRaw));
+        if (rowDataRaw) rowData = JSON.parse(decodeURIComponent(rowDataRaw));
+      }
+    } catch {
+      // 解析失败时忽略
+    }
+    if (drillConfig && rowData) {
+      const drillParams: DrillDownParams = {
+        drillConfig,
+        rowData,
+      };
+      setDrillDownParams(drillUid, drillParams);
+    }
+    const tempTool = new ToolInfo({
+      uid: drillUid,
+      name: drillUid,
+    } as ToolInfo);
+    openTool(tempTool);
+  } else if (isRefreshRestore) {
+    const alreadyInList = openedTools.value.some(t => t.uid === routeUid);
+    if (!alreadyInList) {
+      const tempTool = new ToolInfo({
+        uid: routeUid,
+        name: routeUid,
+      } as ToolInfo);
+      openTool(tempTool);
+    } else if (activeToolUid.value !== routeUid) {
+      switchTab(routeUid);
+    }
+  }
+
+  // 安全地重置左侧标签栏（防止 resetAll 触发的 checked 事件关闭工具详情）
+  const safeResetLabels = () => {
+    if (hasOpenedTools.value) {
+      isProgrammaticReset.value = true;
+    }
+    renderLabelRef.value?.resetAll([]);
+    nextTick(() => {
+      isProgrammaticReset.value = false;
+    });
+  };
+
+  const handleChecked = async (name: string) => {
     tagId.value = name;
+    if (isProgrammaticReset.value) {
+      ContentCardRef.value?.getToolsList(name);
+      return;
+    }
+    if (hasOpenedTools.value) {
+      goHome();
+      syncRouteToUrl();
+      await nextTick();
+    }
     ContentCardRef.value?.getToolsList(name);
   };
-  // 右边数据刷新
+
   const handleChange = () => {
-    fetchToolsTagsList();
+    refreshTagsList();
   };
-  // 工具标签列表
+
+  // 固定分类数量（全部工具、我创建的、最近使用、我的收藏、无标签）
+  const FIXED_TAG_COUNT = 5;
+
   const {
     run: fetchToolsTagsList,
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      const strategyList = data.map(item => ({ strategy_count: item.tool_count, ...item, icon: '' }));
-      // 自定义strategyLabelList.value 的前三个icon
-      const iconMap: Record<number, string> = {
-        0: 'quanbu-xuanzhong',
-        1: 'morentouxiang',
-        2: 'shijian',
-        3: 'weifenpei',
+      const fixedTagOrder = ['-3', '-5', '-6', '-4', '-2'];
+      const iconMap: Record<string, string> = {
+        '-3': 'quanbu-xuanzhong',
+        '-4': 'morentouxiang',
+        '-5': 'shijian',
+        '-6': 'wodeguanzhu',
+        '-2': 'weifenpei',
       };
-      strategyLabelList.value = strategyList.map((item: any, index: number) => ({
-        ...item,
-        icon: iconMap[index] || 'tag',
-      }));
-
+      // 前5项为固定分类，按目标顺序重排；后续为动态标签
+      const fixedTags = data
+        .slice(0, FIXED_TAG_COUNT)
+        .sort((a: any, b: any) => fixedTagOrder.indexOf(a.tag_id) - fixedTagOrder.indexOf(b.tag_id));
+      const dynamicTags = data.slice(FIXED_TAG_COUNT);
+      strategyLabelList.value = [
+        ...fixedTags.map((item: any) => ({
+          ...item,
+          strategy_count: item.tool_count ?? 0,
+          icon: iconMap[item.tag_id] || 'tag',
+        })),
+        ...dynamicTags.map((item: any) => ({
+          ...item,
+          strategy_count: item.tool_count ?? 0,
+          icon: 'tag',
+        })),
+      ];
       tagsEnums.value = strategyLabelList.value;
+      // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
+      if (hasOpenedTools.value) return;
+      // 始终清空 all，避免 render-label 顶部出现空白行
       renderLabelRef.value?.resetAll([]);
+      // 初始化阶段（tagId 为空）：通过 resetAll 触发 handleChecked 来加载工具列表
+      // 场景切换阶段（tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
+      if (!tagId.value) {
+        safeResetLabels();
+      }
     },
   });
 
+  // 刷新标签列表（带 scope 参数）
+  const refreshTagsList = () => {
+    fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
+  };
+
+  const syncRouteToUrl = (uid?: string) => {
+    if (uid && (route.name !== 'toolDetail' || route.params.uid !== uid)) {
+      router.replace({ name: 'toolDetail', params: { uid } });
+    } else if (!uid && route.name !== 'toolsSquare') {
+      router.replace({ name: 'toolsSquare' });
+    }
+  };
+
+  const handleOpenTool = (tool: ToolInfo) => {
+    openTool(tool);
+    isSidebarCollapsed.value = true;
+    syncRouteToUrl(tool.uid);
+    // 打开工具后刷新标签数量（如最近使用计数）
+    refreshTagsList();
+  };
+
+  const handleAddToolFromPopover = (tool: ToolInfo) => {
+    openTool(tool);
+    isSidebarCollapsed.value = true;
+    syncRouteToUrl(tool.uid);
+    // 打开工具后刷新标签数量（如最近使用计数）
+    refreshTagsList();
+  };
+
+  const handleGoHomePage = async () => {
+    isReturningHome.value = true;
+    goHome();
+    syncRouteToUrl();
+    await nextTick();
+    // 保持用户之前选择的标签，不强制重置为"全部工具"
+    renderLabelRef.value?.setLabel(tagId.value || '-3');
+    ContentCardRef.value?.getToolsList(tagId.value || '-3');
+    isReturningHome.value = false;
+  };
+
+  const handleCloseToolPanel = async () => {
+    clearAll();
+    isSidebarCollapsed.value = false;
+    syncRouteToUrl();
+    await nextTick();
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
+
+  const handleCloseTab = async (uid: string) => {
+    closeTab(uid);
+    if (!hasOpenedTools.value) {
+      syncRouteToUrl();
+      await nextTick();
+      ContentCardRef.value?.getToolsList(tagId.value);
+    } else {
+      syncRouteToUrl(activeToolUid.value);
+    }
+  };
+
+  watch(hasOpenedTools, (val) => {
+    isSidebarCollapsed.value = val;
+    if (!val) {
+      // 工具全部关闭，回到广场时刷新标签数量（如最近使用计数）
+      refreshTagsList();
+    }
+  }, { immediate: true });
+
+  watch(isSidebarCollapsed, (val) => {
+    isSidebarAnimating.value = true;
+    if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
+    sidebarAnimateTimer = setTimeout(() => {
+      isSidebarAnimating.value = false;
+      window.dispatchEvent(new Event('resize'));
+    }, 320);
+
+    if (val || isReturningHome.value) return;
+    nextTick(() => {
+      safeResetLabels();
+      if (hasOpenedTools.value) {
+        renderLabelRef.value?.setLabel('');
+      } else {
+        renderLabelRef.value?.setLabel((!tagId.value || tagId.value === '-3') ? '-3' : tagId.value);
+      }
+    });
+  });
+
+  // 切换 tab 时同步 URL
+  const handleSwitchTab = (uid: string) => {
+    switchTab(uid);
+    syncRouteToUrl(uid);
+  };
+
+  // 监听场景切换事件
+  const { on: onEvent, off } = useEventBus();
+
+  // 刷新所有数据（场景切换时调用）
+  const refreshAllData = () => {
+    refreshTagsList();
+    if (hasOpenedTools.value) return;
+    ContentCardRef.value?.getToolsList(tagId.value);
+  };
 
   onMounted(() => {
-    fetchToolsTagsList();
+    // 监听场景切换事件
+    onEvent('scene:change', () => {
+      refreshAllData();
+    });
+    if (hasOpenedTools.value && !isDrillDownRoute && !isRefreshRestore) {
+      syncRouteToUrl(activeToolUid.value);
+    }
+  });
+
+  onUnmounted(() => {
+    off('scene:change');
+    if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
   });
 </script>
 
@@ -115,41 +553,230 @@
 .tools-square {
   position: absolute;
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100%;
-  background-color: #fff;
+  background-color: #f5f7fa;
   inset: 0;
 
-  .content-header {
-    top: 0;
-    width: 100%;
-    background-color: #fff;
+  .tool-using-tip {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    width: calc(100% - 2px);
+    height: 40px;
+    padding: 0 12px;
+    margin: 0 1px;
+    font-size: 12px;
+    line-height: 36px;
+    color: #4d4f56;
+    background: #f0f5ff;
+    border: 1px solid #cddffe;
+    border-top: none;
+    box-shadow: 0 2px 4px 0 #e1e8f4;
+    align-items: center;
+    flex-shrink: 0;
 
-    /deep/ .bk-tab--unborder-card .bk-tab-header {
-      border-bottom: none;
-      box-shadow: 0 3px 4px 0 #0000000a;
+    .tip-icon {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      flex-shrink: 0;
     }
+
+    .tip-text {
+      margin-right: 8px;
+    }
+
+    .tip-link {
+      color: #5897ff;
+      cursor: pointer;
+
+      &:hover {
+        color: #1768ef;
+      }
+    }
+  }
+
+  .tools-square-body {
+    display: flex;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .sidebar-wrapper {
+    height: 100%;
+    padding: 20px;
+    overflow: hidden;
+    background-color: #f5f7fa;
+    transition: width .3s ease;
+    will-change: width;
+    contain: layout style;
+
+    /* position: relative; */
+    flex-shrink: 0;
+
+    &.is-collapsed {
+      width: 100px;
+    }
+
+    &:not(.is-collapsed) {
+      width: 282px;
+    }
+  }
+
+  .sidebar-collapsed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding-top: 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    opacity: 100%;
+    transition: opacity .2s ease .1s;
+
+    .collapsed-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 52px;
+      padding: 20px 0;
+      background-color: #fff;
+      border-radius: 4px;
+      gap: 2px;
+      box-shadow: 0 0 10px 0 rgb(0 0 0 / 10%);
+    }
+
+    .collapsed-text {
+      font-size: 14px;
+      line-height: 1.8;
+      letter-spacing: 10px;
+      color: #313238;
+      writing-mode: vertical-rl;
+    }
+
+    .collapsed-toggle-icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .sidebar-expanded {
+    position: relative;
+    width: 260px;
+    height: 100%;
+    background-color: #fff;
+    border-radius: 4px;
+    opacity: 100%;
+    box-shadow: 0  2px 4px  0 rgb(25 25 41 / 5%);
+    transition: opacity .2s ease .1s;
+
+    .scene-selector-wrapper {
+      display: flex;
+      justify-content: center;
+      padding: 16px 16px 0;
+    }
+
+    .sidebar-header {
+      position: relative;
+      display: flex;
+      height: 52px;
+      padding: 0 16px 0 26px;
+      align-items: center;
+      justify-content: space-between;
+
+      &::after {
+        position: absolute;
+        right: 16px;
+        bottom: 0;
+        left: 16px;
+        border-bottom: 1px solid #eaebf0;
+        content: '';
+      }
+
+      .sidebar-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #313238;
+      }
+
+      .sidebar-toggle-icon {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+    }
+
+    :deep(.render-label-box) {
+      height: calc(100% - 52px - 48px);
+
+      .render-label {
+        min-width: unset;
+        padding: 0;
+
+        .label-item {
+          width: 100%;
+          padding: 0 16px 0 26px;
+
+          &.final {
+            position: relative;
+            border-bottom: none;
+
+            &::after {
+              position: absolute;
+              right: 16px;
+              bottom: 0;
+              left: 16px;
+              border-bottom: 1px solid #eaebf0;
+              content: '';
+            }
+          }
+        }
+
+      }
+
+      .operation-box {
+        display: none;
+      }
+    }
+
   }
 
   .content-content {
     width: 100%;
     height: 100%;
+    min-width: 0;
     margin-top: 0;
-    background-color: #f5f7fa;
+    overflow: hidden;
+    contain: layout style;
+    transition: margin-left .3s ease;
 
-    .content-tag {
-      margin-left: 20px;
-      font-size: 12px;
-      letter-spacing: 0;
-      color: #979ba5;
+    &.has-shadow {
+      box-shadow: -3px 0 6px 0 rgb(0 0 0 / 10%);
+    }
 
-      .clear-tag {
-        margin-left: 20px;
-        color: #3a84ff;
-        cursor: pointer;
+    .tools-square.is-animating & {
+      pointer-events: none;
+
+      .content-card {
+        will-change: contents;
       }
     }
+
+    .content-card {
+      width: 100%;
+      height: 100%;
+
+      .content-card-wrapper {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
   }
 }
 </style>
-

@@ -210,6 +210,8 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   const route = useRoute();
   const router = useRouter();
 
@@ -300,6 +302,7 @@
       id: route.params.id,
       page: 1,
       page_size: 1,
+      scene_id: getSceneSystemParams().scope_id,
     },
     manual: isEditMode || isCloneMode,
     onSuccess(data) {

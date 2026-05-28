@@ -298,6 +298,7 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Where {
     connector: 'and' | 'or'
@@ -470,7 +471,7 @@
   // 获取tableid
   const {
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchTable, {
+  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
     defaultValue: [],
   });
 
@@ -501,6 +502,7 @@
       return async () => {
         const data = await fetchTable({
           table_type: item.value,
+          scene_id: getSceneSystemParams().scope_id,
         });
         return [{
           ...item,
@@ -516,7 +518,7 @@
     Promise.all(requests.map(fn => fn()))
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
-        allConfigTypeTable.value = flattenedResults;
+        allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
         typeTableLoading.value = false;
       });
   };
@@ -996,6 +998,35 @@
       }
       // 同步display_name
       params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1 ? params.configs.data_source.rt_id : '') as string;
+      // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
+      const transferFilter = (whereData: Where) => {
+        whereData.conditions.forEach((group) => {
+          group.conditions.forEach((_condItem, condIndex) => {
+            const { condition } = group.conditions[condIndex];
+            if (condition.operator === 'eq') {
+              // 等于操作符：将 filters 转移到 filter
+              if (condition.filters?.length) {
+                condition.filter = Array.isArray(condition.filters)
+                  ? condition.filters.join(',')
+                  : condition.filters;
+                condition.filters = [];
+              }
+            } else {
+              // 非等于操作符：将 filter 转移到 filters
+              if (condition.filter && !condition.filters?.length) {
+                condition.filters = [condition.filter];
+                condition.filter = '';
+              }
+            }
+          });
+        });
+      };
+      if (params.configs.where) {
+        transferFilter(params.configs.where);
+      }
+      if (params.configs.having) {
+        transferFilter(params.configs.having);
+      }
       return params;
     },
     // 暴露 typeTableLoading 状态
@@ -1058,6 +1089,7 @@
     .flex-center {
       display: flex;
       align-items: center;
+      justify-content: left;
     }
 
     .circle {

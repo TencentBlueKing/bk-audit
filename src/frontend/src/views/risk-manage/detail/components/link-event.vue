@@ -643,7 +643,7 @@
 
   // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import { execCopy } from '@utils/assist';
 
@@ -935,17 +935,21 @@
   // 获取所有工具
   const {
     data: allToolsData,
+    run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    manual: true,
+    defaultParams: {
+      scope_type: 'scene',
+      scope_id: props.data.scene_id,
+    },
   });
 
   // 获取标签列表
   const {
     data: tagData,
+    run: fetchToolTags,
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
-    manual: true,
   });
 
   const getToolNameAndType = (uid: string) => {
@@ -1079,6 +1083,8 @@
         risk_id: data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     });
   };
@@ -1099,6 +1105,8 @@
         risk_id: props.data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     }
   };
@@ -1124,6 +1132,8 @@
       name: 'strategyList',
       query: {
         strategy_id: eventItem.value.strategy_id,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       },
     });
     window.open(to.href, '_blank');
@@ -1223,6 +1233,8 @@
         risk_id: props.data.risk_id,
         page: currentPage.value,
         page_size: 50,
+        scope_id: props.data.scene_id,
+        scope_type: 'scene',
       });
     });
   };
@@ -1243,6 +1255,8 @@
           risk_id: data.risk_id,
           page: currentPage.value,
           page_size: 50,
+          scope_id: props.data.scene_id,
+          scope_type: 'scene',
         });
       }, 100); // 100ms 防抖延迟
     }
@@ -1257,6 +1271,20 @@
     deep: true,
   });
 
+  watch(() => props.data, (data) => {
+    if (data) {
+      setTimeout(() => {
+        fetchAllTools({
+          scope_id: data.scene_id,
+          scope_type: 'scene',
+        });
+        fetchToolTags({
+          scope_id: data.scene_id,
+          scope_type: 'scene',
+        });
+      }, 0);
+    }
+  });
   onMounted(() => {
     loading.value = true;
     const observer = new MutationObserver(() => {

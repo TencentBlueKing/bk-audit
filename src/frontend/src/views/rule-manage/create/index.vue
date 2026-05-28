@@ -198,7 +198,10 @@
                 :to="{
                   name:'applicationManageList',
                   query:{
-                    id: formData.pa_id
+                    id: formData.pa_id,
+                    scene_id:Number(route.query.scene_id),
+                    scope_id: Number(route.query.scope_id),
+                    scope_type: route.query.scope_type,
                   }
                 }">
                 <audit-icon
@@ -342,6 +345,8 @@
 
   import BatchDialog from './components/dialog.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface ParamItem {
     custom_type: string;
     desc:string;
@@ -483,6 +488,7 @@
       page: 1,
       page_size: 1000,
       rule_id: route.params.id,
+      scene_id: getSceneSystemParams().scope_id,
     });
   }
   // 获取所有策略列表
@@ -567,7 +573,9 @@
       if (isEditMode || isCloneMode) {
         formData.value.scope.forEach(({ field }:{field: string}) => {
           if (field === 'strategy_id' && !strategyList.value.length) {
-            fetchAllStrategyList();
+            fetchAllStrategyList({
+              scene_id: getSceneSystemParams().scope_id,
+            });
           }
         });
         if (!isPaIdChange.value) {
@@ -650,7 +658,9 @@
 
   const handleValueDicts = (val: string) => {
     if (val === 'strategy_id' && !strategyList.value.length) {
-      fetchAllStrategyList();
+      fetchAllStrategyList({
+        scene_id: getSceneSystemParams().scope_id,
+      });
     }
   };
   const handleFetchDetail = () => {

@@ -34,8 +34,9 @@
           type="search-empty">
           {{ t('当前联表无关联策略可前往') }}
           <auth-button
-            action-id="create_strategy"
+            action-id="create_strategy_v2"
             :permission="permissionCheckData"
+            resource-is-scene
             text
             theme="primary"
             @click="handleCreate">
@@ -63,6 +64,8 @@
   import useRequest from '@hooks/use-request';
 
   import EditTag from '@components/edit-box/tag.vue';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Strategy {
     page: number;
@@ -184,12 +187,13 @@
   // 获取策略新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
-      action_ids: 'create_strategy',
+      action_ids: 'create_strategy_v2',
+      resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
     manual: true,
     onSuccess: (data) => {
-      permissionCheckData.value = data.create_strategy;
+      permissionCheckData.value = data.create_strategy_v2;
     },
   });
 

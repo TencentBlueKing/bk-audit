@@ -760,10 +760,16 @@
           .item-right-tips {
             position: absolute;
             right: 60px;
+            display: inline-flex;
+            margin-top: -12px;
             color: #3a84ff;
+            align-items: center;
+            gap: 4px;
 
             .jump-link {
+              font-size: inherit;
               color: #3a84ff;
+              vertical-align: middle;
             }
           }
 

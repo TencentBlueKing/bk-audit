@@ -41,6 +41,12 @@ class Root extends ModuleBase {
       payload,
     });
   }
+
+  getUserPermission(payload = {} as IRequestPayload) {
+    return Request.get('/api/v1/scene/my_role_permissions/', {
+      payload,
+    });
+  }
 }
 
 export default new Root();

@@ -75,7 +75,7 @@
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
-  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import tableRow from './table-raw.vue';
 
@@ -184,6 +184,7 @@
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
+    defaultParams: { status: 'published' },
   });
 
 
@@ -194,7 +195,7 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      fetchAllTools();
+      fetchAllTools({ status: 'published' });
     },
   });
 

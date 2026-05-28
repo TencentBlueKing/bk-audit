@@ -135,6 +135,8 @@
 
   import Card from './components/card.vue';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   interface ControlType {
     control_type_id: string;
     control_id: string;
@@ -379,6 +381,11 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     manual: true,
+    defaultParams: {
+      action_ids: 'view_system',
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: 'scene',
+    },
     onSuccess(data) {
       data.forEach((item) => {
         systemMap.value[item.id] = item.name;
@@ -410,6 +417,7 @@
         // 解析resulttableid
         fetchTable({
           table_type: formData.value.configs.config_type,
+          scene_id: getSceneSystemParams().scope_id,
         });
       }
     },

@@ -121,6 +121,13 @@
         @click="handleNext">
         {{ t('下一步') }}
       </bk-button>
+      <!-- <bk-button
+        v-if="isEditMode"
+        class="ml8"
+        theme="primary"
+        @click="handleSaveCurrentStep">
+        {{ t('提交') }}
+      </bk-button> -->
       <bk-button
         class="ml8"
         @click="handleCancel">
@@ -160,8 +167,9 @@
   }
 
   interface Emits {
-    (e: 'previousStep', step: number): void;
+    (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: IFormData): void;
     (e: 'showPreview'): void;
   }
   interface Props {
@@ -248,7 +256,7 @@
   };
 
   const handlePrevious = () => {
-    emits('previousStep', 1);
+    emits('previousStep', 1,  buildStepParams());
   };
 
   const handleCancel = () => {
@@ -257,31 +265,39 @@
     });
   };
 
+  const buildStepParams = (): IFormData => {
+    const params: IFormData = _.cloneDeep(Object.assign(
+      {},
+      formData.value, eventRef.value.getData(),
+      strategyTableRef.value.getData(),
+    ));
+    params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+      cleanMapConfig(item);
+      cleanDrillConfig(item);
+      return item;
+    });
+    params.risk_meta_field_config = params.risk_meta_field_config.map((item) => {
+      cleanMapConfig(item);
+      cleanDrillConfig(item);
+      return item;
+    });
+    params.event_data_field_configs = params.event_data_field_configs.map(cleanDrillConfig);
+    params.event_evidence_field_configs = params.event_evidence_field_configs.map(cleanDrillConfig);
+    return params;
+  };
+
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      const params: IFormData = _.cloneDeep(Object.assign(
-        {},
-        formData.value, eventRef.value.getData(),
-        strategyTableRef.value.getData(),
-      ));
-      // 统一处理配置字段
-      params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
-        cleanMapConfig(item);
-        cleanDrillConfig(item);
-        return item;
-      });
-      params.risk_meta_field_config = params.risk_meta_field_config.map((item) => {
-        cleanMapConfig(item);
-        cleanDrillConfig(item);
-        return item;
-      });
-
-      params.event_data_field_configs = params.event_data_field_configs.map(cleanDrillConfig);
-      params.event_evidence_field_configs = params.event_evidence_field_configs.map(cleanDrillConfig);
-
-      emits('nextStep', 3, params);
+      emits('nextStep', 3, buildStepParams());
     });
   };
+
+  // 提交（编辑态）：效果与「其他配置」的提交一致
+  // const handleSaveCurrentStep = () => {
+  //   Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
+  //     emits('saveCurrentStep', buildStepParams());
+  //   });
+  // };
 
   // 公共函数：清理配置中的无效drill_config
   const cleanDrillConfig = (item: IFormData['event_basic_field_configs'][0]) => {

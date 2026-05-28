@@ -21,7 +21,7 @@
       :show-icon="false"
       :title="t('基础配置')">
       <template #content>
-        <div class="flex-center">
+        <div>
           <audit-form
             ref="formRef"
             class="example"
@@ -192,11 +192,12 @@
 
   import useRequest from '@hooks/use-request';
 
-  import CardPartVue from '../../../tools/tools-square/add/components/card-part.vue';
+  import CardPartVue from '../../../scene-config/tool-manege/create-tool/components/card-part.vue';
 
   import fieldCom from './field-components.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import { convertGMTTimeToStandard, convertToTimestamp } from '@/utils/assist/timestamp-conversion';
 
   interface Exposes{
@@ -296,6 +297,8 @@
   } = useRequest(StrategyManageService.fetchStrategyList, {
     defaultParams: {
       strategy_type: 'rule',
+      scene_id: getSceneSystemParams().scope_id,
+      scene_type: getSceneSystemParams().scope_type,
     },
     defaultValue: {
       results: [],

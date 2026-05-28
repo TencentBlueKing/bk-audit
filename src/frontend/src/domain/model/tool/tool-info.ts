@@ -22,7 +22,8 @@ export default class ToolInfo {
   description: string;
   namespace: string;
   is_bkvision: boolean;
-  favorite: boolean;  // 是否已收藏
+  favorite: boolean;
+  status: string;
   config?: {  // 预览携带的配置
     sql: string;
     output_fields: Array<{
@@ -52,16 +53,18 @@ export default class ToolInfo {
       table_name: string;
     }>;
   };
-  permission: {
-    use_tool: boolean;
-    manage_tool: boolean;
-  };
   strategies: Array<string>;
   tags: Array<string>;
   created_by: string;
   created_at: string;
   updated_by: string;
   updated_at: string;
+  visibility: {
+    binding_type: string;
+    visibility_type: string;
+    scene_ids: number[];
+    system_ids: number[];
+  };
   constructor(payload = {} as ToolInfo) {
     this.is_bkvision = payload.is_bkvision;
     this.name = payload.name;
@@ -70,7 +73,6 @@ export default class ToolInfo {
     this.tool_type = payload.tool_type;
     this.description = payload.description;
     this.namespace = payload.namespace;
-    this.permission = payload.permission;
     this.tags = payload.tags;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;
@@ -78,5 +80,12 @@ export default class ToolInfo {
     this.updated_by = payload.updated_by;
     this.updated_at = payload.updated_at;
     this.favorite = payload.favorite ?? false;
+    this.status = payload.status || '';
+    this.visibility = payload.visibility || {
+      binding_type: '',
+      visibility_type: '',
+      scene_ids: [],
+      system_ids: [],
+    };
   }
 }

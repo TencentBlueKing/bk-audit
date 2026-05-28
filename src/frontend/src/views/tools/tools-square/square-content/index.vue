@@ -116,7 +116,7 @@
   });
 
   onMounted(() => {
-    fetchToolsTagsList();
+    fetchToolsTagsList({ status: 'published' });
   });
 
   defineExpose<Exposes>({

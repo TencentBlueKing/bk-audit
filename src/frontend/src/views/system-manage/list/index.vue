@@ -21,17 +21,15 @@
     name="systemList">
     <div class="system-list-page">
       <div class="mb16 action-header">
-        <auth-button
-          action-id="create_system"
+        <bk-button
           class="mr8"
-          :permission="permissionCheckData"
           theme="primary"
           @click="handleCreate">
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('接入系统') }}
-        </auth-button>
+          {{ t('接入新系统') }}
+        </bk-button>
         <bk-input
           v-model="searckKey"
           :placeholder="t('请输入 系统名称、系统ID 进行搜索')"
@@ -40,6 +38,7 @@
       </div>
       <render-list
         ref="listRef"
+        :border="['row']"
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
@@ -48,8 +47,7 @@
         @clear-search="handleClearSearch"
         @column-filter="handleColumnFilter"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess"
-        @row-click="handleRowClick" />
+        @request-success="handleRequestSuccess" />
     </div>
   </skeleton-loading>
 </template>
@@ -63,18 +61,14 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
-  import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
   import type SyetemModel from '@model/meta/system';
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import getAssetsFile from '@utils/getAssetsFile';
-
   import useRequest from '@/hooks/use-request';
 
-  // import useRequest from '@/hooks/use-request';
 
   interface Syetem {
     page: number;
@@ -112,49 +106,47 @@
     },
     {
       label: () => t('系统名称'),
-      sort: 'custom',
       field: () => 'name',
-      render: ({ data }: {data: SyetemModel}) => {
-        const isNew = isNewData(data);
-        const to = {
-          name: 'systemDetail',
-          params: {
-            id: data.system_id,
-          },
-          query: {
-            type: data.permission_type,
-          },
-        };
-        return (isNew
-          ? <div style='display: flex;align-items: center;'>
-            <auth-router-link
-              id={`systemDetailLink${data.system_id}`}
-              permission={data.permission.view_system}
-              actionId='view_system'
-              resource={data.system_id}
-              resourceTypeId="system"
-              to={to}>
-              {data.name}
-            </auth-router-link>
-            <img
-              class='table-new-tip'
-              src={getAssetsFile('new-tip.png')}/>
-          </div>
-          : <auth-router-link
-            id={`systemDetailLink${data.system_id}`}
-            permission={data.permission.view_system}
-            actionId='view_system'
-            resource={data.system_id}
-            resourceTypeId="system"
-            to={to}>
-            {data.name}
-          </auth-router-link>
-        );
-      },
+      // render: ({ data }: {data: SyetemModel}) => {
+      //   const isNew = isNewData(data);
+      //   const to = {
+      //     name: 'systemDetail',
+      //     params: {
+      //       id: data.system_id,
+      //     },
+      //     query: {
+      //       type: data.permission_type,
+      //     },
+      //   };
+      //   return (isNew
+      //     ? <div style='display: flex;align-items: center;'>
+      //       <auth-router-link
+      //         id={`systemDetailLink${data.system_id}`}
+      //         permission={data.permission.view_system}
+      //         actionId='view_system'
+      //         resource={data.system_id}
+      //         resourceTypeId="system"
+      //         to={to}>
+      //         {data.name}
+      //       </auth-router-link>
+      //       <img
+      //         class='table-new-tip'
+      //         src={getAssetsFile('new-tip.png')}/>
+      //     </div>
+      //     : <auth-router-link
+      //       id={`systemDetailLink${data.system_id}`}
+      //       permission={data.permission.view_system}
+      //       actionId='view_system'
+      //       resource={data.system_id}
+      //       resourceTypeId="system"
+      //       to={to}>
+      //       {data.name}
+      //     </auth-router-link>
+      //   );
+      // },
     },
     {
       label: () => t('系统 ID'),
-      sort: 'custom',
       field: () => 'instance_id',
       width: '180px',
     },
@@ -211,8 +203,44 @@
       }</>,
     },
     {
+      label: () => t('系统状态'),
+      width: '200px',
+      filter: {
+        list: [
+          {
+            text: t('待完善'),
+            value: 'incomplete',
+          },
+          {
+            text: t('数据异常'),
+            value: 'abnormal',
+          },
+          {
+            text: t('正常'),
+            value: 'normal',
+          },
+        ],
+        filterScope: SortScope.ALL,
+        match: FullEnum.FUZZY,
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
+      field: () => 'system_status',
+      render: ({ data }: {data: SyetemModel}) => {
+        if (!data.system_status) {
+          return '--';
+        }
+        return (
+           <bk-tag
+              theme={systemStatusThemeMap(data.system_status)}
+             >
+             { systemStatusMap(data.system_status)}
+            </bk-tag>
+        );
+      },
+    },
+    {
       label: () => t('数据上报状态'),
-      sort: 'custom',
       width: '200px',
       filter: {
         list: [
@@ -279,16 +307,45 @@
       width: 140,
       render: ({ data }: {data: SyetemModel}) => data.created_by || '--',
     },
+    // 操作列 文字按钮
+    {
+      label: () => t('操作'),
+      width: 140,
+      render: ({ data }: {data: SyetemModel}) => (
+          <bk-button
+            theme="primary"
+            disabled={!data.permission.edit_system}
+            text
+            onClick={() => handleRowClick(data)}
+            size="small">
+            { t('管理') }
+          </bk-button>
+        ),
+    },
   ] as Column[];
 
   const listRef = ref();
-  const dataSource = MetaManageService.fetchSystemList;
+  const dataSource = (params: any) => MetaManageService.fetchSystemList({ ...params, audit_status: 'accessed', filter_actions: 'edit_system,view_system' });
 
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
-  const permissionCheckData = ref();
-
+  const systemStatusMap = (status: string) => {
+    const map: Record<string, string> = {
+      incomplete: t('待完善'),
+      abnormal: t('数据异常'),
+      normal: t('正常'),
+    };
+    return map[status] || status;
+  };
+  const systemStatusThemeMap = (status: string) => {
+    const map: Record<string, string> = {
+      incomplete: 'warning',
+      abnormal: 'danger',
+      normal: 'success',
+    };
+    return map[status] || 'default';
+  };
   const disabledMap: Record<string, string> = {
     name: 'name',
     instance_id: 'instance_id',
@@ -313,7 +370,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['name', 'instance_id', 'managers', 'resource_type_count', 'status', 'last_time'],
+    checked: ['name', 'instance_id', 'managers', 'resource_type_count', 'status', 'last_time', 'system_status'],
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
   });
@@ -355,18 +412,6 @@
     }
   });
 
-  // 获取策略新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'create_system',
-    },
-    defaultValue: {},
-    manual: true,
-    onSuccess: (data) => {
-      permissionCheckData.value = data.create_strategy;
-    },
-  });
-
   const {
     data: GlobalChoices,
   } = useRequest(MetaManageService.fetchGlobalChoices, {
@@ -386,8 +431,16 @@
   };
 
   // 点击整行
-  const handleRowClick = (event: Event, row: any) => {
-    (document.querySelector(`#systemDetailLink${row.system_id}`) as HTMLElement)?.click();
+  const handleRowClick = (row: any) => {
+    router.push({
+      name: 'systemInfo',
+      params: {
+        id: row.system_id,
+      },
+      query: {
+        type: row.permission_type,
+      },
+    });
   };
   // 清空搜索
   const handleClearSearch = () => {
@@ -404,10 +457,10 @@
   };
 
   const handleCreate = () => {
-    const route = router.resolve({
+    const routeUrl = router.resolve({
       name: 'systemAccess',
     });
-    window.open(route.href, '_blank');
+    window.open(routeUrl.href, '_blank');
   };
 
   // 判断是否是新建数据

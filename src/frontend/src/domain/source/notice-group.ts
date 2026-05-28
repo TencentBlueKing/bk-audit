@@ -23,6 +23,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class NoticeGroup extends ModuleBase {
   constructor() {
     super();
@@ -38,7 +40,7 @@ class NoticeGroup extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/`, {
+    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });
@@ -51,6 +53,7 @@ class NoticeGroup extends ModuleBase {
       msg_type: string;
     }>;
     description: string;
+    scene_id: string | number;
   }) {
     return Request.post(`${this.module}/`, {
       params,
@@ -62,7 +65,7 @@ class NoticeGroup extends ModuleBase {
     return Request.get<Array<{
       id: string;
       name: string
-    }>>(`${this.module}/all/`);
+    }>>(`${this.module}/all/?scene_id=${getSceneSystemParams().scope_id}`);
   }
 
   // 获取通知组详情

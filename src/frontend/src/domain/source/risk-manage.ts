@@ -18,11 +18,12 @@ import type RiskManageModel from '@model/risk/risk';
 import type StrategyInfo from '@model/risk/strategy-info';
 
 import Request, {
-  type IRequestPayload,
   type IRequestResponsePaginationData,
 } from '@utils/request';
 
 import ModuleBase from './module-base';
+
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
 class RiskManage extends ModuleBase {
   api: string;
@@ -34,11 +35,11 @@ class RiskManage extends ModuleBase {
   // 获取风险列表
   getRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scene_id?: string,
+  }) {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/?page=${params.page}&page_size=${params.page_size}`, {
       params,
-      payload,
     });
   }
   // 获取正在生成的事件列表
@@ -61,7 +62,8 @@ class RiskManage extends ModuleBase {
   // 获取待我处理的风险列表
   getTodoRiskList(params: {
       page: number,
-      page_size: number
+      page_size: number,
+      scene_id?: string,
     }) {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/?page=${params.page}&page_size=${params.page_size}`, {
       params,
@@ -70,21 +72,21 @@ class RiskManage extends ModuleBase {
   // 我关注的获取风险列表
   getWatchRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scene_id?: string,
+  }) {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/?page=${params.page}&page_size=${params.page_size}`, {
       params,
-      payload,
     });
   }
   // 获取处理历史风险列表
   getProcessedRiskList(params: {
     page: number,
-    page_size: number
-  }, payload = {} as IRequestPayload) {
+    page_size: number,
+    scene_id?: string,
+  }) {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/processed/?page=${params.page}&page_size=${params.page_size}`, {
       params,
-      payload,
     });
   }
   // 获取风险可用字段
@@ -119,11 +121,22 @@ class RiskManage extends ModuleBase {
   }
   // 获取风险标签
   getRiskTags(params: Record<string, any>) {
+    const sceneParams = getSceneSystemParams();
+    const { noNeedSceneParams, ...restParams } = params;  // 解构分离不需要的参数
+    const requestParams = noNeedSceneParams
+      ? { ...restParams }
+      : {
+        ...restParams,
+        scope_id: params.scope_id  ?? sceneParams.scope_id,
+        scope_type: params.scope_type  ?? sceneParams.scope_type,
+      };
     return Request.get<Array<{
       id: string,
       name: string,
+      scope_id?: string | number,
+      scope_type?: string
     }>>(`${this.module}/tags/`, {
-      params,
+      params: requestParams,
     });
   }
   // 获取风险详情
@@ -273,6 +286,107 @@ class RiskManage extends ModuleBase {
     task_id: string,
   }) {
     return Request.get(`${this.api}/risk_report/task/`, {
+      params,
+    });
+  }
+
+  // 自然语言转风险筛选条件（nl2risk_filter）
+  nl2RiskFilter(params: {
+    query: string,
+    tags?: Array<{ id: number; name: string }>,
+    strategies?: Array<{ id: number; name: string }>,
+  }) {
+    return Request.post<{
+      filter_conditions: Record<string, any>,
+      message: string,
+    }>(`${this.module}/nl2risk_filter/`, {
+      params,
+    });
+  }
+  // 获取AI分析列表
+  getAiAnalyseList() {
+    return Request.get(`${this.api}/analyse_report/scenarios/`);
+  }
+  // 生成AI分析报告
+  getAiAnalyseReport(params: {
+    scenario_key: string,
+    report_type: string,
+    title: string,
+    analysis_scope: string,
+    custom_prompt: string,
+    target_risks_filter: any,
+    }) {
+    return Request.post(`${this.api}/analyse_report/generate/`, {
+      params,
+    });
+  }
+  // 查询AI报告任务结果
+  getAiAnalyseTaskReport(params: {
+    task_id: string,
+  }) {
+    return Request.get(`${this.api}/analyse_report/task/`, {
+      params,
+    });
+  }
+  // 获取AI报告详情
+  getAiAnalyseReportDetail(params: {
+    report_id: string | number,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/`, {
+      params,
+    });
+  }
+  // 获取历史报告列表
+  getHistoryReportList(params: {
+    page: number,
+    page_size: number,
+    keyword?: string,
+    report_type?: string,
+    sort?: any,
+  }) {
+    return Request.post(`${this.api}/analyse_report/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+    });
+  }
+  // 编辑AI报告
+  updateAiAnalyseReport(params: {
+    report_id: string | number,
+    title: string,
+    content: string,
+  }) {
+    return Request.put(`${this.api}/analyse_report/${params.report_id}/`, {
+      params,
+    });
+  }
+  // 导出AI报告
+  exportAiAnalyseReport(params: {
+    report_id: string | number,
+    export_format: string,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/export/`, {
+      params,
+      responseType: 'blob',
+    });
+  }
+  // 报告关联风险列表
+  getReportRiskList(params: {
+    report_id: string | number,
+    page: number,
+    page_size: number,
+  }) {
+    return Request.get(`${this.api}/analyse_report/${params.report_id}/risks/`, {
+      params,
+    });
+  }
+  // 获取风险关联的场景
+  getRiskScenes(params: {
+    end_time?: string,
+    risk_view_type?: string,
+    scope_id?: string,
+    scope_type?: string,
+    start_time?: string,
+  }) {
+    return Request.get(`${this.module}/scenes/`, {
       params,
     });
   }

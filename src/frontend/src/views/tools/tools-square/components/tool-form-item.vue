@@ -350,16 +350,44 @@
     },
   });
 </script>
-<style lang="postcss" scoped>
-  :deep(.date-picker) {
-    display: flex;
-    width: 100%;
+<style lang="postcss" scoped> /* stylelint-disable */
+  .form-item {
+    :deep(.__bk_date_picker__) {
+       .date-icon {
+        background-color: transparent;
+       }
+      .date-icon-right{
+        display: inline-block;
+        position: absolute;
+        right: 0;
+      }
+      .date-content{
+       position: absolute;
+       width: 85%;
+       margin-top: -12px;
+      }
+    }
+
+    :deep(.date-wrapper) {
+      width: 100%;
+    }
+
+    :deep(.date-wrapper .date-input .date-picker) {
+      width: 100%;
+      min-width: 0;
+    }
+
+    :deep(.date-wrapper .date-input .date-picker-start),
+    :deep(.date-wrapper .date-input .date-picker-end) {
+      flex: 1;
+      min-width: 0;
+    }
 
     .date-content {
       flex: 1;
+      justify-content: space-between;
 
       span {
-        width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

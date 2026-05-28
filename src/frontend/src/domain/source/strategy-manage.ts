@@ -32,6 +32,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 
 class Strategy extends ModuleBase {
   constructor() {
@@ -42,10 +44,13 @@ class Strategy extends ModuleBase {
   getStrategyList(params: {
     label?: string,
     name?: string,
-    page: number,
-    page_size: number
+    page?: number,
+    order_type?: string
+    page_size?: number
+    strategy_type?: string
+    tag?: string
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/`, {
+    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });
@@ -65,18 +70,28 @@ class Strategy extends ModuleBase {
     });
   }
   // 获取所有策略下拉列表
-  getAllStrategyList() {
+  getAllStrategyList(params: {
+    scene_id?: string
+  }) {
     return Request.get<Array<{
       label: string,
       value: number
-    }>>(`${this.path}/strategy/all/`);
+    }>>(`${this.path}/strategy/all/`, { params });
   }
   // 获取权限下所有策略下拉列表
   getScopedStrategyList(params: Record<string, any>) {
+    const sceneParams = getSceneSystemParams();
+    const { isNeedSceneParams, ...restParams } = params;  // 解构分离不需要的参数
+    const requestParams = isNeedSceneParams
+      ?  {
+        ...restParams,
+        scope_id: params.scope_id  ?? sceneParams.scope_id,
+        scope_type: params.scope_type  ?? sceneParams.scope_type,
+      } : restParams;
     return Request.get<Array<{
       label: string,
       value: number
-    }>>(`${this.module}risks/strategies/`, { params });
+    }>>(`${this.module}risks/strategies/`, { params: requestParams });
   }
   // 获取告警常量
   getStrategyCommon(payload = {} as IRequestPayload) {
@@ -161,6 +176,7 @@ class Strategy extends ModuleBase {
   // 获取表格id
   getTable(params: {
     table_type: string;
+    scene_id?: string;
   }) {
     return Request.get<Array<{
       label: string;
@@ -170,6 +186,22 @@ class Strategy extends ModuleBase {
         value: string;
       }>
     }>>(`${this.path}/strategy_table/`, {
+      params,
+    });
+  }
+  // 获取场景下有权限的数据表（BuildIn/BizRt）
+  getScenePermissionTable(params: {
+    table_type: string;
+    scene_id?: string;
+  }) {
+    return Request.get<Array<{
+      label: string;
+      value: string;
+      children: Array<{
+        label: string;
+        value: string;
+      }>
+    }>>(`${this.path}/strategy_table/scene_permission_tables/`, {
       params,
     });
   }
@@ -232,7 +264,7 @@ class Strategy extends ModuleBase {
 
   // 获取策略标签
   getStrategyTags() {
-    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/`);
+    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/?scene_id=${getSceneSystemParams().scope_id}`);
   }
 
   // 获取方案列表

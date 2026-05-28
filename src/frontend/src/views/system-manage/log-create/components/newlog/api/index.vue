@@ -95,6 +95,7 @@
         v-if="!data.enabled"
         action-id="edit_system"
         :loading="isCreating"
+        :permission="dataCheckMap.edit_system"
         :resource="route.params.systemId"
         style="margin-left: 19px;"
         theme="primary"
@@ -121,6 +122,7 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import CollectorManageService from '@service/collector-manage';
+  import IamManageService from '@service/iam-manage';
 
   import ConfigModel from '@model/root/config';
 
@@ -178,6 +180,18 @@
   const selectedSdkUrl = computed(() => {
     const selectedSdk = selectSdkTypeList.value.find(item => item.label === formData.value.sdk);
     return selectedSdk?.url || 'https://github.com/TencentBlueKing/bk-audit-sdk';
+  });
+
+  const {
+    data: dataCheckMap,
+  // eslint-disable-next-line vue/no-setup-props-destructure
+  } = useRequest(IamManageService.check, {
+    defaultValue: {},
+    defaultParams: {
+      action_ids: 'edit_system',
+      resources: route.params.systemId,
+    },
+    manual: true,
   });
 
   // 获取启用状态&上报host （无需单独鉴权）

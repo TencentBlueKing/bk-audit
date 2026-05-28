@@ -14,39 +14,45 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import ToolInfo from '../model/tool/tool-info';
 import ToolManageSources from '../source/tool-manage';
 
 export default  {
   /**
-   * @desc 工具列表
+   * @desc 工具列表（不再分页，直接返回数组）
    * @param { Object } params
    */
   fetchToolsList(params: {
-      offset?: number
-      limit?: number
       keyword?: string,
-      page: number,
-      page_size: number
       tags?: string[],
+      scope_type?: string,
+      scope_id?: string,
+      binding_type?: string,
+      status?: string[],
+      sort?: string[],
+      my_created?: boolean,
+      recent_used?: boolean,
     }) {
-    return ToolManageSources.getToolsList(params).then(({ data }) =>  ({
-      ...data,
-      results: data.results,
-    }));
+    return ToolManageSources.getToolsList(params).then(({ data }) => data.map((item: any) => new ToolInfo(item)));
   },
   /**
    * @desc tag列表
+   * @param { Object } params
    */
-  fetchToolTags() {
-    return ToolManageSources.getToolTags()
+  fetchToolTags(params?: {
+      scope_type?: string,
+      scope_id?: string,
+      status?: string[],
+    }) {
+    return ToolManageSources.getToolTags(params)
       .then(({ data }) => data);
   },
   /**
-   * @desc 新建工具
+   * @desc 创建场景级工具
    * @param { Object } params
    */
-  createTool(params: Record<string, any>) {
-    return ToolManageSources.createTool(params)
+  createSceneTool(params: Record<string, any>) {
+    return ToolManageSources.createSceneTool(params)
       .then(({ data }) => data);
   },
   /**
@@ -75,18 +81,22 @@ export default  {
     return ToolManageSources.getToolsDetail(params).then(({ data }) =>  data);
   },
   /**
-   * @desc 编辑工具
+   * @desc 编辑场景级工具
    * @param { Object } params
    */
-  updateTool(params: Record<string, any>) {
-    return ToolManageSources.updateTool(params)
+  updateSceneTool(params: Record<string, any>) {
+    return ToolManageSources.updateSceneTool(params)
       .then(({ data }) => data);
   },
   /**
    * @desc 获取全部工具
    */
-  fetchAllTools() {
-    return ToolManageSources.getAllTools()
+  fetchAllTools(params?: {
+    scope_type?: string,
+    scope_id?: string,
+    status?: string[],
+  }) {
+    return ToolManageSources.getAllTools(params)
       .then(({ data }) => data);
   },
   /**
@@ -115,15 +125,26 @@ export default  {
     }));
   },
   /**
-     * @desc 工具删除
+     * @desc 删除场景级工具
      * @param { Object } params
      */
-  fetchDeleteTool(params: {
+  fetchDeleteSceneTool(params: {
       uid: string,
+      scene_id: number,
     }) {
-    return ToolManageSources.deleteTool(params).then(({ data }) =>  ({
+    return ToolManageSources.deleteSceneTool(params).then(({ data }) =>  ({
       ...data,
     }));
+  },
+  /**
+     * @desc 上架/下架平台级场景工具
+     * @param { Object } params
+     */
+  publishPlatformTool(params: {
+      uid: string,
+      scene_id: number,
+    }) {
+    return ToolManageSources.publishPlatformTool(params).then(({ data }) => data);
   },
   /**
      * @desc 收藏/取消收藏工具

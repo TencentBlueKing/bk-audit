@@ -28,8 +28,11 @@ export default {
   fetchStrategyList(params: {
     label?: string
     name?: string,
-    page: number,
-    page_size: number
+    order_type?: string
+    page?: number,
+    page_size?: number
+    strategy_type?: string
+    tag?: string
   }) {
     return StrategySource.getStrategyList(
       params,
@@ -63,8 +66,10 @@ export default {
   /**
    * @desc 获取所有策略下拉列表
    */
-  fetchAllStrategyList() {
-    return StrategySource.getAllStrategyList()
+  fetchAllStrategyList(params: {
+    scene_id?: string
+  }) {
+    return StrategySource.getAllStrategyList(params)
       .then(({ data }) => data);
   },
   /**
@@ -157,7 +162,22 @@ export default {
    */
   fetchTable(params: {
     table_type: string;
+    scene_id?: string;
   }) {
+    return StrategySource.getTable(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取场景下有权限的数据表（BuildIn/BizRt使用新接口，其他类型使用原接口）
+   */
+  fetchScenePermissionTable(params: {
+    table_type: string;
+    scene_id?: string;
+  }) {
+    if (params.table_type === 'BuildIn' || params.table_type === 'BizRt') {
+      return StrategySource.getScenePermissionTable(params)
+        .then(({ data }) => data);
+    }
     return StrategySource.getTable(params)
       .then(({ data }) => data);
   },

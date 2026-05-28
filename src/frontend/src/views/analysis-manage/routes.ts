@@ -33,6 +33,7 @@ export default {
       title: '检索',
       meta: {
         skeleton: 'analysisList',
+        nodeSideContent: true,
       },
     },
   ],

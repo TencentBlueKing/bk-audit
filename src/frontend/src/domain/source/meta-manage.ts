@@ -33,6 +33,8 @@ import Request, {
 
 import ModuleBase from './module-base';
 
+// import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 class MetaManage extends ModuleBase {
   constructor() {
     super();
@@ -81,21 +83,31 @@ class MetaManage extends ModuleBase {
     params: {
       page:number,
       page_size: number,
-      audit_status: 'accessed'
+      audit_status: string,
       keyword?: string,
+      filter_actions?: string,
     },
     payload = {} as IRequestPayload,
   ) {
     return Request.get<IRequestResponsePaginationData<SystemModel>>(`${this.path}/systems/`, {
       params: {
         ...params,
-        audit_status: params.audit_status || 'accessed',
       },
       payload,
     });
   }
   // 获取系统列表(All)
-  getAllSysetemByActionId(params: { action_ids?: string }, payload = {} as IRequestPayload) {
+  getAllSysetemByActionId(params: {
+    action_ids?: string;
+    audit_status__in?: string;
+    namespace?: string;
+    order_type?: string;
+    sort_keys?: string;
+    with_favorite?: boolean;
+    with_system_status?: boolean;
+    scope_id?: string;
+    scope_type?: string;
+  }, payload = {} as IRequestPayload) {
     return Request.get<Array<EventSourceAppModel>>(`${this.path}/systems/all/`, {
       params,
       payload,
@@ -339,4 +351,3 @@ class MetaManage extends ModuleBase {
 }
 
 export default new MetaManage();
-

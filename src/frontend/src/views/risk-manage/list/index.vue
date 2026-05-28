@@ -21,19 +21,10 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
+      @change-table-height="handleChangeTableHeight"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
-      <div class="add-button">
-        <bk-button
-          theme="primary"
-          @click="handleAddRisk">
-          <audit-icon
-            class="add-icon"
-            type="add" />
-          {{ t('新增风险') }}
-        </bk-button>
-      </div>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
@@ -48,9 +39,6 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
-  <add-risk
-    ref="addRiskRef"
-    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -72,6 +60,7 @@
 
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
+  import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
@@ -86,10 +75,11 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import addRisk from './add-risk/index.vue';
+  import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
-  import RiskLevel from './components/risk-level.vue';
 
   const dataSource = RiskManageService.fetchRiskList;
 
@@ -106,312 +96,153 @@
   const router = useRouter();
   const route = useRoute();
   let timeout: number | undefined = undefined;
-  const statusToMap: Record<string, {
-    tag: string,
-    icon: string,
-    color: string,
-  }> = {
-    new: {
-      tag: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    closed: {
-      tag: '',
-      icon: 'corret-fill',
-      color: '#979BA5',
-    },
-    await_deal: {
-      tag: 'warning',
-      icon: 'daichuli',
-      color: '#FF9E00',
-    },
-    for_approve: {
-      tag: 'info',
-      icon: 'auto',
-      color: '#3A84FF',
-    },
-    auto_process: {
-      tag: 'success',
-      icon: 'taocanchulizhong',
-      color: '#0CA668',
-    },
-    processing: {
-      tag: 'info',
-      icon: 'loading',
-      color: '#3A84FF',
-    },
-  };
+  const statusToMap = RISK_STATUS_TAG_MAP;
 
-  // 直接按 TDesign PrimaryTable 格式定义列配置
-  const initTableColumns = [
-    {
-      // 选择列
-      type: 'multiple',
-      colKey: 'row-select',
-      width: 80,
-      fixed: 'left',
-    },
-    {
-      title: t('风险ID'),
-      colKey: 'risk_id',
-      width: 200,
-      minWidth: 180,
-      fixed: 'left',
-      ellipsis: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const to = {
-          name: 'riskManageDetail',
-          params: {
-            riskId: row.risk_id,
-          },
-        };
-        return (row.status === 'stand_by'
-          ? <span>{row.risk_id}</span>
-          : (<router-link to={to}>
-          <Tooltips data={row.risk_id} />
-        </router-link>));
-      },
-    },
-    {
-      title: t('风险标题'),
-      colKey: 'title',
-      minWidth: 320,
-      ellipsis: true,
-    },
-    {
-      title: t('风险描述'),
-      colKey: 'event_content',
-      minWidth: 320,
-      ellipsis: true,
-    },
-    {
-      title: t('风险等级'),
-      colKey: 'risk_level',
-      width: 120,
-      sortType: 'all',
-      sorter: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <>
-        <RiskLevel levelData={levelData.value} data={row}></RiskLevel>
-      </>,
-    },
-    {
-      title: t('风险标签'),
-      colKey: 'tags',
-      width: 120,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const tags = row.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={row.strategy_id} />;
-      },
-    },
-    {
-      title: t('责任人'),
-      colKey: 'operator',
-      width: 160,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator || []} />,
-    },
-    {
-      title: t('处理状态'),
-      colKey: 'status',
-      width: 130,
-      cell: (h: any, { row }: { row: RiskManageModel }) => (
-        // eslint-disable-next-line no-nested-ternary
-        row.status === 'stand_by' ? (
-           <span style='font-size: 14px;color: #3a84ff;'>
-           <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
-          </span>
-        )
-          : (row.status === 'closed' && row.experiences > 0
+  const actionColumn = {
+    title: t('操作'),
+    colKey: 'action',
+    width: 180,
+    fixed: 'right',
+    cell: (h: any, { row }: { row: RiskManageModel }) => (
+      row.status === 'stand_by'
+        ? <div>
+          <bk-button text class='mr16'>--</bk-button>
+        </div>
+        : (<p>
+        {
+          ['for_approve', 'auto_process'].includes(row.status)
             ? (
-              <div style='display: flex;align-items: center;height: 100%;'>
-                <bk-tag
-                  theme={statusToMap[row.status]?.tag}>
-                  <p style='display: flex;align-items: center;'>
-                    <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                    <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-                  </p>
-                </bk-tag>
-                <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
-                  <audit-icon v-bk-tooltips={t('已填写"风险总结"')} type="report" style='font-size: 14px;' />
-                </bk-button>
-              </div>
+              <bk-button
+                v-bk-tooltips={t('当前状态不支持人工处理')}
+                text
+                theme='primary'
+                class='mr16 is-disabled'>
+                {t('处理')}
+              </bk-button>
             )
             : (
-              <bk-tag
-                theme={statusToMap[row.status]?.tag}>
-                <p style='display: flex;align-items: center;'>
-                  <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                  <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-                </p>
-              </bk-tag>))
-      ),
-    },
-    {
-      title: t('当前处理人'),
-      colKey: 'current_operator',
-      width: 200,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.current_operator} />,
-    },
-    {
-      title: t('关注人'),
-      colKey: 'notice_users',
-      width: 200,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.notice_users} />,
-    },
-    {
-      title: t('风险命中策略(ID)'),
-      colKey: 'strategy_id',
-      width: 200,
-      ellipsis: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => {
-        const to = {
-          name: 'strategyList',
-          query: {
-            strategy_id: row.strategy_id,
-          },
-        };
-        const strategyName = strategyList.value
-          .find(item => item.value === row.strategy_id)?.label;
-        return strategyName
-          ? (
-          <router-link to={to} target='_blank'>
-            <span>{`${strategyName}(${row.strategy_id})`}</span>
-          </router-link>
-          ) : (
-          <span>--</span>
-        );
-      },
-    },
-    {
-      title: t('首次发现时间'),
-      colKey: 'event_time',
-      width: 168,
-      minWidth: 168,
-      sortType: 'all',
-      sorter: true,
-    },
-    {
-      title: t('最后一次处理时间'),
-      colKey: 'last_operate_time',
-      width: 160,
-      sorter: true,
-      cell: (h: any, { row }: { row: RiskManageModel }) => row.last_operate_time || '--',
-    },
-    {
-      title: t('事件调查报告'),
-      colKey: 'has_report',
-      width: 160,
-      filter: {
-        type: 'single',
-        showConfirmAndReset: true,
-        resetValue: undefined,
-        list: [
-          {
-            label: t('已生成'),
-            value: true,
-          },
-          {
-            label: t('未生成'),
-            value: false,
-          },
-        ],
-      },
-      cell: (h: any, { row }: { row: RiskManageModel }) => <bk-tag
-      >{row.has_report ? t('已生成') : t('未生成')}</bk-tag>,
-    },
-    {
-      title: t('风险标记'),
-      colKey: 'risk_label',
-      width: 110,
-      cell: (h: any, { row }: { row: RiskManageModel }) => <span
-      class={{
-        misreport: row.risk_label === 'misreport',
-        'risk-label-status': true,
-      }}>
-      {row.risk_label === 'normal' ? t('正常') : t('误报')}
-    </span>,
-    },
-    {
-      title: t('操作'),
-      colKey: 'action',
-      width: 180,
-      fixed: 'right',
-      cell: (h: any, { row }: { row: RiskManageModel }) => (
-        row.status === 'stand_by'
-          ? <div>
-            <bk-button text class='mr16'>--</bk-button>
-          </div>
-          : (<p>
-          {
-            ['for_approve', 'auto_process'].includes(row.status)
-              ? (
-                <bk-button
-                  v-bk-tooltips={t('当前状态不支持人工处理')}
-                  text
-                  theme='primary'
-                  class='mr16 is-disabled'>
-                  {t('处理')}
-                </bk-button>
-              )
-              : (
-                <auth-button
-                  text
-                  theme='primary'
-                  class='mr16'
-                  permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-                  action-id='process_risk'
-                  resource={row.risk_id}
-                  onClick={() => handleToDetail(row)}>
-                  {t('处理')}
-                </auth-button>
-            )
-          }
-          {
-            row.status === 'auto_process'
-              ? <bk-button text theme='primary'
-                class="is-disabled"
-                v-bk-tooltips={{
-                  content: row.risk_label === 'normal'
-                    ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                    : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-                }}>
-                  {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-                </bk-button>
-              : <MarkRiskLabel
-                  onUpdate={() => fetchList()}
-                  userInfo={userInfo.value}
-                  data={row} />
-          }
-          <bk-dropdown
-            style="margin-left: 8px">
-            {{
-              default: () => <bk-button text>
-                <audit-icon type="more" />
-              </bk-button>,
-              content: () => (
-                <bk-dropdown-menu>
-                  <bk-dropdown-item>
-                    <auth-button
-                      style="width: 100%;"
-                      actionId="edit_risk_v2"
-                      permission={row.permission.edit_risk_v2}
-                      resource={row.strategy_id}
-                      onClick={() => handleGenerateReport(row)}
-                      text>
-                      {row.has_report ? t('编辑调查报告') : t('创建调查报告')}
-                    </auth-button>
-                  </bk-dropdown-item>
-                </bk-dropdown-menu>
-              ),
-            }}
-          </bk-dropdown>
-          </p>)
-      ),
-    },
-  ];
+              <auth-button
+                text
+                theme='primary'
+                class='mr16'
+                permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+                action-id='process_risk'
+                resource={row.risk_id}
+                onClick={() => handleToDetail(row)}>
+                {t('处理')}
+              </auth-button>
+          )
+        }
+        {
+          row.status === 'auto_process'
+            ? <bk-button text theme='primary'
+              class="is-disabled"
+              v-bk-tooltips={{
+                content: row.risk_label === 'normal'
+                  ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
+                  : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
+              }}>
+                {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
+              </bk-button>
+            : <MarkRiskLabel
+                onUpdate={() => fetchList()}
+                userInfo={userInfo.value}
+                data={row} />
+        }
+        <bk-dropdown
+          style="margin-left: 8px">
+          {{
+            default: () => <bk-button text>
+              <audit-icon type="more" />
+            </bk-button>,
+            content: () => (
+              <bk-dropdown-menu>
+                <bk-dropdown-item>
+                  <auth-button
+                    style="width: 100%;"
+                    actionId="edit_risk_v2"
+                    permission={row.permission.edit_risk_v2}
+                    resource={row.strategy_id}
+                    onClick={() => handleGenerateReport(row)}
+                    text>
+                    {row.has_report ? t('编辑调查报告') : t('创建调查报告')}
+                  </auth-button>
+                </bk-dropdown-item>
+              </bk-dropdown-menu>
+            ),
+          }}
+        </bk-dropdown>
+        </p>)
+    ),
+  };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
+  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
+    if (!initTableColumns.length) {
+      initTableColumns = useRiskColumns({
+        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+        detailRouteName: 'riskManageDetail',
+        overrides: {
+          // risk_id 列：stand_by 状态不可点击
+          risk_id: {
+            cell: (h: any, { row }: { row: RiskManageModel }) => {
+              const to = {
+                name: 'riskManageDetail',
+                params: {
+                  riskId: row.risk_id,
+                },
+              };
+              return (row.status === 'stand_by'
+                ? <span>{row.risk_id}</span>
+                : (<router-link to={to}>
+                <Tooltips data={row.risk_id} />
+              </router-link>));
+            },
+          },
+          // operator 列：传 row.operator || []
+          operator: {
+            cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator || []} />,
+          },
+          // status 列：宽 130，增加 stand_by 状态处理
+          status: {
+            width: 130,
+            cell: (h: any, { row }: { row: RiskManageModel }) => (
+              // eslint-disable-next-line no-nested-ternary
+              row.status === 'stand_by' ? (
+                 <span style='font-size: 14px;color: #3a84ff;'>
+                 <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
+                </span>
+              )
+                : (row.status === 'closed' && row.experiences > 0
+                  ? (
+                    <div style='display: flex;align-items: center;height: 100%;'>
+                      <bk-tag
+                        theme={statusToMap[row.status]?.tag}>
+                        <p style='display: flex;align-items: center;'>
+                          <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+                          <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                        </p>
+                      </bk-tag>
+                      <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
+                        <audit-icon v-bk-tooltips={t('已填写"风险总结"')} type="report" style='font-size: 14px;' />
+                      </bk-button>
+                    </div>
+                  )
+                  : (
+                    <bk-tag
+                      theme={statusToMap[row.status]?.tag}>
+                      <p style='display: flex;align-items: center;'>
+                        <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+                        <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                      </p>
+                    </bk-tag>))
+            ),
+          },
+        },
+        appendColumns: [actionColumn],
+      });
+    }
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -433,8 +264,8 @@
     return [...beforeAction, ...eventColumns, ...afterAction];
   });
 
-  // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  // 默认的可配置列键（所有风险页面默认展示所属场景）
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
@@ -455,7 +286,6 @@
   });
 
   const listRef = ref();
-  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
 
@@ -503,8 +333,7 @@
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
-      page: 1,
-      page_size: 1,
+      noNeedSceneParams: true,
     },
     defaultValue: [],
     manual: true,
@@ -515,6 +344,12 @@
     },
   });
 
+  const {
+    data: sceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    manual: true,
+    defaultValue: [],
+  });
   const {
     data: levelData,
     run: fetchRiskLevel,
@@ -535,6 +370,9 @@
 
   const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
     window.changeConfirm = false;
+
+    // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
+    searchBoxRef.value?.notifySearchComplete();
 
     if (!results.length) {
       return;
@@ -621,8 +459,15 @@
       ...value,
       event_filters: exValue,
     };
-    listRef.value.initTableHeight();
+    listRef.value?.initTableHeight();
     fetchList();
+  };
+
+  // 表格高度变化时重新计算
+  const handleChangeTableHeight = () => {
+    nextTick(() => {
+      listRef.value?.initTableHeight?.();
+    });
   };
 
   const handleClearSearch = () => {
@@ -634,6 +479,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: route.query.strategy_id || '',
@@ -656,15 +502,6 @@
       dataParams.sort = ['-event_time', '-risk_id'];
     }
     listRef.value.fetchData(dataParams);
-  };
-
-  // 新增风险
-  const handleAddRisk = () => {
-    addRiskRef.value.show();
-  };
-  // 新增风险成功
-  const handleAddRiskSuccess = () => {
-    searchBoxRef.value.clearValue();
   };
 
   onMounted(() => {
@@ -727,15 +564,6 @@
     padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
-
-    .add-button {
-      padding-bottom: 5px;
-
-      .add-icon {
-        margin-right: 5px;
-        font-size: 12px;
-      }
-    }
   }
 }
 

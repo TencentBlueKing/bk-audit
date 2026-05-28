@@ -44,7 +44,7 @@
         style="width: 368px; padding: 9px 15px;">
         <render-field-config
           ref="fieldConfigRef"
-          :base-config="fieldConfig"
+          :base-config="fieldConfigInfo"
           :model="model"
           :name="name"
           simple
@@ -119,7 +119,8 @@
 
   const { t } = useI18n();
 
-  const config = fieldConfig[props.name as keyof typeof fieldConfig];
+  const fieldConfigInfo = fieldConfig();
+  const config = fieldConfigInfo[props.name as keyof typeof fieldConfigInfo];
 
   const rootRef = ref();
   const popRef = ref();
@@ -127,8 +128,8 @@
   const isRemoteOriginLoading = ref(false);
   const remoteOriginalList = shallowRef<Array<any>>([]);
 
-  const allSelectTypeKeyList = Object.keys(fieldConfig).reduce((result, key) => {
-    if (fieldConfig[key].type === 'select') {
+  const allSelectTypeKeyList = Object.keys(fieldConfigInfo).reduce((result, key) => {
+    if (fieldConfigInfo[key].type === 'select') {
       result.push(key);
     }
     return result;

@@ -90,8 +90,9 @@
 
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
-  const selectKeys = Object.keys(Config).reduce((result, key) => {
-    if (Config[key].type === 'select') {
+  const configInfo = Config();
+  const selectKeys = Object.keys(configInfo).reduce((result, key) => {
+    if (configInfo[key].type === 'select') {
       result.push(key);
     }
     return result;

@@ -29,13 +29,10 @@
       :placeholder="`请选择${config.label}`"
       show-selected-icon
       @change="handleChange">
-      <auth-option
+      <bk-option
         v-for="item in data"
         :key="item.id"
-        action-id="search_regular_event"
         :label="`${item.name}(${item.id})`"
-        :permission="item.permission.search_regular_event"
-        :resource="item.id"
         :value="item.id" />
       <template
         v-if="simple"
@@ -57,6 +54,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
+  import { onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -91,15 +89,24 @@
 
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+
   const {
     loading,
     data,
-  } = useRequest(MetaManageService.fetchSystemWithAction, {
-    defaultParams: {
-      action_ids: 'search_regular_event',
-    },
+    run,
+  } = useRequest(async () => {
+    if (props.config.service) {
+      return props.config.service();
+    }
+    return MetaManageService.fetchSystemWithAction({});
+  }, {
     defaultValue: [],
     manual: true,
+  });
+
+  // 组件挂载或 config 变化时请求接口数据（切换场景时 key 变化触发重新挂载）
+  onMounted(() => {
+    run();
   });
 
   const {

@@ -21,6 +21,7 @@ import Request from '@utils/request';
 
 import ModuleBase from './module-base';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 import type { IRequestPayload, IRequestResponsePaginationData } from '@/utils/request';
 
 class LinkDataManage extends ModuleBase {
@@ -30,7 +31,7 @@ class LinkDataManage extends ModuleBase {
   }
   // 获取联表列表
   getLinkDataList(params: Record<string, any>, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<LInkDataModel>>(`${this.path}/link_table/`, {
+    return Request.get<IRequestResponsePaginationData<LInkDataModel>>(`${this.path}/link_table/?scene_id=${getSceneSystemParams().scope_id}`, {
       params,
       payload,
     });
@@ -41,7 +42,7 @@ class LinkDataManage extends ModuleBase {
       uid:string,
       name: string,
       version: number,
-    }>>(`${this.path}/link_table/all/`);
+    }>>(`${this.path}/link_table/all/?scene_id=${getSceneSystemParams().scope_id}`);
   }
   // 获取联表标签
   getLinkTableTags() {
@@ -49,7 +50,7 @@ class LinkDataManage extends ModuleBase {
       link_table_count: number,
       tag_id: string,
       tag_name: string
-    }>>(`${this.path}/link_table/tags/`);
+    }>>(`${this.path}/link_table/tags/?scene_id=${getSceneSystemParams().scope_id}`);
   }
   // 删除联表
   deleteLinkData(params: {
@@ -67,7 +68,8 @@ class LinkDataManage extends ModuleBase {
   addLinkData(params: {
     table_name: string;
     tags: Array<string>;
-    links: LinkDataDetailModel['config']['links']
+    links: LinkDataDetailModel['config']['links'],
+    scene_id: string | number;
   }) {
     return Request.post(`${this.path}/link_table/`, {
       params,

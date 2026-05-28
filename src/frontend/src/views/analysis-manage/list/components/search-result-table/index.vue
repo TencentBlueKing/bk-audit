@@ -22,6 +22,7 @@
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
+      is-need-scene-params
       :settings="settings"
       @clear-search="handleClearSearch"
       @request-success="handleRequestSuccess">
@@ -89,6 +90,7 @@
   interface Exposes {
     loading: Ref<boolean>,
     tableSearchModel: Ref<Record<string, any>>,
+    handleUpdateField: () => void,
   }
   interface ResultFilter {
     conditions: Array<{
@@ -306,7 +308,7 @@
     };
     // 将查询参数添加到 conditions 数组中
     Object.entries(filter).forEach(([k, v]) => {
-      const config = filedConfig[k];
+      const config = filedConfig()[k];
       if (config && config.operator) {
         let value: Array<string> = [];
         if (config.service || config.type === 'select' || config.type === 'user-selector') {
@@ -503,6 +505,7 @@
   defineExpose<Exposes>({
     loading: isLoading,
     tableSearchModel,
+    handleUpdateField,
   });
 
 </script>

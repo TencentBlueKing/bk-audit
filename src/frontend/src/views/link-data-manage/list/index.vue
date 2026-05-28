@@ -62,7 +62,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import type { Ref } from 'vue';
-  import { computed, h, onMounted, ref, shallowRef } from 'vue';
+  import { computed, h, onMounted, onUnmounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
@@ -80,6 +80,7 @@
 
   import RenderLabel from './components/render-label.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
@@ -119,6 +120,7 @@
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const { on: onEvent, off } = useEventBus();
   const {
     getSearchParams,
   } = useUrlSearch();
@@ -130,7 +132,7 @@
   const detailRef = ref();
   const renderLabelRef = ref();
   const isNeedShowDetail = ref(false);
-
+  const isChangeScene = ref(false);
   const validateValues = async (item: Record<string, any>, value: Array<Arrays>) => {
     if (item && item.id === 'tags') {
       const tag = value[0].id;
@@ -468,12 +470,17 @@
       ];
       setSearchKey();
     });
-    total.value = data.total > total.value ? data.total : total.value;
+    if (!isChangeScene.value) {
+      total.value = data.total > total.value ? data.total : total.value;
+    } else {
+      total.value = data.total;
+    }
     const { uid } = getSearchParams();
     if (uid && isNeedShowDetail.value && data.results.length) {
       detailRef.value.show(uid);
       isNeedShowDetail.value = false;
     }
+    isChangeScene.value = false;
   };
 
   const handleSettingChange = (setting: ISettings) => {
@@ -556,9 +563,20 @@
       listRef.value.fetchData();
     }
   };
-
+  const handlFetchData = () => {
+    isChangeScene.value = true;
+    total.value = 0;
+    listRef.value.fetchData();
+  };
   onMounted(() => {
     fetchData();
+    setTimeout(() => {
+      onEvent('scene:change', handlFetchData);
+    }, 1000);
+  });
+
+  onUnmounted(() => {
+    off('scene:change', handlFetchData);
   });
 </script>
 <style scoped lang="postcss">

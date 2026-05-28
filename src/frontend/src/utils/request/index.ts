@@ -50,7 +50,7 @@ export interface IRequestResponsePaginationData<T>{
   total: number
 }
 
-const methodList:Array<Method> = ['get', 'delete', 'post', 'put', 'download'];
+const methodList:Array<Method> = ['get', 'delete', 'post', 'put', 'patch', 'download'];
 
 let cancelTokenSource: CancelTokenSource;
 

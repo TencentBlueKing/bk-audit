@@ -94,6 +94,15 @@
       }
     }
 
+    &.active-weak {
+      color: #acb9d1;
+      background: #3a84ff4d ;
+
+      .menu-item-icon {
+        color: #acb9d1;
+      }
+    }
+
     .audit-icon {
       margin-right: 19px;
       font-size: 16px;

@@ -124,7 +124,6 @@
       onConfirm() {
         isEdit.value = true;
         isShow.value = false;
-        window.changeConfirm = false;
         resolve(true);
       },
       onCancel() {
@@ -175,6 +174,7 @@
   defineExpose<Exposes>({
     show() {
       isShow.value = true;
+      window.changeConfirm = false;
     },
   });
 </script>

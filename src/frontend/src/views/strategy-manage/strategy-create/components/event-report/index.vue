@@ -131,6 +131,13 @@
           @click="handleNext">
           {{ t(isEnvent ? '下一步' : '跳过') }}
         </bk-button>
+        <!-- <bk-button
+          v-if="isEditMode"
+          class="ml8"
+          theme="primary"
+          @click="handleSaveCurrentStep">
+          {{ t('提交') }}
+        </bk-button> -->
         <bk-button
           class="ml8"
           @click="handleCancel">
@@ -162,8 +169,8 @@
   import { formatDate } from '@/utils/assist/timestamp-conversion';
 
   interface IFormData {
-    processor_groups: Array<number>,
-    notice_groups: Array<number>,
+    processor_groups?: Array<any>,
+    notice_groups?: Array<any>,
     report_enabled: boolean,
     report_config: Record<string, any>,
     report_auto_render: boolean,
@@ -186,8 +193,9 @@
     formData?: any; // 从父组件传递的 step2 表格数据
   }
   interface Emits {
-    (e: 'previousStep', step: number): void;
+    (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveCurrentStep', params: Partial<IFormData>): void;
     (e: 'submitData'): void;
   }
 
@@ -367,7 +375,23 @@
   });
 
   const handlePrevious = () => {
-    emits('previousStep', 2);
+    if (isEnvent.value) {
+      if (aiEditorRef.value && !aiEditorRef.value.hasContent()) {
+        editorError.value = true;
+        return;
+      }
+      reportInfo.value.enabled = true;
+      reportInfo.value.config = buildReportConfig();
+    } else {
+      reportInfo.value.enabled = false;
+      reportInfo.value.config = buildReportConfig();
+    }
+
+    emits('previousStep', 2, {
+      report_enabled: reportInfo.value.enabled,
+      report_config: reportInfo.value.config,
+      report_auto_render: isAutoGetReports.value,
+    });
   };
   const handleNext = () => {
     if (isEnvent.value) {
@@ -383,13 +407,32 @@
     }
 
     emits('nextStep', 4, {
-      processor_groups: [],
-      notice_groups: [],
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,
     });
   };
+
+  // 提交（编辑态）：效果与「其他配置」的提交一致
+  // const handleSaveCurrentStep = () => {
+  //   if (isEnvent.value && aiEditorRef.value && !aiEditorRef.value.hasContent()) {
+  //     editorError.value = true;
+  //     return;
+  //   }
+  //   if (isEnvent.value) {
+  //     reportInfo.value.enabled = true;
+  //     reportInfo.value.config = buildReportConfig();
+  //   } else {
+  //     reportInfo.value.enabled = false;
+  //     reportInfo.value.config = buildReportConfig();
+  //   }
+  //   emits('saveCurrentStep', {
+  //     report_enabled: reportInfo.value.enabled,
+  //     report_config: reportInfo.value.config,
+  //     report_auto_render: isAutoGetReports.value,
+  //   });
+  // };
+
   const handleCancel = () => {
     router.push({
       name: 'strategyList',

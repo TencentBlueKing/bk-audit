@@ -16,6 +16,8 @@
 */
 import MetaManageService from '@service/meta-manage';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 export interface IFieldConfig {
   label: string,
   type: string,
@@ -33,15 +35,20 @@ export interface IFieldConfig {
 }
 // eslint-disable-next-line no-useless-escape
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
-export default {
+export default () => ({
   system_id: {
     label: '系统名称(ID)',
     type: 'system-id',
     required: false,
     operator: 'include',
-    service: () => MetaManageService.fetchSystemWithAction({
-      action_ids: 'search_regular_event',
-    }),
+    service: () => {
+      const params = getSceneSystemParams();
+      return MetaManageService.fetchSystemWithAction({
+        scope_id: params.scope_id || '',
+        scope_type: params.scope_type || '',
+        audit_status__in: 'accessed',
+      });
+    },
   },
   action_id: {
     label: '操作事件名',
@@ -215,4 +222,4 @@ export default {
     type: 'expr',
     required: false,
   },
-} as Record<string, IFieldConfig>;
+}) as Record<string, IFieldConfig>;

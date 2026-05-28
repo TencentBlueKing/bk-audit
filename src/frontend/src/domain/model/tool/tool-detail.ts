@@ -53,10 +53,6 @@ export default class ToolDetail {
   tags: Array<string>;
   created_at: string;
   created_by: string;
-  permission:{
-    use_tool: boolean;
-    manage_tool: boolean;
-  };
   strategies: Array<string>;
   updated_at: string;
   updated_by: string;
@@ -64,6 +60,10 @@ export default class ToolDetail {
   data_search_config_type: string;
   is_bkvision: boolean;
   config: {
+    // 智能页面工具（如审计用户画像）携带的属性，用于风险卡片跳转风险时携带场景 id
+    property?: {
+      scene_id?: number | string;
+    };
     referenced_tables: Array<{
       table_name: string | null;
       alias: string | null;
@@ -103,6 +103,33 @@ export default class ToolDetail {
           }>;
         };
       }>;
+      enable_pagination?: boolean;
+      pagination_config?: Array<{
+        list_field: {
+          raw_name: string;
+          json_path: string;
+          display_name?: string;
+          description?: string;
+        };
+        total_field: {
+          raw_name: string;
+          json_path: string;
+          display_name?: string;
+          description?: string;
+        };
+        page_param: {
+          raw_name: string;
+          var_name: string;
+        };
+        page_size_param: {
+          raw_name: string;
+          var_name: string;
+        };
+        default_page: number;
+        default_page_size: number;
+        position: string;
+        result_schema?: any;
+      }>;
     };
     sql: string;
     uid: string;
@@ -121,7 +148,6 @@ export default class ToolDetail {
     this.tags = payload.tags;
     this.data_search_config_type = payload.data_search_config_type;
     this.config = payload.config;
-    this.permission = payload.permission;
     this.strategies = payload.strategies;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;

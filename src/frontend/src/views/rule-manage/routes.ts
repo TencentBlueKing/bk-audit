@@ -23,7 +23,7 @@ export default {
     name: 'ruleManageList',
   },
   meta: {
-    navName: 'auditConfigurationManage',
+    navName: 'sceneConfiguration',
   },
   children: [
     {
@@ -42,6 +42,9 @@ export default {
       meta: {
         title: '新建处理规则',
         // skeleton: 'strategyCreate',
+        changeSceneIsBackedList: true,
+        ListPageName: 'ruleManageList',
+
       },
     },
     {
@@ -51,6 +54,8 @@ export default {
       meta: {
         title: '编辑处理规则',
         // skeleton: 'strategyCreate',
+        changeSceneIsBackedList: true,
+        ListPageName: 'ruleManageList',
       },
     },
     {
@@ -60,6 +65,8 @@ export default {
       meta: {
         title: '克隆处理规则',
         // skeleton: 'strategyCreate',
+        changeSceneIsBackedList: true,
+        ListPageName: 'ruleManageList',
       },
     },
   ],

@@ -337,7 +337,7 @@
     });
   };
 
-  // 取消
+  // 取消 - 从引导页来的返回引导页，其他保持原逻辑
   const handlerCancel = () => {
     window.changeConfirm = false;
     InfoBox({
@@ -346,12 +346,20 @@
       cancelText: t('留在当前页'),
       confirmText: t('确认取消'),
       onConfirm() {
-        router.push({
-          name: 'nweSystemManage',
-          params: {
-            id: route.params.id || sessionStorage.getItem('systemProjectId'),
-          },
-        });
+        if (route.query.fromLanding === 'true') {
+          // 从引导页跳转过来的，返回引导页
+          router.push({
+            name: 'systemLandingPage',
+            params: {
+              id: route.params.id || sessionStorage.getItem('systemProjectId'),
+            },
+          });
+        } else {
+          // 其他来源返回 systemAccess 页面
+          router.push({
+            name: 'systemAccess',
+          });
+        }
       },
       onCancel() {},
     });

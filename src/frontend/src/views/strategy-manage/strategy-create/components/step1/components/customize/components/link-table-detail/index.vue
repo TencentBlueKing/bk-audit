@@ -155,6 +155,7 @@
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Emits {
     (e: 'refreshLinkData'): void;
@@ -187,8 +188,9 @@
   const fetchTableTypeData = () => {
     // 获取tableData
     for (const type of uniqueTableTypes.value) {
-      StrategyManageService.fetchTable({
+      StrategyManageService.fetchScenePermissionTable({
         table_type: type,
+        scene_id: getSceneSystemParams().scope_id,
       }).then((data) => {
         tableTypeData.value[type] = data;
       });
@@ -305,7 +307,11 @@
     (newLinks: LinkDataDetailModel['config']['links']) => {
       if (newLinks) {
         // 获取系统
-        fetchSystemWithAction();
+        fetchSystemWithAction({
+          scope_id: getSceneSystemParams().scope_id,
+          action_ids: 'view_system',
+          scope_type: 'scene',
+        });
         uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
         fetchTableTypeData();
       }
