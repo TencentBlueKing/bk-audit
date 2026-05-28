@@ -55,12 +55,14 @@
           enable-search
           resizable
           :search-data="dataTableSearchData"
+          :search-loading="!dataTableAllLoaded"
           :search-placeholder="t('搜索 数据表名称、数据表ID、管理员')"
           show-pagination
           stripe
           :title="t('关联数据表')"
           :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
-            + configData.platform_admin_users.join(',')" />
+            + configData.platform_admin_users.join(',')"
+          :total="dataTableTotal" />
       </div>
     </bk-loading>
   </skeleton-loading>
@@ -343,38 +345,78 @@
   // 关联数据报表表格数据（从场景详情接口中获取 tables 数据，再获取详情）
   const dataTableDetailList = ref<Array<Record<string, any>>>([]);
   const dataTableDetailLoading = ref(false);
+  // 数据表总条数（用于分页器显示正确总数）
+  const dataTableTotal = computed(() => sceneInfoData.value.tables?.length || 0);
+  // 数据表是否全部加载完成（用于搜索区域 loading 提示）
+  const dataTableAllLoaded = ref(false);
 
-  // 根据场景详情中的 tables 列表，逐个获取数据表详情
-  const fetchPermissionTables = async () => {
-    if (!sceneId.value) return;
+  const mapTableDetail = (detail: any) => ({
+    result_table_id: detail.result_table_id || '',
+    result_table_name_alias: detail.result_table_name_alias
+      || detail.result_table_name || '--',
+    managers: detail.managers || [],
+    updated_at: detail.updated_at || '',
+    created_at: detail.created_at || '',
+    sensitivity: detail.sensitivity || '',
+    description: detail.description || '',
+  });
+
+  // 根据场景详情中的 tables 列表，分批获取数据表详情
+  const fetchPermissionTables = () => {
+    if (!sceneId.value) return Promise.resolve();
     dataTableDetailLoading.value = true;
-    try {
-      const tables = sceneInfoData.value.tables || [];
-      if (!tables || tables.length === 0) {
-        dataTableDetailList.value = [];
-        return;
-      }
-      const detailPromises = tables.map((table: Record<string, any>) => StrategyManageService
-        .fetchTableRtMeta({ table_id: table.table_id })
-        .catch(() => null));
-      const details = await Promise.all(detailPromises);
-      dataTableDetailList.value = details
-        .filter(Boolean)
-        .map((detail: any) => ({
-          result_table_id: detail.result_table_id || '',
-          result_table_name_alias: detail.result_table_name_alias
-            || detail.result_table_name || '--',
-          managers: detail.managers || [],
-          updated_at: detail.updated_at || '',
-          created_at: detail.created_at || '',
-          sensitivity: detail.sensitivity || '',
-          description: detail.description || '',
-        }));
-    } catch (e) {
+    dataTableAllLoaded.value = false;
+    const tables = sceneInfoData.value.tables || [];
+    if (!tables || tables.length === 0) {
       dataTableDetailList.value = [];
-    } finally {
+      dataTableAllLoaded.value = true;
+      isSkeletonLoading.value = false;
       dataTableDetailLoading.value = false;
+      return Promise.resolve();
     }
+    const BATCH_SIZE = 20;
+    // 第一批：立即加载并展示，加载完后关闭骨架屏并 resolve
+    const firstBatch = tables.slice(0, BATCH_SIZE);
+    const firstPromises = firstBatch.map((table: Record<string, any>) => StrategyManageService
+      .fetchTableRtMeta({ table_id: table.table_id })
+      .catch(() => null));
+    const firstLoadPromise = Promise.all(firstPromises)
+      .then((firstDetails) => {
+        dataTableDetailList.value = firstDetails
+          .filter(Boolean)
+          .map(mapTableDetail);
+        // 第一批数据加载完成，关闭骨架屏
+        isSkeletonLoading.value = false;
+      })
+      .catch(() => {
+        dataTableDetailList.value = [];
+        isSkeletonLoading.value = false;
+      });
+
+    // 如果还有更多，后台继续加载剩余数据（不阻塞第一批的 resolve）
+    if (tables.length > BATCH_SIZE) {
+      firstLoadPromise.then(() => {
+        const remainingTables = tables.slice(BATCH_SIZE);
+        Promise.all(remainingTables.map((table: Record<string, any>) => StrategyManageService
+          .fetchTableRtMeta({ table_id: table.table_id })
+          .catch(() => null))).then((details) => {
+          const remainingData = details.filter(Boolean).map(mapTableDetail);
+          dataTableDetailList.value = [...dataTableDetailList.value, ...remainingData];
+        })
+          .finally(() => {
+            dataTableAllLoaded.value = true;
+            dataTableDetailLoading.value = false;
+          });
+      });
+    } else {
+      // 没有更多数据，直接标记为全部加载完成
+      firstLoadPromise.then(() => {
+        dataTableAllLoaded.value = true;
+        dataTableDetailLoading.value = false;
+      });
+    }
+
+    return firstLoadPromise;
   };
 
   const dataTableData = computed(() => dataTableDetailList.value);
@@ -508,9 +550,11 @@
         fetchSceneInfo(sceneId.value).catch(() => null),
         fetchPermissionSystems(),
       ]);
-      // 场景信息获取完成后，再根据其中的 tables 获取数据表详情
+      // 场景信息和系统列表已加载完，关闭页面 loading
+      pageLoading.value = false;
+      // 获取数据表详情（首批加载完后关骨架屏，剩余后台加载）
       await fetchPermissionTables();
-    } finally {
+    } catch {
       isSkeletonLoading.value = false;
       pageLoading.value = false;
     }
