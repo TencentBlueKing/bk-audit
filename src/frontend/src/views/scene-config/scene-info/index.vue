@@ -50,7 +50,7 @@
 
         <!-- 关联数据报表 -->
         <scene-table
-          :columns="computedDataTableColumns"
+          :columns="dataTableColumns"
           :data="dataTableData"
           enable-search
           resizable
@@ -60,8 +60,7 @@
           stripe
           :title="t('关联数据表')"
           :tooltip="t('由蓝鲸审计中心管理员配置，场景管理员仅可查看，可基于数据表配置审计策略，在工具广场创建 SQL 工具，如需调整请联系 审计中心平台管理员: ')
-            + configData.platform_admin_users.join(',')"
-          @search-change="handleDataTableSearchChange" />
+            + configData.platform_admin_users.join(',')" />
       </div>
     </bk-loading>
   </skeleton-loading>
@@ -184,29 +183,6 @@
   ];
 
   // ==================== 关联数据报表表格列配置 ====================
-  // 当前数据表搜索状态（用于动态切换列显示）
-  const dataTableSearchKeyword = ref<any[]>([]);
-
-  // 处理数据表搜索条件变化
-  const handleDataTableSearchChange = (value: any[]) => {
-    dataTableSearchKeyword.value = value;
-  };
-
-  // 根据搜索状态判断当前激活的搜索字段类型
-  const getActiveSearchType = computed(() => {
-    if (!dataTableSearchKeyword.value || dataTableSearchKeyword.value.length === 0) {
-      return 'none';
-    }
-    // 检查是否有数据表名称搜索
-    const hasNameSearch = dataTableSearchKeyword.value.some((cond: any) => cond.id === 'result_table_name_alias' && (cond.values?.length > 0 || cond.id));
-    // 检查是否有数据表ID搜索
-    const hasIdSearch = dataTableSearchKeyword.value.some((cond: any) => cond.id === 'result_table_id' && (cond.values?.length > 0 || cond.id));
-
-    if (hasNameSearch && !hasIdSearch) return 'name';
-    if (hasIdSearch && !hasNameSearch) return 'id';
-    return 'none'; // 同时搜索或其他情况显示默认组合列
-  });
-
   // 数据表名称（ID）组合列配置
   const dataTableCombinedColumn = {
     colKey: 'result_table_name_alias',
@@ -223,82 +199,33 @@
     },
   };
 
-  // 数据表名称单独列配置
-  const dataTableNameColumn = {
-    colKey: 'result_table_name_alias',
-    title: () => t('数据表名称'),
-    width: 250,
-    resizable: true,
-    cell: (_h: any, { row }: { row: any }) => {
-      const text = `${row.result_table_name_alias}`;
-      return (
-        <div style="max-width: 450px;">
-          <ShowTooltipsText data={text} />
-        </div>
-      );
+  // 固定的数据表列配置（不再根据搜索状态动态切换）
+  const dataTableColumns = [
+    dataTableCombinedColumn,
+    {
+      colKey: 'managers',
+      title: () => t('管理员'),
+      width: 180,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => (
+        <EditTag data={row.managers || []} />
+      ),
     },
-  };
-
-  // 数据表ID单独列配置
-  const dataTableIdColumn = {
-    colKey: 'result_table_id',
-    title: () => t('数据表ID'),
-    width: 250,
-    resizable: true,
-    cell: (_h: any, { row }: { row: any }) => {
-      const text = `${row.result_table_id}`;
-      return (
-        <div style="max-width: 450px;">
-          <ShowTooltipsText data={text} />
-        </div>
-      );
+    {
+      colKey: 'data_scope',
+      title: () => t('数据范围'),
+      width: 150,
+      resizable: true,
+      cell: () => <span>{t('全部数据')}</span>,
     },
-  };
-
-  // 动态计算的数据表列配置（根据搜索状态切换第一列显示）
-  const computedDataTableColumns = computed(() => {
-    const baseColumns = [
-      {
-        colKey: 'managers',
-        title: () => t('管理员'),
-        width: 180,
-        resizable: true,
-        cell: (_h: any, { row }: { row: any }) => (
-          <EditTag data={row.managers || []} />
-        ),
-      },
-      {
-        colKey: 'data_scope',
-        title: () => t('数据范围'),
-        width: 150,
-        resizable: true,
-        cell: () => <span>{t('全部数据')}</span>,
-      },
-      {
-        colKey: 'updated_at',
-        title: () => t('最近数据时间'),
-        width: 280,
-        resizable: true,
-        cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'updated_at'),
-      },
-    ];
-
-    // 根据搜索类型选择要显示的第一列
-    let firstColumn;
-    switch (getActiveSearchType.value) {
-    case 'name':
-      firstColumn = dataTableNameColumn;
-      break;
-    case 'id':
-      firstColumn = dataTableIdColumn;
-      break;
-    default:
-      firstColumn = dataTableCombinedColumn;
-      break;
-    }
-
-    return [firstColumn, ...baseColumns];
-  });
+    {
+      colKey: 'updated_at',
+      title: () => t('最近数据时间'),
+      width: 280,
+      resizable: true,
+      cell: (_h: any, { row }: { row: any }) => renderLastTimeCell(_h, { row }, 'updated_at'),
+    },
+  ];
 
   const dataTableSearchData = [
     {
@@ -309,15 +236,19 @@
       match: (row: Record<string, any>, kw: string) => {
         const lower = kw.toLowerCase();
         return String(row.result_table_name_alias || '').toLowerCase()
-          .includes(lower)
-          || String(row.result_table_id || '').toLowerCase()
-            .includes(lower);
+          .includes(lower);
       },
     },
     {
       name: t('数据表ID'),
       id: 'result_table_id',
       placeholder: t('请输入数据表ID'),
+      // 数据表ID只匹配result_table_id，不匹配名称
+      match: (row: Record<string, any>, kw: string) => {
+        const lower = kw.toLowerCase();
+        return String(row.result_table_id || '').toLowerCase()
+          .includes(lower);
+      },
     },
     {
       name: t('管理员'),
