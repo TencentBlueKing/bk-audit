@@ -21,12 +21,14 @@ from typing import Callable, List, Union
 
 from bk_resource import resource
 from bk_resource.utils.common_utils import is_backend
+from django.utils.translation import gettext
 from iam import Resource
 from rest_framework import permissions
 
 from apps.permission.handlers.actions import ActionMeta
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types.base import ResourceTypeMeta
+from core.exceptions import ValidationError
 
 
 class IAMPermission(permissions.BasePermission):
@@ -146,6 +148,8 @@ class InstanceActionPermission(IAMPermission, InstancePermission):
     def has_permission(self, request, view):
         # Perform the lookup filtering.
         instance_id = self._get_instance_id(request, view)
+        if instance_id is None or str(instance_id).strip().lower() in {"", "none", "null"}:
+            raise ValidationError(message=gettext("无法获取权限校验资源实例ID"))
         resource = self.resource_meta.create_instance(instance_id)
         self.resources = [resource]
         return super(InstanceActionPermission, self).has_permission(request, view)
