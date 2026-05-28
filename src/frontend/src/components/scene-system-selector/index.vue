@@ -312,7 +312,7 @@
     // ── 阶段2.5：恢复用户上次的选择（跨页面记忆，需在当前页面可见范围内）──
     if (!targetItem) {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (saved && saved.id) {
           // 只在当前页面实际展示的列表中恢复（包括聚合项）
           const availableItems = [
@@ -345,7 +345,7 @@
     // 设置选中项
     hasInitializedSelection = true;
     selectedItem.value = targetItem;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
     emits('update:modelValue', targetItem);
     emits('change', targetItem);
     syncSceneIdToRoute(targetItem);
@@ -367,7 +367,7 @@
           // 同步 scene_id 到路由参数
           syncSceneIdToRoute(item);
           selectedItem.value = item;
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
           emits('update:modelValue', item);
           emits('change', item);
           isPopoverShow.value = false;
@@ -386,7 +386,7 @@
       // 同步 scene_id 到路由参数
       syncSceneIdToRoute(item);
       selectedItem.value = item;
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
       emits('update:modelValue', item);
       emits('change', item);
       isPopoverShow.value = false;
@@ -493,7 +493,7 @@
         }));
       sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
       // 存储纯场景列表（不含聚合项）供 layout.vue 聚合模式使用
-      sessionStorage.setItem('scene-system-selector:sceneList', JSON.stringify(list));
+      localStorage.setItem('scene-system-selector:sceneList', JSON.stringify(list));
       sceneEmit('scene-list-ready', list);
       // 尝试从路由参数选中（场景列表已就绪）
       trySelectFromRoute();

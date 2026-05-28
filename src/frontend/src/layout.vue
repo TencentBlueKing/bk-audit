@@ -390,9 +390,9 @@
   const currentPanelScene = ref<{ id: string; name: string; type: string } | null>(null);
   // 从 scene-system-selector 缓存的稳定场景列表
   const cachedSceneList = ref<Array<{ id: string; name: string; type: string }>>([]);
-  // 尝试从 sessionStorage 恢复已缓存的 sceneList
+  // 尝试从 localStorage 恢复已缓存的 sceneList
   try {
-    const saved = JSON.parse(sessionStorage.getItem('scene-system-selector:sceneList') || '[]');
+    const saved = JSON.parse(localStorage.getItem('scene-system-selector:sceneList') || '[]');
     if (Array.isArray(saved)) {
       cachedSceneList.value = saved;
     }
