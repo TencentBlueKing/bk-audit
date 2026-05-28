@@ -925,18 +925,28 @@
         useExportExcel.exportExcelSheet(wb, data, t('代币发放记录'), headers, keys);
       }
 
-      // 聊天记录 sheet
+      // 聊天记录 sheet（分为可疑言论和全部言论2个工作表）
       if (exportContentChecked.value.includes('chat')) {
-        const res = await executeDataSource('chat_detail_list', {
-          detail_startdate_Ymd: startYmd,
-          detail_enddate_Ymd: endYmd,
-          is_sensitive: ['0', '1'],
-          ...baseParams,
-        });
-        const data = extractResults(res);
+        const [suspectedRes, allRes] = await Promise.all([
+          executeDataSource('chat_detail_list', {
+            detail_startdate_Ymd: startYmd,
+            detail_enddate_Ymd: endYmd,
+            is_sensitive: ['1'],
+            ...baseParams,
+          }),
+          executeDataSource('chat_detail_list', {
+            detail_startdate_Ymd: startYmd,
+            detail_enddate_Ymd: endYmd,
+            is_sensitive: ['0', '1'],
+            ...baseParams,
+          }),
+        ]);
+        const suspectedData = extractResults(suspectedRes);
+        const allData = extractResults(allRes);
         const headers = chatDetailColumns.map(col => col.label());
         const keys = chatDetailColumns.map(col => col.field);
-        useExportExcel.exportExcelSheet(wb, data, t('聊天记录'), headers, keys);
+        useExportExcel.exportExcelSheet(wb, suspectedData, t('可疑言论'), headers, keys);
+        useExportExcel.exportExcelSheet(wb, allData, t('全部言论'), headers, keys);
       }
 
       // 设置列宽自适应 & 表头自动筛选
