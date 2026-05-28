@@ -41,16 +41,26 @@
           </template>
         </bk-popover>
       </div>
-      <bk-search-select
-        v-if="enableSearch"
-        v-model="searchKeyword"
-        class="scene-table-search"
-        clearable
-        :data="searchData"
-        :defaut-using-item="{ inputHtml: t('请选择') }"
-        :get-menu-list="getMenuList"
-        :placeholder="searchPlaceholder || t('请输入关键字搜索')"
-        unique-select />
+      <div class="scene-table-search-wrapper">
+        <!-- 搜索框：loading 时不展示搜索框，改为展示 loading 占位 -->
+        <bk-search-select
+          v-if="enableSearch && !searchLoading"
+          v-model="searchKeyword"
+          class="scene-table-search"
+          clearable
+          :data="searchData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
+          :get-menu-list="getMenuList"
+          :placeholder="searchPlaceholder || t('请输入关键字搜索')"
+          unique-select />
+        <bk-loading
+          v-if="searchLoading"
+          class="search-loading-placeholder"
+          loading
+          size="small">
+          <div style="width: 600px; height: 32px;" />
+        </bk-loading>
+      </div>
     </div>
     <!-- PrimaryTable 表格 -->
     <primary-table
@@ -63,12 +73,12 @@
       :style="{ '--row-height': rowHeight + 'px' }" />
     <!-- 分页器 -->
     <div
-      v-if="showPagination && filteredData.length > 0"
+      v-if="showPagination && (total !== undefined ? total : filteredData.length) > 0"
       class="scene-table-pagination">
       <bk-pagination
         v-model="currentPage"
         align="left"
-        :count="filteredData.length"
+        :count="total !== undefined ? total : filteredData.length"
         :layout="['total', 'limit', 'list']"
         :limit="currentLimit"
         :limit-list="limitList"
@@ -120,6 +130,9 @@
     enableSearch?: boolean;
     searchData?: SearchDataItem[];
     searchPlaceholder?: string;
+    searchLoading?: boolean;
+    /** 数据总条数（用于分批加载时显示正确分页总数） */
+    total?: number;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -135,6 +148,8 @@
     enableSearch: false,
     searchData: () => [],
     searchPlaceholder: '',
+    searchLoading: false,
+    total: undefined,
   });
 
   const emit = defineEmits<{(e: 'search-change', value: any[]): void;
@@ -266,9 +281,25 @@
     margin-bottom: 16px;
   }
 
+  .scene-table-search-wrapper {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+  }
+
   .scene-table-search {
     width: 600px;
-    margin-left: auto;
+  }
+
+  .search-loading-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 600px;
+    height: 32px;
+    border-radius: 2px;
   }
 
   .section-title {
