@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import base64
 
 from django.conf import settings
+from django.core.validators import ProhibitNullCharactersValidator
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -184,8 +185,18 @@ class CollectorRequestSerializer(serializers.Serializer):
     collector_config_id = serializers.IntegerField(label=gettext_lazy("采集项ID"))
 
 
+class NullCharAllowedCharField(serializers.CharField):
+    """允许 null 字符的 CharField"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.validators = [
+            validator for validator in self.validators if not isinstance(validator, ProhibitNullCharactersValidator)
+        ]
+
+
 class CollectorLogItemsSerializer(serializers.Serializer):
-    data = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    data = NullCharAllowedCharField(allow_blank=True, allow_null=True, required=False)
     iterationindex = serializers.IntegerField(required=False, allow_null=True)
 
 

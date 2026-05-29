@@ -19,6 +19,11 @@ to the current version of the project delivered to anyone in the future.
 from unittest import mock
 from unittest.mock import Mock
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import ProhibitNullCharactersValidator
+
+from api.bk_log.serializers import GetCollectorTailLogResponseSerializer
 from apps.exceptions import JoinDataPreCheckFailed, SnapshotPreparingException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
@@ -406,8 +411,6 @@ class CollectorTest(TestCase):
         CreateAPIPushResource 自定义名称测试
         测试使用 custom_collector_config_name 参数创建API Push
         """
-        from django.conf import settings
-
         custom_name = "自定义采集器名称"
         request_data = {
             "namespace": settings.DEFAULT_NAMESPACE,
@@ -421,3 +424,42 @@ class CollectorTest(TestCase):
         # 验证自定义名称已被保存到英文名字段
         collector = CollectorConfig.objects.get(collector_config_id=result.get("collector_config_id"))
         self.assertEqual(collector.collector_config_name_en, custom_name)
+
+    def test_null_char_allowed_in_collector_log_data(self):
+        """
+        验证NullCharAllowedCharField允许null字符
+        """
+
+        # 构造包含null字符的测试数据
+        test_data = {
+            "origin": {
+                "datetime": "2023-01-01 00:00:00",
+                "items": [{"data": "a\x00b", "iterationindex": 1}],
+            }
+        }
+
+        # 验证序列化器可以正常处理包含null字符的数据
+        serializer = GetCollectorTailLogResponseSerializer(data=test_data)
+        self.assertTrue(serializer.is_valid(), f"Serializer validation failed: {serializer.errors}")
+
+        # 验证数据被正确反序列化
+        validated_data = serializer.validated_data
+        self.assertEqual(validated_data["origin"]["items"][0]["data"], "a\x00b")
+
+    def test_normal_char_field_rejects_null_char(self):
+        """
+        对比测试：验证ProhibitNullCharactersValidator会拒绝null字符
+        """
+
+        # 直接测试ProhibitNullCharactersValidator
+        validator = ProhibitNullCharactersValidator()
+
+        # 测试包含null字符的字符串应该抛出ValidationError
+        with self.assertRaises(ValidationError):
+            validator("a\x00b")
+
+        # 测试普通字符串应该通过验证
+        try:
+            validator("normal string")
+        except ValidationError:
+            self.fail("ProhibitNullCharactersValidator should accept normal strings")
