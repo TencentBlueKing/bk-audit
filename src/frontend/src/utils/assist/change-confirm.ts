@@ -51,7 +51,6 @@ export const changeConfirm = (options?: string | ChangeConfirmOptions): Promise<
       onConfirm() {
         window.changeConfirm = false;
         if (route && route.meta.changeSceneIsBackedList && router) {
-          console.log('返回', route.meta.ListPageName);
           // 延迟跳转，等待 syncSceneIdToRoute 的 router.replace 及 route.query watcher 完成后再导航
           setTimeout(() => {
             router.push({
