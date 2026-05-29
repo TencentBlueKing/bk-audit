@@ -36,7 +36,8 @@ export default {
    */
   fetchGroupList(params: {
     page: number,
-    page_size : number
+    page_size : number,
+    scene_id?: string | number;
   }) {
     return NoticeGroupSource.getGroupList(
       params,

@@ -39,9 +39,15 @@ class NoticeGroup extends ModuleBase {
   getGroupList(params: {
     page: number,
     page_size: number
+    scene_id?: string | number;
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/?scene_id=${getSceneSystemParams().scope_id}`, {
-      params,
+    // 如果有场景id直接用，没有则用场景系统参数getSceneSystemParams().scope_id
+    const paramsInfo = {
+      ...params,
+      scene_id: params.scene_id || getSceneSystemParams().scope_id,
+    };
+    return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/`, {
+      params: paramsInfo,
       payload,
     });
   }

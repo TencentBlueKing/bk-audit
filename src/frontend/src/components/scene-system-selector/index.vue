@@ -368,9 +368,12 @@
           syncSceneIdToRoute(item);
           selectedItem.value = item;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-          emits('update:modelValue', item);
-          emits('change', item);
+
           isPopoverShow.value = false;
+          setTimeout(() => {
+            emits('update:modelValue', item);
+            emits('change', item);
+          }, 10);
           // 延迟跳转，等待 syncSceneIdToRoute 的 router.replace 及 route.query watcher 完成后再导航
           setTimeout(() => {
             router.push({
@@ -386,8 +389,10 @@
       syncSceneIdToRoute(item);
       selectedItem.value = item;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-      emits('update:modelValue', item);
-      emits('change', item);
+      setTimeout(() => {
+        emits('update:modelValue', item);
+        emits('change', item);
+      }, 10);
       isPopoverShow.value = false;
     }
   };
