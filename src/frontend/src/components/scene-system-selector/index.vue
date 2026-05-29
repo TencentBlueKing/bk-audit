@@ -379,7 +379,6 @@
           }, 100);
         },
         onClose() {
-          console.log('取消');
         },
       });
     } else {

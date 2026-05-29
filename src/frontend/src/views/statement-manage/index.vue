@@ -112,7 +112,6 @@
 
   // 监听子组件的刷新菜单事件
   on('refresh-menu', (val: any) => {
-    console.log('val>>>>>>>');
     fetchMenuListRun({
       scenario: 'default',
       scope_id: val.scope_id,
