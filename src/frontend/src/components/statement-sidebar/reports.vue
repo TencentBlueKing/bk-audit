@@ -258,7 +258,10 @@
     sceneChangeItem.value = val;
     searchKeyword.value = '';
 
-    emit('refresh-menu');
+    emit('refresh-menu', {
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    });
     fetchPanelPreference();
     fetchGroups({
       scope_id: getSceneSystemParams().scope_id,
@@ -417,7 +420,7 @@
   } = useRequest(PanelModelService.updateFavorite, {
     defaultValue: {},
     onSuccess: () => {
-      emit('refresh-menu');
+      emit('refresh-menu', { scope_id: getSceneSystemParams().scope_id, scope_type: getSceneSystemParams().scope_type });
       setTimeout(() => {
         fetchGroups({
           scope_id: getSceneSystemParams().scope_id,
@@ -615,7 +618,9 @@
     // 初始化侧边栏宽度监听
     initResizeObserver();
     // 组件挂载时先获取用户偏好，再获取分组数据
-    fetchPanelPreference();
+    setTimeout(() => {
+      fetchPanelPreference();
+    }, 100);
   });
 
   onBeforeUnmount(() => {
