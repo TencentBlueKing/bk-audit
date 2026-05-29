@@ -87,7 +87,6 @@
     run: fetchMenuListRun,
     loading: isLoading,
   } = useRequest(StatementManageService.fetchMenuList, {
-    manual: true,
     defaultParams: {
       scenario: 'default',
     },
@@ -112,8 +111,13 @@
   });
 
   // 监听子组件的刷新菜单事件
-  on('refresh-menu', () => {
-    fetchMenuListRun();
+  on('refresh-menu', (val: any) => {
+    console.log('val>>>>>>>');
+    fetchMenuListRun({
+      scenario: 'default',
+      scope_id: val.scope_id,
+      scope_type: val.scope_type,
+    });
   });
 </script>
 <style lang="postcss">
