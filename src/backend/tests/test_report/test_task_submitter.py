@@ -179,6 +179,21 @@ class TestSubmitRenderTask(TestCase):
         self.assertEqual(risk_data["strategy_id"], self.strategy.strategy_id)
 
     @patch("services.web.risk.report.task_submitter.render_template")
+    def test_submit_render_task_passes_plain_risk_dict(self, mock_task):
+        """风险报告模板上下文只传递纯业务字段，不能携带 serializer 回链"""
+        from services.web.risk.report.task_submitter import submit_render_task
+
+        mock_task.delay.return_value = MagicMock()
+
+        report_config = ReportConfig(template="{{ risk.title }}", ai_variables=[])
+
+        submit_render_task(risk=self.risk, report_config=report_config)
+
+        risk_data = mock_task.delay.call_args[1]["variables"]["risk"]
+        self.assertIs(type(risk_data), dict)
+        self.assertFalse(hasattr(risk_data, "serializer"))
+
+    @patch("services.web.risk.report.task_submitter.render_template")
     def test_submit_render_task_enable_cache_default_false(self, mock_task):
         """测试 enable_cache 默认为 False（后台事件触发场景）"""
         from services.web.risk.report.task_submitter import submit_render_task

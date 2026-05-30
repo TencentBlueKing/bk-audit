@@ -46,7 +46,7 @@ def submit_render_task(
         Celery AsyncResult 对象
     """
     # 获取风险数据
-    risk_data = ReportRiskVariableSerializer(risk).data
+    risk_data = dict(ReportRiskVariableSerializer(risk).data)
 
     # 将 AIVariableConfig 转换为 dict 格式（AIProvider 需要）
     ai_variables_config = [
