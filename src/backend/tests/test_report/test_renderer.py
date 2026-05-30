@@ -436,6 +436,22 @@ class TestRenderTemplate(TestCase):
         self.assertIn("总金额：500000", result)
 
     @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
+    def test_render_event_function_should_not_expose_python_globals(self, mock_query):
+        """事件聚合函数不应暴露 Python 函数对象内部属性"""
+        from services.web.risk.report.renderer import _render_template
+
+        mock_query.side_effect = mock_bkbase_query(MOCK_EVENTS)
+
+        template = "{{ count(event.event_id) }} {{ count.__globals__.__builtins__.eval('6*7') }}"
+        result = _render_template(
+            template=template,
+            providers=[create_event_provider_with_mock_api()],
+            variables={},
+        )
+
+        self.assertNotIn("42", result)
+
+    @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
     def test_render_full_template(self, mock_query):
         """测试渲染完整模板（包含普通变量、事件聚合、AI变量）"""
         from services.web.risk.report.providers import AIProvider
