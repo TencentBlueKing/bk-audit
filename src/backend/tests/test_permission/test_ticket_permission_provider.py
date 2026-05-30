@@ -119,6 +119,24 @@ class TestTicketPermissionResourceProvider:
             for key, value in field_expectation.items():
                 assert actual.get(key) == value
 
+    def test_fetch_instance_list_orders_by_authorized_at_for_incremental_sync(self):
+        now = timezone.now()
+        t0 = now - datetime.timedelta(minutes=10)
+        older = self._mk_tp("R1", "list_risk", "alice", ts=now - datetime.timedelta(minutes=2))
+        newer = self._mk_tp("R2", "list_risk", "bob", ts=now - datetime.timedelta(minutes=1))
+
+        filter_fd = FancyDict(start_time=int(t0.timestamp() * 1000), end_time=int(now.timestamp() * 1000))
+        lr = self.provider.fetch_instance_list(filter_fd, Page(1, 0))
+
+        assert lr.count == 2
+        assert [item["id"] for item in lr.results] == [str(older.pk)]
+
+        lr_next = self.provider.fetch_instance_list(filter_fd, Page(1, 1))
+        assert [item["id"] for item in lr_next.results] == [str(newer.pk)]
+
+    def test_ticket_permission_declares_authorized_at_incremental_sync_index(self):
+        assert "risk_tp_auth_id_idx" in {index.name for index in TicketPermission._meta.indexes}
+
     def test_list_instance_by_policy_no_expression(self):
         # 无表达式返回空
         lr = self.provider.list_instance_by_policy(FancyDict(expression=None), Page(50, 0))

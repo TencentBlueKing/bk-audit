@@ -557,6 +557,9 @@ class TicketNode(models.Model):
         verbose_name = gettext_lazy("Ticket History")
         verbose_name_plural = verbose_name
         ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["status", "timestamp"], name="risk_tn_status_time_idx"),
+        ]
 
 
 class TicketPermission(models.Model):
@@ -577,6 +580,7 @@ class TicketPermission(models.Model):
         unique_together = [["risk_id", "action", "user", "user_type"]]
         indexes = [
             models.Index(fields=["user", "action", "user_type", "risk_id"], name="risk_tp_user_act_rid_idx"),
+            models.Index(fields=["authorized_at", "id"], name="risk_tp_auth_id_idx"),
             models.Index(
                 fields=["user", "action", "user_type", "authorized_at", "risk_id"],
                 name="risk_tp_user_act_auth_rid_idx",

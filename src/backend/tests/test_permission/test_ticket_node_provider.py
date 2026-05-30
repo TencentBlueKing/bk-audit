@@ -105,6 +105,9 @@ class TestTicketNodeResourceProvider:
             for key, value in field_expectation.items():
                 assert actual.get(key) == value
 
+    def test_ticket_node_declares_running_status_sync_index(self):
+        assert "risk_tn_status_time_idx" in {index.name for index in TicketNode._meta.indexes}
+
     def test_list_instance_by_policy_no_expression(self):
         lr = self.provider.list_instance_by_policy(FancyDict(expression=None), Page(50, 0))
         assert lr.count == 0
