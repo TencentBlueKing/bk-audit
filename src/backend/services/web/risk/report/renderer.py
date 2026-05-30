@@ -24,9 +24,10 @@ from typing import Any, Type
 
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
-from jinja2 import Environment, nodes
+from jinja2 import nodes
 from markupsafe import Markup
 
+from core.render import jinja2_environment
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.providers import Provider
 
@@ -80,7 +81,7 @@ class TemplateParser:
         """
         self.template = template
         self.providers = providers
-        self.env = Environment()
+        self.env = jinja2_environment(autoescape=False)
         self.provider_calls: list[ProviderCall] = []
         self._processed_exprs: set[str] = set()  # 用于去重
 
@@ -306,7 +307,7 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
     # 1. 使用AST解析模板，提取所有Provider调用
     provider_calls = _parse_template(template, providers)
 
-    env = Environment()
+    env = jinja2_environment(autoescape=False)
 
     if not provider_calls:
         # 没有Provider调用，直接用Jinja2渲染普通变量
