@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="step2">
+  <div
+    class="step2"
+    :class="{ 'with-sidebar': route.params?.isShowSideBar === 'true' }">
     <div class="step2-header">
       <div class="step2-header-box">
         <span class="step2-header-title"> {{ t('请设置权限模型') }}</span>
@@ -49,7 +51,7 @@
       </div>
     </div>
 
-    <div class="step2-list">
+    <div :class="route.params?.isShowSideBar === 'true' ? 'step2-list-with-sidebar' : 'step2-list'">
       <step2
         ref="step2Ref"
         :can-edit-system="canEditSystem"
@@ -208,10 +210,16 @@
   padding-bottom: 60px;
   overflow: auto;
 
+  &.with-sidebar {
+    max-height: none;
+    padding-bottom: 0;
+    overflow: visible;
+
+  }
+
   .step2-header {
-    position: fixed;
-    top: 104px;
-    left: 0;
+    position: sticky;
+    top: 0;
     z-index: 999;
     width: 100%;
     height: 48px;
@@ -255,7 +263,10 @@
   .step2-list {
     padding: 20px 24px;
     margin-top: 40px;
+  }
 
+  .step2-list-with-sidebar {
+    margin-top: 40px;
   }
 
   .angle-line-down {
