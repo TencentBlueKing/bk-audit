@@ -77,6 +77,7 @@
         },
         params: {
           id: route.params.id,
+          isShowSideBar: 'true',
         },
       });
     }

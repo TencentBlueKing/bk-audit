@@ -15,8 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="step3">
-    <div class="step3-box">
+  <div
+    class="step3"
+    :class="{ 'with-sidebar': route.params?.isShowSideBar === 'true' }">
+    <div :class="route.params?.isShowSideBar === 'true' ? 'step3-box-with-sidebar' :'step3-box'">
       <div class="system-manage-detail-header">
         <system-info
           id="bk-audit"
@@ -30,6 +32,7 @@
 </template>
 <script setup lang="ts">
   import { ref } from 'vue';
+  import { useRoute } from 'vue-router';
 
   import DataReport from '@views/system-manage/detail/components/data-report/index.vue';
   import SystemInfo from '@views/system-manage/detail/components/system-info/index.vue';
@@ -39,6 +42,7 @@
   }
   const emit = defineEmits<Emits>();
   const appRef = ref();
+  const route = useRoute();
 
   const handleGetDataEnabled  = (val: boolean) => {
     emit('isDataEnabled', val);
@@ -52,12 +56,28 @@
     height: calc(100vh - 120px);
     overflow: auto;
 
+    &.with-sidebar {
+      height: auto;
+      overflow: visible;
+
+      .step3-box {
+        position: relative;
+        left: auto;
+        margin: 10px auto 0;
+        transform: none;
+      }
+    }
+
     .step3-box {
       position: absolute;
       left: 50%;
       width: 60%;
       margin-top: 10px;
       transform: translateX(-50%);
+    }
+
+    .step3-box-with-sidebar {
+      padding-bottom: 5px;
     }
   }
 </style>
