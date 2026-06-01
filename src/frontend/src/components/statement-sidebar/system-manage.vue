@@ -41,7 +41,7 @@
   const router = useRouter();
 
   // 当前激活的路由
-  const currentRoute = computed(() => route.name as string);
+  const currentRoute = computed(() => route.meta.activeRoute as string);
 
   // 展开的分组列表
   const expandedGroups = ref<string[]>(['resourceManage', 'dataManage']);

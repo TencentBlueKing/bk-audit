@@ -75,6 +75,7 @@ export default {
         skeleton: 'system-info',
         headerTips: 'systemInfo',
         groupName: '接入',
+        activeRoute: 'systemList',
       },
     },
     {
@@ -85,6 +86,8 @@ export default {
         title: '系统诊断',
         skeleton: 'system-diagnose',
         headerTips: 'systemDiagnose',
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -96,6 +99,8 @@ export default {
         skeleton: 'system-access',
         headerTips: 'systemAccess',
         nodeSideContent: true,
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -107,6 +112,8 @@ export default {
         skeleton: 'system-access-steps',
         headerTips: 'systemAccessSteps',
         nodeSideContent: true,
+        activeRoute: 'systemList',
+
       },
     },
   ],
