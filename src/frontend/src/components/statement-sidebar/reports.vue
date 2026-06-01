@@ -149,12 +149,13 @@
             @click="handleMenuClick('group')">
             <audit-menu-item
               v-for="child in group.children"
-              :key="child.id"
+              :key="`${side.id}_${child.id}`"
               class="menu-item-with-favorite"
-              :class="[(child.id === route.params.id && clickFavorite) ? 'active-weak' :
-                ((child.id === route.params.id && !clickFavorite) ? 'active' : '')]"
-              :index="child.id"
-              @mouseenter="hoveredItemId = child.id"
+              :class="[(getActiveKey(child.id, side.id) === activeMenuId && clickFavorite) ? 'active-weak' :
+                ((getActiveKey(child.id, side.id) === activeMenuId && !clickFavorite) ? 'active' : '')]"
+              :index="getActiveKey(child.id, side.id)"
+              @click.stop="handleChildClick(child.id, side.id)"
+              @mouseenter="hoveredItemId = getActiveKey(child.id, side.id)"
               @mouseleave="hoveredItemId = null">
               <span class="side-child-dot" />
               <tool-tip-text
@@ -169,10 +170,10 @@
                 class="side-pentagram-fill"
                 src="@images/pentagram-fill.svg"
                 @click.stop="handleToggleFavorite(child, false)">
-              <!-- 未收藏：仅hover时显示空心星，选中时默认不展示 -->
+              <!-- 未收藏：hover时或选中时均显示空心星 -->
               <img
                 v-else-if="!collapsed"
-                v-show="hoveredItemId === child.id && !(child.id === route.params.id)"
+                v-show="isShowPentagram(child.id, side.id)"
                 class="side-pentagram"
                 src="@images/pentagram.svg"
                 @click.stop="handleToggleFavorite(child, true)">
@@ -344,6 +345,59 @@
 
   // 判断是否为聚合模式
   const isAggregateMode = computed(() => sceneChangeItem.value?.type === 'aggregate');
+
+  // 聚合模式下，使用 sceneId + panelId 作为唯一标识，避免同一报表在多处高亮
+  const getActiveKey = (panelId: string | number, sceneId: string | number): string => {
+    if (isAggregateMode.value) {
+      return `${sceneId}_${panelId}`;
+    }
+    return String(panelId);
+  };
+
+  // 当前选中的菜单项唯一标识（聚合模式: sceneId_panelId, 非聚合模式: panelId）
+  const activeMenuId = computed(() => {
+    const rawId = route.params.id;
+    const id = Array.isArray(rawId) ? rawId[0] : String(rawId);
+    if (!id || !isAggregateMode.value) {
+      return id;
+    }
+    // 聚合模式：从 query 中获取 sceneId，组合成唯一 key
+    const querySceneId = route.query.sceneId as string | undefined;
+    if (querySceneId) {
+      return `${querySceneId}_${id}`;
+    }
+    // 兜底：遍历查找当前报表所属的第一个场景
+    for (const scene of allSideRoutes.value) {
+      for (const group of scene.children || []) {
+        if (group.children?.some(child => String(child.id) === id)) {
+          return `${scene.id}_${id}`;
+        }
+      }
+    }
+    return id;
+  });
+
+  // 点击子菜单项时，聚合模式下携带 sceneId 信息
+  const handleChildClick = (panelId: string | number, sceneId: string | number) => {
+    clickFavorite.value = false;
+    if (isAggregateMode.value) {
+      router.push({
+        params: { id: String(panelId) },
+        query: { ...route.query, sceneId: String(sceneId) },
+      });
+    } else {
+      router.push({
+        params: { id: String(panelId) },
+        query: route.query,
+      });
+    }
+  };
+
+  // 未收藏项：hover 或选中时显示空心星
+  const isShowPentagram = (panelId: string | number, sceneId: string | number): boolean => {
+    const key = getActiveKey(panelId, sceneId);
+    return hoveredItemId.value === key || key === activeMenuId.value;
+  };
 
   // 侧边路由数组变量，与reportGroups类型相同
   const sideRoutes = ref<SideRouteItem[]>([]);
@@ -639,15 +693,18 @@
     flex-direction: column;
     width: 100%;
     height: 100%;
+    max-height: 100%;
     overflow: hidden;
   }
 
   .sidebar-header {
     flex-shrink: 0;
+    background-color: #1b2132;
   }
 
   .sidebar-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
 
