@@ -15,10 +15,12 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="step1">
+  <div
+    class="step1"
+    :class="{ 'with-sidebar': route.params?.isShowSideBar === 'true' }">
     <div
       v-if="showModelType"
-      class="step1-box">
+      :class="route.params?.isShowSideBar !== 'true' ? 'step1-box' : 'step1-box-with-sidebar'">
       <div
         v-if="!isNewSystem"
         class="step1-tip">
@@ -294,7 +296,7 @@
                   <h3>{{ t('资源实例回调地址填写说明：') }}</h3>
                   <div>{{ t('1、应用说明：审计中心会通过“回调地址”获取详细的资源实例') }}</div>
                   <div>{{ t('2、此处填写是回调地址，格式要求是 HOST格式：scheme://netloc') }}</div>
-                  <div>{{ t('3、例如：我的系统是cmdb，可获取到资源实例的url为  http://cmdb.consul') }}</div>
+                  <div>{{ t('3、例如：我的系统是cmdb，可获取到资源实例的url为 http://cmdb.consul') }}</div>
                 </template>
               </bk-popover>
             </template>
@@ -665,16 +667,20 @@
 <style scoped lang="postcss">
 .step1 {
   position: relative;
-  height: calc(100vh - 20px);
+  min-height: calc(100vh - 20px);
   overflow: auto;
 
-  .step1-box {
-    position: absolute;
-    left: 50%;
+  &.with-sidebar {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .step1-box,
+  .step1-box-with-sidebar {
+    position: relative;
     width: 60%;
     padding-bottom: 150px;
-    margin-top: 10px;
-    transform: translateX(-50%);
+    margin: 10px auto 0;
 
     .rotate-right {
       transform: rotate(90deg);
@@ -796,6 +802,11 @@
 
   }
 
+  .step1-box-with-sidebar {
+    width: 100%;
+    padding-bottom: 20px;
+  }
+
   .step1-select-model-type {
     padding: 16px 24px;
 
@@ -831,7 +842,9 @@
   }
 
   .dashed-underline {
-    padding-bottom: 2px; /* 可选，增加文字和虚线间距 */
+    padding-bottom: 2px;
+
+    /* 可选，增加文字和虚线间距 */
     border-bottom: 1px dashed #c4c6cc;
   }
 }

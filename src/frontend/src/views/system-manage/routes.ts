@@ -51,6 +51,8 @@ export default {
       meta: {
         title: '系统列表',
         skeleton: 'systemList',
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -59,6 +61,8 @@ export default {
       name: 'systemDetail',
       meta: {
         title: '系统详情',
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -68,6 +72,8 @@ export default {
       meta: {
         title: '新建日志上报',
         isShowTitleTip: true,
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -76,6 +82,8 @@ export default {
       name: 'logDataIdEdit',
       meta: {
         title: '编辑采集',
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -84,6 +92,8 @@ export default {
       name: 'logCollectorEdit',
       meta: {
         title: '编辑采集',
+        activeRoute: 'systemList',
+
       },
     },
     {
@@ -92,6 +102,8 @@ export default {
       name: 'collectorComplete',
       meta: {
         title: '采集配置创建完成',
+        activeRoute: 'systemList',
+
       },
     },
   ],
