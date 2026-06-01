@@ -223,8 +223,6 @@ class AIProvider(Provider):
                 chat_history=[],
                 execute_kwargs={"stream": True},
             )
-            if isinstance(result, dict):
-                return result.get("choices", [{}])[0].get("delta", {}).get("content", "")
             return result or ""
         except Exception as e:
             logger.error("[AIProvider] AI执行失败:risk_id=%s,error=%s", self.context.get("risk_id", "unknown"), e)

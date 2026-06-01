@@ -37,12 +37,14 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     EventFilterOperator,
     EventMappingFields,
+    NL2RiskFilterLogStatus,
     RiskLabel,
     RiskRuleOperator,
     RiskViewType,
 )
 from services.web.risk.models import (
     ManualEvent,
+    NL2RiskFilterLog,
     ProcessApplication,
     Risk,
     RiskExperience,
@@ -518,24 +520,55 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         help_text=gettext_lazy("风险标签：normal(正常) / misreport(误报)"),
     )
     risk_level = serializers.CharField(
-        label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
+        label=gettext_lazy("Risk Level"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy(
+            "风险等级：HIGH(高) / MIDDLE(中) / LOW(低)。"
+            '口语映射：\u201c紧急的\u201d\u201c优先处理\u201d → HIGH；\u201c一般的\u201d\u201c普通的\u201d → MIDDLE'
+        ),
     )
-    title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
-    event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
+    title = serializers.CharField(
+        label=gettext_lazy("Risk Title"),
+        allow_blank=True,
+        required=False,
+        help_text=gettext_lazy(
+            "风险标题（顶层字段，不放入 event_filters）。"
+            '当用户用描述性短语指代风险主题（\u201c关于xxx\u201d\u201c涉及xxx\u201d\u201cxxx相关\u201d）时映射到此字段'
+        ),
+    )
+    event_filters = EventFieldFilterItemSerializer(
+        label=gettext_lazy("关联事件字段筛选"),
+        many=True,
+        required=False,
+        help_text=gettext_lazy("关联事件字段筛选（结构见下）。" "先调用 list_event_fields_by_strategy_brief 获取可用字段，不要猜测字段名"),
+    )
     sort = serializers.ListField(
         child=serializers.CharField(),
         required=False,
         allow_empty=True,
         default=list,
         help_text=gettext_lazy(
-            '多字段排序，如 ["-risk_level", "-event_time", "-risk_id"]。'
-            "每个元素为字段名，前缀 - 表示倒序。"
-            "可用字段：risk_level(风险等级)、event_time(首次发现时间)、"
-            "last_operate_time(最后处理时间)、risk_id、display_status、event_data.xxx 等。"
-            "替代已废弃的 order_field + order_type 参数。"
+            "多字段排序（JSON 数组，必须双引号），如 "
+            '["-risk_level", "-event_time", "-risk_id"]。'
+            "每个元素为字段名，前缀 - 表示倒序，无前缀为正序。"
+            "数组顺序即排序优先级。"
+            "可用字段：risk_level(风险等级，语义排序 LOW<MIDDLE<HIGH)、"
+            "event_time(首次发现时间)、last_operate_time(最后处理时间)、"
+            "risk_id(风险ID)、display_status(展示状态)、"
+            "event_data.xxx(关联事件字段，⚠️ 必须同时传 event_filters 且 event_filters 中包含该字段的筛选条件，否则后端校验失败)。"
+            '默认降序：用户说"按时间排序"未指定升降序时，默认 ["-event_time"]。'
+            "event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段。"
+            "⚠️ 不要使用单引号"
         ),
     )
-    has_report = serializers.BooleanField(label=gettext_lazy("是否已生成报告"), required=False, allow_null=True)
+    has_report = serializers.BooleanField(
+        label=gettext_lazy("是否已生成报告"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("是否已生成报告。有报告 → true，无报告 → false"),
+    )
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
@@ -1419,3 +1452,100 @@ class GenerateRiskReportResponseSerializer(serializers.Serializer):
 
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
+class EventFieldsForAIRequestSerializer(serializers.Serializer):
+    strategy_ids = serializers.CharField(
+        label=gettext_lazy("Strategy IDs"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("逗号分隔的策略 ID 列表"),
+    )
+    keyword = serializers.CharField(
+        label=gettext_lazy("Keyword"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按字段名或显示名模糊搜索，多个关键字用逗号分隔（OR 匹配）"),
+    )
+
+    def validate_strategy_ids(self, value):
+        if not value:
+            return []
+        result = []
+        for item in value.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                result.append(int(item))
+            except ValueError:
+                raise serializers.ValidationError(gettext_lazy("策略 ID 必须为整数，无效值：%s") % item)
+        return result
+
+
+class EventFieldsBriefItemSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"), required=False)
+
+
+class EventFieldsBriefResponseSerializer(serializers.Serializer):
+    results = EventFieldsBriefItemSerializer(
+        many=True,
+        label=gettext_lazy("字段列表"),
+        help_text=gettext_lazy("最多返回 AI_EVENT_FIELDS_BRIEF_MAX 条（默认100，可通过环境变量 BKAPP_AI_EVENT_FIELDS_BRIEF_MAX 调整）"),
+    )
+
+
+class NL2RiskTagItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label=gettext_lazy("Tag ID"))
+    name = serializers.CharField(label=gettext_lazy("Tag Name"))
+
+
+class NL2RiskStrategyItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    name = serializers.CharField(label=gettext_lazy("Strategy Name"))
+
+
+class NL2RiskFilterRequestSerializer(serializers.Serializer):
+    query = serializers.CharField(label=gettext_lazy("Natural Language Query"), allow_blank=False)
+    tags = NL2RiskTagItemSerializer(label=gettext_lazy("Tags"), many=True, required=False, default=list)
+    strategies = NL2RiskStrategyItemSerializer(
+        label=gettext_lazy("Strategies"), many=True, required=False, default=list
+    )
+    thread_id = serializers.CharField(
+        label=gettext_lazy("Thread ID"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("会话标识，用于多轮对话。不传则每次生成新的。"),
+    )
+
+
+class NL2RiskFilterResponseSerializer(serializers.Serializer):
+    filter_conditions = serializers.DictField(label=gettext_lazy("Filter Conditions"), default=dict)
+    thread_id = serializers.CharField(label=gettext_lazy("Thread ID"))
+    message = serializers.CharField(label=gettext_lazy("AI Message"), default="", allow_blank=True)
+
+
+class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        label=gettext_lazy("Status"),
+        choices=NL2RiskFilterLogStatus.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
+    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
+
+
+class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NL2RiskFilterLog
+        fields = [
+            "id",
+            "query",
+            "response_data",
+            "status",
+        ]
