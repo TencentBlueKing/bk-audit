@@ -23,16 +23,22 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import useRouterBack from '@hooks/use-router-back';
+  import { computed } from 'vue';
 
   const route = useRoute();
+  const router = useRouter();
   const routerBack = useRouterBack();
-  const isShowSideBar = route.params?.isShowSideBar === 'true';
+  const isShowSideBar = computed(() => route.params.isShowSideBar === 'true');
 
   const handleRouterBack = () => {
     // isShowSideBar 模式下使用浏览器后退，否则走注册的回调
+    if (isShowSideBar.value) {
+      router.push({ name: route.meta.activeRoute as string });
+      return;
+    }
     if (!routerBack.value) {
       window.history.back();
       return;
