@@ -18,9 +18,10 @@
   <div
     class="step"
     :class="{ 'with-sidebar': withSidebar }">
-    <div class="step-head">
-      <div
-        class="head-left">
+    <div
+      v-if="route.params?.isShowSideBar !== 'true'"
+      class="step-head">
+      <div class="head-left">
         <span class="back-icon-text">{{ t("接入新系统") }}</span>
       </div>
 
@@ -30,8 +31,15 @@
           :steps-title="stepsTitle" />
       </div>
     </div>
+    <div
+      v-else
+      class="cur-step-with-sidebar">
+      <header-steps
+        :cur-step="Number(curStep)"
+        :steps-title="stepsTitle" />
+    </div>
 
-    <div class="step-content">
+    <div :class="route.params?.isShowSideBar !== 'true' ? 'step-content' : 'step-content-with-sidebar'">
       <component
         :is="stepComponents(curStep)"
         ref="stepRef"
@@ -42,9 +50,9 @@
         @is-data-enabled="isDataEnabled" />
     </div>
 
-    <div class="step-footer">
+    <div :class="route.params?.isShowSideBar !== 'true' ? 'step-footer' : 'step-footer-with-sidebar'">
       <div
-        v-if=" Number(curStep) === 1"
+        v-if="Number(curStep) === 1"
         class="footer-btn">
         <bk-button
           theme="primary"
@@ -58,10 +66,9 @@
         </bk-button>
       </div>
       <div
-        v-if=" Number(curStep) === 1.5"
+        v-if="Number(curStep) === 1.5"
         class="footer-btn1-1">
-        <bk-button
-          @click="handlerStepSubmit">
+        <bk-button @click="handlerStepSubmit">
           {{ t("上一步") }}
         </bk-button>
         <bk-button
@@ -74,10 +81,9 @@
         </bk-button>
       </div>
       <div
-        v-if=" Number(curStep) === 2"
+        v-if="Number(curStep) === 2"
         class="footer-btn2">
-        <bk-button
-          @click="handlerStep2Cancel">
+        <bk-button @click="handlerStep2Cancel">
           {{ t("上一步") }}
         </bk-button>
         <bk-button
@@ -93,10 +99,9 @@
         </bk-button>
       </div>
       <div
-        v-if=" Number(curStep) === 3"
+        v-if="Number(curStep) === 3"
         class="footer-btn2">
-        <bk-button
-          @click="handlerStep3Cancel">
+        <bk-button @click="handlerStep3Cancel">
           {{ t("上一步") }}
         </bk-button>
         <bk-button
@@ -291,7 +296,7 @@
             }
           }
         },
-        onCancel() {},
+        onCancel() { },
       });
     }
   };
@@ -371,7 +376,7 @@
           });
         }
       },
-      onCancel() {},
+      onCancel() { },
     });
   };
 
@@ -464,8 +469,9 @@
       top: 50%;
       left: 50%;
       width: 40%;
-      transform: translate(-50%,-50%  );
+      transform: translate(-50%, -50%);
     }
+
 
     .head-right {
       position: absolute;
@@ -508,22 +514,36 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%,-50%);
+      transform: translate(-50%, -50%);
     }
 
     .footer-btn2 {
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%,-50%);
+      transform: translate(-50%, -50%);
 
     }
+  }
 
-    .ml10 {
-      margin-left: 10px;
-    }
+  .step-footer-with-sidebar {
+    position: absolute;
+    width: 100%;
   }
 }
 
+.ml10 {
+  margin-left: 10px;
+}
 
+.cur-step-with-sidebar {
+  position: relative;
+  display: flex;
+  width: 60%;
+  height: auto;
+  padding-bottom: 10px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+}
 </style>
