@@ -47,7 +47,7 @@
                 v-if="editingField === row.key"
                 :ref="(el: any) => setEditorRef(row.key, el)"
                 class="editor-wrapper">
-                <audit-user-selector
+                <audit-user-selector-tenant
                   v-model="editUserValue"
                   allow-create
                   auto-focus

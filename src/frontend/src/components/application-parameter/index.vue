@@ -126,7 +126,7 @@
         </bk-option-group>
       </bk-select>
       <div v-else>
-        <audit-user-selector
+        <audit-user-selector-tenant
           v-if="config.custom_type === 'bk_user_selector'"
           v-model="userSelectorValue"
           allow-create
