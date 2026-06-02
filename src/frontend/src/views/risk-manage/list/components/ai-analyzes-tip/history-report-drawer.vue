@@ -192,7 +192,8 @@
       originalQuery.value = { ...router.currentRoute.value.query };
       searchKeyword.value = '';
       nextTick(() => {
-        listRef.value?.fetchData({ keyword: '' });
+        // 避免复用外层页面 URL 中的 sort（如 -event_time）导致历史报告接口排序字段非法
+        listRef.value?.fetchData({ keyword: '', sort: ['-created_at'] });
       });
     } else {
       // 恢复原始URL参数
