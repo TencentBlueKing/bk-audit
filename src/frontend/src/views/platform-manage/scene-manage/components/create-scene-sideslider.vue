@@ -53,7 +53,7 @@
                 </template>
               </bk-popover>
             </template>
-            <audit-user-selector
+            <audit-user-selector-tenant
               v-model="formData.managers"
               :collapse-tags="false"
               multiple
@@ -86,7 +86,7 @@
                 </template>
               </bk-popover>
             </template>
-            <audit-user-selector
+            <audit-user-selector-tenant
               v-model="formData.users"
               :auto-focus="false"
               :collapse-tags="false"
@@ -189,7 +189,7 @@
 
   import useMessage from '@hooks/use-message';
 
-  import AuditUserSelector from '@components/audit-user-selector/index.vue';
+  import AuditUserSelectorTenant from '@components/audit-user-selector-tenant/index.vue';
   import TableSelectPicker from './table-select-picker.vue';
 
   import useRequest from '@/hooks/use-request';
