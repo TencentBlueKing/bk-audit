@@ -631,3 +631,26 @@
       value: "file://assertions/check_filters.py:has_expected_keys"
     - type: python
       value: "file://assertions/check_filters.py:field_value_match"
+
+# A39: 场景/Scope 上下文透传
+- description: "A39-常规：当前场景和scope上下文下的高危风险"
+  vars:
+    query: "当前场景和当前视角下最近一周的高危风险"
+    tags: "[]"
+    strategies: "[]"
+    scenes: '[{"id": 100001, "name": "主机安全审计"}]'
+    scope_type: "scene"
+    scope_id: "100001"
+    expected_keys: '["risk_level", "start_time", "end_time", "scene_id", "scope_type", "scope_id"]'
+    expected_values: '{"risk_level": "HIGH", "scene_id": "100001", "scope_type": "scene", "scope_id": "100001"}'
+    expected_time_delta_days: "7"
+    time_tolerance_hours: "2"
+  assert:
+    - type: python
+      value: "file://assertions/check_filters.py:is_non_empty_filter"
+    - type: python
+      value: "file://assertions/check_filters.py:has_expected_keys"
+    - type: python
+      value: "file://assertions/check_filters.py:field_value_match"
+    - type: python
+      value: "file://assertions/check_filters.py:check_time_range"

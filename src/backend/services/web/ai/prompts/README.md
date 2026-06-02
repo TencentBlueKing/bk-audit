@@ -42,3 +42,9 @@ python -m services.web.ai.prompts.nl2riskfilter.generate
 
 nl2riskfilter 的 prompt 包含字段表格和枚举值，这些信息直接来源于 `ListRiskRequestSerializer` 和业务常量。
 通过脚本动态生成可以确保 prompt 与接口定义始终一致，避免手动维护导致的不同步。
+
+## NL2RiskFilter 上下文输入
+
+`NL2RiskFilter` 用户消息除自然语言查询外，还会透传当前请求人、可用标签、可用策略、当前可用场景 `scenes`
+以及当前视角/范围 `scope_type`/`scope_id`。模型需要基于这些上下文将“当前场景”“当前视角”等表达转换为
+`ListRiskRequestSerializer` 支持的 `scene_id`、`scope_type`、`scope_id` 等筛选字段。

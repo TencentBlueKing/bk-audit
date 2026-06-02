@@ -30,10 +30,25 @@ class NL2RiskFilterRequestSerializerTest(TestCase):
             "query": "最近一周的高危风险",
             "tags": [{"id": 1, "name": "重要"}],
             "strategies": [{"id": 10, "name": "异常登录"}],
+            "scenes": [{"id": 100001, "name": "主机安全审计"}],
         }
         serializer = NL2RiskFilterRequestSerializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["query"], "最近一周的高危风险")
+        self.assertEqual(serializer.validated_data["scenes"][0]["name"], "主机安全审计")
+
+    def test_scope_type_fields_are_supported(self):
+        serializer = NL2RiskFilterRequestSerializer(
+            data={"query": "最近一周的高危风险", "scope_type": "scene", "scope_id": "100001"}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["scope_type"], "scene")
+        self.assertEqual(serializer.validated_data["scope_id"], "100001")
+
+    def test_scope_id_requires_scope_type(self):
+        serializer = NL2RiskFilterRequestSerializer(data={"query": "查询风险", "scope_id": "100001"})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("scope_type", serializer.errors)
 
     def test_query_required(self):
         data = {"tags": [], "strategies": []}
@@ -74,10 +89,22 @@ class BuildNL2RiskUserMessageTest(TestCase):
 
         tags = [{"id": 1, "name": "重要"}]
         strategies = [{"id": 10, "name": "异常登录"}]
-        result = build_nl2risk_user_message("高危风险", tags, strategies, username="testuser")
+        result = build_nl2risk_user_message(
+            "高危风险",
+            tags,
+            strategies,
+            username="testuser",
+            scenes=[{"id": 100001, "name": "主机安全审计"}],
+            scope_type="scene",
+            scope_id="100001",
+        )
 
         self.assertIn("2026-03-05T10:30:00", result)
         self.assertIn("当前请求人：testuser", result)
+        self.assertIn("当前可用场景：", result)
+        self.assertIn("id=100001, 名称=主机安全审计", result)
+        self.assertIn("当前视角/范围：", result)
+        self.assertIn("scope_type=scene, scope_id=100001", result)
         self.assertIn("id=1, 名称=重要", result)
         self.assertIn("id=10, 名称=异常登录", result)
         self.assertIn("用户查询：高危风险", result)
@@ -99,6 +126,11 @@ class BuildNL2RiskUserMessageTest(TestCase):
     def test_custom_username(self):
         result = build_nl2risk_user_message("test", [], [], username="xxx")
         self.assertIn("当前请求人：xxx", result)
+
+    def test_empty_scenes_and_scope(self):
+        result = build_nl2risk_user_message("test", [], [])
+        self.assertIn("当前可用场景：\n无", result)
+        self.assertIn("当前视角/范围：\n无", result)
 
 
 class ExtractJsonFromTextTest(TestCase):
@@ -160,6 +192,30 @@ class NL2RiskFilterRequestTest(TestCase):
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
     @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_ai_returns_filter_json_in_message(self, mock_chat, mock_user):
+        mock_chat.return_value = {
+            "filter_conditions": {},
+            "thread_id": "agent-thread",
+            "message": '{"current_operator": "李四"}',
+        }
+        result = self.resource.request({"query": "李四正在处理的风险"})
+        self.assertEqual(result["filter_conditions"], {"current_operator": "李四"})
+        self.assertEqual(result["message"], "")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_ai_returns_escaped_filter_json_in_message(self, mock_chat, mock_user):
+        mock_chat.return_value = {
+            "filter_conditions": {},
+            "thread_id": "agent-thread",
+            "message": r"{\"risk_level\": \"HIGH\", \"has_report\": true}",
+        }
+        result = self.resource.request({"query": "有报告的高危风险"})
+        self.assertEqual(result["filter_conditions"], {"risk_level": "HIGH", "has_report": True})
+        self.assertEqual(result["message"], "")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
     def test_ai_call_fails(self, mock_chat, mock_user):
         mock_chat.side_effect = Exception("AI service timeout")
         with self.assertRaises(NL2RiskFilterServiceError):
@@ -193,6 +249,25 @@ class NL2RiskFilterRequestTest(TestCase):
         self.assertEqual(result["thread_id"], "my-thread-001")
         call_kwargs = mock_chat.call_args
         self.assertEqual(call_kwargs.kwargs.get("execute_kwargs", {}).get("thread_id"), "my-thread-001")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_scene_and_scope_context_passed_to_ai(self, mock_chat, mock_user):
+        mock_chat.return_value = '{"risk_level": "HIGH"}'
+        result = self.resource.request(
+            {
+                "query": "当前场景下的高危风险",
+                "scenes": [{"id": 100001, "name": "主机安全审计"}],
+                "scope_type": "scene",
+                "scope_id": "100001",
+            }
+        )
+        self.assertEqual(result["filter_conditions"], {"risk_level": "HIGH"})
+        ai_input = mock_chat.call_args.kwargs["input"]
+        self.assertIn("当前可用场景：", ai_input)
+        self.assertIn("id=100001, 名称=主机安全审计", ai_input)
+        self.assertIn("当前视角/范围：", ai_input)
+        self.assertIn("scope_type=scene, scope_id=100001", ai_input)
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
     @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")

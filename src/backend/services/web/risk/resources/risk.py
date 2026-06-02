@@ -54,6 +54,7 @@ from core.models import get_request_username
 from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
 from core.utils.page import paginate_queryset
 from core.utils.time import ceil_to_second, mstimestamp_to_date_string
+from services.web.common.constants import ScopeQueryField
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
@@ -100,7 +101,7 @@ from services.web.risk.exceptions import (
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.nl2riskfilter import (
     build_nl2risk_user_message,
-    extract_json_from_text,
+    extract_filter_conditions_from_ai_result,
 )
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.handlers.ticket import (
@@ -1392,11 +1393,30 @@ class NL2RiskFilter(RiskMeta):
         query = validated_request_data["query"]
         tags = validated_request_data.get("tags", [])
         strategies = validated_request_data.get("strategies", [])
+        scenes = validated_request_data.get("scenes", [])
+        scope_type = validated_request_data.get(ScopeQueryField.SCOPE_TYPE)
+        scope_id = validated_request_data.get(ScopeQueryField.SCOPE_ID)
         thread_id = validated_request_data.get("thread_id") or str(uuid.uuid4())
         username = get_request_username()
 
-        request_params = {"query": query, "tags": tags, "strategies": strategies, "thread_id": thread_id}
-        user_message = build_nl2risk_user_message(query=query, tags=tags, strategies=strategies, username=username)
+        request_params = {
+            "query": query,
+            "tags": tags,
+            "strategies": strategies,
+            "scenes": scenes,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "thread_id": thread_id,
+        }
+        user_message = build_nl2risk_user_message(
+            query=query,
+            tags=tags,
+            strategies=strategies,
+            username=username,
+            scenes=scenes,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
 
         try:
             result = api.bk_plugins_ai_agent.chat_completion(
@@ -1419,8 +1439,7 @@ class NL2RiskFilter(RiskMeta):
             raise NL2RiskFilterServiceError()
 
         raw_text = str(result)
-        filter_conditions = extract_json_from_text(raw_text)
-        message = "" if filter_conditions else raw_text.strip()
+        filter_conditions, message = extract_filter_conditions_from_ai_result(result)
         response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
 
         status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED

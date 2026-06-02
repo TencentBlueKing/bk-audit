@@ -6,7 +6,8 @@
 2. 无法转换为有效筛选条件时返回空对象 `{}`，不要返回空字符串。字段值必须符合定义的类型
 3. **"我的风险""我负责的"** → 将"当前请求人"映射到 `operator` 字段，不能返回空
 4. **统计/聚合类查询**（"有多少个""哪些 X 产生了最多 Y""排名前几""最多/最少"等）→ 仍提取可识别的筛选条件（如风险等级、时间范围），忽略无法表达的聚合/排名/分组部分，系统基于筛选结果计算
-5. **标签和策略** → 从用户消息中的可用列表匹配 id
+5. **标签、策略、场景** → 从用户消息中的可用列表匹配 id。用户说"当前场景"时，从"当前可用场景"取对应 id 输出到 `scene_id`
+6. **当前视角/范围** → 用户说"当前视角""当前范围"时，使用用户消息中的 `scope_type` / `scope_id` 输出同名字段，不要输出额外的 `scope` 对象
 
 ## 多轮对话
 
@@ -18,6 +19,7 @@
 |------|------|------|
 | risk_id | string | 风险ID |
 | strategy_id | string | 策略ID。从"可用策略"列表匹配名称取 id 值，多个逗号拼接如 "137,169"。匹配规则：①完全匹配名称 > ②名称中包含用户关键词的最精确项 |
+| scene_id | string | 场景ID。用于在权限域结果内按风险所属场景筛选，多个逗号拼接如 "1,2"。 |
 | operator | string | 责任人。xxx 的风险/xxx 负责的 → operator |
 | status | string | 风险状态：stand_by(录入中) / new(新) / await_deal(待处理) / processing(处理中) / for_approve(自动处理审批中) / auto_process(套餐处理中) / closed(已关单)。“待处理”“未处理”→ await_deal（非 new）。口语映射：“漏处理的”“遗漏的”“积压的”“没人管的” → await_deal |
 | start_time | string | 开始时间 ISO 8601 YYYY-MM-DDTHH:mm:ss。最近一周 → 7 天前 00:00:00；最近一个月 → 30 天前；今天 → 今天 00:00:00 |
@@ -33,6 +35,8 @@
 | event_filters | array | 关联事件字段筛选（结构见下）。先调用 list_event_fields_by_strategy_brief 获取可用字段，不要猜测字段名 |
 | sort | array | 多字段排序（JSON 数组，必须双引号），如 ["-risk_level", "-event_time", "-risk_id"]。每个元素为字段名，前缀 - 表示倒序，无前缀为正序。数组顺序即排序优先级。可用字段：risk_level(风险等级，语义排序 LOW<MIDDLE<HIGH)、event_time(首次发现时间)、last_operate_time(最后处理时间)、risk_id(风险ID)、display_status(展示状态)、event_data.xxx(关联事件字段，⚠️ 必须同时传 event_filters 且 event_filters 中包含该字段的筛选条件，否则后端校验失败)。默认降序：用户说"按时间排序"未指定升降序时，默认 ["-event_time"]。event_data 排序限制：最多只支持单个事件字段，且会覆盖其他排序字段。⚠️ 不要使用单引号 |
 | has_report | boolean | 是否已生成报告。有报告 → true，无报告 → false |
+| scope_type | string | 权限域类型。可选值：cross_scene(跨场景)、cross_system(跨系统)、scene(单场景)、system(单系统) |
+| scope_id | string | 权限域实例 ID。scope_type 为 scene 或 system 时必填；cross_scene/cross_system 时不要传 |
 
 ### event_filters
 
