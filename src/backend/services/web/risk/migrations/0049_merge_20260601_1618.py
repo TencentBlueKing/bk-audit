@@ -6,6 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('risk', '0047_alter_analyse_report_charset_utf8mb4'),
         ('risk', '0048_risk_idx_risk_strategy_status_time'),
         ('risk', '0048_ticketpermission_idx_authorized_at'),
     ]
