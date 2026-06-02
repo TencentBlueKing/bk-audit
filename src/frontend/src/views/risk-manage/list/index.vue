@@ -16,15 +16,30 @@
 -->
 <template>
   <div class="risk-manage-list-page-wrap">
-    <search-box
+    <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
-      @change-table-height="handleChangeTableHeight"
       @export="handleExport"
-      @model-value-watch="handleModelValueWatch" />
+      @model-value-watch="handleModelValueWatch"
+      @parsing="handleParsing" />
+    <ai-analyzes
+      ref="aiAnalyzesRef"
+      :condition-tags="conditionTags"
+      :search-params="searchModel"
+      :total="totalCount" />
     <div class="risk-manage-list">
+      <div class="add-button">
+        <bk-button
+          theme="primary"
+          @click="handleAddRisk">
+          <audit-icon
+            class="add-icon"
+            type="add" />
+          {{ t('新增风险') }}
+        </bk-button>
+      </div>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
@@ -39,6 +54,9 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
+  <add-risk
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -71,15 +89,17 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
-  import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
+  import addRisk from './add-risk/index.vue';
+  import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
+  import NlSearchBox from './components/nl-search-box/index.vue';
 
   const dataSource = RiskManageService.fetchRiskList;
 
@@ -95,6 +115,7 @@
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const route = useRoute();
+  const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
   let timeout: number | undefined = undefined;
   const statusToMap = RISK_STATUS_TAG_MAP;
 
@@ -264,8 +285,8 @@
     return [...beforeAction, ...eventColumns, ...afterAction];
   });
 
-  // 默认的可配置列键（所有风险页面默认展示所属场景）
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  // 默认的可配置列键
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
@@ -286,8 +307,11 @@
   });
 
   const listRef = ref();
+  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
+  const totalCount = ref(0);
+  const conditionTags = ref<any[]>([]);
 
   // 导出数据
   const handleExport = () => {
@@ -333,7 +357,8 @@
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
-      noNeedSceneParams: true,
+      page: 1,
+      page_size: 1,
     },
     defaultValue: [],
     manual: true,
@@ -368,8 +393,10 @@
     },
   });
 
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
+  const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
+    aiAnalyzesRef.value?.changeIsSearch();
     window.changeConfirm = false;
+    totalCount.value = total || 0;
 
     // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
     searchBoxRef.value?.notifySearchComplete();
@@ -461,13 +488,22 @@
     };
     listRef.value?.initTableHeight();
     fetchList();
+    // 更新conditionTags
+    updateConditionTags();
   };
 
-  // 表格高度变化时重新计算
-  const handleChangeTableHeight = () => {
-    nextTick(() => {
-      listRef.value?.initTableHeight?.();
-    });
+  // 更新conditionTags
+  const updateConditionTags = () => {
+    if (searchBoxRef.value?.getConditionTags) {
+      conditionTags.value = searchBoxRef.value.getConditionTags();
+    }
+  };
+
+  // NL 解析状态变化时，给列表设置 loading
+  const handleParsing = (isParsing: boolean) => {
+    if (listRef.value) {
+      listRef.value.loading = isParsing;
+    }
   };
 
   const handleClearSearch = () => {
@@ -479,7 +515,6 @@
     const params = {
       risk_id: '',
       tags: '',
-      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: route.query.strategy_id || '',
@@ -504,10 +539,21 @@
     listRef.value.fetchData(dataParams);
   };
 
+  // 新增风险
+  const handleAddRisk = () => {
+    addRiskRef.value.show();
+  };
+  // 新增风险成功
+  const handleAddRiskSuccess = () => {
+    searchBoxRef.value.clearValue();
+  };
+
   onMounted(() => {
     nextTick(() => {
       getEventFields();
       sessionStorage.removeItem('addEventRiskIds');
+      // 初始获取conditionTags
+      updateConditionTags();
     });
   });
 
@@ -564,6 +610,15 @@
     padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
+
+    .add-button {
+      padding-bottom: 5px;
+
+      .add-icon {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+    }
   }
 }
 
