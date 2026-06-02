@@ -658,7 +658,7 @@ class ListRiskRequestSerializer(ListRiskBaseRequestSerializer, RiskScopeQuerySer
     ...
 
 
-class ListRiskAPIGWRequestSerializer(ListRiskBaseRequestSerializer):
+class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
     """
     APIGW 获取风险列表 - 继承 ListRiskRequestSerializer，逻辑完全一致，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权）
     分页由 DRF 分页器统一处理（通过 URL 参数 page/page_size）
@@ -1688,6 +1688,7 @@ class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "analysis_scope",
             "risk_count",
             "status",
+            "extra_info",
             "created_by",
             "created_at",
         ]
@@ -1720,6 +1721,7 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "risk_ids",
             "scenario_name",
             "status",
+            "extra_info",
             "prompt_params",
             "custom_prompt",
             "created_by",

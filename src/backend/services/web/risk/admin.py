@@ -336,7 +336,16 @@ class AnalyseReportScenarioAdmin(admin.ModelAdmin):
 
 @admin.register(AnalyseReport)
 class AnalyseReportAdmin(admin.ModelAdmin):
-    list_display = ["report_id", "title", "report_type", "status", "risk_count", "created_by", "created_at"]
+    list_display = [
+        "report_id",
+        "title",
+        "report_type",
+        "status",
+        "risk_count",
+        "extra_info",
+        "created_by",
+        "created_at",
+    ]
     list_filter = ["report_type", "status", "created_by", "created_at"]
     search_fields = ["report_id", "title", "created_by", "task_id"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
