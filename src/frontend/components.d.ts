@@ -17,6 +17,7 @@ declare module 'vue' {
     AuditRouterView: typeof import('./src/components/audit-router-view/index.vue')['default']
     AuditSideslider: typeof import('./src/components/audit-sideslider/index.vue')['default']
     AuditUserSelector: typeof import('./src/components/audit-user-selector/index.vue')['default']
+    AuditUserSelectorTenant: typeof import('./src/components/audit-user-selector-tenant/index.vue')['default']
     Button: typeof import('./src/components/auth/button.vue')['default']
     Catch: typeof import('./src/components/apply-permission/catch.vue')['default']
     ChartTableList: typeof import('./src/components/skeleton-loading/components/chart-table-list.vue')['default']
