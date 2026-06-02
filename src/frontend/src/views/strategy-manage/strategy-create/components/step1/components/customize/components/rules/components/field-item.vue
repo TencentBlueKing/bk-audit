@@ -101,7 +101,7 @@
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
 
       <!-- 日志表特有，人员选择器 -->
-      <audit-user-selector
+      <audit-user-selector-tenant
         v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         allow-create

@@ -64,7 +64,7 @@
           class="is-required mr16"
           :label="t('处理人')"
           property="new_operators">
-          <audit-user-selector
+          <audit-user-selector-tenant
             v-model="formData.new_operators"
             multiple />
         </bk-form-item>
