@@ -149,6 +149,7 @@ export const EXPORT_USER_FIELDS = {
   GAME_NAME: '游戏名称',
   OPENID: 'openid',
   WECHAT: '微信',
+  QQ: 'QQ',
   COIN_BALANCE: '代币存量',
   TOTAL_RECHARGE: '累计充值',
   TOTAL_GIFT: '累计赠送',
