@@ -132,6 +132,8 @@ class EntryHandler(object):
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
             "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
             "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
+            # 用户人员选择器
+            'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
         }
         return data
 
@@ -144,6 +146,19 @@ class EntryHandler(object):
         except Exception as err:  # NOCC:broad-except(需要处理所有异常)
             logger.exception(f"GetVersion Failed => {err}")
             return str()
+
+    @classmethod
+    def get_user_web_apigw_url(cls):
+        """
+        获取人员选择器 API 的网关地址
+        返回格式: BK_API_URL_TMPL + 网关环境
+        """
+        stage = os.getenv('BKPAAS_ENVIRONMENT', 'prod')
+        base_url = settings.BK_API_URL_TMPL.format(api_name='bk-user-web').rstrip('/')
+        # 如果是 http 则转换为 https
+        if base_url.startswith('http://'):
+            base_url = base_url.replace('http://', 'https://', 1)
+        return f"{base_url}/{stage}"
 
     @classmethod
     def get_query_help(cls):
