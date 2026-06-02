@@ -575,8 +575,9 @@
 /* 分析中弹窗样式 */
 .ai-analyzing-dialog {
   :deep(.bk-modal-content) {
-    height: 180px;
+    height: 250px;
     padding: 40px 24px;
+    box-sizing: border-box;
   }
 
   :deep(.bk-dialog-footer) {
@@ -584,12 +585,13 @@
   }
 
   .analyzing-content {
-    position: absolute;
-    top: -50px;
     display: flex;
+    width: 100%;
+    height: 100%;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    text-align: center;
 
     .loading-icon-wrapper {
       margin-bottom: 24px;
