@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <audit-user-selector
+  <audit-user-selector-tenant
     allow-create
     :model-value="defaultValue"
     :multiple="multiple"
