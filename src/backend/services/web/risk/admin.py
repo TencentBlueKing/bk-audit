@@ -30,6 +30,9 @@ from django.utils.translation import gettext_lazy as _
 from core.sql.constants import FieldType, Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
+    AnalyseReport,
+    AnalyseReportRisk,
+    AnalyseReportScenario,
     ManualEvent,
     NL2RiskFilterLog,
     ProcessApplication,
@@ -321,6 +324,31 @@ class RiskReportAdmin(admin.ModelAdmin):
         return ""
 
     content_short.short_description = _("报告内容摘要")
+
+
+@admin.register(AnalyseReportScenario)
+class AnalyseReportScenarioAdmin(admin.ModelAdmin):
+    list_display = ["scenario_id", "scenario_key", "name", "report_type", "is_builtin", "is_enabled", "priority"]
+    list_filter = ["report_type", "is_builtin", "is_enabled"]
+    search_fields = ["scenario_key", "name", "description"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+
+
+@admin.register(AnalyseReport)
+class AnalyseReportAdmin(admin.ModelAdmin):
+    list_display = ["report_id", "title", "report_type", "status", "risk_count", "created_by", "created_at"]
+    list_filter = ["report_type", "status", "created_by", "created_at"]
+    search_fields = ["report_id", "title", "created_by", "task_id"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    raw_id_fields = ["scenario"]
+
+
+@admin.register(AnalyseReportRisk)
+class AnalyseReportRiskAdmin(admin.ModelAdmin):
+    list_display = ["id", "report", "risk_id", "created_at"]
+    list_filter = ["created_at"]
+    search_fields = ["report__report_id", "risk_id"]
+    raw_id_fields = ["report"]
 
 
 @admin.register(NL2RiskFilterLog)

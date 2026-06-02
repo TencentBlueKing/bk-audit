@@ -35,6 +35,7 @@ from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    AnalyseReportStatus,
     AnalyseReportType,
     EventFilterOperator,
     EventMappingFields,
@@ -1627,6 +1628,12 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
         ),
     )
 
+    def validate_target_risks_filter(self, value):
+        serializer = ListRiskRequestSerializer(data=value or {})
+        if not serializer.is_valid():
+            raise serializers.ValidationError(serializer.errors)
+        return value or {}
+
 
 class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
     """生成AI分析报告响应"""
@@ -1653,6 +1660,13 @@ class ListAnalyseReportRequestSerializer(serializers.Serializer):
         choices=AnalyseReportType.choices,
         required=False,
         allow_blank=True,
+    )
+    status = serializers.ChoiceField(
+        label=gettext_lazy("报告状态筛选"),
+        choices=AnalyseReportStatus.choices,
+        required=False,
+        allow_blank=True,
+        default="",
     )
     sort = serializers.ListField(
         child=serializers.ChoiceField(choices=SORT_CHOICES),

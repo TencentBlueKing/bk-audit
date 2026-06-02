@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import os
+from types import SimpleNamespace
 from typing import Any
 
 from bk_resource import api
@@ -46,6 +47,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
 from core.utils.data import data_chunks
+from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
@@ -70,7 +72,12 @@ from services.web.risk.handlers.ticket import (
 from services.web.risk.models import ManualEvent, Risk, TicketNode
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
-from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.serializers import (
+    CreateEventSerializer,
+    ListRiskRequestSerializer,
+)
+from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.filters import SceneScopeFilter
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
@@ -546,6 +553,59 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     return q
 
 
+def _load_report_risk_ids(report, risk_limit: int) -> list:
+    """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
+    from services.web.risk.resources.risk import ListRisk
+
+    serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
+    serializer.is_valid(raise_exception=True)
+    filter_data = dict(serializer.validated_data)
+
+    list_risk = ListRisk()
+    list_risk._duplicate_event_field_map = {}
+
+    order_fields = filter_data.pop("order_fields", [])
+    use_bkbase = bool(filter_data.pop("use_bkbase", False))
+    event_filters = filter_data.pop("event_filters", [])
+    scope_type = filter_data.pop("scope_type", None)
+    scope_id = filter_data.pop("scope_id", None)
+    scene_ids = filter_data.pop("scene_id", [])
+
+    thedate_range = list_risk._extract_thedate_range(filter_data)
+    base_queryset = list_risk.load_risks(filter_data, username=report.created_by)
+
+    if scope_type:
+        scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+        scope_scene_ids = ScopePermission(report.created_by).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+        base_queryset = SceneScopeFilter.filter_queryset(
+            queryset=base_queryset,
+            scene_id=scope_scene_ids,
+            resource_type=ResourceVisibilityType.RISK,
+            pk_field="risk_id",
+        )
+
+    base_queryset = list_risk._filter_queryset_by_scene_ids(base_queryset, scene_ids)
+    base_queryset = list_risk._filter_queryset_by_event_data_fields(base_queryset, event_filters)
+    request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
+
+    if use_bkbase:
+        paged_risks, _, _ = list_risk.retrieve_via_bkbase(
+            base_queryset=base_queryset,
+            request=request,
+            order_fields=order_fields,
+            event_filters=event_filters,
+            thedate_range=thedate_range,
+        )
+        return [risk.risk_id for risk in paged_risks]
+
+    _, _, risk_ids = list_risk.retrieve_via_db(
+        base_queryset=base_queryset,
+        request=request,
+        order_fields=order_fields,
+    )
+    return risk_ids
+
+
 def _link_risks_to_report(report) -> int:
     """
     根据报告的 prompt_params 查询关联风险，批量创建 AnalyseReportRisk 关联记录。
@@ -555,22 +615,24 @@ def _link_risks_to_report(report) -> int:
     """
     from services.web.risk.models import AnalyseReportRisk
 
-    prompt_params = report.prompt_params or {}
-    q = _build_risk_query_from_prompt_params(prompt_params)
-
     if not report.created_by:
         logger_celery.warning("[LinkRisksToReport] Skip report without creator, report_id=%s", report.report_id)
         return 0
 
+    risk_limit = int(getattr(settings, "ANALYSE_REPORT_RISK_LIMIT", 100))
+    if risk_limit <= 0:
+        logger_celery.info(
+            "[LinkRisksToReport] Skip because risk limit is %s, report_id=%s", risk_limit, report.report_id
+        )
+        return 0
+
     # 查询报告创建人实际有权限且符合条件的风险 ID 列表
-    risk_ids = list(
-        Risk.load_authed_risks(ActionEnum.LIST_RISK, username=report.created_by)
-        .filter(q)
-        .values_list("risk_id", flat=True)
-    )
+    risk_ids = _load_report_risk_ids(report, risk_limit)
     if not risk_ids:
         logger_celery.info(
-            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s", report.report_id, prompt_params
+            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s",
+            report.report_id,
+            report.prompt_params,
         )
         return 0
 
@@ -650,12 +712,13 @@ def generate_analyse_report(self, report_id: int):
 
     except Exception as exc:
         logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
-        report.status = AnalyseReportStatus.FAILED
-        report.save(update_fields=["status", "updated_at"])
         try:
             self.retry(exc=exc, countdown=60)
         except MaxRetriesExceededError:
+            report.status = AnalyseReportStatus.FAILED
+            report.save(update_fields=["status", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            raise
 
 
 @celery_app.task(queue="risk_render")

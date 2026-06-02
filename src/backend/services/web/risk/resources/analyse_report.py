@@ -144,6 +144,7 @@ class GetAnalyseReportTaskResult(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data["task_id"]
+        get_object_or_404(self.get_user_reports(), task_id=task_id)
 
         async_result = AsyncResult(task_id)
         celery_status = async_result.status
@@ -170,10 +171,7 @@ class ListAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         # 默认按当前用户过滤，只返回自己创建的报告
-        queryset = AnalyseReport.objects.filter(
-            status=AnalyseReportStatus.SUCCESS,
-            created_by=get_request_username(),
-        )
+        queryset = AnalyseReport.objects.filter(created_by=get_request_username())
 
         # keyword 模糊搜索
         keyword = validated_request_data.get("keyword")
@@ -186,6 +184,11 @@ class ListAnalyseReport(AnalyseReportMeta):
         report_type = validated_request_data.get("report_type")
         if report_type:
             queryset = queryset.filter(report_type=report_type)
+
+        # status 筛选；不传时返回当前用户所有状态报告
+        status = validated_request_data.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
 
         # 排序
         sort = validated_request_data.get("sort", ["-created_at"])

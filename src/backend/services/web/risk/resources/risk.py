@@ -640,9 +640,9 @@ class ListRisk(RiskMeta):
             q &= _q
         return q
 
-    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+    def load_risks(self, validated_request_data: dict, username: str = None) -> QuerySet["Risk"]:
         q = self._build_filter_query(validated_request_data)
-        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
+        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
 
     def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
         if not risk_ids:

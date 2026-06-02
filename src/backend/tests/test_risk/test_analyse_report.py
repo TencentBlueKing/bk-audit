@@ -19,11 +19,17 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 from unittest import mock
 
+from django.contrib import admin
 from django.db.models import Q
 from django.http import Http404
+from django.test import override_settings
 
 from apps.permission.handlers.actions import ActionEnum
-from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
+from services.web.risk.constants import (
+    AnalyseReportStatus,
+    AnalyseReportType,
+    EventFilterOperator,
+)
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
@@ -246,6 +252,21 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("report_type", serializer.errors)
 
+    def test_generate_report_target_filter_uses_list_risk_validation(self):
+        """target_risks_filter 使用 ListRisk 请求参数校验"""
+        serializer = GenerateAnalyseReportRequestSerializer(
+            data={
+                "report_type": AnalyseReportType.SYSTEM,
+                "title": "非法筛选报告",
+                "target_risks_filter": {
+                    "sort": ["event_data.foo"],
+                },
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("target_risks_filter", serializer.errors)
+
 
 class TestListAnalyseReport(AnalyseReportTestBase):
     """测试历史分析报告列表（默认按当前用户过滤）"""
@@ -322,9 +343,9 @@ class TestListAnalyseReport(AnalyseReportTestBase):
             created_by="other_user",
         )
 
-    def test_list_reports_only_success(self):
-        """测试列表只返回成功的报告"""
-        result = self.resource.risk.list_analyse_report({})
+    def test_list_reports_filter_success_status(self):
+        """测试按 success 状态过滤报告"""
+        result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.SUCCESS})
         titles = [r["title"] for r in result]
         self.assertIn("张三行为调查分析报告", titles)
         self.assertIn("风险综合分析报告", titles)
@@ -367,6 +388,27 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         result = self.resource.risk.list_analyse_report({})
         titles = [r["title"] for r in result]
         self.assertNotIn("其他用户的报告", titles)
+
+    def test_list_reports_returns_all_status_by_default(self):
+        """默认返回当前用户所有状态的报告"""
+        result = self.resource.risk.list_analyse_report({})
+        statuses = {r["status"] for r in result}
+        self.assertIn(AnalyseReportStatus.SUCCESS, statuses)
+        self.assertIn(AnalyseReportStatus.GENERATING, statuses)
+
+    def test_list_reports_filter_by_status(self):
+        """支持按报告状态过滤"""
+        failed_report = AnalyseReport.objects.create(
+            title="失败报告",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.FAILED,
+            prompt_params={},
+            created_by="admin",
+        )
+
+        result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.FAILED})
+
+        self.assertEqual([item["report_id"] for item in result], [failed_report.report_id])
 
 
 class TestRetrieveAnalyseReport(AnalyseReportTestBase):
@@ -1033,19 +1075,34 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_failure(self, mock_chat):
-        """测试生成报告失败"""
+        """测试达到最大重试次数后标记为失败"""
+        mock_chat.side_effect = Exception("API调用失败")
+
+        from celery.exceptions import MaxRetriesExceededError
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with mock.patch.object(generate_analyse_report, "retry", side_effect=MaxRetriesExceededError()):
+            with self.assertRaises(MaxRetriesExceededError):
+                generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_keeps_generating_status_before_max_retries(self, mock_chat):
+        """未达到最大重试次数前，报告状态保持生成中"""
         mock_chat.side_effect = Exception("API调用失败")
 
         from celery.exceptions import Retry
 
         from services.web.risk.tasks import generate_analyse_report
 
-        # 任务在直接调用时会抛出 Retry 异常（因为 max_retries=2）
         with self.assertRaises((Exception, Retry)):
             generate_analyse_report(report_id=self.report.report_id)
 
         self.report.refresh_from_db()
-        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
 
 
 class TestAnalyseReportModel(AnalyseReportTestBase):
@@ -1195,9 +1252,20 @@ class TestAnalyseReportSerializer(AnalyseReportTestBase):
 class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
     """测试查询任务状态"""
 
+    def create_task_report(self, task_id):
+        return AnalyseReport.objects.create(
+            title="当前用户任务",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.GENERATING,
+            task_id=task_id,
+            prompt_params={},
+            created_by="admin",
+        )
+
     @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
     def test_task_pending(self, mock_async_result_cls):
         """测试任务待处理状态"""
+        self.create_task_report("test-task-001")
         mock_result = mock.MagicMock()
         mock_result.status = "PENDING"
         mock_result.result = None
@@ -1210,6 +1278,7 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
     @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
     def test_task_success(self, mock_async_result_cls):
         """测试任务成功状态"""
+        self.create_task_report("test-task-002")
         mock_result = mock.MagicMock()
         mock_result.status = "SUCCESS"
         mock_result.result = {"report_id": 1}
@@ -1222,6 +1291,7 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
     @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
     def test_task_failure(self, mock_async_result_cls):
         """测试任务失败状态"""
+        self.create_task_report("test-task-003")
         mock_result = mock.MagicMock()
         mock_result.status = "FAILURE"
         mock_result.result = Exception("Something went wrong")
@@ -1234,6 +1304,7 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
     @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
     def test_task_running(self, mock_async_result_cls):
         """测试任务运行中状态"""
+        self.create_task_report("test-task-004")
         mock_result = mock.MagicMock()
         mock_result.status = "STARTED"
         mock_result.result = None
@@ -1241,6 +1312,22 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
 
         result = self.resource.risk.get_analyse_report_task_result({"task_id": "test-task-004"})
         self.assertEqual(result["status"], "RUNNING")
+
+    @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
+    def test_task_rejects_other_user_report_task(self, mock_async_result_cls):
+        """不能查询其他用户报告的异步任务结果"""
+        AnalyseReport.objects.create(
+            title="其他用户任务",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.GENERATING,
+            task_id="other-user-task",
+            prompt_params={},
+            created_by="other_user",
+        )
+
+        with self.assertRaises(Http404):
+            self.resource.risk.get_analyse_report_task_result({"task_id": "other-user-task"})
+        mock_async_result_cls.assert_not_called()
 
 
 class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
@@ -1367,8 +1454,12 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
 
     def setUp(self):
         super().setUp()
-        self.iam_patcher = mock.patch.object(Risk, "iam_risk_filter", return_value=Q(pk__in=[]))
-        self.iam_patcher.start()
+        self.iam_patcher = mock.patch.object(
+            Risk,
+            "iam_risk_filter",
+            return_value=Q(risk_id__in=[self.risk1.risk_id, self.risk2.risk_id]),
+        )
+        self.iam_filter_mock = self.iam_patcher.start()
         self.addCleanup(self.iam_patcher.stop)
         self.grant_list_risk_permission(self.risk1.risk_id)
         self.grant_list_risk_permission(self.risk2.risk_id)
@@ -1494,7 +1585,7 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
 
     def test_link_risks_only_links_report_creator_authed_risks(self):
         """测试后台关联风险时只关联报告创建人实际有权限的风险"""
-        TicketPermission.objects.exclude(risk_id=self.risk1.risk_id).delete()
+        self.iam_filter_mock.return_value = Q(risk_id=self.risk1.risk_id)
         report = AnalyseReport.objects.create(
             title="权限过滤关联测试",
             report_type=AnalyseReportType.SYSTEM,
@@ -1512,13 +1603,90 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
         risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
         self.assertEqual(risk_ids, [self.risk1.risk_id])
 
+    def test_link_risks_reuses_list_risk_filter_logic(self):
+        """关联风险复用 ListRisk 的筛选逻辑，支持 risk_label 等列表接口参数"""
+        self.risk1.risk_label = "misreport"
+        self.risk1.save(update_fields=["risk_label"])
+        self.risk2.risk_label = "normal"
+        self.risk2.save(update_fields=["risk_label"])
+        report = AnalyseReport.objects.create(
+            title="复用列表筛选测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "risk_label": "misreport",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [self.risk1.risk_id])
+
+    @mock.patch("services.web.risk.resources.risk.ListRisk.retrieve_via_db")
+    @mock.patch("services.web.risk.resources.risk.ListRisk.retrieve_via_bkbase")
+    def test_link_risks_reuses_list_risk_bkbase_result(self, mock_retrieve_via_bkbase, mock_retrieve_via_db):
+        """事件字段筛选时，关联风险使用 ListRisk 的 BKBase 最终结果"""
+        self.strategy.event_data_field_configs = [{"field_name": "ip", "display_name": "IP"}]
+        self.strategy.save(update_fields=["event_data_field_configs"])
+        mock_retrieve_via_bkbase.return_value = ([self.risk2], mock.MagicMock(), [])
+        report = AnalyseReport.objects.create(
+            title="复用BKBase结果测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "event_filters": [
+                    {
+                        "field": "ip",
+                        "display_name": "IP",
+                        "operator": EventFilterOperator.EQUAL,
+                        "value": "127.0.0.1",
+                    }
+                ],
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [self.risk2.risk_id])
+        mock_retrieve_via_bkbase.assert_called_once()
+        mock_retrieve_via_db.assert_not_called()
+
+    @override_settings(ANALYSE_REPORT_RISK_LIMIT=1)
+    def test_link_risks_respects_configured_limit(self):
+        """关联风险数量受配置上限限制"""
+        report = AnalyseReport.objects.create(
+            title="关联数量限制测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "start_time": "2025-01-01",
+                "end_time": "2027-01-01",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(AnalyseReportRisk.objects.filter(report=report).count(), 1)
+
 
 class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
     """测试 generate_analyse_report 任务中关联风险的集成行为"""
 
     def setUp(self):
         super().setUp()
-        self.iam_patcher = mock.patch.object(Risk, "iam_risk_filter", return_value=Q(pk__in=[]))
+        self.iam_patcher = mock.patch.object(
+            Risk,
+            "iam_risk_filter",
+            return_value=Q(risk_id__in=[self.risk1.risk_id, self.risk2.risk_id]),
+        )
         self.iam_patcher.start()
         self.addCleanup(self.iam_patcher.stop)
         TicketPermission.objects.get_or_create(
@@ -1629,3 +1797,12 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         # 报告应仍为成功状态
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertIn("分析结果", self.report.content)
+
+
+class TestAnalyseReportAdmin(AnalyseReportTestBase):
+    """测试 AI 分析报告相关模型已注册 admin"""
+
+    def test_analyse_report_models_registered(self):
+        self.assertIn(AnalyseReportScenario, admin.site._registry)
+        self.assertIn(AnalyseReport, admin.site._registry)
+        self.assertIn(AnalyseReportRisk, admin.site._registry)
