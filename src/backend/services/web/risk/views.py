@@ -19,10 +19,10 @@ from typing import List
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
-from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
@@ -396,11 +396,6 @@ class RiskRulesViewSet(ResourceViewSet):
     ]
 
 
-@extend_schema_view(
-    retrieve=extend_schema(description="获取AI报告详情"),
-    update=extend_schema(description="编辑AI报告"),
-    destroy=extend_schema(description="删除AI报告"),
-)
 class AnalyseReportViewSet(ResourceViewSet):
     """
     风险AI分析报告管理
