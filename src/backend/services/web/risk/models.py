@@ -219,12 +219,12 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     # ──── 单一权限 ────
 
     @classmethod
-    def iam_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
+    def iam_risk_filter(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> Q:
         """
         IAM 策略权限：仅返回用户在权限中心申请过的风险
         """
 
-        permission = Permission(get_request_username())
+        permission = Permission(username or get_request_username())
         request = permission.make_request(action=get_action_by_id(action), resources=[])
         policies = permission.iam_client._do_policy_query(request)
         if policies:
@@ -232,7 +232,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         return Q(pk__in=[])
 
     @classmethod
-    def local_risk_filter(cls, user_types: Optional[List[UserType]] = None) -> Q:
+    def local_risk_filter(cls, user_types: Optional[List[UserType]] = None, username: Optional[str] = None) -> Q:
         """
         本地权限：通过 TicketPermission 授权的风险（处理人/关注人）
         """
@@ -241,7 +241,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         return Q(
             risk_id__in=TicketPermission.objects.filter(
                 user_type__in=user_types,
-                user=get_request_username(),
+                user=username or get_request_username(),
                 action=ActionEnum.LIST_RISK.id,
             ).values("risk_id")
         )
@@ -251,16 +251,16 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     _IAM_ANY_Q = ~Q(pk=None)
 
     @classmethod
-    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
+    def authed_risk_filter(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> Q:
         """
         组合权限：IAM 策略 + 本地 TicketPermission
         超管场景（IAM 返回 op=any）时直接使用 IAM 结果，跳过 OR 合并以避免索引失效。
         """
 
-        iam_filter = cls.iam_risk_filter(action)
+        iam_filter = cls.iam_risk_filter(action, username=username)
         if iam_filter == cls._IAM_ANY_Q:
             return iam_filter
-        return cls.local_risk_filter() | iam_filter
+        return cls.local_risk_filter(username=username) | iam_filter
 
     # ──── QuerySet 快捷方法 ────
 
@@ -279,18 +279,18 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         ).defer("event_content")
 
     @classmethod
-    def load_iam_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+    def load_iam_authed_risks(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> QuerySet["Risk"]:
         """
         获取仅通过 IAM 权限过滤的风险集（不带展示注解）。
         """
-        return cls.objects.filter(cls.iam_risk_filter(action))
+        return cls.objects.filter(cls.iam_risk_filter(action, username=username))
 
     @classmethod
-    def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+    def load_authed_risks(cls, action: Union[ActionMeta, str], username: Optional[str] = None) -> QuerySet["Risk"]:
         """
         获取通过组合权限（IAM + 本地）过滤的风险集（不带展示注解）。
         """
-        return cls.objects.filter(cls.authed_risk_filter(action))
+        return cls.objects.filter(cls.authed_risk_filter(action, username=username))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
@@ -814,6 +814,12 @@ class AnalyseReport(OperateRecordModel):
         help_text=gettext_lazy("传给Analyse Agent的完整参数"),
     )
     custom_prompt = models.TextField(gettext_lazy("自定义分析描述"), blank=True, default="")
+    extra_info = models.JSONField(
+        gettext_lazy("额外信息"),
+        default=dict,
+        blank=True,
+        help_text=gettext_lazy("报告生成失败原因等附加信息"),
+    )
 
     class Meta:
         db_table = "risk_analysereport"

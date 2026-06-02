@@ -35,6 +35,7 @@ from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    AnalyseReportStatus,
     AnalyseReportType,
     EventFilterOperator,
     EventMappingFields,
@@ -657,7 +658,7 @@ class ListRiskRequestSerializer(ListRiskBaseRequestSerializer, RiskScopeQuerySer
     ...
 
 
-class ListRiskAPIGWRequestSerializer(ListRiskBaseRequestSerializer):
+class ListRiskAPIGWRequestSerializer(ListRiskRequestSerializer):
     """
     APIGW 获取风险列表 - 继承 ListRiskRequestSerializer，逻辑完全一致，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权）
     分页由 DRF 分页器统一处理（通过 URL 参数 page/page_size）
@@ -1627,6 +1628,12 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
         ),
     )
 
+    def validate_target_risks_filter(self, value):
+        serializer = ListRiskRequestSerializer(data=value or {})
+        if not serializer.is_valid():
+            raise serializers.ValidationError(serializer.errors)
+        return value or {}
+
 
 class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
     """生成AI分析报告响应"""
@@ -1638,6 +1645,8 @@ class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
 
 class ListAnalyseReportRequestSerializer(serializers.Serializer):
     """历史报告列表请求"""
+
+    SORT_CHOICES = ["created_at", "-created_at", "risk_count", "-risk_count"]
 
     keyword = serializers.CharField(
         label=gettext_lazy("搜索关键词"),
@@ -1652,8 +1661,15 @@ class ListAnalyseReportRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+    status = serializers.ChoiceField(
+        label=gettext_lazy("报告状态筛选"),
+        choices=AnalyseReportStatus.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
     sort = serializers.ListField(
-        child=serializers.CharField(),
+        child=serializers.ChoiceField(choices=SORT_CHOICES),
         required=False,
         default=["-created_at"],
         help_text=gettext_lazy('排序字段，如 ["-risk_count", "-created_at"]'),
@@ -1672,6 +1688,7 @@ class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "analysis_scope",
             "risk_count",
             "status",
+            "extra_info",
             "created_by",
             "created_at",
         ]
@@ -1704,6 +1721,7 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "risk_ids",
             "scenario_name",
             "status",
+            "extra_info",
             "prompt_params",
             "custom_prompt",
             "created_by",
@@ -1740,6 +1758,8 @@ class ListAnalyseReportRiskRequestSerializer(serializers.Serializer):
     """报告关联风险列表请求"""
 
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1)
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=100)
 
 
 class ListAnalyseReportRiskResponseSerializer(serializers.ModelSerializer):
