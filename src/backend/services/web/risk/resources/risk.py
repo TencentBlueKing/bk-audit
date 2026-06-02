@@ -22,6 +22,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
 from bk_resource import CacheResource, api, resource
@@ -640,9 +641,54 @@ class ListRisk(RiskMeta):
             q &= _q
         return q
 
-    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
+    def load_risks(self, validated_request_data: dict, username: str = None) -> QuerySet["Risk"]:
         q = self._build_filter_query(validated_request_data)
-        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
+        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
+
+    def load_report_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
+        filter_data = dict(validated_request_data)
+
+        order_fields = filter_data.pop("order_fields", [])
+        use_bkbase = bool(filter_data.pop("use_bkbase", False))
+        event_filters = filter_data.pop("event_filters", [])
+        scope_type = filter_data.pop("scope_type", None)
+        scope_id = filter_data.pop("scope_id", None)
+        scene_ids = filter_data.pop("scene_id", [])
+
+        self._duplicate_event_field_map = {}
+        thedate_range = self._extract_thedate_range(filter_data)
+        base_queryset = self.load_risks(filter_data, username=username)
+
+        if scope_type:
+            scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+            scope_scene_ids = ScopePermission(username).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+            base_queryset = SceneScopeFilter.filter_queryset(
+                queryset=base_queryset,
+                scene_id=scope_scene_ids,
+                resource_type=ResourceVisibilityType.RISK,
+                pk_field="risk_id",
+            )
+
+        base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
+        base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
+        request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
+
+        if use_bkbase:
+            paged_risks, _, _ = self.retrieve_via_bkbase(
+                base_queryset=base_queryset,
+                request=request,
+                order_fields=order_fields,
+                event_filters=event_filters,
+                thedate_range=thedate_range,
+            )
+            return [risk.risk_id for risk in paged_risks]
+
+        _, _, risk_ids = self.retrieve_via_db(
+            base_queryset=base_queryset,
+            request=request,
+            order_fields=order_fields,
+        )
+        return risk_ids
 
     def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
         if not risk_ids:

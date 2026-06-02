@@ -44,14 +44,24 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
+    app_code_setting_names = ("AI_AGENT_APP_CODE",)
+    secret_key_setting_names = ("AI_AGENT_SECRET_KEY",)
+
+    @staticmethod
+    def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
+        for setting_name in setting_names:
+            setting_value = getattr(settings, setting_name, "")
+            if setting_value:
+                return setting_value
+        return getattr(settings, default_setting_name)
 
     @property
     def app_code(self) -> str:
-        return settings.AI_AGENT_APP_CODE or settings.AI_AUDIT_REPORT_APP_CODE or settings.APP_CODE
+        return self._get_first_setting(self.app_code_setting_names, "APP_CODE")
 
     @property
     def secret_key(self) -> str:
-        return settings.AI_AGENT_SECRET_KEY or settings.AI_AUDIT_REPORT_SECRET_KEY or settings.SECRET_KEY
+        return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
         params["bk_app_code"] = self.app_code
@@ -132,7 +142,11 @@ class ChatCompletion(AIAgentBase):
         # done event 仅用于日志记录（平台元数据），实际内容始终从 text event 拼接
         done_content = None
         text_content = ""
-        for line in response.iter_lines(decode_unicode=True):
+        for raw_line in response.iter_lines(decode_unicode=False):
+            if isinstance(raw_line, (bytes, bytearray)):
+                line = raw_line.decode("utf-8", errors="replace")
+            else:
+                line = raw_line
             if not line or not line.startswith("data:"):
                 continue
             data = line[len("data:") :].strip()
@@ -143,6 +157,7 @@ class ChatCompletion(AIAgentBase):
             except json.JSONDecodeError:
                 continue
             event_type = event.get("event")
+            ag_ui_event_type = event.get("type")
             content = event.get("content", "")
             cover = event.get("cover", False)
             if event_type == "error":
@@ -159,6 +174,8 @@ class ChatCompletion(AIAgentBase):
                 done_content = content
             elif event_type == "text":
                 text_content = content if cover else text_content + content
+            elif ag_ui_event_type == "TEXT_MESSAGE_CONTENT":
+                text_content += event.get("delta", "")
         if done_content is not None:
             logger.debug("AI stream done content: %s", done_content)
         logger.debug("AI stream text content: %s", text_content)

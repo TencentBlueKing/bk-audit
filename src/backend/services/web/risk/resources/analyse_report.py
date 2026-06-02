@@ -63,6 +63,12 @@ class AnalyseReportMeta(AuditMixinResource, abc.ABC):
 
     tags = ["AnalyseReport"]
 
+    def get_user_reports(self):
+        return AnalyseReport.objects.filter(created_by=get_request_username())
+
+    def get_user_report(self, report_id: int) -> AnalyseReport:
+        return get_object_or_404(self.get_user_reports(), report_id=report_id)
+
 
 class ListAnalyseReportScenario(AnalyseReportMeta):
     """获取AI报告场景列表"""
@@ -138,6 +144,7 @@ class GetAnalyseReportTaskResult(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data["task_id"]
+        get_object_or_404(self.get_user_reports(), task_id=task_id)
 
         async_result = AsyncResult(task_id)
         celery_status = async_result.status
@@ -164,10 +171,7 @@ class ListAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         # 默认按当前用户过滤，只返回自己创建的报告
-        queryset = AnalyseReport.objects.filter(
-            status=AnalyseReportStatus.SUCCESS,
-            created_by=get_request_username(),
-        )
+        queryset = AnalyseReport.objects.filter(created_by=get_request_username())
 
         # keyword 模糊搜索
         keyword = validated_request_data.get("keyword")
@@ -180,6 +184,11 @@ class ListAnalyseReport(AnalyseReportMeta):
         report_type = validated_request_data.get("report_type")
         if report_type:
             queryset = queryset.filter(report_type=report_type)
+
+        # status 筛选；不传时返回当前用户所有状态报告
+        status = validated_request_data.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
 
         # 排序
         sort = validated_request_data.get("sort", ["-created_at"])
@@ -198,7 +207,7 @@ class RetrieveAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        return get_object_or_404(AnalyseReport, report_id=report_id)
+        return self.get_user_report(report_id)
 
 
 class UpdateAnalyseReport(AnalyseReportMeta):
@@ -210,7 +219,7 @@ class UpdateAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
 
         if "title" in validated_request_data:
             report.title = validated_request_data["title"]
@@ -237,7 +246,7 @@ class DeleteAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
         # 级联删除关联关系
         report.delete()
         return {}
@@ -257,7 +266,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
         export_format = validated_request_data["export_format"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
 
         if export_format == "markdown":
             return self._export_markdown(report)
@@ -492,7 +501,8 @@ class ListAnalyseReportRisk(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        risk_ids = list(AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True))
+        self.get_user_report(report_id)
+        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True)
         return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
 
 
@@ -507,4 +517,4 @@ class ListAnalyseReportByRisk(AnalyseReportMeta):
     def perform_request(self, validated_request_data):
         risk_id = validated_request_data["risk_id"]
         report_ids = AnalyseReportRisk.objects.filter(risk_id=risk_id).values_list("report_id", flat=True)
-        return AnalyseReport.objects.filter(report_id__in=report_ids, status=AnalyseReportStatus.SUCCESS)
+        return self.get_user_reports().filter(report_id__in=report_ids, status=AnalyseReportStatus.SUCCESS)

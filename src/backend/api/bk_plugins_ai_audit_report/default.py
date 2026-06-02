@@ -30,6 +30,8 @@ class AIAuditReport(AIAgentBase, abc.ABC):
     module_name = "bk_plugins_ai_audit_report"
     base_url = AI_AUDIT_REPORT_API_URL
     tags = ["AIAuditReport"]
+    app_code_setting_names = ("AI_AUDIT_REPORT_APP_CODE",)
+    secret_key_setting_names = ("AI_AUDIT_REPORT_SECRET_KEY",)
 
 
 class ChatCompletion(BaseChatCompletion):
@@ -41,6 +43,8 @@ class ChatCompletion(BaseChatCompletion):
 
     module_name = "bk_plugins_ai_audit_report"
     name = gettext_lazy("智能体对话")
+    app_code_setting_names = ("AI_AUDIT_REPORT_APP_CODE",)
+    secret_key_setting_names = ("AI_AUDIT_REPORT_SECRET_KEY",)
 
     def build_url(self, validated_request_data):
         return AI_AUDIT_REPORT_API_URL.rstrip("/") + "/" + self.action.lstrip("/")

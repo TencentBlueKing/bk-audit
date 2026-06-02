@@ -23,6 +23,10 @@ from bk_resource import api
 from django.conf import settings
 from django.test import override_settings
 
+from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
+from api.bk_plugins_ai_audit_analyse.default import (
+    ChatCompletion as AnalyseChatCompletion,
+)
 from api.bk_plugins_ai_audit_report.default import ChatCompletion
 from api.constants import AIAgentCode
 from api.utils import get_agent_base_url
@@ -58,9 +62,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.app_code, settings.APP_CODE)
 
     def test_app_code_custom(self):
-        """测试自定义 APP_CODE（AI_AGENT_APP_CODE 优先）"""
+        """测试审计报告 APP_CODE 不被通用 AI_AGENT_APP_CODE 覆盖"""
         with override_settings(AI_AGENT_APP_CODE="agent_app", AI_AUDIT_REPORT_APP_CODE="report_app"):
-            self.assertEqual(self.resource.app_code, "agent_app")
+            self.assertEqual(self.resource.app_code, "report_app")
 
     def test_app_code_fallback_to_report(self):
         """测试 APP_CODE 回退到 AI_AUDIT_REPORT_APP_CODE"""
@@ -73,9 +77,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.secret_key, settings.SECRET_KEY)
 
     def test_secret_key_custom(self):
-        """测试自定义 SECRET_KEY（AI_AGENT_SECRET_KEY 优先）"""
+        """测试审计报告 SECRET_KEY 不被通用 AI_AGENT_SECRET_KEY 覆盖"""
         with override_settings(AI_AGENT_SECRET_KEY="agent_secret", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
-            self.assertEqual(self.resource.secret_key, "agent_secret")
+            self.assertEqual(self.resource.secret_key, "report_secret")
 
     def test_secret_key_fallback_to_report(self):
         """测试 SECRET_KEY 回退到 AI_AUDIT_REPORT_SECRET_KEY"""
@@ -177,6 +181,32 @@ class TestAIAuditReportAuth(TestCase):
         self.assertEqual(result.get("bk_username"), "test_bk_user")
 
 
+class TestAIAuditAnalyseAuth(TestCase):
+    """测试AI分析智能体复用通用 Agent 能力并使用独立认证信息"""
+
+    def setUp(self):
+        self.resource = AnalyseChatCompletion()
+
+    def test_reuses_base_chat_completion(self):
+        self.assertIsInstance(self.resource, BaseChatCompletion)
+
+    def test_app_code_uses_analyse_config(self):
+        with override_settings(
+            AI_AGENT_APP_CODE="agent_app",
+            AI_AUDIT_REPORT_APP_CODE="report_app",
+            AI_AUDIT_ANALYSE_APP_CODE="analyse_app",
+        ):
+            self.assertEqual(self.resource.app_code, "analyse_app")
+
+    def test_secret_key_uses_analyse_config(self):
+        with override_settings(
+            AI_AGENT_SECRET_KEY="agent_secret",
+            AI_AUDIT_REPORT_SECRET_KEY="report_secret",
+            AI_AUDIT_ANALYSE_SECRET_KEY="analyse_secret",
+        ):
+            self.assertEqual(self.resource.secret_key, "analyse_secret")
+
+
 class TestAIAuditReportStream(TestCase):
     """测试AI审计报告智能体流式返回"""
 
@@ -260,6 +290,70 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, "prefix ")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_appends_ag_ui_text_message_content(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_START', 'messageId': 'msg', 'role': 'assistant'})}",
+            "data: "
+            + json.dumps({"type": "THINKING_TEXT_MESSAGE_CONTENT", "messageId": "thinking", "delta": "ignore"}),
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'hello '})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'world'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_END', 'messageId': 'msg'})}",
+            f"data: {json.dumps({'type': 'RUN_FINISHED', 'threadId': 'thread', 'runId': 'run'})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "hello world")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_decodes_ag_ui_text_message_content_as_utf8(self, mock_build_header, mock_build_url):
+        text = "根据已获取的数据"
+        event = "data: " + json.dumps(
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "msg", "delta": text},
+            ensure_ascii=False,
+        )
+
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+
+        def iter_lines(decode_unicode=False):
+            if decode_unicode:
+                return [event.encode("utf-8").decode("latin1")]
+            return [event.encode("utf-8")]
+
+        mock_response.iter_lines.side_effect = iter_lines
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, text)
 
     def test_before_request_sets_stream_flag(self):
         kwargs = {"json": {"execute_kwargs": {"stream": True}}}
