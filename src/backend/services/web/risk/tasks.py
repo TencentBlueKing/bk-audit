@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import os
-from types import SimpleNamespace
 from typing import Any
 
 from bk_resource import api
@@ -43,11 +42,9 @@ from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
-from apps.permission.handlers.actions import ActionEnum
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
 from core.utils.data import data_chunks
-from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
@@ -76,8 +73,6 @@ from services.web.risk.serializers import (
     CreateEventSerializer,
     ListRiskRequestSerializer,
 )
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import SceneScopeFilter
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
@@ -557,53 +552,18 @@ def _load_report_risk_ids(report, risk_limit: int) -> list:
     """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
     from services.web.risk.resources.risk import ListRisk
 
+    list_risk = ListRisk()
+    prompt_params = report.prompt_params or {}
+    if prompt_params.get("risk_ids"):
+        return list_risk.load_selected_risk_ids(
+            prompt_params["risk_ids"], username=report.created_by, risk_limit=risk_limit
+        )
+
     serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
     serializer.is_valid(raise_exception=True)
-    filter_data = dict(serializer.validated_data)
-
-    list_risk = ListRisk()
-    list_risk._duplicate_event_field_map = {}
-
-    order_fields = filter_data.pop("order_fields", [])
-    use_bkbase = bool(filter_data.pop("use_bkbase", False))
-    event_filters = filter_data.pop("event_filters", [])
-    scope_type = filter_data.pop("scope_type", None)
-    scope_id = filter_data.pop("scope_id", None)
-    scene_ids = filter_data.pop("scene_id", [])
-
-    thedate_range = list_risk._extract_thedate_range(filter_data)
-    base_queryset = list_risk.load_risks(filter_data, username=report.created_by)
-
-    if scope_type:
-        scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
-        scope_scene_ids = ScopePermission(report.created_by).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
-        base_queryset = SceneScopeFilter.filter_queryset(
-            queryset=base_queryset,
-            scene_id=scope_scene_ids,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
-
-    base_queryset = list_risk._filter_queryset_by_scene_ids(base_queryset, scene_ids)
-    base_queryset = list_risk._filter_queryset_by_event_data_fields(base_queryset, event_filters)
-    request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
-
-    if use_bkbase:
-        paged_risks, _, _ = list_risk.retrieve_via_bkbase(
-            base_queryset=base_queryset,
-            request=request,
-            order_fields=order_fields,
-            event_filters=event_filters,
-            thedate_range=thedate_range,
-        )
-        return [risk.risk_id for risk in paged_risks]
-
-    _, _, risk_ids = list_risk.retrieve_via_db(
-        base_queryset=base_queryset,
-        request=request,
-        order_fields=order_fields,
+    return list_risk.load_report_risk_ids(
+        dict(serializer.validated_data), username=report.created_by, risk_limit=risk_limit
     )
-    return risk_ids
 
 
 def _link_risks_to_report(report) -> int:

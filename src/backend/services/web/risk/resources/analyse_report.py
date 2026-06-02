@@ -96,8 +96,13 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         if scenario_key:
             scenario = AnalyseReportScenario.objects.filter(scenario_key=scenario_key, is_enabled=True).first()
 
-        # 2. 获取风险过滤参数，直接存入 prompt_params
-        prompt_params = validated_request_data.get("target_risks_filter") or {}
+        # 2. 获取风险过滤参数或明确选择的风险 ID，直接存入 prompt_params
+        target_risk_ids = validated_request_data.get("target_risk_ids") or []
+        prompt_params = (
+            {"risk_ids": target_risk_ids}
+            if target_risk_ids
+            else validated_request_data.get("target_risks_filter") or {}
+        )
 
         # 3. 创建 AnalyseReport 记录
         report = AnalyseReport.objects.create(
@@ -502,7 +507,7 @@ class ListAnalyseReportRisk(AnalyseReportMeta):
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
         self.get_user_report(report_id)
-        risk_ids = list(AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True))
+        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True)
         return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
 
 

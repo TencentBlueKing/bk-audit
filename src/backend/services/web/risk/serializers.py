@@ -1627,12 +1627,26 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
             '"operator": "zhangsan", "use_bkbase": true, "datetime_origin": "now-6M,now"}'
         ),
     )
+    target_risk_ids = serializers.ListField(
+        label=gettext_lazy("目标风险ID列表"),
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        default=list,
+        help_text=gettext_lazy("前端已明确选择风险时传入，最多支持配置项限制的数量，默认 100 条"),
+    )
 
     def validate_target_risks_filter(self, value):
         serializer = ListRiskRequestSerializer(data=value or {})
         if not serializer.is_valid():
             raise serializers.ValidationError(serializer.errors)
         return value or {}
+
+    def validate_target_risk_ids(self, value):
+        risk_limit = int(getattr(settings, "ANALYSE_REPORT_RISK_LIMIT", 100))
+        if risk_limit > 0 and len(value) > risk_limit:
+            raise serializers.ValidationError(gettext("目标风险数量不能超过 %s 条") % risk_limit)
+        return value
 
 
 class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
@@ -1756,6 +1770,8 @@ class ListAnalyseReportRiskRequestSerializer(serializers.Serializer):
     """报告关联风险列表请求"""
 
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1)
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=100)
 
 
 class ListAnalyseReportRiskResponseSerializer(serializers.ModelSerializer):

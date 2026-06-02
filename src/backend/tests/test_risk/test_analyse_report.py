@@ -41,6 +41,7 @@ from services.web.risk.models import (
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
     ListAnalyseReportRequestSerializer,
+    ListAnalyseReportRiskRequestSerializer,
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportResponseSerializer,
@@ -266,6 +267,22 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("target_risks_filter", serializer.errors)
+
+    def test_generate_report_accepts_target_risk_ids(self):
+        """支持前端直接提交目标风险 ID 列表"""
+        serializer = GenerateAnalyseReportRequestSerializer(
+            data={
+                "report_type": AnalyseReportType.SYSTEM,
+                "title": "指定风险报告",
+                "target_risk_ids": [self.risk1.risk_id, self.risk2.risk_id],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data["target_risk_ids"],
+            [self.risk1.risk_id, self.risk2.risk_id],
+        )
 
 
 class TestListAnalyseReport(AnalyseReportTestBase):
@@ -902,6 +919,28 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         self.assertEqual(data["title"], "Test Risk 1")
         self.assertEqual(data["risk_level"], RiskLevel.HIGH.value)
         self.assertEqual(data["strategy_id"], self.strategy.strategy_id)
+
+    def test_list_report_risks_request_limits_page_size(self):
+        """关联风险列表单页最多返回 100 条"""
+        serializer = ListAnalyseReportRiskRequestSerializer(
+            data={
+                "report_id": self.report.report_id,
+                "page": 1,
+                "page_size": 101,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("page_size", serializer.errors)
+
+    def test_list_report_risks_uses_subquery_for_report_risks(self):
+        """关联风险列表不预先拉取全部 risk_id 到内存"""
+        from services.web.risk.resources.analyse_report import ListAnalyseReportRisk
+
+        queryset = ListAnalyseReportRisk().perform_request({"report_id": self.report.report_id})
+
+        self.assertIn("SELECT", str(queryset.query).upper())
+        self.assertIn("risk_analysereportrisk", str(queryset.query))
 
     @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
     def test_list_report_risks_rejects_other_user_report(self, _mock_username):
@@ -1593,6 +1632,24 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
             prompt_params={
                 "start_time": "2025-01-01",
                 "end_time": "2027-01-01",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [self.risk1.risk_id])
+
+    def test_link_risks_accepts_explicit_risk_ids(self):
+        """前端指定风险 ID 时，后台仍按报告创建人权限过滤后关联"""
+        report = AnalyseReport.objects.create(
+            title="指定风险关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "risk_ids": [self.risk1.risk_id],
             },
             created_by="admin",
         )
