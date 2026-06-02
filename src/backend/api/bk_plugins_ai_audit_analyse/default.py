@@ -32,8 +32,6 @@ class AIAuditAnalyse(AIAgentBase, abc.ABC):
     base_url = AI_AUDIT_ANALYSE_API_URL
     tags = ["AIAuditAnalyse"]
     TIMEOUT = 600
-    app_code_setting_names = ("AI_AUDIT_ANALYSE_APP_CODE",)
-    secret_key_setting_names = ("AI_AUDIT_ANALYSE_SECRET_KEY",)
 
 
 class ChatCompletion(BaseChatCompletion):
@@ -44,8 +42,6 @@ class ChatCompletion(BaseChatCompletion):
     tags = ["AIAuditAnalyse"]
     name = gettext_lazy("分析智能体对话")
     TIMEOUT = 600
-    app_code_setting_names = ("AI_AUDIT_ANALYSE_APP_CODE",)
-    secret_key_setting_names = ("AI_AUDIT_ANALYSE_SECRET_KEY",)
 
     def build_url(self, validated_request_data):
         return AI_AUDIT_ANALYSE_API_URL.rstrip("/") + "/" + self.action.lstrip("/")

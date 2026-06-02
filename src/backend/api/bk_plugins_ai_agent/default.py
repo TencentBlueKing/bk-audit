@@ -44,8 +44,8 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
-    app_code_setting_names = ("AI_AGENT_APP_CODE",)
-    secret_key_setting_names = ("AI_AGENT_SECRET_KEY",)
+    app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
+    secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
 
     @staticmethod
     def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
