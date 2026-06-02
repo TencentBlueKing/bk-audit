@@ -81,17 +81,35 @@ def _make_chat_completion_wrapper(original_fn, model=None, non_thinking_llm=None
     return wrapper
 
 
+def _loads_json_var(vars_: dict, key: str, default):
+    raw_value = vars_.get(key)
+    if not raw_value:
+        return default
+    if not isinstance(raw_value, str):
+        return raw_value
+    return json.loads(raw_value)
+
+
 def call_api(prompt, options, context):
     """promptfoo 调用入口"""
     vars_ = context.get("vars", {})
     config = options.get("config", {})
 
     query = vars_.get("query", prompt)
-    tags = json.loads(vars_.get("tags", "[]"))
-    strategies = json.loads(vars_.get("strategies", "[]"))
+    tags = _loads_json_var(vars_, "tags", [])
+    strategies = _loads_json_var(vars_, "strategies", [])
+    scenes = _loads_json_var(vars_, "scenes", [])
     thread_id = vars_.get("thread_id", "")
+    scope_type = vars_.get("scope_type", "")
+    scope_id = vars_.get("scope_id", "")
 
     request_data = {"query": query, "tags": tags, "strategies": strategies}
+    if scenes:
+        request_data["scenes"] = scenes
+    if scope_type:
+        request_data["scope_type"] = scope_type
+    if scope_id:
+        request_data["scope_id"] = scope_id
     if thread_id:
         request_data["thread_id"] = thread_id
 

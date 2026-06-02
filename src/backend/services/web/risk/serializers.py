@@ -1507,11 +1507,23 @@ class NL2RiskStrategyItemSerializer(serializers.Serializer):
     name = serializers.CharField(label=gettext_lazy("Strategy Name"))
 
 
-class NL2RiskFilterRequestSerializer(serializers.Serializer):
+class NL2RiskSceneItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(label=gettext_lazy("Scene ID"))
+    name = serializers.CharField(label=gettext_lazy("Scene Name"))
+
+
+class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
     query = serializers.CharField(label=gettext_lazy("Natural Language Query"), allow_blank=False)
     tags = NL2RiskTagItemSerializer(label=gettext_lazy("Tags"), many=True, required=False, default=list)
     strategies = NL2RiskStrategyItemSerializer(
         label=gettext_lazy("Strategies"), many=True, required=False, default=list
+    )
+    scenes = NL2RiskSceneItemSerializer(
+        label=gettext_lazy("Scenes"),
+        many=True,
+        required=False,
+        default=list,
+        help_text=gettext_lazy("当前可用场景列表，透传给 NL2RiskFilter 模型。"),
     )
     thread_id = serializers.CharField(
         label=gettext_lazy("Thread ID"),

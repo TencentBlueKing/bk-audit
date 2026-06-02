@@ -39,7 +39,10 @@ from services.web.risk.serializers import (  # noqa: E402
 EXCLUDE_FIELDS = ["use_bkbase"]
 
 # 字段说明的人工覆盖（仅当 Serializer 的 help_text 不够精确时使用；优先修改序列化器 help_text）
-FIELD_LABEL_OVERRIDES = {}
+FIELD_LABEL_OVERRIDES = {
+    "scope_type": "权限域类型。可选值：cross_scene(跨场景)、cross_system(跨系统)、scene(单场景)、system(单系统)",
+    "scope_id": "权限域实例 ID。scope_type 为 scene 或 system 时必填；cross_scene/cross_system 时不要传",
+}
 
 # 字段类型的人工覆盖（Serializer 推导类型不准确时使用）
 FIELD_TYPE_OVERRIDES = {}
@@ -173,7 +176,8 @@ def generate_system_prompt() -> str:
 2. 无法转换为有效筛选条件时返回空对象 `{{}}`，不要返回空字符串。字段值必须符合定义的类型
 3. **"我的风险""我负责的"** → 将"当前请求人"映射到 `operator` 字段，不能返回空
 4. **统计/聚合类查询**（"有多少个""哪些 X 产生了最多 Y""排名前几""最多/最少"等）→ 仍提取可识别的筛选条件（如风险等级、时间范围），忽略无法表达的聚合/排名/分组部分，系统基于筛选结果计算
-5. **标签和策略** → 从用户消息中的可用列表匹配 id
+5. **标签、策略、场景** → 从用户消息中的可用列表匹配 id。用户说"当前场景"时，从"当前可用场景"取对应 id 输出到 `scene_id`
+6. **当前视角/范围** → 用户说"当前视角""当前范围"时，使用用户消息中的 `scope_type` / `scope_id` 输出同名字段，不要输出额外的 `scope` 对象
 
 ## 多轮对话
 
