@@ -553,12 +553,6 @@ def _load_report_risk_ids(report, risk_limit: int) -> list:
     from services.web.risk.resources.risk import ListRisk
 
     list_risk = ListRisk()
-    prompt_params = report.prompt_params or {}
-    if prompt_params.get("risk_ids"):
-        return list_risk.load_selected_risk_ids(
-            prompt_params["risk_ids"], username=report.created_by, risk_limit=risk_limit
-        )
-
     serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
     serializer.is_valid(raise_exception=True)
     return list_risk.load_report_risk_ids(
@@ -672,13 +666,14 @@ def generate_analyse_report(self, report_id: int):
 
     except Exception as exc:
         logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
-        try:
-            self.retry(exc=exc, countdown=60)
-        except MaxRetriesExceededError:
+        max_retries = self.max_retries
+        current_retries = getattr(self.request, "retries", 0)
+        if max_retries is not None and current_retries >= max_retries:
             report.status = AnalyseReportStatus.FAILED
             report.save(update_fields=["status", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
             raise
+        raise self.retry(exc=exc, countdown=60)
 
 
 @celery_app.task(queue="risk_render")

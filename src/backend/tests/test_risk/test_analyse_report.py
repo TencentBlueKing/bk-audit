@@ -268,22 +268,6 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("target_risks_filter", serializer.errors)
 
-    def test_generate_report_accepts_target_risk_ids(self):
-        """支持前端直接提交目标风险 ID 列表"""
-        serializer = GenerateAnalyseReportRequestSerializer(
-            data={
-                "report_type": AnalyseReportType.SYSTEM,
-                "title": "指定风险报告",
-                "target_risk_ids": [self.risk1.risk_id, self.risk2.risk_id],
-            }
-        )
-
-        self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(
-            serializer.validated_data["target_risk_ids"],
-            [self.risk1.risk_id, self.risk2.risk_id],
-        )
-
 
 class TestListAnalyseReport(AnalyseReportTestBase):
     """测试历史分析报告列表（默认按当前用户过滤）"""
@@ -1117,13 +1101,15 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         """测试达到最大重试次数后标记为失败"""
         mock_chat.side_effect = Exception("API调用失败")
 
-        from celery.exceptions import MaxRetriesExceededError
-
         from services.web.risk.tasks import generate_analyse_report
 
-        with mock.patch.object(generate_analyse_report, "retry", side_effect=MaxRetriesExceededError()):
-            with self.assertRaises(MaxRetriesExceededError):
+        original_retries = generate_analyse_report.request.retries
+        generate_analyse_report.request.retries = generate_analyse_report.max_retries
+        try:
+            with self.assertRaisesRegex(Exception, "API调用失败"):
                 generate_analyse_report(report_id=self.report.report_id)
+        finally:
+            generate_analyse_report.request.retries = original_retries
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
@@ -1632,24 +1618,6 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
             prompt_params={
                 "start_time": "2025-01-01",
                 "end_time": "2027-01-01",
-            },
-            created_by="admin",
-        )
-
-        count = self._call(report)
-
-        self.assertEqual(count, 1)
-        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
-        self.assertEqual(risk_ids, [self.risk1.risk_id])
-
-    def test_link_risks_accepts_explicit_risk_ids(self):
-        """前端指定风险 ID 时，后台仍按报告创建人权限过滤后关联"""
-        report = AnalyseReport.objects.create(
-            title="指定风险关联测试",
-            report_type=AnalyseReportType.SYSTEM,
-            status=AnalyseReportStatus.SUCCESS,
-            prompt_params={
-                "risk_ids": [self.risk1.risk_id],
             },
             created_by="admin",
         )

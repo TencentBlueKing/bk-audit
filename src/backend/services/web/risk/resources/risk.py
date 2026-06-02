@@ -645,20 +645,6 @@ class ListRisk(RiskMeta):
         q = self._build_filter_query(validated_request_data)
         return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
 
-    def load_selected_risk_ids(self, risk_ids: List[str], username: str, risk_limit: int) -> List[str]:
-        risk_ids = list(dict.fromkeys(risk_ids or []))[:risk_limit]
-        if not risk_ids:
-            return []
-
-        order_cases = [When(risk_id=risk_id, then=index) for index, risk_id in enumerate(risk_ids)]
-        order_expression = Case(*order_cases, default=len(risk_ids), output_field=IntegerField())
-        return list(
-            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
-            .filter(risk_id__in=risk_ids)
-            .order_by(order_expression)
-            .values_list("risk_id", flat=True)
-        )
-
     def load_report_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
         filter_data = dict(validated_request_data)
 
