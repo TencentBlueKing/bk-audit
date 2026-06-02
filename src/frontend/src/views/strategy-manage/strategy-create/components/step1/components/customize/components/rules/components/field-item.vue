@@ -70,16 +70,14 @@
       error-display-type="tooltips"
       label=""
       label-width="0"
-      :property="(!tagInput.includes(condition.condition.operator) &&
-        !(dicts[condition.condition.field.raw_name] &&
-          dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id' &&
-          props.configType === 'EventLog')) ?
-        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
-        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
+      :property="getValueFormProperty(condition.condition.operator, condition.condition.field.raw_name, index)"
       required
       :rules="[
-        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
+        {
+          message: t('不能为空'),
+          trigger: ['change', 'blur'],
+          validator: () => validateConditionValue(condition.condition),
+        },
       ]">
       <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
@@ -136,11 +134,17 @@
         trigger="focus"
         @change="(value: Array<string>) => handleTagInput(value, index)" />
       <bk-input
-        v-else
+        v-else-if="condition.condition.operator === 'eq'"
         v-model="condition.condition.filter"
         class="consition-value"
         :placeholder="t('请输入')"
         @input="(value: string) => handleFilter(value, index)" />
+      <bk-input
+        v-else
+        class="consition-value"
+        :model-value="getNonEqInputValue(condition.condition)"
+        :placeholder="t('请输入')"
+        @input="(value: string) => handleNonEqInput(value, index)" />
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
@@ -230,6 +234,27 @@
 
   const tagInput = ['include', 'exclude'];
 
+  const isEqOperator = (operator: string) => operator === 'eq';
+
+  const isEventLogDictField = (rawName: string) => Boolean(dicts.value[rawName]?.length
+    && rawName !== 'action_id'
+    && props.configType === 'EventLog');
+
+  const isEventLogUserField = (rawName: string) => rawName.includes('username') && props.configType === 'EventLog';
+
+  // 等于：普通输入校验 filter；日志表字典/人员选择器仍绑定 filters
+  const getValueFormProperty = (operator: string, rawName: string, conditionIndex: number) => {
+    const base = `configs.where.conditions[${props.conditionsIndex}].conditions[${conditionIndex}].condition`;
+    if (isEqOperator(operator) && !isEventLogDictField(rawName) && !isEventLogUserField(rawName)) {
+      return `${base}.filter`;
+    }
+    return `${base}.filters`;
+  };
+
+  const getNonEqInputValue = (condition: Props['conditions']['conditions'][0]['condition']) => (
+    condition.filters?.length ? condition.filters.join(',') : condition.filter
+  );
+
   const localConditions = ref<Props['conditions']>({
     connector: 'and',
     index: 0,
@@ -270,6 +295,16 @@
       return value.length > 0;
     }
     return value !== '' && value !== undefined && value !== null;
+  };
+
+  const validateConditionValue = (condition: Props['conditions']['conditions'][0]['condition']) => {
+    if (isEqOperator(condition.operator)) {
+      if (isEventLogDictField(condition.field.raw_name) || isEventLogUserField(condition.field.raw_name)) {
+        return handleValidate(condition.filters);
+      }
+      return handleValidate(condition.filter);
+    }
+    return handleValidate(condition.filters);
   };
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
@@ -323,6 +358,17 @@
         return valItem;
       })) : value.slice(-1);
     emits('updateFieldItem', resultValue as Array<string>, props.conditionsIndex, index, 'filter');
+  };
+
+  const syncNonEqFilters = (index: number, value: string) => {
+    const filters = value ? splitAndMerge([value]) : [];
+    localConditions.value.conditions[index].condition.filters = filters;
+    localConditions.value.conditions[index].condition.filter = '';
+    emits('updateFieldItem', filters, props.conditionsIndex, index, 'filter');
+  };
+
+  const handleNonEqInput = (value: string, index: number) => {
+    syncNonEqFilters(index, value);
   };
 
   // tag-input、user、input输入
@@ -426,6 +472,10 @@
       const c = cond.condition;
       if (c.operator === 'eq' && c.filter && (!c.filters?.length)) {
         c.filters = [c.filter];
+      }
+      if (!isEqOperator(c.operator) && c.filter && !c.filters?.length) {
+        c.filters = splitAndMerge([c.filter]);
+        c.filter = '';
       }
     });
     if (props.configType === 'EventLog') {
