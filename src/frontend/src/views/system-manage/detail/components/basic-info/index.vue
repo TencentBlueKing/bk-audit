@@ -59,7 +59,7 @@
               type="edit-fill"
               @click="toggleEdit('managers')" />
           </template>
-          <audit-user-selector
+          <audit-user-selector-tenant
             v-else
             v-model="formData.managers"
             allow-create

@@ -123,7 +123,7 @@
             :label="t('管理员')"
             property="managers"
             :required="!isDisabled">
-            <audit-user-selector
+            <audit-user-selector-tenant
               v-bk-tooltips="{
                 content: t('当前不支持修改'),
                 disabled: !isDisabled,
