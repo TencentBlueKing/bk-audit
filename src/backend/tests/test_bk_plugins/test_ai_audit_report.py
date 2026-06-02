@@ -291,6 +291,70 @@ class TestAIAuditReportStream(TestCase):
 
         self.assertEqual(result, "prefix ")
 
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_appends_ag_ui_text_message_content(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_START', 'messageId': 'msg', 'role': 'assistant'})}",
+            "data: "
+            + json.dumps({"type": "THINKING_TEXT_MESSAGE_CONTENT", "messageId": "thinking", "delta": "ignore"}),
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'hello '})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'world'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_END', 'messageId': 'msg'})}",
+            f"data: {json.dumps({'type': 'RUN_FINISHED', 'threadId': 'thread', 'runId': 'run'})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "hello world")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_decodes_ag_ui_text_message_content_as_utf8(self, mock_build_header, mock_build_url):
+        text = "根据已获取的数据"
+        event = "data: " + json.dumps(
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "msg", "delta": text},
+            ensure_ascii=False,
+        )
+
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+
+        def iter_lines(decode_unicode=False):
+            if decode_unicode:
+                return [event.encode("utf-8").decode("latin1")]
+            return [event.encode("utf-8")]
+
+        mock_response.iter_lines.side_effect = iter_lines
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, text)
+
     def test_before_request_sets_stream_flag(self):
         kwargs = {"json": {"execute_kwargs": {"stream": True}}}
 

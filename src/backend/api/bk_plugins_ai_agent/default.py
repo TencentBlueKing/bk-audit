@@ -142,7 +142,11 @@ class ChatCompletion(AIAgentBase):
         # done event 仅用于日志记录（平台元数据），实际内容始终从 text event 拼接
         done_content = None
         text_content = ""
-        for line in response.iter_lines(decode_unicode=True):
+        for raw_line in response.iter_lines(decode_unicode=False):
+            if isinstance(raw_line, (bytes, bytearray)):
+                line = raw_line.decode("utf-8", errors="replace")
+            else:
+                line = raw_line
             if not line or not line.startswith("data:"):
                 continue
             data = line[len("data:") :].strip()
@@ -153,6 +157,7 @@ class ChatCompletion(AIAgentBase):
             except json.JSONDecodeError:
                 continue
             event_type = event.get("event")
+            ag_ui_event_type = event.get("type")
             content = event.get("content", "")
             cover = event.get("cover", False)
             if event_type == "error":
@@ -169,6 +174,8 @@ class ChatCompletion(AIAgentBase):
                 done_content = content
             elif event_type == "text":
                 text_content = content if cover else text_content + content
+            elif ag_ui_event_type == "TEXT_MESSAGE_CONTENT":
+                text_content += event.get("delta", "")
         if done_content is not None:
             logger.debug("AI stream done content: %s", done_content)
         logger.debug("AI stream text content: %s", text_content)
