@@ -1639,6 +1639,8 @@ class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
 class ListAnalyseReportRequestSerializer(serializers.Serializer):
     """历史报告列表请求"""
 
+    SORT_CHOICES = ["created_at", "-created_at", "risk_count", "-risk_count"]
+
     keyword = serializers.CharField(
         label=gettext_lazy("搜索关键词"),
         required=False,
@@ -1653,7 +1655,7 @@ class ListAnalyseReportRequestSerializer(serializers.Serializer):
         allow_blank=True,
     )
     sort = serializers.ListField(
-        child=serializers.CharField(),
+        child=serializers.ChoiceField(choices=SORT_CHOICES),
         required=False,
         default=["-created_at"],
         help_text=gettext_lazy('排序字段，如 ["-risk_count", "-created_at"]'),

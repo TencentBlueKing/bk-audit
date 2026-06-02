@@ -1174,6 +1174,12 @@ class TestAnalyseReportSerializer(AnalyseReportTestBase):
         self.assertEqual(serializer.validated_data["keyword"], "")
         self.assertEqual(serializer.validated_data["sort"], ["-created_at"])
 
+    def test_list_report_request_serializer_rejects_invalid_sort(self):
+        """测试列表请求序列化器拒绝非报告字段排序"""
+        serializer = ListAnalyseReportRequestSerializer(data={"sort": ["-event_time"]})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("sort", serializer.errors)
+
     def test_update_report_serializer_partial(self):
         """测试编辑请求序列化器支持部分更新"""
         serializer = UpdateAnalyseReportRequestSerializer(
