@@ -361,19 +361,21 @@
       sorter: true,
       align: 'right',
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span class="strategy-count-cell">
+      <div style="display: flex; justify-content: flex-end; align-items: center;">
         {row.strategy_ids.length}
-        {row.status !== 'disabled' && (
-          <audit-icon
-            v-bk-tooltips={t('跳转至「审计策略」查看')}
-            class="ml8 jump-link hover-show-icon"
-            type="jump-link"
-            onClick={(e: Event) => {
-              e.stopPropagation();
-              handleJumpToStrategy(row);
-            }} />
-        )}
-      </span>
+        <span style="display: inline-block; width: 18px; margin-left: 2px;">
+          {row.status !== 'disabled' && (
+            <audit-icon
+              v-bk-tooltips={t('跳转至「审计策略」查看')}
+              class="jump-link hover-show-icon"
+              type="jump-link"
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                handleJumpToStrategy(row);
+              }} />
+          )}
+        </span>
+      </div>
     ),
     },
     {
@@ -384,19 +386,21 @@
       sorter: true,
       align: 'right',
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span class="risk-count-cell">
+      <div style="display: flex; justify-content: flex-end; align-items: center;">
         {row.risk_count}
-        {row.status !== 'disabled' && (
-          <audit-icon
-            v-bk-tooltips={t('跳转至「风险」查看')}
-            class="ml8 jump-link hover-show-icon"
-            type="jump-link"
-            onClick={(e: Event) => {
-              e.stopPropagation();
-              handleJumpToRisk(row);
-            }} />
-        )}
-      </span>
+        <span style="display: inline-block; width: 18px; margin-left: 2px;">
+          {row.status !== 'disabled' && (
+            <audit-icon
+              v-bk-tooltips={t('跳转至「风险」查看')}
+              class="jump-link hover-show-icon"
+              type="jump-link"
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                handleJumpToRisk(row);
+              }} />
+          )}
+        </span>
+      </div>
     ),
     },
     {
