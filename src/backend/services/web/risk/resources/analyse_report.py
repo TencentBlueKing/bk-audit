@@ -63,6 +63,12 @@ class AnalyseReportMeta(AuditMixinResource, abc.ABC):
 
     tags = ["AnalyseReport"]
 
+    def get_user_reports(self):
+        return AnalyseReport.objects.filter(created_by=get_request_username())
+
+    def get_user_report(self, report_id: int) -> AnalyseReport:
+        return get_object_or_404(self.get_user_reports(), report_id=report_id)
+
 
 class ListAnalyseReportScenario(AnalyseReportMeta):
     """获取AI报告场景列表"""
@@ -198,7 +204,7 @@ class RetrieveAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        return get_object_or_404(AnalyseReport, report_id=report_id)
+        return self.get_user_report(report_id)
 
 
 class UpdateAnalyseReport(AnalyseReportMeta):
@@ -210,7 +216,7 @@ class UpdateAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
 
         if "title" in validated_request_data:
             report.title = validated_request_data["title"]
@@ -237,7 +243,7 @@ class DeleteAnalyseReport(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
         # 级联删除关联关系
         report.delete()
         return {}
@@ -257,7 +263,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
         export_format = validated_request_data["export_format"]
-        report = get_object_or_404(AnalyseReport, report_id=report_id)
+        report = self.get_user_report(report_id)
 
         if export_format == "markdown":
             return self._export_markdown(report)
@@ -492,6 +498,7 @@ class ListAnalyseReportRisk(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
+        self.get_user_report(report_id)
         risk_ids = list(AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True))
         return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
 
@@ -507,4 +514,4 @@ class ListAnalyseReportByRisk(AnalyseReportMeta):
     def perform_request(self, validated_request_data):
         risk_id = validated_request_data["risk_id"]
         report_ids = AnalyseReportRisk.objects.filter(risk_id=risk_id).values_list("report_id", flat=True)
-        return AnalyseReport.objects.filter(report_id__in=report_ids, status=AnalyseReportStatus.SUCCESS)
+        return self.get_user_reports().filter(report_id__in=report_ids, status=AnalyseReportStatus.SUCCESS)

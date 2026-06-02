@@ -19,14 +19,18 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 from unittest import mock
 
+from django.db.models import Q
 from django.http import Http404
 
+from apps.permission.handlers.actions import ActionEnum
 from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
+    TicketPermission,
+    UserType,
 )
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
@@ -46,6 +50,16 @@ class AnalyseReportTestBase(TestCase):
 
     def setUp(self):
         super().setUp()
+        self.core_username_patcher = mock.patch("core.models.get_request_username", return_value="admin")
+        self.core_username_patcher.start()
+        self.addCleanup(self.core_username_patcher.stop)
+        self.resource_username_patcher = mock.patch(
+            "services.web.risk.resources.analyse_report.get_request_username",
+            return_value="admin",
+        )
+        self.resource_username_patcher.start()
+        self.addCleanup(self.resource_username_patcher.stop)
+
         # 创建策略
         self.strategy = Strategy.objects.create(
             namespace="default",
@@ -407,6 +421,20 @@ class TestRetrieveAnalyseReport(AnalyseReportTestBase):
         with self.assertRaises(Http404):
             self.resource.risk.retrieve_analyse_report({"report_id": 99999})
 
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_retrieve_report_rejects_other_user_report(self, _mock_username):
+        """测试不能查看其他用户创建的报告"""
+        other_report = AnalyseReport.objects.create(
+            title="其他用户报告",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+
+        with self.assertRaises(Http404):
+            self.resource.risk.retrieve_analyse_report({"report_id": other_report.report_id})
+
 
 class TestUpdateAnalyseReport(AnalyseReportTestBase):
     """测试编辑AI报告"""
@@ -486,6 +514,25 @@ class TestUpdateAnalyseReport(AnalyseReportTestBase):
                 }
             )
 
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_update_report_rejects_other_user_report(self, _mock_username):
+        """测试不能编辑其他用户创建的报告"""
+        other_report = AnalyseReport.objects.create(
+            title="其他用户报告",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+
+        with self.assertRaises(Http404):
+            self.resource.risk.update_analyse_report(
+                {
+                    "report_id": other_report.report_id,
+                    "title": "非法修改",
+                }
+            )
+
 
 class TestDeleteAnalyseReport(AnalyseReportTestBase):
     """测试删除AI报告"""
@@ -514,6 +561,21 @@ class TestDeleteAnalyseReport(AnalyseReportTestBase):
         """测试删除不存在的报告"""
         with self.assertRaises(Http404):
             self.resource.risk.delete_analyse_report({"report_id": 99999})
+
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_delete_report_rejects_other_user_report(self, _mock_username):
+        """测试不能删除其他用户创建的报告"""
+        other_report = AnalyseReport.objects.create(
+            title="其他用户报告",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+
+        with self.assertRaises(Http404):
+            self.resource.risk.delete_analyse_report({"report_id": other_report.report_id})
+        self.assertTrue(AnalyseReport.objects.filter(report_id=other_report.report_id).exists())
 
 
 class TestExportAnalyseReport(AnalyseReportTestBase):
@@ -659,6 +721,26 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
                 }
             )
 
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_export_report_rejects_other_user_report(self, _mock_username):
+        """测试不能导出其他用户创建的报告"""
+        other_report = AnalyseReport.objects.create(
+            title="其他用户报告",
+            report_type=AnalyseReportType.SYSTEM,
+            content="other content",
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+
+        with self.assertRaises(Http404):
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": other_report.report_id,
+                    "export_format": "markdown",
+                }
+            )
+
 
 class TestListAnalyseReportRisk(AnalyseReportTestBase):
     """测试报告关联风险列表"""
@@ -779,6 +861,22 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         self.assertEqual(data["risk_level"], RiskLevel.HIGH.value)
         self.assertEqual(data["strategy_id"], self.strategy.strategy_id)
 
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_list_report_risks_rejects_other_user_report(self, _mock_username):
+        """测试不能查看其他用户报告关联的风险"""
+        other_report = AnalyseReport.objects.create(
+            title="其他用户报告",
+            report_type=AnalyseReportType.SYSTEM,
+            risk_count=1,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+        AnalyseReportRisk.objects.create(report=other_report, risk_id=self.risk1.risk_id)
+
+        with self.assertRaises(Http404):
+            self.resource.risk.list_analyse_report_risk({"report_id": other_report.report_id})
+
 
 class TestListAnalyseReportByRisk(AnalyseReportTestBase):
     """测试通过风险ID反查报告"""
@@ -833,6 +931,22 @@ class TestListAnalyseReportByRisk(AnalyseReportTestBase):
             }
         )
         self.assertEqual(len(result), 0)
+
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_list_reports_by_risk_only_returns_current_user_reports(self, _mock_username):
+        """测试风险反查报告时只返回当前用户创建的报告"""
+        self.report2.created_by = "other_user"
+        self.report2.save(update_fields=["created_by"])
+
+        result = self.resource.risk.list_analyse_report_by_risk(
+            {
+                "risk_id": self.risk1.risk_id,
+            }
+        )
+
+        titles = [r["title"] for r in result]
+        self.assertIn("反查报告1", titles)
+        self.assertNotIn("反查报告2", titles)
 
 
 class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
@@ -1245,6 +1359,22 @@ class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
 class TestLinkRisksToReport(AnalyseReportTestBase):
     """测试 _link_risks_to_report 辅助函数"""
 
+    def setUp(self):
+        super().setUp()
+        self.iam_patcher = mock.patch.object(Risk, "iam_risk_filter", return_value=Q(pk__in=[]))
+        self.iam_patcher.start()
+        self.addCleanup(self.iam_patcher.stop)
+        self.grant_list_risk_permission(self.risk1.risk_id)
+        self.grant_list_risk_permission(self.risk2.risk_id)
+
+    def grant_list_risk_permission(self, risk_id, username="admin"):
+        TicketPermission.objects.get_or_create(
+            risk_id=risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=username,
+            user_type=UserType.OPERATOR,
+        )
+
     def _call(self, report):
         from services.web.risk.tasks import _link_risks_to_report
 
@@ -1356,12 +1486,47 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
         self.assertEqual(report.risk_count, count)
         self.assertGreater(count, 0)
 
+    def test_link_risks_only_links_report_creator_authed_risks(self):
+        """测试后台关联风险时只关联报告创建人实际有权限的风险"""
+        TicketPermission.objects.exclude(risk_id=self.risk1.risk_id).delete()
+        report = AnalyseReport.objects.create(
+            title="权限过滤关联测试",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={
+                "start_time": "2025-01-01",
+                "end_time": "2027-01-01",
+            },
+            created_by="admin",
+        )
+
+        count = self._call(report)
+
+        self.assertEqual(count, 1)
+        risk_ids = list(AnalyseReportRisk.objects.filter(report=report).values_list("risk_id", flat=True))
+        self.assertEqual(risk_ids, [self.risk1.risk_id])
+
 
 class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
     """测试 generate_analyse_report 任务中关联风险的集成行为"""
 
     def setUp(self):
         super().setUp()
+        self.iam_patcher = mock.patch.object(Risk, "iam_risk_filter", return_value=Q(pk__in=[]))
+        self.iam_patcher.start()
+        self.addCleanup(self.iam_patcher.stop)
+        TicketPermission.objects.get_or_create(
+            risk_id=self.risk1.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user="admin",
+            user_type=UserType.OPERATOR,
+        )
+        TicketPermission.objects.get_or_create(
+            risk_id=self.risk2.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user="admin",
+            user_type=UserType.OPERATOR,
+        )
         # 设置风险的 operator
         self.risk1.operator = ["zhangsan"]
         self.risk1.save(update_fields=["operator"])

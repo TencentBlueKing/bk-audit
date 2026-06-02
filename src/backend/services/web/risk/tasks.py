@@ -42,6 +42,7 @@ from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
+from apps.permission.handlers.actions import ActionEnum
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
 from core.utils.data import data_chunks
@@ -557,8 +558,16 @@ def _link_risks_to_report(report) -> int:
     prompt_params = report.prompt_params or {}
     q = _build_risk_query_from_prompt_params(prompt_params)
 
-    # 查询符合条件的风险 ID 列表
-    risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+    if not report.created_by:
+        logger_celery.warning("[LinkRisksToReport] Skip report without creator, report_id=%s", report.report_id)
+        return 0
+
+    # 查询报告创建人实际有权限且符合条件的风险 ID 列表
+    risk_ids = list(
+        Risk.load_authed_risks(ActionEnum.LIST_RISK, username=report.created_by)
+        .filter(q)
+        .values_list("risk_id", flat=True)
+    )
     if not risk_ids:
         logger_celery.info(
             "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s", report.report_id, prompt_params

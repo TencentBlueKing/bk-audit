@@ -44,14 +44,24 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
+    app_code_setting_names = ("AI_AGENT_APP_CODE",)
+    secret_key_setting_names = ("AI_AGENT_SECRET_KEY",)
+
+    @staticmethod
+    def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
+        for setting_name in setting_names:
+            setting_value = getattr(settings, setting_name, "")
+            if setting_value:
+                return setting_value
+        return getattr(settings, default_setting_name)
 
     @property
     def app_code(self) -> str:
-        return settings.AI_AGENT_APP_CODE or settings.AI_AUDIT_REPORT_APP_CODE or settings.APP_CODE
+        return self._get_first_setting(self.app_code_setting_names, "APP_CODE")
 
     @property
     def secret_key(self) -> str:
-        return settings.AI_AGENT_SECRET_KEY or settings.AI_AUDIT_REPORT_SECRET_KEY or settings.SECRET_KEY
+        return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
         params["bk_app_code"] = self.app_code

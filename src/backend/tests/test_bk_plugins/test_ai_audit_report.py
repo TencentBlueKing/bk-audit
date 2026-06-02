@@ -23,6 +23,10 @@ from bk_resource import api
 from django.conf import settings
 from django.test import override_settings
 
+from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
+from api.bk_plugins_ai_audit_analyse.default import (
+    ChatCompletion as AnalyseChatCompletion,
+)
 from api.bk_plugins_ai_audit_report.default import ChatCompletion
 from api.constants import AIAgentCode
 from api.utils import get_agent_base_url
@@ -58,9 +62,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.app_code, settings.APP_CODE)
 
     def test_app_code_custom(self):
-        """测试自定义 APP_CODE（AI_AGENT_APP_CODE 优先）"""
+        """测试审计报告 APP_CODE 不被通用 AI_AGENT_APP_CODE 覆盖"""
         with override_settings(AI_AGENT_APP_CODE="agent_app", AI_AUDIT_REPORT_APP_CODE="report_app"):
-            self.assertEqual(self.resource.app_code, "agent_app")
+            self.assertEqual(self.resource.app_code, "report_app")
 
     def test_app_code_fallback_to_report(self):
         """测试 APP_CODE 回退到 AI_AUDIT_REPORT_APP_CODE"""
@@ -73,9 +77,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.secret_key, settings.SECRET_KEY)
 
     def test_secret_key_custom(self):
-        """测试自定义 SECRET_KEY（AI_AGENT_SECRET_KEY 优先）"""
+        """测试审计报告 SECRET_KEY 不被通用 AI_AGENT_SECRET_KEY 覆盖"""
         with override_settings(AI_AGENT_SECRET_KEY="agent_secret", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
-            self.assertEqual(self.resource.secret_key, "agent_secret")
+            self.assertEqual(self.resource.secret_key, "report_secret")
 
     def test_secret_key_fallback_to_report(self):
         """测试 SECRET_KEY 回退到 AI_AUDIT_REPORT_SECRET_KEY"""
@@ -175,6 +179,32 @@ class TestAIAuditReportAuth(TestCase):
 
         # 验证用户信息已添加
         self.assertEqual(result.get("bk_username"), "test_bk_user")
+
+
+class TestAIAuditAnalyseAuth(TestCase):
+    """测试AI分析智能体复用通用 Agent 能力并使用独立认证信息"""
+
+    def setUp(self):
+        self.resource = AnalyseChatCompletion()
+
+    def test_reuses_base_chat_completion(self):
+        self.assertIsInstance(self.resource, BaseChatCompletion)
+
+    def test_app_code_uses_analyse_config(self):
+        with override_settings(
+            AI_AGENT_APP_CODE="agent_app",
+            AI_AUDIT_REPORT_APP_CODE="report_app",
+            AI_AUDIT_ANALYSE_APP_CODE="analyse_app",
+        ):
+            self.assertEqual(self.resource.app_code, "analyse_app")
+
+    def test_secret_key_uses_analyse_config(self):
+        with override_settings(
+            AI_AGENT_SECRET_KEY="agent_secret",
+            AI_AUDIT_REPORT_SECRET_KEY="report_secret",
+            AI_AUDIT_ANALYSE_SECRET_KEY="analyse_secret",
+        ):
+            self.assertEqual(self.resource.secret_key, "analyse_secret")
 
 
 class TestAIAuditReportStream(TestCase):
