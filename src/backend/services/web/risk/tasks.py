@@ -69,7 +69,10 @@ from services.web.risk.handlers.ticket import (
 from services.web.risk.models import ManualEvent, Risk, TicketNode
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
-from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.serializers import (
+    CreateEventSerializer,
+    ListRiskRequestSerializer,
+)
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
@@ -545,6 +548,18 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     return q
 
 
+def _load_report_risk_ids(report, risk_limit: int) -> list:
+    """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
+    from services.web.risk.resources.risk import ListRisk
+
+    list_risk = ListRisk()
+    serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
+    serializer.is_valid(raise_exception=True)
+    return list_risk.load_report_risk_ids(
+        dict(serializer.validated_data), username=report.created_by, risk_limit=risk_limit
+    )
+
+
 def _link_risks_to_report(report) -> int:
     """
     根据报告的 prompt_params 查询关联风险，批量创建 AnalyseReportRisk 关联记录。
@@ -554,14 +569,24 @@ def _link_risks_to_report(report) -> int:
     """
     from services.web.risk.models import AnalyseReportRisk
 
-    prompt_params = report.prompt_params or {}
-    q = _build_risk_query_from_prompt_params(prompt_params)
+    if not report.created_by:
+        logger_celery.warning("[LinkRisksToReport] Skip report without creator, report_id=%s", report.report_id)
+        return 0
 
-    # 查询符合条件的风险 ID 列表
-    risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
+    risk_limit = int(getattr(settings, "ANALYSE_REPORT_RISK_LIMIT", 100))
+    if risk_limit <= 0:
+        logger_celery.info(
+            "[LinkRisksToReport] Skip because risk limit is %s, report_id=%s", risk_limit, report.report_id
+        )
+        return 0
+
+    # 查询报告创建人实际有权限且符合条件的风险 ID 列表
+    risk_ids = _load_report_risk_ids(report, risk_limit)
     if not risk_ids:
         logger_celery.info(
-            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s", report.report_id, prompt_params
+            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s",
+            report.report_id,
+            report.prompt_params,
         )
         return 0
 
@@ -579,6 +604,15 @@ def _link_risks_to_report(report) -> int:
         report.report_id,
     )
     return len(risk_ids)
+
+
+def _build_analyse_report_error_info(exc: Exception, current_retries: int, max_retries: int | None) -> dict:
+    return {
+        "error_type": exc.__class__.__name__,
+        "error_message": str(exc),
+        "retry_count": current_retries,
+        "max_retries": max_retries,
+    }
 
 
 @celery_app.task(
@@ -601,6 +635,9 @@ def generate_analyse_report(self, report_id: int):
     report = AnalyseReport.objects.get(report_id=report_id)
 
     try:
+        # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
+        _link_risks_to_report(report)
+
         # 1. 构造分析要求 prompt
         scenario = report.scenario
         if scenario:
@@ -625,28 +662,22 @@ def generate_analyse_report(self, report_id: int):
         # 3. 更新报告
         report.content = result
         report.status = AnalyseReportStatus.SUCCESS
-        report.save(update_fields=["content", "status", "updated_at"])
-
-        # 4. 根据 prompt_params 关联风险记录
-        try:
-            _link_risks_to_report(report)
-        except Exception as link_exc:
-            logger_celery.warning(
-                "[GenerateAnalyseReport] Failed to link risks for report_id=%s: %s",
-                report_id,
-                link_exc,
-            )
+        report.extra_info = {}
+        report.save(update_fields=["content", "status", "extra_info", "updated_at"])
 
         return {"report_id": report.report_id}
 
     except Exception as exc:
         logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
-        report.status = AnalyseReportStatus.FAILED
-        report.save(update_fields=["status", "updated_at"])
-        try:
-            self.retry(exc=exc, countdown=60)
-        except MaxRetriesExceededError:
+        max_retries = self.max_retries
+        current_retries = getattr(self.request, "retries", 0)
+        if max_retries is not None and current_retries >= max_retries:
+            report.status = AnalyseReportStatus.FAILED
+            report.extra_info = _build_analyse_report_error_info(exc, current_retries, max_retries)
+            report.save(update_fields=["status", "extra_info", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            raise
+        raise self.retry(exc=exc, countdown=60)
 
 
 @celery_app.task(queue="risk_render")

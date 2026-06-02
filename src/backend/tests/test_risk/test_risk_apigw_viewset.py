@@ -5,7 +5,9 @@ from django.test import SimpleTestCase, override_settings
 from django.urls import Resolver404, resolve
 from rest_framework.test import APIRequestFactory
 
+from services.web.common.constants import ScopeType
 from services.web.risk.resources.risk import ListRiskAPIGW
+from services.web.risk.serializers import ListRiskAPIGWRequestSerializer
 from services.web.risk.urls import router
 from services.web.risk.views import RiskAPIGWViewSet
 
@@ -99,3 +101,27 @@ class TestRiskAPIGWViewSet(SimpleTestCase):
         # 不传 with_detail 时不应该出现在 request_data 中，或默认为 False
         request_data = mock_request.call_args.kwargs["request_data"]
         self.assertFalse(request_data.get("with_detail", False))
+
+
+class TestListRiskAPIGWRequestSerializer(SimpleTestCase):
+    def test_supports_scope_params_from_list_risk_serializer(self):
+        serializer = ListRiskAPIGWRequestSerializer(
+            data={
+                "scope_type": ScopeType.SCENE,
+                "scope_id": "1",
+                "scene_id": "1,2",
+                "with_detail": True,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["scope_type"], ScopeType.SCENE)
+        self.assertEqual(serializer.validated_data["scope_id"], "1")
+        self.assertEqual(serializer.validated_data["scene_id"], ["1", "2"])
+        self.assertTrue(serializer.validated_data["with_detail"])
+
+    def test_rejects_scope_id_without_scope_type(self):
+        serializer = ListRiskAPIGWRequestSerializer(data={"scope_id": "1"})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("scope_type", serializer.errors)
