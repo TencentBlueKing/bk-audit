@@ -37,7 +37,7 @@
       style="width: 248px;height: 40px"
       type="input"
       @update:modelValue="handleChange('input')" />
-    <audit-user-selector
+    <audit-user-selector-tenant
       v-if="type === 'user-selector'"
       v-model="userValue"
       allow-create
