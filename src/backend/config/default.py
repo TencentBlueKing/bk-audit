@@ -424,6 +424,7 @@ BK_AUDIT_SETTINGS = {
 
 # 全局配置
 BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
+BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
 
 # CORS 允许的 header
 CORS_ALLOW_HEADERS = [

@@ -132,8 +132,11 @@ class EntryHandler(object):
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
             "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
             "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
-            # 用户人员选择器
-            'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
+            # 租户id和用户人员选择
+            "tenant_config": {
+                'BK_TENANT_ID': settings.BK_TENANT_ID,
+                'BK_USER_WEB_APIGW_URL': cls.get_user_web_apigw_url(),
+            },
         }
         return data
 
