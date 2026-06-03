@@ -398,13 +398,13 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         titles = [r["title"] for r in result]
         self.assertNotIn("其他用户的报告", titles)
 
-    def test_list_reports_returns_success_and_failed_status_by_default(self):
-        """默认只返回当前用户生成成功和失败的报告"""
+    def test_list_reports_returns_all_status_by_default(self):
+        """默认返回当前用户所有状态的报告，由前端按需筛选"""
         result = self.resource.risk.list_analyse_report({})
         statuses = {r["status"] for r in result}
         self.assertIn(AnalyseReportStatus.SUCCESS, statuses)
         self.assertIn(AnalyseReportStatus.FAILED, statuses)
-        self.assertNotIn(AnalyseReportStatus.GENERATING, statuses)
+        self.assertIn(AnalyseReportStatus.GENERATING, statuses)
 
     def test_list_reports_filter_by_status(self):
         """支持按报告状态过滤"""
