@@ -115,6 +115,7 @@
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
+    scenes?: Array<{ scene_id: number; name: string }>;
   }
 
   const { t } = useI18n();
@@ -260,6 +261,7 @@
     risk_label: 'split-array',
     strategy_id: 'split-array',
     tags: 'split-array',
+    scene_id: 'split-array',
     // 直接赋值的字段
     risk_id: 'direct',
     event_content: 'direct',
@@ -381,7 +383,16 @@
         name: item.label || item.name || '',
       }));
 
-    const result = await parse(query, tags, strategies);
+    // 构建 scenes 参数
+    const scenes = props.scenes
+      ?.filter((item: any) => item && item.scene_id && item.name)
+      .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [];
+
+    // 获取 scope_type 和 scope_id（从 URL 参数或默认值）
+    const { scope_type } = urlSearchParams;
+    const { scope_id } = urlSearchParams;
+
+    const result = await parse(query, tags, strategies, scenes, scope_type, scope_id);
     if (!result) {
       // 解析失败，取消列表 loading 和 input 转动
       isNLSearching.value = false;
