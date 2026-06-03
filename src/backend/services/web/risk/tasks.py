@@ -606,6 +606,15 @@ def _link_risks_to_report(report) -> int:
     return len(risk_ids)
 
 
+def _build_analyse_report_error_info(exc: Exception, current_retries: int, max_retries: int | None) -> dict:
+    return {
+        "error_type": exc.__class__.__name__,
+        "error_message": str(exc),
+        "retry_count": current_retries,
+        "max_retries": max_retries,
+    }
+
+
 @celery_app.task(
     bind=True,
     queue="risk_report",
@@ -626,6 +635,9 @@ def generate_analyse_report(self, report_id: int):
     report = AnalyseReport.objects.get(report_id=report_id)
 
     try:
+        # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
+        _link_risks_to_report(report)
+
         # 1. 构造分析要求 prompt
         scenario = report.scenario
         if scenario:
@@ -650,17 +662,8 @@ def generate_analyse_report(self, report_id: int):
         # 3. 更新报告
         report.content = result
         report.status = AnalyseReportStatus.SUCCESS
-        report.save(update_fields=["content", "status", "updated_at"])
-
-        # 4. 根据 prompt_params 关联风险记录
-        try:
-            _link_risks_to_report(report)
-        except Exception as link_exc:
-            logger_celery.warning(
-                "[GenerateAnalyseReport] Failed to link risks for report_id=%s: %s",
-                report_id,
-                link_exc,
-            )
+        report.extra_info = {}
+        report.save(update_fields=["content", "status", "extra_info", "updated_at"])
 
         return {"report_id": report.report_id}
 
@@ -670,7 +673,8 @@ def generate_analyse_report(self, report_id: int):
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
             report.status = AnalyseReportStatus.FAILED
-            report.save(update_fields=["status", "updated_at"])
+            report.extra_info = _build_analyse_report_error_info(exc, current_retries, max_retries)
+            report.save(update_fields=["status", "extra_info", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
             raise
         raise self.retry(exc=exc, countdown=60)

@@ -767,7 +767,7 @@ paths:
   /risks/:
     post:
       operationId: list_risk_apigw
-      description: 获取风险列表
+      description: 获取风险列表。参数口径与审计中心 ListRisk 一致，用于 AI 智能体按筛选条件查询风险并聚合分析。
       tags: [ ]
       parameters:
         - in: query
@@ -796,6 +796,20 @@ paths:
               strategy_id:
                 type: string
                 description: 策略ID（多个用逗号分隔）
+              scope_type:
+                type: string
+                description: 场景选择器范围类型。不传表示不过滤场景范围；传 scope_id 时必须传 scope_type。
+                enum:
+                  - cross_scene
+                  - cross_system
+                  - scene
+                  - system
+              scope_id:
+                type: string
+                description: 范围实例 ID。scope_type 为 scene/system 时必传；cross_scene/cross_system 时不传。
+              scene_id:
+                type: string
+                description: 场景ID（多个用逗号分隔）。用于在权限域结果内按风险所属场景筛选。
               operator:
                 type: string
                 description: 责任人（支持模糊匹配）
@@ -848,16 +862,41 @@ paths:
               title:
                 type: string
                 description: 风险标题（支持模糊匹配）
-              order_field:
-                type: string
-                description: 排序字段（默认 -event_time，前缀 - 表示倒序；risk_level 表示按风险等级排序）
-                default: -event_time
-              order_type:
-                type: string
-                description: 排序方式
-                enum:
-                  - asc
-                  - desc
+              event_filters:
+                type: array
+                description: 关联事件字段筛选。
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 字段显示名
+                    operator:
+                      type: string
+                      description: 操作符
+                      enum:
+                        - "="
+                        - "!="
+                        - "CONTAINS"
+                        - "NOT CONTAINS"
+                        - "IN"
+                        - "NOT IN"
+                        - ">="
+                        - "<="
+                        - ">"
+                        - "<"
+                    value:
+                      description: 筛选值，类型由字段决定
+              sort:
+                type: array
+                description: 多字段排序数组。字段名前缀 - 表示倒序，如 ["-risk_level", "-event_time", "-risk_id"]；支持 risk_level、event_time、last_operate_time、risk_id、display_status、event_data.xxx。
+                items:
+                  type: string
+                default:
+                  - -event_time
               has_report:
                 type: boolean
                 description: 是否已生成报告
@@ -898,6 +937,9 @@ paths:
                     strategy_id:
                       type: integer
                       description: 策略ID
+                    scene_id:
+                      type: integer
+                      description: 场景ID
                     event_evidence:
                       type: string
                       description: 风险证据
@@ -953,6 +995,15 @@ paths:
                       items:
                         type: integer
                       description: 标签ID列表
+                    has_report:
+                      type: boolean
+                      description: 是否已生成报告
+                    report_enabled:
+                      type: boolean
+                      description: 命中策略是否启用报告
+                    report_auto_render:
+                      type: boolean
+                      description: 命中策略是否自动生成报告
                     detail:
                       type: object
                       description: 风险单详情（仅当请求参数 with_detail=true 时返回）

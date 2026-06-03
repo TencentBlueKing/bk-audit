@@ -185,10 +185,12 @@ class ListAnalyseReport(AnalyseReportMeta):
         if report_type:
             queryset = queryset.filter(report_type=report_type)
 
-        # status 筛选；不传时返回当前用户所有状态报告
+        # status 筛选；不传时默认返回已生成成功和失败的报告
         status = validated_request_data.get("status")
         if status:
             queryset = queryset.filter(status=status)
+        else:
+            queryset = queryset.filter(status__in=[AnalyseReportStatus.SUCCESS, AnalyseReportStatus.FAILED])
 
         # 排序
         sort = validated_request_data.get("sort", ["-created_at"])

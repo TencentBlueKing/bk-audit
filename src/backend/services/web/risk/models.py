@@ -818,6 +818,12 @@ class AnalyseReport(OperateRecordModel):
         help_text=gettext_lazy("传给Analyse Agent的完整参数"),
     )
     custom_prompt = models.TextField(gettext_lazy("自定义分析描述"), blank=True, default="")
+    extra_info = models.JSONField(
+        gettext_lazy("额外信息"),
+        default=dict,
+        blank=True,
+        help_text=gettext_lazy("报告生成失败原因等附加信息"),
+    )
 
     class Meta:
         db_table = "risk_analysereport"

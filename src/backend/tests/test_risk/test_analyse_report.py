@@ -333,6 +333,14 @@ class TestListAnalyseReport(AnalyseReportTestBase):
             prompt_params={},
             created_by="admin",
         )
+        self.report_failed = AnalyseReport.objects.create(
+            title="失败报告",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.FAILED,
+            prompt_params={},
+            extra_info={"error_message": "生成失败"},
+            created_by="admin",
+        )
         # 创建其他用户的报告（不应出现在列表中）
         self.report_other_user = AnalyseReport.objects.create(
             title="其他用户的报告",
@@ -390,26 +398,26 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         titles = [r["title"] for r in result]
         self.assertNotIn("其他用户的报告", titles)
 
-    def test_list_reports_returns_all_status_by_default(self):
-        """默认返回当前用户所有状态的报告"""
+    def test_list_reports_returns_success_and_failed_status_by_default(self):
+        """默认只返回当前用户生成成功和失败的报告"""
         result = self.resource.risk.list_analyse_report({})
         statuses = {r["status"] for r in result}
         self.assertIn(AnalyseReportStatus.SUCCESS, statuses)
-        self.assertIn(AnalyseReportStatus.GENERATING, statuses)
+        self.assertIn(AnalyseReportStatus.FAILED, statuses)
+        self.assertNotIn(AnalyseReportStatus.GENERATING, statuses)
 
     def test_list_reports_filter_by_status(self):
         """支持按报告状态过滤"""
-        failed_report = AnalyseReport.objects.create(
-            title="失败报告",
-            report_type=AnalyseReportType.SYSTEM,
-            status=AnalyseReportStatus.FAILED,
-            prompt_params={},
-            created_by="admin",
-        )
-
         result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.FAILED})
 
-        self.assertEqual([item["report_id"] for item in result], [failed_report.report_id])
+        self.assertEqual([item["report_id"] for item in result], [self.report_failed.report_id])
+        self.assertEqual(result[0]["extra_info"]["error_message"], "生成失败")
+
+    def test_list_reports_filter_generating_status(self):
+        """显式传入状态时可查询生成中的报告"""
+        result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.GENERATING})
+
+        self.assertEqual([item["report_id"] for item in result], [self.report_generating.report_id])
 
 
 class TestRetrieveAnalyseReport(AnalyseReportTestBase):
@@ -1095,6 +1103,30 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertIn("自定义分析报告", self.report.content)
+        self.assertEqual(self.report.extra_info, {})
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_links_risks_before_chat_completion(self, mock_chat):
+        """调用 Agent 前先关联风险并填充 risk_count"""
+        self.report.risk_count = 0
+        self.report.prompt_params = {"risk_id": self.risk1.risk_id}
+        self.report.save(update_fields=["risk_count", "prompt_params"])
+
+        def assert_risk_count_filled(**kwargs):
+            self.report.refresh_from_db()
+            self.assertEqual(self.report.risk_count, 1)
+            self.assertTrue(AnalyseReportRisk.objects.filter(report=self.report, risk_id=self.risk1.risk_id).exists())
+            return "# 已生成报告"
+
+        mock_chat.side_effect = assert_risk_count_filled
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+        self.assertEqual(self.report.risk_count, 1)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_failure(self, mock_chat):
@@ -1113,6 +1145,9 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.extra_info["error_type"], "Exception")
+        self.assertEqual(self.report.extra_info["error_message"], "API调用失败")
+        self.assertEqual(self.report.extra_info["retry_count"], generate_analyse_report.max_retries)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_keeps_generating_status_before_max_retries(self, mock_chat):
@@ -1254,6 +1289,7 @@ class TestAnalyseReportSerializer(AnalyseReportTestBase):
         serializer = ListAnalyseReportRequestSerializer(data={})
         self.assertTrue(serializer.is_valid())
         self.assertEqual(serializer.validated_data["keyword"], "")
+        self.assertEqual(serializer.validated_data["status"], "")
         self.assertEqual(serializer.validated_data["sort"], ["-created_at"])
 
     def test_list_report_request_serializer_rejects_invalid_sort(self):
@@ -1807,21 +1843,22 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
 
     @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_succeeds_even_if_link_fails(self, mock_chat, mock_link):
-        """测试关联风险失败不影响报告生成成功"""
-        mock_chat.return_value = (
-            "# 分析结果\n\n" "## 一、风险概况\n\n" "经分析，本次筛选范围内共有若干条风险记录需要关注。\n\n" "## 二、处置建议\n\n" "建议对高风险事件优先进行人工审核确认。\n"
-        )
-
+    def test_task_fails_before_chat_if_link_fails_on_max_retry(self, mock_chat, mock_link):
+        """风险关联失败时不调用 Agent，最终重试失败后记录错误信息"""
         from services.web.risk.tasks import generate_analyse_report
 
-        result = generate_analyse_report(report_id=self.report.report_id)
+        original_retries = generate_analyse_report.request.retries
+        generate_analyse_report.request.retries = generate_analyse_report.max_retries
+        try:
+            with self.assertRaisesRegex(Exception, "关联失败"):
+                generate_analyse_report(report_id=self.report.report_id)
+        finally:
+            generate_analyse_report.request.retries = original_retries
 
-        self.assertEqual(result["report_id"], self.report.report_id)
         self.report.refresh_from_db()
-        # 报告应仍为成功状态
-        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-        self.assertIn("分析结果", self.report.content)
+        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.extra_info["error_message"], "关联失败")
+        mock_chat.assert_not_called()
 
 
 class TestAnalyseReportAdmin(AnalyseReportTestBase):
