@@ -54,7 +54,7 @@ export default function useNLParse() {
     query: string,
     tags?: Array<{ id: number; name: string }>,
     strategies?: Array<{ id: number; name: string }>,
-    scenes?: Array<{ scene_id: number; name: string }>,
+    scenes?: Array<{ id: number; name: string }>,
     scopeType?: string,
     scopeId?: string,
   ): Promise<{
