@@ -138,5 +138,6 @@ export default {
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
+    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
   },
 } as Record<string, IFieldConfig>;
