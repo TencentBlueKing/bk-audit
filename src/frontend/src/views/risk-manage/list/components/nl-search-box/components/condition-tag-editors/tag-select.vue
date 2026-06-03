@@ -70,13 +70,13 @@
               @click="handleToggleOption(item)">
               <span
                 v-bk-tooltips="{
-                  content: item[labelName],
+                  content: getItemLabel(item),
                   disabled: !itemOverflowFlags[valName ? item[valName] : item.id],
                   extCls: 'nl-tag-tooltip-wrap',
                 }"
                 class="nl-tag-select-item-label"
                 @mouseenter="(e: MouseEvent) => checkItemOverflow(valName ? item[valName] : item.id, e)">
-                {{ item[labelName] }}
+                {{ getItemLabel(item) }}
               </span>
               <audit-icon
                 v-if="isOptionSelected(item)"
@@ -137,6 +137,14 @@
   const valName = computed(() => props.tag.config.valName || 'id');
   const labelName = computed(() => props.tag.config.labelName || 'name');
 
+  // 获取选项展示文本
+  const getItemLabel = (item: Record<string, any>) => {
+    if (props.tag.config.formatLabel) {
+      return props.tag.config.formatLabel(item);
+    }
+    return item[labelName.value];
+  };
+
   // 过滤后的选项
   const filteredOptions = computed(() => {
     const keyword = searchKey.value.trim().toLowerCase();
@@ -153,7 +161,7 @@
     if (!cached || cached.length === 0) return values.map(String);
     return values.map((val) => {
       const found = cached.find(item => String(item[valName.value]) === String(val));
-      return found ? found[labelName.value] : String(val);
+      return found ? getItemLabel(found) : String(val);
     });
   };
 
