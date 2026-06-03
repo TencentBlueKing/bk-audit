@@ -304,6 +304,9 @@ export default {
     query: string,
     tags?: Array<{ id: number; name: string }>,
     strategies?: Array<{ id: number; name: string }>,
+    scenes?: Array<{ id: number; name: string }>,
+    scope_type?: string,
+    scope_id?: string,
   }) {
     return RiskManageSource.nl2RiskFilter(params)
       .then(({ data }) => data);

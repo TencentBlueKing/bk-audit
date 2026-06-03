@@ -20,6 +20,7 @@
       ref="searchBoxRef"
       :field-config="FieldConfig"
       is-export
+      :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
       @export="handleExport"
       @model-value-watch="handleModelValueWatch"
@@ -60,6 +61,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import dayjs from 'dayjs';
   import {
     computed,
     nextTick,
@@ -375,6 +377,25 @@
     manual: true,
     defaultValue: [],
   });
+
+  // 获取AI搜索用的场景列表（与"所属场景"下拉选项保持一致，使用已筛选的场景）
+  const {
+    data: riskScenesData,
+    run: fetchRiskScenes,
+  } = useRequest(RiskManageService.fetchRiskScenes, {
+    defaultParams: {
+      risk_view_type: 'all',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
+    defaultValue: [],
+    manual: true,
+  });
+
+  const nlSearchBoxScenes = computed(() => riskScenesData.value?.map((item: any) => ({
+    scene_id: Number(item.scene_id || item.id),
+    name: item.name,
+  })) || []);
   const {
     data: levelData,
     run: fetchRiskLevel,
@@ -527,6 +548,7 @@
       title: '',
       notice_users: '',
       has_report: '',
+      scene_id: '',
     };
     const dataParams: Record<string, any> = {
       ...params,
@@ -551,6 +573,7 @@
   onMounted(() => {
     nextTick(() => {
       getEventFields();
+      fetchRiskScenes();
       sessionStorage.removeItem('addEventRiskIds');
       // 初始获取conditionTags
       updateConditionTags();

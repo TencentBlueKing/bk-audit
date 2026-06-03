@@ -45,12 +45,18 @@ export default function useNLParse() {
    * @param query 用户输入的自然语言文本
    * @param tags 当前用户有权限的标签列表
    * @param strategies 当前用户有权限的策略列表
+   * @param scenes 当前用户有权限的场景列表
+   * @param scopeType 范围类型
+   * @param scopeId 范围ID
    * @returns { filterConditions, message } 或 null
    */
   const parse = async (
     query: string,
     tags?: Array<{ id: number; name: string }>,
     strategies?: Array<{ id: number; name: string }>,
+    scenes?: Array<{ scene_id: number; name: string }>,
+    scopeType?: string,
+    scopeId?: string,
   ): Promise<{
     filterConditions: Record<string, any>;
     message: string;
@@ -66,6 +72,15 @@ export default function useNLParse() {
       }
       if (strategies && strategies.length > 0) {
         params.strategies = strategies;
+      }
+      if (scenes && scenes.length > 0) {
+        params.scenes = scenes;
+      }
+      if (scopeType) {
+        params.scope_type = scopeType;
+      }
+      if (scopeId) {
+        params.scope_id = scopeId;
       }
       const result = await runNl2RiskFilter(params);
 
