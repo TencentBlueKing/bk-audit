@@ -26,5 +26,7 @@ export interface IFieldConfig {
   filterList?: string[]// 要过滤的数据列表
   defaultParams?: Record<string, any>,
   // 是否多选 默认true
-  multiple?: boolean
+  multiple?: boolean,
+  // 自定义选项展示文本
+  formatLabel?: (item: Record<string, any>) => string,
 }
