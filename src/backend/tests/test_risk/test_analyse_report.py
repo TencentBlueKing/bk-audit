@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import json
 from unittest import mock
 
 from django.contrib import admin
@@ -1241,12 +1242,19 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertIn("处置建议", self.report.content)
         self.assertEqual(result["report_id"], self.report.report_id)
 
-        # 验证调用参数：直接传递 prompt 文本，不再传 chat_history
+        # 验证调用参数：只传递报告参数配置，不再传 chat_history 或原始筛选条件
         mock_chat.assert_called_once()
         call_kwargs = mock_chat.call_args[1]
         self.assertEqual(call_kwargs["user"], "admin")
-        # input 是完整的文本字符串，包含场景 system_prompt 内容
-        self.assertIn("请分析责任人行为", call_kwargs["input"])
+        agent_input = json.loads(call_kwargs["input"])
+        self.assertEqual(agent_input["报告ID"], self.report.report_id)
+        self.assertEqual(agent_input["场景标识"], self.scenario_person.scenario_key)
+        self.assertIn("请分析责任人行为", agent_input["分析要求"])
+        self.assertNotIn("analysis_scope", agent_input)
+        self.assertNotIn("分析范围", agent_input)
+        self.assertNotIn("list_analyse_report_risk_apigw", call_kwargs["input"])
+        self.assertNotIn("operator", agent_input)
+        self.assertNotIn("zhangsan", call_kwargs["input"])
         self.assertNotIn("chat_history", call_kwargs)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")

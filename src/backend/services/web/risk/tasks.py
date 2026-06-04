@@ -647,15 +647,20 @@ def generate_analyse_report(self, report_id: int):
             # 自定义分析：使用用户自定义描述
             analysis_request = report.custom_prompt or "请使用风险查询条件查询风险详细数据生成分析报告。"
 
-        # 将 prompt_params 拼接到分析要求中，构造完整的文本字符串
-        prompt_params = report.prompt_params or {}
-        prompt_params_text = json.dumps(prompt_params, ensure_ascii=False) if prompt_params else ""
-        prompt = f"{analysis_request}\n{prompt_params_text}" if prompt_params_text else analysis_request
+        # prompt_params 仅用于后端筛选并绑定报告风险；Agent 只接收报告参数配置。
+        agent_input = {
+            "报告ID": report.report_id,
+            "报告标题": report.title,
+            "报告类型": report.report_type,
+            "场景标识": scenario.scenario_key if scenario else "",
+            "分析要求": analysis_request,
+            "已绑定风险数量": report.risk_count,
+        }
 
         # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
         result = api.bk_plugins_ai_audit_analyse.chat_completion(
             user=report.created_by or "admin",
-            input=prompt,
+            input=json.dumps(agent_input, ensure_ascii=False),
             execute_kwargs={"stream": True},
         )
 

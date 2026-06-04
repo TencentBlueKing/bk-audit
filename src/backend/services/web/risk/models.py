@@ -561,7 +561,7 @@ class TicketPermission(models.Model):
     risk_id = models.CharField(gettext_lazy("Risk ID"), max_length=255, db_index=True)
     action = models.CharField(gettext_lazy("Action"), max_length=32, db_index=True)
     user = models.CharField(gettext_lazy("User"), max_length=255, db_index=True)
-    authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True)
+    authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True, db_index=True)
     user_type = models.CharField(gettext_lazy("User Type"), choices=UserType.choices, max_length=32, db_index=True)
 
     class Meta:
@@ -815,7 +815,7 @@ class AnalyseReport(OperateRecordModel):
         gettext_lazy("Prompt参数"),
         default=dict,
         blank=True,
-        help_text=gettext_lazy("传给Analyse Agent的完整参数"),
+        help_text=gettext_lazy("用于后端筛选并绑定报告风险的参数"),
     )
     custom_prompt = models.TextField(gettext_lazy("自定义分析描述"), blank=True, default="")
     extra_info = models.JSONField(
