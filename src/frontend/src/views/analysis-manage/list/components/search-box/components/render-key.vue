@@ -403,8 +403,13 @@
   // 删除搜索项
   const handleDeleteField = (fieldName: keyof typeof localFiledConfig.value) => {
     deleteFieldName.value = fieldName;
-    // 删除对应的搜索项
+    // 删除对应的搜索项配置
     delete localFiledConfig.value[fieldName];
+    // 清除 searchModel 中对应字段的值
+    delete localSearchModel.value[fieldName];
+    // 同步更新到父组件并触发搜索
+    emits('update:modelValue', localSearchModel.value);
+    emits('submit');
   };
 
   const handleAfterHidden = (value: { isShow: boolean}) => {
