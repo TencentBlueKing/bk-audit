@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="system-detail-box">
+  <div
+    class="system-detail-box"
+    :class="{ 'is-with-sidebar': route.params?.isShowSideBar === 'true' }">
     <img
       class="app-logo"
       :src="data.logo_url">
@@ -117,8 +119,11 @@
     display: flex;
     padding: 24px;
     overflow: hidden;
-    background-color: #fff;
     align-items: flex-start;
+
+    &.is-with-sidebar {
+      padding: 0;
+    }
 
     .app-logo {
       flex: 0;
