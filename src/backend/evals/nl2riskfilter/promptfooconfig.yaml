@@ -6,13 +6,6 @@ prompts:
 
 providers:
   - id: 'python:providers/provider.py'
-    label: 'qwen3-8b'
-    config:
-      username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'qwen3-8b'
-      non_thinking_llm: 'qwen3-8b'
-
-  - id: 'python:providers/provider.py'
     label: 'hy3-preview'
     config:
       username: '{{env.BKAPP_EVAL_USERNAME}}'
@@ -27,11 +20,11 @@ providers:
       non_thinking_llm: 'gptoss-120b'
 
   - id: 'python:providers/provider.py'
-    label: 'gpt_4o_mini'
+    label: 'qwen3-5-27B'
     config:
       username: '{{env.BKAPP_EVAL_USERNAME}}'
-      model: 'gpt_4o_mini'
-      non_thinking_llm: 'gpt_4o_mini'
+      model: 'qwen3-5-27B'
+      non_thinking_llm: 'qwen3-5-27B'
 
 defaultTest:
   options:

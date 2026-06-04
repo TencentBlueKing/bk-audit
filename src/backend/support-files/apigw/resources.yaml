@@ -764,6 +764,149 @@ paths:
           userVerifiedRequired: false
         disabledStages: []
         descriptionEn:
+  /analyse_report_apigw/{report_id}/risks/:
+    post:
+      operationId: list_analyse_report_risk_apigw
+      description: 获取 AI 分析报告已绑定的风险列表。Agent 只能通过 report_id 分页读取后端已绑定风险，不能自行传入全局风险筛选条件。
+      tags: [ ]
+      parameters:
+        - in: path
+          name: report_id
+          type: integer
+          required: true
+          description: AI 分析报告 ID
+        - in: query
+          name: page
+          type: integer
+          required: false
+          description: 页码
+          minimum: 1
+          default: 1
+        - in: query
+          name: page_size
+          type: integer
+          required: false
+          description: 每页数量
+          minimum: 1
+          maximum: 100
+          default: 10
+        - in: body
+          name: body
+          required: false
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险ID，多个用逗号分隔
+              risk_level:
+                type: string
+                description: 风险等级，多个用逗号分隔
+                enum:
+                  - LOW
+                  - MIDDLE
+                  - HIGH
+              status:
+                type: string
+                description: 风险状态，多个用逗号分隔
+                enum:
+                  - stand_by
+                  - new
+                  - await_deal
+                  - for_approve
+                  - auto_process
+                  - closed
+              risk_label:
+                type: string
+                description: 风险标签，多个用逗号分隔
+                enum:
+                  - normal
+                  - misreport
+              keyword:
+                type: string
+                description: 搜索关键词，匹配 risk_id、title、event_content
+              with_detail:
+                type: boolean
+                description: 是否返回风险自身完整详情，不返回风险报告内容
+                default: false
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: 当前页码
+              num_pages:
+                type: integer
+                description: 总页数
+              total:
+                type: integer
+                description: 总记录数
+              results:
+                type: array
+                description: 报告已绑定风险列表
+                items:
+                  type: object
+                  properties:
+                    risk_id:
+                      type: string
+                      description: 风险ID
+                    title:
+                      type: string
+                      description: 风险标题
+                    risk_level:
+                      type: string
+                      description: 风险等级
+                    status:
+                      type: string
+                      description: 风险状态
+                    event_time:
+                      type: string
+                      format: date-time
+                      description: 首次发现时间
+                    event_end_time:
+                      type: string
+                      format: date-time
+                      description: 最后发现时间
+                    operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 责任人
+                    current_operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 当前处理人
+                    strategy_id:
+                      type: integer
+                      description: 策略ID
+                    risk_label:
+                      type: string
+                      description: 风险标签
+                    detail:
+                      type: object
+                      description: 风险自身完整详情，仅 with_detail=true 时返回，不包含风险报告 report 字段
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/analyse_report_apigw/{report_id}/risks/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
   /risks/:
     post:
       operationId: list_risk_apigw

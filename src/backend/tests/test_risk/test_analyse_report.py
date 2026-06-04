@@ -23,30 +23,37 @@ from django.contrib import admin
 from django.db.models import Q
 from django.http import Http404
 from django.test import override_settings
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 from apps.permission.handlers.actions import ActionEnum
 from services.web.risk.constants import (
     AnalyseReportStatus,
     AnalyseReportType,
     EventFilterOperator,
+    RiskLabel,
+    RiskStatus,
 )
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
+    RiskReport,
     TicketPermission,
     UserType,
 )
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
     ListAnalyseReportRequestSerializer,
+    ListAnalyseReportRiskPageResponseSerializer,
     ListAnalyseReportRiskRequestSerializer,
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
 )
+from services.web.risk.views import AnalyseReportAPIGWViewSet
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -886,6 +893,62 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         for risk_data in result:
             self.assertEqual(risk_data["strategy_id"], self.strategy.strategy_id)
 
+    def test_list_report_risks_filters_by_risk_id(self):
+        """测试报告关联风险列表支持按风险ID过滤"""
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_id": self.risk1.risk_id}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_status(self):
+        """测试报告关联风险列表支持按风险状态过滤"""
+        self.risk2.status = RiskStatus.CLOSED
+        self.risk2.save(update_fields=["status"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "status": RiskStatus.NEW}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_keyword(self):
+        """测试报告关联风险列表支持按关键词过滤"""
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "keyword": "Test Risk 1"}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_risk_level(self):
+        """测试报告关联风险列表支持按风险等级过滤"""
+        low_strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="test-low-strategy",
+            risk_level=RiskLevel.LOW.value,
+        )
+        self.risk2.strategy = low_strategy
+        self.risk2.save(update_fields=["strategy"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_level": RiskLevel.HIGH.value}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_risk_label(self):
+        """测试报告关联风险列表支持按风险标签过滤"""
+        self.risk1.risk_label = RiskLabel.MISREPORT
+        self.risk1.save(update_fields=["risk_label"])
+        self.risk2.risk_label = RiskLabel.NORMAL
+        self.risk2.save(update_fields=["risk_label"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_label": RiskLabel.MISREPORT}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
     def test_list_report_risks_empty_report(self):
         """测试没有关联风险的报告返回空列表"""
         empty_report = AnalyseReport.objects.create(
@@ -949,6 +1012,118 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
 
         with self.assertRaises(Http404):
             self.resource.risk.list_analyse_report_risk({"report_id": other_report.report_id})
+
+
+class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
+    """测试报告关联风险 APIGW 列表"""
+
+    def setUp(self):
+        super().setUp()
+        self.factory = APIRequestFactory()
+        self.report = AnalyseReport.objects.create(
+            title="APIGW关联风险测试",
+            report_type=AnalyseReportType.SYSTEM,
+            risk_count=2,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+        AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk1.risk_id)
+        AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk2.risk_id)
+
+    def request_apigw_resource(self, request_data=None, query_string="page=1&page_size=100"):
+        request_data = request_data or {}
+        request = Request(
+            self.factory.post(
+                f"/api/v1/analyse_report_apigw/{self.report.report_id}/risks/?{query_string}",
+                request_data,
+                format="json",
+            )
+        )
+        return self.resource.risk.list_analyse_report_risk_apigw.request(
+            {"report_id": self.report.report_id, **request_data},
+            _request=request,
+        )
+
+    def test_apigw_request_serializer_normalizes_csv_fields(self):
+        """APIGW请求序列化器负责拆分多值筛选参数"""
+        serializer = ListAnalyseReportRiskRequestSerializer(
+            data={
+                "report_id": self.report.report_id,
+                "risk_id": "risk-agent-001,risk-agent-002",
+                "status": "new,closed",
+                "risk_level": "HIGH,LOW",
+                "risk_label": "normal,misreport",
+                "keyword": " Test Risk ",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["risk_id"], ["risk-agent-001", "risk-agent-002"])
+        self.assertEqual(serializer.validated_data["status"], ["new", "closed"])
+        self.assertEqual(serializer.validated_data["risk_level"], ["HIGH", "LOW"])
+        self.assertEqual(serializer.validated_data["risk_label"], ["normal", "misreport"])
+        self.assertEqual(serializer.validated_data["keyword"], "Test Risk")
+
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_apigw_list_report_risks_skips_owner_check_but_limits_bound_risks(self, _mock_username):
+        """APIGW跳过报告归属校验，但只能返回报告已绑定风险"""
+        unbound_risk = Risk.objects.create(
+            risk_id="risk-agent-unbound",
+            raw_event_id="raw-agent-unbound",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="Unbound Risk",
+            event_time=datetime.datetime(2026, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+
+        result = self.request_apigw_resource()
+
+        self.assertEqual(result["total"], 2)
+        risk_ids = {item["risk_id"] for item in result["results"]}
+        self.assertEqual(risk_ids, {self.risk1.risk_id, self.risk2.risk_id})
+        self.assertNotIn(unbound_risk.risk_id, risk_ids)
+
+    def test_apigw_with_detail_excludes_risk_report(self):
+        """APIGW风险详情不返回风险报告内容"""
+        RiskReport.objects.create(risk=self.risk1, content="sensitive report content")
+
+        result = self.request_apigw_resource({"risk_id": self.risk1.risk_id, "with_detail": True})
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertIn("detail", result["results"][0])
+        self.assertNotIn("report", result["results"][0]["detail"])
+
+    def test_apigw_response_serializer_matches_paginated_response(self):
+        """APIGW响应序列化器与分页响应结构一致"""
+        result = self.request_apigw_resource()
+        serializer = ListAnalyseReportRiskPageResponseSerializer(data=result)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["total"], 2)
+
+    @mock.patch("core.permissions.get_app_info")
+    def test_apigw_viewset_paginates_before_returning_detail(self, mock_get_app_info):
+        """APIGW HTTP链路按分页返回当前页风险详情"""
+        RiskReport.objects.create(risk=self.risk1, content="risk1 report content")
+        RiskReport.objects.create(risk=self.risk2, content="risk2 report content")
+        view = AnalyseReportAPIGWViewSet.as_view({"post": "risks"})
+        request = self.factory.post(
+            f"/api/v1/analyse_report_apigw/{self.report.report_id}/risks/?page=1&page_size=1",
+            {"with_detail": True},
+            format="json",
+        )
+
+        response = view(request, report_id=self.report.report_id)
+
+        self.assertEqual(response.status_code, 200)
+        mock_get_app_info.assert_called_once()
+        data = response.data
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertIn("detail", data["results"][0])
+        self.assertNotIn("report", data["results"][0]["detail"])
 
 
 class TestListAnalyseReportByRisk(AnalyseReportTestBase):

@@ -617,7 +617,7 @@ def _build_analyse_report_error_info(exc: Exception, current_retries: int, max_r
 
 @celery_app.task(
     bind=True,
-    queue="risk_report",
+    queue="risk_render",
     time_limit=900,
     max_retries=2,
     acks_late=True,

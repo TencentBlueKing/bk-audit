@@ -9,7 +9,7 @@ from services.web.common.constants import ScopeType
 from services.web.risk.resources.risk import ListRiskAPIGW
 from services.web.risk.serializers import ListRiskAPIGWRequestSerializer
 from services.web.risk.urls import router
-from services.web.risk.views import RiskAPIGWViewSet
+from services.web.risk.views import AnalyseReportAPIGWViewSet, RiskAPIGWViewSet
 
 
 @override_settings(ROOT_URLCONF="services.web.urls")
@@ -23,6 +23,16 @@ class TestRiskAPIGWRouting(SimpleTestCase):
         match = resolve("/api/v1/risk_apigw/")
 
         self.assertIs(match.func.cls, RiskAPIGWViewSet)
+
+    def test_analyse_report_apigw_prefix_registered_to_viewset(self):
+        registry = {prefix: viewset for prefix, viewset, _ in router.registry}
+
+        self.assertIs(registry["analyse_report_apigw"], AnalyseReportAPIGWViewSet)
+
+    def test_analyse_report_apigw_risks_route_resolves_to_viewset(self):
+        match = resolve("/api/v1/analyse_report_apigw/1/risks/")
+
+        self.assertIs(match.func.cls, AnalyseReportAPIGWViewSet)
 
     def test_legacy_risks_apigw_route_removed(self):
         with self.assertRaises(Resolver404):
