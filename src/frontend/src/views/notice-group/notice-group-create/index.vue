@@ -46,14 +46,13 @@
             label-width="135"
             property="group_member">
             <audit-user-selector-tenant
+              v-model="formData.group_member"
+              allow-create
               class="form-item-common"
-              :collapse-tags="collapseTags"
-              :model-value="formData.group_member"
               :multiple="multiple"
               :placeholder="t('请输入用户名，或通过输入$使用变量')"
               :user-group="variableList"
-              :user-group-name="t('可使用变量')"
-              @change="handleNoticeReceiver" />
+              :user-group-name="t('可使用变量')" />
             <bk-alert
               class="form-item-common mt8"
               theme="info"
@@ -168,7 +167,6 @@
   });
   const formRef = ref();
   const noticeWay = ref<Record<string, any>>({});
-  const collapseTags = false;
   const { t, locale } = useI18n();
   const showCreate = ref(false);
   const marginOffset = ref(locale.value === 'zh-CN' ?  '-25px' : '-10px');
@@ -301,10 +299,6 @@
     });
   };
 
-  // 接收通知对象
-  const handleNoticeReceiver = (value: Array<string> | string) => {
-    formData.value.group_member = value as string[];
-  };
   const closeDialog = () => {
     showCreate.value = false;
   };
