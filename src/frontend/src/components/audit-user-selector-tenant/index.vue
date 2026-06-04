@@ -68,20 +68,60 @@
     // collapseTags: true,
     // needRecord: false,
     isDisabled: false,
-    autoFocus: true,
+    autoFocus: false,
     userGroup: () => [],
     userGroupName: '用户组',
   });
 
   const emit = defineEmits<Emits>();
   const userSelectorRef = ref();
-  const localValue = ref<Props['modelValue']>([]);
 
-  // 自定义标签渲染
-  const renderTag = (createElement:any, userInfo:any) => createElement('span', { class: 'custom-tag' }, [
-    createElement('img', { src: userInfo.logo, class: 'avatar' }),
-    userInfo.display_name,
-  ]);
+  const normalizeModelValue = (modelValue: Props['modelValue']): Props['modelValue'] => {
+    if (props.multiple) {
+      if (Array.isArray(modelValue)) {
+        return modelValue;
+      }
+      return modelValue ? [String(modelValue)] : [];
+    }
+    if (Array.isArray(modelValue)) {
+      return modelValue[0] || '';
+    }
+    return modelValue || '';
+  };
+
+  const localValue = ref<Props['modelValue']>(normalizeModelValue(props.modelValue));
+
+  const getUserGroupLabel = (id: string) => {
+    const groupItem = props.userGroup?.find(item => item.id === id);
+    return groupItem?.name || '';
+  };
+
+  const getTagDisplayText = (userInfo: Record<string, any> | string) => {
+    if (!userInfo) {
+      return '';
+    }
+    if (typeof userInfo === 'string') {
+      return getUserGroupLabel(userInfo) || userInfo;
+    }
+    const id = userInfo.id || userInfo.username || userInfo.bk_username || '';
+    return userInfo.display_name
+      || userInfo.name
+      || getUserGroupLabel(id)
+      || userInfo.username
+      || userInfo.bk_username
+      || id;
+  };
+
+  // 自定义标签渲染（兼容用户组变量：无 display_name / logo）
+  const renderTag = (createElement: any, userInfo: Record<string, any> | string) => {
+    const displayText = getTagDisplayText(userInfo);
+    const children: any[] = [];
+    if (userInfo && typeof userInfo === 'object' && userInfo.logo) {
+      children.push(createElement('img', { src: userInfo.logo, class: 'avatar' }));
+    }
+    children.push(displayText);
+    return createElement('span', { class: 'custom-tag' }, children);
+  };
 
   // 从sessionStorage中获取配置
   const getConfig = () => {
@@ -125,9 +165,9 @@
   };
 
   watch(
-    () => props.modelValue,
-    (modelValue: Props['modelValue']) => {
-      localValue.value = modelValue;
+    () => [props.modelValue, props.multiple] as const,
+    ([modelValue]) => {
+      localValue.value = normalizeModelValue(modelValue);
     },
     {
       immediate: true,

@@ -240,6 +240,7 @@
     h,
     onBeforeUnmount,
     onMounted,
+    provide,
     ref,
     watch,
   } from 'vue';
@@ -316,6 +317,7 @@
 
   const comRef = ref();
   const formRef = ref();
+  provide('strategyStep1FormRef', formRef);
   const tagData = ref<Array<{
     id: string;
     name: string

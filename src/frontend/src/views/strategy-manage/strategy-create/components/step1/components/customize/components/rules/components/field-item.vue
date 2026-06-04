@@ -70,14 +70,12 @@
       error-display-type="tooltips"
       label=""
       label-width="0"
-      :property="getValueFormProperty(condition.condition.operator, condition.condition.field.raw_name, index)"
+      :property="condition.condition.operator === 'eq' ?
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
-        {
-          message: t('不能为空'),
-          trigger: ['change', 'blur'],
-          validator: () => validateConditionValue(condition.condition),
-        },
+        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
       ]">
       <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
@@ -101,20 +99,13 @@
       <!-- 日志表特有，人员选择器 -->
       <audit-user-selector-tenant
         v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
-        v-model="condition.condition.filters"
         allow-create
         :auto-focus="false"
         class="consition-value"
-        :multiple="tagInput.includes(condition.condition.operator)"
+        :model-value="getUserSelectorModelValue(condition)"
+        :multiple="condition.condition.operator !== 'eq'"
         :popover-options="{ placement: 'top-start' }"
-        @change="(value: Array<string>) => {
-          const val = Array.isArray(value) ? value : [value];
-          handleFilter(val, index);
-          // 同步写入 filter 字段（字符串），确保 eq 等单值操作符走 filter 校验路径时数据一致
-          if (!tagInput.includes(condition.condition.operator)) {
-            emits('updateFieldItem', val.join(','), props.conditionsIndex, index, 'filter');
-          }
-        }" />
+        @update:model-value="(value: string | string[]) => handleUserSelectorChange(value, index)" />
 
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
@@ -134,17 +125,11 @@
         trigger="focus"
         @change="(value: Array<string>) => handleTagInput(value, index)" />
       <bk-input
-        v-else-if="condition.condition.operator === 'eq'"
-        v-model="condition.condition.filter"
-        class="consition-value"
-        :placeholder="t('请输入')"
-        @input="(value: string) => handleFilter(value, index)" />
-      <bk-input
         v-else
         class="consition-value"
-        :model-value="getNonEqInputValue(condition.condition)"
+        :model-value="getTextInputValue(condition)"
         :placeholder="t('请输入')"
-        @input="(value: string) => handleNonEqInput(value, index)" />
+        @update:model-value="(value: string) => handleTextInputChange(value, index)" />
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
@@ -173,7 +158,14 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref, watch } from 'vue';
+  import {
+    computed,
+    inject,
+    nextTick,
+    ref,
+    watch,
+    type Ref,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -181,6 +173,7 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
+  import { normalizeConditionValueForDisplay } from '@utils/assist/normalize-condition-filter';
   import { splitAndMerge } from '@utils/assist/split-and-merge';
 
   import nodeSelect from './tree.vue';
@@ -224,6 +217,12 @@
 
   const emits = defineEmits<Emits>();
 
+  interface StrategyFormExpose {
+    clearValidate: (fields?: string | string[]) => void;
+  }
+
+  const strategyStep1FormRef = inject<Ref<StrategyFormExpose | null>>('strategyStep1FormRef', ref(null));
+
   const { t } = useI18n();
   const conditionList = ref<Array<{
     label: string,
@@ -234,26 +233,74 @@
 
   const tagInput = ['include', 'exclude'];
 
-  const isEqOperator = (operator: string) => operator === 'eq';
+  type ConditionItem = Props['conditions']['conditions'][0];
 
-  const isEventLogDictField = (rawName: string) => Boolean(dicts.value[rawName]?.length
-    && rawName !== 'action_id'
-    && props.configType === 'EventLog');
-
-  const isEventLogUserField = (rawName: string) => rawName.includes('username') && props.configType === 'EventLog';
-
-  // 等于：普通输入校验 filter；日志表字典/人员选择器仍绑定 filters
-  const getValueFormProperty = (operator: string, rawName: string, conditionIndex: number) => {
-    const base = `configs.where.conditions[${props.conditionsIndex}].conditions[${conditionIndex}].condition`;
-    if (isEqOperator(operator) && !isEventLogDictField(rawName) && !isEventLogUserField(rawName)) {
-      return `${base}.filter`;
-    }
-    return `${base}.filters`;
+  const getConditionValidateProperty = (index: number) => {
+    const { operator } = localConditions.value.conditions[index].condition;
+    const valueKey = operator === 'eq' ? 'filter' : 'filters';
+    return `configs.where.conditions[${props.conditionsIndex}].conditions[${index}].condition.${valueKey}`;
   };
 
-  const getNonEqInputValue = (condition: Props['conditions']['conditions'][0]['condition']) => (
-    condition.filters?.length ? condition.filters.join(',') : condition.filter
-  );
+  const syncConditionToParent = (index: number) => {
+    const { operator, filter, filters } = localConditions.value.conditions[index].condition;
+    if (operator === 'eq') {
+      emits('updateFieldItem', filter, props.conditionsIndex, index, 'filter');
+    } else {
+      emits('updateFieldItem', filters, props.conditionsIndex, index, 'filter');
+    }
+    emits('handleUpdateLocalConditions', localConditions.value);
+  };
+
+  const clearConditionFieldValidate = (index: number) => {
+    const field = getConditionValidateProperty(index);
+    nextTick(() => {
+      strategyStep1FormRef.value?.clearValidate?.(field);
+    });
+  };
+
+  const getTextInputValue = (condition: ConditionItem) => {
+    const { filter, filters, operator } = condition.condition;
+    if (operator === 'eq') {
+      return filter;
+    }
+    return filters?.length ? filters[0] : '';
+  };
+
+  const handleTextInputChange = (value: string, index: number) => {
+    const { condition } = localConditions.value.conditions[index];
+    if (condition.operator === 'eq') {
+      condition.filter = value;
+      condition.filters = [];
+    } else {
+      condition.filters = value ? [value] : [];
+      condition.filter = '';
+    }
+    syncConditionToParent(index);
+    clearConditionFieldValidate(index);
+  };
+
+  const getUserSelectorModelValue = (condition: ConditionItem): string | string[] => {
+    const { filter, filters, operator } = condition.condition;
+    if (operator === 'eq') {
+      return filter || '';
+    }
+    return filters?.length ? filters : [];
+  };
+
+  const handleUserSelectorChange = (value: string | string[], index: number) => {
+    const { condition } = localConditions.value.conditions[index];
+    if (condition.operator === 'eq') {
+      const singleVal = Array.isArray(value) ? (value[0] || '') : (value || '');
+      condition.filter = singleVal;
+      condition.filters = [];
+    } else {
+      const val = Array.isArray(value) ? value : (value ? [value] : []);
+      condition.filters = val;
+      condition.filter = '';
+    }
+    syncConditionToParent(index);
+    clearConditionFieldValidate(index);
+  };
 
   const localConditions = ref<Props['conditions']>({
     connector: 'and',
@@ -295,16 +342,6 @@
       return value.length > 0;
     }
     return value !== '' && value !== undefined && value !== null;
-  };
-
-  const validateConditionValue = (condition: Props['conditions']['conditions'][0]['condition']) => {
-    if (isEqOperator(condition.operator)) {
-      if (isEventLogDictField(condition.field.raw_name) || isEventLogUserField(condition.field.raw_name)) {
-        return handleValidate(condition.filters);
-      }
-      return handleValidate(condition.filter);
-    }
-    return handleValidate(condition.filters);
   };
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
@@ -349,6 +386,7 @@
 
   // 级联选择器
   const handleCascaderFilter = (value: Array<Array<string>> | Array<string>, index: number) => {
+    const { condition } = localConditions.value.conditions[index];
     // 判断是否是级联(多选是二维数组，取每个元素最后一个；单选一维，取最后一个元素)
     const resultValue = (Array.isArray(value) && value.every(element => Array.isArray(element)))
       ? value.map(((valItem) => {
@@ -357,18 +395,16 @@
         }
         return valItem;
       })) : value.slice(-1);
-    emits('updateFieldItem', resultValue as Array<string>, props.conditionsIndex, index, 'filter');
-  };
-
-  const syncNonEqFilters = (index: number, value: string) => {
-    const filters = value ? splitAndMerge([value]) : [];
-    localConditions.value.conditions[index].condition.filters = filters;
-    localConditions.value.conditions[index].condition.filter = '';
-    emits('updateFieldItem', filters, props.conditionsIndex, index, 'filter');
-  };
-
-  const handleNonEqInput = (value: string, index: number) => {
-    syncNonEqFilters(index, value);
+    const resultList = (Array.isArray(resultValue) ? resultValue : [resultValue]).filter(Boolean) as string[];
+    if (condition.operator === 'eq') {
+      condition.filter = resultList.join(',');
+      condition.filters = resultList;
+    } else {
+      condition.filters = resultList;
+      condition.filter = '';
+    }
+    syncConditionToParent(index);
+    clearConditionFieldValidate(index);
   };
 
   // tag-input、user、input输入
@@ -378,7 +414,9 @@
   // tag-input输入
   const handleTagInput = (value: Array<string>, index: number) => {
     localConditions.value.conditions[index].condition.filters = splitAndMerge(value);
-    emits('updateFieldItem', splitAndMerge(value), props.conditionsIndex, index, 'filter');
+    localConditions.value.conditions[index].condition.filter = '';
+    syncConditionToParent(index);
+    clearConditionFieldValidate(index);
   };
 
   const handleChangeConnector = () => {
@@ -424,6 +462,15 @@
         }).then((data) => {
           dicts.value[key] = data;
           if (data && data.length) {
+            const conditionItemList = localConditions.value.conditions
+              .filter(item => item.condition.field.raw_name === key);
+            conditionItemList.forEach((conditionItem) => {
+              const c = conditionItem.condition;
+              // eq 级联回显：filter 供校验，filters 供级联组件展示
+              if (c.operator === 'eq' && c.filter && (!c.filters?.length)) {
+                c.filters = c.filter.split(',').filter(Boolean);
+              }
+            });
             handleCascader(key, data);
           }
         });
@@ -466,17 +513,8 @@
 
   watch(() => props.conditions, (data) => {
     localConditions.value = JSON.parse(JSON.stringify(data));
-    // 编辑回填：eq操作符后端将值存入 filter 字段，
-    // 但 audit-user-selector 等组件绑定的是 filters 数组，需同步
     localConditions.value.conditions.forEach((cond: any) => {
-      const c = cond.condition;
-      if (c.operator === 'eq' && c.filter && (!c.filters?.length)) {
-        c.filters = [c.filter];
-      }
-      if (!isEqOperator(c.operator) && c.filter && !c.filters?.length) {
-        c.filters = splitAndMerge([c.filter]);
-        c.filter = '';
-      }
+      normalizeConditionValueForDisplay(cond.condition);
     });
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
