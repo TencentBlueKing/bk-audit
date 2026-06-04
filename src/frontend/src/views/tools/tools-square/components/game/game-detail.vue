@@ -840,6 +840,7 @@
           [EXPORT_USER_FIELDS.TOTAL_RECHARGE]: props.gameData.totalRecharge,
           [EXPORT_USER_FIELDS.TOTAL_GIFT]: props.gameData.totalGift,
           [EXPORT_USER_FIELDS.TOTAL_ISSUE]: props.gameData.totalIssue,
+          gameid: Number(props.gameData.gameid),
         }];
         const userHeaders = [
           EXPORT_USER_FIELDS.GAME_NAME, EXPORT_USER_FIELDS.OPENID,
@@ -847,6 +848,7 @@
           ...(props.gameData.platType === 'qq' ? [EXPORT_USER_FIELDS.QQ] : [EXPORT_USER_FIELDS.WECHAT]),
           EXPORT_USER_FIELDS.COIN_BALANCE, EXPORT_USER_FIELDS.TOTAL_RECHARGE,
           EXPORT_USER_FIELDS.TOTAL_GIFT, EXPORT_USER_FIELDS.TOTAL_ISSUE,
+          'gameid',
         ];
         useExportExcel.exportExcelSheet(wb, userInfoData, t('用户信息'), userHeaders, userHeaders);
       }
