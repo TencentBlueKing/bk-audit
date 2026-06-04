@@ -152,7 +152,7 @@
 
 <script setup lang="ts">
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import { InfoBox } from 'bkui-vue';
 
@@ -217,6 +217,7 @@
   }>();
 
   const router = useRouter();
+  const route = useRoute();
 
   const {
     getDrillDownParams,
@@ -687,6 +688,47 @@
   };
 
   // 打开游戏数据详情
+  const getRouteQueryValue = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value[0] ? String(value[0]) : '';
+    }
+    if (value === undefined || value === null) {
+      return '';
+    }
+    return String(value);
+  };
+
+  const restoreGameDetailFromRoute = () => {
+    const routeUid = typeof route.params.uid === 'string' ? route.params.uid : '';
+    if (!routeUid.startsWith('game_detail_')) return;
+    if (gameDetailDataMap.value[routeUid] && gameDetailToolUidMap.value[routeUid]) return;
+
+    const gameName = getRouteQueryValue(route.query.game_name);
+    const openid = getRouteQueryValue(route.query.openid);
+    const toolUid = getRouteQueryValue(route.query.tool_uid);
+    if (!gameName || !openid || !toolUid) return;
+
+    gameDetailDataMap.value[routeUid] = {
+      name: gameName,
+      openid,
+      gameid: getRouteQueryValue(route.query.game_id),
+      ctx: getRouteQueryValue(route.query.ctx),
+      wechat: '',
+      platType: getRouteQueryValue(route.query.plat_type),
+      platAccount: getRouteQueryValue(route.query.plat_account),
+      loginDays31: 0,
+      coinBalance: Number(getRouteQueryValue(route.query.coin_balance) || 0),
+      totalRecharge: Number(getRouteQueryValue(route.query.total_recharge) || 0),
+      totalGift: 0,
+      totalIssue: Number(getRouteQueryValue(route.query.total_issue) || 0),
+    };
+    gameDetailInitialTabMap.value[routeUid] = getRouteQueryValue(route.query.initial_tab) || 'overview';
+    gameDetailToolUidMap.value[routeUid] = toolUid;
+    syncGameDetailToStorage();
+  };
+
+  restoreGameDetailFromRoute();
+
   const handleOpenGameDetail = (gameData: Record<string, any>, initialTab?: string) => {
     const gameUid = `game_detail_${gameData.openid || ''}_${gameData.name}`;
     // 缓存游戏数据（保留 gameid 用于子接口查询）
@@ -728,11 +770,11 @@
       updated_by: '',
       updated_at: '',
     } as any);
-    emit('addTool', gameTool);
-    // 切换到新 tab
-    emit('switchTab', gameUid);
-    // 同步游戏详情缓存到 sessionStorage
+    // 同步游戏详情缓存后再切 tab，避免 URL 同步时拿到空 query。
     syncGameDetailToStorage();
+    syncGameDetailToStorage();
+    emit('addTool', gameTool);
+    emit('switchTab', gameUid);
   };
 
   // 处理下钻事件：在新浏览器标签页中打开目标工具
