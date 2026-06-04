@@ -37,6 +37,7 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 from rest_framework.settings import api_settings
 
+from api.constants import AIAgentCode
 from apps.exceptions import MetaConfigNotExistException
 from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
@@ -54,6 +55,7 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
+from services.web.risk.exceptions import AnalyseReportTitleGenerationError
 from services.web.risk.handlers import (
     BKMAlertSyncHandler,
     EventHandler,
@@ -66,7 +68,14 @@ from services.web.risk.handlers.ticket import (
     NewRisk,
     TransOperator,
 )
-from services.web.risk.models import ManualEvent, Risk, TicketNode
+from services.web.risk.models import (
+    AnalyseReportAgentRequestInfo,
+    AnalyseReportErrorInfo,
+    AnalyseReportExtraInfo,
+    ManualEvent,
+    Risk,
+    TicketNode,
+)
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import (
@@ -76,6 +85,32 @@ from services.web.risk.serializers import (
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
+
+ANALYSE_REPORT_LOADING_CONTENTS = ("正在思考", "正在思考...", "正在思考……")
+
+
+def _content_preview(content: str, limit: int = 200) -> str:
+    return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
+
+
+def _validate_analyse_report_content(content: str, report_id: int) -> str:
+    stripped = (content or "").strip()
+    reason = ""
+    if not stripped:
+        reason = "empty"
+    elif stripped in ANALYSE_REPORT_LOADING_CONTENTS:
+        reason = "loading_only"
+
+    if reason:
+        logger_celery.error(
+            "[GenerateAnalyseReport] Invalid agent content: report_id=%s, reason=%s, content_size=%s, preview=%s",
+            report_id,
+            reason,
+            len(content or ""),
+            _content_preview(content or ""),
+        )
+        raise ValueError(f"AI分析报告内容异常: {reason}")
+    return content or ""
 
 
 @celery_app.task(
@@ -606,19 +641,40 @@ def _link_risks_to_report(report) -> int:
     return len(risk_ids)
 
 
-def _build_analyse_report_error_info(exc: Exception, current_retries: int, max_retries: int | None) -> dict:
-    return {
-        "error_type": exc.__class__.__name__,
-        "error_message": str(exc),
-        "retry_count": current_retries,
-        "max_retries": max_retries,
-    }
+def _build_analyse_report_error_info(
+    exc: Exception, current_retries: int, max_retries: int | None
+) -> AnalyseReportErrorInfo:
+    return AnalyseReportErrorInfo(
+        error_type=exc.__class__.__name__,
+        error_message=str(exc),
+        retry_count=current_retries,
+        max_retries=max_retries,
+    )
+
+
+def _build_analyse_report_extra_info(
+    started_at: datetime.datetime,
+    ended_at: datetime.datetime | None = None,
+    agent_request: AnalyseReportAgentRequestInfo | None = None,
+    error: AnalyseReportErrorInfo | None = None,
+) -> dict:
+    return AnalyseReportExtraInfo.build(
+        started_at=started_at,
+        ended_at=ended_at,
+        agent_request=agent_request,
+        error=error,
+    ).model_dump(exclude_none=True)
+
+
+def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
+    report.extra_info = extra_info
+    report.__class__.objects.filter(report_id=report.report_id).update(extra_info=extra_info)
 
 
 @celery_app.task(
     bind=True,
-    queue="risk_report",
-    time_limit=900,
+    queue="risk_render",
+    time_limit=settings.ANALYSE_REPORT_TIME_LIMIT,
     max_retries=2,
     acks_late=True,
 )
@@ -633,6 +689,9 @@ def generate_analyse_report(self, report_id: int):
     from services.web.risk.models import AnalyseReport
 
     report = AnalyseReport.objects.get(report_id=report_id)
+    started_at = timezone.now()
+    agent_request = None
+    _update_analyse_report_extra_info(report, _build_analyse_report_extra_info(started_at=started_at))
 
     try:
         # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
@@ -647,22 +706,46 @@ def generate_analyse_report(self, report_id: int):
             # 自定义分析：使用用户自定义描述
             analysis_request = report.custom_prompt or "请使用风险查询条件查询风险详细数据生成分析报告。"
 
-        # 将 prompt_params 拼接到分析要求中，构造完整的文本字符串
-        prompt_params = report.prompt_params or {}
-        prompt_params_text = json.dumps(prompt_params, ensure_ascii=False) if prompt_params else ""
-        prompt = f"{analysis_request}\n{prompt_params_text}" if prompt_params_text else analysis_request
+        # prompt_params 仅用于后端筛选并绑定报告风险；Agent 只接收报告参数配置。
+        agent_input = {
+            "报告ID": report.report_id,
+            "报告标题": report.title,
+            "报告类型": report.report_type,
+            "场景标识": scenario.scenario_key if scenario else "",
+            "分析要求": analysis_request,
+            "已绑定风险数量": report.risk_count,
+        }
+        chat_user = report.created_by or "admin"
+        execute_kwargs = {"stream": True}
+        agent_request = AnalyseReportAgentRequestInfo(
+            user=chat_user,
+            input=agent_input,
+            execute_kwargs=execute_kwargs,
+        )
+        _update_analyse_report_extra_info(
+            report,
+            _build_analyse_report_extra_info(
+                started_at=started_at,
+                agent_request=agent_request,
+            ),
+        )
 
         # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
         result = api.bk_plugins_ai_audit_analyse.chat_completion(
-            user=report.created_by or "admin",
-            input=prompt,
-            execute_kwargs={"stream": True},
+            user=chat_user,
+            input=json.dumps(agent_input, ensure_ascii=False),
+            execute_kwargs=execute_kwargs,
         )
+        result = _validate_analyse_report_content(result, report.report_id)
 
         # 3. 更新报告
         report.content = result
         report.status = AnalyseReportStatus.SUCCESS
-        report.extra_info = {}
+        report.extra_info = _build_analyse_report_extra_info(
+            started_at=started_at,
+            ended_at=timezone.now(),
+            agent_request=agent_request,
+        )
         report.save(update_fields=["content", "status", "extra_info", "updated_at"])
 
         return {"report_id": report.report_id}
@@ -673,11 +756,74 @@ def generate_analyse_report(self, report_id: int):
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
             report.status = AnalyseReportStatus.FAILED
-            report.extra_info = _build_analyse_report_error_info(exc, current_retries, max_retries)
+            report.extra_info = _build_analyse_report_extra_info(
+                started_at=started_at,
+                ended_at=timezone.now(),
+                agent_request=agent_request,
+                error=_build_analyse_report_error_info(exc, current_retries, max_retries),
+            )
             report.save(update_fields=["status", "extra_info", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
             raise
         raise self.retry(exc=exc, countdown=60)
+
+
+def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:
+    """清洗并截断 AI 返回的标题。"""
+    title = str(raw_title or "").strip()
+    title = title.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    title = title.strip("\"'“”‘’")
+    title = " ".join(title.split())
+    title = title[:max_length]
+    if not title:
+        raise AnalyseReportTitleGenerationError()
+    return title
+
+
+@celery_app.task(bind=True, queue="risk_render", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT, acks_late=True)
+def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
+    """异步生成 AI 分析报告标题"""
+    from services.web.risk.models import AnalyseReport
+
+    report = AnalyseReport.objects.get(report_id=report_id)
+    current_task_id = getattr(self.request, "id", "")
+    title_task_id = report.title_task_id
+    if not report.title_generating or not title_task_id:
+        return {"report_id": report_id, "skipped": True}
+    if title_task_id and current_task_id and title_task_id != current_task_id:
+        logger_celery.warning(
+            "[GenerateAnalyseReportTitle] Skip stale task report_id=%s task_id=%s",
+            report_id,
+            current_task_id,
+        )
+        return {"report_id": report_id, "skipped": True}
+
+    try:
+        input_text = f'用户自定义分析描述: "{report.custom_prompt or ""}"'
+        result = api.bk_plugins_ai_agent.chat_completion(
+            agent_code=AIAgentCode.ALS_TITLE_SUM,
+            user=report.created_by or "admin",
+            input=input_text,
+            chat_history=[],
+            execute_kwargs={"stream": False},
+        )
+        title = _normalize_analyse_report_ai_title(result, settings.ANALYSE_REPORT_AI_TITLE_MAX_LENGTH)
+        updated = AnalyseReport.objects.filter(
+            report_id=report_id,
+            title_generating=True,
+            title_task_id=title_task_id,
+        ).update(title=title, title_generating=False, updated_at=timezone.now())
+        if updated:
+            report.title = title
+            report.title_generating = False
+        return {"report_id": report_id, "title": report.title, "updated": updated}
+    except Exception:
+        AnalyseReport.objects.filter(
+            report_id=report_id,
+            title_generating=True,
+            title_task_id=title_task_id,
+        ).update(title_generating=False, updated_at=timezone.now())
+        raise
 
 
 @celery_app.task(queue="risk_render")

@@ -17,27 +17,33 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import json
+import io
 import logging
 import os
-from urllib.parse import quote
+import uuid
+from typing import Any
+from urllib.parse import unquote, urlparse
 
 from blueapps.utils.request_provider import get_request_username
 from celery.result import AsyncResult
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers as drf_serializers
 
 from apps.audit.resources import AuditMixinResource
-from services.web.risk.constants import AnalyseReportStatus
+from core.utils.page import paginate_data
+from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
 )
+from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import (
     DeleteAnalyseReportRequestSerializer,
     ExportAnalyseReportRequestSerializer,
@@ -46,6 +52,7 @@ from services.web.risk.serializers import (
     ListAnalyseReportByRiskRequestSerializer,
     ListAnalyseReportRequestSerializer,
     ListAnalyseReportResponseSerializer,
+    ListAnalyseReportRiskPageResponseSerializer,
     ListAnalyseReportRiskRequestSerializer,
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
@@ -55,7 +62,20 @@ from services.web.risk.serializers import (
     TaskResultResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
 )
-from services.web.risk.tasks import generate_analyse_report
+from services.web.risk.tasks import (
+    generate_analyse_report,
+    generate_analyse_report_title,
+)
+
+
+def _build_analyse_report_temp_title(scenario: AnalyseReportScenario | None) -> str:
+    """构造 AI 标题生成完成前展示的临时标题。"""
+    if scenario:
+        title_prefix = scenario.name
+    else:
+        title_prefix = str(AnalyseReportType.CUSTOM.label)
+    timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
+    return f"{title_prefix}_{timestamp}"
 
 
 class AnalyseReportMeta(AuditMixinResource, abc.ABC):
@@ -78,7 +98,7 @@ class ListAnalyseReportScenario(AnalyseReportMeta):
     ResponseSerializer = ListAnalyseReportScenarioResponseSerializer
     many_response_data = True
 
-    def perform_request(self, validated_request_data):
+    def perform_request(self, validated_request_data: dict[str, Any]) -> QuerySet[AnalyseReportScenario]:
         return AnalyseReportScenario.objects.filter(is_enabled=True)
 
 
@@ -100,12 +120,17 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         prompt_params = validated_request_data.get("target_risks_filter") or {}
 
         # 3. 创建 AnalyseReport 记录
+        generate_title = validated_request_data.get("generate_title", False)
+        title = _build_analyse_report_temp_title(scenario) if generate_title else validated_request_data["title"]
+        title_task_id = str(uuid.uuid4()) if generate_title else ""
         report = AnalyseReport.objects.create(
-            title=validated_request_data["title"],
+            title=title,
             report_type=validated_request_data["report_type"],
             scenario=scenario,
             analysis_scope=validated_request_data.get("analysis_scope", ""),
             status=AnalyseReportStatus.GENERATING,
+            title_generating=generate_title,
+            title_task_id=title_task_id,
             prompt_params=prompt_params,
             custom_prompt=validated_request_data.get("custom_prompt", ""),
         )
@@ -117,10 +142,17 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         report.task_id = task.id
         report.save(update_fields=["task_id"])
 
+        title_task_status = ""
+        if generate_title:
+            generate_analyse_report_title.apply_async(kwargs={"report_id": report.report_id}, task_id=title_task_id)
+            title_task_status = "PENDING"
+
         return {
             "report_id": report.report_id,
             "task_id": task.id,
             "status": "PENDING",
+            "title_task_id": title_task_id,
+            "title_task_status": title_task_status,
         }
 
 
@@ -144,7 +176,7 @@ class GetAnalyseReportTaskResult(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data["task_id"]
-        get_object_or_404(self.get_user_reports(), task_id=task_id)
+        get_object_or_404(self.get_user_reports().filter(Q(task_id=task_id) | Q(title_task_id=task_id)))
 
         async_result = AsyncResult(task_id)
         celery_status = async_result.status
@@ -222,6 +254,8 @@ class UpdateAnalyseReport(AnalyseReportMeta):
         report = self.get_user_report(report_id)
 
         if "title" in validated_request_data:
+            if report.title_generating:
+                raise drf_serializers.ValidationError({"title": gettext_lazy("标题生成中，暂不可编辑")})
             report.title = validated_request_data["title"]
         if "content" in validated_request_data:
             report.content = validated_request_data["content"]
@@ -276,14 +310,20 @@ class ExportAnalyseReport(AnalyseReportMeta):
     def _export_markdown(self, report):
         """导出为 Markdown 文件"""
         response = HttpResponse(report.content, content_type="text/markdown; charset=utf-8")
-        filename = f"{report.title}.md"
-        response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
+        filename = self._build_export_filename(report.title, ".md")
+        response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
         return response
+
+    @staticmethod
+    def _build_export_filename(title: str, extension: str) -> str:
+        timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
+        return f"{title}_{timestamp}{extension}"
 
     # 项目内置中文字体路径（Noto Sans SC，SIL Open Font License）
     _CJK_FONT_PATH = os.path.normpath(
         os.path.join(os.path.dirname(__file__), os.pardir, "fonts", "NotoSansSC-Regular.ttf")
     )
+    _BLOCKED_PDF_RESOURCE_URI = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
 
     # PDF 报告的 HTML 模板，使用 @font-face 注册项目内置中文字体
     _PDF_HTML_TEMPLATE = """<!DOCTYPE html>
@@ -334,8 +374,22 @@ class ExportAnalyseReport(AnalyseReportMeta):
         margin: 6px 0;
         text-align: justify;
     }}
+    p, li {{
+        -pdf-word-wrap: CJK;
+        word-break: break-word;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }}
+    h1, h2, h3, blockquote, code, pre {{
+        -pdf-word-wrap: CJK;
+        word-break: break-word;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }}
     table {{
         width: 100%;
+        max-width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
         margin: 10px 0;
         font-size: 11px;
@@ -344,6 +398,11 @@ class ExportAnalyseReport(AnalyseReportMeta):
         border: 1px solid #ccc;
         padding: 6px 8px;
         text-align: left;
+        vertical-align: top;
+        -pdf-word-wrap: CJK;
+        word-break: break-word;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
     }}
     th {{
         background-color: #f0f0f0;
@@ -369,6 +428,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
         padding: 10px;
         font-size: 10px;
         overflow-x: auto;
+        white-space: pre-wrap;
     }}
     blockquote {{
         border-left: 3px solid #ccc;
@@ -379,48 +439,9 @@ class ExportAnalyseReport(AnalyseReportMeta):
 </style>
 </head>
 <body>
-    <h1>{title}</h1>
-    <div class="meta">{meta}</div>
     {content}
 </body>
 </html>"""
-
-    @staticmethod
-    def _format_analysis_scope(scope_raw: str) -> str:
-        """将 analysis_scope 的 JSON 格式转为可读文本。
-
-        输入示例:
-            [{"label":"首次发现时间","value":["2025-09-26","2026-03-27"]},{"label":"责任人","value":["ziminggao"]}]
-        输出示例:
-            首次发现时间: 2025-09-26 ~ 2026-03-27, 责任人: ziminggao
-        如果解析失败则原样返回。
-        """
-        if not scope_raw:
-            return ""
-        try:
-            items = json.loads(scope_raw)
-            if not isinstance(items, list):
-                return scope_raw
-        except (json.JSONDecodeError, TypeError):
-            return scope_raw
-
-        parts = []
-        for item in items:
-            label = item.get("label", "")
-            value = item.get("value", "")
-            if isinstance(value, list):
-                # 两个元素的列表视为范围（如时间范围），用 ~ 连接；否则用逗号
-                if len(value) == 2:
-                    display_value = f"{value[0]} ~ {value[1]}"
-                else:
-                    display_value = ", ".join(str(v) for v in value)
-            else:
-                display_value = str(value)
-            if label:
-                parts.append(f"{label}: {display_value}")
-            else:
-                parts.append(display_value)
-        return ", ".join(parts) if parts else scope_raw
 
     def _export_pdf(self, report):
         """导出为 PDF 文件
@@ -432,49 +453,23 @@ class ExportAnalyseReport(AnalyseReportMeta):
         使用项目内置的 Noto Sans SC 字体以支持中文渲染；
         如果 xhtml2pdf 不可用，回退为纯 HTML 导出。
         """
-        import io
-
-        import mistune
-
         # 将 Markdown 转为 HTML
-        html_content = mistune.html(report.content)
-
-        # 构建元信息
-        scope_display = self._format_analysis_scope(report.analysis_scope)
-        meta_text = (
-            f"报告类型: {report.get_report_type_display()} &nbsp;|&nbsp; "
-            f"分析范围: {scope_display} &nbsp;|&nbsp; "
-            f"关联风险: {report.risk_count} 条 &nbsp;|&nbsp; "
-            f"生成人: {report.created_by} &nbsp;|&nbsp; "
-            f"生成时间: {report.created_at.strftime('%Y-%m-%d %H:%M') if report.created_at else ''}"
-        )
+        html_content = render_ai_markdown(report.content)
 
         # 渲染完整 HTML
         full_html = self._PDF_HTML_TEMPLATE.format(
             font_path=self._CJK_FONT_PATH,
-            title=report.title,
-            meta=meta_text,
             content=html_content,
         )
 
         logger = logging.getLogger(__name__)
 
         try:
-            from xhtml2pdf import pisa
-
             # 检查字体文件是否存在
             if not os.path.exists(self._CJK_FONT_PATH):
                 logger.error("[ExportPDF] 中文字体文件不存在: %s", self._CJK_FONT_PATH)
 
-            # xhtml2pdf 通过 @font-face CSS 自动加载字体并注册到 reportlab
-            pdf_buffer = io.BytesIO()
-            pisa_status = pisa.CreatePDF(full_html, dest=pdf_buffer, encoding="utf-8")
-
-            if pisa_status.err:
-                logger.error("[ExportPDF] xhtml2pdf 渲染失败，错误数: %d", pisa_status.err)
-                raise RuntimeError(f"xhtml2pdf 渲染失败，错误数: {pisa_status.err}")
-
-            pdf_bytes = pdf_buffer.getvalue()
+            pdf_bytes = self._create_pdf(html=full_html)
             response = HttpResponse(pdf_bytes, content_type="application/pdf")
             ext = ".pdf"
         except ImportError:
@@ -486,24 +481,135 @@ class ExportAnalyseReport(AnalyseReportMeta):
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
 
-        filename = f"{report.title}{ext}"
-        response["Content-Disposition"] = f'attachment; filename="{quote(filename)}"'
+        filename = self._build_export_filename(report.title, ext)
+        response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
         return response
 
+    @classmethod
+    def _create_pdf(cls, html: str) -> bytes:
+        """使用 xhtml2pdf 将 HTML 渲染为 PDF 字节。"""
+        from xhtml2pdf import pisa
 
-class ListAnalyseReportRisk(AnalyseReportMeta):
-    """报告关联风险列表"""
+        pdf_buffer = io.BytesIO()
+        pisa_status = pisa.CreatePDF(
+            html,
+            dest=pdf_buffer,
+            encoding="utf-8",
+            link_callback=cls._resolve_pdf_resource,
+        )
+        if pisa_status.err:
+            raise RuntimeError(f"xhtml2pdf 渲染失败，错误数: {pisa_status.err}")
+        return pdf_buffer.getvalue()
 
-    name = gettext_lazy("报告关联风险列表")
+    @classmethod
+    def _resolve_pdf_resource(cls, uri: str, rel: str | None) -> str | None:
+        """限制 PDF 渲染读取服务器本地文件，仅允许远程资源和内置字体。"""
+        if not uri:
+            return cls._BLOCKED_PDF_RESOURCE_URI
+
+        parsed_uri = urlparse(uri)
+        if parsed_uri.scheme in {"http", "https", "data"}:
+            return uri
+        if parsed_uri.scheme == "file":
+            candidate_path = unquote(parsed_uri.path)
+        elif parsed_uri.scheme:
+            return cls._BLOCKED_PDF_RESOURCE_URI
+        elif os.path.isabs(uri):
+            candidate_path = uri
+        else:
+            candidate_path = os.path.join(os.path.dirname(rel), uri) if rel else os.path.abspath(uri)
+
+        builtin_font_path = os.path.realpath(cls._CJK_FONT_PATH)
+        if os.path.realpath(candidate_path) == builtin_font_path:
+            return cls._CJK_FONT_PATH
+        return cls._BLOCKED_PDF_RESOURCE_URI
+
+
+class AnalyseReportRiskListBase(AnalyseReportMeta):
+    """报告关联风险列表基类。"""
+
     RequestSerializer = ListAnalyseReportRiskRequestSerializer
     ResponseSerializer = ListAnalyseReportRiskResponseSerializer
     many_response_data = True
+    check_report_owner = True
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        self.get_user_report(report_id)
-        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True)
+        if self.check_report_owner:
+            self.get_user_report(report_id)
+
+        queryset = self.get_report_risk_queryset(report_id)
+        queryset = self.filter_report_risks(queryset, validated_request_data)
+        if validated_request_data.get("with_detail", False):
+            return self.attach_risk_detail(queryset)
+        return queryset
+
+    def get_report_risk_queryset(self, report_id: int):
+        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values("risk_id")
         return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
+
+    def filter_report_risks(self, queryset, params: dict):
+        risk_ids = params.get("risk_id", [])
+        if risk_ids:
+            queryset = queryset.filter(risk_id__in=risk_ids)
+
+        risk_levels = params.get("risk_level", [])
+        if risk_levels:
+            queryset = queryset.filter(strategy__risk_level__in=risk_levels)
+
+        statuses = params.get("status", [])
+        if statuses:
+            queryset = queryset.filter(status__in=statuses)
+
+        risk_labels = params.get("risk_label", [])
+        if risk_labels:
+            queryset = queryset.filter(risk_label__in=risk_labels)
+
+        keyword = params.get("keyword")
+        if keyword:
+            queryset = queryset.filter(
+                Q(risk_id__icontains=keyword) | Q(title__icontains=keyword) | Q(event_content__icontains=keyword)
+            )
+
+        return queryset.distinct()
+
+    def attach_risk_detail(self, queryset):
+        return ListAnalyseReportRiskResponseSerializer(queryset, many=True, context={"with_detail": True}).data
+
+
+class ListAnalyseReportRisk(AnalyseReportRiskListBase):
+    """报告关联风险列表"""
+
+    name = gettext_lazy("报告关联风险列表")
+    check_report_owner = True
+
+
+class ListAnalyseReportRiskAPIGW(AnalyseReportRiskListBase):
+    """报告关联风险列表(APIGW)"""
+
+    name = gettext_lazy("报告关联风险列表(APIGW)")
+    # TODO: APIGW 接入 Agent 身份后补充报告归属/租户校验。
+    check_report_owner = False
+    audit_action = None
+    bind_request = True
+    ResponseSerializer = ListAnalyseReportRiskPageResponseSerializer
+    many_response_data = False
+
+    def perform_request(self, validated_request_data):
+        request = validated_request_data.pop("_request")
+        with_detail = validated_request_data.get("with_detail", False)
+        report_id = validated_request_data["report_id"]
+        queryset = self.get_report_risk_queryset(report_id)
+        queryset = self.filter_report_risks(queryset, validated_request_data)
+
+        # ResourceViewSet 会先执行 resource 响应序列化，再处理 enable_paginate；这里需先分页再渲染详情。
+        paged_queryset, page = paginate_data(queryset=queryset, request=request)
+        data = ListAnalyseReportRiskResponseSerializer(
+            paged_queryset,
+            many=True,
+            context={"with_detail": with_detail},
+        ).data
+        return page.get_paginated_response(data).data
 
 
 class ListAnalyseReportByRisk(AnalyseReportMeta):

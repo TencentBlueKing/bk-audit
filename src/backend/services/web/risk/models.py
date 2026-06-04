@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 from functools import cached_property
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -32,6 +32,8 @@ from django.db.models.functions import Substr
 from django.db.models.signals import post_save  # noqa: E402
 from django.dispatch import receiver  # noqa: E402
 from django.utils.translation import gettext_lazy
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 from pydantic import ValidationError as PydanticValidationError
 
 from apps.meta.models import Tag
@@ -558,7 +560,7 @@ class TicketPermission(models.Model):
     risk_id = models.CharField(gettext_lazy("Risk ID"), max_length=255, db_index=True)
     action = models.CharField(gettext_lazy("Action"), max_length=32, db_index=True)
     user = models.CharField(gettext_lazy("User"), max_length=255, db_index=True)
-    authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True)
+    authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True, db_index=True)
     user_type = models.CharField(gettext_lazy("User Type"), choices=UserType.choices, max_length=32, db_index=True)
 
     class Meta:
@@ -772,6 +774,55 @@ class AnalyseReportScenario(SoftDeleteModel):
         ordering = ["-is_builtin", "-priority", "-created_at"]
 
 
+class AnalyseReportAgentRequestInfo(BaseModel):
+    user: str = PydanticField(..., description="调用 Agent 使用的用户标识")
+    input: dict[str, Any] = PydanticField(..., description="传给 Agent 的业务输入参数")
+    execute_kwargs: dict[str, Any] = PydanticField(..., description="调用 Agent 时使用的执行参数")
+
+
+class AnalyseReportExecutionInfo(BaseModel):
+    started_at: str = PydanticField(..., description="报告生成任务开始时间，ISO 8601 格式")
+    ended_at: str | None = PydanticField(None, description="报告生成任务结束时间，ISO 8601 格式")
+    duration_seconds: float | None = PydanticField(None, description="报告生成任务耗时，单位秒")
+
+    @classmethod
+    def build(
+        cls, started_at: datetime.datetime, ended_at: datetime.datetime | None = None
+    ) -> "AnalyseReportExecutionInfo":
+        data = {"started_at": started_at.isoformat()}
+        if ended_at is not None:
+            data["ended_at"] = ended_at.isoformat()
+            data["duration_seconds"] = round((ended_at - started_at).total_seconds(), 3)
+        return cls(**data)
+
+
+class AnalyseReportErrorInfo(BaseModel):
+    error_type: str = PydanticField(..., description="异常类型名称")
+    error_message: str = PydanticField(..., description="异常错误信息")
+    retry_count: int = PydanticField(..., description="当前已重试次数")
+    max_retries: int | None = PydanticField(None, description="任务允许的最大重试次数")
+
+
+class AnalyseReportExtraInfo(BaseModel):
+    agent_request: AnalyseReportAgentRequestInfo | None = PydanticField(None, description="报告生成时传给 Agent 的请求信息")
+    execution: AnalyseReportExecutionInfo = PydanticField(..., description="报告生成任务执行耗时信息")
+    error: AnalyseReportErrorInfo | None = PydanticField(None, description="报告最终失败时的错误信息")
+
+    @classmethod
+    def build(
+        cls,
+        started_at: datetime.datetime,
+        ended_at: datetime.datetime | None = None,
+        agent_request: AnalyseReportAgentRequestInfo | None = None,
+        error: AnalyseReportErrorInfo | None = None,
+    ) -> "AnalyseReportExtraInfo":
+        return cls(
+            agent_request=agent_request,
+            execution=AnalyseReportExecutionInfo.build(started_at=started_at, ended_at=ended_at),
+            error=error,
+        )
+
+
 class AnalyseReport(OperateRecordModel):
     """
     风险AI分析报告
@@ -807,11 +858,15 @@ class AnalyseReport(OperateRecordModel):
         db_index=True,
     )
     task_id = models.CharField(gettext_lazy("Celery任务ID"), max_length=255, blank=True, default="")
+    title_generating = models.BooleanField(gettext_lazy("AI标题生成中"), default=False, db_index=True)
+    title_task_id = models.CharField(
+        gettext_lazy("标题生成Celery任务ID"), max_length=255, blank=True, default="", db_index=True
+    )
     prompt_params = models.JSONField(
         gettext_lazy("Prompt参数"),
         default=dict,
         blank=True,
-        help_text=gettext_lazy("传给Analyse Agent的完整参数"),
+        help_text=gettext_lazy("用于后端筛选并绑定报告风险的参数"),
     )
     custom_prompt = models.TextField(gettext_lazy("自定义分析描述"), blank=True, default="")
     extra_info = models.JSONField(
