@@ -17,36 +17,50 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import io
+import json
+import sys
+import types
+from pathlib import Path
 from unittest import mock
 
 from django.contrib import admin
 from django.db.models import Q
 from django.http import Http404
 from django.test import override_settings
+from rest_framework import serializers as drf_serializers
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 from apps.permission.handlers.actions import ActionEnum
 from services.web.risk.constants import (
     AnalyseReportStatus,
     AnalyseReportType,
     EventFilterOperator,
+    RiskLabel,
+    RiskStatus,
 )
 from services.web.risk.models import (
     AnalyseReport,
+    AnalyseReportExtraInfo,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
+    RiskReport,
     TicketPermission,
     UserType,
 )
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
     ListAnalyseReportRequestSerializer,
+    ListAnalyseReportRiskPageResponseSerializer,
     ListAnalyseReportRiskRequestSerializer,
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
 )
+from services.web.risk.views import AnalyseReportAPIGWViewSet
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -240,6 +254,128 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
         serializer = GenerateAnalyseReportRequestSerializer(data={})
         self.assertFalse(serializer.is_valid())
         self.assertIn("report_type", serializer.errors)
+
+    @mock.patch("services.web.risk.resources.analyse_report.uuid.uuid4", return_value="title-task-id")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report_title")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_generate_report_allows_empty_title_when_generate_title_enabled(
+        self, mock_task, mock_title_task, _mock_uuid4
+    ):
+        """测试开启 AI 标题生成时允许标题为空"""
+        mock_async_result = mock.MagicMock()
+        mock_async_result.id = "celery-task-id-generate-title"
+        mock_task.delay.return_value = mock_async_result
+
+        result = self.resource.risk.generate_analyse_report(
+            {
+                "scenario_key": "person_investigation",
+                "report_type": AnalyseReportType.SYSTEM,
+                "generate_title": True,
+                "title": "",
+                "custom_prompt": "分析张三近30天高危风险",
+                "target_risks_filter": {},
+            }
+        )
+
+        self.assertIn("report_id", result)
+
+    @mock.patch("services.web.risk.resources.analyse_report.uuid.uuid4", return_value="title-task-id")
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report_title")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_generate_report_creates_temp_title_and_title_task(
+        self, mock_report_task, mock_title_task, mock_timezone, _mock_uuid4
+    ):
+        """测试开启 AI 标题生成时创建临时标题并触发标题任务"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 16, 21, 30, 45)
+        mock_report_task.delay.return_value.id = "report-task-id"
+
+        result = self.resource.risk.generate_analyse_report(
+            {
+                "scenario_key": "person_investigation",
+                "report_type": AnalyseReportType.SYSTEM,
+                "generate_title": True,
+                "title": "",
+                "custom_prompt": "分析张三近30天高危风险",
+                "target_risks_filter": {},
+            }
+        )
+
+        report = AnalyseReport.objects.get(report_id=result["report_id"])
+        self.assertEqual(report.title, f"{self.scenario_person.name}_20260616213045")
+        self.assertTrue(report.title_generating)
+        self.assertEqual(report.title_task_id, "title-task-id")
+        self.assertEqual(result["title_task_id"], "title-task-id")
+        self.assertEqual(result["title_task_status"], "PENDING")
+        mock_title_task.apply_async.assert_called_once_with(
+            kwargs={"report_id": report.report_id}, task_id="title-task-id"
+        )
+
+    @mock.patch("services.web.risk.resources.analyse_report.uuid.uuid4", return_value="title-task-id")
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report_title")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_generate_report_uses_custom_temp_title_when_scenario_missing(
+        self, mock_report_task, mock_title_task, mock_timezone, _mock_uuid4
+    ):
+        """测试未命中场景时使用自定义分析作为临时标题前缀"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 16, 21, 30, 45)
+        mock_report_task.delay.return_value.id = "report-task-id"
+
+        result = self.resource.risk.generate_analyse_report(
+            {
+                "scenario_key": "",
+                "report_type": AnalyseReportType.CUSTOM,
+                "generate_title": True,
+                "title": "",
+                "custom_prompt": "分析张三近30天高危风险",
+                "target_risks_filter": {},
+            }
+        )
+
+        report = AnalyseReport.objects.get(report_id=result["report_id"])
+        self.assertEqual(report.title, "自定义分析_20260616213045")
+        self.assertEqual(result["title_task_id"], "title-task-id")
+
+    @mock.patch("services.web.risk.resources.analyse_report.uuid.uuid4", return_value="title-task-id")
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report_title")
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_generate_report_uses_custom_temp_title_when_system_scenario_missing(
+        self, mock_report_task, mock_title_task, mock_timezone, _mock_uuid4
+    ):
+        """测试系统分析未命中场景时仍使用自定义分析作为临时标题前缀"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 16, 21, 30, 45)
+        mock_report_task.delay.return_value.id = "report-task-id"
+
+        result = self.resource.risk.generate_analyse_report(
+            {
+                "scenario_key": "not_exists",
+                "report_type": AnalyseReportType.SYSTEM,
+                "generate_title": True,
+                "title": "",
+                "custom_prompt": "分析张三近30天高危风险",
+                "target_risks_filter": {},
+            }
+        )
+
+        report = AnalyseReport.objects.get(report_id=result["report_id"])
+        self.assertEqual(report.title, "自定义分析_20260616213045")
+
+    def test_generate_report_requires_title_when_generate_title_disabled(self):
+        """测试未开启 AI 标题生成时标题不能为空"""
+        serializer = GenerateAnalyseReportRequestSerializer(
+            data={
+                "scenario_key": "",
+                "report_type": AnalyseReportType.CUSTOM,
+                "generate_title": False,
+                "title": "",
+                "custom_prompt": "分析张三近30天高危风险",
+                "target_risks_filter": {},
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
         self.assertIn("title", serializer.errors)
 
     def test_generate_report_serializer_invalid_report_type(self):
@@ -412,12 +548,33 @@ class TestListAnalyseReport(AnalyseReportTestBase):
 
         self.assertEqual([item["report_id"] for item in result], [self.report_failed.report_id])
         self.assertEqual(result[0]["extra_info"]["error_message"], "生成失败")
+        self.assertEqual(result[0]["error_message"], "生成失败")
 
     def test_list_reports_filter_generating_status(self):
         """显式传入状态时可查询生成中的报告"""
         result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.GENERATING})
 
         self.assertEqual([item["report_id"] for item in result], [self.report_generating.report_id])
+
+    def test_list_reports_returns_title_generating_flag(self):
+        """列表返回标题生成中标识"""
+        self.report_generating.title_generating = True
+        self.report_generating.title_task_id = "title-task-id"
+        self.report_generating.save(update_fields=["title_generating", "title_task_id"])
+
+        result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.GENERATING})
+
+        self.assertTrue(result[0]["title_generating"])
+
+    def test_list_reports_title_generating_uses_business_state(self):
+        """标题加载态使用业务状态，避免 Celery 结果过期后误判为生成中"""
+        self.report_generating.title_generating = False
+        self.report_generating.title_task_id = "title-task-id"
+        self.report_generating.save(update_fields=["title_generating", "title_task_id"])
+
+        result = self.resource.risk.list_analyse_report({"status": AnalyseReportStatus.GENERATING})
+
+        self.assertFalse(result[0]["title_generating"])
 
 
 class TestRetrieveAnalyseReport(AnalyseReportTestBase):
@@ -466,6 +623,42 @@ class TestRetrieveAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(result["risk_count"], 2)
         self.assertIn(self.risk1.risk_id, result["risk_ids"])
         self.assertIn(self.risk2.risk_id, result["risk_ids"])
+        self.assertIsNone(result["error_message"])
+
+    def test_retrieve_failed_report_returns_error_message(self):
+        """失败报告详情返回错误信息展示字段"""
+        failed_report = AnalyseReport.objects.create(
+            title="失败报告详情",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.FAILED,
+            prompt_params={},
+            extra_info={
+                "error": {
+                    "error_type": "Exception",
+                    "error_message": "API调用失败",
+                    "retry_count": 3,
+                    "max_retries": 3,
+                }
+            },
+            created_by="admin",
+        )
+
+        result = self.resource.risk.retrieve_analyse_report({"report_id": failed_report.report_id})
+
+        self.assertEqual(result["error_message"], "API调用失败")
+
+    def test_retrieve_report_returns_title_task_info(self):
+        """报告详情返回标题任务标识和生成态"""
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        result = self.resource.risk.retrieve_analyse_report({"report_id": self.report.report_id})
+
+        self.assertEqual(result["title_task_id"], "title-task-id")
+        self.assertTrue(result["title_generating"])
+        self.assertNotIn("title_task_status", result)
+        self.assertNotIn("title_editable", result)
 
     def test_retrieve_report_not_found(self):
         """测试获取不存在的报告"""
@@ -518,6 +711,50 @@ class TestUpdateAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(result["title"], "修改后的标题")
         self.report.refresh_from_db()
         self.assertEqual(self.report.title, "修改后的标题")
+
+    def test_update_report_rejects_title_when_title_task_running(self):
+        """测试标题生成中不允许编辑标题"""
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        with self.assertRaises(drf_serializers.ValidationError):
+            self.resource.risk.update_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "title": "用户新标题",
+                }
+            )
+
+    def test_update_report_allows_title_when_title_task_success(self):
+        """测试标题生成成功后允许编辑标题"""
+        self.report.title_generating = False
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        result = self.resource.risk.update_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "title": "用户新标题",
+            }
+        )
+
+        self.assertEqual(result["title"], "用户新标题")
+
+    def test_update_report_allows_title_when_title_task_failed(self):
+        """测试标题生成失败后允许编辑标题"""
+        self.report.title_generating = False
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        result = self.resource.risk.update_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "title": "用户新标题",
+            }
+        )
+
+        self.assertEqual(result["title"], "用户新标题")
 
     def test_update_report_content(self):
         """测试更新报告内容"""
@@ -632,28 +869,20 @@ class TestDeleteAnalyseReport(AnalyseReportTestBase):
 class TestExportAnalyseReport(AnalyseReportTestBase):
     """测试导出AI报告"""
 
+    @staticmethod
+    def _read_fixture(filename):
+        return (Path(__file__).parent / "fixtures" / filename).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extract_html_body(html):
+        return html.split("<body>", 1)[1].split("</body>", 1)[0].strip()
+
     def setUp(self):
         super().setUp()
         self.report = AnalyseReport.objects.create(
             title="导出测试报告",
             report_type=AnalyseReportType.SYSTEM,
-            content=(
-                "# 一、总览\n\n"
-                "本报告对综合类风险数据进行全面分析，涵盖事件检测、趋势分析和处置建议。\n\n"
-                "## 二、详情\n\n"
-                "| 指标 | 值 | 同比变化 |\n"
-                "|---|---|---|\n"
-                "| 风险总数 | 100 | +15% |\n"
-                "| 高风险 | 25 | +20% |\n"
-                "| 中风险 | 45 | +10% |\n"
-                "| 低风险 | 30 | +5% |\n\n"
-                "## 三、趋势分析\n\n"
-                "近30天风险数量呈上升趋势，主要增长来自数据访问类和权限变更类事件。\n\n"
-                "## 四、处置建议\n\n"
-                "1. 加强数据访问权限的定期审查\n"
-                "2. 完善权限变更的审批流程\n"
-                "3. 部署实时异常检测告警\n"
-            ),
+            content=self._read_fixture("analyse_report_export.md"),
             analysis_scope="风险类型=综合",
             risk_count=5,
             status=AnalyseReportStatus.SUCCESS,
@@ -670,7 +899,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         )
         self.assertEqual(result["Content-Type"], "text/markdown; charset=utf-8")
         self.assertIn("attachment", result["Content-Disposition"])
-        self.assertEqual(result.content.decode("utf-8"), self.report.content)
+        self.assertEqual(result.content.decode("utf-8"), self._read_fixture("analyse_report_export.md"))
 
     def test_export_pdf(self):
         """测试导出为PDF（回退为HTML）"""
@@ -701,6 +930,23 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertIn(".md", disposition)
         self.assertNotIn(".pdf", disposition)
         self.assertNotIn(".html", disposition)
+        self.assertIn("filename*=utf-8''", disposition)
+        self.assertNotIn('filename="%E5', disposition)
+
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    def test_export_markdown_filename_contains_export_timestamp(self, mock_timezone):
+        """测试 Markdown 导出文件名包含精确到秒的导出时间戳"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
+
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "markdown",
+            }
+        )
+
+        disposition = result["Content-Disposition"]
+        self.assertIn("20260615204436.md", disposition)
 
     def test_export_pdf_filename_matches_content_type(self):
         """测试 PDF 导出的文件名扩展名与实际内容类型匹配"""
@@ -719,6 +965,133 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
             # 回退为 HTML，文件名应以 .html 结尾
             self.assertIn(".html", disposition)
             self.assertNotIn(".pdf", disposition)
+        self.assertIn("filename*=utf-8''", disposition)
+        self.assertNotIn('filename="%E5', disposition)
+
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    def test_export_pdf_filename_contains_export_timestamp(self, mock_timezone):
+        """测试 PDF 导出文件名包含精确到秒的导出时间戳"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            result = self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        disposition = result["Content-Disposition"]
+        self.assertIn("20260615204436.pdf", disposition)
+
+    def test_export_pdf_renders_content_only(self):
+        """测试 PDF 渲染内容与 Markdown 一致，不额外拼接标题和元信息"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertEqual(
+            self._extract_html_body(full_html),
+            self._read_fixture("analyse_report_export_body.html").strip(),
+        )
+        self.assertNotIn("<h1>导出测试报告</h1>", full_html)
+        self.assertNotIn("报告类型:", full_html)
+        self.assertNotIn("分析范围:", full_html)
+
+    def test_export_pdf_table_styles_wrap_long_text(self):
+        """测试 PDF 表格样式限制长文本跨列溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn("-pdf-word-wrap: CJK", full_html)
+
+    def test_export_pdf_text_styles_wrap_long_text(self):
+        """测试 PDF 普通段落和列表项限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn(
+            "p, li {\n"
+            "        -pdf-word-wrap: CJK;\n"
+            "        word-break: break-word;\n"
+            "        word-wrap: break-word;\n"
+            "        overflow-wrap: anywhere;",
+            full_html,
+        )
+
+    def test_export_pdf_heading_and_code_styles_wrap_long_text(self):
+        """测试 PDF 标题、引用和代码块限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn("h1, h2, h3, blockquote, code, pre {", full_html)
+        self.assertIn("-pdf-word-wrap: CJK", full_html)
+        self.assertIn("white-space: pre-wrap", full_html)
+
+    def test_create_pdf_uses_xhtml2pdf(self):
+        """测试 PDF 字节生成逻辑使用 xhtml2pdf"""
+        pisa_status = mock.Mock(err=False)
+        mock_create_pdf = mock.Mock(return_value=pisa_status)
+        fake_module = types.SimpleNamespace(pisa=types.SimpleNamespace(CreatePDF=mock_create_pdf))
+        with mock.patch.dict(sys.modules, {"xhtml2pdf": fake_module}):
+            pdf_bytes = self.resource.risk.export_analyse_report._create_pdf(html="<html>报告</html>")
+
+        self.assertEqual(pdf_bytes, b"")
+        dest = mock_create_pdf.call_args.kwargs["dest"]
+        self.assertIsInstance(dest, io.BytesIO)
+        self.assertIn("link_callback", mock_create_pdf.call_args.kwargs)
+
+    def test_pdf_resource_callback_rejects_local_file(self):
+        """测试 PDF 资源回调拒绝读取服务器本地文件"""
+        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
+
+        for local_uri in ["/etc/passwd", "file:///etc/passwd"]:
+            resolved_uri = callback(local_uri, None)
+            self.assertNotEqual(resolved_uri, local_uri)
+            self.assertTrue(resolved_uri.startswith("data:image/gif;base64,"))
+
+    def test_pdf_resource_callback_allows_remote_images(self):
+        """测试 PDF 资源回调允许外部和内网图片"""
+        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
+
+        self.assertEqual(callback("https://example.com/a.png", None), "https://example.com/a.png")
+        self.assertEqual(callback("http://127.0.0.1/a.png", None), "http://127.0.0.1/a.png")
+
+    def test_pdf_resource_callback_allows_builtin_font_only(self):
+        """测试 PDF 资源回调仅允许内置字体本地路径"""
+        export_resource = self.resource.risk.export_analyse_report
+
+        self.assertEqual(
+            export_resource._resolve_pdf_resource(export_resource._CJK_FONT_PATH, None),
+            export_resource._CJK_FONT_PATH,
+        )
 
     @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
     def test_export_pdf_success_filename_is_pdf(self, mock_export_pdf):
@@ -886,6 +1259,62 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         for risk_data in result:
             self.assertEqual(risk_data["strategy_id"], self.strategy.strategy_id)
 
+    def test_list_report_risks_filters_by_risk_id(self):
+        """测试报告关联风险列表支持按风险ID过滤"""
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_id": self.risk1.risk_id}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_status(self):
+        """测试报告关联风险列表支持按风险状态过滤"""
+        self.risk2.status = RiskStatus.CLOSED
+        self.risk2.save(update_fields=["status"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "status": RiskStatus.NEW}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_keyword(self):
+        """测试报告关联风险列表支持按关键词过滤"""
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "keyword": "Test Risk 1"}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_risk_level(self):
+        """测试报告关联风险列表支持按风险等级过滤"""
+        low_strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="test-low-strategy",
+            risk_level=RiskLevel.LOW.value,
+        )
+        self.risk2.strategy = low_strategy
+        self.risk2.save(update_fields=["strategy"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_level": RiskLevel.HIGH.value}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
+    def test_list_report_risks_filters_by_risk_label(self):
+        """测试报告关联风险列表支持按风险标签过滤"""
+        self.risk1.risk_label = RiskLabel.MISREPORT
+        self.risk1.save(update_fields=["risk_label"])
+        self.risk2.risk_label = RiskLabel.NORMAL
+        self.risk2.save(update_fields=["risk_label"])
+
+        result = self.resource.risk.list_analyse_report_risk.request(
+            {"report_id": self.report.report_id, "risk_label": RiskLabel.MISREPORT}
+        )
+
+        self.assertEqual([item["risk_id"] for item in result], [self.risk1.risk_id])
+
     def test_list_report_risks_empty_report(self):
         """测试没有关联风险的报告返回空列表"""
         empty_report = AnalyseReport.objects.create(
@@ -949,6 +1378,118 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
 
         with self.assertRaises(Http404):
             self.resource.risk.list_analyse_report_risk({"report_id": other_report.report_id})
+
+
+class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
+    """测试报告关联风险 APIGW 列表"""
+
+    def setUp(self):
+        super().setUp()
+        self.factory = APIRequestFactory()
+        self.report = AnalyseReport.objects.create(
+            title="APIGW关联风险测试",
+            report_type=AnalyseReportType.SYSTEM,
+            risk_count=2,
+            status=AnalyseReportStatus.SUCCESS,
+            prompt_params={},
+            created_by="other_user",
+        )
+        AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk1.risk_id)
+        AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk2.risk_id)
+
+    def request_apigw_resource(self, request_data=None, query_string="page=1&page_size=100"):
+        request_data = request_data or {}
+        request = Request(
+            self.factory.post(
+                f"/api/v1/analyse_report_apigw/{self.report.report_id}/risks/?{query_string}",
+                request_data,
+                format="json",
+            )
+        )
+        return self.resource.risk.list_analyse_report_risk_apigw.request(
+            {"report_id": self.report.report_id, **request_data},
+            _request=request,
+        )
+
+    def test_apigw_request_serializer_normalizes_csv_fields(self):
+        """APIGW请求序列化器负责拆分多值筛选参数"""
+        serializer = ListAnalyseReportRiskRequestSerializer(
+            data={
+                "report_id": self.report.report_id,
+                "risk_id": "risk-agent-001,risk-agent-002",
+                "status": "new,closed",
+                "risk_level": "HIGH,LOW",
+                "risk_label": "normal,misreport",
+                "keyword": " Test Risk ",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["risk_id"], ["risk-agent-001", "risk-agent-002"])
+        self.assertEqual(serializer.validated_data["status"], ["new", "closed"])
+        self.assertEqual(serializer.validated_data["risk_level"], ["HIGH", "LOW"])
+        self.assertEqual(serializer.validated_data["risk_label"], ["normal", "misreport"])
+        self.assertEqual(serializer.validated_data["keyword"], "Test Risk")
+
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_apigw_list_report_risks_skips_owner_check_but_limits_bound_risks(self, _mock_username):
+        """APIGW跳过报告归属校验，但只能返回报告已绑定风险"""
+        unbound_risk = Risk.objects.create(
+            risk_id="risk-agent-unbound",
+            raw_event_id="raw-agent-unbound",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="Unbound Risk",
+            event_time=datetime.datetime(2026, 1, 3, tzinfo=datetime.timezone.utc),
+        )
+
+        result = self.request_apigw_resource()
+
+        self.assertEqual(result["total"], 2)
+        risk_ids = {item["risk_id"] for item in result["results"]}
+        self.assertEqual(risk_ids, {self.risk1.risk_id, self.risk2.risk_id})
+        self.assertNotIn(unbound_risk.risk_id, risk_ids)
+
+    def test_apigw_with_detail_excludes_risk_report(self):
+        """APIGW风险详情不返回风险报告内容"""
+        RiskReport.objects.create(risk=self.risk1, content="sensitive report content")
+
+        result = self.request_apigw_resource({"risk_id": self.risk1.risk_id, "with_detail": True})
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertIn("detail", result["results"][0])
+        self.assertNotIn("report", result["results"][0]["detail"])
+
+    def test_apigw_response_serializer_matches_paginated_response(self):
+        """APIGW响应序列化器与分页响应结构一致"""
+        result = self.request_apigw_resource()
+        serializer = ListAnalyseReportRiskPageResponseSerializer(data=result)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["total"], 2)
+
+    @mock.patch("core.permissions.get_app_info")
+    def test_apigw_viewset_paginates_before_returning_detail(self, mock_get_app_info):
+        """APIGW HTTP链路按分页返回当前页风险详情"""
+        RiskReport.objects.create(risk=self.risk1, content="risk1 report content")
+        RiskReport.objects.create(risk=self.risk2, content="risk2 report content")
+        view = AnalyseReportAPIGWViewSet.as_view({"post": "risks"})
+        request = self.factory.post(
+            f"/api/v1/analyse_report_apigw/{self.report.report_id}/risks/?page=1&page_size=1",
+            {"with_detail": True},
+            format="json",
+        )
+
+        response = view(request, report_id=self.report.report_id)
+
+        self.assertEqual(response.status_code, 200)
+        mock_get_app_info.assert_called_once()
+        data = response.data
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertIn("detail", data["results"][0])
+        self.assertNotIn("report", data["results"][0]["detail"])
 
 
 class TestListAnalyseReportByRisk(AnalyseReportTestBase):
@@ -1043,9 +1584,84 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
             created_by="admin",
         )
 
+    def test_ai_title_agent_code_exists(self):
+        """测试 AI 标题生成 Agent Code 已注册"""
+        from api.constants import AIAgentCode
+
+        self.assertEqual(AIAgentCode.ALS_TITLE_SUM.value, "bp-ai-als-title-sum")
+
+    @override_settings(ANALYSE_REPORT_AI_TITLE_MAX_LENGTH=20)
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
+    def test_generate_title_task_updates_report_title(self, mock_chat):
+        """测试标题任务调用 AI 并更新报告标题"""
+        from api.constants import AIAgentCode
+        from services.web.risk.tasks import generate_analyse_report_title
+
+        mock_chat.return_value = "张三近三十天高危风险行为分析报告标题明显超过二十个字"
+        self.report.title = "自定义分析_20260616213045"
+        self.report.custom_prompt = "分析张三近30天高危风险"
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title", "custom_prompt", "title_generating", "title_task_id"])
+
+        with mock.patch.object(generate_analyse_report_title.request, "id", "title-task-id"):
+            result = generate_analyse_report_title(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.title, "张三近三十天高危风险行为分析报告标题明显")
+        self.assertEqual(len(self.report.title), 20)
+        self.assertFalse(self.report.title_generating)
+        self.assertEqual(result["title"], self.report.title)
+        self.assertEqual(result["updated"], 1)
+        mock_chat.assert_called_once()
+        self.assertEqual(mock_chat.call_args.kwargs["agent_code"], AIAgentCode.ALS_TITLE_SUM)
+        self.assertEqual(mock_chat.call_args.kwargs["input"], '用户自定义分析描述: "分析张三近30天高危风险"')
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
+    def test_generate_title_task_rejects_empty_title(self, mock_chat):
+        """测试 AI 返回空标题时任务失败且保留临时标题"""
+        from services.web.risk.exceptions import AnalyseReportTitleGenerationError
+        from services.web.risk.tasks import generate_analyse_report_title
+
+        mock_chat.return_value = "   "
+        self.report.title = "自定义分析_20260616213045"
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title", "title_generating", "title_task_id"])
+
+        with mock.patch.object(generate_analyse_report_title.request, "id", "title-task-id"):
+            with self.assertRaises(AnalyseReportTitleGenerationError):
+                generate_analyse_report_title(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.title, "自定义分析_20260616213045")
+        self.assertFalse(self.report.title_generating)
+
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
+    def test_generate_title_task_skips_stale_task(self, mock_chat):
+        """测试旧标题任务不会覆盖当前报告标题"""
+        from services.web.risk.tasks import generate_analyse_report_title
+
+        self.report.title = "自定义分析_20260616213045"
+        self.report.title_generating = True
+        self.report.title_task_id = "new-title-task-id"
+        self.report.save(update_fields=["title", "title_generating", "title_task_id"])
+
+        with mock.patch.object(generate_analyse_report_title.request, "id", "old-title-task-id"):
+            result = generate_analyse_report_title(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.title, "自定义分析_20260616213045")
+        self.assertTrue(result["skipped"])
+        mock_chat.assert_not_called()
+
+    @mock.patch("services.web.risk.tasks.timezone.now")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_success_with_scenario(self, mock_chat):
+    def test_task_success_with_scenario(self, mock_chat, mock_now):
         """测试使用场景配置成功生成报告"""
+        start_time = datetime.datetime(2026, 6, 5, 10, 0, 0, tzinfo=datetime.timezone.utc)
+        end_time = datetime.datetime(2026, 6, 5, 10, 0, 3, 250000, tzinfo=datetime.timezone.utc)
+        mock_now.side_effect = [start_time, start_time, end_time, end_time, end_time]
         mock_chat.return_value = (
             "# 一、行为链分析\n\n"
             "通过对张三相关风险单的时序分析，发现以下行为模式：\n\n"
@@ -1066,13 +1682,32 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertIn("处置建议", self.report.content)
         self.assertEqual(result["report_id"], self.report.report_id)
 
-        # 验证调用参数：直接传递 prompt 文本，不再传 chat_history
+        # 验证调用参数：只传递报告参数配置，不再传 chat_history 或原始筛选条件
         mock_chat.assert_called_once()
         call_kwargs = mock_chat.call_args[1]
         self.assertEqual(call_kwargs["user"], "admin")
-        # input 是完整的文本字符串，包含场景 system_prompt 内容
-        self.assertIn("请分析责任人行为", call_kwargs["input"])
+        agent_input = json.loads(call_kwargs["input"])
+        self.assertEqual(agent_input["报告ID"], self.report.report_id)
+        self.assertEqual(agent_input["场景标识"], self.scenario_person.scenario_key)
+        self.assertIn("请分析责任人行为", agent_input["分析要求"])
+        self.assertNotIn("analysis_scope", agent_input)
+        self.assertNotIn("分析范围", agent_input)
+        self.assertNotIn("list_analyse_report_risk_apigw", call_kwargs["input"])
+        self.assertNotIn("operator", agent_input)
+        self.assertNotIn("zhangsan", call_kwargs["input"])
         self.assertNotIn("chat_history", call_kwargs)
+
+        self.assertEqual(self.report.extra_info["agent_request"]["user"], "admin")
+        self.assertEqual(self.report.extra_info["agent_request"]["input"], agent_input)
+        self.assertEqual(self.report.extra_info["agent_request"]["execute_kwargs"], {"stream": True})
+        self.assertEqual(self.report.extra_info["execution"]["started_at"], start_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["ended_at"], end_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["duration_seconds"], 3.25)
+        extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+        self.assertEqual(extra_info.agent_request.input["报告ID"], self.report.report_id)
+        self.assertIsNone(extra_info.error)
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["agent_request"].description, "报告生成时传给 Agent 的请求信息")
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["execution"].description, "报告生成任务执行耗时信息")
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_success_custom_analysis(self, mock_chat):
@@ -1103,7 +1738,11 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertIn("自定义分析报告", self.report.content)
-        self.assertEqual(self.report.extra_info, {})
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["分析要求"], self.report.custom_prompt)
+        self.assertIn("started_at", self.report.extra_info["execution"])
+        self.assertIn("ended_at", self.report.extra_info["execution"])
+        self.assertIn("duration_seconds", self.report.extra_info["execution"])
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_links_risks_before_chat_completion(self, mock_chat):
@@ -1129,8 +1768,34 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(self.report.risk_count, 1)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_failure(self, mock_chat):
+    def test_task_saves_agent_request_before_chat_completion(self, mock_chat):
+        """调用 Agent 前先记录已确定的请求上下文"""
+
+        def assert_agent_request_saved(**kwargs):
+            self.report.refresh_from_db()
+            self.assertEqual(self.report.extra_info["agent_request"]["user"], "admin")
+            self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+            self.assertIn("started_at", self.report.extra_info["execution"])
+            self.assertNotIn("ended_at", self.report.extra_info["execution"])
+            self.assertNotIn("duration_seconds", self.report.extra_info["execution"])
+            self.assertNotIn("error", self.report.extra_info)
+            extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+            self.assertIsNone(extra_info.execution.ended_at)
+            return "# 已生成报告"
+
+        mock_chat.side_effect = assert_agent_request_saved
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
+    @mock.patch("services.web.risk.tasks.timezone.now")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_failure(self, mock_chat, mock_now):
         """测试达到最大重试次数后标记为失败"""
+        start_time = datetime.datetime(2026, 6, 5, 11, 0, 0, tzinfo=datetime.timezone.utc)
+        end_time = datetime.datetime(2026, 6, 5, 11, 0, 1, 500000, tzinfo=datetime.timezone.utc)
+        mock_now.side_effect = [start_time, start_time, end_time, end_time, end_time]
         mock_chat.side_effect = Exception("API调用失败")
 
         from services.web.risk.tasks import generate_analyse_report
@@ -1145,9 +1810,16 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
-        self.assertEqual(self.report.extra_info["error_type"], "Exception")
-        self.assertEqual(self.report.extra_info["error_message"], "API调用失败")
-        self.assertEqual(self.report.extra_info["retry_count"], generate_analyse_report.max_retries)
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+        self.assertEqual(self.report.extra_info["execution"]["started_at"], start_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["ended_at"], end_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["duration_seconds"], 1.5)
+        self.assertEqual(self.report.extra_info["error"]["error_type"], "Exception")
+        self.assertEqual(self.report.extra_info["error"]["error_message"], "API调用失败")
+        self.assertEqual(self.report.extra_info["error"]["retry_count"], generate_analyse_report.max_retries)
+        extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+        self.assertEqual(extra_info.error.error_message, "API调用失败")
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["error"].description, "报告最终失败时的错误信息")
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_keeps_generating_status_before_max_retries(self, mock_chat):
@@ -1389,6 +2061,23 @@ class TestGetAnalyseReportTaskResult(AnalyseReportTestBase):
         with self.assertRaises(Http404):
             self.resource.risk.get_analyse_report_task_result({"task_id": "other-user-task"})
         mock_async_result_cls.assert_not_called()
+
+    @mock.patch("services.web.risk.resources.analyse_report.AsyncResult")
+    def test_task_result_allows_title_task_id(self, mock_async_result_cls):
+        """支持查询报告关联的标题生成任务"""
+        report = self.create_task_report("report-task-id")
+        report.title_generating = True
+        report.title_task_id = "title-task-id"
+        report.save(update_fields=["title_generating", "title_task_id"])
+        mock_result = mock.MagicMock()
+        mock_result.status = "SUCCESS"
+        mock_result.result = {"report_id": report.report_id}
+        mock_async_result_cls.return_value = mock_result
+
+        result = self.resource.risk.get_analyse_report_task_result({"task_id": "title-task-id"})
+
+        self.assertEqual(result["task_id"], "title-task-id")
+        self.assertEqual(result["status"], "SUCCESS")
 
 
 class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
@@ -1841,6 +2530,38 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.assertEqual(linked_count, Risk.objects.count())
         self.assertEqual(self.report.risk_count, Risk.objects.count())
 
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_empty_content(self, mock_chat, mock_retry):
+        """Agent 返回空报告时触发重试，不写入成功报告"""
+        mock_chat.return_value = "   "
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_loading_content(self, mock_chat, mock_retry):
+        """Agent 返回正在思考占位内容时触发重试，不写入成功报告"""
+        mock_chat.return_value = "正在思考..."
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
     @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_fails_before_chat_if_link_fails_on_max_retry(self, mock_chat, mock_link):
@@ -1857,7 +2578,9 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
-        self.assertEqual(self.report.extra_info["error_message"], "关联失败")
+        self.assertNotIn("agent_request", self.report.extra_info)
+        self.assertIn("execution", self.report.extra_info)
+        self.assertEqual(self.report.extra_info["error"]["error_message"], "关联失败")
         mock_chat.assert_not_called()
 
 

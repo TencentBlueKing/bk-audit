@@ -17,9 +17,12 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+from pathlib import Path
 from unittest import mock
 
+import yaml
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from django.test import override_settings
 
@@ -33,6 +36,8 @@ from api.utils import get_agent_base_url
 from tests.base import TestCase
 
 from .constants import CHAT_COMPLETION_PARAMS, CHAT_COMPLETION_RESPONSE
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class TestAIAuditReport(TestCase):
@@ -213,7 +218,7 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_returns_done_content(self, mock_build_header, mock_build_url):
+    def test_stream_returns_text_content_when_text_and_done_present(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
@@ -265,7 +270,60 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_done_cover_not_returned(self, mock_build_header, mock_build_url):
+    def test_stream_prefers_text_content_when_done_present(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            "data: " + json.dumps({"event": "text", "content": "# 报告\n## 一、行为链分析\n", "cover": False}),
+            "data: " + json.dumps({"event": "text", "content": "## 二、风险关联分析\n", "cover": False}),
+            "data: " + json.dumps({"event": "done", "content": "done 完整内容", "cover": False}),
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "# 报告\n## 一、行为链分析\n## 二、风险关联分析\n")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_returns_text_content_without_extra_normalization(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            "data: " + json.dumps({"event": "text", "content": "正在思考...\n\n ## Analysis Plan\n", "cover": False}),
+            "data: " + json.dumps({"event": "text", "content": "# 风险态势总结报告\n## 一、态势概览\n", "cover": False}),
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "正在思考...\n\n ## Analysis Plan\n# 风险态势总结报告\n## 一、态势概览\n")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_prefers_text_content_over_done_cover(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
@@ -288,6 +346,135 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, "prefix ")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_returns_text_content_even_when_done_present(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': '正在思考...', 'cover': False})}",
+            "data: " + json.dumps({"event": "text", "content": "\n\n  ", "cover": False}),
+            f"data: {json.dumps({'event': 'done', 'content': '完整最终报告', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "正在思考...\n\n  ")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_fallbacks_to_done_content_when_text_missing(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'think', 'content': 'thinking', 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': 'final answer', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "final answer")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_raises_when_only_think_events_without_terminal_event(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'think', 'content': 'thinking', 'cover': False})}",
+            f"data: {json.dumps({'event': 'think', 'content': 'still thinking', 'cover': False})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        with self.assertRaises(APIRequestError):
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_raises_when_text_events_without_terminal_event(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': 'part1', 'cover': False})}",
+            f"data: {json.dumps({'event': 'text', 'content': 'part2', 'cover': False})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        with self.assertRaises(APIRequestError):
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_raises_when_terminal_seen_but_content_empty(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'think', 'content': 'thinking', 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': '   ', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        with self.assertRaises(APIRequestError):
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -336,8 +523,16 @@ class TestAIAuditReportStream(TestCase):
 
         def iter_lines(decode_unicode=False):
             if decode_unicode:
-                return [event.encode("utf-8").decode("latin1")]
-            return [event.encode("utf-8")]
+                return [
+                    event.encode("utf-8").decode("latin1"),
+                    ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}))
+                    .encode("utf-8")
+                    .decode("latin1"),
+                ]
+            return [
+                event.encode("utf-8"),
+                ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"})).encode("utf-8"),
+            ]
 
         mock_response.iter_lines.side_effect = iter_lines
         self.resource.session.request = mock.Mock(return_value=mock_response)
@@ -474,3 +669,30 @@ class TestGetAgentBaseUrl(TestCase):
         ):
             result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
             self.assertEqual(result, "http://direct")
+
+
+class TestAIAuditReportAPIGWConfig(TestCase):
+    """测试 AI 审计报告 APIGW/MCP 配置"""
+
+    def test_audit_report_mcp_uses_report_risk_resource(self):
+        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text()
+
+        self.assertIn("list_analyse_report_risk_apigw", definition)
+        self.assertNotIn("list_risk_apigw", definition)
+
+    def test_report_risk_apigw_resource_defined(self):
+        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text())
+        resource = resources["paths"]["/analyse_report_apigw/{report_id}/risks/"]["post"]
+
+        self.assertEqual(resource["operationId"], "list_analyse_report_risk_apigw")
+        self.assertEqual(
+            resource["x-bk-apigateway-resource"]["backend"]["path"],
+            "/api/v1/analyse_report_apigw/{report_id}/risks/",
+        )
+        detail_schema = resource["responses"]["200"]["schema"]["properties"]["results"]["items"]["properties"]["detail"]
+        detail_properties = detail_schema["properties"]
+        self.assertIn("risk_id", detail_properties)
+        self.assertIn("event_content", detail_properties)
+        self.assertIn("event_data", detail_properties)
+        self.assertIn("has_report", detail_properties)
+        self.assertNotIn("report", detail_properties)

@@ -240,7 +240,8 @@ class RiskHandler:
             # 只在事件的时间更新的时候存储
             if risk.event_end_time.timestamp() < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
-                risk.save(update_fields=["event_end_time"])
+                risk.event_data = event.get("event_data")
+                risk.save(update_fields=["event_end_time", "event_data"])
             if event.get("event_content") and risk.event_content != event["event_content"]:
                 risk.event_content = event["event_content"]
                 risk.save(update_fields=["event_content"])

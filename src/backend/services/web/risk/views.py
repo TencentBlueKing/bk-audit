@@ -89,6 +89,22 @@ class EventAPIGWViewSet(APIGWViewSet):
     ]
 
 
+class AnalyseReportAPIGWViewSet(APIGWViewSet):
+    """
+    AI Analyse Report APIGW - 托管 AI 报告给 Agent 使用的接口。
+    """
+
+    lookup_field = "report_id"
+    resource_routes = [
+        ResourceRoute(
+            "POST",
+            resource.risk.list_analyse_report_risk_apigw,
+            pk_field="report_id",
+            endpoint="risks",
+        ),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks

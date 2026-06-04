@@ -109,3 +109,33 @@ class TestCreateRiskWithStrategyStatus(TestCase):
 
         existing.refresh_from_db()
         self.assertEqual(int(existing.event_end_time.timestamp()), int(self.now_ms / 1000))
+
+    def test_existing_risk_event_data_updated_when_event_time_is_later(self):
+        strategy = Strategy.objects.create(strategy_id=104, status=StrategyStatusChoices.RUNNING.value)
+        existing = Risk.objects.create(
+            strategy=strategy,
+            raw_event_id="raw-004",
+            event_time=datetime.datetime.fromtimestamp(self.now_ms / 1000),
+            event_end_time=datetime.datetime.fromtimestamp(self.now_ms / 1000),
+            event_data={"result": "old"},
+            event_type=[],
+        )
+
+        later_ms = self.now_ms + 60_000
+        event = {
+            "strategy_id": 104,
+            "raw_event_id": "raw-004",
+            "event_time": later_ms,
+            "event_data": {"result": "new"},
+            "event_evidence": "[]",
+        }
+
+        eligible = RiskHandler.fetch_eligible_strategy_ids()
+        created, risk = RiskHandler().create_risk(event, eligible)
+
+        self.assertFalse(created)
+        self.assertEqual(risk.risk_id, existing.risk_id)
+
+        existing.refresh_from_db()
+        self.assertEqual(int(existing.event_end_time.timestamp()), int(later_ms / 1000))
+        self.assertEqual(existing.event_data, {"result": "new"})
