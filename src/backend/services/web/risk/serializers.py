@@ -1601,7 +1601,7 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
 
     通过 target_risks_filter 接收和 list_risk 接口一样的所有过滤参数，
     前端页面上提交的过滤条件会直接放入该字段中传入。
-    这些过滤参数会作为 prompt_params 存入报告，并拼接到 AI 分析要求中。
+    这些过滤参数会作为 prompt_params 存入报告，仅用于后端按发起人权限筛选并绑定报告风险。
     """
 
     scenario_key = serializers.CharField(
