@@ -889,6 +889,86 @@ paths:
                     detail:
                       type: object
                       description: 风险自身完整详情，仅 with_detail=true 时返回，不包含风险报告 report 字段
+                      properties:
+                        risk_id:
+                          type: string
+                          description: 风险ID
+                        raw_event_id:
+                          type: string
+                          description: 原始事件ID
+                        strategy_id:
+                          type: integer
+                          description: 策略ID
+                        scene_id:
+                          type: integer
+                          description: 场景ID
+                        title:
+                          type: string
+                          description: 风险标题
+                        event_content:
+                          type: string
+                          description: 风险描述
+                        event_evidence:
+                          type: string
+                          description: 风险证据
+                        event_type:
+                          type: array
+                          items:
+                            type: string
+                          description: 风险类型
+                        event_data:
+                          type: object
+                          description: 事件原始数据
+                        event_time:
+                          type: string
+                          format: date-time
+                          description: 首次发现时间
+                        event_end_time:
+                          type: string
+                          format: date-time
+                          description: 最后发现时间
+                        event_source:
+                          type: string
+                          description: 事件来源
+                        operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 责任人
+                        status:
+                          type: string
+                          description: 风险展示状态
+                        current_operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 当前处理人
+                        notice_users:
+                          type: array
+                          items:
+                            type: string
+                          description: 关注人
+                        risk_label:
+                          type: string
+                          description: 风险标签
+                        last_operate_time:
+                          type: string
+                          format: date-time
+                          description: 最后操作时间
+                        tags:
+                          type: array
+                          items:
+                            type: integer
+                          description: 标签ID列表
+                        has_report:
+                          type: boolean
+                          description: 是否存在风险报告
+                        report_enabled:
+                          type: boolean
+                          description: 策略是否启用AI报告
+                        report_auto_render:
+                          type: boolean
+                          description: 策略是否自动生成AI报告
         default:
           description: ''
       x-bk-apigateway-resource:

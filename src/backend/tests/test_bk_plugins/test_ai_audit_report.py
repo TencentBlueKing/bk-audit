@@ -498,3 +498,10 @@ class TestAIAuditReportAPIGWConfig(TestCase):
             resource["x-bk-apigateway-resource"]["backend"]["path"],
             "/api/v1/analyse_report_apigw/{report_id}/risks/",
         )
+        detail_schema = resource["responses"]["200"]["schema"]["properties"]["results"]["items"]["properties"]["detail"]
+        detail_properties = detail_schema["properties"]
+        self.assertIn("risk_id", detail_properties)
+        self.assertIn("event_content", detail_properties)
+        self.assertIn("event_data", detail_properties)
+        self.assertIn("has_report", detail_properties)
+        self.assertNotIn("report", detail_properties)
