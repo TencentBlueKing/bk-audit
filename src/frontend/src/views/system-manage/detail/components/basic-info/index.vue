@@ -63,6 +63,7 @@
             v-else
             v-model="formData.managers"
             allow-create
+            auto-focus
             multiple
             @blur="handleBlur('managers')" />
         </div>
