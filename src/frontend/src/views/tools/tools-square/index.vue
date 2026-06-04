@@ -127,6 +127,7 @@
 <script setup lang='ts'>
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import type { LocationQueryRaw } from 'vue-router';
   import { useRoute, useRouter } from 'vue-router';
 
   import SceneManageService from '@service/scene-manage';
@@ -160,6 +161,20 @@
     id: string;
     name: string;
     type: 'aggregate' | 'scene' | 'system';
+  }
+
+  interface GameDetailRouteQuery {
+    game_id?: string;
+    game_name?: string;
+    openid?: string;
+    tool_uid?: string;
+    initial_tab?: string;
+    ctx?: string;
+    plat_type?: string;
+    plat_account?: string;
+    coin_balance?: string;
+    total_recharge?: string;
+    total_issue?: string;
   }
 
   const renderLabelRef = ref();
@@ -274,12 +289,67 @@
   const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
   const isProgrammaticReset = ref(false);
 
+  const GAME_DETAIL_STORAGE_KEY = 'tool_tabs_game_detail_map';
+
+  const getFirstQueryValue = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value[0] ? String(value[0]) : '';
+    }
+    if (value === undefined || value === null) {
+      return '';
+    }
+    return String(value);
+  };
+
+  const loadGameDetailRouteCache = (): {
+    data: Record<string, any>;
+    tab: Record<string, string>;
+    toolUid: Record<string, string>;
+  } => {
+    try {
+      const raw = sessionStorage.getItem(GAME_DETAIL_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : { data: {}, tab: {}, toolUid: {} };
+    } catch {
+      return { data: {}, tab: {}, toolUid: {} };
+    }
+  };
+
+  const buildGameDetailQuery = (uid: string): LocationQueryRaw => {
+    const cache = loadGameDetailRouteCache();
+    const gameData = cache.data?.[uid] || {};
+    const query: GameDetailRouteQuery = {
+      game_id: gameData.gameid ? String(gameData.gameid) : '',
+      game_name: gameData.name || '',
+      openid: gameData.openid || '',
+      tool_uid: cache.toolUid?.[uid] || '',
+      initial_tab: cache.tab?.[uid] || 'overview',
+      ctx: gameData.ctx || '',
+      plat_type: gameData.platType || '',
+      plat_account: gameData.platAccount || '',
+      coin_balance: gameData.coinBalance !== undefined ? String(gameData.coinBalance) : '',
+      total_recharge: gameData.totalRecharge !== undefined ? String(gameData.totalRecharge) : '',
+      total_issue: gameData.totalIssue !== undefined ? String(gameData.totalIssue) : '',
+    };
+
+    return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== ''));
+  };
+
+  const getGameDetailTabName = (uid: string) => {
+    const query = route.query as Record<string, unknown>;
+    const gameName = getFirstQueryValue(query.game_name);
+    const ctx = getFirstQueryValue(query.ctx);
+    if (routeUid === uid && gameName) {
+      return ctx ? `${ctx} - ${gameName}` : gameName;
+    }
+    return uid;
+  };
+
   // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
   // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
   if (!routeUid && openedTools.value.length > 0) {
     if (activeToolUid.value) {
       // activeToolUid 有值说明离开前在工具详情，恢复 URL 到对应的工具详情路由
-      router.replace({ name: 'toolDetail', params: { uid: activeToolUid.value } });
+      syncRouteToUrl(activeToolUid.value);
     }
     // activeToolUid 为空说明离开前在工具列表（首页），保持在工具列表页面，不自动打开工具详情
   }
@@ -364,7 +434,7 @@
     if (!alreadyInList) {
       const tempTool = new ToolInfo({
         uid: routeUid,
-        name: routeUid,
+        name: routeUid.startsWith('game_detail_') ? getGameDetailTabName(routeUid) : routeUid,
       } as ToolInfo);
       openTool(tempTool);
     } else if (activeToolUid.value !== routeUid) {
@@ -459,13 +529,14 @@
     fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
   };
 
-  const syncRouteToUrl = (uid?: string) => {
-    if (uid && (route.name !== 'toolDetail' || route.params.uid !== uid)) {
-      router.replace({ name: 'toolDetail', params: { uid } });
+  function syncRouteToUrl(uid?: string) {
+    if (uid) {
+      const query = uid.startsWith('game_detail_') ? buildGameDetailQuery(uid) : {};
+      router.replace({ name: 'toolDetail', params: { uid }, query });
     } else if (!uid && route.name !== 'toolsSquare') {
       router.replace({ name: 'toolsSquare' });
     }
-  };
+  }
 
   const handleOpenTool = (tool: ToolInfo) => {
     openTool(tool);
