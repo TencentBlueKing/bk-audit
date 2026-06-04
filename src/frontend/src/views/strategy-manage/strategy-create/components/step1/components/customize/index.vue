@@ -298,6 +298,7 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Where {
@@ -882,7 +883,11 @@
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
     expectedResultsRef.value.setSelect(editData.configs.select);
-    rulesComponentRef.value.setWhere(editData.configs.where, editData.configs.having);
+    const where = _.cloneDeep(editData.configs.where);
+    const having = editData.configs.having ? _.cloneDeep(editData.configs.having) : undefined;
+    normalizeWhereForDisplay(where);
+    normalizeWhereForDisplay(having);
+    rulesComponentRef.value.setWhere(where, having);
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
