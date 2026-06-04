@@ -31,6 +31,7 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers as drf_serializers
 
 from apps.audit.resources import AuditMixinResource
+from core.utils.page import paginate_data
 from services.web.risk.constants import AnalyseReportStatus
 from services.web.risk.models import (
     AnalyseReport,
@@ -46,6 +47,7 @@ from services.web.risk.serializers import (
     ListAnalyseReportByRiskRequestSerializer,
     ListAnalyseReportRequestSerializer,
     ListAnalyseReportResponseSerializer,
+    ListAnalyseReportRiskPageResponseSerializer,
     ListAnalyseReportRiskRequestSerializer,
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
@@ -491,19 +493,91 @@ class ExportAnalyseReport(AnalyseReportMeta):
         return response
 
 
-class ListAnalyseReportRisk(AnalyseReportMeta):
-    """报告关联风险列表"""
+class AnalyseReportRiskListBase(AnalyseReportMeta):
+    """报告关联风险列表基类。"""
 
-    name = gettext_lazy("报告关联风险列表")
     RequestSerializer = ListAnalyseReportRiskRequestSerializer
     ResponseSerializer = ListAnalyseReportRiskResponseSerializer
     many_response_data = True
+    check_report_owner = True
 
     def perform_request(self, validated_request_data):
         report_id = validated_request_data["report_id"]
-        self.get_user_report(report_id)
-        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values_list("risk_id", flat=True)
+        if self.check_report_owner:
+            self.get_user_report(report_id)
+
+        queryset = self.get_report_risk_queryset(report_id)
+        queryset = self.filter_report_risks(queryset, validated_request_data)
+        if validated_request_data.get("with_detail", False):
+            return self.attach_risk_detail(queryset)
+        return queryset
+
+    def get_report_risk_queryset(self, report_id: int):
+        risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values("risk_id")
         return Risk.objects.filter(risk_id__in=risk_ids).select_related("strategy")
+
+    def filter_report_risks(self, queryset, params: dict):
+        risk_ids = params.get("risk_id", [])
+        if risk_ids:
+            queryset = queryset.filter(risk_id__in=risk_ids)
+
+        risk_levels = params.get("risk_level", [])
+        if risk_levels:
+            queryset = queryset.filter(strategy__risk_level__in=risk_levels)
+
+        statuses = params.get("status", [])
+        if statuses:
+            queryset = queryset.filter(status__in=statuses)
+
+        risk_labels = params.get("risk_label", [])
+        if risk_labels:
+            queryset = queryset.filter(risk_label__in=risk_labels)
+
+        keyword = params.get("keyword")
+        if keyword:
+            queryset = queryset.filter(
+                Q(risk_id__icontains=keyword) | Q(title__icontains=keyword) | Q(event_content__icontains=keyword)
+            )
+
+        return queryset.distinct()
+
+    def attach_risk_detail(self, queryset):
+        return ListAnalyseReportRiskResponseSerializer(queryset, many=True, context={"with_detail": True}).data
+
+
+class ListAnalyseReportRisk(AnalyseReportRiskListBase):
+    """报告关联风险列表"""
+
+    name = gettext_lazy("报告关联风险列表")
+    check_report_owner = True
+
+
+class ListAnalyseReportRiskAPIGW(AnalyseReportRiskListBase):
+    """报告关联风险列表(APIGW)"""
+
+    name = gettext_lazy("报告关联风险列表(APIGW)")
+    # TODO: APIGW 接入 Agent 身份后补充报告归属/租户校验。
+    check_report_owner = False
+    audit_action = None
+    bind_request = True
+    ResponseSerializer = ListAnalyseReportRiskPageResponseSerializer
+    many_response_data = False
+
+    def perform_request(self, validated_request_data):
+        request = validated_request_data.pop("_request")
+        with_detail = validated_request_data.get("with_detail", False)
+        report_id = validated_request_data["report_id"]
+        queryset = self.get_report_risk_queryset(report_id)
+        queryset = self.filter_report_risks(queryset, validated_request_data)
+
+        # ResourceViewSet 会先执行 resource 响应序列化，再处理 enable_paginate；这里需先分页再渲染详情。
+        paged_queryset, page = paginate_data(queryset=queryset, request=request)
+        data = ListAnalyseReportRiskResponseSerializer(
+            paged_queryset,
+            many=True,
+            context={"with_detail": with_detail},
+        ).data
+        return page.get_paginated_response(data).data
 
 
 class ListAnalyseReportByRisk(AnalyseReportMeta):

@@ -17,8 +17,10 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+from pathlib import Path
 from unittest import mock
 
+import yaml
 from bk_resource import api
 from django.conf import settings
 from django.test import override_settings
@@ -33,6 +35,8 @@ from api.utils import get_agent_base_url
 from tests.base import TestCase
 
 from .constants import CHAT_COMPLETION_PARAMS, CHAT_COMPLETION_RESPONSE
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class TestAIAuditReport(TestCase):
@@ -474,3 +478,23 @@ class TestGetAgentBaseUrl(TestCase):
         ):
             result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
             self.assertEqual(result, "http://direct")
+
+
+class TestAIAuditReportAPIGWConfig(TestCase):
+    """测试 AI 审计报告 APIGW/MCP 配置"""
+
+    def test_audit_report_mcp_uses_report_risk_resource(self):
+        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text()
+
+        self.assertIn("list_analyse_report_risk_apigw", definition)
+        self.assertNotIn("list_risk_apigw", definition)
+
+    def test_report_risk_apigw_resource_defined(self):
+        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text())
+        resource = resources["paths"]["/analyse_report_apigw/{report_id}/risks/"]["post"]
+
+        self.assertEqual(resource["operationId"], "list_analyse_report_risk_apigw")
+        self.assertEqual(
+            resource["x-bk-apigateway-resource"]["backend"]["path"],
+            "/api/v1/analyse_report_apigw/{report_id}/risks/",
+        )
