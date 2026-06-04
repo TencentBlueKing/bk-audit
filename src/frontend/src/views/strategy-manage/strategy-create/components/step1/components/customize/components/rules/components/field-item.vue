@@ -75,11 +75,7 @@
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
-        {
-          message: t('不能为空'),
-          trigger: ['change', 'blur'],
-          validator: () => validateConditionValue(condition.condition),
-        },
+        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
       ]">
       <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
@@ -346,16 +342,6 @@
       return value.length > 0;
     }
     return value !== '' && value !== undefined && value !== null;
-  };
-
-  const validateConditionValue = (condition: Props['conditions']['conditions'][0]['condition']) => {
-    if (isEqOperator(condition.operator)) {
-      if (isEventLogDictField(condition.field.raw_name) || isEventLogUserField(condition.field.raw_name)) {
-        return handleValidate(condition.filters);
-      }
-      return handleValidate(condition.filter);
-    }
-    return handleValidate(condition.filters);
   };
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
