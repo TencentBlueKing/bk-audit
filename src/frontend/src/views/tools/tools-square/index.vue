@@ -197,7 +197,15 @@
   // 初始化获取场景列表
   fetchSceneAll();
   const tagsEnums = ref<Array<TagItem>>([]);
-  const tagId = ref('');
+  const tagId = ref(sessionStorage.getItem('tools_square_selected_tag') || '');
+  // 监听 tagId 变化，保存到 sessionStorage（用于记忆选中的tab）
+  watch(tagId, (newVal) => {
+    if (newVal) {
+      sessionStorage.setItem('tools_square_selected_tag', newVal);
+    } else {
+      sessionStorage.removeItem('tools_square_selected_tag');
+    }
+  });
   const strategyLabelList = ref<Array<TagItem>>([]);
   const renderStyle = ref({
     backgroundColor: '#fff',
@@ -372,6 +380,14 @@
       syncRouteToUrl(activeToolUid.value || undefined);
     }
     // 无论是初始化还是切换，都重新拉取标签和工具列表
+    // 切换场景时，重置选中的标签为"全部工具"
+    if (isActualChange) {
+      tagId.value = '-3';
+      // 更新UI选中状态为"全部工具"
+      nextTick(() => {
+        renderLabelRef.value?.setLabel('-3');
+      });
+    }
     refreshTagsList();
     ContentCardRef.value?.getToolsList(tagId.value);
   };
@@ -493,10 +509,17 @@
       if (hasOpenedTools.value) return;
       // 始终清空 all，避免 render-label 顶部出现空白行
       renderLabelRef.value?.resetAll([]);
-      // 初始化阶段（tagId 为空）：通过 resetAll 触发 handleChecked 来加载工具列表
-      // 场景切换阶段（tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
-      if (!tagId.value) {
-        safeResetLabels();
+      // 初始化阶段（lastSceneKey 为 null）或 tagId 为空时：需要触发加载工具列表
+      // 场景切换阶段（lastSceneKey 不为 null 且 tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
+      if (lastSceneKey.value === null || !tagId.value) {
+        if (lastSceneKey.value === null && tagId.value) {
+          // 初始化阶段且 tagId 有值（从 sessionStorage 恢复）：直接设置选中状态并加载对应列表
+          renderLabelRef.value?.setLabel(tagId.value);
+          ContentCardRef.value?.getToolsList(tagId.value);
+        } else {
+          // 其他情况（初始化阶段 tagId 为空，或场景切换阶段 tagId 为空）：调用 safeResetLabels 触发 checked 事件
+          safeResetLabels();
+        }
       }
     },
   });
