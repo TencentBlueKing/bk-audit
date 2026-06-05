@@ -338,6 +338,10 @@
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleDocumentClick);
   });
+
+  defineExpose({
+    startEditValue: handleStartEditValue,
+  });
 </script>
 <style lang="postcss" scoped>
   .condition-tag-event-item {

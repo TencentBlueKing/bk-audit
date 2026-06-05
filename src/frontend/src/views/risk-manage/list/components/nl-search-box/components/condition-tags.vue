@@ -77,6 +77,7 @@
         <tag-event-field
           v-for="item in eventFieldItems"
           :key="item.id"
+          :ref="(el: any) => { if (el) eventFieldRefs[item.id] = el }"
           :condition-list="conditionList || []"
           :item="item"
           @finish-edit="handleEventFieldFinishEdit"
@@ -148,6 +149,8 @@
   const editingField = ref<string | null>(null);
   // 选项缓存（供 select 子组件复用）
   const optionsCache = ref<Record<string, Array<Record<string, any>>>>({});
+  // 事件字段组件引用
+  const eventFieldRefs = ref<Record<string, any>>({});
 
   // ========================
   // 条件标签列表（根据 searchModel 中已有的字段动态展示，而非全部展示 fieldConfig）
@@ -254,6 +257,22 @@
   const handleUpdateEventValue = (id: string, value: any) => {
     emit('updateEventValue', id, value);
   };
+
+  // 外部调用：让指定风险字段进入编辑态
+  const startEditField = (fieldName: string) => {
+    editingField.value = fieldName;
+    emit('startEdit');
+  };
+
+  // 外部调用：让指定事件字段进入值编辑态
+  const startEditEventField = (id: string) => {
+    eventFieldRefs.value[id]?.startEditValue?.();
+  };
+
+  defineExpose({
+    startEditField,
+    startEditEventField,
+  });
 
   // ========================
   // 移除 / 清空
