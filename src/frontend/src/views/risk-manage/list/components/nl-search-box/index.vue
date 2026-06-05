@@ -50,6 +50,7 @@
     <div class="nl-search-condition-area">
       <!-- 解析后的条件标签  -->
       <condition-tags
+        ref="conditionTagsRef"
         :condition-list="conditionList"
         :event-field-items="selectedItemList"
         :field-config="fieldConfig"
@@ -79,6 +80,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onMounted,
     ref,
     watch,
@@ -121,6 +123,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const nlInputRef = ref();
+  const conditionTagsRef = ref();
   // URL 参数同步（与 search-box 保持一致）
   const {
     getSearchParamsPost,
@@ -431,7 +434,7 @@
   // 手动添加/编辑/删除条件
   // ========================
   // 添加风险字段条件（已添加的字段不会出现在下拉列表中，因此仅做添加）
-  const handleAddField = (fieldName: string, config: IFieldConfig) => {
+  const handleAddField = async (fieldName: string, config: IFieldConfig) => {
     // 添加默认空值
     let defaultValue: any = '';
     if (config.type === 'select') {
@@ -448,6 +451,8 @@
       ...searchModel.value,
       [fieldName]: defaultValue,
     };
+    await nextTick();
+    conditionTagsRef.value?.startEditField?.(fieldName);
   };
 
   // 移除单个条件
@@ -540,7 +545,7 @@
   };
 
 
-  const handleAddEventField = (item: Record<string, any>) => {
+  const handleAddEventField = async (item: Record<string, any>) => {
     selectedItemList.value.push({
       ...item,
       value: '',
@@ -551,6 +556,8 @@
       id: i.id,
       operator: i.operator,
     }));
+    await nextTick();
+    conditionTagsRef.value?.startEditEventField?.(item.id);
   };
 
   const handleRemoveEventField = (id: string) => {
