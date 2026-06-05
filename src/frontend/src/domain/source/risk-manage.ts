@@ -342,6 +342,7 @@ class RiskManage extends ModuleBase {
     page_size: number,
     keyword?: string,
     report_type?: string,
+    status?: string,
     sort?: any,
   }) {
     return Request.post(`${this.api}/analyse_report/?page=${params.page}&page_size=${params.page_size}`, {
