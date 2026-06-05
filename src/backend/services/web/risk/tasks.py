@@ -626,7 +626,7 @@ def _build_analyse_report_error_info(
 
 def _build_analyse_report_extra_info(
     started_at: datetime.datetime,
-    ended_at: datetime.datetime,
+    ended_at: datetime.datetime | None = None,
     agent_request: AnalyseReportAgentRequestInfo | None = None,
     error: AnalyseReportErrorInfo | None = None,
 ) -> dict:
@@ -636,6 +636,11 @@ def _build_analyse_report_extra_info(
         agent_request=agent_request,
         error=error,
     ).model_dump(exclude_none=True)
+
+
+def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
+    report.extra_info = extra_info
+    report.__class__.objects.filter(report_id=report.report_id).update(extra_info=extra_info)
 
 
 @celery_app.task(
@@ -658,6 +663,7 @@ def generate_analyse_report(self, report_id: int):
     report = AnalyseReport.objects.get(report_id=report_id)
     started_at = timezone.now()
     agent_request = None
+    _update_analyse_report_extra_info(report, _build_analyse_report_extra_info(started_at=started_at))
 
     try:
         # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
@@ -687,6 +693,13 @@ def generate_analyse_report(self, report_id: int):
             user=chat_user,
             input=agent_input,
             execute_kwargs=execute_kwargs,
+        )
+        _update_analyse_report_extra_info(
+            report,
+            _build_analyse_report_extra_info(
+                started_at=started_at,
+                agent_request=agent_request,
+            ),
         )
 
         # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）

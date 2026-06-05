@@ -782,16 +782,18 @@ class AnalyseReportAgentRequestInfo(BaseModel):
 
 class AnalyseReportExecutionInfo(BaseModel):
     started_at: str = PydanticField(..., description="报告生成任务开始时间，ISO 8601 格式")
-    ended_at: str = PydanticField(..., description="报告生成任务结束时间，ISO 8601 格式")
-    duration_seconds: float = PydanticField(..., description="报告生成任务耗时，单位秒")
+    ended_at: str | None = PydanticField(None, description="报告生成任务结束时间，ISO 8601 格式")
+    duration_seconds: float | None = PydanticField(None, description="报告生成任务耗时，单位秒")
 
     @classmethod
-    def build(cls, started_at: datetime.datetime, ended_at: datetime.datetime) -> "AnalyseReportExecutionInfo":
-        return cls(
-            started_at=started_at.isoformat(),
-            ended_at=ended_at.isoformat(),
-            duration_seconds=round((ended_at - started_at).total_seconds(), 3),
-        )
+    def build(
+        cls, started_at: datetime.datetime, ended_at: datetime.datetime | None = None
+    ) -> "AnalyseReportExecutionInfo":
+        data = {"started_at": started_at.isoformat()}
+        if ended_at is not None:
+            data["ended_at"] = ended_at.isoformat()
+            data["duration_seconds"] = round((ended_at - started_at).total_seconds(), 3)
+        return cls(**data)
 
 
 class AnalyseReportErrorInfo(BaseModel):
@@ -810,7 +812,7 @@ class AnalyseReportExtraInfo(BaseModel):
     def build(
         cls,
         started_at: datetime.datetime,
-        ended_at: datetime.datetime,
+        ended_at: datetime.datetime | None = None,
         agent_request: AnalyseReportAgentRequestInfo | None = None,
         error: AnalyseReportErrorInfo | None = None,
     ) -> "AnalyseReportExtraInfo":
