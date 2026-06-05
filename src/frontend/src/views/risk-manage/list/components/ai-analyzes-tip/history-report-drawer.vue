@@ -19,7 +19,7 @@
     v-model:isShow="show"
     :show-footer="false"
     :title="t('历史分析报告')"
-    width="1100">
+    width="1200">
     <div
       v-if="show"
       class="history-report-drawer-content">
@@ -96,6 +96,49 @@
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const originalQuery = ref<Record<string, any>>({});
 
+  const reportStatusTextMap: Record<string, string> = {
+    generating: t('生成中'),
+    success: t('已完成'),
+    failed: t('生成失败'),
+  };
+  const reportStatusIconMap: Record<string, { icon: string; color: string; spin?: boolean }> = {
+    generating: {
+      icon: 'loading',
+      color: '#3a84ff',
+      spin: true,
+    },
+    success: {
+      icon: 'success',
+      color: '#2dcb56',
+    },
+    failed: {
+      icon: 'failed',
+      color: '#ea3636',
+    },
+  };
+
+  const canOpenReport = (status: string) => String(status || '').toLowerCase() === 'success';
+  const getReportStatusText = (status: string) => reportStatusTextMap[String(status || '').toLowerCase()] || status;
+  const renderReportStatus = (status: string) => {
+    const normalizedStatus = String(status || '').toLowerCase();
+    const config = reportStatusIconMap[normalizedStatus];
+    if (!config) {
+      return <span>{getReportStatusText(status)}</span>;
+    }
+    return (
+      <span class="report-status-cell">
+        <span class="report-status-icon-wrap">
+          <audit-icon
+            class={config.spin ? 'report-status-icon rotate-loading' : 'report-status-icon'}
+            style={{ color: config.color }}
+            svg
+            type={config.icon} />
+        </span>
+        <span class="report-status-text">{getReportStatusText(status)}</span>
+      </span>
+    );
+  };
+
   const tableColumns = [
     {
       title: t('报告标题'),
@@ -103,11 +146,15 @@
       minWidth: 180,
       ellipsis: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
-        <span
-          class="report-title-link"
-          onClick={() => emit('open-report', row)}>
-          {row.title}
-        </span>
+        canOpenReport(row.status)
+          ? (
+            <span
+              class="report-title-link"
+              onClick={() => emit('open-report', row)}>
+              {row.title}
+            </span>
+          )
+          : <span class="report-title-text">{row.title}</span>
       ),
     },
     {
@@ -161,8 +208,34 @@
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <RiskTablePopover
           count={row.risk_count}
-          reportId={row.report_id} />
+          reportId={row.report_id}
+          status={row.status} />
       ),
+    },
+    {
+      title: t('状态'),
+      colKey: 'status',
+      width: 120,
+      filter: {
+        type: 'single',
+        showConfirmAndReset: true,
+        resetValue: undefined,
+        list: [
+          {
+            label: t('生成中'),
+            value: 'generating',
+          },
+          {
+            label: t('已完成'),
+            value: 'success',
+          },
+          {
+            label: t('生成失败'),
+            value: 'failed',
+          },
+        ],
+      },
+      cell: (h: any, { row }: { row: HistoryReportItem }) => renderReportStatus(row.status),
     },
     {
       title: t('生成人'),
@@ -240,6 +313,36 @@
   }
 }
 
+:deep(.report-title-text) {
+  color: #313238;
+}
+
+:deep(.report-status-cell) {
+  display: inline-flex;
+  line-height: 20px;
+  color: #313238;
+  align-items: center;
+
+  .report-status-icon-wrap {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+  }
+
+  .report-status-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .report-status-text {
+    line-height: 20px;
+  }
+}
+
 :deep(.risk-count-cell) {
   display: inline-flex;
   align-items: center;
@@ -251,12 +354,10 @@
   }
 
   .risk-count-link {
-    color: #3a84ff;
+    color: #313238;
+    text-decoration: underline;
     cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
-    }
+    text-underline-offset: 2px;
   }
 
   .link-icon {
