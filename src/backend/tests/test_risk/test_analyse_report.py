@@ -37,6 +37,7 @@ from services.web.risk.constants import (
 )
 from services.web.risk.models import (
     AnalyseReport,
+    AnalyseReportExtraInfo,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
@@ -1219,9 +1220,13 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
             created_by="admin",
         )
 
+    @mock.patch("services.web.risk.tasks.timezone.now")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_success_with_scenario(self, mock_chat):
+    def test_task_success_with_scenario(self, mock_chat, mock_now):
         """测试使用场景配置成功生成报告"""
+        start_time = datetime.datetime(2026, 6, 5, 10, 0, 0, tzinfo=datetime.timezone.utc)
+        end_time = datetime.datetime(2026, 6, 5, 10, 0, 3, 250000, tzinfo=datetime.timezone.utc)
+        mock_now.side_effect = [start_time, end_time, end_time]
         mock_chat.return_value = (
             "# 一、行为链分析\n\n"
             "通过对张三相关风险单的时序分析，发现以下行为模式：\n\n"
@@ -1257,6 +1262,18 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertNotIn("zhangsan", call_kwargs["input"])
         self.assertNotIn("chat_history", call_kwargs)
 
+        self.assertEqual(self.report.extra_info["agent_request"]["user"], "admin")
+        self.assertEqual(self.report.extra_info["agent_request"]["input"], agent_input)
+        self.assertEqual(self.report.extra_info["agent_request"]["execute_kwargs"], {"stream": True})
+        self.assertEqual(self.report.extra_info["execution"]["started_at"], start_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["ended_at"], end_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["duration_seconds"], 3.25)
+        extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+        self.assertEqual(extra_info.agent_request.input["报告ID"], self.report.report_id)
+        self.assertIsNone(extra_info.error)
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["agent_request"].description, "报告生成时传给 Agent 的请求信息")
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["execution"].description, "报告生成任务执行耗时信息")
+
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_success_custom_analysis(self, mock_chat):
         """测试自定义分析成功生成报告"""
@@ -1286,7 +1303,11 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertIn("自定义分析报告", self.report.content)
-        self.assertEqual(self.report.extra_info, {})
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["分析要求"], self.report.custom_prompt)
+        self.assertIn("started_at", self.report.extra_info["execution"])
+        self.assertIn("ended_at", self.report.extra_info["execution"])
+        self.assertIn("duration_seconds", self.report.extra_info["execution"])
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_links_risks_before_chat_completion(self, mock_chat):
@@ -1311,9 +1332,13 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertEqual(self.report.risk_count, 1)
 
+    @mock.patch("services.web.risk.tasks.timezone.now")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_failure(self, mock_chat):
+    def test_task_failure(self, mock_chat, mock_now):
         """测试达到最大重试次数后标记为失败"""
+        start_time = datetime.datetime(2026, 6, 5, 11, 0, 0, tzinfo=datetime.timezone.utc)
+        end_time = datetime.datetime(2026, 6, 5, 11, 0, 1, 500000, tzinfo=datetime.timezone.utc)
+        mock_now.side_effect = [start_time, end_time, end_time]
         mock_chat.side_effect = Exception("API调用失败")
 
         from services.web.risk.tasks import generate_analyse_report
@@ -1328,9 +1353,16 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
-        self.assertEqual(self.report.extra_info["error_type"], "Exception")
-        self.assertEqual(self.report.extra_info["error_message"], "API调用失败")
-        self.assertEqual(self.report.extra_info["retry_count"], generate_analyse_report.max_retries)
+        self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+        self.assertEqual(self.report.extra_info["execution"]["started_at"], start_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["ended_at"], end_time.isoformat())
+        self.assertEqual(self.report.extra_info["execution"]["duration_seconds"], 1.5)
+        self.assertEqual(self.report.extra_info["error"]["error_type"], "Exception")
+        self.assertEqual(self.report.extra_info["error"]["error_message"], "API调用失败")
+        self.assertEqual(self.report.extra_info["error"]["retry_count"], generate_analyse_report.max_retries)
+        extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+        self.assertEqual(extra_info.error.error_message, "API调用失败")
+        self.assertEqual(AnalyseReportExtraInfo.model_fields["error"].description, "报告最终失败时的错误信息")
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_keeps_generating_status_before_max_retries(self, mock_chat):
@@ -2040,7 +2072,9 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
-        self.assertEqual(self.report.extra_info["error_message"], "关联失败")
+        self.assertNotIn("agent_request", self.report.extra_info)
+        self.assertIn("execution", self.report.extra_info)
+        self.assertEqual(self.report.extra_info["error"]["error_message"], "关联失败")
         mock_chat.assert_not_called()
 
 

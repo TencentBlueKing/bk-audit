@@ -66,7 +66,14 @@ from services.web.risk.handlers.ticket import (
     NewRisk,
     TransOperator,
 )
-from services.web.risk.models import ManualEvent, Risk, TicketNode
+from services.web.risk.models import (
+    AnalyseReportAgentRequestInfo,
+    AnalyseReportErrorInfo,
+    AnalyseReportExtraInfo,
+    ManualEvent,
+    Risk,
+    TicketNode,
+)
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import (
@@ -606,13 +613,29 @@ def _link_risks_to_report(report) -> int:
     return len(risk_ids)
 
 
-def _build_analyse_report_error_info(exc: Exception, current_retries: int, max_retries: int | None) -> dict:
-    return {
-        "error_type": exc.__class__.__name__,
-        "error_message": str(exc),
-        "retry_count": current_retries,
-        "max_retries": max_retries,
-    }
+def _build_analyse_report_error_info(
+    exc: Exception, current_retries: int, max_retries: int | None
+) -> AnalyseReportErrorInfo:
+    return AnalyseReportErrorInfo(
+        error_type=exc.__class__.__name__,
+        error_message=str(exc),
+        retry_count=current_retries,
+        max_retries=max_retries,
+    )
+
+
+def _build_analyse_report_extra_info(
+    started_at: datetime.datetime,
+    ended_at: datetime.datetime,
+    agent_request: AnalyseReportAgentRequestInfo | None = None,
+    error: AnalyseReportErrorInfo | None = None,
+) -> dict:
+    return AnalyseReportExtraInfo.build(
+        started_at=started_at,
+        ended_at=ended_at,
+        agent_request=agent_request,
+        error=error,
+    ).model_dump(exclude_none=True)
 
 
 @celery_app.task(
@@ -633,6 +656,8 @@ def generate_analyse_report(self, report_id: int):
     from services.web.risk.models import AnalyseReport
 
     report = AnalyseReport.objects.get(report_id=report_id)
+    started_at = timezone.now()
+    agent_request = None
 
     try:
         # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
@@ -656,18 +681,29 @@ def generate_analyse_report(self, report_id: int):
             "分析要求": analysis_request,
             "已绑定风险数量": report.risk_count,
         }
+        chat_user = report.created_by or "admin"
+        execute_kwargs = {"stream": True}
+        agent_request = AnalyseReportAgentRequestInfo(
+            user=chat_user,
+            input=agent_input,
+            execute_kwargs=execute_kwargs,
+        )
 
         # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
         result = api.bk_plugins_ai_audit_analyse.chat_completion(
-            user=report.created_by or "admin",
+            user=chat_user,
             input=json.dumps(agent_input, ensure_ascii=False),
-            execute_kwargs={"stream": True},
+            execute_kwargs=execute_kwargs,
         )
 
         # 3. 更新报告
         report.content = result
         report.status = AnalyseReportStatus.SUCCESS
-        report.extra_info = {}
+        report.extra_info = _build_analyse_report_extra_info(
+            started_at=started_at,
+            ended_at=timezone.now(),
+            agent_request=agent_request,
+        )
         report.save(update_fields=["content", "status", "extra_info", "updated_at"])
 
         return {"report_id": report.report_id}
@@ -678,7 +714,12 @@ def generate_analyse_report(self, report_id: int):
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
             report.status = AnalyseReportStatus.FAILED
-            report.extra_info = _build_analyse_report_error_info(exc, current_retries, max_retries)
+            report.extra_info = _build_analyse_report_extra_info(
+                started_at=started_at,
+                ended_at=timezone.now(),
+                agent_request=agent_request,
+                error=_build_analyse_report_error_info(exc, current_retries, max_retries),
+            )
             report.save(update_fields=["status", "extra_info", "updated_at"])
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
             raise

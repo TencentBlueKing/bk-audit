@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 from functools import cached_property
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -32,6 +32,8 @@ from django.db.models.functions import Substr
 from django.db.models.signals import post_save  # noqa: E402
 from django.dispatch import receiver  # noqa: E402
 from django.utils.translation import gettext_lazy
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 from pydantic import ValidationError as PydanticValidationError
 
 from apps.meta.models import Tag
@@ -770,6 +772,53 @@ class AnalyseReportScenario(SoftDeleteModel):
         verbose_name = gettext_lazy("AI报告场景配置")
         verbose_name_plural = verbose_name
         ordering = ["-is_builtin", "-priority", "-created_at"]
+
+
+class AnalyseReportAgentRequestInfo(BaseModel):
+    user: str = PydanticField(..., description="调用 Agent 使用的用户标识")
+    input: dict[str, Any] = PydanticField(..., description="传给 Agent 的业务输入参数")
+    execute_kwargs: dict[str, Any] = PydanticField(..., description="调用 Agent 时使用的执行参数")
+
+
+class AnalyseReportExecutionInfo(BaseModel):
+    started_at: str = PydanticField(..., description="报告生成任务开始时间，ISO 8601 格式")
+    ended_at: str = PydanticField(..., description="报告生成任务结束时间，ISO 8601 格式")
+    duration_seconds: float = PydanticField(..., description="报告生成任务耗时，单位秒")
+
+    @classmethod
+    def build(cls, started_at: datetime.datetime, ended_at: datetime.datetime) -> "AnalyseReportExecutionInfo":
+        return cls(
+            started_at=started_at.isoformat(),
+            ended_at=ended_at.isoformat(),
+            duration_seconds=round((ended_at - started_at).total_seconds(), 3),
+        )
+
+
+class AnalyseReportErrorInfo(BaseModel):
+    error_type: str = PydanticField(..., description="异常类型名称")
+    error_message: str = PydanticField(..., description="异常错误信息")
+    retry_count: int = PydanticField(..., description="当前已重试次数")
+    max_retries: int | None = PydanticField(None, description="任务允许的最大重试次数")
+
+
+class AnalyseReportExtraInfo(BaseModel):
+    agent_request: AnalyseReportAgentRequestInfo | None = PydanticField(None, description="报告生成时传给 Agent 的请求信息")
+    execution: AnalyseReportExecutionInfo = PydanticField(..., description="报告生成任务执行耗时信息")
+    error: AnalyseReportErrorInfo | None = PydanticField(None, description="报告最终失败时的错误信息")
+
+    @classmethod
+    def build(
+        cls,
+        started_at: datetime.datetime,
+        ended_at: datetime.datetime,
+        agent_request: AnalyseReportAgentRequestInfo | None = None,
+        error: AnalyseReportErrorInfo | None = None,
+    ) -> "AnalyseReportExtraInfo":
+        return cls(
+            agent_request=agent_request,
+            execution=AnalyseReportExecutionInfo.build(started_at=started_at, ended_at=ended_at),
+            error=error,
+        )
 
 
 class AnalyseReport(OperateRecordModel):
