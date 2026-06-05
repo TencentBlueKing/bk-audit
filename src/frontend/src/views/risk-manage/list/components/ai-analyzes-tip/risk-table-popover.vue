@@ -16,37 +16,46 @@
 -->
 <template>
   <div class="risk-count-cell">
-    <bk-popover
-      ext-cls="risk-table-popover"
-      placement="bottom-start"
-      theme="light"
-      trigger="click"
-      @after-hidden="handleAfterHidden"
-      @after-show="handleAfterShow">
-      <span class="risk-count">{{ count }}</span>
-      <template #content>
-        <bk-loading :loading="loading">
-          <div class="risk-table-popover-content">
-            <bk-table
-              :border="['outer', 'row']"
-              :columns="riskTableColumns"
-              :data="riskList"
-              :max-height="320"
-              size="small"
-              width="300" />
-          </div>
-        </bk-loading>
-      </template>
-    </bk-popover>
-    <audit-icon
-      class="link-icon"
-      type="jump-link"
-      @click.stop="handleClick" />
+    <span class="risk-count-num">
+      <bk-popover
+        v-if="canOpen"
+        ext-cls="risk-table-popover"
+        placement="bottom-start"
+        theme="light"
+        trigger="click"
+        @after-hidden="handleAfterHidden"
+        @after-show="handleAfterShow">
+        <span class="risk-count">{{ count }}</span>
+        <template #content>
+          <bk-loading :loading="loading">
+            <div class="risk-table-popover-content">
+              <bk-table
+                :border="['outer', 'row']"
+                :columns="riskTableColumns"
+                :data="riskList"
+                :max-height="320"
+                size="small"
+                width="300" />
+            </div>
+          </bk-loading>
+        </template>
+      </bk-popover>
+      <span
+        v-else
+        class="risk-count-disabled">{{ count }}</span>
+    </span>
+    <span class="link-icon-wrap">
+      <audit-icon
+        v-if="canOpen"
+        class="link-icon"
+        type="jump-link"
+        @click.stop="handleClick" />
+    </span>
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -76,9 +85,13 @@
   interface Props {
     count: number;
     reportId: string | number;
+    status?: string;
   }
 
-  const props = withDefaults(defineProps<Props>(), {});
+  const props = withDefaults(defineProps<Props>(), {
+    status: 'success',
+  });
+  const canOpen = computed(() => String(props.status || '').toLowerCase() === 'success');
   const router = useRouter();
   const loading = ref(true);
   const { t } = useI18n();
@@ -185,11 +198,31 @@
   gap: 4px;
 }
 
+.risk-count-num {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 24px;
+  text-align: right;
+}
+
+.risk-count-disabled {
+  color: #313238;
+}
+
 .risk-count {
-  color: #63656e;
+  color: #313238;
   text-decoration: underline;
   cursor: pointer;
   text-underline-offset: 2px;
+}
+
+.link-icon-wrap {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
 }
 
 .link-icon {
