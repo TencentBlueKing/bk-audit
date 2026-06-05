@@ -1226,7 +1226,7 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         """测试使用场景配置成功生成报告"""
         start_time = datetime.datetime(2026, 6, 5, 10, 0, 0, tzinfo=datetime.timezone.utc)
         end_time = datetime.datetime(2026, 6, 5, 10, 0, 3, 250000, tzinfo=datetime.timezone.utc)
-        mock_now.side_effect = [start_time, end_time, end_time]
+        mock_now.side_effect = [start_time, start_time, end_time, end_time, end_time]
         mock_chat.return_value = (
             "# 一、行为链分析\n\n"
             "通过对张三相关风险单的时序分析，发现以下行为模式：\n\n"
@@ -1332,13 +1332,35 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
         self.assertEqual(self.report.risk_count, 1)
 
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_saves_agent_request_before_chat_completion(self, mock_chat):
+        """调用 Agent 前先记录已确定的请求上下文"""
+
+        def assert_agent_request_saved(**kwargs):
+            self.report.refresh_from_db()
+            self.assertEqual(self.report.extra_info["agent_request"]["user"], "admin")
+            self.assertEqual(self.report.extra_info["agent_request"]["input"]["报告ID"], self.report.report_id)
+            self.assertIn("started_at", self.report.extra_info["execution"])
+            self.assertNotIn("ended_at", self.report.extra_info["execution"])
+            self.assertNotIn("duration_seconds", self.report.extra_info["execution"])
+            self.assertNotIn("error", self.report.extra_info)
+            extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
+            self.assertIsNone(extra_info.execution.ended_at)
+            return "# 已生成报告"
+
+        mock_chat.side_effect = assert_agent_request_saved
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
     @mock.patch("services.web.risk.tasks.timezone.now")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_failure(self, mock_chat, mock_now):
         """测试达到最大重试次数后标记为失败"""
         start_time = datetime.datetime(2026, 6, 5, 11, 0, 0, tzinfo=datetime.timezone.utc)
         end_time = datetime.datetime(2026, 6, 5, 11, 0, 1, 500000, tzinfo=datetime.timezone.utc)
-        mock_now.side_effect = [start_time, end_time, end_time]
+        mock_now.side_effect = [start_time, start_time, end_time, end_time, end_time]
         mock_chat.side_effect = Exception("API调用失败")
 
         from services.web.risk.tasks import generate_analyse_report
