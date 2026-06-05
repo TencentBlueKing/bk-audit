@@ -358,6 +358,7 @@ export default {
     page_size: number,
     keyword?: string,
     report_type?: string,
+    status?: string,
     sort?: any,
   }) {
     return RiskManageSource.getHistoryReportList(params)
