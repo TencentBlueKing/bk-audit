@@ -34,3 +34,6 @@ REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10)
 # ============== AI 风险检索相关配置 ==============
 # MCP 事件字段简化接口返回上限
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
+
+# ============== AI 风险分析报告相关配置 ==============
+ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))

@@ -646,7 +646,7 @@ def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
 @celery_app.task(
     bind=True,
     queue="risk_render",
-    time_limit=900,
+    time_limit=settings.ANALYSE_REPORT_TIME_LIMIT,
     max_retries=2,
     acks_late=True,
 )
