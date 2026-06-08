@@ -301,7 +301,6 @@
     isAllSystemsSelected.value = (value as any[]).includes(undefined)
       || (value as string[]).includes('__ALL__')
       || (Array.isArray(value) && value.length > 0 && value.length === systemList.value.length);
-    formData.value.table_id = [];
     if (Array.isArray(value) && value.length > 0) {
       fetchTableList();
     } else {
