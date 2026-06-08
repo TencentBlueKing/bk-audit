@@ -214,6 +214,7 @@
   const isSidebarAnimating = ref(false);
   let sidebarAnimateTimer: ReturnType<typeof setTimeout> | null = null;
   const isReturningHome = ref(false);
+  const isInitialSceneSetup = ref(false);
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
@@ -358,6 +359,7 @@
   const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
   const handleSceneChange = async (value: SceneItem | null) => {
     const newKey = getSceneKey(value);
+    const isFirstSceneSetup = lastSceneKey.value === null;
     const isActualChange = lastSceneKey.value !== null && lastSceneKey.value !== newKey;
 
     if (isActualChange) {
@@ -373,6 +375,7 @@
 
     selectedScene.value = value;
     lastSceneKey.value = newKey;
+    isInitialSceneSetup.value = isFirstSceneSetup;
 
     if (isActualChange) {
       restoreSceneState(newKey);
@@ -511,8 +514,8 @@
       renderLabelRef.value?.resetAll([]);
       // 初始化阶段（lastSceneKey 为 null）或 tagId 为空时：需要触发加载工具列表
       // 场景切换阶段（lastSceneKey 不为 null 且 tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
-      if (lastSceneKey.value === null || !tagId.value) {
-        if (lastSceneKey.value === null && tagId.value) {
+      if (isInitialSceneSetup.value || lastSceneKey.value === null || !tagId.value) {
+        if ((isInitialSceneSetup.value || lastSceneKey.value === null) && tagId.value) {
           // 初始化阶段且 tagId 有值（从 sessionStorage 恢复）：直接设置选中状态并加载对应列表
           renderLabelRef.value?.setLabel(tagId.value);
           ContentCardRef.value?.getToolsList(tagId.value);
@@ -520,6 +523,7 @@
           // 其他情况（初始化阶段 tagId 为空，或场景切换阶段 tagId 为空）：调用 safeResetLabels 触发 checked 事件
           safeResetLabels();
         }
+        isInitialSceneSetup.value = false;
       }
     },
   });
