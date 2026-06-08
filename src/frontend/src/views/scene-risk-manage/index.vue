@@ -182,7 +182,7 @@
     if (!initTableColumns.length) {
       initTableColumns = useRiskColumns({
         deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'processedManageDetail',
+        detailRouteName: 'sceneRiskManageDetail',
         appendColumns: [actionColumn],
       });
     }

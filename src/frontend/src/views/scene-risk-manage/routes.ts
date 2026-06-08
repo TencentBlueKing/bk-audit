@@ -40,6 +40,8 @@ export default {
       name: 'sceneRiskManageDetail',
       meta: {
         title: '风险详情',
+        isShowSceneSelector: false,
+        routerBackName: 'sceneRiskManageList',
       },
     },
   ],
