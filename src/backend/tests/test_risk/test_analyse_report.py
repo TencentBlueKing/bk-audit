@@ -421,6 +421,7 @@ class TestListAnalyseReport(AnalyseReportTestBase):
 
         self.assertEqual([item["report_id"] for item in result], [self.report_failed.report_id])
         self.assertEqual(result[0]["extra_info"]["error_message"], "生成失败")
+        self.assertEqual(result[0]["error_message"], "生成失败")
 
     def test_list_reports_filter_generating_status(self):
         """显式传入状态时可查询生成中的报告"""
@@ -475,6 +476,29 @@ class TestRetrieveAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(result["risk_count"], 2)
         self.assertIn(self.risk1.risk_id, result["risk_ids"])
         self.assertIn(self.risk2.risk_id, result["risk_ids"])
+        self.assertIsNone(result["error_message"])
+
+    def test_retrieve_failed_report_returns_error_message(self):
+        """失败报告详情返回错误信息展示字段"""
+        failed_report = AnalyseReport.objects.create(
+            title="失败报告详情",
+            report_type=AnalyseReportType.SYSTEM,
+            status=AnalyseReportStatus.FAILED,
+            prompt_params={},
+            extra_info={
+                "error": {
+                    "error_type": "Exception",
+                    "error_message": "API调用失败",
+                    "retry_count": 3,
+                    "max_retries": 3,
+                }
+            },
+            created_by="admin",
+        )
+
+        result = self.resource.risk.retrieve_analyse_report({"report_id": failed_report.report_id})
+
+        self.assertEqual(result["error_message"], "API调用失败")
 
     def test_retrieve_report_not_found(self):
         """测试获取不存在的报告"""
