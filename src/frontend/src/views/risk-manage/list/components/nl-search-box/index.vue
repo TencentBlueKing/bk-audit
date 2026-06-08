@@ -305,10 +305,10 @@
     // 处理时间范围：仅当 AI 明确返回了时间字段时才覆盖默认值
     if (filterConditions.start_time || filterConditions.end_time) {
       const startTime = filterConditions.start_time
-        ? dayjs(filterConditions.start_time).format('YYYY-MM-DD')
+        ? dayjs(filterConditions.start_time).format('YYYY-MM-DD HH:mm:ss')
         : defaultDatetime[0];
       const endTime = filterConditions.end_time
-        ? dayjs(filterConditions.end_time).format('YYYY-MM-DD')
+        ? dayjs(filterConditions.end_time).format('YYYY-MM-DD HH:mm:ss')
         : defaultDatetime[1];
       newModel.datetime = [startTime, endTime];
       newModel.datetime_origin = [startTime, endTime];
@@ -471,11 +471,11 @@
   // 注意：使用直接属性赋值而非展开运算符，避免 searchModel 引用变化导致 popover 重渲染关闭
   const handleUpdateCondition = (fieldName: string, value: any) => {
     if (fieldName === 'datetime') {
-      // 日期字段：bk-date-picker 返回格式化的日期字符串数组
+      // 日期字段：bk-date-picker 返回格式化的日期时间字符串数组
       if (Array.isArray(value) && value.length >= 2) {
         const formatted = value.map((item: any) => (
           typeof item === 'number' || item instanceof Date
-            ? dayjs(item).format('YYYY-MM-DD')
+            ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
             : item
         ));
         searchModel.value.datetime = formatted;
