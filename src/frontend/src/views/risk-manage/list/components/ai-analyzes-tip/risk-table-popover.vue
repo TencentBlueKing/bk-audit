@@ -91,7 +91,10 @@
   const props = withDefaults(defineProps<Props>(), {
     status: 'success',
   });
-  const canOpen = computed(() => String(props.status || '').toLowerCase() === 'success');
+  const canOpen = computed(() => {
+    const normalizedStatus = String(props.status || '').toLowerCase();
+    return ['success', 'generating', 'failed'].includes(normalizedStatus);
+  });
   const router = useRouter();
   const loading = ref(true);
   const { t } = useI18n();
