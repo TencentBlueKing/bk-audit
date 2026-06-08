@@ -37,6 +37,8 @@
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
+  import Tooltips from '@components/show-tooltips-text/index.vue';
+
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
@@ -190,13 +192,18 @@
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
-          {row.name}
+          <span class="tool-name-text">
+            <Tooltips data={row.name} />
+          </span>
           {row.status === 'published' && (
             <audit-icon
               v-bk-tooltips={t('点击查看工具')}
               class="jump-link hover-show-icon"
               type="jump-link"
-              onClick={() => handleOpenToolInSquare(row.uid)} />
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                handleOpenToolInSquare(row.uid);
+              }} />
           )}
         </span>
       ),
@@ -466,10 +473,20 @@
     align-items: center;
   }
 
-  .tool-name-cell {
+  :deep(.tool-name-cell) {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    max-width: 100%;
+  }
+
+  :deep(.tool-name-text) {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+
+    .show-tooltips-text {
+      display: block;
+    }
   }
 
   .action-cell {
@@ -500,6 +517,7 @@
   }
 
   :deep(.jump-link) {
+    flex-shrink: 0;
     padding-left: 4px;
     font-size: 14px;
     color: #3a84ff;
