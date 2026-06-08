@@ -65,6 +65,7 @@
     title: string;
     created_at: string;
     created_by: string;
+    error_message?: string;
     report_id: string | number;
     report_type: string;
     risk_count: number;
@@ -119,13 +120,14 @@
 
   const canOpenReport = (status: string) => String(status || '').toLowerCase() === 'success';
   const getReportStatusText = (status: string) => reportStatusTextMap[String(status || '').toLowerCase()] || status;
-  const renderReportStatus = (status: string) => {
+  const renderReportStatus = (row: HistoryReportItem) => {
+    const { status, error_message: errorMessage } = row;
     const normalizedStatus = String(status || '').toLowerCase();
     const config = reportStatusIconMap[normalizedStatus];
     if (!config) {
       return <span>{getReportStatusText(status)}</span>;
     }
-    return (
+    const statusCell = (
       <span class="report-status-cell">
         <span class="report-status-icon-wrap">
           <audit-icon
@@ -137,6 +139,19 @@
         <span class="report-status-text">{getReportStatusText(status)}</span>
       </span>
     );
+    if (normalizedStatus === 'failed' && errorMessage) {
+      return (
+        <span
+          class="report-status-failed"
+          v-bk-tooltips={{
+            content: errorMessage,
+            maxWidth: 480,
+          }}>
+          {statusCell}
+        </span>
+      );
+    }
+    return statusCell;
   };
 
   const tableColumns = [
@@ -235,7 +250,7 @@
           },
         ],
       },
-      cell: (h: any, { row }: { row: HistoryReportItem }) => renderReportStatus(row.status),
+      cell: (h: any, { row }: { row: HistoryReportItem }) => renderReportStatus(row),
     },
     {
       title: t('生成人'),
@@ -315,6 +330,11 @@
 
 :deep(.report-title-text) {
   color: #313238;
+}
+
+:deep(.report-status-failed) {
+  display: inline-flex;
+  cursor: help;
 }
 
 :deep(.report-status-cell) {
