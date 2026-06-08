@@ -99,7 +99,7 @@
     });
   };
 
-  watch(() => props.data, () => {
+  watch(() => [props.data, props.maxWidth], () => {
     initTippy();
   }, {
     deep: true,
