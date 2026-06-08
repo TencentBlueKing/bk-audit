@@ -273,26 +273,29 @@
       </span>
     ),
       colKey: 'name',
-      minWidth: 180,
-      ellipsis: true,
+      width: 180,
+      align: 'left',
+      className: 'scene-name-column',
       cell: (_: any, { row }: { row: SceneModel }) => (
-      <span class="scene-name-cell" style="color: #3A84FF;">
+      <div class="scene-name-cell" style="color: #3A84FF;">
         <span
-          class="scene-name-link"
+          class="scene-name-text"
+          title={row.name || '--'}
           onClick={() => handleShowSceneDetail(row)}>
           {row.name}
         </span>
         {row.status !== 'disabled' && (
-          <audit-icon
+          <span
+            class="scene-name-jump"
             v-bk-tooltips={t('跳转至「场景信息」查看')}
-            class="ml8 jump-link hover-show-icon"
-            type="jump-link"
             onClick={(e: Event) => {
               e.stopPropagation();
               handleJumpToSceneInfo(row);
-            }} />
+            }}>
+            <audit-icon type="jump-link" />
+          </span>
         )}
-      </span>
+      </div>
     ),
     },
     {
@@ -926,6 +929,14 @@
   :deep(.audit-tdesign-list) {
     border: none;
   }
+
+  :deep(.t-table) {
+    table-layout: fixed;
+  }
+
+  :deep(.scene-name-column) {
+    overflow: hidden;
+  }
 }
 
 .scene-id-cell {
@@ -943,26 +954,6 @@
   align-items: center;
 }
 
-:deep(.jump-link) {
-  color: #3a84ff;
-  cursor: pointer;
-}
-
-:deep(.scene-name-link) {
-  cursor: pointer;
-}
-
-/* 默认隐藏 hover-show-icon */
-:deep(.hover-show-icon) {
-  visibility: hidden;
-}
-
-/* 鼠标移入表格行时显示图标 */
-:deep(tr:hover) {
-  .hover-show-icon {
-    visibility: visible;
-  }
-}
 
 /* 更多操作图标 */
 .more-action-icon {
@@ -978,6 +969,64 @@
 </style>
 
 <style lang="postcss">
+/* 场景名称：文字省略 + 同行跳转图标 */
+.audit-tdesign-list td.scene-name-column {
+  overflow: hidden;
+}
+
+.audit-tdesign-list td.scene-name-column > * {
+  max-width: 100%;
+}
+
+.audit-tdesign-list .scene-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 20px;
+  vertical-align: middle;
+}
+
+.audit-tdesign-list .scene-name-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.audit-tdesign-list .scene-name-jump {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  color: #3a84ff;
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.audit-tdesign-list .t-table tr:hover .scene-name-jump {
+  visibility: visible;
+}
+
+.jump-link {
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.hover-show-icon {
+  visibility: hidden;
+}
+
+.t-table tr:hover .hover-show-icon {
+  visibility: visible;
+}
+
 /* 更多操作菜单（popover 渲染到 body 下，需要全局样式） */
 .more-action-menu {
   .more-action-item {
