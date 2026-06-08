@@ -28,13 +28,18 @@
         v-model="localValue"
         append-to-body
         :clearable="false"
-        format="yyyy-MM-dd"
+        format="yyyy-MM-dd HH:mm:ss"
         :open="isPanelOpen"
         :shortcut-selected-index="shortcutSelectedIndex"
         :shortcuts="shortcutsRange"
-        type="daterange"
+        type="datetimerange"
         use-shortcut-text
-        @change="handleChange" />
+        @change="handleChange"
+        @pick-success="handlePickSuccess">
+        <template #confirm>
+          <span />
+        </template>
+      </bk-date-picker>
       <!-- 隐藏的测量元素，用于动态计算日期文本宽度 -->
       <span
         ref="measureRef"
@@ -173,11 +178,16 @@
     if (!value || !Array.isArray(value) || value.length < 2) return;
     const formatted = value.map((item: any) => (
       typeof item === 'number' || item instanceof Date
-        ? dayjs(item).format('YYYY-MM-DD')
+        ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
         : item
     ));
     localValue.value = formatted;
     emit('update', props.tag.fieldName, formatted);
+  };
+
+  const handlePickSuccess = () => {
+    isPanelOpen.value = false;
+    emit('finishEdit');
   };
 
   watch(() => props.tag.value, (val) => {
@@ -198,8 +208,8 @@
     }
     const val = localValue.value;
     if (!val || !Array.isArray(val) || val.length < 2) return '';
-    const start = val[0] instanceof Date ? dayjs(val[0]).format('YYYY-MM-DD') : val[0];
-    const end = val[1] instanceof Date ? dayjs(val[1]).format('YYYY-MM-DD') : val[1];
+    const start = val[0] instanceof Date ? dayjs(val[0]).format('YYYY-MM-DD HH:mm:ss') : val[0];
+    const end = val[1] instanceof Date ? dayjs(val[1]).format('YYYY-MM-DD HH:mm:ss') : val[1];
     if (!start || !end) return '';
     return `${start} - ${end}`;
   };
@@ -343,9 +353,4 @@
   }
 </style>
 
-<!-- 全局样式：隐藏日期选择器弹出面板中的确定/清除按钮区域 -->
-<style lang="postcss">
-  .bk-picker-confirm {
-    display: none !important;
-  }
-</style>
+
