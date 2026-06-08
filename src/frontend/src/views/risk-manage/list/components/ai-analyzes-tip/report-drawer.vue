@@ -59,7 +59,8 @@
               <div
                 v-for="item in metaList"
                 :key="item.key"
-                class="ai-report-meta-item">
+                class="ai-report-meta-item"
+                :class="`ai-report-meta-item--${item.key}`">
                 <div class="label">
                   {{ item.label }}
                 </div>
@@ -67,13 +68,28 @@
                   <div v-if="item.key === 'analysis_scope'">
                     <div
                       v-for="(scope, index) in item.value"
-                      :key="index">
-                      {{ scope.label }} = {{ scope.value }}
+                      :key="index"
+                      class="ai-report-meta-scope-item">
+                      <span
+                        v-if="scope.label === '首次发现时间'"
+                        class="ai-report-meta-text-full">
+                        {{ scope.label }} = {{ scope.value }}
+                      </span>
+                      <tooltips
+                        v-else
+                        :data="`${scope.label} = ${scope.value}`"
+                        :max-width="tooltipMaxWidth" />
                     </div>
                   </div>
-                  <div v-else>
+                  <span
+                    v-else-if="item.key === 'created_at'"
+                    class="ai-report-meta-text-full">
                     {{ item.value }}
-                  </div>
+                  </span>
+                  <tooltips
+                    v-else
+                    :data="String(item.value ?? '')"
+                    :max-width="tooltipMaxWidth" />
                 </div>
               </div>
             </div>
@@ -133,6 +149,8 @@
   import useRequest from '@hooks/use-request';
 
   import ReportEditor from './report-editor.vue';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import RiskManageService from '@/domain/service/risk-manage';
 
@@ -209,6 +227,9 @@
   });
   const title = computed(() => JSON.parse(props.itemInfo).title || '');
   const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 960));
+  const tooltipMaxWidth = computed(() => (
+    isFullscreen.value ? 'calc(100vw - 48px)' : 912
+  ));
   const editTitle = computed(() => JSON.parse(props.itemInfo).title || '');
   const show = computed({
     get: () => props.isShow,
@@ -344,13 +365,42 @@
 
 .ai-report-meta-row {
   display: flex;
+  gap: 24px;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
   text-align: center;
 }
 
 .ai-report-meta-item {
   min-width: 0;
+  overflow: hidden;
+}
+
+.ai-report-meta-item--report_type {
+  flex: 0 0 72px;
+}
+
+.ai-report-meta-item--analysis_scope {
+  flex: 1 1 0;
+  min-width: 280px;
+}
+
+.ai-report-meta-item--risk_count {
+  flex: 0 0 64px;
+}
+
+.ai-report-meta-item--created_by {
+  flex: 0 0 100px;
+}
+
+.ai-report-meta-item--created_at {
+  flex: 0 0 155px;
+  overflow: visible;
+}
+
+.ai-report-meta-text-full {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .ai-report-meta-item .label {
@@ -360,8 +410,13 @@
 }
 
 .ai-report-meta-item .value {
+  width: 100%;
   font-size: 13px;
   color: #313238;
+}
+
+.ai-report-meta-scope-item {
+  width: 100%;
 }
 
 .ai-report-section {
