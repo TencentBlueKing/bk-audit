@@ -43,6 +43,10 @@
       window.history.back();
       return;
     }
+    if (route.meta?.routerBackName) {
+      router.push({ name: route.meta.routerBackName as string });
+      return;
+    }
     routerBack.value();
   };
 
