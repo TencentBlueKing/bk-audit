@@ -1686,8 +1686,22 @@ class ListAnalyseReportRequestSerializer(serializers.Serializer):
     )
 
 
+def _get_analyse_report_error_message(extra_info) -> str | None:
+    if not isinstance(extra_info, dict):
+        return None
+    error = extra_info.get("error")
+    if isinstance(error, dict) and error.get("error_message"):
+        return error["error_message"]
+    return extra_info.get("error_message") or None
+
+
 class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
     """历史报告列表响应"""
+
+    error_message = serializers.SerializerMethodField(help_text=gettext_lazy("报告生成失败时的错误信息"))
+
+    def get_error_message(self, obj) -> str | None:
+        return _get_analyse_report_error_message(obj.extra_info)
 
     class Meta:
         model = AnalyseReport
@@ -1699,6 +1713,7 @@ class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "risk_count",
             "status",
             "extra_info",
+            "error_message",
             "created_by",
             "created_at",
         ]
@@ -1715,9 +1730,13 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
 
     risk_ids = serializers.SerializerMethodField()
     scenario_name = serializers.CharField(source="scenario.name", default="", read_only=True)
+    error_message = serializers.SerializerMethodField(help_text=gettext_lazy("报告生成失败时的错误信息"))
 
     def get_risk_ids(self, obj) -> List[str]:
         return list(obj.report_risks.values_list("risk_id", flat=True))
+
+    def get_error_message(self, obj) -> str | None:
+        return _get_analyse_report_error_message(obj.extra_info)
 
     class Meta:
         model = AnalyseReport
@@ -1732,6 +1751,7 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "scenario_name",
             "status",
             "extra_info",
+            "error_message",
             "prompt_params",
             "custom_prompt",
             "created_by",
