@@ -546,8 +546,8 @@
     }
   };
 
-  const handlerManagersChange = (val: string[]) => {
-    formData.value.managers = val;
+  const handlerManagersChange = (val: string | string[]) => {
+    formData.value.managers = Array.isArray(val) ? val : [val];
   };
 
   const handlerRouteChange = (type: string) => {
