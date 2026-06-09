@@ -242,6 +242,7 @@
     appendSearchParams({
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
+    emit('changeTableHeight');
   };
 
   // 解析字段key，获取raw_name和keys（支持嵌套字段如JSON数组字符串）
