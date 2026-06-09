@@ -35,7 +35,8 @@
         <div class="search-box">
           <search-box
             ref="searchBoxRef"
-            @change="handleSearchChange" />
+            @change="handleSearchChange"
+            @change-table-height="handleTableHeightChange" />
           <div class="search-result-action">
             <render-type-tab
               v-if="false"
@@ -134,6 +135,11 @@
     }
   };
 
+  // 搜索区高度变化时重新计算表格高度
+  const handleTableHeightChange = () => {
+    resultRef.value?.calcTableHeight?.();
+  };
+
   watch(() => isDoris.value, (data) => {
     if (data.enabled) {
       dataSource.value = EsQueryService.fetchCollectorSearchList;
@@ -143,7 +149,11 @@
 </script>
 <style lang="postcss">
 .analysis-manage-page {
-  min-height: 100vh;
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100%;
+  overflow-y: auto;
   background-color: #f5f7fa;
 
   .page-header {
