@@ -364,7 +364,7 @@
       .date-content{
        position: absolute;
        width: 85%;
-       margin-top: -12px;
+       margin-left: 15px;
       }
     }
 
