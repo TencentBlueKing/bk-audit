@@ -6,6 +6,7 @@ import unittest.mock
 
 from rest_framework import serializers
 
+from api.bk_base.constants import UserAuthActionEnum
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control, ControlVersion
 from services.web.scene.constants import (
@@ -608,11 +609,11 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
         self.mixin_instance = CreateLinkTableRequestSerializer()
 
-    def _create_mock_link_table_config(self, system_ids=None, rt_ids=None):
+    def _create_mock_link_table_config(self, system_ids=None, rt_ids=None, mine_biz_rt_ids=None):
         """创建模拟的联表配置"""
         config = {"links": []}
 
-        if system_ids or rt_ids:
+        if system_ids or rt_ids or mine_biz_rt_ids:
             link = {}
             if system_ids:
                 link["left_table"] = {
@@ -632,6 +633,15 @@ class TestLinkTableDataPermissionMixin(TestCase):
                     link["right_table"] = link.get("right_table", {})
                     link["right_table"]["rt_id"] = rt_ids[1]
                     link["right_table"]["table_type"] = LinkTableTableType.BIZ_RT.value  # 使用正确的枚举值
+            if mine_biz_rt_ids:
+                # MINE_BIZ_RT 类型：需要校验用户权限
+                link["left_table"] = link.get("left_table", {})
+                link["left_table"]["rt_id"] = mine_biz_rt_ids[0] if mine_biz_rt_ids else None
+                link["left_table"]["table_type"] = LinkTableTableType.MINE_BIZ_RT.value
+                if len(mine_biz_rt_ids) > 1:
+                    link["right_table"] = link.get("right_table", {})
+                    link["right_table"]["rt_id"] = mine_biz_rt_ids[1]
+                    link["right_table"]["table_type"] = LinkTableTableType.MINE_BIZ_RT.value
 
             config["links"].append(link)
 
@@ -822,6 +832,192 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
         self.assertIn("数据表[rt2]不在场景", str(cm.exception))
 
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_user_has_permission(
+        self, mock_system_resource, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 用户有权限"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = []
+        # 用户有权限
+        mock_user_auth.return_value = True
+
+        # 创建包含 MINE_BIZ_RT 类型的联表配置
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(mine_biz_rt_ids=["mine_rt_1", "mine_rt_2"]),
+        }
+
+        # 应该正常通过，不抛出异常
+        serializer = self.mixin_instance
+        serializer.validate(data)
+
+        # 验证用户权限检查被调用
+        self.assertEqual(mock_user_auth.call_count, 2)
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_user_no_permission(
+        self, mock_system_resource, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 用户没有权限"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = []
+        # 用户没有权限
+        mock_user_auth.return_value = False
+
+        # 创建包含 MINE_BIZ_RT 类型的联表配置
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(mine_biz_rt_ids=["mine_rt_1"]),
+        }
+
+        # 应该抛出验证错误
+        serializer = self.mixin_instance
+        with self.assertRaises(serializers.ValidationError) as cm:
+            serializer.validate(data)
+
+        self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_partial_permission(
+        self, mock_system_resource, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 部分有权限，部分没有"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = []
+        # 第一个RT有权限，第二个没有
+        mock_user_auth.side_effect = [True, False]
+
+        # 创建包含 MINE_BIZ_RT 类型的联表配置
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(mine_biz_rt_ids=["mine_rt_1", "mine_rt_2"]),
+        }
+
+        # 应该抛出验证错误
+        serializer = self.mixin_instance
+        with self.assertRaises(serializers.ValidationError) as cm:
+            serializer.validate(data)
+
+        # 由于MINE_BIZ_RT处理逻辑的变化，错误信息可能指向第一个没有权限的表
+        self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_auth_check_failed(
+        self, mock_system_resource, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 用户权限校验失败"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = []
+        # 权限检查失败
+        mock_user_auth.side_effect = Exception("Auth check failed")
+
+        # 创建包含 MINE_BIZ_RT 类型的联表配置
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(mine_biz_rt_ids=["mine_rt_1"]),
+        }
+
+        # 应该抛出验证错误
+        serializer = self.mixin_instance
+        with self.assertRaises(serializers.ValidationError) as cm:
+            serializer.validate(data)
+
+        self.assertIn("校验用户权限失败", str(cm.exception))
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_no_username(self, mock_system_resource, mock_get_username):
+        """测试MINE_BIZ_RT类型 - 用户名为空时跳过校验"""
+        # 用户名为空
+        mock_get_username.return_value = ""
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = []
+
+        # 创建包含 MINE_BIZ_RT 类型的联表配置
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": self._create_mock_link_table_config(mine_biz_rt_ids=["mine_rt_1"]),
+        }
+
+        # 应该正常通过（用户名为空时跳过校验）
+        serializer = self.mixin_instance
+        serializer.validate(data)
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
+    def test_validate_link_table_data_permission_mine_biz_rt_with_other_types(
+        self, mock_system_resource, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型与其他类型混合配置"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+        # 模拟系统权限检查
+        mock_system_resource.return_value.request.return_value = [{"system_id": "system1"}]
+        # 用户有权限
+        mock_user_auth.return_value = True
+
+        # 创建包含多种类型的联表配置
+        config = {
+            "links": [
+                {
+                    "left_table": {
+                        "system_ids": ["system1"],
+                        "table_type": LinkTableTableType.EVENT_LOG.value,
+                    },
+                    "right_table": {
+                        "rt_id": "mine_rt_1",
+                        "table_type": LinkTableTableType.MINE_BIZ_RT.value,
+                    },
+                }
+            ]
+        }
+
+        data = {
+            "namespace": "test_namespace",
+            "name": "test_link_table",
+            "scene_id": self.scene_id,
+            "config": config,
+        }
+
+        # 应该正常通过，不抛出异常
+        serializer = self.mixin_instance
+        serializer.validate(data)
+
+        # 验证用户权限检查被调用
+        mock_user_auth.assert_called_once_with(
+            user_id="test_user",
+            action_id=UserAuthActionEnum.RT_QUERY.value,
+            object_id="mine_rt_1",
+        )
+
 
 class TestStrategyDataPermissionValidation(TestCase):
     """StrategySerializer 数据权限验证测试"""
@@ -834,10 +1030,10 @@ class TestStrategyDataPermissionValidation(TestCase):
         self.scene = Scene.objects.create(name="test_strategy_permission_scene", description="test")
         self.scene_id = self.scene.scene_id
 
-        # 创建用于测试的 StrategySerializer 实例
-        from services.web.strategy_v2.serializers import StrategySerializer
+        # 创建用于测试的 CreateStrategyRequestSerializer 实例
+        from services.web.strategy_v2.serializers import CreateStrategyRequestSerializer
 
-        self.serializer = StrategySerializer()
+        self.serializer = CreateStrategyRequestSerializer()
 
     def _create_mock_strategy_data(self, strategy_type, config_type=None, system_ids=None, rt_id=None):
         """创建模拟策略数据"""
@@ -855,8 +1051,7 @@ class TestStrategyDataPermissionValidation(TestCase):
         return data
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
-    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
-    def test_validate_strategy_data_permission_event_log_success(self, mock_scene_data_filter, mock_system_resource):
+    def test_validate_strategy_data_permission_event_log_success(self, mock_system_resource):
         """测试事件日志策略系统权限验证成功"""
         # 模拟授权的系统
         mock_system_resource.return_value.request.return_value = [{"system_id": "bklog"}, {"system_id": "bkssm"}]
@@ -891,19 +1086,19 @@ class TestStrategyDataPermissionValidation(TestCase):
         self.assertIn("系统[bkssm]不在场景", str(cm.exception))
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
-    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
-    def test_validate_strategy_data_permission_biz_rt_success(self, mock_get_table_ids, mock_system_resource):
+    def test_validate_strategy_data_permission_biz_rt_success(self, mock_system_resource):
         """测试业务RT策略数据表权限验证成功"""
-        # 模拟授权的数据表
-        mock_get_table_ids.return_value = ["rt_table_1", "rt_table_2"]
+        from services.web.scene.data_filter import SceneDataFilter
 
-        data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRt", rt_id="rt_table_1")
+        # 使用patch.object来mock类方法
+        with unittest.mock.patch.object(SceneDataFilter, 'get_table_ids', return_value=["rt_table_1", "rt_table_2"]):
+            data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRt", rt_id="rt_table_1")
 
-        # 应该正常通过，不抛出异常
-        self.serializer._validate_strategy_data_permission(data)
+            # 应该正常通过，不抛出异常
+            self.serializer._validate_strategy_data_permission(data)
 
-        # 验证权限检查被调用
-        mock_get_table_ids.assert_called_once_with(self.scene_id)
+            # 验证权限检查被调用
+            SceneDataFilter.get_table_ids.assert_called_once_with(self.scene_id)
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
@@ -924,7 +1119,7 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
-    def test_validate_strategy_data_permission_model_strategy_skip(self, mock_scene_data_filter, mock_system_resource):
+    def test_validate_strategy_data_permission_model_strategy_skip(self, mock_system_resource, mock_scene_data_filter):
         """测试模型策略跳过权限验证"""
         data = self._create_mock_strategy_data(strategy_type="model")
 
@@ -954,7 +1149,7 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter')
-    def test_validate_strategy_data_permission_no_scene_id_skip(self, mock_scene_data_filter, mock_system_resource):
+    def test_validate_strategy_data_permission_no_scene_id_skip(self, mock_system_resource, mock_scene_data_filter):
         """测试没有场景ID时跳过权限验证"""
         data = {
             "strategy_type": "rule",
@@ -984,7 +1179,7 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
-    def test_validate_strategy_data_permission_empty_rt_id(self, mock_get_table_ids, mock_system_resource):
+    def test_validate_strategy_data_permission_empty_rt_id(self, mock_system_resource, mock_get_table_ids):
         """测试空RT ID跳过权限验证"""
         data = self._create_mock_strategy_data(strategy_type="rule", config_type="BizRT", rt_id="")
 
@@ -1010,3 +1205,191 @@ class TestStrategyDataPermissionValidation(TestCase):
 
         # 验证权限检查被调用
         mock_get_table_ids.assert_called_once_with(self.scene_id)
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_mine_biz_rt_in_scene_scope(
+        self, mock_get_table_ids, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - RT在场景授权范围内时直接通过"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+
+        # RT在场景授权范围内
+        mock_get_table_ids.return_value = ["mine_rt_table"]
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="MineBizRt", rt_id="mine_rt_table")
+
+        # 应该正常通过，不抛出异常，也不需要检查用户权限
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证场景权限检查被调用，但用户权限检查没有被调用
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
+        mock_user_auth.assert_not_called()
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_mine_biz_rt_user_has_permission(
+        self, mock_get_table_ids, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - RT不在场景范围内但用户有权限"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+
+        # RT不在场景授权范围内
+        mock_get_table_ids.return_value = ["other_rt_table"]
+
+        # 用户有权限
+        mock_user_auth.return_value = True
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="MineBizRt", rt_id="mine_rt_table")
+
+        # 应该正常通过，不抛出异常
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 验证用户权限检查被调用
+        mock_user_auth.assert_called_once_with(
+            user_id="test_user",
+            action_id=UserAuthActionEnum.RT_QUERY.value,
+            object_id="mine_rt_table",
+        )
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_mine_biz_rt_user_no_permission(
+        self, mock_get_table_ids, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 用户没有权限使用数据表"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+
+        # RT不在场景授权范围内
+        mock_get_table_ids.return_value = ["other_rt_table"]
+
+        # 用户没有权限
+        mock_user_auth.return_value = False
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="MineBizRt", rt_id="mine_rt_table")
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.serializer._validate_strategy_data_permission(data)
+
+        self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_mine_biz_rt_user_auth_check_failed(
+        self, mock_get_table_ids, mock_user_auth, mock_get_username
+    ):
+        """测试MINE_BIZ_RT类型 - 用户权限校验失败"""
+        # 模拟用户名
+        mock_get_username.return_value = "test_user"
+
+        # RT不在场景授权范围内
+        mock_get_table_ids.return_value = ["other_rt_table"]
+
+        # 权限检查失败
+        mock_user_auth.side_effect = Exception("Auth check failed")
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="MineBizRt", rt_id="mine_rt_table")
+
+        # 应该抛出验证错误
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.serializer._validate_strategy_data_permission(data)
+
+        self.assertIn("校验用户权限失败", str(cm.exception))
+
+    @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
+    def test_validate_strategy_data_permission_mine_biz_rt_no_username(self, mock_get_table_ids, mock_get_username):
+        """测试MINE_BIZ_RT类型 - 用户名为空时跳过校验"""
+        # 用户名为空
+        mock_get_username.return_value = ""
+
+        data = self._create_mock_strategy_data(strategy_type="rule", config_type="MineBizRt", rt_id="mine_rt_table")
+
+        # 应该正常通过（用户名为空时跳过校验）
+        self.serializer._validate_strategy_data_permission(data)
+
+        # 由于MINE_BIZ_RT处理逻辑的变化，即使用户名为空也会先检查场景授权范围
+        # 验证权限检查被调用
+        mock_get_table_ids.assert_called_once_with(self.scene_id)
+
+    def test_check_user_table_permission_success(self):
+        """测试_check_user_table_permission - 用户有权限"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
+            with unittest.mock.patch(
+                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=True
+            ):
+                # 不应该抛出异常
+                self.serializer._check_user_table_permission(["rt_id_1", "rt_id_2"])
+
+    def test_check_user_table_permission_no_permission(self):
+        """测试_check_user_table_permission - 用户没有权限"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
+            with unittest.mock.patch(
+                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=False
+            ):
+                # 应该抛出验证错误
+                with self.assertRaises(serializers.ValidationError) as cm:
+                    self.serializer._check_user_table_permission(["rt_id_1"])
+
+                self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
+
+    def test_check_user_table_permission_multiple_rt_ids(self):
+        """测试_check_user_table_permission - 多个RT ID，部分没有权限"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
+            # 第一个RT有权限，第二个没有
+            with unittest.mock.patch(
+                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', side_effect=[True, False]
+            ):
+                # 应该抛出验证错误
+                with self.assertRaises(serializers.ValidationError) as cm:
+                    self.serializer._check_user_table_permission(["rt_id_1", "rt_id_2"])
+
+        # 由于MINE_BIZ_RT处理逻辑的变化，错误信息可能指向第一个没有权限的表
+        self.assertIn("当前用户没有权限使用数据表", str(cm.exception))
+
+    def test_check_user_table_permission_empty_rt_ids(self):
+        """测试_check_user_table_permission - 空的RT ID列表"""
+        # 空列表不应该调用API
+        with unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check') as mock_auth:
+            self.serializer._check_user_table_permission([])
+            mock_auth.assert_not_called()
+
+    def test_check_user_table_permission_api_exception(self):
+        """测试_check_user_table_permission - API调用异常"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
+            with unittest.mock.patch(
+                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', side_effect=Exception("API Error")
+            ):
+                # 应该抛出验证错误
+                with self.assertRaises(serializers.ValidationError) as cm:
+                    self.serializer._check_user_table_permission(["rt_id_1"])
+
+                self.assertIn("校验用户权限失败", str(cm.exception))
+
+    def test_check_user_table_permission_no_username(self):
+        """测试_check_user_table_permission - 用户名为空"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value=""):
+            # 用户名为空时不应该调用API
+            with unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check') as mock_auth:
+                self.serializer._check_user_table_permission(["rt_id_1"])
+                mock_auth.assert_not_called()
+
+    def test_check_user_table_permission_with_none_and_empty_values(self):
+        """测试_check_user_table_permission - 过滤None和空值"""
+        with unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username', return_value="test_user"):
+            with unittest.mock.patch(
+                'services.web.strategy_v2.serializers.api.bk_base.user_auth_check', return_value=True
+            ) as mock_auth:
+                # 包含None和空字符串
+                self.serializer._check_user_table_permission(["rt_id_1", None, "", "rt_id_2"])
+
+                # 应该只调用2次（过滤掉了None和空字符串）
+                self.assertEqual(mock_auth.call_count, 2)

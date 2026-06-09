@@ -463,3 +463,11 @@ class UserAuthBatchCheck(BkBaseResource):
     many_response_data = True
     RequestSerializer = UserAuthBatchCheckReqSerializer
     ResponseSerializer = UserAuthCheckRespSerializer
+
+
+class GetBizsList(BkBaseResource):
+    """获取业务信息元数据"""
+
+    name = gettext_lazy("获取业务列表")
+    action = "/v3/meta/bizs/"
+    method = "GET"

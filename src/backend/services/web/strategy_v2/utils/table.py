@@ -20,10 +20,13 @@ import abc
 from typing import List, Set
 
 from bk_resource import api, resource
+from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.db.models import Q
 from django.utils.module_loading import import_string
 
+from api.bk_base.constants import UserAuthActionEnum
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
@@ -217,6 +220,99 @@ class BizRtTableHandler(TableHandler):
                 rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
             )
         return self.format_result_tables(result_tables)
+
+
+class MineBizRtTableHandler(TableHandler):
+    """
+    获取个人有权限的结果表
+    1. 不传 bk_biz_id，返回业务列表供用户选择
+    2. 用户选择业务后，传入 bk_biz_id，返回该业务下个人有权限的结果表
+    """
+
+    def __init__(self, table_type: str, *args, **kwargs):
+        super().__init__(table_type)
+        self.bk_username = kwargs.get("bk_username", "")
+        self.bk_biz_id = kwargs.get("bk_biz_id")
+        # 如果 bk_username 为空，则使用当前请求的用户名
+        if not self.bk_username:
+            self.bk_username = get_request_username() or ""
+
+    def _get_biz_list(self) -> List[dict]:
+        """
+        获取业务列表
+        """
+        try:
+            result = api.bk_base.get_bizs_list()
+            if isinstance(result, list):
+                return [{"label": biz.get("bk_biz_name", ""), "value": biz.get("bk_biz_id")} for biz in result]
+            return []
+        except Exception:
+            return []
+
+    def _ensure_project_permission(self, bk_biz_id: int, result_table_ids: List[str]):
+        """
+        确保项目对结果表有权限，如果没有则进行授权
+        """
+        if not result_table_ids:
+            return
+
+        # 1. 批量检查项目是否对这些结果表有权限
+        try:
+            check_result = api.bk_base.project_data_batch_check(
+                project_id=settings.BKBASE_PROJECT_ID,
+                action_id=UserAuthActionEnum.RT_QUERY.value,
+                object_ids=result_table_ids,
+            )
+            no_permission_rt_ids = (
+                set(check_result.get("no_permissions", [])) if isinstance(check_result, dict) else set()
+            )
+        except Exception as e:
+            logger.error("[EnsureProjectPermission] 项目权限检查失败: %s", e)
+            raise
+
+        # 2. 对没有权限的表进行批量授权
+        if no_permission_rt_ids:
+            try:
+                api.bk_base.project_data_batch_add(
+                    project_id=settings.BKBASE_PROJECT_ID,
+                    bk_biz_id=bk_biz_id,
+                    object_ids=list(no_permission_rt_ids),
+                )
+            except Exception as e:
+                logger.error("[EnsureProjectPermission] 项目权限授权失败: %s", e)
+
+    def list_tables(self) -> List[dict]:
+        """
+        获取列表数据
+        1. 如果没有 bk_biz_id，返回业务列表供用户选择
+        2. 如果有 bk_biz_id，返回该业务下个人有权限的结果表
+        """
+        if not self.bk_biz_id:
+            return self._get_biz_list()
+
+        # 有 bk_biz_id，返回该业务下个人有权限的结果表
+        result = api.bk_base.get_mine_result_tables(
+            bk_username=self.bk_username,
+            action_id=UserAuthActionEnum.RT_QUERY.value,
+            bk_biz_id=self.bk_biz_id,
+        )
+        result_tables = (
+            result if isinstance(result, list) else result.get("data", []) if isinstance(result, dict) else []
+        )
+
+        if not result_tables:
+            return []
+
+        result_table_ids = [rt.get("result_table_id", "") for rt in result_tables if rt.get("result_table_id")]
+        self._ensure_project_permission(self.bk_biz_id, result_table_ids)
+
+        return [
+            {
+                "label": rt.get("result_table_name", ""),
+                "value": rt.get("result_table_id", ""),
+            }
+            for rt in result_tables
+        ]
 
 
 class RuleAuditSourceTypeChecker:

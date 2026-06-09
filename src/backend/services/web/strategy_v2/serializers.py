@@ -19,9 +19,13 @@ import json
 from datetime import datetime, timedelta
 from typing import List
 
+from bk_resource import api
+from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_request_username
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
+from api.bk_base.constants import UserAuthActionEnum
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.serializers import (
     BatchUpdateEnumMappingSerializer,
@@ -43,6 +47,7 @@ from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import CompositeScopeFilter
 from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.constants import (
@@ -417,6 +422,15 @@ class StrategySerializer(serializers.Serializer):
                 or config_type == RuleAuditConfigType.BUILD_ID_ASSET.value
             ):
                 self._check_table_permission(data_source.get("rt_id"), scene_id)
+            if config_type == RuleAuditConfigType.MINE_BIZ_RT.value:
+                # MINE_BIZ_RT 类型：优先检查场景授权范围，不在范围内才校验用户权限
+                rt_id = data_source.get("rt_id")
+                if rt_id:
+                    # 先检查是否在场景授权范围内
+                    scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+                    if rt_id not in set(scene_table_ids):
+                        # 不在场景授权范围内，校验用户是否有权限使用此表
+                        self._check_user_table_permission([rt_id])
             if config_type == RuleAuditConfigType.EVENT_LOG.value:
                 self._check_systems_permission(data_source.get("system_ids", []), scene_id)
             if config_type == RuleAuditConfigType.LINK_TABLE.value:
@@ -455,6 +469,15 @@ class StrategySerializer(serializers.Serializer):
                     self._check_systems_permission(table.get("system_ids", []), scene_id)
                 elif table_type in (LinkTableTableType.BIZ_RT.value, LinkTableTableType.BUILD_ID_ASSET.value):
                     self._check_table_permission(table.get("rt_id"), scene_id)
+                elif table_type == LinkTableTableType.MINE_BIZ_RT.value:
+                    # MINE_BIZ_RT 类型：优先检查场景授权范围，不在范围内才校验用户权限
+                    rt_id = table.get("rt_id")
+                    if rt_id:
+                        # 先检查是否在场景授权范围内
+                        scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+                        if rt_id not in set(scene_table_ids):
+                            # 不在场景授权范围内，校验用户是否有权限使用此表
+                            self._check_user_table_permission([rt_id])
 
     def _check_systems_permission(self, system_ids: list, scene_id: int):
         """校验系统是否在场景授权范围内"""
@@ -497,6 +520,33 @@ class StrategySerializer(serializers.Serializer):
 
         if rt_id not in set(scene_table_ids):
             raise serializers.ValidationError({"rt_id": gettext("数据表[%s]不在场景[%s]的授权范围内") % (rt_id, scene_id)})
+
+    def _check_user_table_permission(self, rt_ids: list):
+        """
+        校验当前用户是否有权限查询结果表
+        """
+        username = get_request_username()
+        if not username or not rt_ids:
+            return
+
+        # 去除空值和重复值
+        rt_ids = list({rt for rt in rt_ids if rt})
+
+        if not rt_ids:
+            return
+        for rt_id in rt_ids:
+            try:
+                result = api.bk_base.user_auth_check(
+                    user_id=username,
+                    action_id=UserAuthActionEnum.RT_QUERY.value,
+                    object_id=rt_id,
+                )
+            except Exception as e:
+                logger.warning("[StrategyPermissionCheck] 用户权限校验失败: %s", e)
+                raise serializers.ValidationError({"rt_id": gettext("校验用户权限失败，无法验证数据表[%s]的权限") % rt_id})
+
+            if not result:
+                raise serializers.ValidationError({"rt_id": gettext("当前用户没有权限使用数据表[%s]") % rt_id})
 
 
 class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
@@ -1134,6 +1184,8 @@ class ListTablesRequestSerializer(serializers.Serializer):
 
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
+    bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), required=False)
+    bk_username = serializers.CharField(label=gettext_lazy("用户名"), required=False)
 
 
 class GetRTFieldsRequestSerializer(serializers.Serializer):
@@ -1413,6 +1465,7 @@ class LinkTableDataPermissionMixin:
         # 收集权限检查所需的数据
         all_system_ids = set()
         all_rt_ids = set()
+        mine_biz_rt_ids = set()
         for link in links:
             for table_key in ("left_table", "right_table"):
                 table = link.get(table_key, {})
@@ -1431,6 +1484,12 @@ class LinkTableDataPermissionMixin:
                     rt_id = table.get("rt_id")
                     if rt_id:
                         all_rt_ids.add(rt_id)
+
+                # MINE_BIZ_RT 类型：收集需要校验用户权限的 rt_id
+                if table_type == LinkTableTableType.MINE_BIZ_RT.value:
+                    rt_id = table.get("rt_id")
+                    if rt_id:
+                        mine_biz_rt_ids.add(rt_id)
 
         # 校验系统授权
         if all_system_ids:
@@ -1463,6 +1522,41 @@ class LinkTableDataPermissionMixin:
                 raise serializers.ValidationError(
                     {"config": gettext("数据表[%s]不在场景[%s]的授权范围内") % (",".join(unauthorized_tables), scene_id)}
                 )
+
+        # 校验用户对结果表的权限（MINE_BIZ_RT 类型）
+        if mine_biz_rt_ids:
+            self._check_user_table_permission(list(mine_biz_rt_ids))
+
+    def _check_user_table_permission(self, rt_ids: list):
+        """
+        校验当前用户是否有权限查询结果表
+        """
+        username = get_request_username()
+        if not username or not rt_ids:
+            return
+
+        # 去除空值和重复值
+        rt_ids = list({rt for rt in rt_ids if rt})
+
+        if not rt_ids:
+            return
+        for rt_id in rt_ids:
+            # API 调用可能失败，需要捕获异常
+            try:
+                result = api.bk_base.user_auth_check(
+                    user_id=username,
+                    action_id=UserAuthActionEnum.RT_QUERY.value,
+                    object_id=rt_id,
+                )
+            except Exception as e:
+                from blueapps.utils.logger import logger
+
+                logger.warning("[LinkTablePermissionCheck] 用户权限校验失败: %s", e)
+                raise serializers.ValidationError({"config": gettext("校验用户权限失败，无法验证数据表[%s]的权限") % rt_id})
+
+            # API 调用成功，检查用户是否有权限
+            if not result:
+                raise serializers.ValidationError({"config": gettext("当前用户没有权限使用数据表[%s]") % rt_id})
 
 
 class CreateLinkTableRequestSerializer(LinkTableDataPermissionMixin, serializers.ModelSerializer):
@@ -1792,7 +1886,8 @@ class RuleAuditSerializer(serializers.Serializer):
         # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
         # 1. 日志需要指定 rt_id,system_ids
         # 2. 资产和其他数据需要指定 rt_id
-        # 3. 联表需要指定 link_table
+        # 3. 个人有权限的结果表需要指定 rt_id
+        # 4. 联表需要指定 link_table
         config_type = attrs["config_type"]
         data_source = attrs["data_source"]
         match config_type:
@@ -1801,7 +1896,11 @@ class RuleAuditSerializer(serializers.Serializer):
                     raise serializers.ValidationError(
                         gettext("Config type: %s need rt_id and system_ids") % config_type
                     )
-            case RuleAuditConfigType.BUILD_ID_ASSET.value | RuleAuditConfigType.BIZ_RT.value:
+            case (
+                RuleAuditConfigType.BUILD_ID_ASSET.value
+                | RuleAuditConfigType.BIZ_RT.value
+                | RuleAuditConfigType.MINE_BIZ_RT.value
+            ):
                 if not data_source.get("rt_id"):
                     raise serializers.ValidationError(gettext("Config type: %s need rt_id") % config_type)
             case RuleAuditConfigType.LINK_TABLE.value:
