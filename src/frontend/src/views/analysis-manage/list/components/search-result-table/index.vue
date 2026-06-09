@@ -91,6 +91,7 @@
     loading: Ref<boolean>,
     tableSearchModel: Ref<Record<string, any>>,
     handleUpdateField: () => void,
+    calcTableHeight: () => void,
   }
   interface ResultFilter {
     conditions: Array<{
@@ -502,10 +503,15 @@
     immediate: true,
   });
 
+  const calcTableHeight = () => {
+    listRef.value?.calcTableHeight?.();
+  };
+
   defineExpose<Exposes>({
     loading: isLoading,
     tableSearchModel,
     handleUpdateField,
+    calcTableHeight,
   });
 
 </script>
