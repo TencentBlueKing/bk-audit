@@ -81,6 +81,7 @@
   import type { Table } from 'bkui-vue';
   import _ from 'lodash';
   import {
+    nextTick,
     onBeforeUnmount,
     onMounted,
     reactive,
@@ -114,6 +115,7 @@
     loading: Ref<boolean>,
     getTableRef: () => Ref<any>
     getParamsMemo: () => Ref<Record<string, any>>
+    calcTableHeight: () => void,
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -221,9 +223,16 @@
     emits('clearSearch');
   };
 
+  const PAGE_OFFSET_BOTTOM = 24;
+
   const calcTableHeight = _.throttle(() => {
-    const windowInnerHeight = window.innerHeight;
-    tableMaxHeight.value = windowInnerHeight - 500;
+    nextTick(() => {
+      if (!rootRef.value) {
+        return;
+      }
+      const { top } = rootRef.value.getBoundingClientRect();
+      tableMaxHeight.value = Math.max(window.innerHeight - top - PAGE_OFFSET_BOTTOM, 300);
+    });
   }, 100);
 
   onMounted(() => {
@@ -260,5 +269,6 @@
     getParamsMemo() {
       return params;
     },
+    calcTableHeight,
   });
 </script>
