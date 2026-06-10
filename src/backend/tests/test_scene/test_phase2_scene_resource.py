@@ -1781,3 +1781,108 @@ class TestMigrationFiles:
             "0008_add_scene_id.py",
         )
         assert os.path.exists(path), f"迁移文件不存在: {path}"
+
+
+class TestScenesAndSystemsVisibilityType:
+    """SCENES_AND_SYSTEMS 可见性类型测试"""
+
+    @pytest.mark.django_db
+    def test_filter_scenes_and_systems_visibility_type(self, scene):
+        """测试 scenes_and_systems 可见性类型"""
+        # 测试场景1：某些场景和某些系统
+        scenes_and_systems_group1 = NoticeGroup.objects.create(
+            group_name="某些场景和某些系统平台组", group_member=["admin"], notice_config=[]
+        )
+        binding1 = ResourceBinding.objects.create(
+            resource_id=str(scenes_and_systems_group1.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=binding1, scene_id=scene.scene_id)
+        ResourceBindingSystem.objects.create(binding=binding1, system_id="bk_job")
+
+        # 测试场景2：全部场景和某些系统
+        scenes_and_systems_group2 = NoticeGroup.objects.create(
+            group_name="全部场景和某些系统平台组", group_member=["admin"], notice_config=[]
+        )
+        binding2 = ResourceBinding.objects.create(
+            resource_id=str(scenes_and_systems_group2.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=binding2, system_id="bk_cmdb")
+        # 注意：绑定了特定系统，但未绑定特定场景，表示全部场景可见
+
+        # 测试场景3：某些场景和全部系统
+        scenes_and_systems_group3 = NoticeGroup.objects.create(
+            group_name="某些场景和全部系统平台组", group_member=["admin"], notice_config=[]
+        )
+        binding3 = ResourceBinding.objects.create(
+            resource_id=str(scenes_and_systems_group3.group_id),
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=binding3, scene_id=scene.scene_id)
+        # 注意：绑定了特定场景，但未绑定特定系统，表示全部系统可见
+
+        # 测试按场景过滤（应该返回所有绑定到该场景或全部场景的资源）
+        scene_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            scene_id=scene.scene_id,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert scene_qs.count() == 3  # 所有三个资源都应该可见
+
+        # 测试按系统过滤（应该返回所有绑定到该系统或全部系统的资源）
+        job_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            system_id="bk_job",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert job_qs.count() == 2  # 组1和组3应该可见
+
+        cmdb_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            system_id="bk_cmdb",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert cmdb_qs.count() == 2  # 组2和组3应该可见
+
+        # 测试同时按场景和系统过滤
+        both_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            scene_id=scene.scene_id,
+            system_id="bk_job",
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert both_qs.count() == 3  # 所有三个资源都应该可见
+
+        # 测试不匹配的场景和系统
+        unmatched_scene_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            scene_id=999999,  # 不存在的场景
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert unmatched_scene_qs.count() == 0  # 场景不存在时不应该显示任何资源
+
+        unmatched_system_qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=None,
+            system_id="nonexistent_system",  # 不存在的系统
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert unmatched_system_qs.count() == 1  # 只有组3（全部系统）应该可见
