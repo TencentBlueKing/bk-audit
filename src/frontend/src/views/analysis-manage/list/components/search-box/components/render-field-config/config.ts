@@ -35,7 +35,7 @@ export interface IFieldConfig {
 }
 // eslint-disable-next-line no-useless-escape
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
-export default () => ({
+export default {
   system_id: {
     label: '系统名称(ID)',
     type: 'system-id',
@@ -222,4 +222,4 @@ export default () => ({
     type: 'expr',
     required: false,
   },
-}) as Record<string, IFieldConfig>;
+} as Record<string, IFieldConfig>;
