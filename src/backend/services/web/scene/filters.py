@@ -457,6 +457,19 @@ class CompositeScopeFilter:
                     if set(system_ids) & binding_system_ids:
                         visible_ids.add(binding.resource_id)
 
+            elif binding.visibility_type == VisibilityScope.SCENES_AND_SYSTEMS:
+                # 场景和系统可见：匹配场景或匹配系统
+                binding_scene_ids = set(
+                    binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+                )
+                binding_system_ids = set(binding.binding_systems.values_list("system_id", flat=True))
+
+                scene_matched = bool(active_scene_ids) and bool(set(active_scene_ids) & binding_scene_ids)
+                system_matched = bool(system_ids) and bool(set(system_ids) & binding_system_ids)
+
+                if scene_matched or system_matched:
+                    visible_ids.add(binding.resource_id)
+
         return visible_ids
 
     @staticmethod

@@ -495,6 +495,14 @@ TOOL_LIST_SORT_FIELD_DESCRIPTIONS = {
 
 
 class ListRequestSerializer(SortSerializerMixin, OptionalScopeBindingRequestSerializer):
+    visibility_type = serializers.ChoiceField(
+        choices=VisibilityScope.choices,
+        required=False,
+        allow_null=True,
+        label=gettext_lazy("可见范围类型"),
+    )
+    scene_ids = FlexibleListField(child=serializers.IntegerField(), required=False, label=gettext_lazy("场景ID列表"))
+    system_ids = FlexibleListField(child=serializers.CharField(), required=False, label=gettext_lazy("系统ID列表"))
     keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
