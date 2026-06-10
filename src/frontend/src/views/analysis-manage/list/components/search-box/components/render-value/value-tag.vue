@@ -119,7 +119,7 @@
 
   const { t } = useI18n();
 
-  const fieldConfigInfo = fieldConfig();
+  const fieldConfigInfo = fieldConfig;
   const config = fieldConfigInfo[props.name as keyof typeof fieldConfigInfo];
 
   const rootRef = ref();
