@@ -23,10 +23,10 @@
     placement="bottom-start"
     theme="light"
     trigger="click"
-    @after-hidden="isShow = false">
+    @after-hidden="handleAfterHidden">
     <span
       class="nl-add-condition-trigger"
-      :class="{ 'is-active': isShow }"
+      :class="{ 'is-active': shouldActivate }"
       @click="isShow = !isShow">
       <audit-icon
         class="nl-add-condition-icon"
@@ -136,8 +136,16 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const popoverRef = ref();
+  const popoverRef = ref<{ hide?:() => void }>();
   const isShow = ref(false);
+  const pendingSelection = ref<null | {
+    type: 'risk';
+    fieldName: string;
+    config: IFieldConfig;
+  } | {
+    type: 'event';
+    item: Record<string, any>;
+  }>(null);
   // 记录每个字段项是否溢出，用于控制 tooltip 显示
   const overflowFlags = ref<Record<string, boolean>>({});
 
@@ -150,6 +158,13 @@
   };
   const activeTab = ref<'risk' | 'event'>('risk');
   const searchKeyword = ref('');
+
+  // 判断是否有已添加的条件（风险字段或事件字段）
+  const hasAddedConditions = computed(() => props.selectedFields.length > 0 || props.selectedEventFieldIds.length > 0);
+
+  // 判断是否应该激活添加条件标签
+  // 只有当没有已添加的条件且弹窗显示时才激活
+  const shouldActivate = computed(() => !hasAddedConditions.value && isShow.value);
 
   // 过滤风险字段（排除已添加的字段，且排除 datetimerange 类型，因为首次发现时间始终存在不可添加）
   const filteredRiskFields = computed(() => {
@@ -189,16 +204,40 @@
     return filteredEventFields.value.length === 0;
   });
 
-  // 选择风险字段（点击后添加并关闭下拉）
-  const handleSelectField = (fieldName: string, config: IFieldConfig) => {
-    emit('addField', fieldName, config);
+  const handleAfterHidden = () => {
     isShow.value = false;
+    if (!pendingSelection.value) return;
+
+    if (pendingSelection.value.type === 'risk') {
+      emit('addField', pendingSelection.value.fieldName, pendingSelection.value.config);
+    } else {
+      emit('addEventField', pendingSelection.value.item);
+    }
+    pendingSelection.value = null;
   };
 
-  // 选择事件字段（点击后添加并关闭下拉）
-  const handleSelectEventField = (item: Record<string, any>) => {
-    emit('addEventField', item);
+  const closePopover = () => {
     isShow.value = false;
+    popoverRef.value?.hide?.();
+  };
+
+  // 选择风险字段（点击后先关闭下拉，再通知父组件添加字段，避免两个弹窗同时出现互相遮挡）
+  const handleSelectField = (fieldName: string, config: IFieldConfig) => {
+    pendingSelection.value = {
+      type: 'risk',
+      fieldName,
+      config,
+    };
+    closePopover();
+  };
+
+  // 选择事件字段（点击后先关闭下拉，再通知父组件添加字段，避免两个弹窗同时出现互相遮挡）
+  const handleSelectEventField = (item: Record<string, any>) => {
+    pendingSelection.value = {
+      type: 'event',
+      item,
+    };
+    closePopover();
   };
 </script>
 <style lang="postcss">
