@@ -24,13 +24,41 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 
+type HtmlEnvPluginOptions = {
+  prefix?: string,
+  suffix?: string,
+  envPrefixes?: string,
+};
+
+// vite-plugin-html-env 旧版 API，Vite 5+ 需适配为 handler
+const wrapHtmlEnvPlugin = (options: HtmlEnvPluginOptions) => {
+  const plugin = VitePluginHtmlEnv(options);
+  const { transformIndexHtml } = plugin as {
+    transformIndexHtml?: {
+      transform?: (html: string, ctx: unknown) => string,
+      enforce?: 'pre' | 'post',
+    },
+  };
+
+  if (transformIndexHtml?.transform) {
+    return {
+      ...plugin,
+      transformIndexHtml: {
+        ...(transformIndexHtml.enforce ? { order: transformIndexHtml.enforce } : {}),
+        handler: transformIndexHtml.transform.bind(transformIndexHtml),
+      },
+    };
+  }
+
+  return plugin;
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
 
   return {
-    logLevel: 'error',
+    // logLevel: 'error',
     base: process.env.AUDIT_VITE_BUILD_BASE_DIR || '/',
     publicDir: 'static',
     plugins: [
@@ -42,7 +70,7 @@ export default defineConfig(({ mode }) => {
       vueJsx(),
       basicSsl(),
       monacoEditorPlugin({}),
-      isDevelopment && VitePluginHtmlEnv({
+      isDevelopment && wrapHtmlEnvPlugin({
         prefix: '{{ ',
         suffix: ' }}',
         envPrefixes: 'AUDIT_',
@@ -70,6 +98,23 @@ export default defineConfig(({ mode }) => {
       },
     },
     envPrefix: 'AUDIT_',
+    optimizeDeps: {
+      include: ['vue', 'vue-router', 'vue-i18n', 'mitt'],
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/vue/')
+              || id.includes('node_modules/@vue/')
+              || id.includes('node_modules/vue-router')
+              || id.includes('node_modules/vue-i18n')) {
+              return 'vue-vendor';
+            }
+          },
+        },
+      },
+    },
     server: {
       https: {},
       port: 8082,
