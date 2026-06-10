@@ -18,12 +18,15 @@ def validate_platform_visibility_payload(visibility_type: str, scene_ids=None, s
     规则：
     - visibility_type=specific_scenes 时，scene_ids 必须非空
     - visibility_type=specific_systems 时，system_ids 必须非空
+    - visibility_type=scenes_and_systems 时，scene_ids 和 system_ids 至少一个非空
     """
     normalized_scene_ids = _normalize_values(scene_ids)
     normalized_system_ids = _normalize_values(system_ids)
 
     if visibility_type == VisibilityScope.SPECIFIC_SCENES and not normalized_scene_ids:
         raise ValueError("platform_binding 的 visibility_type 为 specific_scenes 时，scene_ids 不能为空")
+    if visibility_type == VisibilityScope.SCENES_AND_SYSTEMS and not normalized_scene_ids and not normalized_system_ids:
+        raise ValueError("platform_binding 的 visibility_type 为 scenes_and_systems 时，scene_ids 和 system_ids 不能同时为空")
     if normalized_scene_ids:
         active_scene_ids = set(
             Scene.objects.filter(scene_id__in=normalized_scene_ids).values_list("scene_id", flat=True)
@@ -61,3 +64,6 @@ def assert_binding_relation_integrity(binding, scene_count: int = None, system_c
             raise ValueError("platform_binding 的 visibility_type 为 specific_scenes 时，必须关联至少一个 scene")
         if binding.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS and system_count == 0:
             raise ValueError("platform_binding 的 visibility_type 为 specific_systems 时，必须关联至少一个 system")
+        if binding.visibility_type == VisibilityScope.SCENES_AND_SYSTEMS:
+            if scene_count == 0 and system_count == 0:
+                raise ValueError("platform_binding 的 visibility_type 为 scenes_and_systems 时，必须关联至少一个 scene 或 system")
