@@ -244,7 +244,8 @@
   // 字段配置版本号，切换场景时递增以强制子组件重新挂载、重新请求接口数据
   const fieldConfigVersion = ref(0);
 
-  const localFiledConfig = ref(filedConfig());
+  const defaultFieldKeys = new Set(Object.keys(filedConfig));
+  const localFiledConfig = ref(filedConfig);
   // eslint-disable-next-line max-len
   const allFieldNameList = computed(() => Object.keys(localFiledConfig.value) as Array<keyof typeof localFiledConfig.value>);
   const defaultFieldList = computed(() => allFieldNameList.value.slice(0, 7).reduce((result, fieldName) => ({
@@ -553,7 +554,11 @@
 
   // 重置字段配置到初始状态（清除自定义字段、收藏字段等）
   const resetFieldConfig = () => {
-    localFiledConfig.value = _.cloneDeep(filedConfig());
+    Object.keys(localFiledConfig.value).forEach((key) => {
+      if (!defaultFieldKeys.has(key)) {
+        delete localFiledConfig.value[key];
+      }
+    });
     fieldConfigVersion.value += 1;  // 递增版本号，强制子组件重新挂载
   };
 
