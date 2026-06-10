@@ -124,7 +124,11 @@
 
 <script setup lang="ts">
   import _ from 'lodash';
-  import { ref, watch } from 'vue';
+  import {
+    nextTick,
+    ref,
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import type { IFieldConfig } from '../render-field-config/config';
@@ -289,14 +293,45 @@
     }
   };
 
-  watch(() => props.deleteFieldName, (newVal) => {
-    // 根据id在selectedItems中找到对应的节点
-    const nodeToRemove = selectedItems.value.find(node => node.id === newVal);
-    if (nodeToRemove) {
-      // 从selectedItems中移除该节点
-      selectedItems.value = selectedItems.value.filter(node => node !== nodeToRemove);
+  const findNodeById = (nodes: CascaderItem[], id: string): CascaderItem | null => {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
+      }
+      if (node.children?.length) {
+        const found = findNodeById(node.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
+
+  const syncNodeDisabled = (nodes: CascaderItem[], fieldId: string) => {
+    const node = findNodeById(nodes, fieldId);
+    if (node) {
+      // eslint-disable-next-line no-param-reassign
+      node.disabled = Object.keys(props.filedConfig).includes(fieldId);
+    }
+  };
+
+  const uncheckNodeById = async (fieldId: string) => {
+    if (!fieldId) {
+      return;
+    }
+    selectedItems.value = selectedItems.value.filter(node => node.id !== fieldId);
+    syncNodeDisabled(localData.value, fieldId);
+    syncNodeDisabled(originalData.value, fieldId);
+    await nextTick();
+    const nodeToRemove = findNodeById(localData.value, fieldId);
+    if (nodeToRemove && treeRef.value) {
       treeRef.value.setChecked(nodeToRemove, false);
     }
+  };
+
+  watch(() => props.deleteFieldName, (newVal) => {
+    uncheckNodeById(newVal);
   });
 
   // 同步外部值的改动

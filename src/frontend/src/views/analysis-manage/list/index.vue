@@ -113,9 +113,16 @@
   provide('total', total);
   provide('tableSearchModel', tableSearchModel);
 
+  // 场景选择器初始化时会触发一次 change，不应清空 URL 带入的搜索条件
+  const isSceneInitialized = ref(false);
+
   // 场景切换
   const handleSceneChange = () => {
     resultRef.value?.handleUpdateField();
+    if (!isSceneInitialized.value) {
+      isSceneInitialized.value = true;
+      return;
+    }
     // 清空搜索
     searchBoxRef.value.clearValue();
   };
