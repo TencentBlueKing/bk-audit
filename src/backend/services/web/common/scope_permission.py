@@ -328,6 +328,17 @@ class ScopePermission:
             bound_system_ids = set(binding.binding_systems.values_list("system_id", flat=True))
             return bool(set(system_ids) & bound_system_ids)
 
+        if binding.visibility_type == VisibilityScope.SCENES_AND_SYSTEMS:
+            bound_scene_ids = set(
+                binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+            )
+            bound_system_ids = set(binding.binding_systems.values_list("system_id", flat=True))
+
+            scene_matched = bool(scene_ids) and bool(set(scene_ids) & bound_scene_ids)
+            system_matched = bool(system_ids) and bool(set(system_ids) & bound_system_ids)
+
+            return scene_matched or system_matched
+
         return False
 
     # ------------------------------------------------------------------
