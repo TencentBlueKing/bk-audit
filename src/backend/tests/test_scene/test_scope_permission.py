@@ -896,6 +896,210 @@ class TestCheckResourcePermission(TestCase):
             )
 
 
+# ==================== SCENES_AND_SYSTEMS Binding Tests ====================
+
+
+@pytest.mark.django_db
+class TestScenesAndSystemsBinding(TestCase):
+    """测试 SCENES_AND_SYSTEMS 绑定类型的权限消费逻辑"""
+
+    def setUp(self):
+        self.scene_1 = Scene.objects.create(name="场景1", status="enabled")
+        self.scene_2 = Scene.objects.create(name="场景2", status="enabled")
+
+        # 创建 SCENES_AND_SYSTEMS 绑定 - 只绑定场景
+        self.binding_scene_only = ResourceBinding.objects.create(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_scene_only",
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=self.binding_scene_only, scene=self.scene_1)
+
+        # 创建 SCENES_AND_SYSTEMS 绑定 - 只绑定系统
+        self.binding_system_only = ResourceBinding.objects.create(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_system_only",
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=self.binding_system_only, system_id="bk_monitor")
+
+        # 创建 SCENES_AND_SYSTEMS 绑定 - 同时绑定场景和系统
+        self.binding_both = ResourceBinding.objects.create(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_both",
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=self.binding_both, scene=self.scene_1)
+        ResourceBindingSystem.objects.create(binding=self.binding_both, system_id="bk_monitor")
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_only_binding_with_scene_access(self, mock_perm_cls):
+        """只绑定场景：用户有对应场景权限时可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_scene_only",
+            scene_ids=[self.scene_1.scene_id],
+            system_ids=[],
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_only_binding_without_scene_access(self, mock_perm_cls):
+        """只绑定场景：用户无对应场景权限时不可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_scene_only",
+            scene_ids=[self.scene_2.scene_id],  # 无权限的场景
+            system_ids=[],
+        )
+        assert result is False
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_scene_only_binding_with_system_access_returns_true(self, mock_perm_cls):
+        """只绑定场景：用户有任意系统权限时可见（特殊规则）"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_scene_only",
+            scene_ids=[],
+            system_ids=["bk_monitor"],  # 有系统权限
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_system_only_binding_with_system_access(self, mock_perm_cls):
+        """只绑定系统：用户有对应系统权限时可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_system_only",
+            scene_ids=[],
+            system_ids=["bk_monitor"],
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_system_only_binding_without_system_access(self, mock_perm_cls):
+        """只绑定系统：用户无对应系统权限时不可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_system_only",
+            scene_ids=[],
+            system_ids=["bk_other"],  # 无权限的系统
+        )
+        assert result is False
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_system_only_binding_with_scene_access_returns_true(self, mock_perm_cls):
+        """只绑定系统：用户有任意场景权限时可见（特殊规则）"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_system_only",
+            scene_ids=[self.scene_1.scene_id],  # 有场景权限
+            system_ids=[],
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_both_binding_with_scene_access(self, mock_perm_cls):
+        """同时绑定场景和系统：用户有场景权限时可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_both",
+            scene_ids=[self.scene_1.scene_id],
+            system_ids=[],
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_both_binding_with_system_access(self, mock_perm_cls):
+        """同时绑定场景和系统：用户有系统权限时可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_both",
+            scene_ids=[],
+            system_ids=["bk_monitor"],
+        )
+        assert result is True
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_both_binding_without_access(self, mock_perm_cls):
+        """同时绑定场景和系统：用户无任何权限时不可见"""
+        mock_perm_cls.return_value = MagicMock()
+
+        sp = ScopePermission("admin")
+        result = sp._check_visibility_intersection(
+            BindingResourceType.PANEL,
+            "panel_both",
+            scene_ids=[self.scene_2.scene_id],  # 无权限的场景
+            system_ids=["bk_other"],  # 无权限的系统
+        )
+        assert result is False
+
+    @patch("services.web.common.scope_permission.Permission")
+    def test_check_resource_permission_with_scenes_and_systems(self, mock_perm_cls):
+        """测试 check_resource_permission 对 SCENES_AND_SYSTEMS 绑定的集成测试"""
+        mock_instance = MagicMock()
+        mock_instance.get_policies_for_action.return_value = {}
+        mock_perm_cls.return_value = mock_instance
+
+        sp = ScopePermission("admin")
+        # 注入缓存，模拟用户有场景1和bk_monitor系统权限
+        cache_key = (ScopeType.CROSS_SCENE, None, ActionEnum.VIEW_SCENE.id)
+        sp._scene_ids_cache[cache_key] = [self.scene_1.scene_id]
+        cache_key_sys = (ScopeType.CROSS_SYSTEM, None, ActionEnum.VIEW_SYSTEM.id)
+        sp._system_ids_cache[cache_key_sys] = ["bk_monitor"]
+
+        # 测试同时绑定场景和系统的资源
+        result = sp.check_resource_permission(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_both",
+            raise_exception=False,
+        )
+        assert result is True
+
+        # 测试只绑定场景的资源
+        result = sp.check_resource_permission(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_scene_only",
+            raise_exception=False,
+        )
+        assert result is True
+
+        # 测试只绑定系统的资源
+        result = sp.check_resource_permission(
+            resource_type=BindingResourceType.PANEL,
+            resource_id="panel_system_only",
+            raise_exception=False,
+        )
+        assert result is True
+
+
 # ==================== Specific System Binding Tests ====================
 
 

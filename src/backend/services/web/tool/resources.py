@@ -1119,29 +1119,29 @@ class ListToolAll(ToolBase):
         if status:
             tool_qs = tool_qs.filter(status=status)
 
-        name = validated_request_data.get("name", [])
-        description = validated_request_data.get("description", [])
-        tool_type = validated_request_data.get("tool_type", [])
-        created_by = validated_request_data.get("created_by", [])
-        updated_by = validated_request_data.get("updated_by", [])
+        name_list = validated_request_data.get("name", [])
+        description_list = validated_request_data.get("description", [])
+        tool_type_list = validated_request_data.get("tool_type", [])
+        created_by_list = validated_request_data.get("created_by", [])
+        updated_by_list = validated_request_data.get("updated_by", [])
 
-        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+        def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
             q_filter = Q()
             for value in values:
                 if value:
                     q_filter |= Q(**{f"{field_name}__{lookup}": value})
-            return tool_qs.filter(q_filter)
+            return qs.filter(q_filter) if q_filter else qs
 
-        if name:
-            tool_qs = apply_multi_value_filter("name", name)
-        if description:
-            tool_qs = apply_multi_value_filter("description", description)
-        if tool_type:
-            tool_qs = tool_qs.filter(tool_type__in=tool_type)
-        if created_by:
-            tool_qs = tool_qs.filter(created_by__in=created_by)
-        if updated_by:
-            tool_qs = tool_qs.filter(updated_by__in=updated_by)
+        if name_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "name", name_list)
+        if description_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "description", description_list)
+        if tool_type_list:
+            tool_qs = tool_qs.filter(tool_type__in=tool_type_list)
+        if created_by_list:
+            tool_qs = tool_qs.filter(created_by__in=created_by_list)
+        if updated_by_list:
+            tool_qs = tool_qs.filter(updated_by__in=updated_by_list)
 
         tools = list(tool_qs)
 
