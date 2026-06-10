@@ -174,8 +174,9 @@ class PlatformPanelListQuerySerializer(serializers.Serializer):
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     page_size = serializers.IntegerField(required=False, min_value=1, default=20)
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
-    name = serializers.CharField(required=False, allow_blank=True)
-    description = serializers.CharField(required=False, allow_blank=True)
+    name = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="报表名称")
+    description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="报表描述")
+    updated_by = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="更新人")
 
 
 class SceneReportGroupOrderItemSerializer(serializers.Serializer):

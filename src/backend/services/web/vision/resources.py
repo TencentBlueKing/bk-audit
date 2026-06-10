@@ -136,6 +136,8 @@ class BKVision(AuditMixinResource, abc.ABC):
             return list(Scene.objects.values_list("scene_id", flat=True))
         if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES:
             return list(binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True))
+        if binding.visibility_type == VisibilityScope.SCENES_AND_SYSTEMS:
+            return list(binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True))
         return []
 
     @classmethod
@@ -822,14 +824,25 @@ class ListPlatformPanels(BKVision):
         )
 
         status = validated_request_data.get("status")
-        name = validated_request_data.get("name") or ""
-        description = validated_request_data.get("description") or ""
+        name_list = validated_request_data.get("name", [])
+        description_list = validated_request_data.get("description", [])
+        updated_by_list = validated_request_data.get("updated_by", [])
+
+        def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
+            q_filter = Q()
+            for value in values:
+                if value:
+                    q_filter |= Q(**{f"{field_name}__{lookup}": value})
+            return qs.filter(q_filter) if q_filter else qs
+
         if status:
             queryset = queryset.filter(status=status)
-        if name:
-            queryset = queryset.filter(name__icontains=name)
-        if description:
-            queryset = queryset.filter(description__icontains=description)
+        if name_list:
+            queryset = apply_multi_value_filter(queryset, "name", name_list)
+        if description_list:
+            queryset = apply_multi_value_filter(queryset, "description", description_list)
+        if updated_by_list:
+            queryset = apply_multi_value_filter(queryset, "updated_by", updated_by_list)
 
         bindings = self._get_binding_map(panel_ids=list(queryset.values_list("id", flat=True)))
         data = []

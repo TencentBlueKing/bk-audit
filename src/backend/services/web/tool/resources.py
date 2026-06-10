@@ -418,6 +418,40 @@ class ListTool(ToolBase):
         queryset = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
         queryset = self.filter_queryset_by_scope(queryset, validated_request_data, current_user)
 
+        visibility_type = validated_request_data.get("visibility_type")
+        scene_ids = validated_request_data.get("scene_ids") or []
+        system_ids = validated_request_data.get("system_ids") or []
+        if visibility_type or scene_ids or system_ids:
+            binding_type = BindingType.PLATFORM_BINDING
+            matched_uids = None
+
+            # 1) 按 visibility_type 匹配（全部场景或系统没有具体场景/系统 ID）
+            if visibility_type:
+                binding_qs = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    visibility_type=visibility_type,
+                )
+                if binding_type:
+                    binding_qs = binding_qs.filter(binding_type=binding_type)
+                matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
+
+            # 2) 按具体 scene/system ID 可见范围
+            if scene_ids or system_ids:
+                scoped_uids = {
+                    str(uid)
+                    for uid in CompositeScopeFilter.filter_queryset(
+                        queryset=queryset,
+                        binding_type=binding_type,
+                        scene_id=scene_ids,
+                        system_id=system_ids,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        pk_field="uid",
+                    ).values_list("uid", flat=True)
+                }
+                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+
+            queryset = queryset.filter(uid__in=matched_uids or [])
+
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
             int(tag_id) in tags
@@ -1044,6 +1078,10 @@ class ExecuteTool(ToolBase):
             input_var_config = input_var_config_map.get(raw_name, {})
             # 仅校验 is_show=False 的参数
             if not input_var_config.get("is_show", True):
+                # 豁免时间范围选择器的权限校验（支持相对时间表达式）
+                if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
+                    continue
+
                 # 获取工具的原始默认值
                 original_default = input_var_config.get("default_value")
 
@@ -1214,29 +1252,29 @@ class ListToolAll(ToolBase):
         if status:
             tool_qs = tool_qs.filter(status=status)
 
-        name = validated_request_data.get("name", [])
-        description = validated_request_data.get("description", [])
-        tool_type = validated_request_data.get("tool_type", [])
-        created_by = validated_request_data.get("created_by", [])
-        updated_by = validated_request_data.get("updated_by", [])
+        name_list = validated_request_data.get("name", [])
+        description_list = validated_request_data.get("description", [])
+        tool_type_list = validated_request_data.get("tool_type", [])
+        created_by_list = validated_request_data.get("created_by", [])
+        updated_by_list = validated_request_data.get("updated_by", [])
 
-        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+        def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
             q_filter = Q()
             for value in values:
                 if value:
                     q_filter |= Q(**{f"{field_name}__{lookup}": value})
-            return tool_qs.filter(q_filter)
+            return qs.filter(q_filter) if q_filter else qs
 
-        if name:
-            tool_qs = apply_multi_value_filter("name", name)
-        if description:
-            tool_qs = apply_multi_value_filter("description", description)
-        if tool_type:
-            tool_qs = tool_qs.filter(tool_type__in=tool_type)
-        if created_by:
-            tool_qs = tool_qs.filter(created_by__in=created_by)
-        if updated_by:
-            tool_qs = tool_qs.filter(updated_by__in=updated_by)
+        if name_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "name", name_list)
+        if description_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "description", description_list)
+        if tool_type_list:
+            tool_qs = tool_qs.filter(tool_type__in=tool_type_list)
+        if created_by_list:
+            tool_qs = tool_qs.filter(created_by__in=created_by_list)
+        if updated_by_list:
+            tool_qs = tool_qs.filter(updated_by__in=updated_by_list)
 
         tools = list(tool_qs)
 

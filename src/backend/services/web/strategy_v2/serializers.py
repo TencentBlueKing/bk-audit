@@ -368,6 +368,9 @@ class StrategySerializer(serializers.Serializer):
 
                         # 校验用户不可见(is_show=False)
                         if not var_config.get("is_show", True):
+                            # 豁免时间范围选择器的权限校验（支持相对时间表达式）
+                            if var_config.get("field_category") in ["time_range_select", "time-ranger"]:
+                                continue
                             if item.get("target_value_type") != TargetValueTypeEnum.FIXED_VALUE.value:
                                 continue
                             target_value = item.get("target_value")
