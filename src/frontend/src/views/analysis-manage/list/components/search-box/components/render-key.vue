@@ -173,6 +173,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -194,6 +195,7 @@
   import useFeature from '@/hooks/use-feature';
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import useUrlSearch from '@/hooks/use-url-search';
 
   interface CascaderNode {
     allow_operators: string[]
@@ -217,6 +219,15 @@
     (e: 'update:modelValue', value: Record<string, any>): void,
     (e: 'submit'): void,
   }
+  interface UrlCondition {
+    field: {
+      raw_name: string;
+      keys?: string[];
+    };
+    operator?: string;
+    filters?: Array<string | number>;
+  }
+
   interface Exposes {
     clearValue: () => void;
     resetFieldConfig: () => void;
@@ -228,6 +239,17 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { feature: isDoris } = useFeature('enable_doris');
+  const { getSearchParamsPost } = useUrlSearch();
+  const urlPostParams = getSearchParamsPost('conditions');
+  const getPendingUrlConditions = (): UrlCondition[] => {
+    if (!urlPostParams.conditions) {
+      return [];
+    }
+    return _.isArray(urlPostParams.conditions)
+      ? urlPostParams.conditions
+      : [urlPostParams.conditions];
+  };
+  const pendingUrlConditions = ref<UrlCondition[]>(getPendingUrlConditions());
 
   const isShow = ref(false);
   const favouriteQueryRef = ref();
@@ -302,6 +324,15 @@
     manual: true,
     onSuccess: () => {
       list.value = convertToCascaderList(SearchConfigList.value);
+      if (pendingUrlConditions.value.length) {
+        const conditions = [...pendingUrlConditions.value];
+        pendingUrlConditions.value = [];
+        // 等树数据 disabled 计算完成后再写入 filedConfig，避免自定义字段被误禁用
+        nextTick(() => {
+          initCustomFieldsFromUrl(conditions);
+          emits('submit');
+        });
+      }
     },
   });
 
@@ -370,6 +401,70 @@
     },
   });
 
+  const findNodeNameByKey = (nodes: CascaderNode[], searchKey: string): string | null => {
+    for (const node of nodes) {
+      if (node.id === searchKey) {
+        return node.name;
+      }
+      if (node.children?.length) {
+        const found = findNodeNameByKey(node.children, searchKey);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getCustomFieldLabel = (key: string) => {
+    const foundName = findNodeNameByKey(list.value, key);
+    if (foundName) {
+      return foundName;
+    }
+    try {
+      const parsedKey = JSON.parse(key);
+      if (Array.isArray(parsedKey)) {
+        return parsedKey.slice(1).join('/');
+      }
+    } catch (e) {
+      // ignore
+    }
+    return key;
+  };
+
+  const getConditionFieldKey = (condition: UrlCondition) => {
+    const { raw_name: rawName, keys = [] } = condition.field || {};
+    if (keys.length) {
+      return JSON.stringify([rawName, ...keys]);
+    }
+    return rawName;
+  };
+
+  const initCustomFieldsFromUrl = (conditions: UrlCondition[]) => {
+    let hasCustomField = false;
+    conditions.forEach((condition) => {
+      if (!condition?.field?.raw_name) {
+        return;
+      }
+      const key = getConditionFieldKey(condition);
+      if (defaultFieldKeys.has(key) || localFiledConfig.value[key]) {
+        return;
+      }
+      hasCustomField = true;
+      localFiledConfig.value[key] = {
+        label: getCustomFieldLabel(key),
+        type: 'string',
+        required: false,
+        canClose: true,
+        customField: true,
+        operator: condition.operator || 'like',
+      };
+    });
+    if (hasCustomField) {
+      isShowMore.value = true;
+    }
+  };
+
   // 处理级联选择器选中事件，添加搜索项
   const handleCascaderSelect = (selectArr: CascaderNode[]) => {
     // 先检查并删除不在 selectArr 中的自定义字段
@@ -411,6 +506,9 @@
     // 同步更新到父组件并触发搜索
     emits('update:modelValue', localSearchModel.value);
     emits('submit');
+    nextTick(() => {
+      deleteFieldName.value = '';
+    });
   };
 
   const handleAfterHidden = (value: { isShow: boolean}) => {

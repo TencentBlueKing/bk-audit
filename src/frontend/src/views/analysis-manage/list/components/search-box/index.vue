@@ -64,11 +64,41 @@
     value: RenderValue,
   };
 
+  interface UrlCondition {
+    field: {
+      raw_name: string;
+      keys?: string[];
+    };
+    operator?: string;
+    filters?: Array<string | number>;
+  }
+
+  const getConditionFieldKey = (condition: UrlCondition) => {
+    const { raw_name: rawName, keys = [] } = condition.field || {};
+    if (keys.length) {
+      return JSON.stringify([rawName, ...keys]);
+    }
+    return rawName;
+  };
+
+  const getConditionFieldValue = (condition: UrlCondition) => {
+    const filters = condition.filters || [];
+    if (!filters.length) {
+      return '';
+    }
+    if (filters.length === 1) {
+      return String(filters[0]);
+    }
+    return filters.map(item => String(item)).join(',');
+  };
+
   const {
     getSearchParams,
+    getSearchParamsPost,
     appendSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParams();
+  const urlPostParams = getSearchParamsPost('conditions');
 
   const renderType = ref<keyof typeof comMap>('key');
   if (comMap[urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap]) {
@@ -133,6 +163,24 @@
   }
   if (urlSearchParams.datetime_origin) {
     searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
+  }
+
+  const pendingUrlConditions = ref<UrlCondition[]>([]);
+  if (urlPostParams.conditions) {
+    const conditions = _.isArray(urlPostParams.conditions)
+      ? urlPostParams.conditions
+      : [urlPostParams.conditions];
+    pendingUrlConditions.value = conditions;
+    conditions.forEach((condition: UrlCondition) => {
+      if (!condition?.field?.raw_name) {
+        return;
+      }
+      const fieldKey = getConditionFieldKey(condition);
+      const fieldValue = getConditionFieldValue(condition);
+      if (fieldValue) {
+        searchModel.value[fieldKey] = fieldValue;
+      }
+    });
   }
 
   const handleRenderTypeChange = () => {
