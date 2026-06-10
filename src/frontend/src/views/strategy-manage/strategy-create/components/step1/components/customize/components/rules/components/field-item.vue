@@ -294,7 +294,7 @@
       condition.filter = singleVal;
       condition.filters = [];
     } else {
-      const val = Array.isArray(value) ? value : (value ? [value] : []);
+      const val = Array.isArray(value) ? value : [value].filter(Boolean);
       condition.filters = val;
       condition.filter = '';
     }
