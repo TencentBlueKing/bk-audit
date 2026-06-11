@@ -39,8 +39,8 @@ from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -1191,7 +1191,7 @@ class GetToolDetail(ToolBase):
         if not binding:
             return False
 
-        permission = Permission(username=username)
+        permission = PermissionService(username=username)
 
         if binding.binding_type == BindingType.PLATFORM_BINDING:
             return permission.has_action_any_permission(ActionEnum.MANAGE_PLATFORM)

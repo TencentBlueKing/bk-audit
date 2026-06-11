@@ -23,8 +23,7 @@ from apps.audit.resources import AuditMixinResource
 from apps.meta.models import SensitiveObject
 from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
-from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from services.web.query.exceptions import LogExportTaskNoPermission
 from services.web.query.models import LogExportTask
@@ -46,19 +45,18 @@ class SearchDataParser:
         # 获取用户信息，用于判断敏感权限
         if sensitive_objs:
             username = get_request_username()
+            has_sensitive_permission = False
             if username:
-                permissions = Permission(username).batch_is_allowed(
-                    actions=[ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO],
-                    resources=[[ResourceEnum.SENSITIVE_OBJECT.create_instance(so.id)] for so in sensitive_objs],
+                # V4: access_audit_sensitive_info is a no-resource platform-admin action.
+                # V3: the action has related_resource_types=[sensitive_object] in initial.json,
+                # but actual deployments use platform_admin global grant (no per-instance policies).
+                # Passing resources=[] is safe for both backends.
+                has_sensitive_permission = PermissionService(username=username).is_allowed(
+                    ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO,
+                    resources=[],
                 )
-            else:
-                permissions = {so.id: {ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO: False} for so in sensitive_objs}
             for so in sensitive_objs:
-                setattr(
-                    so,
-                    "_has_permission",
-                    permissions.get(so.id, {}).get(ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO.id, False),
-                )
+                setattr(so, "_has_permission", has_sensitive_permission)
         # parse
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
 

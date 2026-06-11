@@ -47,8 +47,8 @@ from apps.notice.serializers import (
     UpdateNoticeGroupResponseSerializer,
 )
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.utils.data import choices_to_dict
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
@@ -163,7 +163,7 @@ class CreateNoticeGroup(NoticeMeta):
         username = get_request_username()
         if username:
             resource_instance = ResourceEnum.NOTICE_GROUP.create_instance(notice_group.group_id)
-            Permission(username).grant_creator_action(resource_instance)
+            PermissionService(username=username).grant_creator_action(resource_instance)
 
     def _compensate_create_failure(self, notice_group):
         with transaction.atomic():

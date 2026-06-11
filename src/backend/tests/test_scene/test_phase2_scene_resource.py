@@ -36,6 +36,7 @@ from services.web.scene.models import (
     Scene,
     SceneSystem,
 )
+from services.web.scene.resources import get_scene_members_data
 from services.web.strategy_v2.models import LinkTable, Strategy
 from services.web.tool.models import Tool
 
@@ -161,6 +162,18 @@ class TestResourceBindingModel:
             binding__resource_type=ResourceVisibilityType.STRATEGY,
         ).values_list("binding__resource_id", flat=True)
         assert list(bound_ids) == ["100"]
+
+
+class TestSceneMembersResource:
+    @pytest.mark.django_db
+    @mock.patch("services.web.scene.resources.IAMGroupManager.get_scene_members")
+    def test_get_scene_members_data_delegates_to_group_manager(self, mock_get_members, scene):
+        mock_get_members.return_value = [{"type": "user", "id": "admin", "name": "", "role": "manager"}]
+
+        result = get_scene_members_data(scene.scene_id)
+
+        assert result == [{"type": "user", "id": "admin", "name": "", "role": "manager"}]
+        mock_get_members.assert_called_once()
 
 
 class TestStrategySceneId:
@@ -502,7 +515,7 @@ class TestLinkTableSceneId:
         with (
             mock.patch("services.web.strategy_v2.resources.get_request_username", return_value="admin"),
             mock.patch(
-                "services.web.strategy_v2.resources.Permission.grant_creator_action",
+                "services.web.strategy_v2.resources.PermissionService.grant_creator_action",
                 side_effect=RuntimeError("grant failed"),
             ),
             pytest.raises(RuntimeError, match="grant failed"),
@@ -780,7 +793,7 @@ class TestNoticeGroupSceneFilter:
         with (
             mock.patch("apps.notice.resources.get_request_username", return_value="admin"),
             mock.patch(
-                "apps.notice.resources.Permission.grant_creator_action",
+                "apps.notice.resources.PermissionService.grant_creator_action",
                 side_effect=RuntimeError("grant failed"),
             ),
             pytest.raises(RuntimeError, match="grant failed"),

@@ -16,14 +16,19 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from contextlib import nullcontext
 from typing import Union
 
 from bk_resource import api
+from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.db import transaction
 
 from apps.permission.handlers.actions import get_action_by_id
 from apps.permission.handlers.actions.action import ActionEnum
+from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 
 # 场景管理用户组拥有的操作列表
 SCENE_MANAGER_GROUP_ACTIONS = [
@@ -75,6 +80,199 @@ class IAMGroupManager:
     """
     IAM 用户组管理
     """
+
+    @staticmethod
+    def is_v4_backend() -> bool:
+        return getattr(settings, "IAM_PERMISSION_BACKEND", "v3") == "v4"
+
+    @classmethod
+    def scene_member_sync_context(cls):
+        if cls.is_v4_backend():
+            return transaction.atomic()
+        return nullcontext()
+
+    @classmethod
+    def get_scene_role_members(cls, role_id: str, scene_id: str) -> list:
+        service = PermissionService(username=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
+        subjects = service.list_role_subjects(role_id=role_id, resource=ResourceEnum.SCENE.create_instance(scene_id))
+        return [
+            item.get("subject", {}).get("id", "")
+            for item in subjects
+            if item.get("subject", {}).get("type") == "user" and item.get("subject", {}).get("id")
+        ]
+
+    @classmethod
+    def sync_scene_role_members(cls, role_id: str, members: list, scene_id: str, operator: str = None) -> None:
+        service = PermissionService(username=operator or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
+        resource = ResourceEnum.SCENE.create_instance(scene_id)
+        current_members = set(cls.get_scene_role_members(role_id=role_id, scene_id=scene_id))
+        target_members = set(members or [])
+        for username in sorted(current_members - target_members):
+            service.revoke_instance_permission(
+                role_id=role_id,
+                subject={"type": "user", "id": username},
+                resources=[resource],
+                operator=operator,
+            )
+        for username in sorted(target_members - current_members):
+            service.grant_instance_permission(
+                role_id=role_id,
+                subject={"type": "user", "id": username},
+                resources=[resource],
+                operator=operator,
+            )
+
+    @classmethod
+    def refresh_scene_members(cls, scene, save=True, allow_empty_overwrite=False):
+        if cls.is_v4_backend():
+            manager_members = cls.get_scene_role_members("scene_admin", str(scene.scene_id))
+            user_members = cls.get_scene_role_members("scene_user", str(scene.scene_id))
+            if (
+                save
+                and not allow_empty_overwrite
+                and not manager_members
+                and not user_members
+                and (scene.managers or scene.users)
+            ):
+                logger.warning(
+                    "[IAMGroupManager] skip empty V4 scene role refresh before migration is confirmed, scene_id=%s",
+                    scene.scene_id,
+                )
+                return {"managers": list(scene.managers or []), "users": list(scene.users or [])}
+            if save and (scene.managers != manager_members or scene.users != user_members):
+                scene.managers = manager_members
+                scene.users = user_members
+                scene.save(update_fields=["managers", "users"])
+            else:
+                scene.managers = manager_members
+                scene.users = user_members
+            return {"managers": manager_members, "users": user_members}
+
+        manager_members = list(scene.managers or [])
+        if scene.iam_manager_group_id:
+            manager_members = [
+                item["id"]
+                for item in cls.get_all_group_members(group_id=scene.iam_manager_group_id)
+                if item["type"] == "user"
+            ]
+
+        user_members = list(scene.users or [])
+        if scene.iam_viewer_group_id:
+            user_members = [
+                item["id"]
+                for item in cls.get_all_group_members(group_id=scene.iam_viewer_group_id)
+                if item["type"] == "user"
+            ]
+
+        if save and (scene.managers != manager_members or scene.users != user_members):
+            scene.managers = manager_members
+            scene.users = user_members
+            scene.save(update_fields=["managers", "users"])
+        else:
+            scene.managers = manager_members
+            scene.users = user_members
+        return {"managers": manager_members, "users": user_members}
+
+    @classmethod
+    def get_scene_members(cls, scene) -> list[dict]:
+        if cls.is_v4_backend():
+            members = []
+            for username in cls.get_scene_role_members("scene_admin", str(scene.scene_id)):
+                members.append({"type": "user", "id": username, "name": "", "role": "manager"})
+            for username in cls.get_scene_role_members("scene_user", str(scene.scene_id)):
+                members.append({"type": "user", "id": username, "name": "", "role": "user"})
+            return members
+
+        members = []
+        if scene.iam_manager_group_id:
+            for member in cls.get_all_group_members(group_id=scene.iam_manager_group_id):
+                members.append(
+                    {
+                        "type": member.get("type", ""),
+                        "id": member.get("id", ""),
+                        "name": member.get("name", ""),
+                        "role": "manager",
+                    }
+                )
+        if scene.iam_viewer_group_id:
+            for member in cls.get_all_group_members(group_id=scene.iam_viewer_group_id):
+                members.append(
+                    {
+                        "type": member.get("type", ""),
+                        "id": member.get("id", ""),
+                        "name": member.get("name", ""),
+                        "role": "user",
+                    }
+                )
+        return members
+
+    @classmethod
+    def create_scene_member_permissions(cls, scene, operator: str = None) -> None:
+        if cls.is_v4_backend():
+            cls.sync_scene_role_members("scene_admin", scene.managers, str(scene.scene_id), operator)
+            cls.sync_scene_role_members("scene_user", scene.users, str(scene.scene_id), operator)
+            return
+
+        scene.iam_manager_group_id = cls.create_single_group_with_members(
+            group_name=f"{scene.name}-管理用户组",
+            group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+            group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+            members=scene.managers,
+            scene_id=str(scene.scene_id),
+            scene_name=scene.name,
+        )
+        scene.iam_viewer_group_id = cls.create_single_group_with_members(
+            group_name=f"{scene.name}-使用用户组",
+            group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+            group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+            members=scene.users,
+            scene_id=str(scene.scene_id),
+            scene_name=scene.name,
+        )
+        scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+
+    @classmethod
+    def sync_scene_members(cls, scene, validated_request_data: dict, operator: str = None) -> None:
+        if "managers" not in validated_request_data and "users" not in validated_request_data:
+            return
+
+        if cls.is_v4_backend():
+            if "managers" in validated_request_data:
+                cls.sync_scene_role_members("scene_admin", scene.managers, str(scene.scene_id), operator)
+            if "users" in validated_request_data:
+                cls.sync_scene_role_members("scene_user", scene.users, str(scene.scene_id), operator)
+            return
+
+        update_fields = []
+        if "managers" in validated_request_data:
+            new_group_id = cls.sync_group_members(
+                group_id=scene.iam_manager_group_id,
+                members=scene.managers,
+                group_name=f"{scene.name}-管理用户组",
+                group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
+                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
+            )
+            if new_group_id is not None:
+                scene.iam_manager_group_id = new_group_id
+                update_fields.append("iam_manager_group_id")
+        if "users" in validated_request_data:
+            new_group_id = cls.sync_group_members(
+                group_id=scene.iam_viewer_group_id,
+                members=scene.users,
+                group_name=f"{scene.name}-使用用户组",
+                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
+                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
+                scene_id=str(scene.scene_id),
+                scene_name=scene.name,
+            )
+            if new_group_id is not None:
+                scene.iam_viewer_group_id = new_group_id
+                update_fields.append("iam_viewer_group_id")
+
+        if update_fields:
+            scene.save(update_fields=update_fields)
 
     @staticmethod
     def build_permissions(

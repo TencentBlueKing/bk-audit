@@ -14,13 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
-from apps.meta.converter import SystemDjangoQuerySetConverter
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionMeta
 from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import InstancePermission
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService as Permission
 from core.exceptions import PermissionException, ValidationError
 from core.models import get_request_username
 from services.web.common.constants import (
@@ -29,7 +28,6 @@ from services.web.common.constants import (
     ScopeType,
 )
 from services.web.scene.constants import BindingType, SceneStatus, VisibilityScope
-from services.web.scene.converter import SceneDjangoQuerySetConverter
 from services.web.scene.models import ResourceBinding, Scene, SceneSystem
 
 # IAM 资源类型 ID 常量（用于判断 action 关联的 resource_type）
@@ -150,7 +148,7 @@ class ScopePermission:
 
     def __init__(self, username: str):
         self.username = username
-        self.permission = Permission(username)
+        self.permission = Permission(username=username)
         self._is_platform_admin: Optional[bool] = None
         # 请求级缓存：key 为 (scope_type, scope_id, action_id)
         self._scene_ids_cache: Dict[Tuple[ScopeType, Optional[str], str], List[int]] = {}
@@ -384,12 +382,12 @@ class ScopePermission:
         result: List[int] = []
 
         if scope.scope_type == ScopeType.CROSS_SCENE:
-            # 通过 IAM 获取有权限的场景策略 → 转为 Q 查询
-            policies = self.permission.get_policies_for_action(action)
-            if policies:
-                converter = SceneDjangoQuerySetConverter()
-                filters = converter.convert(policies)
-                scene_qs = Scene.objects.filter(filters, status=SceneStatus.ENABLED)
+            resource_ids = self.permission.get_authorized_resource_ids(action, ResourceEnum.SCENE.id)
+            if resource_ids:
+                scene_qs = Scene.objects.filter(scene_id__in=resource_ids, status=SceneStatus.ENABLED)
+            else:
+                scene_qs = None
+            if scene_qs is not None:
                 result = list(scene_qs.values_list("scene_id", flat=True))
             else:
                 result = []
@@ -436,12 +434,9 @@ class ScopePermission:
 
         if scope.scope_type == ScopeType.CROSS_SYSTEM:
             # IAM 通道
-            policies = self.permission.get_policies_for_action(action)
-            if policies:
-                converter = SystemDjangoQuerySetConverter()
-                filters = converter.convert(policies)
-                iam_ids = set(System.objects.filter(filters).values_list("system_id", flat=True))
-                result_set |= iam_ids
+            resource_ids = self.permission.get_authorized_resource_ids(action, ResourceEnum.SYSTEM.id)
+            if resource_ids:
+                result_set |= set(System.objects.filter(system_id__in=resource_ids).values_list("system_id", flat=True))
 
             # 本地 managers 通道（使用 Model 便捷方法，单条 SQL）
             local_ids = set(System.get_managed_system_ids(self.username))
