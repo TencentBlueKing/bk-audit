@@ -14,10 +14,16 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+const blockChildTagPattern = /^(H[1-6]|TABLE|BLOCKQUOTE|HR|UL|OL|DIV|PRE|SECTION|ARTICLE)$/i;
+
 export const sanitizeEditorHtml = (content: string) => {
   if (!content) return content;
+  const normalizedContent = content
+    .replace(/\uFEFF/g, '')
+    .replace(/(<hr\s*\/?>)\s*<\/p>/gi, '$1')
+    .replace(/([^>])\n(<(?:strong|br|em|code|span)\b)/gi, '$1<br />$2');
   const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+  const doc = parser.parseFromString(`<div>${normalizedContent}</div>`, 'text/html');
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) {
     return content
@@ -27,22 +33,65 @@ export const sanitizeEditorHtml = (content: string) => {
 
   const tables = Array.from(container.querySelectorAll('table')) as HTMLTableElement[];
   tables.forEach((table) => {
-    const rows = Array.from(table.querySelectorAll('tr'));
-    const fragment = doc.createDocumentFragment();
-    rows.forEach((row) => {
-      const cells = Array.from(row.querySelectorAll('th,td')) as HTMLElement[];
-      if (!cells.length) return;
-      const line = cells
-        .map(cell => (cell.textContent || '').trim())
-        .filter(Boolean)
-        .join(' | ');
-      if (!line) return;
-      const paragraph = doc.createElement('p');
-      paragraph.textContent = line;
-      fragment.appendChild(paragraph);
+    table.classList.add('report-table');
+    table.querySelectorAll('td p, th p').forEach((paragraph) => {
+      const cell = paragraph.parentNode;
+      if (!cell) return;
+      while (paragraph.firstChild) {
+        cell.insertBefore(paragraph.firstChild, paragraph);
+      }
+      cell.removeChild(paragraph);
     });
-    table.parentNode?.insertBefore(fragment, table);
-    table.parentNode?.removeChild(table);
+    if (!table.parentElement?.classList.contains('ql-report-table')) {
+      const wrapper = doc.createElement('div');
+      wrapper.className = 'ql-report-table';
+      table.parentNode?.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    }
+  });
+
+  // <p> 内嵌 h2/table/blockquote 等块级标签时，浏览器与 Quill 都会解析异常
+  const invalidParagraphs = Array.from(container.querySelectorAll('p')) as HTMLElement[];
+  invalidParagraphs.forEach((paragraph) => {
+    const hasBlockChild = Array.from(paragraph.children)
+      .some(child => blockChildTagPattern.test(child.tagName));
+    if (!hasBlockChild) return;
+    const parent = paragraph.parentNode;
+    if (!parent) return;
+    while (paragraph.firstChild) {
+      parent.insertBefore(paragraph.firstChild, paragraph);
+    }
+    parent.removeChild(paragraph);
+  });
+
+  const blockquotes = Array.from(container.querySelectorAll('blockquote')) as HTMLElement[];
+  blockquotes.forEach((blockquote) => {
+    const lines: string[] = [];
+    const paragraphs = Array.from(blockquote.querySelectorAll('p'));
+    if (paragraphs.length) {
+      paragraphs.forEach((paragraph) => {
+        const text = (paragraph.textContent || '').trim();
+        if (text) lines.push(text);
+      });
+    } else {
+      const text = (blockquote.textContent || '').trim();
+      if (text) lines.push(text);
+    }
+    const replacement = doc.createElement('p');
+    replacement.className = 'report-blockquote';
+    replacement.textContent = lines.join('\n');
+    blockquote.parentNode?.replaceChild(replacement, blockquote);
+  });
+
+  const headings = Array.from(container.querySelectorAll('h2, h3')) as HTMLElement[];
+  headings.forEach((heading) => {
+    const text = (heading.textContent || '').trim();
+    const label = heading.querySelector('strong')?.textContent?.trim() || '';
+    if (label === '分析' && text.length > 30) {
+      const paragraph = doc.createElement('p');
+      paragraph.innerHTML = heading.innerHTML;
+      heading.parentNode?.replaceChild(paragraph, heading);
+    }
   });
 
   const walker = doc.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -55,34 +104,7 @@ export const sanitizeEditorHtml = (content: string) => {
       const inParagraph = parentElement?.closest('p');
       if (inParagraph) {
         const normalizedText = textValue.replace(/\\n/g, '\n');
-        if (normalizedText.trim() === '') {
-          node.nodeValue = normalizedText.replace(/\r?\n/g, '');
-        } else {
-          const parts = normalizedText.split(/\r?\n+/);
-          if (parts.length <= 1) {
-            node.nodeValue = normalizedText;
-          } else {
-            const parent = inParagraph.parentNode;
-            if (!parent) {
-              node.nodeValue = normalizedText.replace(/\r?\n/g, '');
-            } else {
-              const fragment = doc.createDocumentFragment();
-              parts.forEach((part, index) => {
-                const targetParagraph = index === 0
-                  ? inParagraph
-                  : doc.createElement('p');
-                if (index > 0) {
-                  fragment.appendChild(targetParagraph);
-                }
-                if (part) {
-                  targetParagraph.appendChild(doc.createTextNode(part));
-                }
-              });
-              node.nodeValue = '';
-              parent.insertBefore(fragment, inParagraph.nextSibling);
-            }
-          }
-        }
+        node.nodeValue = normalizedText.replace(/\r?\n/g, '');
       } else {
         node.nodeValue = textValue.replace(/\\n/g, '').replace(/\r?\n/g, '');
       }

@@ -50,7 +50,14 @@
           {{ data.report?.updated_at || '--' }}
         </render-info-item>
       </render-info-block>
+      <!-- eslint-disable-next-line vue/no-v-html -- 内容经 DOMPurify 消毒 -->
+      <div
+        v-if="useHtmlRenderer"
+        :key="reportRenderKey"
+        class="event-report-content"
+        v-html="displayHtml" />
       <quill-editor
+        v-else
         :key="reportRenderKey"
         ref="editorRef"
         v-model:content="content"
@@ -78,6 +85,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
+  import DOMPurify from 'dompurify';
   import Quill from 'quill';
   import { computed, nextTick, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -95,6 +103,8 @@
   import AIAgentBlot from './ai-model';
   import EditEventReport from './edit-event-report.vue';
   import { sanitizeEditorHtml } from './editor-utils';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import ReportTableBlot, { registerReportTableMatcher } from './report-table-blot';
 
   interface QuillInstance {
     root: HTMLElement;
@@ -134,6 +144,29 @@
   const content = ref('');
   const rawContent = computed(() => props.data.report?.content);
   const reportRenderKey = computed(() => props.data.report?.updated_at || props.data.report?.content || 'empty');
+
+  const DISPLAY_HTML_OPTIONS = {
+    ALLOWED_TAGS: [
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'p', 'br', 'strong', 'em', 'code', 'hr',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+      'ul', 'ol', 'li', 'span', 'div',
+    ],
+    ADD_ATTR: ['class', 'colspan', 'rowspan'],
+  };
+
+  const hasAiAgentContent = (html: string) => /ql-ai-agent|ai-content|data-ai-embed/i.test(html);
+
+  const useHtmlRenderer = computed(() => {
+    const html = rawContent.value || '';
+    return html.length > 0 && !hasAiAgentContent(html);
+  });
+
+  const displayHtml = computed(() => {
+    const html = rawContent.value;
+    if (!html) return '';
+    return DOMPurify.sanitize(sanitizeEditorHtml(html), DISPLAY_HTML_OPTIONS);
+  });
   const editReportKey = computed(() => props.data.report?.updated_at || props.data.report?.content || 'empty');
   const aiAgentData = ref<Array<{ id: string; name: string; prompt: string }>>([]);
   const aiBlockToken = '[[AI_AGENT_BLOCK]]';
@@ -233,6 +266,12 @@
     }
   };
 
+  const repasteEditorHtml = (html: string) => {
+    if (!quill.value) return;
+    quill.value.setText('', 'api');
+    quill.value.clipboard.dangerouslyPasteHTML(0, html);
+  };
+
   const applyEditorContent = (html?: string) => {
     if (!html) {
       content.value = '';
@@ -247,21 +286,18 @@
       return;
     }
     nextTick(() => {
-      if (quill.value) {
-        quill.value.setText('', 'api');
-        quill.value.clipboard.dangerouslyPasteHTML(0, normalized.html);
-      }
-      if (normalized.aiAgent.length) {
-        insertAiAgentBlock();
-      }
+      if (!normalized.aiAgent.length) return;
+      repasteEditorHtml(normalized.html);
+      insertAiAgentBlock();
     });
   };
 
   const handleEditorReady = () => {
-    const quill = getQuillInstance();
-    if (quill) {
+    quill.value = getQuillInstance();
+    if (quill.value) {
+      registerReportTableMatcher(quill.value);
       const Delta = Quill.import('delta') as any;
-      quill.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
+      quill.value.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
         const element = node as HTMLElement;
         const id = element.getAttribute('data-id') || Date.now().toString();
         const name = element.getAttribute('data-name') || t('完整AI总结');
@@ -278,14 +314,15 @@
       });
     }
     isEditorReady.value = true;
-    isEditorReady.value = true;
     nextTick(() => {
       applyEditorContent(rawContent.value);
     });
   };
 
   watch(rawContent, (newContent) => {
-    applyEditorContent(newContent);
+    if (!useHtmlRenderer.value) {
+      applyEditorContent(newContent);
+    }
   }, { immediate: true });
 
   // 监听 report_generating 状态变化，当从 true 变为 false 时通知父组件刷新
@@ -332,6 +369,106 @@
     align-items: flex-start;
   }
 
+  .event-report-content,
+  :deep(.ql-editor) {
+    line-height: 1.5;
+    color: #313238;
+  }
+
+  /* v-html 渲染区：补齐原 Quill 容器边框 */
+  .event-report-content {
+    min-height: 120px;
+    padding: 12px 15px;
+    background: #fff;
+    border: 1px solid #dcdee5;
+    border-radius: 2px;
+    box-sizing: border-box;
+
+    :deep(strong) {
+      display: inline;
+    }
+
+    :deep(p) {
+      margin: 0 0 12px;
+      line-height: 1.5;
+    }
+
+    :deep(h1),
+    :deep(h2),
+    :deep(h3),
+    :deep(h4),
+    :deep(h5),
+    :deep(h6),
+    :deep(ul),
+    :deep(ol) {
+      margin: 0 0 12px;
+    }
+
+    :deep(ul),
+    :deep(ol) {
+      padding-left: 20px;
+    }
+
+    :deep(li) {
+      margin-bottom: 4px;
+    }
+
+    :deep(.report-blockquote) {
+      padding: 8px 12px;
+      margin: 0 0 12px;
+      color: #313238;
+      background: #f5f7fa;
+      border-left: 4px solid #dcdee5;
+    }
+
+    :deep(code) {
+      padding: 2px 4px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: .9em;
+      background: #f0f1f5;
+      border-radius: 2px;
+    }
+
+    :deep(hr) {
+      margin: 16px 0;
+      border: 0;
+      border-top: 1px solid #dcdee5;
+    }
+
+    :deep(.ql-report-table) {
+      margin: 0 0 16px;
+    }
+
+    :deep(table) {
+      width: 100%;
+      margin: 0;
+      font-size: 14px;
+      border-collapse: collapse;
+      table-layout: auto;
+    }
+
+    :deep(th),
+    :deep(td) {
+      padding: 10px 12px;
+      color: #313238;
+      text-align: left;
+      vertical-align: top;
+      border: 1px solid #dcdee5;
+    }
+
+    :deep(thead th) {
+      font-weight: 600;
+      color: #313238;
+      background: #f5f7fa;
+    }
+  }
+
+  :deep(.quill-editor .ql-container.ql-snow) {
+    background: #fff;
+    border: 1px solid #dcdee5;
+    border-radius: 2px;
+  }
+
   :deep(.ql-disabled) {
     background-color: #fff !important;
   }
@@ -372,6 +509,55 @@
 
   :deep(.ql-editor li) {
     margin-bottom: 4px;
+  }
+
+  :deep(.ql-editor .report-blockquote) {
+    padding: 8px 12px;
+    margin: 0 0 12px;
+    color: #313238;
+    background: #f5f7fa;
+    border-left: 4px solid #dcdee5;
+  }
+
+  :deep(.ql-editor code) {
+    padding: 2px 4px;
+    font-family: Consolas, Monaco, monospace;
+    font-size: .9em;
+    background: #f0f1f5;
+    border-radius: 2px;
+  }
+
+  :deep(.ql-editor hr) {
+    margin: 16px 0;
+    border: 0;
+    border-top: 1px solid #dcdee5;
+  }
+
+  :deep(.ql-editor .ql-report-table) {
+    margin: 0 0 16px;
+  }
+
+  :deep(.ql-editor table) {
+    width: 100%;
+    margin: 0 0 16px;
+    font-size: 14px;
+    border-collapse: collapse;
+    table-layout: auto;
+  }
+
+  :deep(.ql-editor th),
+  :deep(.ql-editor td) {
+    padding: 10px 12px;
+    color: #313238;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid #dcdee5;
+  }
+
+  :deep(.ql-editor thead th) {
+    font-weight: 600;
+    color: #313238;
+    background: #f5f7fa;
   }
 
 }
