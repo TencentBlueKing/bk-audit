@@ -75,6 +75,9 @@
       ref="saveReportDialogRef"
       :status="status"
       @submit="handleSaveReportSubmit" />
+    <insert-table-dialog
+      ref="insertTableDialogRef"
+      @confirm="handleInsertTableConfirm" />
   </audit-sideslider>
 </template>
 <script setup lang="tsx">
@@ -103,6 +106,13 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import AIAgentBlot from './ai-model';
   import { sanitizeEditorHtml } from './editor-utils';
+  import InsertTableDialog from './insert-table-dialog.vue';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import ReportTableBlot, {
+    hasTableContent,
+    insertReportTable,
+    registerReportTableMatcher,
+  } from './report-table-blot';
   import saveReportDialog from './save-report-dialog.vue';
 
   import useMessage from '@/hooks/use-message';
@@ -129,6 +139,12 @@
   const isChangeVal = ref(false);
   const baseReportContent = ref<string>('');
   const saveReportDialogRef = ref();
+  const insertTableDialogRef = ref<InstanceType<typeof InsertTableDialog>>();
+
+  const openInsertTableDialog = () => {
+    insertTableDialogRef.value?.show();
+  };
+
   const editorOptions = {
     theme: 'snow',
     modules: {
@@ -143,9 +159,12 @@
           [{ header: 1 }, { header: 2 }, 'blockquote', 'code-block'],
           [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
           [{ direction: 'rtl' }, { align: [] }],
-          ['link', 'image', 'video'],
+          ['link', 'image', 'video', 'table'],
           ['clean'],
         ],
+        handlers: {
+          table: openInsertTableDialog,
+        },
       },
     },
     placeholder: '开始输入...',
@@ -254,24 +273,74 @@
     });
   };
 
+  const repasteEditorHtml = (html: string) => {
+    const quill = getQuillInstance();
+    if (!quill) return;
+    isProgrammaticUpdate.value = true;
+    quill.setText('', 'api');
+    quill.clipboard.dangerouslyPasteHTML(0, html);
+    nextTick(() => {
+      isProgrammaticUpdate.value = false;
+      quillEditFlag.value = false;
+    });
+  };
+
+  const refreshEditorContent = (html: string, aiAgent: typeof aiAgentData.value) => {
+    isProgrammaticUpdate.value = true;
+    baseReportContent.value = html;
+    const needsRepaste = aiAgent.length > 0 || hasTableContent(html);
+    const quill = getQuillInstance();
+
+    if (!quill) {
+      localeReportContent.value = html;
+      isApiLoading.value = localeReportContent.value === baseReportContent.value;
+      return;
+    }
+
+    if (needsRepaste) {
+      repasteEditorHtml(html);
+      localeReportContent.value = html;
+      isApiLoading.value = localeReportContent.value === baseReportContent.value;
+      nextTick(() => {
+        if (aiAgent.length) {
+          insertAiAgentBlock();
+          return;
+        }
+        isProgrammaticUpdate.value = false;
+        quillEditFlag.value = false;
+      });
+      return;
+    }
+
+    localeReportContent.value = '';
+    nextTick(() => {
+      localeReportContent.value = html;
+      isApiLoading.value = localeReportContent.value === baseReportContent.value;
+      nextTick(() => {
+        isProgrammaticUpdate.value = false;
+        quillEditFlag.value = false;
+      });
+    });
+  };
+
+  const handleInsertTableConfirm = ({ rows, cols }: { rows: number; cols: number }) => {
+    const quill = getQuillInstance();
+    if (!quill) return;
+    insertReportTable(quill, rows, cols);
+    quillEditFlag.value = true;
+  };
+
   const applyEditorContent = (content: string) => {
     const sanitized = sanitizeEditorHtml(content);
     const normalized = normalizeContentWithAiBlock(sanitized);
-    localeReportContent.value = normalized.html;
-    baseReportContent.value = normalized.html;
-    isApiLoading.value = localeReportContent.value === baseReportContent.value;
     aiAgentData.value = normalized.aiAgent;
-    if (!isEditorReady.value) return;
-    nextTick(() => {
-      if (normalized.aiAgent.length) {
-        insertAiAgentBlock();
-      } else {
-        nextTick(() => {
-          isProgrammaticUpdate.value = false;
-          quillEditFlag.value = false;
-        });
-      }
-    });
+    if (!isEditorReady.value) {
+      localeReportContent.value = normalized.html;
+      baseReportContent.value = normalized.html;
+      isApiLoading.value = localeReportContent.value === baseReportContent.value;
+      return;
+    }
+    refreshEditorContent(normalized.html, normalized.aiAgent);
   };
 
   const restoreAiContentBlocks = (content: string) => {
@@ -313,9 +382,22 @@
     return container.innerHTML;
   };
 
+  const setupTableToolbarButton = () => {
+    const quill = getQuillInstance();
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar') as { container?: HTMLElement } | undefined;
+    const tableButton = toolbar?.container?.querySelector('.ql-table') as HTMLElement | null;
+    if (tableButton) {
+      tableButton.innerHTML = t('插入表格');
+      tableButton.setAttribute('title', t('插入表格'));
+      tableButton.classList.add('custom-toolbar-btn');
+    }
+  };
+
   const handleEditorReady = () => {
     const quill = getQuillInstance();
     if (quill) {
+      registerReportTableMatcher(quill);
       const Delta = Quill.import('delta') as any;
       quill.clipboard.addMatcher('span[data-ai-embed="true"]', (node: Node) => {
         const element = node as HTMLElement;
@@ -335,8 +417,9 @@
     }
     isEditorReady.value = true;
     nextTick(() => {
-      if (aiAgentData.value.length) {
-        insertAiAgentBlock();
+      setupTableToolbarButton();
+      if (props.reportContent !== undefined) {
+        applyEditorContent(props.reportContent);
       }
     });
   };
@@ -677,6 +760,19 @@
     :deep(.bk-loading-title) {
       margin-left: -50px !important;
     }
+
+    :deep(.ql-toolbar.ql-snow) {
+      background: #fafbfd;
+      border: 1px solid #dcdee5;
+      border-radius: 2px 2px 0 0;
+    }
+
+    :deep(.ql-container.ql-snow) {
+      background: #fff;
+      border: 1px solid #dcdee5;
+      border-top: 0;
+      border-radius: 0 0 2px 2px;
+    }
   }
 }
 
@@ -792,5 +888,72 @@
 
 :deep(.ql-editor li) {
   margin-bottom: 4px;
+}
+
+:deep(.ql-editor .report-blockquote) {
+  padding: 8px 12px;
+  margin: 0 0 12px;
+  color: #313238;
+  background: #f5f7fa;
+  border-left: 4px solid #dcdee5;
+}
+
+:deep(.ql-editor code) {
+  padding: 2px 4px;
+  font-family: Consolas, Monaco, monospace;
+  font-size: .9em;
+  background: #f0f1f5;
+  border-radius: 2px;
+}
+
+:deep(.ql-editor hr) {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid #dcdee5;
+}
+
+:deep(.ql-editor .ql-report-table) {
+  margin: 0 0 16px;
+}
+
+:deep(.ql-editor table) {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 14px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+:deep(.ql-editor th),
+:deep(.ql-editor td) {
+  padding: 10px 12px;
+  color: #313238;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dcdee5;
+}
+
+:deep(.ql-editor thead th) {
+  font-weight: 600;
+  color: #313238;
+  background: #f5f7fa;
+}
+
+:deep(.ql-toolbar .ql-table) {
+  width: auto !important;
+  padding: 0 8px !important;
+  margin: 0 4px;
+  font-size: 14px !important;
+  line-height: 24px !important;
+  color: #3a84ff !important;
+  cursor: pointer;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+:deep(.ql-toolbar .ql-table:hover) {
+  opacity: 80%;
 }
 </style>
