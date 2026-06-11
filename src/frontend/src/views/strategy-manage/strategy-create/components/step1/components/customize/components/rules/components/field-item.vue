@@ -101,10 +101,11 @@
         v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         allow-create
         :auto-focus="false"
-        class="consition-value"
+        class="consition-value user-selector-value"
         :model-value="getUserSelectorModelValue(condition)"
         :multiple="condition.condition.operator !== 'eq'"
         :popover-options="{ placement: 'top-start' }"
+        @blur="clearConditionFieldValidate(index)"
         @update:model-value="(value: string | string[]) => handleUserSelectorChange(value, index)" />
 
       <bk-tag-input
@@ -520,6 +521,13 @@
       // 日志表特有，dict字典下拉
       handleValueDicts();
     }
+    nextTick(() => {
+      localConditions.value.conditions.forEach((cond, index) => {
+        if (handleValidate(getUserSelectorModelValue(cond))) {
+          clearConditionFieldValidate(index);
+        }
+      });
+    });
   }, {
     immediate: true,
   });
@@ -539,8 +547,24 @@
     margin-bottom: 0;
   }
 
-  :deep(.bk-form-item.is-error .bk-tag-input-trigger) {
+  :deep(.bk-form-item.is-error .consition-value:not(.user-selector-value) .bk-tag-input-trigger) {
     border-color: #ea3636;
+  }
+
+  :deep(.user-selector-value.bk-user-selector),
+  :deep(.user-selector-value .bk-user-selector) {
+    .bk-select-trigger,
+    .bk-tag-input-trigger {
+      border-color: #c4c6cc;
+    }
+
+    .bk-select-tag,
+    .custom-tag,
+    .bk-tag {
+      color: #63656e;
+      background-color: #f0f1f5;
+      border-color: #f0f1f5;
+    }
   }
 
   .row-line {
