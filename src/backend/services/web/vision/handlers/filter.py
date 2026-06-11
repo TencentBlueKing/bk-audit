@@ -25,12 +25,12 @@ from bk_resource.utils.common_utils import ignored
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.db.models import QuerySet
-from iam.contrib.converter.queryset import DjangoQuerySetConverter
 
 from apps.meta.models import System, Tag
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.exceptions import PermissionException
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.vision.exceptions import (
@@ -98,7 +98,8 @@ class DeptFilter(DataFilter):
             if departments:
                 authed_dept.add(departments[0]["full_name"])
 
-        # 获取有权限的组织架构
+        # [V3-only] VIEW_PANEL + bk_usermgr:department 跨系统资源暂不支持 V4，
+        # 等待 IAM V4 跨系统资源方案后迁移。
         permission = Permission(username)
         request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_PANEL), resources=[])
         policies = permission.iam_client._do_policy_query(request)
@@ -143,7 +144,7 @@ class DeptFilter(DataFilter):
             return input_data[0] if is_single else input_data
 
         # 无权限申请
-        apply_data, apply_url = Permission().get_apply_data(
+        apply_data, apply_url = PermissionService().get_apply_data(
             [ActionEnum.VIEW_PANEL],
             [ResourceEnum.DEPT_BK_USERMGR.create_instance(instance_id=item) for item in no_permission_dept],
         )
@@ -168,12 +169,10 @@ class TagBasedPermissionFilter(DataFilter):
         username = self.get_request_username()
 
         # 获取有权限的标签
-        permission = Permission(username)
-        request = permission.make_request(action=get_action_by_id(self.iam_action), resources=[])
-        policies = permission.iam_client._do_policy_query(request)
-        if policies:
-            condition = DjangoQuerySetConverter({"tag.id": "tag_id"}).convert(policies)
-            authed_tag = Tag.objects.filter(condition)
+        permission = PermissionService(username=username)
+        tag_ids = permission.get_authorized_resource_ids(self.iam_action, ResourceEnum.TAG.id)
+        if tag_ids:
+            authed_tag = Tag.objects.filter(tag_id__in=tag_ids)
 
         data = [{"label": tag.tag_name, "value": tag.tag_id} for tag in authed_tag]
         data.sort(key=lambda item: item["label"])
@@ -194,7 +193,7 @@ class TagBasedPermissionFilter(DataFilter):
             return authed_tags
 
         # 检验权限
-        Permission(self.get_request_username()).is_allowed(
+        PermissionService(username=self.get_request_username()).is_allowed(
             action=self.iam_action,
             resources=[ResourceEnum.TAG.create_instance(item) for item in input_data],
             raise_exception=True,
@@ -243,12 +242,10 @@ class SystemDiagnosisFilter(DataFilter):
         # 获取用户
         username = self.get_request_username()
         # 获取有权限的系统
-        permission = Permission(username)
-        request = permission.make_request(action=get_action_by_id(self.iam_action), resources=[])
-        policies = permission.iam_client._do_policy_query(request)
-        if policies:
-            q = DjangoQuerySetConverter({"system.id": "system_id"}).convert(policies)
-            return System.objects.filter(q)
+        permission = PermissionService(username=username)
+        system_ids = permission.get_authorized_resource_ids(self.iam_action, ResourceEnum.SYSTEM.id)
+        if system_ids:
+            return System.objects.filter(system_id__in=system_ids)
         return System.objects.none()
 
     def get_data(self, limit_systems: List[str] = None, internal=False) -> List[Dict[str, str]]:
@@ -283,7 +280,7 @@ class SystemDiagnosisFilter(DataFilter):
             return input_data[0] if is_single else input_data
 
         # 无权限申请
-        apply_data, apply_url = Permission().get_apply_data(
+        apply_data, apply_url = PermissionService().get_apply_data(
             [self.iam_action],
             [ResourceEnum.SYSTEM.create_instance(instance_id=item) for item in no_permission_systems],
         )

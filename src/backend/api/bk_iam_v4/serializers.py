@@ -20,6 +20,7 @@ class ListSystemRequestSerializer(serializers.Serializer):
 
 class RetrieveSystemRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField()
+    fields = serializers.CharField(required=False, allow_blank=True)
 
 
 class DirectAuthRequestSerializer(serializers.Serializer):
@@ -110,8 +111,9 @@ class RevokeAuthorizationRequestSerializer(serializers.Serializer):
 
 class ListAuthorizationSubjectRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField()
+    operator = serializers.CharField(required=False, allow_blank=True)
     role_id = serializers.CharField()
     page = serializers.IntegerField(required=False, min_value=1)
     page_size = serializers.IntegerField(required=False, min_value=1)
     related_resource_type_id = serializers.CharField(required=False, allow_blank=True)
-    resource = ResourceInstanceSerializer(required=False)
+    resource = ResourceInstanceSerializer(required=False, allow_null=True)
