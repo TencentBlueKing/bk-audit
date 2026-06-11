@@ -179,5 +179,20 @@
 <style lang="postcss">
   .bk-user-selector {
     width: 100%;
+
+    .custom-tag {
+      display: inline-flex;
+      align-items: center;
+      color: #63656e;
+      background-color: #f0f1f5;
+      border-color: #f0f1f5;
+    }
+
+    .avatar {
+      width: 16px;
+      height: 16px;
+      margin-right: 4px;
+      border-radius: 50%;
+    }
   }
 </style>
