@@ -225,8 +225,6 @@ class BizRtTableHandler(TableHandler):
 class MineBizRtTableHandler(TableHandler):
     """
     获取个人有权限的结果表
-    1. 不传 bk_biz_id，返回业务列表供用户选择
-    2. 用户选择业务后，传入 bk_biz_id，返回该业务下个人有权限的结果表
     """
 
     def __init__(self, table_type: str, *args, **kwargs):
@@ -236,18 +234,6 @@ class MineBizRtTableHandler(TableHandler):
         # 如果 bk_username 为空，则使用当前请求的用户名
         if not self.bk_username:
             self.bk_username = get_request_username() or ""
-
-    def _get_biz_list(self) -> List[dict]:
-        """
-        获取业务列表
-        """
-        try:
-            result = api.bk_base.get_bizs_list()
-            if isinstance(result, list):
-                return [{"label": biz.get("bk_biz_name", ""), "value": biz.get("bk_biz_id")} for biz in result]
-            return []
-        except Exception:
-            return []
 
     def _ensure_project_permission(self, bk_biz_id: int, result_table_ids: List[str]):
         """
@@ -284,35 +270,71 @@ class MineBizRtTableHandler(TableHandler):
     def list_tables(self) -> List[dict]:
         """
         获取列表数据
-        1. 如果没有 bk_biz_id，返回业务列表供用户选择
-        2. 如果有 bk_biz_id，返回该业务下个人有权限的结果表
         """
-        if not self.bk_biz_id:
-            return self._get_biz_list()
+        try:
+            # 获取所有业务列表
+            biz_list_result = api.bk_base.get_bizs_list()
+            if not isinstance(biz_list_result, list):
+                return []
 
-        # 有 bk_biz_id，返回该业务下个人有权限的结果表
-        result = api.bk_base.get_mine_result_tables(
-            bk_username=self.bk_username,
-            action_id=UserAuthActionEnum.RT_QUERY.value,
-            bk_biz_id=self.bk_biz_id,
-        )
-        result_tables = (
-            result if isinstance(result, list) else result.get("data", []) if isinstance(result, dict) else []
-        )
+            biz_trees = []
+            for biz in biz_list_result:
+                biz_id = biz.get("bk_biz_id")
+                biz_name = biz.get("bk_biz_name", "")
 
-        if not result_tables:
+                # 获取该业务下个人有权限的结果表
+                try:
+                    result = api.bk_base.get_mine_result_tables(
+                        bk_username=self.bk_username,
+                        action_id=UserAuthActionEnum.RT_QUERY.value,
+                        bk_biz_id=biz_id,
+                    )
+                    result_tables = (
+                        result
+                        if isinstance(result, list)
+                        else result.get("data", [])
+                        if isinstance(result, dict)
+                        else []
+                    )
+
+                    children = []
+                    if result_tables:
+                        result_table_ids = [
+                            rt.get("result_table_id", "") for rt in result_tables if rt.get("result_table_id")
+                        ]
+
+                        # 确保项目权限
+                        try:
+                            self._ensure_project_permission(biz_id, result_table_ids)
+                        except Exception as e:
+                            logger.error("[ListTables] 业务 %s 权限检查失败，但继续处理: %s", biz_id, e)
+
+                        # 构建子项
+                        children = [
+                            {
+                                "label": rt.get("result_table_name", ""),
+                                "value": rt.get("result_table_id", ""),
+                            }
+                            for rt in result_tables
+                        ]
+
+                    # 构建业务节点
+                    biz_node = {"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": children}
+
+                    biz_trees.append(biz_node)
+
+                except Exception as e:
+                    logger.error("[ListTables] 获取业务 %s 的结果表失败: %s", biz_id, e)
+                    # 即使获取失败，也添加业务节点（children 为空）
+                    biz_trees.append({"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": []})
+
+            # 按是否有子项和业务 ID 排序（与其他 TableHandler 保持一致）
+            biz_trees.sort(key=lambda x: (not bool(x["children"]), int(x["value"]) if x["value"].isdigit() else 0))
+            return biz_trees
+
+        except Exception as e:
+            logger.error("[ListTables] 获取业务列表失败: %s", e)
             return []
-
-        result_table_ids = [rt.get("result_table_id", "") for rt in result_tables if rt.get("result_table_id")]
-        self._ensure_project_permission(self.bk_biz_id, result_table_ids)
-
-        return [
-            {
-                "label": rt.get("result_table_name", ""),
-                "value": rt.get("result_table_id", ""),
-            }
-            for rt in result_tables
-        ]
 
 
 class RuleAuditSourceTypeChecker:

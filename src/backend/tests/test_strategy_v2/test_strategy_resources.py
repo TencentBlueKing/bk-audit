@@ -379,12 +379,12 @@ class StrategyResourcesTest(TestCase):
     @mock.patch("services.web.strategy_v2.resources.TableHandler")
     def test_list_tables_invokes_handler(self, mock_table_handler):
         handler_instance = mock_table_handler.return_value
-        handler_instance.list_tables.return_value = [{"label": "biz", "value": "rt"}]
+        handler_instance.list_tables.return_value = [{"bk_biz_name": "biz", "bk_biz_id": "rt"}]
 
         result = ListTables().perform_request({"table_type": "BizRt", "namespace": self.namespace})
 
         mock_table_handler.assert_called_once_with(table_type="BizRt", namespace=self.namespace)
-        self.assertEqual(result, [{"label": "biz", "value": "rt"}])
+        self.assertEqual(result, [{"bk_biz_name": "biz", "bk_biz_id": "rt"}])
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")

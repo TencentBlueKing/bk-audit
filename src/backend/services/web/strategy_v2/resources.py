@@ -1178,6 +1178,7 @@ class GetScenePermissionTables(StrategyV2Base):
             choices=[
                 (ListTableType.BUILD_ID_ASSET.value, ListTableType.BUILD_ID_ASSET.label),
                 (ListTableType.BIZ_RT.value, ListTableType.BIZ_RT.label),
+                (ListTableType.MINE_BIZ_RT.value, ListTableType.MINE_BIZ_RT.label),
             ],
             required=True,
         )
