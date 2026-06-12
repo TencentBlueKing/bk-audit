@@ -294,7 +294,12 @@
       condition.filter = singleVal;
       condition.filters = [];
     } else {
-      const val = Array.isArray(value) ? value : (value ? [value] : []);
+      let val: string[];
+      if (Array.isArray(value)) {
+        val = value;
+      } else {
+        val = value ? [value] : [];
+      }
       condition.filters = val;
       condition.filter = '';
     }
