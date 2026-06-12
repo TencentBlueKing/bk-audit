@@ -28,9 +28,7 @@
     </audit-menu-item>
 
     <!-- 资源管理 -->
-    <div
-      v-if="0"
-      class="side-group">
+    <div class="side-group">
       <div
         class="side-group-header"
         @click="toggleGroup('resourceManage')">
@@ -54,7 +52,7 @@
           {{ t('报表管理') }}
         </audit-menu-item>
         <audit-menu-item
-          :class="{ active: currentRoute === 'platformToolConfig' }"
+          :class="{ active: ['platformToolConfig', 'platformToolCreate', 'platformToolEdit'].includes(currentRoute) }"
           index="platformToolConfig"
           @click="handleMenuClick('platformToolConfig')">
           <span class="side-child-dot" />
@@ -128,6 +126,8 @@
   const routeGroupMap: Record<string, string> = {
     platformReportConfig: 'resourceManage',
     platformToolConfig: 'resourceManage',
+    platformToolCreate: 'resourceManage',
+    platformToolEdit: 'resourceManage',
     storageManage: 'dataManage',
     storageList: 'dataManage',
   };
@@ -219,4 +219,3 @@
     }
   }
 </style>
-
