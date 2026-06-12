@@ -9,7 +9,8 @@
       <bk-form-item :label="t('报告内容')">
         <rich-editor
           v-model:content="localContent"
-          :default="localContent"
+          :default="editorInitialContent"
+          enable-table
           height="calc(100vh - 300px)" />
       </bk-form-item>
     </bk-form>
@@ -21,6 +22,8 @@
   import { useI18n } from 'vue-i18n';
 
   import RichEditor from '@components/rich-editor/index.vue';
+
+  import { toReportDisplayHtml } from './report-content-utils';
 
   interface Props {
     title: string;
@@ -38,14 +41,20 @@
   const { t } = useI18n();
 
   const localTitle = ref(props.title);
-  const localContent = ref(props.content);
+  const normalizeEditorContent = (value: string) => (value ? toReportDisplayHtml(value) : '');
+  const editorInitialContent = ref(normalizeEditorContent(props.content));
+  const localContent = ref(editorInitialContent.value);
 
   watch(() => props.title, (val:string) => {
     localTitle.value = val;
   });
 
+  // 仅在外部切换内容时初始化（避免输入时 props 回写触发重渲染滚回顶部）
   watch(() => props.content, (val:string) => {
-    localContent.value = val;
+    if (val === localContent.value) return;
+    const normalized = normalizeEditorContent(val);
+    editorInitialContent.value = normalized;
+    localContent.value = normalized;
   });
 
   watch(localTitle, (val:string) => {
