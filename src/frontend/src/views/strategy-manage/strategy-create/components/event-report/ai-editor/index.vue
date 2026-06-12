@@ -134,10 +134,12 @@
     getModule: (name: string) => any;
     getContents: () => any;
     setContents: (delta: any, source?: string) => void;
+    setText: (text: string, source?: string) => void;
     updateContents: (delta: any, source?: string) => any;
     clipboard: {
       convert: (html: string) => any;
       dangerouslyPasteHTML: (index: number, html: string) => void;
+      addMatcher: (selector: string, matcher: (node: Node) => any) => void;
     };
   }
 
