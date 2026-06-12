@@ -141,14 +141,13 @@
 
 <script setup lang="ts">
   import { Message } from 'bkui-vue';
-  import DOMPurify from 'dompurify';
-  import MarkdownIt from 'markdown-it';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useRequest from '@hooks/use-request';
 
   import ReportEditor from './report-editor.vue';
+  import { toPreviewHtml } from './report-content-utils';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -164,13 +163,6 @@
   });
 
   const emit = defineEmits(['update:isShow', 'refresh', 'update:item-info']);
-
-  // 初始化markdown渲染器
-  const md = new MarkdownIt({
-    html: true,
-    linkify: true,
-    typographer: true,
-  });
 
   const { t } = useI18n();
   const isFullscreen = ref(false);
@@ -235,11 +227,11 @@
     get: () => props.isShow,
     set: (val: boolean) => emit('update:isShow', val),
   });
-  // 使用markdown-it渲染markdown内容
   const htmlText = computed(() => {
     if (!props.itemInfo) return '';
     try {
-      return md.render(DOMPurify.sanitize(JSON.parse(props.itemInfo).content)) || '';
+      const rawContent = JSON.parse(props.itemInfo).content || '';
+      return toPreviewHtml(rawContent);
     } catch {
       return '';
     }
