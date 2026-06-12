@@ -54,6 +54,24 @@ export default {
         nodeSideContent: false,
       },
     },
+    {
+      path: 'platform-tool-create',
+      component: () => import('@views/platform-manage/tool-manage/create-tool/index.vue'),
+      name: 'platformToolCreate',
+      meta: {
+        title: '新建工具',
+        nodeSideContent: false,
+      },
+    },
+    {
+      path: 'platform-tool-edit/:id',
+      component: () => import('@views/platform-manage/tool-manage/create-tool/index.vue'),
+      name: 'platformToolEdit',
+      meta: {
+        title: '编辑工具',
+        skeleton: 'strategyEdit',
+        nodeSideContent: false,
+      },
+    },
   ],
 };
-
