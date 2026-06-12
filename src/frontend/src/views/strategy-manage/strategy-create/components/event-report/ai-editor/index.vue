@@ -49,6 +49,9 @@
       :event-data="eventData"
       :event-info-data="eventInfoData"
       @confirm="handleInsetVarConfirm" />
+    <insert-table-dialog
+      ref="insertTableDialogRef"
+      @confirm="handleInsertTableConfirm" />
   </div>
 </template>
 
@@ -60,6 +63,14 @@
   import aiIconUrl from '@images/ai.svg';
   import fullScreenIconUrl from '@images/full screen.svg';
   import unFullScreenIconUrl from '@images/un-full-screen.svg';
+  import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
+  import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import ReportTableBlot, {
+    hasTableContent,
+    insertReportTable,
+    registerReportTableMatcher,
+  } from '@views/risk-manage/detail/components/event-report/report-table-blot';
   import { QuillEditor } from '@vueup/vue-quill';
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -144,9 +155,37 @@
   const pendingDeleteAgent = ref<{ node: HTMLElement; name: string } | null>(null);
   const showInsetVarModal = ref(false);
   const insetVarRef = ref();
+  const insertTableDialogRef = ref<InstanceType<typeof InsertTableDialog>>();
+  const pendingQuillContent = ref<string | null>(null);
   const aiList = ref<info[]>([]); // AI列表
   const placeholder = ref(t('请输入模版内容，或直接引用变量，也可使用AI智能体辅助快速生成'));
   const isFullscreen = ref(false);
+
+  const openInsertTableDialog = () => {
+    insertTableDialogRef.value?.show();
+  };
+
+  const handleInsertTableConfirm = ({ rows, cols }: { rows: number; cols: number }) => {
+    if (!quill) return;
+    insertReportTable(quill, rows, cols);
+    previousContent.value = quill.getContents();
+  };
+
+  const repasteEditorHtml = (html: string) => {
+    if (!quill) return;
+    quill.clipboard.dangerouslyPasteHTML(0, html);
+    previousContent.value = quill.getContents();
+  };
+
+  const applyHtmlContent = (html: string) => {
+    const sanitized = sanitizeEditorHtml(html);
+    content.value = sanitized;
+    if (!quill) return;
+    if (hasTableContent(sanitized)) {
+      quill.setText('', 'silent');
+      repasteEditorHtml(sanitized);
+    }
+  };
   // 定义处理函数
   const insertVariable = () => {
     if (!quill) return;
@@ -206,8 +245,20 @@
     }
   };
 
+  const setupTableToolbarButton = () => {
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar');
+    const tableButton = toolbar?.container?.querySelector('.ql-table') as HTMLElement | null;
+    if (tableButton) {
+      tableButton.innerHTML = t('插入表格');
+      tableButton.setAttribute('title', t('插入表格'));
+      tableButton.classList.add('custom-toolbar-btn');
+    }
+  };
+
   const onEditorReady = (quillInstance: QuillInstance) => {
     quill = quillInstance;
+    registerReportTableMatcher(quill);
 
     // 使用nextTick确保DOM已渲染
     nextTick(() => {
@@ -237,6 +288,7 @@
         }
 
         setFullscreenButtonLabel();
+        setupTableToolbarButton();
       }
     });
 
@@ -244,6 +296,13 @@
     const editorElement = quill.root;
     if (editorElement) {
       editorElement.addEventListener('click', handleEditorClick);
+    }
+
+    if (pendingQuillContent.value) {
+      initValue(pendingQuillContent.value);
+      pendingQuillContent.value = null;
+    } else if (content.value && hasTableContent(content.value)) {
+      applyHtmlContent(content.value);
     }
 
     // 保存初始内容状态
@@ -263,7 +322,7 @@
           [{ header: 1 }, { header: 2 }, 'blockquote', 'code-block'],
           [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
           [{ direction: 'rtl' }, { align: [] }],
-          ['link', 'image', 'video'],
+          ['link', 'image', 'video', 'table'],
           ['clean'],
           ['variable', 'aiagent', 'fullscreen'], // 自定义按钮
         ],
@@ -271,6 +330,7 @@
           variable: insertVariable,
           aiagent: openAIAgentModal,
           fullscreen: toggleFullscreen,
+          table: openInsertTableDialog,
         },
       },
     },
@@ -626,6 +686,10 @@
       return true;
     }
 
+    if (body.querySelectorAll('table, .ql-report-table').length > 0) {
+      return true;
+    }
+
     // 获取所有文本内容（去除 HTML 标签）
     const textContent = body.textContent || body.innerText || '';
     const trimmedText = textContent.trim();
@@ -673,7 +737,10 @@
   const getAiLists = () => aiList.value;
 
   const initValue = (data: string) => {
-    if (!quill) return;
+    if (!quill) {
+      pendingQuillContent.value = data;
+      return;
+    }
     const delta = JSON.parse(data);
     quill.setContents(delta, 'silent');
 
@@ -907,9 +974,37 @@
   margin-bottom: 4px;
 }
 
+:deep(.ql-editor .ql-report-table) {
+  margin: 0 0 16px;
+}
+
+:deep(.ql-editor table) {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 14px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+:deep(.ql-editor th),
+:deep(.ql-editor td) {
+  padding: 10px 12px;
+  color: #313238;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dcdee5;
+}
+
+:deep(.ql-editor thead th) {
+  font-weight: 600;
+  color: #313238;
+  background: #f5f7fa;
+}
+
 /* 自定义工具栏按钮样式 - 文字按钮 */
 :deep(.ql-toolbar .ql-variable),
-:deep(.ql-toolbar .ql-aiagent) {
+:deep(.ql-toolbar .ql-aiagent),
+:deep(.ql-toolbar .ql-table) {
   width: auto !important;
   padding: 0 8px !important;
   margin: 0 4px;
@@ -925,7 +1020,8 @@
 }
 
 :deep(.ql-toolbar .ql-variable:hover),
-:deep(.ql-toolbar .ql-aiagent:hover) {
+:deep(.ql-toolbar .ql-aiagent:hover),
+:deep(.ql-toolbar .ql-table:hover) {
   color: #3a84ff !important;
   background-color: transparent !important;
   opacity: 80%;
@@ -946,13 +1042,15 @@
 
 /* disabled 状态下自定义按钮样式 */
 :deep(.ql-toolbar.toolbar-disabled .ql-variable),
-:deep(.ql-toolbar.toolbar-disabled .ql-aiagent) {
+:deep(.ql-toolbar.toolbar-disabled .ql-aiagent),
+:deep(.ql-toolbar.toolbar-disabled .ql-table) {
   color: #c4c6cc !important;
   cursor: not-allowed !important;
 }
 
 :deep(.ql-toolbar.toolbar-disabled .ql-variable:hover),
-:deep(.ql-toolbar.toolbar-disabled .ql-aiagent:hover) {
+:deep(.ql-toolbar.toolbar-disabled .ql-aiagent:hover),
+:deep(.ql-toolbar.toolbar-disabled .ql-table:hover) {
   color: #c4c6cc !important;
   opacity: 100% !important;
 }

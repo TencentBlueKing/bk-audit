@@ -17,7 +17,8 @@
 <template>
   <div
     :active="!disabled"
-    class="editor-wrap">
+    class="editor-wrap"
+    :class="{ 'editor-wrap--table': enableTable }">
     <quill-editor
       ref="editorRef"
       v-model:content="content"
@@ -37,6 +38,10 @@
         {{ TiLength }}
       </span> / {{ maxLen }}
     </div>
+    <insert-table-dialog
+      v-if="enableTable"
+      ref="insertTableDialogRef"
+      @confirm="handleInsertTableConfirm" />
   </div>
 </template>
 
@@ -50,17 +55,14 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  const props = withDefaults(defineProps<Props>(), {
-    maxLen: 0,
-    default: '',
-    disabled: false,
-    height: 'auto',
-  });
-
-  const emits = defineEmits<Emits>();
-
-  const { t } = useI18n();
-
+  import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
+  import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import ReportTableBlot, {
+    hasTableContent,
+    insertReportTable,
+    registerReportTableMatcher,
+  } from '@views/risk-manage/detail/components/event-report/report-table-blot';
   import { QuillEditor } from '@vueup/vue-quill';
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
@@ -74,36 +76,69 @@
     default?: string;
     maxLen?: number;
     height?: string;
+    enableTable?: boolean;
   }
+
+  const props = withDefaults(defineProps<Props>(), {
+    maxLen: 0,
+    default: '',
+    disabled: false,
+    height: 'auto',
+    enableTable: false,
+  });
+
+  const emits = defineEmits<Emits>();
+
+  const { t } = useI18n();
+
   const content = ref();
   const editorRef = ref();
+  const insertTableDialogRef = ref<InstanceType<typeof InsertTableDialog>>();
   const TiLength = ref(0);
+  const isEditorReady = ref(false);
+  const isProgrammaticUpdate = ref(false);
+
+  const openInsertTableDialog = () => {
+    insertTableDialogRef.value?.show();
+  };
+
+  const buildToolbarContainer = () => {
+    const lastRow: Array<string | Record<string, unknown>> = [
+      'link',
+      { background: [] },
+      'code-block',
+    ];
+    if (props.enableTable) {
+      lastRow.push('table');
+    }
+    return [
+      [
+        { header: 1 },
+        'bold',
+        'italic',
+        'strike',
+        'underline',
+        { color: [] },
+      ],
+      [
+        { align: '' },
+        { align: 'center' },
+        { align: 'right' },
+        'blockquote',
+        { list: 'ordered' },
+        { list: 'bullet' },
+      ],
+      lastRow,
+    ];
+  };
+
   const options = reactive({
     modules: {
       toolbar: {
-        container: [
-          [
-            { header: 1 },
-            'bold',
-            'italic',
-            'strike',
-            'underline',
-            { color: [] },
-          ],
-          [
-            { align: '' },
-            { align: 'center' },
-            { align: 'right' },
-            'blockquote',
-            { list: 'ordered' }, // 有序
-            { list: 'bullet' }, // 无序列表的图标
-          ],
-          [
-            'link',
-            { background: [] },
-            'code-block',
-          ],
-        ],
+        container: buildToolbarContainer(),
+        handlers: props.enableTable
+          ? { table: openInsertTableDialog }
+          : {},
       },
       history: {
         delay: 1000,
@@ -114,8 +149,60 @@
   });
   const backgroundColor = ref('#fff');
 
+  const getQuill = () => editorRef.value?.getQuill?.();
+
+  const setupTableToolbarButton = () => {
+    const quill = getQuill();
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar') as { container?: HTMLElement } | undefined;
+    const tableButton = toolbar?.container?.querySelector('.ql-table') as HTMLElement | null;
+    if (tableButton) {
+      tableButton.innerHTML = t('插入表格');
+      tableButton.setAttribute('title', t('插入表格'));
+      tableButton.classList.add('rich-editor-table-btn');
+    }
+  };
+
+  const repasteEditorHtml = (html: string) => {
+    const quill = getQuill();
+    if (!quill) return;
+    isProgrammaticUpdate.value = true;
+    quill.setText('', 'silent');
+    quill.clipboard.dangerouslyPasteHTML(0, html);
+    nextTick(() => {
+      isProgrammaticUpdate.value = false;
+      TiLength.value = quill.getLength() - 1;
+    });
+  };
+
+  const applyContent = (html?: string) => {
+    const value = html || '';
+    if (!props.enableTable) {
+      content.value = value;
+      return;
+    }
+    const sanitized = value ? sanitizeEditorHtml(value) : '';
+    content.value = sanitized;
+    if (!isEditorReady.value || !sanitized) {
+      return;
+    }
+    // 含表格或富文本结构时统一重贴，确保与预览一致
+    if (hasTableContent(sanitized) || /<h[1-6]\b|<ul\b|<ol\b|<blockquote\b/i.test(sanitized)) {
+      repasteEditorHtml(sanitized);
+    }
+  };
+
+  const handleInsertTableConfirm = ({ rows, cols }: { rows: number; cols: number }) => {
+    const quill = getQuill();
+    if (!quill) return;
+    insertReportTable(quill, rows, cols);
+    TiLength.value = quill.getLength() - 1;
+  };
 
   const onContentChange = (val: string) => {
+    if (isProgrammaticUpdate.value) {
+      return;
+    }
     if (props.maxLen) {
       editorRef.value?.getQuill().deleteText(props.maxLen, 4);
     }
@@ -126,32 +213,46 @@
     }
     emits('update:content', val);
   };
+
   const onEditorReady = () => {
+    isEditorReady.value = true;
+    const quill = getQuill();
+    if (props.enableTable && quill) {
+      registerReportTableMatcher(quill);
+    }
     nextTick(() => {
+      if (props.enableTable) {
+        setupTableToolbarButton();
+      }
       if (props.default) {
-        content.value = props.default;
+        applyContent(props.default);
       }
       TiLength.value = editorRef.value?.getQuill().getLength() - 1;
+      editorRef.value?.getQuill().enable(!props?.disabled);
     });
   };
 
   onMounted(() => {
-    editorRef.value?.setHTML(props.default);
-    editorRef.value?.getQuill().enable(!props?.disabled);
+    if (!isEditorReady.value) {
+      applyContent(props.default);
+    }
   });
 
-  watch(() => props.default, () => {
-    content.value = props.default;
-  }, {
-    immediate: true,
+  watch(() => props.default, (val) => {
+    if (isProgrammaticUpdate.value) return;
+    const nextValue = val || '';
+    if (nextValue === content.value) return;
+    applyContent(nextValue);
   });
+
   watch(() => props.disabled, () => {
     editorRef.value?.getQuill().enable(!props.disabled);
   });
+
   watch(() => props.height, () => {
     if (props.height) {
       nextTick(() => {
-        const el = document.querySelector('.ql-container.ql-snow') as HTMLElement;
+        const el = editorRef.value?.$el?.querySelector?.('.ql-container.ql-snow') as HTMLElement | undefined;
         if (el) {
           el.style.height = props.height;
         }
@@ -218,5 +319,96 @@
 .ql-container.ql-snow {
   min-height: 120px;
   padding-bottom: 10px;
+}
+
+.editor-wrap--table .ql-editor .ql-report-table {
+  margin: 0 0 16px;
+}
+
+.editor-wrap--table .ql-editor table {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 14px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.editor-wrap--table .ql-editor th,
+.editor-wrap--table .ql-editor td {
+  padding: 10px 12px;
+  color: #313238;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dcdee5;
+}
+
+.editor-wrap--table .ql-editor thead th {
+  font-weight: 600;
+  color: #313238;
+  background: #f5f7fa;
+}
+
+.editor-wrap--table .ql-editor h1,
+.editor-wrap--table .ql-editor h2,
+.editor-wrap--table .ql-editor h3,
+.editor-wrap--table .ql-editor h4,
+.editor-wrap--table .ql-editor h5,
+.editor-wrap--table .ql-editor h6 {
+  margin: 16px 0 12px;
+  font-weight: 600;
+  color: #313238;
+}
+
+.editor-wrap--table .ql-editor p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+  color: #313238;
+}
+
+.editor-wrap--table .ql-editor ul,
+.editor-wrap--table .ql-editor ol {
+  padding-left: 20px;
+  margin: 0 0 12px;
+}
+
+.editor-wrap--table .ql-editor li {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.editor-wrap--table .ql-editor strong {
+  font-weight: 600;
+}
+
+.editor-wrap--table .ql-editor blockquote {
+  padding: 8px 12px;
+  margin: 0 0 12px;
+  color: #313238;
+  background: #f5f7fa;
+  border-left: 4px solid #dcdee5;
+}
+
+.editor-wrap--table .ql-editor hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid #dcdee5;
+}
+
+.editor-wrap--table .ql-toolbar .rich-editor-table-btn {
+  width: auto !important;
+  padding: 0 8px !important;
+  margin: 0 4px;
+  font-size: 14px !important;
+  line-height: 24px !important;
+  color: #3a84ff !important;
+  cursor: pointer;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.editor-wrap--table .ql-toolbar .rich-editor-table-btn:hover {
+  opacity: 80%;
 }
 </style>
