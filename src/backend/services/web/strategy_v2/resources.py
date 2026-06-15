@@ -1160,7 +1160,7 @@ class GetStrategyCommon(StrategyV2Base):
 class ListTables(StrategyV2Base, CacheResource):
     name = gettext_lazy("List Tables")
     RequestSerializer = ListTablesRequestSerializer
-    cache_type = CacheTypeItem(key="ListTables", timeout=60, user_related=False)
+    cache_type = CacheTypeItem(key="ListTables", timeout=60, user_related=True)
 
     def perform_request(self, validated_request_data):
         return TableHandler(**validated_request_data).list_tables()
@@ -1179,6 +1179,7 @@ class GetScenePermissionTables(StrategyV2Base):
             choices=[
                 (ListTableType.BUILD_ID_ASSET.value, ListTableType.BUILD_ID_ASSET.label),
                 (ListTableType.BIZ_RT.value, ListTableType.BIZ_RT.label),
+                (ListTableType.MINE_BIZ_RT.value, ListTableType.MINE_BIZ_RT.label),
             ],
             required=True,
         )

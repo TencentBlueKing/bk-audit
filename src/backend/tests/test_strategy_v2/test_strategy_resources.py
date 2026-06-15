@@ -420,12 +420,23 @@ class StrategyResourcesTest(TestCase):
     @mock.patch("services.web.strategy_v2.resources.TableHandler")
     def test_list_tables_invokes_handler(self, mock_table_handler):
         handler_instance = mock_table_handler.return_value
-        handler_instance.list_tables.return_value = [{"label": "biz", "value": "rt"}]
+        handler_instance.list_tables.return_value = [{"bk_biz_name": "biz", "bk_biz_id": "rt"}]
 
         result = ListTables().perform_request({"table_type": "BizRt", "namespace": self.namespace})
 
         mock_table_handler.assert_called_once_with(table_type="BizRt", namespace=self.namespace)
-        self.assertEqual(result, [{"label": "biz", "value": "rt"}])
+        self.assertEqual(result, [{"bk_biz_name": "biz", "bk_biz_id": "rt"}])
+
+    def test_list_tables_eventlog_missing_scene_id_raises_error(self):
+        """测试EventLog类型缺少scene_id时应该抛出参数校验错误"""
+        # 框架在 request() 阶段会先通过 RequestSerializer 校验，
+        # ListTablesRequestSerializer.validate() 要求 EventLog 必须提供 scene_id，故抛出参数校验错误
+        with self.assertRaises(Exception) as context:
+            ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
+
+        # 验证错误消息中包含scene_id相关的错误
+        self.assertIn("scene_id", str(context.exception))
+        self.assertIn("必须提供", str(context.exception))
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")
