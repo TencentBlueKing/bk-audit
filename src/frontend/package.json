@@ -111,5 +111,8 @@
   },
   "resolutions": {
     "rolldown": "1.0.1"
+  },
+  "overrides": {
+    "rolldown": "1.0.1"
   }
 }
