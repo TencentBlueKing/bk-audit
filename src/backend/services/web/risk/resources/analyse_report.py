@@ -339,6 +339,18 @@ class ExportAnalyseReport(AnalyseReportMeta):
         margin: 6px 0;
         text-align: justify;
     }}
+    p, li {{
+        -pdf-word-wrap: CJK;
+        word-break: break-word;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }}
+    h1, h2, h3, blockquote, code, pre {{
+        -pdf-word-wrap: CJK;
+        word-break: break-word;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }}
     table {{
         width: 100%;
         max-width: 100%;
@@ -381,6 +393,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
         padding: 10px;
         font-size: 10px;
         overflow-x: auto;
+        white-space: pre-wrap;
     }}
     blockquote {{
         border-left: 3px solid #ccc;
