@@ -15,44 +15,50 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div
-    class="ai-analyzes">
-    <div class="tip-content">
+  <div class="ai-analyzes">
+    <div class="tip-bar">
       <audit-icon
         class="info-fill"
         type="info-fill" />
-      <span class="text">{{ t('共搜索出') }}</span>
+      <span class="text">{{ tipContent.prefix }}</span>
       <span class="highlight">{{ total }}</span>
-      <span class="text">{{ tipText }}</span>
-      <span
-        class="action-btn">
-        <img
-          class="ai-agent-ai"
-          height="14"
-          src="@images/ai.svg"
-          width="24">
-        <span
-          v-bk-tooltips="{
-            disabled: !(total === 0 || total >= 100),
-            content: total === 0 ? t('至少包含 1 条风险数据才能使用') : t('最多支持 100 条，请添加筛选条件后使用')
-          }"
-          :class="(total > 0 && total < 100 && isSearch) ? '' : 'disabled'"
-          @click="handleAnalyze">
-          {{ t('智能分析') }}
-        </span>
-      </span>
-      <span class="text">{{ t('或查看') }}</span>
-      <span
-        class="action-btn"
-        @click="handleHistory">
-        <img
-          class="ai-agent-history"
-          height="14"
-          src="@images/history.svg"
-          width="24">
-        {{ t('历史分析报告') }}
-      </span>
-      <!-- 条件标签信息 -->
+      <span class="text">{{ tipContent.suffix }}</span>
+    </div>
+    <div class="list-panel">
+      <div class="action-toolbar">
+        <div class="action-left">
+          <bk-button
+            v-bk-tooltips="analyzeTooltip"
+            class="analyze-btn"
+            :disabled="!isAnalyzeEnabled"
+            outline
+            @click="handleAnalyze">
+            <img
+              class="ai-agent-ai"
+              height="14"
+              src="@images/ai.svg"
+              width="24">
+            {{ t('智能分析') }}
+          </bk-button>
+          <slot name="toolbar-after-analyze" />
+        </div>
+        <div class="action-right">
+          <bk-button
+            class="history-btn"
+            outline
+            @click="handleHistory">
+            <img
+              class="ai-agent-history"
+              height="14"
+              src="@images/history.svg"
+              width="24">
+            {{ t('历史分析报告') }}
+          </bk-button>
+        </div>
+      </div>
+      <div class="list-content">
+        <slot />
+      </div>
     </div>
   </div>
   <analyze-dialog
@@ -76,7 +82,7 @@
 </template>
 
 <script setup lang="tsx">
-  import { computed, ref, watch } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
@@ -107,6 +113,25 @@
     },
   );
 
+  const hasTagValue = (value: unknown) => {
+    if (value === undefined || value === null || value === '') {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.some(item => item !== undefined && item !== null && item !== '');
+    }
+    return true;
+  };
+
+  const hasUserSearchConditions = computed(() => {
+    const hasFieldFilters = props.conditionTags.some((tag: any) => tag.removable && hasTagValue(tag.value));
+    const eventFilters = props.searchParams?.event_filters;
+    const hasEventFilters = Array.isArray(eventFilters)
+      ? eventFilters.length > 0
+      : !!eventFilters;
+    return hasFieldFilters || hasEventFilters;
+  });
+
   const { t } = useI18n();
 
   const analyzeDialogRef = ref<InstanceType<typeof AnalyzeDialog>>();
@@ -114,19 +139,43 @@
   const showReportDrawer = ref(false);
   const showHistoryDrawer = ref(false);
   const itemInfo = ref<string>('');
-  const isSearch = ref(false);
-  const tipText = computed(() => {
-    if (isSearch.value) {
-      if (props.total > 0 && props.total < 100) {
-        return t('可对所有风险单进行');
-      }
-      return t('可修改筛选条件后进行');
+
+  const tipContent = computed(() => {
+    if (!hasUserSearchConditions.value) {
+      return {
+        prefix: t('当前共有'),
+        suffix: t('条风险单，可选择目标风险单进行智能分析，或查看历史分析报告'),
+      };
     }
-    return t('可添加筛选条件后进行');
+    if (props.total === 0) {
+      return {
+        prefix: t('共搜索到'),
+        suffix: t('条风险单，可重置筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告'),
+      };
+    }
+    if (props.total >= 100) {
+      return {
+        prefix: t('共搜索到'),
+        suffix: t('条风险单，可添加筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告'),
+      };
+    }
+    return {
+      prefix: t('共搜索到'),
+      suffix: t('条风险单，可选择目标风险单进行智能分析，或查看历史分析报告'),
+    };
   });
 
+  const isAnalyzeEnabled = computed(() => props.total > 0 && props.total < 100 && hasUserSearchConditions.value);
+
+  const analyzeTooltip = computed(() => ({
+    disabled: !(props.total === 0 || props.total >= 100),
+    content: props.total === 0
+      ? t('至少选择 1 条风险数据才能使用')
+      : t('当前数据量为 {total} 条，最多支持分析 100 条数据', { total: props.total }),
+  }));
+
   const handleAnalyze = () => {
-    if ((props.total > 0 && props.total < 100 && isSearch)) {
+    if (isAnalyzeEnabled.value) {
       analyzeDialogRef.value?.show();
     }
   };
@@ -168,34 +217,29 @@
     itemInfo.value = data;
     showReportDrawer.value = true;
   };
-  // 监听conditionTags变化，更新isSearch状态
-  watch(() => props.conditionTags, (newTags: any) => {
-    isSearch.value = newTags.length > 0;
-  }, { immediate: true });
 
   const handleHistory = () => {
     showHistoryDrawer.value = true;
   };
   defineExpose<Exposes>({
     changeIsSearch() {
-      isSearch.value = true;
+      // 保留对外接口，搜索状态由筛选条件自动计算
     },
   });
 </script>
 
 <style lang='postcss' scoped>
 .ai-analyzes {
-  height: 32px;
-  padding: 0 20px;
   margin-top: 16px;
-  line-height: 32px;
-  background-color: #fff;
-  border: 1px solid #e2e6ed;
 
-  .tip-content {
+  .tip-bar {
     display: flex;
-    align-items: center;
+    height: 32px;
+    padding: 0;
+    margin-bottom: 8px;
     font-size: 12px;
+    line-height: 32px;
+    align-items: center;
 
     .info-fill {
       margin-right: 4px;
@@ -209,67 +253,70 @@
     .highlight {
       margin: 0 4px;
       font-weight: bold;
+      color: #4d4f56;
+    }
+  }
+
+  .list-panel {
+    padding: 0 20px 16px;
+    overflow: hidden;
+    background-color: #fff;
+    border: 1px solid #e2e6ed;
+  }
+
+  .action-toolbar {
+    display: flex;
+    padding: 8px 0 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    .action-left,
+    .action-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .action-btn {
-      display: flex;
-      margin: 0 4px;
-      color: #3a84ff;
-      cursor: pointer;
-      align-items: center;
+    :deep(.analyze-btn) {
+      color: #7b29ff;
+      border-color: #7b29ff;
+
+      &:not(.is-disabled):hover {
+        color: #9b5cff;
+        border-color: #9b5cff;
+      }
+
+      &.is-disabled {
+        color: #c4c6cc;
+        border-color: #dcdee5;
+      }
+
+      .ai-agent-ai {
+        margin-right: 4px;
+      }
+    }
+
+    :deep(.history-btn) {
+      color: #4d4f56;
+      border-color: #c4c6cc;
 
       &:hover {
-        color: #699df4;
+        color: #4d4f56;
+        border-color: #979ba5;
       }
 
-      .action-icon {
+      .ai-agent-history {
         margin-right: 4px;
-        font-size: 14px;
-      }
-
-      .disabled {
-        color: #979ba5;
-        cursor: not-allowed;
-      }
-    }
-
-    .condition-tags-info {
-      display: flex;
-      margin-left: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-
-      .condition-tag-item {
-        display: inline-flex;
-        padding: 2px 6px;
-        margin: 0 4px;
-        font-size: 12px;
-        color: #63656e;
-        background: #f0f1f5;
-        border-radius: 2px;
-        align-items: center;
-
-        .tag-label {
-          color: #4d4f56;
-        }
-
-        .tag-value {
-          font-weight: 700;
-          color: #4d4f56;
-        }
       }
     }
   }
 
-  :deep(.bk-alert-wraper) {
-    .bk-alert-icon-info {
-      height: 22px;
-      line-height: 22px;
-    }
+  .list-content {
+    padding: 0;
 
-    .bk-alert-title {
-      font-size: 12px;
-      line-height: 22px;
+    :deep(.tdesign-list-pagination) {
+      padding: 12px 0;
+      margin-top: 16px;
     }
   }
 }

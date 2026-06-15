@@ -50,7 +50,7 @@
           {{ data.report?.updated_at || '--' }}
         </render-info-item>
       </render-info-block>
-      <!-- eslint-disable-next-line vue/no-v-html -- 内容经 DOMPurify 消毒 -->
+      <!-- eslint-disable vue/no-v-html -- 内容经 DOMPurify 消毒 -->
       <div
         v-if="useHtmlRenderer"
         :key="reportRenderKey"
