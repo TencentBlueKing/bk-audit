@@ -307,6 +307,22 @@ class RiskManage extends ModuleBase {
     });
   }
   // 获取AI分析列表
+  getNl2RiskFilterLog(params: {
+    end_time?: string,
+    page: number,
+    page_size: number,
+    start_time?: string,
+    status?: string,
+  }) {
+    return Request.get<IRequestResponsePaginationData<{
+      id: number,
+      query: string,
+      response_data: string,
+      status: string,
+    }>>(`${this.module}/nl2risk_filter_log/`, {
+      params,
+    });
+  }
   getAiAnalyseList() {
     return Request.get(`${this.api}/analyse_report/scenarios/`);
   }

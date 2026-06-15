@@ -15,8 +15,12 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="nl-search-input">
-    <div class="nl-input-wrapper">
+  <div
+    ref="rootRef"
+    class="nl-search-input">
+    <div
+      class="nl-input-wrapper"
+      @click="handleWrapperClick">
       <input
         ref="inputRef"
         v-model="inputValue"
@@ -25,17 +29,18 @@
         type="text"
         @compositionend="isComposing = false"
         @compositionstart="isComposing = true"
+        @focus="handleFocus"
         @keydown.enter="handleSubmit">
       <div
         v-if="inputValue"
         class="nl-input-clear"
-        @click="handleClear">
+        @click.stop="handleClear">
         <audit-icon type="close-circle-fill" />
       </div>
       <div
         class="nl-input-send-btn"
         :class="{ 'is-loading': loading, 'is-active': !!inputValue.trim() }"
-        @click="handleSubmit">
+        @click.stop="handleSubmit">
         <audit-icon
           v-if="loading"
           class="rotate-animation"
@@ -46,39 +51,145 @@
           :src="inputValue.trim() ? submitBlue : submitGray">
       </div>
     </div>
+    <div
+      v-if="isPanelVisible"
+      class="nl-input-panel">
+      <div class="nl-input-panel-columns">
+        <div class="nl-input-panel-column">
+          <div class="nl-input-panel-title">
+            {{ t('推荐示例') }}
+          </div>
+          <div
+            v-for="item in recommendationList"
+            :key="item"
+            class="nl-input-panel-item"
+            @mousedown.prevent="handleSelectPanelItem(item)">
+            {{ item }}
+          </div>
+        </div>
+        <div class="nl-input-panel-divider" />
+        <div class="nl-input-panel-column">
+          <div class="nl-input-panel-title">
+            {{ t('搜索记录') }}
+          </div>
+          <template v-if="historyList.length">
+            <div
+              v-for="item in historyList"
+              :key="item.id"
+              class="nl-input-panel-item is-history"
+              @mousedown.prevent="handleSelectPanelItem(item.query)">
+              {{ item.query }}
+            </div>
+          </template>
+          <div
+            v-else
+            class="nl-input-panel-empty">
+            {{ t('暂无搜索记录') }}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
   import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RiskManageService from '@service/risk-manage';
+  import useRequest from '@hooks/use-request';
+
   import submitBlue from '@/images/submit-blue.svg';
   import submitGray from '@/images/submit-gray.svg';
+  import type { INL2RiskFilterLogItem } from '../types';
 
   interface Props {
+    historyRefreshKey?: number;
     loading?: boolean;
   }
   interface Emits {
     (e: 'submit', value: string): void;
   }
 
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
+    historyRefreshKey: 0,
     loading: false,
   });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const rootRef = ref<HTMLElement>();
   const inputRef = ref<HTMLInputElement>();
   const inputValue = ref('');
   const isComposing = ref(false);
+  const isPanelVisible = ref(false);
+  const hasLoadedHistory = ref(false);
+  const historyList = ref<INL2RiskFilterLogItem[]>([]);
+
+  const recommendationList = computed(() => ([
+    t('责任人为 admin 的风险单'),
+    t('风险等级为 高 的风险单'),
+    t('风险命中策略为 虚拟资源管控 的风险单'),
+    t('风险ID为 20260604105353041234 的风险单'),
+    t('风险标题包含 虚拟资源 的风险单'),
+    t('事件字段云区域ID为 0 的风险单'),
+  ]));
+
+  const {
+    run: fetchNl2RiskFilterLog,
+  } = useRequest(RiskManageService.fetchNl2RiskFilterLog, {
+    defaultValue: {
+      results: [],
+    },
+    manual: true,
+    onSuccess(data) {
+      historyList.value = (data?.results || []).slice(0, 6);
+      hasLoadedHistory.value = true;
+    },
+  });
+
+  const loadHistory = () => fetchNl2RiskFilterLog({
+    page: 1,
+    page_size: 6,
+    status: 'success',
+  });
+
+  const openPanel = () => {
+    isPanelVisible.value = true;
+    if (!hasLoadedHistory.value) {
+      loadHistory();
+    }
+  };
+
+  const closePanel = () => {
+    isPanelVisible.value = false;
+  };
+
+  const handleFocus = () => {
+    openPanel();
+  };
+
+  const handleWrapperClick = () => {
+    inputRef.value?.focus();
+    openPanel();
+  };
+
+  const handleSelectPanelItem = (value: string) => {
+    inputValue.value = value;
+    inputRef.value?.focus();
+  };
 
   // 提交搜索
   const handleSubmit = () => {
-    if (isComposing.value) return;
+    if (isComposing.value || props.loading) return;
     const value = inputValue.value.trim();
     if (!value) return;
+    closePanel();
     emit('submit', value);
   };
 
@@ -86,15 +197,39 @@
   const handleClear = () => {
     inputValue.value = '';
     inputRef.value?.focus();
+    openPanel();
   };
+
+  const handleDocumentClick = (event: MouseEvent) => {
+    const target = event.target as Node;
+    if (rootRef.value && !rootRef.value.contains(target)) {
+      closePanel();
+    }
+  };
+
+  watch(() => props.historyRefreshKey, () => {
+    loadHistory();
+  });
+
+  onMounted(() => {
+    document.addEventListener('click', handleDocumentClick);
+  });
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClick);
+  });
 
   // 对外暴露
   defineExpose({
     clear() {
       inputValue.value = '';
+      closePanel();
     },
     focus() {
       inputRef.value?.focus();
+    },
+    refreshHistory() {
+      loadHistory();
     },
   });
 </script>
@@ -106,21 +241,21 @@
 
   .nl-search-input {
     position: relative;
-    z-index: 1;
-    padding: 16px 24px 8px;
+    z-index: 5;
+    padding: 16px 24px 10px;
 
     .nl-input-wrapper {
       position: relative;
       display: flex;
       align-items: center;
-      height: 40px;
-      padding: 0 10px;
+      height: 48px;
+      padding: 0 12px 0 14px;
       background: #fff;
       border: none;
       border-radius: 4px;
+      box-shadow: 0 4px 14px 0 rgb(61 72 93 / 8%);
       transition: all .2s;
 
-      /* 渐变边框：用伪元素实现，兼容 border-radius */
       &::before {
         position: absolute;
         padding: 1px;
@@ -135,26 +270,21 @@
       }
 
       &:hover {
-        background: #f5f7fa;
+        background: #fcfdff;
+        box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
       }
 
       &:focus-within {
         background: #fff;
+        box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
       }
-    }
-
-    .nl-input-icon {
-      margin-right: 8px;
-      font-size: 16px;
-      color: #979ba5;
-      flex-shrink: 0;
     }
 
     .nl-input-inner {
       flex: 1;
       height: 100%;
       font-size: 12px;
-      line-height: 36px;
+      line-height: 48px;
       color: #63656e;
       background: transparent;
       border: none;
@@ -166,8 +296,8 @@
     }
 
     .nl-input-clear {
-      margin-right: 8px;
-      font-size: 14px;
+      margin-right: 10px;
+      font-size: 16px;
       color: #c4c6cc;
       cursor: pointer;
       flex-shrink: 0;
@@ -180,25 +310,21 @@
 
     .nl-input-send-btn {
       display: flex;
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       font-size: 16px;
       color: #c4c6cc;
       cursor: pointer;
-      border-radius: 4px;
+      border-radius: 50%;
       transition: all .15s;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
 
       .nl-input-submit-icon {
-        width: 28px;
-        height: 28px;
+        width: 30px;
+        height: 30px;
         object-fit: contain;
-      }
-
-      &.is-active {
-        cursor: pointer;
       }
 
       &.is-loading {
@@ -209,6 +335,79 @@
           animation: rotate 1s linear infinite;
         }
       }
+    }
+
+    .nl-input-panel {
+      position: absolute;
+      top: 68px;
+      left: 24px;
+      z-index: 20;
+      width: min(690px, calc(100% - 48px));
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #eaebf0;
+      border-radius: 4px;
+      box-shadow: 0 10px 30px 0 rgb(31 35 41 / 12%);
+    }
+
+    .nl-input-panel-columns {
+      display: flex;
+      min-height: 258px;
+    }
+
+    .nl-input-panel-column {
+      flex: 1;
+      min-width: 0;
+      padding: 14px 0 12px;
+    }
+
+    .nl-input-panel-divider {
+      width: 1px;
+      margin: 12px 0;
+      background: #dcdee5;
+      flex-shrink: 0;
+    }
+
+    .nl-input-panel-title {
+      padding: 0 16px 6px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 20px;
+
+      /* color: #c7c8cf; */
+      color: #979ba5;
+    }
+
+    .nl-input-panel-item {
+      padding: 0 16px;
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 34px;
+      color: #6c6d73;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all .15s;
+
+      &:hover {
+        color: #3a84ff;
+        background: #edf4ff;
+      }
+    }
+
+    .nl-input-panel-item.is-history {
+      &:hover {
+        color: #4d4f56;
+        background: #f5f7fa;
+      }
+    }
+
+    .nl-input-panel-empty {
+      padding: 0 16px;
+      font-size: 12px;
+      line-height: 40px;
+      color: #c4c6cc;
     }
   }
 </style>
