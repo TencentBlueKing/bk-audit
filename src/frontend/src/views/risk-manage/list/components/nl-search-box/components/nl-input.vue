@@ -21,7 +21,7 @@
         ref="inputRef"
         v-model="inputValue"
         class="nl-input-inner"
-        :placeholder="t('支持自然语言输入，如：张三最近一周的高风险单')"
+        :placeholder="t('支持自然语言输入，如：张三最近一周的高风险单，或直接在下方添加搜索条件')"
         type="text"
         @compositionend="isComposing = false"
         @compositionstart="isComposing = true"
