@@ -29,18 +29,14 @@
       ref="aiAnalyzesRef"
       :condition-tags="conditionTags"
       :search-params="searchModel"
-      :total="totalCount" />
-    <div class="risk-manage-list">
-      <div class="add-button">
+      :total="totalCount">
+      <template #toolbar-after-analyze>
         <bk-button
-          theme="primary"
-          @click="handleAddRisk">
-          <audit-icon
-            class="add-icon"
-            type="add" />
-          {{ t('新增风险') }}
+          outline
+          @click="handleExport">
+          {{ t('批量导出') }}
         </bk-button>
-      </div>
+      </template>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
@@ -53,11 +49,8 @@
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
-    </div>
+    </ai-analyzes>
   </div>
-  <add-risk
-    ref="addRiskRef"
-    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -97,7 +90,6 @@
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
-  import addRisk from './add-risk/index.vue';
   import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
@@ -309,7 +301,6 @@
   });
 
   const listRef = ref();
-  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const totalCount = ref(0);
@@ -561,15 +552,6 @@
     listRef.value.fetchData(dataParams);
   };
 
-  // 新增风险
-  const handleAddRisk = () => {
-    addRiskRef.value.show();
-  };
-  // 新增风险成功
-  const handleAddRiskSuccess = () => {
-    searchBoxRef.value.clearValue();
-  };
-
   onMounted(() => {
     nextTick(() => {
       getEventFields();
@@ -625,23 +607,6 @@
 
   100% {
     transform: rotate(360deg);
-  }
-}
-
-.risk-manage-list-page-wrap {
-  .risk-manage-list {
-    padding: 5px 20px;
-    margin-top: 16px;
-    background-color: white;
-
-    .add-button {
-      padding-bottom: 5px;
-
-      .add-icon {
-        margin-right: 5px;
-        font-size: 12px;
-      }
-    }
   }
 }
 
