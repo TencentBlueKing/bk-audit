@@ -22,6 +22,7 @@ from unittest import mock
 
 import yaml
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from django.test import override_settings
 
@@ -239,7 +240,7 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        self.assertEqual(result, "hello ")
+        self.assertEqual(result, "final")
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -269,7 +270,7 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_done_cover_not_returned(self, mock_build_header, mock_build_url):
+    def test_stream_done_content_preferred_over_text_cover(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
@@ -291,7 +292,34 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        self.assertEqual(result, "prefix ")
+        self.assertEqual(result, "override")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_done_content_preferred_over_loading_text(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': '正在思考...', 'cover': False})}",
+            "data: " + json.dumps({"event": "text", "content": "\n\n  ", "cover": False}),
+            f"data: {json.dumps({'event': 'done', 'content': '完整最终报告', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "完整最终报告")
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -318,6 +346,56 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, "final answer")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_raises_when_only_think_events_without_terminal_event(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'think', 'content': 'thinking', 'cover': False})}",
+            f"data: {json.dumps({'event': 'think', 'content': 'still thinking', 'cover': False})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        with self.assertRaises(APIRequestError):
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_raises_when_text_events_without_terminal_event(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': 'part1', 'cover': False})}",
+            f"data: {json.dumps({'event': 'text', 'content': 'part2', 'cover': False})}",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        with self.assertRaises(APIRequestError):
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -366,8 +444,16 @@ class TestAIAuditReportStream(TestCase):
 
         def iter_lines(decode_unicode=False):
             if decode_unicode:
-                return [event.encode("utf-8").decode("latin1")]
-            return [event.encode("utf-8")]
+                return [
+                    event.encode("utf-8").decode("latin1"),
+                    ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}))
+                    .encode("utf-8")
+                    .decode("latin1"),
+                ]
+            return [
+                event.encode("utf-8"),
+                ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"})).encode("utf-8"),
+            ]
 
         mock_response.iter_lines.side_effect = iter_lines
         self.resource.session.request = mock.Mock(return_value=mock_response)
