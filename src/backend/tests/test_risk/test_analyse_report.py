@@ -787,6 +787,43 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         full_html = mock_create.call_args.kwargs["html"]
         self.assertIn("-pdf-word-wrap: CJK", full_html)
 
+    def test_export_pdf_text_styles_wrap_long_text(self):
+        """测试 PDF 普通段落和列表项限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn(
+            "p, li {\n"
+            "        -pdf-word-wrap: CJK;\n"
+            "        word-break: break-word;\n"
+            "        word-wrap: break-word;\n"
+            "        overflow-wrap: anywhere;",
+            full_html,
+        )
+
+    def test_export_pdf_heading_and_code_styles_wrap_long_text(self):
+        """测试 PDF 标题、引用和代码块限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn("h1, h2, h3, blockquote, code, pre {", full_html)
+        self.assertIn("-pdf-word-wrap: CJK", full_html)
+        self.assertIn("white-space: pre-wrap", full_html)
+
     def test_create_pdf_uses_xhtml2pdf(self):
         """测试 PDF 字节生成逻辑使用 xhtml2pdf"""
         pisa_status = mock.Mock(err=False)
