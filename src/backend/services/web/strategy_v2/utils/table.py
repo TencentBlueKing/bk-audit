@@ -20,10 +20,13 @@ import abc
 from typing import List, Set
 
 from bk_resource import api, resource
+from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.db.models import Q
 from django.utils.module_loading import import_string
 
+from api.bk_base.constants import UserAuthActionEnum
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
@@ -217,6 +220,76 @@ class BizRtTableHandler(TableHandler):
                 rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
             )
         return self.format_result_tables(result_tables)
+
+
+class MineBizRtTableHandler(TableHandler):
+    """
+    获取个人有权限的结果表
+    """
+
+    def __init__(self, table_type: str, *args, **kwargs):
+        super().__init__(table_type)
+        self.bk_biz_id = kwargs.get("bk_biz_id")
+        self.bk_username = get_request_username() or ""
+
+    def list_tables(self) -> List[dict]:
+        """
+        获取列表数据
+        """
+        try:
+            # 获取所有业务列表
+            biz_list_result = api.bk_base.get_bizs_list()
+            if not isinstance(biz_list_result, list):
+                return []
+
+            biz_trees = []
+            for biz in biz_list_result:
+                biz_id = biz.get("bk_biz_id")
+                biz_name = biz.get("bk_biz_name", "")
+
+                # 获取该业务下个人有权限的结果表
+                try:
+                    result = api.bk_base.get_mine_result_tables(
+                        bk_username=self.bk_username,
+                        action_id=UserAuthActionEnum.RT_QUERY.value,
+                        bk_biz_id=biz_id,
+                    )
+                    result_tables = (
+                        result
+                        if isinstance(result, list)
+                        else result.get("data", [])
+                        if isinstance(result, dict)
+                        else []
+                    )
+
+                    children = []
+                    if result_tables:
+                        children = [
+                            {
+                                "label": rt.get("result_table_name", ""),
+                                "value": rt.get("result_table_id", ""),
+                            }
+                            for rt in result_tables
+                            if rt.get("result_table_id")
+                        ]
+
+                    # 构建业务节点
+                    biz_node = {"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": children}
+
+                    biz_trees.append(biz_node)
+
+                except Exception as e:
+                    logger.error("[ListTables] 获取业务 %s 的结果表失败: %s", biz_id, e)
+                    # 即使获取失败，也添加业务节点（children 为空）
+                    biz_trees.append({"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": []})
+
+            # 按是否有子项和业务 ID 排序（与其他 TableHandler 保持一致）
+            biz_trees.sort(key=lambda x: (not bool(x["children"]), int(x["value"]) if x["value"].isdigit() else 0))
+            return biz_trees
+
+        except Exception as e:
+            logger.error("[ListTables] 获取业务列表失败: %s", e)
+            return []
 
 
 class RuleAuditSourceTypeChecker:
