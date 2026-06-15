@@ -217,9 +217,11 @@
     },
     {
       title: t('关联风险数量'),
-      colKey: 'riskCount',
+      colKey: 'risk_count',
       width: 140,
       align: 'center',
+      sortType: 'all',
+      sorter: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <RiskTablePopover
           count={row.risk_count}
