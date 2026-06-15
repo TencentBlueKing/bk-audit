@@ -70,6 +70,7 @@ from services.web.vision.models import (
     SceneReportGroupItem,
     VisionPanel,
 )
+from services.web.vision.resources import BKVision
 from tests.base import TestCase
 
 # ==================== Fixtures ====================
@@ -2279,6 +2280,131 @@ class TestPanelResources(TestCase):
                 resource_id=str(pk),
             ).exists()
         )
+
+
+class TestPlatformPanelSyncScenesAndSystems(TestCase):
+    """测试 SCENES_AND_SYSTEMS 配置下平台报表的场景分组同步"""
+
+    def setUp(self):
+        # 创建测试场景
+        self.scene1 = Scene.objects.create(
+            name="测试场景1",
+            status="enabled",
+        )
+        self.scene2 = Scene.objects.create(
+            name="测试场景2",
+            status="enabled",
+        )
+        self.scene3 = Scene.objects.create(
+            name="测试场景3",
+            status="enabled",
+        )
+
+        # 创建测试平台报表
+        self.panel = VisionPanel.objects.create(
+            id="test_panel_1",
+            name="测试平台报表",
+            status="published",
+        )
+
+    def test_scenes_and_systems_only_scenes_bound(self):
+        """测试只绑定场景的情况：应该只同步到绑定的场景"""
+        # 创建 SCENES_AND_SYSTEMS 绑定，只绑定场景
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene=self.scene1)
+        ResourceBindingScene.objects.create(binding=binding, scene=self.scene2)
+
+        # 调用同步方法
+        visible_scene_ids = BKVision._resolve_binding_visible_scene_ids(binding)
+        BKVision._sync_platform_panel_scene_group_items(
+            panel_id=str(self.panel.id), scene_ids=visible_scene_ids, prune=True
+        )
+
+        # 验证结果：应该只同步到绑定的场景
+        group_items = SceneReportGroupItem.objects.filter(panel_id=str(self.panel.id))
+        synced_scene_ids = {item.group.scene_id for item in group_items}
+
+        assert synced_scene_ids == {self.scene1.scene_id, self.scene2.scene_id}
+        assert self.scene3.scene_id not in synced_scene_ids
+
+    def test_scenes_and_systems_only_systems_bound(self):
+        """测试只绑定系统的情况：应该同步到所有场景"""
+        # 创建 SCENES_AND_SYSTEMS 绑定，只绑定系统
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_monitor")
+        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_log")
+
+        # 调用同步方法
+        visible_scene_ids = BKVision._resolve_binding_visible_scene_ids(binding)
+        BKVision._sync_platform_panel_scene_group_items(
+            panel_id=str(self.panel.id), scene_ids=visible_scene_ids, prune=True
+        )
+
+        # 验证结果：应该同步到所有场景
+        group_items = SceneReportGroupItem.objects.filter(panel_id=str(self.panel.id))
+        synced_scene_ids = {item.group.scene_id for item in group_items}
+        all_scene_ids = set(Scene.objects.values_list('scene_id', flat=True))
+
+        assert synced_scene_ids == all_scene_ids
+
+    def test_scenes_and_systems_both_bound(self):
+        """测试同时绑定场景和系统的情况：应该只同步到绑定的场景"""
+        # 创建 SCENES_AND_SYSTEMS 绑定，同时绑定场景和系统
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+        ResourceBindingScene.objects.create(binding=binding, scene=self.scene1)
+        ResourceBindingSystem.objects.create(binding=binding, system_id="bk_monitor")
+
+        # 调用同步方法
+        visible_scene_ids = BKVision._resolve_binding_visible_scene_ids(binding)
+        BKVision._sync_platform_panel_scene_group_items(
+            panel_id=str(self.panel.id), scene_ids=visible_scene_ids, prune=True
+        )
+
+        # 验证结果：应该只同步到绑定的场景
+        group_items = SceneReportGroupItem.objects.filter(panel_id=str(self.panel.id))
+        synced_scene_ids = {item.group.scene_id for item in group_items}
+
+        assert synced_scene_ids == {self.scene1.scene_id}
+        assert self.scene2.scene_id not in synced_scene_ids
+        assert self.scene3.scene_id not in synced_scene_ids
+
+    def test_scenes_and_systems_empty_binding(self):
+        """测试空绑定的情况：应该同步到所有场景"""
+        # 创建 SCENES_AND_SYSTEMS 绑定，不绑定任何场景和系统
+        binding = ResourceBinding.objects.create(
+            resource_type="panel",
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+        )
+
+        # 调用同步方法
+        visible_scene_ids = BKVision._resolve_binding_visible_scene_ids(binding)
+        BKVision._sync_platform_panel_scene_group_items(
+            panel_id=str(self.panel.id), scene_ids=visible_scene_ids, prune=True
+        )
+
+        # 验证结果：应该同步到所有场景
+        group_items = SceneReportGroupItem.objects.filter(panel_id=str(self.panel.id))
+        synced_scene_ids = {item.group.scene_id for item in group_items}
+        all_scene_ids = set(Scene.objects.values_list('scene_id', flat=True))
+
+        assert synced_scene_ids == all_scene_ids
 
 
 # ==================== 工具 ViewSet 测试 ====================
