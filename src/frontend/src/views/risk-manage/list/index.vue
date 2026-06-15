@@ -610,6 +610,27 @@
   }
 }
 
+.risk-manage-list-page-wrap {
+  position: relative;
+
+  .risk-manage-list {
+    position: relative;
+    z-index: 1;
+    padding: 5px 20px;
+    margin-top: 16px;
+    background-color: white;
+
+    .add-button {
+      padding-bottom: 5px;
+
+      .add-icon {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+    }
+  }
+}
+
 .risk-label-status {
   padding: 1px 8px;
   font-size: 12px;
