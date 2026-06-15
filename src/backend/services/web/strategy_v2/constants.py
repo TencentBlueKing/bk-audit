@@ -138,6 +138,7 @@ class ListTableType(TextChoices):
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
     BIZ_RT = "BizRt", gettext_lazy("Other Data")
+    MINE_BIZ_RT = "MineBizRt", gettext_lazy("My Authorized Result Tables")
 
 
 class BKBaseProcessingType(TextChoices):
@@ -210,6 +211,7 @@ class LinkTableTableType(TextChoices):
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
     BIZ_RT = "BizRt", gettext_lazy("Other Data")
+    MINE_BIZ_RT = "MineBizRt", gettext_lazy("My Authorized Result Tables")
 
 
 class ListLinkTableSortField(TextChoices):
@@ -263,6 +265,7 @@ class RuleAuditConfigType(TextChoices):
     EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
     BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
     BIZ_RT = "BizRt", gettext_lazy("Other Data")
+    MINE_BIZ_RT = "MineBizRt", gettext_lazy("My Authorized Result Tables")
     LINK_TABLE = "LinkTable", gettext_lazy("Link Table Data")
 
 

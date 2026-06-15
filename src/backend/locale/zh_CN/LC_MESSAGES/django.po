@@ -4664,6 +4664,9 @@ msgstr "资产数据"
 msgid "Other Data"
 msgstr "其他数据"
 
+msgid "My Authorized Result Tables"
+msgstr "我的授权结果表"
+
 msgid "Static"
 msgstr "静态"
 
