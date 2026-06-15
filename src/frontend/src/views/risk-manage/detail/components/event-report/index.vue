@@ -53,12 +53,12 @@
       <!-- eslint-disable vue/no-v-html -- 内容经 DOMPurify 消毒 -->
       <div
         v-if="useHtmlRenderer"
-        :key="reportRenderKey"
+        :key="`${reportRenderKey}-html`"
         class="event-report-content"
         v-html="displayHtml" />
       <quill-editor
         v-else
-        :key="reportRenderKey"
+        :key="`${reportRenderKey}-editor`"
         ref="editorRef"
         v-model:content="content"
         content-type="html"

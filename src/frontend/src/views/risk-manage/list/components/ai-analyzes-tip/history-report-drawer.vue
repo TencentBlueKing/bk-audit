@@ -24,14 +24,16 @@
       v-if="show"
       class="history-report-drawer-content">
       <div class="search-row">
-        <bk-input
-          v-model="searchKeyword"
+        <bk-search-select
+          v-model="searchValue"
+          class="search-input"
           clearable
+          :data="searchSelectData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
+          :get-menu-list="getMenuList"
           :placeholder="t('搜索报告标题、报告类型、分析范围、生成人')"
-          style="width: 100%;"
-          type="search"
-          @clear="handleSearch"
-          @enter="handleSearch" />
+          unique-select
+          @update:model-value="handleSearch" />
       </div>
       <tdesign-list
         ref="listRef"
@@ -55,6 +57,9 @@
   import { useRouter } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
+  import MetaManageService from '@service/meta-manage';
+
+  import useRequest from '@hooks/use-request';
 
   import TdesignList from '@components/tdesign-list/index.vue';
 
@@ -82,6 +87,12 @@
     (e: 'view-risks', row: HistoryReportItem): void;
   }
 
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
+
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
 
@@ -93,9 +104,61 @@
     set: (val: boolean) => emit('update:isShow', val),
   });
 
-  const searchKeyword = ref('');
+  const searchValue = ref<SearchKey[]>([]);
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const originalQuery = ref<Record<string, any>>({});
+
+  const searchSelectData = ref([
+    {
+      name: t('报告标题'),
+      id: 'title',
+      placeholder: t('请输入'),
+    },
+    {
+      name: t('报告类型'),
+      id: 'report_type',
+      placeholder: t('请选择'),
+      children: [
+        { id: 'system', name: t('系统分析') },
+        { id: 'custom', name: t('自定义分析') },
+      ],
+    },
+    {
+      name: t('分析范围'),
+      id: 'analysis_scope',
+      placeholder: t('请输入'),
+    },
+    {
+      name: t('生成人'),
+      id: 'created_by',
+      placeholder: t('请选择'),
+      children: [] as Array<{ id: string; name: string }>,
+    },
+  ]);
+
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData.value;
+    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
+    if (searchItem && item.id === 'created_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((user: any) => ({
+          id: user.username,
+          name: `${user.username}(${user.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+  };
 
   const reportStatusTextMap: Record<string, string> = {
     generating: t('生成中'),
@@ -272,18 +335,36 @@
   const dataSource = RiskManageService.getHistoryReportList;
 
 
-  const handleSearch = () => {
-    listRef.value?.fetchData({ keyword: searchKeyword.value });
+  const handleSearch = (keyword: SearchKey[]) => {
+    const search: Record<string, any> = {
+      keyword: undefined,
+      report_type: undefined,
+    };
+
+    keyword.forEach((item) => {
+      if (!item.values?.length) return;
+      const value = item.values.map(v => v.id).join(',');
+      if (item.id === 'report_type') {
+        search.report_type = value;
+      } else {
+        search.keyword = value;
+      }
+    });
+
+    listRef.value?.fetchData({
+      ...search,
+      sort: ['-created_at'],
+    });
   };
 
   watch(show, (val) => {
     if (val) {
       // 记录当前URL参数
       originalQuery.value = { ...router.currentRoute.value.query };
-      searchKeyword.value = '';
+      searchValue.value = [];
       nextTick(() => {
         // 避免复用外层页面 URL 中的 sort（如 -event_time）导致历史报告接口排序字段非法
-        listRef.value?.fetchData({ keyword: '', sort: ['-created_at'] });
+        listRef.value?.fetchData({ keyword: undefined, sort: ['-created_at'] });
       });
     } else {
       // 恢复原始URL参数
@@ -310,14 +391,8 @@
   margin-bottom: 16px;
 }
 
-.search-icon {
-  font-size: 14px;
-  color: #979ba5;
-  cursor: pointer;
-
-  &:hover {
-    color: #3a84ff;
-  }
+.search-input {
+  width: 100%;
 }
 
 :deep(.report-title-link) {
