@@ -120,17 +120,18 @@
             @update:title="(val:string) => editTitle = val" />
         </template>
       </div>
-      <template
-        v-if="isEditing"
-        #footer>
+      <template #footer>
         <div class="ai-report-edit-footer">
           <bk-button
-            class="mr8"
+            :loading="saveLoading"
+            style="width: 102px;"
             theme="primary"
             @click="handleSave">
             {{ t('保存') }}
           </bk-button>
-          <bk-button @click="handleCancelEdit">
+          <bk-button
+            style="min-width: 64px;"
+            @click="handleCancelEdit">
             {{ t('取消') }}
           </bk-button>
         </div>
@@ -141,7 +142,7 @@
 
 <script setup lang="ts">
   import { Message } from 'bkui-vue';
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useRequest from '@hooks/use-request';
@@ -168,6 +169,28 @@
   const isFullscreen = ref(false);
   const isEditing = ref(false);
   const editContent = ref('');
+  const editTitle = ref('');
+
+  const syncEditFormFromItemInfo = () => {
+    if (!props.itemInfo) {
+      editContent.value = '';
+      editTitle.value = '';
+      return;
+    }
+    try {
+      const info = JSON.parse(props.itemInfo);
+      editContent.value = info.content || '';
+      editTitle.value = info.title || '';
+    } catch {
+      editContent.value = '';
+      editTitle.value = '';
+    }
+  };
+
+  const exitEditMode = () => {
+    isEditing.value = false;
+    syncEditFormFromItemInfo();
+  };
 
   const metaList = computed(() => {
     if (!props.itemInfo) {
@@ -222,7 +245,6 @@
   const tooltipMaxWidth = computed(() => (
     isFullscreen.value ? 'calc(100vw - 48px)' : 912
   ));
-  const editTitle = computed(() => JSON.parse(props.itemInfo).title || '');
   const show = computed({
     get: () => props.isShow,
     set: (val: boolean) => emit('update:isShow', val),
@@ -237,12 +259,8 @@
     }
   });
   const handleEdit = () => {
+    syncEditFormFromItemInfo();
     isEditing.value = true;
-    try {
-      editContent.value = JSON.parse(props.itemInfo).content || '';
-    } catch {
-      editContent.value = '';
-    }
   };
 
   // 导出AI报告
@@ -271,6 +289,7 @@
   };
   // 保存AI报告
   const {
+    loading: saveLoading,
     run: updateAiAnalyseReport,
   } = useRequest(RiskManageService.updateAiAnalyseReport, {
     defaultValue: [],
@@ -280,12 +299,12 @@
 
       // 保存成功后提示并切换回预览状态
       Message({ theme: 'success', message: t('保存成功') });
-      isEditing.value = false;
+      exitEditMode();
       // 通知父组件刷新列表
       emit('refresh');
     },
   });
-  const handleSave = async () => {
+  const handleSave = () => {
     const reportInfo = JSON.parse(props.itemInfo);
     updateAiAnalyseReport({
       report_id: reportInfo.report_id,
@@ -295,17 +314,24 @@
   };
 
   const handleCancelEdit = () => {
-    isEditing.value = false;
+    exitEditMode();
   };
 
   // 编辑状态下阻止侧边栏收起
   const handleBeforeClose = () => {
     if (isEditing.value) {
-      isEditing.value = false;
+      exitEditMode();
       return false;
     }
     return true;
   };
+
+  watch(show, (val) => {
+    if (!val) {
+      isFullscreen.value = false;
+      exitEditMode();
+    }
+  });
 </script>
 
 <style scoped lang="postcss">
@@ -317,6 +343,10 @@
   justify-content: space-between;
   height: 52px;
   border-bottom: 1px solid #dcdee5;
+}
+
+.ai-report-title-wrapper {
+  min-width: 0;
 }
 
 .ai-report-title-text {
@@ -443,19 +473,29 @@
   background: #fff;
 }
 
-.ai-report-edit-form {
-  width: 96%;
-  margin-top: 16px;
-  margin-left: 2%;
-  background: #fff;
-}
-
 .ai-report-edit-footer {
   display: flex;
+  width: 100%;
   align-items: center;
-  justify-content: flex-end;
-  height: 52px;
-  padding: 0 24px;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+:deep(.bk-sideslider-footer),
+:deep(.bk-modal-footer) {
+  display: flex;
+  width: 100%;
+  padding-right: 24px;
+  padding-left: 24px;
+  box-sizing: border-box;
+  justify-content: flex-start;
+}
+
+:deep(.bk-sideslider-header),
+:deep(.bk-modal-header) {
+  padding-right: 24px;
+  padding-left: 24px;
+  box-sizing: border-box;
 }
 
 /* Markdown 表格样式 - 使用 :deep() 穿透 scoped 样式 */
