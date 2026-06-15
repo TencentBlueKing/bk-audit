@@ -295,6 +295,32 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_fallbacks_to_done_content_when_text_missing(self, mock_build_header, mock_build_url):
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'think', 'content': 'thinking', 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': 'final answer', 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        self.assertEqual(result, "final answer")
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
     def test_stream_appends_ag_ui_text_message_content(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
