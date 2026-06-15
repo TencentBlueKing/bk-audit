@@ -27,6 +27,7 @@
     <!-- 自然语言搜索输入框 -->
     <nl-input
       ref="nlInputRef"
+      :history-refresh-key="historyRefreshKey"
       :loading="isNLSearching"
       @submit="handleNLSubmit" />
 
@@ -124,6 +125,7 @@
   const { messageSuccess } = useMessage();
   const nlInputRef = ref();
   const conditionTagsRef = ref();
+  const historyRefreshKey = ref(0);
   // URL 参数同步（与 search-box 保持一致）
   const {
     getSearchParamsPost,
@@ -711,6 +713,7 @@
     notifySearchComplete() {
       if (isNLSearching.value) {
         isNLSearching.value = false;
+        historyRefreshKey.value += 1;
         messageSuccess(t('智能搜索成功'));
       }
     },
@@ -773,7 +776,8 @@
 <style lang="postcss">
   .nl-search-box {
     position: relative;
-    overflow: hidden;
+    z-index: 10;
+    overflow: visible;
     background: linear-gradient(90deg, #edeeff 54.99%, #ebe7ff 94.25%);
     border-radius: 8px;
     box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);

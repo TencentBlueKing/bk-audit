@@ -314,6 +314,16 @@ export default {
   /**
    * @desc 获取智能分析列表
    */
+  fetchNl2RiskFilterLog(params: {
+    end_time?: string,
+    page: number,
+    page_size: number,
+    start_time?: string,
+    status?: string,
+  }) {
+    return RiskManageSource.getNl2RiskFilterLog(params)
+      .then(({ data }) => data);
+  },
   getAiAnalyseList() {
     return RiskManageSource.getAiAnalyseList()
       .then(({ data }) => data);

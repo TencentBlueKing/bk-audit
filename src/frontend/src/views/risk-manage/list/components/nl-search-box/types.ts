@@ -23,6 +23,13 @@ export interface INL2RiskFilterResponse {
   message: string;
 }
 
+export interface INL2RiskFilterLogItem {
+  id: number;
+  query: string;
+  response_data: string;
+  status: string;
+}
+
 // 条件标签项
 export interface IConditionTag {
   fieldName: string;
