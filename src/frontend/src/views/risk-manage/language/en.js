@@ -263,7 +263,7 @@ export default {
     全部: 'All',
     添加条件: 'Add Condition',
     确定: 'OK',
-    '支持自然语言输入，如：张三最近一周的高风险单': 'Support natural language input, e.g.: High risk tickets for Zhang San in the last week',
+    '支持自然语言输入，如：张三最近一周的高风险单，或直接在下方添加搜索条件': 'Support natural language input, e.g.: High risk tickets for Zhang San in the last week, or directly add search conditions below',
     搜索: 'Search',
     请输入关键字: 'Please enter keyword',
     // detail directory
