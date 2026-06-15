@@ -2211,6 +2211,38 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.assertEqual(linked_count, Risk.objects.count())
         self.assertEqual(self.report.risk_count, Risk.objects.count())
 
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_empty_content(self, mock_chat, mock_retry):
+        """Agent 返回空报告时触发重试，不写入成功报告"""
+        mock_chat.return_value = "   "
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_loading_content(self, mock_chat, mock_retry):
+        """Agent 返回正在思考占位内容时触发重试，不写入成功报告"""
+        mock_chat.return_value = "正在思考..."
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
     @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_fails_before_chat_if_link_fails_on_max_retry(self, mock_chat, mock_link):

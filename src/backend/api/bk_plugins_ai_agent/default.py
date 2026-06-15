@@ -145,6 +145,10 @@ class ChatCompletion(AIAgentBase):
         except Exception:
             return False
 
+    @staticmethod
+    def _content_preview(content: str, limit: int = 200) -> str:
+        return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
+
     def _parse_stream_response(self, response) -> str:
         # text event 是前端增量渲染内容；done event 在部分 agent 实现中承载最终完整结果。
         done_content = None
@@ -153,6 +157,9 @@ class ChatCompletion(AIAgentBase):
         data_line_count = 0
         invalid_json_count = 0
         event_counts: dict[str, int] = {}
+        stream_done = False
+        event_done = False
+        ag_ui_finished = False
         for raw_line in response.iter_lines(decode_unicode=False):
             line_count += 1
             if isinstance(raw_line, (bytes, bytearray)):
@@ -165,6 +172,7 @@ class ChatCompletion(AIAgentBase):
             data = line[len("data:") :].strip()
             if data == "[DONE]":
                 event_counts["[DONE]"] = event_counts.get("[DONE]", 0) + 1
+                stream_done = True
                 break
             try:
                 event = json.loads(data)
@@ -189,29 +197,86 @@ class ChatCompletion(AIAgentBase):
                 )
             elif event_type == "done":
                 done_content = content
+                event_done = True
             elif event_type == "text":
                 text_content = content if cover else text_content + content
             elif ag_ui_event_type == "TEXT_MESSAGE_CONTENT":
                 text_content += event.get("delta", "")
+            elif ag_ui_event_type == "RUN_FINISHED":
+                ag_ui_finished = True
+            elif ag_ui_event_type == "RUN_ERROR":
+                error_message = event.get("message") or event.get("error") or content or "智能体流式响应异常"
+                logger.error("AI AG-UI stream error event: message=%s", error_message)
+                raise APIRequestError(
+                    module_name=self.module_name,
+                    url=self.action,
+                    status_code=500,
+                    result=error_message,
+                )
+        terminal_seen = stream_done or event_done or ag_ui_finished
         final_content = text_content or done_content or ""
+        final_source = "text" if text_content else "done" if done_content else "empty"
         logger.info(
             "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
-            "event_counts=%s, text_size=%s, done_size=%s, final_size=%s",
+            "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
+            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, text_preview=%s, done_preview=%s",
             getattr(response, "status_code", None),
             line_count,
             data_line_count,
             invalid_json_count,
             event_counts,
+            terminal_seen,
+            stream_done,
+            event_done,
+            ag_ui_finished,
             len(text_content),
             len(done_content or ""),
             len(final_content),
+            final_source,
+            self._content_preview(text_content),
+            self._content_preview(done_content or ""),
         )
-        if not final_content:
-            logger.warning(
-                "AI stream parsed empty content: status_code=%s, headers=%s, event_counts=%s",
+        if not terminal_seen:
+            error_message = (
+                "智能体流式响应未完整结束，请稍后重试；"
+                f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
+            )
+            logger.error(
+                "AI stream incomplete: status_code=%s, line_count=%s, data_line_count=%s, "
+                "invalid_json_count=%s, event_counts=%s, text_size=%s, done_size=%s",
+                getattr(response, "status_code", None),
+                line_count,
+                data_line_count,
+                invalid_json_count,
+                event_counts,
+                len(text_content),
+                len(done_content or ""),
+            )
+            raise APIRequestError(
+                module_name=self.module_name,
+                url=self.action,
+                status_code=502,
+                result=error_message,
+            )
+        if not final_content.strip():
+            error_message = (
+                "智能体流式响应内容为空，请稍后重试；"
+                f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
+            )
+            logger.error(
+                "AI stream parsed empty content: status_code=%s, headers=%s, event_counts=%s, "
+                "text_size=%s, done_size=%s",
                 getattr(response, "status_code", None),
                 dict(getattr(response, "headers", {}) or {}),
                 event_counts,
+                len(text_content),
+                len(done_content or ""),
+            )
+            raise APIRequestError(
+                module_name=self.module_name,
+                url=self.action,
+                status_code=502,
+                result=error_message,
             )
         return final_content
 
