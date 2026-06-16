@@ -66,7 +66,8 @@
     :condition-tags="conditionTags"
     :search-params="searchParams"
     :total="total"
-    @analyze-finished="handleAnalyzeFinished" />
+    @analyze-failed="handleAnalyzeFailed"
+    @analyze-started="handleAnalyzeStarted" />
 
   <report-drawer
     v-model:isShow="showReportDrawer"
@@ -77,12 +78,13 @@
   <history-report-drawer
     ref="historyDrawerRef"
     v-model:isShow="showHistoryDrawer"
+    @analyze-finished="handleAnalyzeFinished"
     @open-report="handleOpenReport"
     @view-risks="handleViewRisks" />
 </template>
 
 <script setup lang="tsx">
-  import { computed, ref } from 'vue';
+  import { computed, nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
@@ -90,6 +92,7 @@
   import useRequest from '@hooks/use-request';
 
   import AnalyzeDialog from './dialog.vue';
+  import type { AnalyzeStartPayload } from './dialog.vue';
   import type { HistoryReportItem } from './history-report-drawer.vue';
   import HistoryReportDrawer from './history-report-drawer.vue';
   import ReportDrawer from './report-drawer.vue';
@@ -211,6 +214,17 @@
 
   const handleUpdate = (val: string) => {
     itemInfo.value = val;
+  };
+
+  const handleAnalyzeStarted = (payload: AnalyzeStartPayload) => {
+    showHistoryDrawer.value = true;
+    nextTick(() => {
+      historyDrawerRef.value?.beginAnalyzeWatch(payload);
+    });
+  };
+
+  const handleAnalyzeFailed = (payload: { title: string }) => {
+    historyDrawerRef.value?.markAnalyzeFailed(payload.title);
   };
 
   const handleAnalyzeFinished = (data: string) => {
