@@ -21,6 +21,30 @@ import StrategyManageService from '@service/strategy-manage';
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
+const riskStatusOrder = [
+  '待处理',
+  '处理中',
+  '已关单',
+  '录入中',
+  '自动处理审批中',
+  '套餐处理中',
+];
+
+const riskStatusOrderMap = new Map(riskStatusOrder.map((name, index) => [name, index]));
+
+const sortRiskStatusOptions = (list: Array<Record<string, any>>) => [...list].sort((first, second) => {
+  const firstOrder = riskStatusOrderMap.get(first.name);
+  const secondOrder = riskStatusOrderMap.get(second.name);
+
+  if (firstOrder !== undefined || secondOrder !== undefined) {
+    if (firstOrder === undefined) return 1;
+    if (secondOrder === undefined) return -1;
+    return firstOrder - secondOrder;
+  }
+
+  return String(first.name || '').localeCompare(String(second.name || ''), 'zh-Hans-CN');
+});
+
 export default {
   risk_id: {
     label: '风险ID',
@@ -71,7 +95,8 @@ export default {
     label: '处理状态',
     type: 'select',
     required: false,
-    service: RiskManageService.fetchRiskStatusCommon,
+    service: (params: Record<string, any>) => RiskManageService.fetchRiskStatusCommon(params)
+      .then(data => sortRiskStatusOptions(data)),
     filterList: ['new'],
   },
   risk_label: {
