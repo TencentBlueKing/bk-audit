@@ -32,7 +32,9 @@
           :src="item.icon">
       </div>
 
-      <div class="section-title">
+      <div
+        v-if="otherReports.length"
+        class="section-title">
         {{ t('其他可用报告') }}
       </div>
 
@@ -127,14 +129,13 @@
 <script setup lang="ts">
   import { onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import dayjs from 'dayjs';
 
   import RiskManageService from '@service/risk-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import useRequest from '@hooks/use-request';
 
-  import iconCelue from '@images/celue.svg';
-  import iconChangjing from '@images/changjing.svg';
   import iconUnion from '@images/Union.svg';
   import iconZonghe from '@images/zonghe.svg';
   import iconZrren from '@images/zrren.svg';
@@ -171,7 +172,6 @@
   const customRequirement = ref('');
   const isAnalyzing = ref(false);
 
-  // 模拟后台返回的数据
   const recommendReports = ref<reportsItem[]>([]);
 
   const otherReports = ref<reportsItem[]>([]);
@@ -189,57 +189,53 @@
     },
   });
 
-  // 根据搜索条件对报告进行排序
+  const hasOperatorCondition = (conditionTags: any[]) => conditionTags.some((tag) => {
+    if (tag.fieldName !== 'operator') {
+      return false;
+    }
+    const { value } = tag;
+    if (value === undefined || value === null || value === '') {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.some(item => item !== undefined && item !== null && item !== '');
+    }
+    return true;
+  });
+
+  // 根据搜索条件推荐报告
   const sortReportsByCondition = (analyseList: any[], conditionTags: any[]) => {
     if (!analyseList || analyseList.length === 0) {
       return { recommend: [], other: [] };
     }
 
-    // 提取搜索条件中的fieldName字段
-    const fieldNames = conditionTags.map(tag => tag.fieldName || '');
-
-    // 复制报告列表进行排序
-    const reports = [...analyseList];
-    // 根据搜索条件确定推荐优先级
-    let recommendScenarioKeys: string[] = [];
-
-    // 责任人相关字段：operator（责任人）、current_operator（当前处理人）
-    if (fieldNames.includes('operator') || fieldNames.includes('current_operator')) {
-      // 优先级1：责任人相关
-      recommendScenarioKeys = ['person_investigation'];
-    } else if (fieldNames.includes('strategy_id')) {
-      // 优先级2：策略相关
-      recommendScenarioKeys = ['strategy_analysis'];
-    } else if (fieldNames.includes('tags')) {
-      // 优先级3：标签相关
-      recommendScenarioKeys = ['tag_analysis', 'scenario_analysis'];
-    } else {
-      // 默认推荐：风险综合和态势总结
-      recommendScenarioKeys = ['comprehensive', 'trend_summary'];
-    }
-    // 设置图标映射
     const iconMap: Record<string, string> = {
       person_investigation: iconZrren,
       trend_summary: iconZonghe,
-      strategy_analysis: iconCelue,
-      scenario_analysis: iconChangjing,
-      comprehensive: iconZonghe,
-      tag_analysis: iconChangjing,
     };
 
-    // 为每个报告设置对应的图标（创建新对象避免修改参数）
-    const reportsWithIcons = reports.map(report => ({
+    const reportsWithIcons = analyseList.map(report => ({
       ...report,
       icon: iconMap[report.scenario_key] || iconUnion,
     }));
 
-    // 分离推荐报告和其他报告
-    const recommendReports = reportsWithIcons.filter(report => recommendScenarioKeys.includes(report.scenario_key));
-    const otherReports = reportsWithIcons.filter(report => !recommendScenarioKeys.includes(report.scenario_key));
+    const findReport = (scenarioKey: string) => (
+      reportsWithIcons.find(report => report.scenario_key === scenarioKey)
+    );
 
+    if (hasOperatorCondition(conditionTags)) {
+      const recommend = findReport('person_investigation');
+      const other = findReport('trend_summary');
+      return {
+        recommend: recommend ? [recommend] : [],
+        other: other ? [other] : [],
+      };
+    }
+
+    const recommend = findReport('trend_summary');
     return {
-      recommend: recommendReports,
-      other: otherReports,
+      recommend: recommend ? [recommend] : [],
+      other: [],
     };
   };
 
@@ -348,11 +344,34 @@
     isAnalyzing.value = true;
   };
 
+  const getReportDateSuffix = () => dayjs().format('YYYYMMDD');
+
+  const getOperatorNameFromTags = (conditionTags: any[]) => {
+    const operatorTag = conditionTags.find(tag => tag.fieldName === 'operator');
+    if (!operatorTag?.value) {
+      return '';
+    }
+    const { value } = operatorTag;
+    if (Array.isArray(value)) {
+      return value.filter(item => item !== undefined && item !== null && item !== '').join(',');
+    }
+    return String(value);
+  };
+
+  const buildReportTitle = (item: reportsItem) => {
+    const dateStr = getReportDateSuffix();
+    if (item.scenario_key === 'person_investigation') {
+      const operatorName = getOperatorNameFromTags(props.conditionTags);
+      return `${operatorName}-${item.name}-${dateStr}`;
+    }
+    return `${item.name}-${dateStr}`;
+  };
+
   const handleReport = (item: reportsItem) => {
     submitAnalyseReport({
       scenario_key: item.scenario_key,
       report_type: item.report_type,
-      title: item.name,
+      title: buildReportTitle(item),
       custom_prompt: '',
     });
   };
