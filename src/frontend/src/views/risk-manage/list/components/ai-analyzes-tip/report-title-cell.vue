@@ -42,7 +42,7 @@
           {{ title }}
         </span>
         <audit-icon
-          v-if="!loading"
+          v-if="!loading && canEdit"
           class="report-title-edit hover-show-icon"
           type="edit-fill"
           @click.stop="handleEdit" />
@@ -66,6 +66,7 @@
     title: string;
     reportId: string | number;
     canOpen?: boolean;
+    canEdit?: boolean;
   }
 
   interface Emits {
@@ -75,6 +76,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     canOpen: false,
+    canEdit: false,
   });
   const emit = defineEmits<Emits>();
 
@@ -92,7 +94,7 @@
   };
 
   const handleEdit = () => {
-    if (loading.value || isEditing.value || !props.reportId) return;
+    if (loading.value || isEditing.value || !props.reportId || !props.canEdit) return;
     draftTitle.value = props.title || '';
     isEditing.value = true;
     nextTick(() => {

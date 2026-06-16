@@ -39,9 +39,11 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
+        :row-class-name="getRowClassName"
         row-key="id"
         :settings="[]"
-        table-max-height="calc(100vh - 210px)" />
+        table-max-height="calc(100vh - 210px)"
+        @request-success="handleRequestSuccess" />
     </div>
   </audit-sideslider>
 </template>
@@ -50,6 +52,7 @@
   import {
     computed,
     nextTick,
+    onBeforeUnmount,
     ref,
     watch,
   } from 'vue';
@@ -65,6 +68,10 @@
 
   import ReportTitleCell from './report-title-cell.vue';
   import RiskTablePopover from './risk-table-popover.vue';
+
+  export interface AnalyzeWatchPayload {
+    title: string;
+  }
 
   export interface HistoryReportItem {
     analysis_scope: string;
@@ -87,6 +94,7 @@
     (e: 'update:isShow', val: boolean): void;
     (e: 'open-report', row: HistoryReportItem): void;
     (e: 'view-risks', row: HistoryReportItem): void;
+    (e: 'analyze-finished', data: string): void;
   }
 
   interface SearchKey {
@@ -109,6 +117,111 @@
   const searchValue = ref<SearchKey[]>([]);
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const originalQuery = ref<Record<string, any>>({});
+  const pendingReportTitles = ref<string[]>([]);
+  const listPollingTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+  const LIST_POLL_INTERVAL = 3000;
+
+  const getRowReportId = (row: HistoryReportItem) => row.report_id ?? row.id;
+
+  const getListData = () => (listRef.value?.getListData?.() || []) as HistoryReportItem[];
+
+  const hasGeneratingInList = () => getListData().some(row => String(row.status || '').toLowerCase() === 'generating');
+
+  const shouldPollList = () => show.value && (hasGeneratingInList() || pendingReportTitles.value.length > 0);
+
+  const resolveRowData = (row: Record<string, any>) => (row?.row || row) as HistoryReportItem;
+
+  const getRowClassName = (row: Record<string, any>) => {
+    const rowData = resolveRowData(row);
+    if (String(rowData.status || '').toLowerCase() !== 'generating') {
+      return '';
+    }
+    if (pendingReportTitles.value.includes(rowData.title)) {
+      return 'new-row';
+    }
+    return '';
+  };
+
+  const removePendingTitle = (title: string) => {
+    pendingReportTitles.value = pendingReportTitles.value.filter(item => item !== title);
+  };
+
+  const stopListPolling = () => {
+    if (listPollingTimer.value) {
+      clearTimeout(listPollingTimer.value);
+      listPollingTimer.value = null;
+    }
+  };
+
+  const scheduleNextListPoll = () => {
+    stopListPolling();
+    if (!shouldPollList()) {
+      return;
+    }
+    listPollingTimer.value = setTimeout(() => {
+      if (shouldPollList()) {
+        listRef.value?.silentRefreshList();
+      }
+    }, LIST_POLL_INTERVAL);
+  };
+
+  const resumeListPolling = () => {
+    if (!shouldPollList()) {
+      return;
+    }
+    scheduleNextListPoll();
+  };
+
+  const {
+    run: getAiAnalyseReportDetail,
+  } = useRequest(RiskManageService.getAiAnalyseReportDetail, {
+    defaultValue: [],
+    onSuccess(data) {
+      emit('analyze-finished', JSON.stringify(data));
+    },
+  });
+
+  const checkPendingReports = () => {
+    const listData = getListData();
+
+    [...pendingReportTitles.value].forEach((title) => {
+      const matched = listData.find(item => item.title === title);
+      if (!matched) {
+        return;
+      }
+
+      const status = String(matched.status || '').toLowerCase();
+      if (status === 'generating') {
+        return;
+      }
+
+      removePendingTitle(title);
+      if (status === 'success') {
+        const reportId = getRowReportId(matched);
+        if (reportId) {
+          getAiAnalyseReportDetail({
+            report_id: reportId,
+          });
+        }
+      }
+    });
+  };
+
+  const handleRequestSuccess = () => {
+    checkPendingReports();
+    scheduleNextListPoll();
+  };
+
+  const beginAnalyzeWatch = (payload: AnalyzeWatchPayload) => {
+    if (!pendingReportTitles.value.includes(payload.title)) {
+      pendingReportTitles.value = [...pendingReportTitles.value, payload.title];
+    }
+  };
+
+  const markAnalyzeFailed = (title: string) => {
+    removePendingTitle(title);
+    scheduleNextListPoll();
+  };
 
   const searchSelectData = ref([
     {
@@ -185,8 +298,6 @@
 
   const canOpenReport = (status: string) => String(status || '').toLowerCase() === 'success';
 
-  const getRowReportId = (row: HistoryReportItem) => row.report_id ?? row.id;
-
   const handleTitleUpdated = (reportId: string | number, title: string) => {
     const listData = listRef.value?.getListData?.() as HistoryReportItem[] | undefined;
     if (!listData?.length) {
@@ -242,6 +353,7 @@
       ellipsis: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <ReportTitleCell
+          canEdit={canOpenReport(row.status)}
           canOpen={canOpenReport(row.status)}
           reportId={getRowReportId(row)}
           title={row.title}
@@ -379,8 +491,10 @@
       nextTick(() => {
         // 避免复用外层页面 URL 中的 sort（如 -event_time）导致历史报告接口排序字段非法
         listRef.value?.fetchData({ keyword: undefined, sort: ['-created_at'] });
+        resumeListPolling();
       });
     } else {
+      stopListPolling();
       // 恢复原始URL参数
       router.replace({
         query: originalQuery.value,
@@ -390,6 +504,12 @@
 
   defineExpose({
     listRef,
+    beginAnalyzeWatch,
+    markAnalyzeFailed,
+  });
+
+  onBeforeUnmount(() => {
+    stopListPolling();
   });
 </script>
 
@@ -399,6 +519,32 @@
   margin-top: 16px;
   margin-right: 50px;
   margin-left: 50px;
+
+  :deep(.audit-tdesign-list) {
+    background-color: #fff;
+
+    .t-table,
+    .t-table__content,
+    .t-table__header,
+    .t-table__body,
+    .t-table__header--fixed > tr > th,
+    .t-table th,
+    .t-table td {
+      background-color: #fff !important;
+    }
+  }
+}
+
+:deep(.audit-tdesign-list .tdesign-list tr.new-row) {
+  td,
+  th {
+    background-color: #e4faf0 !important;
+  }
+
+  &:hover td,
+  &:hover th {
+    background-color: #d8f5e6 !important;
+  }
 }
 
 .search-row {
