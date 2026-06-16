@@ -1588,7 +1588,7 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         """测试 AI 标题生成 Agent Code 已注册"""
         from api.constants import AIAgentCode
 
-        self.assertEqual(AIAgentCode.ALS_TITLE_SUM.value, "ai-als-title-sum")
+        self.assertEqual(AIAgentCode.ALS_TITLE_SUM.value, "bp-ai-als-title-sum")
 
     @override_settings(ANALYSE_REPORT_AI_TITLE_MAX_LENGTH=20)
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
