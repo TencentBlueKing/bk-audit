@@ -193,7 +193,7 @@
   });
   const handleOpenReport = (item: HistoryReportItem) => {
     getAiAnalyseReportDetail({
-      report_id: item.report_id,
+      report_id: item.report_id ?? item.id,
     });
   };
 
@@ -232,6 +232,8 @@
 .ai-analyzes {
   position: relative;
   z-index: 1;
+  width: 100%;
+  min-width: 0;
   margin-top: 16px;
 
   .tip-bar {
@@ -260,10 +262,13 @@
   }
 
   .list-panel {
+    width: 100%;
+    min-width: 0;
     padding: 0 20px 16px;
     overflow: hidden;
     background-color: #fff;
     border: 1px solid #e2e6ed;
+    box-sizing: border-box;
   }
 
   .action-toolbar {
@@ -314,7 +319,16 @@
   }
 
   .list-content {
+    width: 100%;
+    min-width: 0;
     padding: 0;
+    overflow: hidden;
+
+    :deep(.audit-tdesign-list) {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
 
     :deep(.tdesign-list-pagination) {
       padding: 12px 0;

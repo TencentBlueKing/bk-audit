@@ -270,6 +270,7 @@ export default {
     报告内容: 'Report Content',
     保存: 'Save',
     保存成功: 'Saved Successfully',
+    '报告内容为空，无法编辑标题': 'Report content is empty, unable to edit title',
     风险条数: 'Risk Count',
     报告名称: 'Report Name',
     全部: 'All',
