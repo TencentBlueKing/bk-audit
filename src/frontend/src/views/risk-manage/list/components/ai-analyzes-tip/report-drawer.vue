@@ -494,6 +494,46 @@
 
 /* Markdown 表格样式 - 使用 :deep() 穿透 scoped 样式 */
 .markdowm-container {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #313238;
+  word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 14px;
+    line-height: 1.8;
+  }
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(h4),
+  :deep(h5),
+  :deep(h6),
+  :deep(ul),
+  :deep(ol) {
+    margin: 0 0 14px;
+    line-height: 1.6;
+  }
+
+  :deep(ul),
+  :deep(ol) {
+    padding-left: 20px;
+  }
+
+  :deep(li) {
+    margin-bottom: 8px;
+    line-height: 1.8;
+  }
+
+  :deep(li:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(strong) {
+    display: inline;
+  }
+
   :deep(table) {
     width: 100%;
     margin: 16px 0;
