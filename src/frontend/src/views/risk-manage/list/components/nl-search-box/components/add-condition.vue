@@ -279,11 +279,12 @@
   }
 
   .nl-add-condition-panel {
-    width: max-content;
-    max-width: 400px;
+    width: 300px;
+    max-width: calc(100vw - 24px);
     min-width: 240px;
     padding: 0;
     gap: 9px;
+    box-sizing: border-box;
 
     .panel-tabs {
       display: flex;
