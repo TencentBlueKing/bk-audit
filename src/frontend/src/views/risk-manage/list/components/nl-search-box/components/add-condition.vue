@@ -163,9 +163,7 @@
   const hasAddedConditions = computed(() => props.selectedFields.length > 0 || props.selectedEventFieldIds.length > 0);
 
   // 判断是否应该激活添加条件标签
-  const shouldActivate = computed(() =>
-    // 只有当没有已添加的条件且弹窗显示时才激活
-    !hasAddedConditions.value && isShow.value);
+  const shouldActivate = computed(() => !hasAddedConditions.value && isShow.value);
 
   // 过滤风险字段（排除已添加的字段，且排除 datetimerange 类型，因为首次发现时间始终存在不可添加）
   const filteredRiskFields = computed(() => {

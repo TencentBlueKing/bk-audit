@@ -145,6 +145,9 @@
   } = useRequest(RiskManageService.fetchNl2RiskFilterLog, {
     defaultValue: {
       results: [],
+      page: 1,
+      num_pages: 1,
+      total: 0,
     },
     manual: true,
     onSuccess(data) {
@@ -241,7 +244,7 @@
 
   .nl-search-input {
     position: relative;
-    z-index: 5;
+    z-index: 110;
     padding: 16px 24px 10px;
 
     .nl-input-wrapper {
@@ -341,7 +344,7 @@
       position: absolute;
       top: 68px;
       left: 24px;
-      z-index: 20;
+      z-index: 120;
       width: min(690px, calc(100% - 48px));
       overflow: hidden;
       background: #fff;
