@@ -79,11 +79,14 @@
 <script setup lang="ts">
   import dayjs from 'dayjs';
   import _ from 'lodash';
+  import { Message } from 'bkui-vue';
   import {
     computed,
+    h,
     nextTick,
     onMounted,
     ref,
+    resolveComponent,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -98,6 +101,7 @@
 
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
+  import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import AddCondition from './components/add-condition.vue';
   import ConditionTags from './components/condition-tags.vue';
   import NlInput from './components/nl-input.vue';
@@ -123,6 +127,7 @@
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const statusToMap = RISK_STATUS_TAG_MAP;
   const nlInputRef = ref();
   const conditionTagsRef = ref();
   const historyRefreshKey = ref(0);
@@ -231,17 +236,245 @@
     defaultValue: [],
   });
 
+  const {
+    data: riskStatusCommon,
+    run: fetchRiskStatusCommon,
+  } = useRequest(RiskManageService.fetchRiskStatusCommon, {
+    manual: true,
+    defaultValue: [],
+  });
+
   // NLP 自然语言解析
   const {
     parse,
     clearParseResult,
   } = useNLParse();
 
+  const parseSuccessMessage = ref<any>('');
+  const optionsCache = ref<Record<string, Array<Record<string, any>>>>({});
   // 是否显示未识别警告提示
   const showParseWarning = ref(false);
 
   // 是否处于智能搜索整体流程中（NLP 解析 + 表格数据加载）
   const isNLSearching = ref(false);
+
+  const getDisplayValue = (value: any): string => {
+    if (Array.isArray(value)) {
+      return value.map(item => getDisplayValue(item)).filter(Boolean)
+        .join('，');
+    }
+    if (_.isPlainObject(value)) {
+      return String(value.display_name || value.name || value.label || value.id || value.value || '');
+    }
+    if (_.isNil(value) || value === '') {
+      return '--';
+    }
+    return String(value);
+  };
+
+  const getConditionTags = () => {
+    const datetimeTags: any[] = [];
+    const otherTags: any[] = [];
+
+    Object.entries(props.fieldConfig).forEach(([fieldName, config]) => {
+      if (config.type === 'datetimerange') {
+        const value = searchModel.value[fieldName] || searchModel.value.datetime || [];
+        datetimeTags.push({
+          fieldName,
+          label: config.label,
+          value,
+          type: config.type,
+          config,
+          removable: false,
+        });
+      }
+    });
+
+    Object.keys(searchModel.value).forEach((fieldName) => {
+      if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
+      const config = props.fieldConfig[fieldName];
+      if (!config || config.type === 'datetimerange') return;
+
+      const value = searchModel.value[fieldName];
+      otherTags.push({
+        fieldName,
+        label: config.label,
+        value: (value !== undefined && value !== null) ? value : '',
+        type: config.type,
+        config,
+        removable: true,
+      });
+    });
+
+    return [...datetimeTags, ...otherTags];
+  };
+
+  const loadFieldOptions = async (fieldName: string, config: IFieldConfig) => {
+    if (!config.service) {
+      return [];
+    }
+    if (optionsCache.value[fieldName]) {
+      return optionsCache.value[fieldName];
+    }
+    try {
+      const data = await config.service(config.defaultParams || {});
+      const valName = config.valName || 'id';
+      const options = config.filterList
+        ? data.filter((item: Record<string, any>) => !config.filterList?.includes(item[valName]))
+        : data;
+      optionsCache.value[fieldName] = options;
+      return options;
+    } catch {
+      optionsCache.value[fieldName] = [];
+      return [];
+    }
+  };
+
+  const getOptionLabel = (config: IFieldConfig, option: Record<string, any>) => {
+    if (config.formatLabel) {
+      return config.formatLabel(option);
+    }
+    const labelName = config.labelName || 'name';
+    return option[labelName];
+  };
+
+  const getTagDisplayValues = async (tag: ReturnType<typeof getConditionTags>[number]) => {
+    if (tag.type !== 'select') {
+      return Array.isArray(tag.value)
+        ? tag.value.map((item: any) => getDisplayValue(item)).filter(Boolean)
+        : [getDisplayValue(tag.value)];
+    }
+    const options = await loadFieldOptions(tag.fieldName, tag.config);
+    if (!options.length) {
+      return Array.isArray(tag.value)
+        ? tag.value.map((item: any) => String(item))
+        : [getDisplayValue(tag.value)];
+    }
+    const valName = tag.config.valName || 'id';
+    const values = Array.isArray(tag.value) ? tag.value : [tag.value];
+    return values.map((value: any) => {
+      const matched = options.find((item: any) => String(item[valName]) === String(value));
+      return matched ? getOptionLabel(tag.config, matched) : String(value);
+    });
+  };
+
+  const renderRiskLevelNode = (values: string[]) => {
+    const riskLevelStyleMap: Record<string, { label: string; color: string }> = {
+      HIGH: { label: t('高'), color: '#ea3636' },
+      MIDDLE: { label: t('中'), color: '#ff9c01' },
+      LOW: { label: t('低'), color: '#979ba5' },
+    };
+    return h('span', {
+      style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+    }, values.map((value) => {
+      const config = riskLevelStyleMap[String(value)];
+      return h('span', {
+        style: `display:inline-block;padding:3px 8px;border-radius:3px;color:#fff;background:${config?.color || '#c4c6cc'};line-height:18px;`,
+      }, config?.label || value);
+    }));
+  };
+
+  const renderStatusNode = (values: string[], labels: string[]) => {
+    const AuditIcon = resolveComponent('audit-icon');
+    return h('span', {
+      style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+    }, values.map((value, index) => {
+      const config = statusToMap[String(value)] || {};
+      const themeStyleMap: Record<string, string> = {
+        info: 'color:#3a84ff;background:#edf4ff;border:1px solid #a3c5fd;',
+        warning: 'color:#ff9e00;background:#fff3e1;border:1px solid #ffd48a;',
+        success: 'color:#0ca668;background:#e4faf0;border:1px solid rgba(12,166,104,.3);',
+      };
+      return h('span', {
+        style: `display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;border-radius:2px;${themeStyleMap[config.tag] || 'color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;'}`,
+      }, [
+        h('span', { style: 'display:flex;align-items:center;' }, [
+          h(AuditIcon as any, {
+            type: config.icon,
+            style: `margin-right: 6px; color: ${config.color || ''}; font-size: 14px;`,
+          }),
+          h('span', labels[index] || value || '--'),
+        ]),
+      ]);
+    }));
+  };
+
+  const renderRiskLabelNode = (values: string[]) => h('span', {
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+  }, values.map((value) => {
+    const isMisreport = value === 'misreport';
+    return h('span', {
+      style: `display:inline-block;padding:1px 8px;font-size:12px;border-radius:11px;line-height:18px;border:1px solid ${isMisreport ? '#ea35364d' : 'rgb(20 165 104 / 30%)'};background:${isMisreport ? '#fedddc99' : '#e4faf0'};color:${isMisreport ? '#ea3536' : '#14a568'};`,
+    }, isMisreport ? t('误报') : t('正常'));
+  }));
+
+  const renderCommonTagNode = (values: string[]) => h('span', {
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+  }, values.map(value => h('span', {
+    style: 'display:inline-block;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;',
+  }, value || '--')));
+
+  const renderEditTagNode = (values: string[]) => h('span', {
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+  }, values.map(value => h('span', {
+    style: 'display:inline-block;max-width:160px;padding:1px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;',
+  }, value || '--')));
+
+  const renderPlainTextNode = (values: string[]) => h('span', values.join('，') || '--');
+
+  const renderTagValueNode = async (tag: ReturnType<typeof getConditionTags>[number]) => {
+    const displayValues = await getTagDisplayValues(tag);
+    if (tag.fieldName === 'risk_level') {
+      return renderRiskLevelNode(Array.isArray(tag.value) ? tag.value.map(String) : [String(tag.value)]);
+    }
+    if (tag.fieldName === 'status') {
+      const rawValues = Array.isArray(tag.value) ? tag.value.map(String) : [String(tag.value)];
+      const labels = rawValues.map((value: string, index: number) => (
+        riskStatusCommon.value.find((item: any) => item.id === value)?.name
+        || displayValues[index]
+        || value
+      ));
+      return renderStatusNode(rawValues, labels);
+    }
+    if (tag.fieldName === 'risk_label') {
+      return renderRiskLabelNode(Array.isArray(tag.value) ? tag.value.map(String) : [String(tag.value)]);
+    }
+    if (tag.fieldName === 'has_report') {
+      return renderCommonTagNode(displayValues);
+    }
+    if (['tags', 'operator', 'current_operator', 'notice_users'].includes(tag.fieldName)) {
+      return renderEditTagNode(displayValues);
+    }
+    return renderPlainTextNode(displayValues);
+  };
+
+  const buildParseSuccessMessage = async () => {
+    const recognizedTags = getConditionTags()
+      .filter(tag => tag.fieldName !== 'datetime')
+      .filter(tag => !_.isNil(tag.value) && tag.value !== '' && (!Array.isArray(tag.value) || tag.value.length > 0));
+    if (!recognizedTags.length) {
+      return t('已识别到搜索条件');
+    }
+    const visibleTags = await Promise.all(recognizedTags.map(async tag => ({
+      label: t(tag.label),
+      valueNode: await renderTagValueNode(tag),
+    })));
+
+    return h('span', {
+      style: 'display:inline;line-height:20px;max-width:100%;white-space:normal;word-break:break-word;',
+    }, [
+      h('span', `${t('已识别为')}`),
+      ...visibleTags.flatMap((item, index) => ([
+        h('span', {
+          style: 'display:inline;white-space:normal;',
+        }, [
+          h('span', `${item.label}：`),
+          item.valueNode,
+        ]),
+        ...(index < visibleTags.length - 1 ? [h('span', '；')] : []),
+      ])),
+    ]);
+  };
 
   // 关闭警告提示
   const handleCloseWarning = () => {
@@ -372,6 +605,8 @@
   const handleNLSubmit = async (query: string) => {
     // 进入智能搜索整体流程（input 按钮开始转动）
     isNLSearching.value = true;
+    parseSuccessMessage.value = '';
+    showParseWarning.value = false;
     // 通知父组件：NL 解析开始，列表进入 loading 状态
     emit('parsing', true);
 
@@ -410,6 +645,7 @@
     // AI 服务异常或无法理解：filter_conditions 为空，message 有值
     if (_.isEmpty(filterConditions) && message) {
       // 显示警告提示（红色警告提示框）
+      parseSuccessMessage.value = '';
       showParseWarning.value = true;
       isNLSearching.value = false;
       emit('parsing', false);
@@ -420,6 +656,7 @@
     if (!_.isEmpty(filterConditions)) {
       showParseWarning.value = false;
       applyFilterConditions(filterConditions);
+      parseSuccessMessage.value = await buildParseSuccessMessage();
 
       // 通知父组件字段变化（用于获取事件字段）
       emit('modelValueWatch', searchModel.value);
@@ -652,6 +889,7 @@
     selectedItemList.value = [];
     selectedItemListOperator.value = [];
     selectedVal.value = [];
+    parseSuccessMessage.value = '';
     showParseWarning.value = false;
     isNLSearching.value = false;
     clearParseResult();
@@ -692,6 +930,9 @@
   });
 
   onMounted(() => {
+    if (!riskStatusCommon.value.length) {
+      fetchRiskStatusCommon();
+    }
     if (urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         id: item.id ? item.id : `${item.field}:${item.display_name}`,
@@ -714,7 +955,13 @@
       if (isNLSearching.value) {
         isNLSearching.value = false;
         historyRefreshKey.value += 1;
-        messageSuccess(t('智能搜索成功'));
+        nlInputRef.value?.clear();
+        Message({
+          theme: 'success',
+          message: parseSuccessMessage.value || t('已识别到搜索条件'),
+          delay: 8000,
+          extCls: 'audit-nl-success-message',
+        });
       }
     },
     clearValue() {
@@ -730,53 +977,14 @@
       return selectedItemList.value;
     },
     getConditionTags() {
-      // 计算当前的条件标签列表，与condition-tags组件中的逻辑保持一致
-      const datetimeTags: any[] = [];
-      const otherTags: any[] = [];
-
-      // 先处理 datetime 类型（始终展示且排第一）
-      Object.entries(props.fieldConfig).forEach(([fieldName, config]) => {
-        if (config.type === 'datetimerange') {
-          const value = searchModel.value[fieldName] || searchModel.value.datetime || [];
-          datetimeTags.push({
-            fieldName,
-            label: config.label,
-            value,
-            type: config.type,
-            config,
-            removable: false, // 日期类型标签不可删除
-          });
-        }
-      });
-
-      // 其他字段：按 searchModel 中 key 的顺序遍历，确保新添加的字段排在最后
-      Object.keys(searchModel.value).forEach((fieldName) => {
-        // 跳过辅助字段和 datetime 类型
-        if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
-        const config = props.fieldConfig[fieldName];
-        if (!config) return;
-        if (config.type === 'datetimerange') return;
-
-        const value = searchModel.value[fieldName];
-        otherTags.push({
-          fieldName,
-          label: config.label,
-          value: (value !== undefined && value !== null) ? value : '',
-          type: config.type,
-          config,
-          removable: true, // 可删除
-        });
-      });
-
-      // 日期标签排第一，其余按 searchModel 中的添加顺序
-      return [...datetimeTags, ...otherTags];
+      return getConditionTags();
     },
   });
 </script>
 <style lang="postcss">
   .nl-search-box {
     position: relative;
-    z-index: 10;
+    z-index: 100;
     overflow: visible;
     background: linear-gradient(90deg, #edeeff 54.99%, #ebe7ff 94.25%);
     border-radius: 8px;
@@ -879,6 +1087,18 @@
           color: #63656e;
         }
       }
+    }
+  }
+</style>
+<style lang="postcss">
+  .audit-nl-success-message {
+    width: fit-content;
+    max-width: calc(100vw - 80px);
+
+    .bk-message-content {
+      width: 100%;
+      word-break: break-word;
+      white-space: normal;
     }
   }
 </style>
