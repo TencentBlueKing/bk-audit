@@ -265,6 +265,7 @@
       ...params,
       analysis_scope: analysisScope,
       target_risks_filter: props.searchParams,
+      generate_title: params.report_type === 'custom',
     }).catch(() => {
       emit('analyze-failed', { title: params.title });
     });

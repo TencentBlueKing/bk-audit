@@ -334,6 +334,7 @@ class RiskManage extends ModuleBase {
     analysis_scope: string,
     custom_prompt: string,
     target_risks_filter: any,
+    generate_title: boolean,
     }) {
     return Request.post(`${this.api}/analyse_report/generate/`, {
       params,
@@ -372,7 +373,7 @@ class RiskManage extends ModuleBase {
   updateAiAnalyseReport(params: {
     report_id: string | number,
     title: string,
-    content: string,
+    content?: string,
   }) {
     return Request.put(`${this.api}/analyse_report/${params.report_id}/`, {
       params,

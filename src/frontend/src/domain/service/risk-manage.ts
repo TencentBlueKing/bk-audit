@@ -338,6 +338,7 @@ export default {
     analysis_scope: string,
     custom_prompt: string,
     target_risks_filter: any,
+    generate_title: boolean,
     }) {
     return RiskManageSource.getAiAnalyseReport(params)
       .then(({ data }) => data);
@@ -380,7 +381,7 @@ export default {
   updateAiAnalyseReport(params: {
     report_id: string | number,
     title: string,
-    content: string,
+    content?: string,
   }) {
     return RiskManageSource.updateAiAnalyseReport(params)
       .then(({ data }) => data);
