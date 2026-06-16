@@ -244,6 +244,7 @@
     fetchData: (params: Record<string, any>) => void,
     loading: Ref<boolean>,
     refreshList: () => void,
+    silentRefreshList: () => Promise<void>,
     getListData: () => Array<Record<string, any>>,
     getSelection: () => void
     initTableHeight: () => void,
@@ -489,6 +490,62 @@
     }
   }, { deep: true, immediate: true });
 
+  const buildFetchParams = (): Record<string, any> | null => {
+    const currentLimit = pagination.limit;
+    const { isNeedSceneParams, isNeedSceneId } = props;
+    const needSceneParams = isNeedSceneParams || isNeedSceneId;
+    const sceneParams: Record<string, string> = needSceneParams ? getSceneSystemParams() : {};
+
+    if (needSceneParams && !sceneParams.scope_id && !sceneParams.scope_type) {
+      return null;
+    }
+
+    return {
+      ...paramsMemo,
+      page: isUnload.value ? 1 : pagination.current,
+      page_size: currentLimit < 10 ? 10 : currentLimit,
+      ...(isNeedSceneParams ? sceneParams : {}),
+      ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
+    };
+  };
+
+  const isListResponseEqual = (oldData: any, newData: any) => {
+    if (!oldData || !newData) {
+      return false;
+    }
+    if (oldData.total !== newData.total) {
+      return false;
+    }
+    const oldResults = oldData.results || [];
+    const newResults = newData.results || [];
+    if (oldResults.length !== newResults.length) {
+      return false;
+    }
+    return JSON.stringify(oldResults) === JSON.stringify(newResults);
+  };
+
+  const silentRefreshList = async () => {
+    const params = buildFetchParams();
+    if (!params) {
+      return;
+    }
+    try {
+      const newData = await props.dataSource(params);
+      const oldData = listData.value;
+      if (isListResponseEqual(oldData, newData)) {
+        emits('requestSuccess', oldData);
+        return;
+      }
+      listData.value = newData;
+      if (newData && typeof newData.total === 'number') {
+        pagination.count = newData.total;
+      }
+      emits('requestSuccess', newData);
+    } catch {
+      emits('requestSuccess', listData.value);
+    }
+  };
+
   const fetchListData = () => {
     isReady = true;
     isLoading.value = true;
@@ -496,27 +553,12 @@
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
         if (result) {
-          // 确保使用当前的 pagination.limit 值
-          const currentLimit = pagination.limit;
-          const { isNeedSceneParams, isNeedSceneId } = props;
-
-          const needSceneParams = isNeedSceneParams || isNeedSceneId;
-          const sceneParams: Record<string, string> = needSceneParams ? getSceneSystemParams() : {};
-
-          // 场景参数为空时跳过请求（避免首次加载时 scope_id/scope_type 为空导致报错）
-          if (needSceneParams && !sceneParams.scope_id && !sceneParams.scope_type) {
+          const params = buildFetchParams();
+          if (!params) {
             console.warn('[tdesign-list] 场景参数为空，跳过本次请求，等待 scene-change 事件');
+            isLoading.value = false;
             return;
           }
-
-          const params: Record<string, any> = {
-            ...paramsMemo,
-            page: isUnload.value ? 1 : pagination.current,
-            page_size: currentLimit < 10 ? 10 : currentLimit,
-            ...(isNeedSceneParams ? sceneParams : {}),
-            ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
-
-          };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
           isLoading.value = true;
@@ -827,6 +869,7 @@
       isLoading.value = true;
       refreshList();
     },
+    silentRefreshList,
     getListData() {
       return listData.value.results;
     },

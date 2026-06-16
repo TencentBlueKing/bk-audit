@@ -96,38 +96,10 @@
       </div>
     </div>
   </bk-dialog>
-
-  <!-- 分析中加载弹窗 -->
-  <bk-dialog
-    class="ai-analyzing-dialog"
-    dialog-type="show"
-    :esc-close="false"
-    :is-show="isAnalyzing"
-    :quick-close="false"
-    :show-header="false"
-    width="450"
-    @closed="stopPolling"
-    @confirm="stopPolling">
-    <div class="analyzing-content">
-      <div class="loading-icon-wrapper">
-        <bk-loading
-          loading
-          mode="spin"
-          size="large"
-          theme="primary" />
-      </div>
-      <div class="analyzing-title">
-        {{ t('AI 正在分析中...') }}
-      </div>
-      <div class="analyzing-desc">
-        {{ t('正在对') }} {{ total }} {{ t('条风险数据进行深度分析，请稍等片刻') }}
-      </div>
-    </div>
-  </bk-dialog>
 </template>
 
 <script setup lang="ts">
-  import { onUnmounted, ref } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import dayjs from 'dayjs';
 
@@ -156,6 +128,10 @@
     icon: string;
   }
 
+  export interface AnalyzeStartPayload {
+    title: string;
+  }
+
   const props = withDefaults(
     defineProps<Props>(),
     {
@@ -164,14 +140,16 @@
       searchParams: () => ({}),
     },
   );
-  const emit = defineEmits(['analyze-finished']);
+
+  const emit = defineEmits<{
+    'analyze-started': [payload: AnalyzeStartPayload];
+    'analyze-failed': [payload: { title: string }];
+  }>();
   const { t } = useI18n();
   const strategyTagMap = ref<Record<string, string>>({});
   const isShow = ref(false);
   const isCustomExpanded = ref(true);
   const customRequirement = ref('');
-  const isAnalyzing = ref(false);
-
   const recommendReports = ref<reportsItem[]>([]);
 
   const otherReports = ref<reportsItem[]>([]);
@@ -246,70 +224,11 @@
     getAiAnalyseList();
   };
 
-  // 定时器相关变量
-  const pollingTimer = ref<ReturnType<typeof setTimeout> | null>(null);
-  const currentTaskId = ref<string>('');
-
-  // 获取ai分析报告
-  const {
-    run: getAiAnalyseTaskReport,
-  } = useRequest(RiskManageService.getAiAnalyseTaskReport, {
-    defaultValue: [],
-    onSuccess(data) {
-      // 清除之前的定时器
-      if (pollingTimer.value) {
-        clearTimeout(pollingTimer.value);
-        pollingTimer.value = null;
-      }
-
-      if (data?.status === 'SUCCESS') {
-        // 处理成功结果 获取AI报告详情
-        getAiAnalyseReportDetail({
-          report_id: data?.result.report_id,
-        });
-      }
-      if (data?.status === 'PENDING' || data?.status === 'RUNNING') {
-        // 设置定时器继续轮询
-        pollingTimer.value = setTimeout(() => {
-          if (currentTaskId.value) {
-            getAiAnalyseTaskReport({
-              task_id: currentTaskId.value,
-            });
-          }
-        }, 3000); // 3秒后再次查询
-      }
-      if (data?.status === 'FAILURE') {
-        // 处理失败结果
-        isAnalyzing.value = false;
-      }
-    },
-  });
-
-  // 获取ai分析报告任务id
+  // 提交生成分析报告
   const {
     run: getAiAnalyseReport,
   } = useRequest(RiskManageService.getAiAnalyseReport, {
     defaultValue: [],
-    onSuccess(data) {
-      if (data?.task_id) {
-        // 设置当前任务ID并开始轮询
-        currentTaskId.value = data.task_id;
-        getAiAnalyseTaskReport({
-          task_id: data.task_id,
-        });
-      }
-    },
-  });
-
-  // 获取ai报告详情
-  const {
-    run: getAiAnalyseReportDetail,
-  } = useRequest(RiskManageService.getAiAnalyseReportDetail, {
-    defaultValue: [],
-    onSuccess(data) {
-      isAnalyzing.value = false;
-      emit('analyze-finished', JSON.stringify(data));
-    },
   });
 
   // 构建分析范围描述信息
@@ -336,12 +255,19 @@
 
   // 提交分析报告请求
   const submitAnalyseReport = (params: Record<string, any>) => {
+    const analysisScope = JSON.stringify(buildAnalysisScope());
+    const startPayload: AnalyzeStartPayload = {
+      title: params.title,
+    };
+    isShow.value = false;
+    emit('analyze-started', startPayload);
     getAiAnalyseReport({
       ...params,
-      analysis_scope: JSON.stringify(buildAnalysisScope()),
+      analysis_scope: analysisScope,
       target_risks_filter: props.searchParams,
+    }).catch(() => {
+      emit('analyze-failed', { title: params.title });
     });
-    isAnalyzing.value = true;
   };
 
   const getReportDateSuffix = () => dayjs().format('YYYYMMDD');
@@ -408,21 +334,6 @@
   const toggleCustom = () => {
     isCustomExpanded.value = !isCustomExpanded.value;
   };
-
-  const stopPolling = () => {
-    if (pollingTimer.value) {
-      clearTimeout(pollingTimer.value);
-      pollingTimer.value = null;
-    }
-    isAnalyzing.value = false;
-  };
-  // 组件卸载时清理定时器
-  onUnmounted(() => {
-    if (pollingTimer.value) {
-      clearTimeout(pollingTimer.value);
-      pollingTimer.value = null;
-    }
-  });
 
   defineExpose({
     show,
@@ -589,56 +500,6 @@
       }
     }
   }
-}
-
-/* 分析中弹窗样式 */
-.ai-analyzing-dialog {
-  :deep(.bk-modal-content) {
-    height: 250px;
-    padding: 40px 24px;
-    box-sizing: border-box;
-  }
-
-  :deep(.bk-dialog-footer) {
-    display: none;
-  }
-
-  .analyzing-content {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-
-    .loading-icon-wrapper {
-      margin-bottom: 24px;
-
-      .loading-icon {
-        font-size: 60px;
-        color: #6ba3ff;
-        animation: spin 1.5s linear infinite;
-      }
-    }
-
-    .analyzing-title {
-      margin-bottom: 16px;
-      font-size: 20px;
-      font-weight: 500;
-      color: #313238;
-    }
-
-    .analyzing-desc {
-      font-size: 14px;
-      color: #63656e;
-    }
-  }
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 </style>
 
