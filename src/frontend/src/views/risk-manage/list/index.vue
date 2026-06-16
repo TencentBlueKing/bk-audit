@@ -217,6 +217,21 @@
           operator: {
             cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator || []} />,
           },
+          // 风险标签：超过 1 个时展示首个标签 +N，hover 查看全部
+          tags: {
+            width: 180,
+            minWidth: 160,
+            cell: (h: any, { row }: { row: RiskManageModel }) => {
+              const tags = (row.tags || []).map((item: string) => strategyTagMap.value[item] || item);
+              return (
+                <EditTag
+                  data={tags}
+                  key={row.risk_id}
+                  max={tags.length > 1 ? 1 : 0}
+                />
+              );
+            },
+          },
           // status 列：宽 130，增加 stand_by 状态处理
           status: {
             width: 130,
