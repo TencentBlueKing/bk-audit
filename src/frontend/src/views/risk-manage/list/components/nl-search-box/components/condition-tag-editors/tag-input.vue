@@ -190,7 +190,6 @@
     &.is-editing {
       height: auto;
       min-height: 26px;
-      align-items: flex-start;
     }
   }
 
