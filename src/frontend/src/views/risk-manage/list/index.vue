@@ -278,24 +278,30 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+
+  const settingsVersion = ref(0);
 
   // 从 localStorage 读取保存的设置
   const settings = computed(() => {
+    void settingsVersion.value;
     const jsonStr = localStorage.getItem('audit-all-risk-list-setting');
+    let result: string[];
     if (jsonStr) {
       try {
         const savedSettings = JSON.parse(jsonStr);
         // 如果保存的设置中有 checked 字段，使用它；否则使用默认设置
-        return savedSettings.checked && Array.isArray(savedSettings.checked)
-          ? savedSettings.checked
-          : defaultSettings;
+        result = savedSettings.checked && Array.isArray(savedSettings.checked)
+          ? [...savedSettings.checked]
+          : [...defaultSettings];
       } catch (e) {
         console.error('本地设置解析失败，使用默认配置', e);
-        return defaultSettings;
+        result = [...defaultSettings];
       }
+    } else {
+      result = [...defaultSettings];
     }
-    return defaultSettings;
+    return result;
   });
 
   const listRef = ref();
@@ -362,6 +368,7 @@
 
   const {
     data: sceneList,
+    run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     manual: true,
     defaultValue: [],
@@ -475,6 +482,7 @@
 
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-all-risk-list-setting', JSON.stringify(setting));
+    settingsVersion.value += 1;
   };
 
   const handleModelValueWatch = (val: any) => {
@@ -554,6 +562,7 @@
     nextTick(() => {
       getEventFields();
       fetchRiskScenes();
+      fetchSceneAll();
       sessionStorage.removeItem('addEventRiskIds');
       // 初始获取conditionTags
       updateConditionTags();
