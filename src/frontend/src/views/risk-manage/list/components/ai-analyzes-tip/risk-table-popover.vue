@@ -180,7 +180,7 @@
       page: 1,
       page_size: props.count === 0 ? 10 : props.count,
     }).then((data) => {
-      const riskIds = (data?.results ?? []).map((item: RiskItem) => item.risk_id).join(',');
+      const riskIds = (data?.results ?? []).map((item: RiskItem) => String(item.risk_id)).join(',');
       if (riskIds) {
         const route = router.resolve({
           name: 'riskManageList',
