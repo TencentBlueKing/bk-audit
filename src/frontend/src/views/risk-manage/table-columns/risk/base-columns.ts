@@ -86,8 +86,14 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps) => {
       width: 140,
       ellipsis: true,
       cell: (_h: any, { row }: { row: RiskManageModel }) => {
-        const sceneName = sceneList.value.find((item: any) => item.scene_id === row.scene_id)?.name;
-        return h('span', `${sceneName}(${row.scene_id})`);
+        const scene = sceneList.value.find((item: any) => (
+          String(item.scene_id ?? item.id) === String(row.scene_id)
+        ));
+        const sceneName = scene?.name;
+        if (!row.scene_id) {
+          return h('span', '--');
+        }
+        return h('span', sceneName ? `${sceneName}(${row.scene_id})` : String(row.scene_id));
       },
     },
     {
