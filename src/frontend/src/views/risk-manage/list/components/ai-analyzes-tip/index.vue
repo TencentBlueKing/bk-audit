@@ -230,6 +230,8 @@
 
 <style lang='postcss' scoped>
 .ai-analyzes {
+  position: relative;
+  z-index: 1;
   margin-top: 16px;
 
   .tip-bar {

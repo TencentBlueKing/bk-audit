@@ -67,7 +67,6 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
-    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -108,7 +107,6 @@
   const { t } = useI18n();
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
-  const route = useRoute();
   const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
   let timeout: number | undefined = undefined;
   const statusToMap = RISK_STATUS_TAG_MAP;
@@ -529,7 +527,7 @@
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: route.query.strategy_id || '',
+      strategy_id: '',
       operator: '',
       current_operator: '',
       status: '',

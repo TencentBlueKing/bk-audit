@@ -15,8 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 */
 import { Message } from 'bkui-vue';
+import type { VNodeChild } from 'vue';
 
-type message = (message: string) => void
+type MessageContent = string | VNodeChild
+type message = (message: MessageContent) => void
 
 export default function () {
   const messageSuccess:message = (message) => {
