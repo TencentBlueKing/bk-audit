@@ -51,3 +51,4 @@ class AIAgentCode(TextChoices):
 
     AUDIT_REPORT = "bp-ai-audit-report", gettext_lazy("风险报告智能体")
     RISK_SEARCH = "bp-ai-aud-rsk-srch", gettext_lazy("风险检索助手")
+    ALS_TITLE_SUM = "bp-ai-als-title-sum", gettext_lazy("AI 风险分析报告标题生成")
