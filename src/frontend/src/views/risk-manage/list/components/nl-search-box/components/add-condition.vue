@@ -67,18 +67,18 @@
         <div class="panel-field-list">
           <template v-if="activeTab === 'risk'">
             <div
-              v-for="(config, fieldName) in filteredRiskFields"
-              :key="fieldName"
+              v-for="item in filteredRiskFields"
+              :key="item.fieldName"
               class="field-item"
-              @click="handleSelectField(fieldName as string, config)">
+              @click="handleSelectField(item.fieldName, item.config)">
               <span
                 v-bk-tooltips="{
-                  content: t(config.label),
-                  disabled: !overflowFlags[`risk_${fieldName}`],
+                  content: t(item.config.label),
+                  disabled: !overflowFlags[`risk_${item.fieldName}`],
                 }"
                 class="field-item-label"
-                @mouseenter="(e: MouseEvent) => checkOverflow(`risk_${fieldName}`, e)">
-                {{ t(config.label) }}
+                @mouseenter="(e: MouseEvent) => checkOverflow(`risk_${item.fieldName}`, e)">
+                {{ t(item.config.label) }}
               </span>
             </div>
           </template>
@@ -158,6 +158,23 @@
   };
   const activeTab = ref<'risk' | 'event'>('risk');
   const searchKeyword = ref('');
+  const riskFieldOrder = [
+    'risk_id',
+    'title',
+    'risk_level',
+    'strategy_id',
+    'tags',
+    'operator',
+    'current_operator',
+    'notice_users',
+    'status',
+    'risk_label',
+    'event_content',
+    'has_report',
+    'scene_id',
+  ];
+  const riskFieldOrderMap = new Map(riskFieldOrder.map((field, index) => [field, index]));
+  const compareAscii = (first = '', second = '') => first.localeCompare(second, 'en', { sensitivity: 'base' });
 
   // 判断是否有已添加的条件（风险字段或事件字段）
   const hasAddedConditions = computed(() => props.selectedFields.length > 0 || props.selectedEventFieldIds.length > 0);
@@ -178,9 +195,24 @@
       if (keyword && !config.label.toLowerCase().includes(keyword) && !name.toLowerCase().includes(keyword)) {
         return acc;
       }
-      Object.assign(acc, { [name]: config });
+      acc.push({
+        fieldName: name,
+        config,
+      });
       return acc;
-    }, {} as Record<string, IFieldConfig>);
+    }, [] as Array<{ fieldName: string; config: IFieldConfig }>)
+      .sort((first, second) => {
+        const firstOrder = riskFieldOrderMap.get(first.fieldName);
+        const secondOrder = riskFieldOrderMap.get(second.fieldName);
+
+        if (firstOrder !== undefined || secondOrder !== undefined) {
+          if (firstOrder === undefined) return 1;
+          if (secondOrder === undefined) return -1;
+          return firstOrder - secondOrder;
+        }
+
+        return compareAscii(first.fieldName, second.fieldName);
+      });
   });
 
   // 过滤事件字段（排除已添加的字段）
@@ -192,13 +224,13 @@
       list = list.filter(item => item.display_name.toLowerCase().includes(keyword)
         || item.field_name.toLowerCase().includes(keyword));
     }
-    return list;
+    return list.sort((first, second) => compareAscii(first.field_name, second.field_name));
   });
 
   // 列表是否为空
   const isListEmpty = computed(() => {
     if (activeTab.value === 'risk') {
-      return Object.keys(filteredRiskFields.value).length === 0;
+      return filteredRiskFields.value.length === 0;
     }
     return filteredEventFields.value.length === 0;
   });
