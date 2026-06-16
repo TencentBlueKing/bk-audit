@@ -65,22 +65,10 @@
                   {{ item.label }}
                 </div>
                 <div class="value">
-                  <div v-if="item.key === 'analysis_scope'">
-                    <div
-                      v-for="(scope, index) in item.value"
-                      :key="index"
-                      class="ai-report-meta-scope-item">
-                      <span
-                        v-if="scope.label === '首次发现时间'"
-                        class="ai-report-meta-text-full">
-                        {{ scope.label }} = {{ scope.value }}
-                      </span>
-                      <tooltips
-                        v-else
-                        :data="`${scope.label} = ${scope.value}`"
-                        :max-width="tooltipMaxWidth" />
-                    </div>
-                  </div>
+                  <tooltips
+                    v-if="item.key === 'analysis_scope'"
+                    :data="String(item.value ?? '')"
+                    :max-width="tooltipMaxWidth" />
                   <span
                     v-else-if="item.key === 'created_at'"
                     class="ai-report-meta-text-full">
@@ -192,6 +180,23 @@
     syncEditFormFromItemInfo();
   };
 
+  const formatAnalysisScope = (analysisScope: string) => {
+    try {
+      const scopeList = JSON.parse(analysisScope) || [];
+      return scopeList.map((item: { label: string; value: string | string[] }) => {
+        let value: string;
+        if (item.label === '首次发现时间') {
+          value = Array.isArray(item.value) ? item.value.join('-') : String(item.value ?? '');
+        } else {
+          value = Array.isArray(item.value) ? item.value.join(',') : String(item.value ?? '');
+        }
+        return `${item.label} = ${value}`;
+      }).join('，');
+    } catch {
+      return analysisScope || '';
+    }
+  };
+
   const metaList = computed(() => {
     if (!props.itemInfo) {
       return [];
@@ -207,18 +212,7 @@
         {
           key: 'analysis_scope',
           label: t('分析范围'),
-          value: JSON.parse(info.analysis_scope)?.map((item: any) => {
-            if (item.label === '首次发现时间') {
-              return  {
-                label: item.label,
-                value: Array.isArray(item.value) ? item.value.join('-') : item.value,
-              };
-            }
-            return {
-              label: item.label,
-              value: Array.isArray(item.value) ? item.value.join(',') : item.value,
-            };
-          }),
+          value: formatAnalysisScope(info.analysis_scope),
         },
         {
           key: 'risk_count',
@@ -241,7 +235,7 @@
     }
   });
   const title = computed(() => JSON.parse(props.itemInfo).title || '');
-  const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 960));
+  const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 1100));
   const tooltipMaxWidth = computed(() => (
     isFullscreen.value ? 'calc(100vw - 48px)' : 912
   ));
@@ -452,7 +446,7 @@
 .ai-report-section-header {
   display: flex;
   align-items: center;
-  padding: 12px 24px;
+  padding: 12px 40px;
   border-bottom: 1px solid #e1e6f0;
 }
 
@@ -469,7 +463,7 @@
 }
 
 .ai-report-section-body {
-  padding: 16px 24px 24px;
+  padding: 16px 40px 40px;
   background: #fff;
 }
 

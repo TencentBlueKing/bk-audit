@@ -610,6 +610,7 @@
 
 .risk-manage-list-page-wrap {
   position: relative;
+  overflow-x: hidden;
 
   .risk-manage-list {
     position: relative;
