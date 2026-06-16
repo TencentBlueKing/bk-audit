@@ -84,6 +84,7 @@
     report_type: string;
     risk_count: number;
     status: string;
+    title_generating?: boolean;
   }
 
   interface Props {
@@ -125,7 +126,7 @@
 
   const getListData = () => (listRef.value?.getListData?.() || []) as HistoryReportItem[];
 
-  const hasGeneratingInList = () => getListData().some(row => String(row.status || '').toLowerCase() === 'generating');
+  const hasGeneratingInList = () => getListData().some(row => String(row.status || '').toLowerCase() === 'generating' || row.title_generating);
 
   const shouldPollList = () => show.value && (hasGeneratingInList() || pendingReportTitles.value.length > 0);
 
@@ -191,7 +192,7 @@
       }
 
       const status = String(matched.status || '').toLowerCase();
-      if (status === 'generating') {
+      if (status === 'generating' || matched.title_generating) {
         return;
       }
 
@@ -353,10 +354,11 @@
       ellipsis: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <ReportTitleCell
-          canEdit={canOpenReport(row.status)}
+          canEdit={canOpenReport(row.status) && !row.title_generating}
           canOpen={canOpenReport(row.status)}
           reportId={getRowReportId(row)}
           title={row.title}
+          titleGenerating={!!row.title_generating}
           onOpen={() => emit('open-report', row)}
           onUpdated={(title: string) => handleTitleUpdated(getRowReportId(row), title)} />
       ),

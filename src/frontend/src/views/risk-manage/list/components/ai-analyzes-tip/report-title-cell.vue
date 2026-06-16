@@ -18,7 +18,7 @@
   <div class="report-title-cell">
     <bk-loading
       class="report-title-loading"
-      :loading="loading"
+      :loading="loading || titleGenerating"
       size="mini">
       <template v-if="isEditing">
         <bk-input
@@ -28,6 +28,9 @@
           size="small"
           @blur="handleSave"
           @enter="handleSave" />
+      </template>
+      <template v-else-if="titleGenerating">
+        <span class="report-title-generating-placeholder" />
       </template>
       <template v-else>
         <span
@@ -67,6 +70,7 @@
     reportId: string | number;
     canOpen?: boolean;
     canEdit?: boolean;
+    titleGenerating?: boolean;
   }
 
   interface Emits {
@@ -77,11 +81,12 @@
   const props = withDefaults(defineProps<Props>(), {
     canOpen: false,
     canEdit: false,
+    titleGenerating: false,
   });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const { messageSuccess, messageError } = useMessage();
+  const { messageSuccess } = useMessage();
 
   const isEditing = ref(false);
   const draftTitle = ref('');
@@ -117,18 +122,9 @@
 
     loading.value = true;
     try {
-      const detail = await RiskManageService.getAiAnalyseReportDetail({
-        report_id: props.reportId,
-      });
-      const content = detail?.content ?? '';
-      if (!content) {
-        messageError(t('报告内容为空，无法编辑标题'));
-        return;
-      }
       await RiskManageService.updateAiAnalyseReport({
         report_id: props.reportId,
         title: nextTitle,
-        content,
       });
       messageSuccess(t('保存成功'));
       emit('updated', nextTitle);
@@ -153,6 +149,12 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
+}
+
+.report-title-generating-placeholder {
+  display: inline-block;
+  height: 20px;
+  min-width: 80px;
 }
 
 .report-title-link {
