@@ -27,6 +27,7 @@ from celery.result import AsyncResult
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers as drf_serializers
@@ -280,9 +281,14 @@ class ExportAnalyseReport(AnalyseReportMeta):
     def _export_markdown(self, report):
         """导出为 Markdown 文件"""
         response = HttpResponse(report.content, content_type="text/markdown; charset=utf-8")
-        filename = f"{report.title}.md"
+        filename = self._build_export_filename(report.title, ".md")
         response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
         return response
+
+    @staticmethod
+    def _build_export_filename(title: str, extension: str) -> str:
+        timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
+        return f"{title}_{timestamp}{extension}"
 
     # 项目内置中文字体路径（Noto Sans SC，SIL Open Font License）
     _CJK_FONT_PATH = os.path.normpath(
@@ -446,7 +452,7 @@ class ExportAnalyseReport(AnalyseReportMeta):
             response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
             ext = ".html"
 
-        filename = f"{report.title}{ext}"
+        filename = self._build_export_filename(report.title, ext)
         response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
         return response
 

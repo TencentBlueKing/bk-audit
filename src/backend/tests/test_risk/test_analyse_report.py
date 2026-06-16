@@ -733,6 +733,21 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertIn("filename*=utf-8''", disposition)
         self.assertNotIn('filename="%E5', disposition)
 
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    def test_export_markdown_filename_contains_export_timestamp(self, mock_timezone):
+        """测试 Markdown 导出文件名包含精确到秒的导出时间戳"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
+
+        result = self.resource.risk.export_analyse_report(
+            {
+                "report_id": self.report.report_id,
+                "export_format": "markdown",
+            }
+        )
+
+        disposition = result["Content-Disposition"]
+        self.assertIn("20260615204436.md", disposition)
+
     def test_export_pdf_filename_matches_content_type(self):
         """测试 PDF 导出的文件名扩展名与实际内容类型匹配"""
         result = self.resource.risk.export_analyse_report(
@@ -752,6 +767,22 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
             self.assertNotIn(".pdf", disposition)
         self.assertIn("filename*=utf-8''", disposition)
         self.assertNotIn('filename="%E5', disposition)
+
+    @mock.patch("services.web.risk.resources.analyse_report.timezone")
+    def test_export_pdf_filename_contains_export_timestamp(self, mock_timezone):
+        """测试 PDF 导出文件名包含精确到秒的导出时间戳"""
+        mock_timezone.localtime.return_value = datetime.datetime(2026, 6, 15, 20, 44, 36)
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            result = self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        disposition = result["Content-Disposition"]
+        self.assertIn("20260615204436.pdf", disposition)
 
     def test_export_pdf_renders_content_only(self):
         """测试 PDF 渲染内容与 Markdown 一致，不额外拼接标题和元信息"""
