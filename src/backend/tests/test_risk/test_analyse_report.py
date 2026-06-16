@@ -17,7 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import io
 import json
+import sys
+import types
+from pathlib import Path
 from unittest import mock
 
 from django.contrib import admin
@@ -665,28 +669,20 @@ class TestDeleteAnalyseReport(AnalyseReportTestBase):
 class TestExportAnalyseReport(AnalyseReportTestBase):
     """测试导出AI报告"""
 
+    @staticmethod
+    def _read_fixture(filename):
+        return (Path(__file__).parent / "fixtures" / filename).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extract_html_body(html):
+        return html.split("<body>", 1)[1].split("</body>", 1)[0].strip()
+
     def setUp(self):
         super().setUp()
         self.report = AnalyseReport.objects.create(
             title="导出测试报告",
             report_type=AnalyseReportType.SYSTEM,
-            content=(
-                "# 一、总览\n\n"
-                "本报告对综合类风险数据进行全面分析，涵盖事件检测、趋势分析和处置建议。\n\n"
-                "## 二、详情\n\n"
-                "| 指标 | 值 | 同比变化 |\n"
-                "|---|---|---|\n"
-                "| 风险总数 | 100 | +15% |\n"
-                "| 高风险 | 25 | +20% |\n"
-                "| 中风险 | 45 | +10% |\n"
-                "| 低风险 | 30 | +5% |\n\n"
-                "## 三、趋势分析\n\n"
-                "近30天风险数量呈上升趋势，主要增长来自数据访问类和权限变更类事件。\n\n"
-                "## 四、处置建议\n\n"
-                "1. 加强数据访问权限的定期审查\n"
-                "2. 完善权限变更的审批流程\n"
-                "3. 部署实时异常检测告警\n"
-            ),
+            content=self._read_fixture("analyse_report_export.md"),
             analysis_scope="风险类型=综合",
             risk_count=5,
             status=AnalyseReportStatus.SUCCESS,
@@ -703,7 +699,7 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         )
         self.assertEqual(result["Content-Type"], "text/markdown; charset=utf-8")
         self.assertIn("attachment", result["Content-Disposition"])
-        self.assertEqual(result.content.decode("utf-8"), self.report.content)
+        self.assertEqual(result.content.decode("utf-8"), self._read_fixture("analyse_report_export.md"))
 
     def test_export_pdf(self):
         """测试导出为PDF（回退为HTML）"""
@@ -734,6 +730,8 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertIn(".md", disposition)
         self.assertNotIn(".pdf", disposition)
         self.assertNotIn(".html", disposition)
+        self.assertIn("filename*=utf-8''", disposition)
+        self.assertNotIn('filename="%E5', disposition)
 
     def test_export_pdf_filename_matches_content_type(self):
         """测试 PDF 导出的文件名扩展名与实际内容类型匹配"""
@@ -752,6 +750,117 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
             # 回退为 HTML，文件名应以 .html 结尾
             self.assertIn(".html", disposition)
             self.assertNotIn(".pdf", disposition)
+        self.assertIn("filename*=utf-8''", disposition)
+        self.assertNotIn('filename="%E5', disposition)
+
+    def test_export_pdf_renders_content_only(self):
+        """测试 PDF 渲染内容与 Markdown 一致，不额外拼接标题和元信息"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertEqual(
+            self._extract_html_body(full_html),
+            self._read_fixture("analyse_report_export_body.html").strip(),
+        )
+        self.assertNotIn("<h1>导出测试报告</h1>", full_html)
+        self.assertNotIn("报告类型:", full_html)
+        self.assertNotIn("分析范围:", full_html)
+
+    def test_export_pdf_table_styles_wrap_long_text(self):
+        """测试 PDF 表格样式限制长文本跨列溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn("-pdf-word-wrap: CJK", full_html)
+
+    def test_export_pdf_text_styles_wrap_long_text(self):
+        """测试 PDF 普通段落和列表项限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn(
+            "p, li {\n"
+            "        -pdf-word-wrap: CJK;\n"
+            "        word-break: break-word;\n"
+            "        word-wrap: break-word;\n"
+            "        overflow-wrap: anywhere;",
+            full_html,
+        )
+
+    def test_export_pdf_heading_and_code_styles_wrap_long_text(self):
+        """测试 PDF 标题、引用和代码块限制长文本跨页边界溢出"""
+        with mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._create_pdf") as mock_create:
+            mock_create.return_value = b"%PDF-1.4 fake content"
+            self.resource.risk.export_analyse_report(
+                {
+                    "report_id": self.report.report_id,
+                    "export_format": "pdf",
+                }
+            )
+
+        full_html = mock_create.call_args.kwargs["html"]
+        self.assertIn("h1, h2, h3, blockquote, code, pre {", full_html)
+        self.assertIn("-pdf-word-wrap: CJK", full_html)
+        self.assertIn("white-space: pre-wrap", full_html)
+
+    def test_create_pdf_uses_xhtml2pdf(self):
+        """测试 PDF 字节生成逻辑使用 xhtml2pdf"""
+        pisa_status = mock.Mock(err=False)
+        mock_create_pdf = mock.Mock(return_value=pisa_status)
+        fake_module = types.SimpleNamespace(pisa=types.SimpleNamespace(CreatePDF=mock_create_pdf))
+        with mock.patch.dict(sys.modules, {"xhtml2pdf": fake_module}):
+            pdf_bytes = self.resource.risk.export_analyse_report._create_pdf(html="<html>报告</html>")
+
+        self.assertEqual(pdf_bytes, b"")
+        dest = mock_create_pdf.call_args.kwargs["dest"]
+        self.assertIsInstance(dest, io.BytesIO)
+        self.assertIn("link_callback", mock_create_pdf.call_args.kwargs)
+
+    def test_pdf_resource_callback_rejects_local_file(self):
+        """测试 PDF 资源回调拒绝读取服务器本地文件"""
+        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
+
+        for local_uri in ["/etc/passwd", "file:///etc/passwd"]:
+            resolved_uri = callback(local_uri, None)
+            self.assertNotEqual(resolved_uri, local_uri)
+            self.assertTrue(resolved_uri.startswith("data:image/gif;base64,"))
+
+    def test_pdf_resource_callback_allows_remote_images(self):
+        """测试 PDF 资源回调允许外部和内网图片"""
+        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
+
+        self.assertEqual(callback("https://example.com/a.png", None), "https://example.com/a.png")
+        self.assertEqual(callback("http://127.0.0.1/a.png", None), "http://127.0.0.1/a.png")
+
+    def test_pdf_resource_callback_allows_builtin_font_only(self):
+        """测试 PDF 资源回调仅允许内置字体本地路径"""
+        export_resource = self.resource.risk.export_analyse_report
+
+        self.assertEqual(
+            export_resource._resolve_pdf_resource(export_resource._CJK_FONT_PATH, None),
+            export_resource._CJK_FONT_PATH,
+        )
 
     @mock.patch("services.web.risk.resources.analyse_report.ExportAnalyseReport._export_pdf")
     def test_export_pdf_success_filename_is_pdf(self, mock_export_pdf):
@@ -2101,6 +2210,38 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         linked_count = AnalyseReportRisk.objects.filter(report=self.report).count()
         self.assertEqual(linked_count, Risk.objects.count())
         self.assertEqual(self.report.risk_count, Risk.objects.count())
+
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_empty_content(self, mock_chat, mock_retry):
+        """Agent 返回空报告时触发重试，不写入成功报告"""
+        mock_chat.return_value = "   "
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_retries_when_agent_returns_loading_content(self, mock_chat, mock_retry):
+        """Agent 返回正在思考占位内容时触发重试，不写入成功报告"""
+        mock_chat.return_value = "正在思考..."
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        with self.assertRaisesRegex(RuntimeError, "retry called"):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        mock_retry.assert_called_once()
+        self.report.refresh_from_db()
+        self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
 
     @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")

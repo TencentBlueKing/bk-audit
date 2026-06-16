@@ -84,6 +84,32 @@ from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
 
+ANALYSE_REPORT_LOADING_CONTENTS = ("正在思考", "正在思考...", "正在思考……")
+
+
+def _content_preview(content: str, limit: int = 200) -> str:
+    return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
+
+
+def _validate_analyse_report_content(content: str, report_id: int) -> str:
+    stripped = (content or "").strip()
+    reason = ""
+    if not stripped:
+        reason = "empty"
+    elif stripped in ANALYSE_REPORT_LOADING_CONTENTS:
+        reason = "loading_only"
+
+    if reason:
+        logger_celery.error(
+            "[GenerateAnalyseReport] Invalid agent content: report_id=%s, reason=%s, content_size=%s, preview=%s",
+            report_id,
+            reason,
+            len(content or ""),
+            _content_preview(content or ""),
+        )
+        raise ValueError(f"AI分析报告内容异常: {reason}")
+    return content or ""
+
 
 @celery_app.task(
     bind=True,
@@ -708,6 +734,7 @@ def generate_analyse_report(self, report_id: int):
             input=json.dumps(agent_input, ensure_ascii=False),
             execute_kwargs=execute_kwargs,
         )
+        result = _validate_analyse_report_content(result, report.report_id)
 
         # 3. 更新报告
         report.content = result

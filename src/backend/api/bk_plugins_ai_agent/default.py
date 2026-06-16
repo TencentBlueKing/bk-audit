@@ -115,6 +115,13 @@ class ChatCompletion(AIAgentBase):
         request_data = kwargs.get("json") or kwargs.get("data") or {}
         if isinstance(request_data, dict):
             execute_kwargs = request_data.get("execute_kwargs") or {}
+            logger.info(
+                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, chat_history_count=%s",
+                request_data.get("agent_code"),
+                bool(execute_kwargs.get("stream")),
+                len(request_data.get("input") or ""),
+                len(request_data.get("chat_history") or []),
+            )
             if execute_kwargs.get("stream"):
                 kwargs["stream"] = True
         return kwargs
@@ -138,26 +145,44 @@ class ChatCompletion(AIAgentBase):
         except Exception:
             return False
 
+    @staticmethod
+    def _content_preview(content: str, limit: int = 200) -> str:
+        return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
+
     def _parse_stream_response(self, response) -> str:
-        # done event 仅用于日志记录（平台元数据），实际内容始终从 text event 拼接
+        # text event 是前端增量渲染内容；done event 在部分 agent 实现中承载最终完整结果。
         done_content = None
         text_content = ""
+        line_count = 0
+        data_line_count = 0
+        invalid_json_count = 0
+        event_counts: dict[str, int] = {}
+        stream_done = False
+        event_done = False
+        ag_ui_finished = False
         for raw_line in response.iter_lines(decode_unicode=False):
+            line_count += 1
             if isinstance(raw_line, (bytes, bytearray)):
                 line = raw_line.decode("utf-8", errors="replace")
             else:
                 line = raw_line
             if not line or not line.startswith("data:"):
                 continue
+            data_line_count += 1
             data = line[len("data:") :].strip()
             if data == "[DONE]":
+                event_counts["[DONE]"] = event_counts.get("[DONE]", 0) + 1
+                stream_done = True
                 break
             try:
                 event = json.loads(data)
             except json.JSONDecodeError:
+                invalid_json_count += 1
                 continue
             event_type = event.get("event")
             ag_ui_event_type = event.get("type")
+            event_key = event_type or ag_ui_event_type or "unknown"
+            event_counts[event_key] = event_counts.get(event_key, 0) + 1
             content = event.get("content", "")
             cover = event.get("cover", False)
             if event_type == "error":
@@ -172,17 +197,100 @@ class ChatCompletion(AIAgentBase):
                 )
             elif event_type == "done":
                 done_content = content
+                event_done = True
             elif event_type == "text":
                 text_content = content if cover else text_content + content
             elif ag_ui_event_type == "TEXT_MESSAGE_CONTENT":
                 text_content += event.get("delta", "")
-        if done_content is not None:
-            logger.debug("AI stream done content: %s", done_content)
-        logger.debug("AI stream text content: %s", text_content)
-        return text_content
+            elif ag_ui_event_type == "RUN_FINISHED":
+                ag_ui_finished = True
+            elif ag_ui_event_type == "RUN_ERROR":
+                error_message = event.get("message") or event.get("error") or content or "智能体流式响应异常"
+                logger.error("AI AG-UI stream error event: message=%s", error_message)
+                raise APIRequestError(
+                    module_name=self.module_name,
+                    url=self.action,
+                    status_code=500,
+                    result=error_message,
+                )
+        terminal_seen = stream_done or event_done or ag_ui_finished
+        final_content = text_content or done_content or ""
+        final_source = "text" if text_content else "done" if done_content else "empty"
+        logger.info(
+            "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
+            "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
+            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, text_preview=%s, done_preview=%s",
+            getattr(response, "status_code", None),
+            line_count,
+            data_line_count,
+            invalid_json_count,
+            event_counts,
+            terminal_seen,
+            stream_done,
+            event_done,
+            ag_ui_finished,
+            len(text_content),
+            len(done_content or ""),
+            len(final_content),
+            final_source,
+            self._content_preview(text_content),
+            self._content_preview(done_content or ""),
+        )
+        if not terminal_seen:
+            error_message = (
+                "智能体流式响应未完整结束，请稍后重试；"
+                f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
+            )
+            logger.error(
+                "AI stream incomplete: status_code=%s, line_count=%s, data_line_count=%s, "
+                "invalid_json_count=%s, event_counts=%s, text_size=%s, done_size=%s",
+                getattr(response, "status_code", None),
+                line_count,
+                data_line_count,
+                invalid_json_count,
+                event_counts,
+                len(text_content),
+                len(done_content or ""),
+            )
+            raise APIRequestError(
+                module_name=self.module_name,
+                url=self.action,
+                status_code=502,
+                result=error_message,
+            )
+        if not final_content.strip():
+            error_message = (
+                "智能体流式响应内容为空，请稍后重试；"
+                f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
+            )
+            logger.error(
+                "AI stream parsed empty content: status_code=%s, headers=%s, event_counts=%s, "
+                "text_size=%s, done_size=%s",
+                getattr(response, "status_code", None),
+                dict(getattr(response, "headers", {}) or {}),
+                event_counts,
+                len(text_content),
+                len(done_content or ""),
+            )
+            raise APIRequestError(
+                module_name=self.module_name,
+                url=self.action,
+                status_code=502,
+                result=error_message,
+            )
+        return final_content
 
     def parse_response(self, response):
-        if self._is_stream_response(response):
+        is_stream_response = self._is_stream_response(response)
+        logger.info(
+            "AI agent response received: status_code=%s, content_type=%s, stream_response=%s",
+            getattr(response, "status_code", None),
+            (response.headers.get("Content-Type") or response.headers.get("content-type") or "")
+            if getattr(response, "headers", None)
+            else "",
+            is_stream_response,
+        )
+        if is_stream_response:
             try:
                 response.raise_for_status()
             except HTTPError as err:
@@ -206,6 +314,7 @@ class ChatCompletion(AIAgentBase):
 
         data = super().parse_response(response)
         if isinstance(data, dict):
+            logger.info("AI agent non-stream response parsed: keys=%s", list(data.keys()))
             if "content" in data:
                 return data["content"]
             choices = data.get("choices")
