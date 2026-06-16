@@ -63,6 +63,7 @@
 
   import TdesignList from '@components/tdesign-list/index.vue';
 
+  import ReportTitleCell from './report-title-cell.vue';
   import RiskTablePopover from './risk-table-popover.vue';
 
   export interface HistoryReportItem {
@@ -71,6 +72,7 @@
     created_at: string;
     created_by: string;
     error_message?: string;
+    id?: string | number;
     report_id: string | number;
     report_type: string;
     risk_count: number;
@@ -182,6 +184,21 @@
   };
 
   const canOpenReport = (status: string) => String(status || '').toLowerCase() === 'success';
+
+  const getRowReportId = (row: HistoryReportItem) => row.report_id ?? row.id;
+
+  const handleTitleUpdated = (reportId: string | number, title: string) => {
+    const listData = listRef.value?.getListData?.() as HistoryReportItem[] | undefined;
+    if (!listData?.length) {
+      listRef.value?.refreshList();
+      return;
+    }
+    const target = listData.find(item => String(getRowReportId(item)) === String(reportId));
+    if (target) {
+      target.title = title;
+    }
+  };
+
   const getReportStatusText = (status: string) => reportStatusTextMap[String(status || '').toLowerCase()] || status;
   const renderReportStatus = (row: HistoryReportItem) => {
     const { status, error_message: errorMessage } = row;
@@ -224,15 +241,12 @@
       minWidth: 180,
       ellipsis: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
-        canOpenReport(row.status)
-          ? (
-            <span
-              class="report-title-link"
-              onClick={() => emit('open-report', row)}>
-              {row.title}
-            </span>
-          )
-          : <span class="report-title-text">{row.title}</span>
+        <ReportTitleCell
+          canOpen={canOpenReport(row.status)}
+          reportId={getRowReportId(row)}
+          title={row.title}
+          onOpen={() => emit('open-report', row)}
+          onUpdated={(title: string) => handleTitleUpdated(getRowReportId(row), title)} />
       ),
     },
     {
@@ -288,7 +302,7 @@
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <RiskTablePopover
           count={row.risk_count}
-          reportId={row.report_id}
+          reportId={getRowReportId(row)}
           status={row.status} />
       ),
     },
@@ -395,18 +409,13 @@
   width: 100%;
 }
 
-:deep(.report-title-link) {
-  color: #3a84ff;
-  cursor: pointer;
-
-  &:hover {
-    color: #699df4;
-    text-decoration: underline;
-  }
+:deep(.hover-show-icon) {
+  visibility: hidden;
 }
 
-:deep(.report-title-text) {
-  color: #313238;
+:deep(.audit-tdesign-list tr:hover .hover-show-icon),
+:deep(.audit-tdesign-list .t-table__body tr:hover .hover-show-icon) {
+  visibility: visible;
 }
 
 :deep(.report-status-failed) {
