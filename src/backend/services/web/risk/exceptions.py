@@ -45,3 +45,9 @@ class NL2RiskFilterServiceError(RiskException):
     MESSAGE = gettext_lazy("AI 服务暂时不可用，请使用手动筛选")
     STATUS_CODE = 503
     ERROR_CODE = "003"
+
+
+class AnalyseReportTitleGenerationError(RiskException):
+    MESSAGE = gettext_lazy("AI 分析报告标题生成失败")
+    STATUS_CODE = 500
+    ERROR_CODE = "004"

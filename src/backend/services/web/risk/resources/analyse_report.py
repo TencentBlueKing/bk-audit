@@ -20,11 +20,13 @@ import abc
 import io
 import logging
 import os
+import uuid
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 from blueapps.utils.request_provider import get_request_username
 from celery.result import AsyncResult
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -34,7 +36,7 @@ from rest_framework import serializers as drf_serializers
 
 from apps.audit.resources import AuditMixinResource
 from core.utils.page import paginate_data
-from services.web.risk.constants import AnalyseReportStatus
+from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportRisk,
@@ -60,7 +62,20 @@ from services.web.risk.serializers import (
     TaskResultResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
 )
-from services.web.risk.tasks import generate_analyse_report
+from services.web.risk.tasks import (
+    generate_analyse_report,
+    generate_analyse_report_title,
+)
+
+
+def _build_analyse_report_temp_title(scenario: AnalyseReportScenario | None) -> str:
+    """构造 AI 标题生成完成前展示的临时标题。"""
+    if scenario:
+        title_prefix = scenario.name
+    else:
+        title_prefix = str(AnalyseReportType.CUSTOM.label)
+    timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
+    return f"{title_prefix}_{timestamp}"
 
 
 class AnalyseReportMeta(AuditMixinResource, abc.ABC):
@@ -83,7 +98,7 @@ class ListAnalyseReportScenario(AnalyseReportMeta):
     ResponseSerializer = ListAnalyseReportScenarioResponseSerializer
     many_response_data = True
 
-    def perform_request(self, validated_request_data):
+    def perform_request(self, validated_request_data: dict[str, Any]) -> QuerySet[AnalyseReportScenario]:
         return AnalyseReportScenario.objects.filter(is_enabled=True)
 
 
@@ -105,12 +120,17 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         prompt_params = validated_request_data.get("target_risks_filter") or {}
 
         # 3. 创建 AnalyseReport 记录
+        generate_title = validated_request_data.get("generate_title", False)
+        title = _build_analyse_report_temp_title(scenario) if generate_title else validated_request_data["title"]
+        title_task_id = str(uuid.uuid4()) if generate_title else ""
         report = AnalyseReport.objects.create(
-            title=validated_request_data["title"],
+            title=title,
             report_type=validated_request_data["report_type"],
             scenario=scenario,
             analysis_scope=validated_request_data.get("analysis_scope", ""),
             status=AnalyseReportStatus.GENERATING,
+            title_generating=generate_title,
+            title_task_id=title_task_id,
             prompt_params=prompt_params,
             custom_prompt=validated_request_data.get("custom_prompt", ""),
         )
@@ -122,10 +142,17 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         report.task_id = task.id
         report.save(update_fields=["task_id"])
 
+        title_task_status = ""
+        if generate_title:
+            generate_analyse_report_title.apply_async(kwargs={"report_id": report.report_id}, task_id=title_task_id)
+            title_task_status = "PENDING"
+
         return {
             "report_id": report.report_id,
             "task_id": task.id,
             "status": "PENDING",
+            "title_task_id": title_task_id,
+            "title_task_status": title_task_status,
         }
 
 
@@ -149,7 +176,7 @@ class GetAnalyseReportTaskResult(AnalyseReportMeta):
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data["task_id"]
-        get_object_or_404(self.get_user_reports(), task_id=task_id)
+        get_object_or_404(self.get_user_reports().filter(Q(task_id=task_id) | Q(title_task_id=task_id)))
 
         async_result = AsyncResult(task_id)
         celery_status = async_result.status
@@ -227,6 +254,8 @@ class UpdateAnalyseReport(AnalyseReportMeta):
         report = self.get_user_report(report_id)
 
         if "title" in validated_request_data:
+            if report.title_generating:
+                raise drf_serializers.ValidationError({"title": gettext_lazy("标题生成中，暂不可编辑")})
             report.title = validated_request_data["title"]
         if "content" in validated_request_data:
             report.content = validated_request_data["content"]

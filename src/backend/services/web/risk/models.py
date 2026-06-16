@@ -858,6 +858,10 @@ class AnalyseReport(OperateRecordModel):
         db_index=True,
     )
     task_id = models.CharField(gettext_lazy("Celery任务ID"), max_length=255, blank=True, default="")
+    title_generating = models.BooleanField(gettext_lazy("AI标题生成中"), default=False, db_index=True)
+    title_task_id = models.CharField(
+        gettext_lazy("标题生成Celery任务ID"), max_length=255, blank=True, default="", db_index=True
+    )
     prompt_params = models.JSONField(
         gettext_lazy("Prompt参数"),
         default=dict,

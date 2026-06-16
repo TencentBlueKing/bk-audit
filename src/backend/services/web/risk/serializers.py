@@ -1614,7 +1614,10 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
         label=gettext_lazy("报告类型"),
         choices=AnalyseReportType.choices,
     )
-    title = serializers.CharField(label=gettext_lazy("报告标题"), max_length=255)
+    generate_title = serializers.BooleanField(label=gettext_lazy("是否生成标题"), required=False, default=False)
+    title = serializers.CharField(
+        label=gettext_lazy("报告标题"), max_length=255, required=False, allow_blank=True, default=""
+    )
     analysis_scope = serializers.CharField(
         label=gettext_lazy("分析范围描述"),
         required=False,
@@ -1644,6 +1647,12 @@ class GenerateAnalyseReportRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(serializer.errors)
         return value or {}
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("generate_title") and not attrs.get("title"):
+            raise serializers.ValidationError({"title": gettext_lazy("报告标题不能为空")})
+        return attrs
+
 
 class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
     """生成AI分析报告响应"""
@@ -1651,6 +1660,8 @@ class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
     task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
     status = serializers.CharField(label=gettext_lazy("任务状态"))
+    title_task_id = serializers.CharField(label=gettext_lazy("标题生成任务ID"), required=False, allow_blank=True)
+    title_task_status = serializers.CharField(label=gettext_lazy("标题生成任务状态"), required=False, allow_blank=True)
 
 
 class ListAnalyseReportRequestSerializer(serializers.Serializer):
@@ -1714,6 +1725,7 @@ class ListAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "status",
             "extra_info",
             "error_message",
+            "title_generating",
             "created_by",
             "created_at",
         ]
@@ -1752,6 +1764,8 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "status",
             "extra_info",
             "error_message",
+            "title_task_id",
+            "title_generating",
             "prompt_params",
             "custom_prompt",
             "created_by",

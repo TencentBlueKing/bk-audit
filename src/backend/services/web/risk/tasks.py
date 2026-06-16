@@ -37,6 +37,7 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 from rest_framework.settings import api_settings
 
+from api.constants import AIAgentCode
 from apps.exceptions import MetaConfigNotExistException
 from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
@@ -54,6 +55,7 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
+from services.web.risk.exceptions import AnalyseReportTitleGenerationError
 from services.web.risk.handlers import (
     BKMAlertSyncHandler,
     EventHandler,
@@ -764,6 +766,64 @@ def generate_analyse_report(self, report_id: int):
             logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
             raise
         raise self.retry(exc=exc, countdown=60)
+
+
+def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:
+    """清洗并截断 AI 返回的标题。"""
+    title = str(raw_title or "").strip()
+    title = title.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    title = title.strip("\"'“”‘’")
+    title = " ".join(title.split())
+    title = title[:max_length]
+    if not title:
+        raise AnalyseReportTitleGenerationError()
+    return title
+
+
+@celery_app.task(bind=True, queue="risk_render", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT, acks_late=True)
+def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
+    """异步生成 AI 分析报告标题"""
+    from services.web.risk.models import AnalyseReport
+
+    report = AnalyseReport.objects.get(report_id=report_id)
+    current_task_id = getattr(self.request, "id", "")
+    title_task_id = report.title_task_id
+    if not report.title_generating or not title_task_id:
+        return {"report_id": report_id, "skipped": True}
+    if title_task_id and current_task_id and title_task_id != current_task_id:
+        logger_celery.warning(
+            "[GenerateAnalyseReportTitle] Skip stale task report_id=%s task_id=%s",
+            report_id,
+            current_task_id,
+        )
+        return {"report_id": report_id, "skipped": True}
+
+    try:
+        input_text = f'用户自定义分析描述: "{report.custom_prompt or ""}"'
+        result = api.bk_plugins_ai_agent.chat_completion(
+            agent_code=AIAgentCode.ALS_TITLE_SUM,
+            user=report.created_by or "admin",
+            input=input_text,
+            chat_history=[],
+            execute_kwargs={"stream": False},
+        )
+        title = _normalize_analyse_report_ai_title(result, settings.ANALYSE_REPORT_AI_TITLE_MAX_LENGTH)
+        updated = AnalyseReport.objects.filter(
+            report_id=report_id,
+            title_generating=True,
+            title_task_id=title_task_id,
+        ).update(title=title, title_generating=False, updated_at=timezone.now())
+        if updated:
+            report.title = title
+            report.title_generating = False
+        return {"report_id": report_id, "title": report.title, "updated": updated}
+    except Exception:
+        AnalyseReport.objects.filter(
+            report_id=report_id,
+            title_generating=True,
+            title_task_id=title_task_id,
+        ).update(title_generating=False, updated_at=timezone.now())
+        raise
 
 
 @celery_app.task(queue="risk_render")
