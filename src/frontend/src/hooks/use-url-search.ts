@@ -31,6 +31,22 @@ export default function () {
     });
     return params;
   };
+  const parseUrlParamValue = (value: string, escapedField: string, key: string) => {
+    const trimmed = value.trim();
+    // 仅解析 JSON 对象/数组，避免纯数字字符串（如超长 risk_id）被 JSON.parse 成 Number 后精度丢失
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return value || '';
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === 'object' && parsed !== null && escapedField !== key) {
+        return [parsed];
+      }
+      return parsed;
+    } catch {
+      return value || '';
+    }
+  };
   const getSearchParamsPost = (escapedField: string) => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
@@ -46,25 +62,9 @@ export default function () {
 
       // 如果只有一个值，直接存储；如果有多个值，存储为数组
       if (values.length === 1) {
-        try {
-          // 尝试解析JSON，如果不是JSON则直接使用原值
-          // 判断 values[0] 是否为对象
-          if (typeof JSON.parse(values[0]) === 'object' && escapedField !== key) {
-            params[processedKey] = [JSON.parse(values[0])];
-          } else {
-            params[processedKey] = JSON.parse(values[0]);
-          }
-        } catch {
-          params[processedKey] = values[0] || '';
-        }
+        params[processedKey] = parseUrlParamValue(values[0], escapedField, key);
       } else {
-        params[processedKey] = values.map((value: any) => {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return value || '';
-          }
-        });
+        params[processedKey] = values.map((value: string) => parseUrlParamValue(value, escapedField, key));
       }
     });
     return params;
