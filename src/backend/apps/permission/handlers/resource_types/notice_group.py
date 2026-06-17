@@ -24,6 +24,7 @@ from iam import Resource
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.notice.models import NoticeGroup as NoticeGroupModel
+from apps.permission.constants import IAMV4Role
 from apps.permission.handlers.resource_types import ResourceTypeMeta
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
@@ -35,6 +36,8 @@ class NoticeGroup(ResourceTypeMeta):
     name = gettext("通知组")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "notice_group"}]
+    iam_v4_batch_scope = True
+    iam_v4_creator_role_id = IAMV4Role.SCENE_ADMIN
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -66,3 +69,18 @@ class NoticeGroup(ResourceTypeMeta):
             }
             resources.append([resource])
         return resources
+
+    @classmethod
+    def get_iam_v4_creator_authorization_resource(cls, resource: Resource) -> Resource:
+        scene_id = (
+            ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
+                binding__resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                binding__resource_id=str(resource.id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+        if not scene_id:
+            raise ValueError(f"resource {resource.type}:{resource.id} has no active scene binding")
+        return Resource(settings.BK_IAM_SYSTEM_ID, "scene", str(scene_id), {"name": str(scene_id)})
