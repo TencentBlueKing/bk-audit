@@ -33,7 +33,17 @@ from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Case, CharField, Count, IntegerField, Q, QuerySet, When
+from django.db.models import (
+    Case,
+    CharField,
+    Count,
+    IntegerField,
+    Max,
+    Q,
+    QuerySet,
+    Subquery,
+    When,
+)
 from django.db.models.functions import Cast
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -1610,5 +1620,9 @@ class ListNL2RiskFilterLog(RiskMeta):
         if end_time:
             queryset = queryset.filter(created_at__lte=end_time)
 
+        if validated_request_data.get("deduplicate", True):
+            latest_log_ids = queryset.order_by().values("query_hash").annotate(latest_id=Max("id")).values("latest_id")
+            queryset = queryset.filter(pk__in=Subquery(latest_log_ids))
+
         # 分页由框架 enable_paginate 自动处理
-        return queryset
+        return queryset.order_by("-id")
