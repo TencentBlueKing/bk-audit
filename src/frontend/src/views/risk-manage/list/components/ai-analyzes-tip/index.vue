@@ -27,6 +27,7 @@
     <div class="list-panel">
       <div class="action-toolbar">
         <div class="action-left">
+          <slot name="toolbar-before-analyze" />
           <bk-button
             v-bk-tooltips="analyzeTooltip"
             class="analyze-btn"
@@ -296,6 +297,11 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    :deep(.add-icon) {
+      margin-right: 4px;
+      font-size: 12px;
     }
 
     :deep(.analyze-btn) {
