@@ -30,6 +30,16 @@
       :condition-tags="conditionTags"
       :search-params="searchModel"
       :total="totalCount">
+      <template #toolbar-before-analyze>
+        <bk-button
+          theme="primary"
+          @click="handleAddRisk">
+          <audit-icon
+            class="add-icon"
+            type="add" />
+          {{ t('新增风险') }}
+        </bk-button>
+      </template>
       <template #toolbar-after-analyze>
         <bk-button
           outline
@@ -51,6 +61,9 @@
         @request-success="handleRequestSuccess" />
     </ai-analyzes>
   </div>
+  <add-risk
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -89,6 +102,7 @@
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
+  import addRisk from './add-risk/index.vue';
   import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
@@ -320,6 +334,7 @@
   });
 
   const listRef = ref();
+  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const totalCount = ref(0);
@@ -573,6 +588,14 @@
     listRef.value.fetchData(dataParams);
   };
 
+  const handleAddRisk = () => {
+    addRiskRef.value.show();
+  };
+
+  const handleAddRiskSuccess = () => {
+    searchBoxRef.value.clearValue();
+  };
+
   onMounted(() => {
     nextTick(() => {
       getEventFields();
@@ -635,23 +658,6 @@
 .risk-manage-list-page-wrap {
   position: relative;
   overflow-x: hidden;
-
-  .risk-manage-list {
-    position: relative;
-    z-index: 1;
-    padding: 5px 20px;
-    margin-top: 16px;
-    background-color: white;
-
-    .add-button {
-      padding-bottom: 5px;
-
-      .add-icon {
-        margin-right: 5px;
-        font-size: 12px;
-      }
-    }
-  }
 }
 
 .risk-label-status {
