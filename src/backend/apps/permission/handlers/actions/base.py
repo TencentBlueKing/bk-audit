@@ -40,6 +40,7 @@ class ActionMeta(Action):
         description: str = "",
         description_en: str = "",
         system_id: str = "",
+        iam_v4_no_resource: bool = False,
     ):
         super(ActionMeta, self).__init__(id)
         self.name = name
@@ -51,6 +52,7 @@ class ActionMeta(Action):
         self.description = description
         self.description_en = description_en
         self.system_id = system_id if system_id else settings.BK_IAM_SYSTEM_ID
+        self.iam_v4_no_resource = iam_v4_no_resource
 
     def to_json(self):
         return {

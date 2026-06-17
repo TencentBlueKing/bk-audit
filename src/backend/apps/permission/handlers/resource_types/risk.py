@@ -33,6 +33,7 @@ class Risk(ResourceTypeMeta):
     name = gettext("风险")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "risk"}]
+    iam_v4_auth_resource_type = "scene"
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:

@@ -22,9 +22,7 @@ from typing import List
 from apps.audit.resources import AuditMixinResource
 from apps.meta.models import SensitiveObject
 from apps.meta.utils.tools import is_system_admin
-from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
-from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from services.web.query.exceptions import LogExportTaskNoPermission
 from services.web.query.models import LogExportTask
@@ -39,32 +37,33 @@ class QueryBaseResource(AuditMixinResource, abc.ABC):
 
 
 class SearchDataParser:
+    @staticmethod
+    def mark_sensitive_permissions(sensitive_objs: List[SensitiveObject], username: str) -> None:
+        """Mark sensitive objects; PermissionService hides V3 resource vs V4 no-resource details."""
+        if not username:
+            for sensitive_obj in sensitive_objs:
+                setattr(sensitive_obj, "_has_permission", False)
+            return
+
+        permissions = PermissionService(username=username).get_sensitive_object_permissions(
+            [sensitive_obj.id for sensitive_obj in sensitive_objs]
+        )
+        for sensitive_obj in sensitive_objs:
+            setattr(sensitive_obj, "_has_permission", permissions.get(str(sensitive_obj.id), False))
+
     def parse_data(self, data: List[dict]) -> list:
         # 获取敏感字段列表
         private_sensitive_objs = list(SensitiveObject._objects.filter(is_private=True))
         sensitive_objs = list(SensitiveObject.objects.all())
         # 获取用户信息，用于判断敏感权限
         if sensitive_objs:
-            username = get_request_username()
-            if username:
-                permissions = Permission(username).batch_is_allowed(
-                    actions=[ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO],
-                    resources=[[ResourceEnum.SENSITIVE_OBJECT.create_instance(so.id)] for so in sensitive_objs],
-                )
-            else:
-                permissions = {so.id: {ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO: False} for so in sensitive_objs}
-            for so in sensitive_objs:
-                setattr(
-                    so,
-                    "_has_permission",
-                    permissions.get(so.id, {}).get(ActionEnum.ACCESS_AUDIT_SENSITIVE_INFO.id, False),
-                )
+            self.mark_sensitive_permissions(sensitive_objs, get_request_username())
         # parse
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
 
 
 class SearchExportTaskBaseResource(QueryBaseResource, abc.ABC):
-    def validate_task_permission(self, task: LogExportTask):
+    def validate_task_permission(self, task: LogExportTask) -> None:
         username = self.get_request_username()
         if not (is_system_admin(username) or username == task.created_by):
             raise LogExportTaskNoPermission()

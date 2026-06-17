@@ -73,7 +73,10 @@ if not BK_VISION_API_URL:
     BK_VISION_API_URL = get_endpoint(settings.BK_VISION_API_NAME, APIProvider.APIGW, stag="stag-new")
 
 # BK IAM V4
-BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="dev")
+# 业务代码默认使用 IAM V4 预发布网关；本地 dev e2e 可临时覆盖 BKAPP_BK_IAM_V4_API_URL。
+BK_IAM_V4_API_URL = settings.BK_IAM_V4_API_URL or get_endpoint(
+    settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="stage"
+)
 
 # AI Audit Report (智能体插件)
 AI_AUDIT_REPORT_API_URL = settings.AI_AUDIT_REPORT_API_URL or get_endpoint(
