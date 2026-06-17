@@ -52,6 +52,7 @@
         :columns="tableColumns"
         :data-source="dataSource"
         need-empty-search-tip
+        :row-class-name="getRowClassName"
         row-key="risk_id"
         :search-params="searchModel"
         secondary-sort-field="-event_time"
@@ -336,6 +337,7 @@
 
   const listRef = ref();
   const addRiskRef = ref();
+  const newAddedRiskIds = ref<string[]>([]);
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const totalCount = ref(0);
@@ -530,6 +532,7 @@
   const handleSearchChange = (value: Record<string, any>, exValue: Record<string, any>, isClear?: boolean) => {
     if (!isClear) {
       sessionStorage.removeItem('addEventRiskIds');
+      newAddedRiskIds.value = [];
     }
     searchModel.value = {
       ...value,
@@ -594,7 +597,20 @@
   };
 
   const handleAddRiskSuccess = () => {
+    const riskIds = sessionStorage.getItem('addEventRiskIds');
+    if (riskIds) {
+      newAddedRiskIds.value = JSON.parse(riskIds).map((id: string | number) => String(id));
+    }
     searchBoxRef.value.clearValue();
+    fetchList();
+  };
+
+  const getRowClassName = (row: Record<string, any>) => {
+    const rowData = row?.row || row;
+    if (newAddedRiskIds.value.includes(String(rowData?.risk_id))) {
+      return 'new-row';
+    }
+    return '';
   };
 
   onMounted(() => {
@@ -603,6 +619,7 @@
       fetchRiskScenes();
       fetchSceneAll();
       sessionStorage.removeItem('addEventRiskIds');
+      newAddedRiskIds.value = [];
       // 初始获取conditionTags
       updateConditionTags();
     });
