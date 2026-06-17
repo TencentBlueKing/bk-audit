@@ -448,10 +448,38 @@
     return renderPlainTextNode(displayValues);
   };
 
-  const buildParseSuccessMessage = async () => {
-    const recognizedTags = getConditionTags()
-      .filter(tag => tag.fieldName !== 'datetime')
-      .filter(tag => !_.isNil(tag.value) && tag.value !== '' && (!Array.isArray(tag.value) || tag.value.length > 0));
+  const getRecognizedTagsFromFilterConditions = (filterConditions: Record<string, any>) => (
+    Object.entries(fieldTransformMap).reduce((result, [field, transform]) => {
+      if (!Object.prototype.hasOwnProperty.call(filterConditions, field)) {
+        return result;
+      }
+      const config = props.fieldConfig[field];
+      if (!config || config.type === 'datetimerange') {
+        return result;
+      }
+
+      const value = filterConditions[field];
+      const hasValue = transform === 'bool-array'
+        ? value !== undefined
+        : value !== undefined && value !== null && value !== '';
+      if (!hasValue) {
+        return result;
+      }
+
+      result.push({
+        fieldName: field,
+        label: config.label,
+        value: transformFieldValue(value, transform),
+        type: config.type,
+        config,
+        removable: true,
+      });
+      return result;
+    }, [] as ReturnType<typeof getConditionTags>)
+  );
+
+  const buildParseSuccessMessage = async (filterConditions: Record<string, any>) => {
+    const recognizedTags = getRecognizedTagsFromFilterConditions(filterConditions);
     if (!recognizedTags.length) {
       return t('已识别到搜索条件');
     }
@@ -524,69 +552,75 @@
     }
   };
 
+  const createDefaultDatetime = () => ([
+    dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+    dayjs().format('YYYY-MM-DD HH:mm:ss'),
+  ]);
+
+  const createDefaultDatetimeOrigin = () => ([
+    'now-6M',
+    'now',
+  ]);
+
+  const normalizeEventFilterValue = (operator: string, value: any) => {
+    const isInOperator = operator === 'IN' || operator === 'NOT IN';
+    if (isInOperator && typeof value === 'string') {
+      return value.split(',');
+    }
+    return value;
+  };
+
+  const syncEventFilterState = () => {
+    selectedVal.value = selectedItemList.value.map(item => item.id);
+    selectedItemListOperator.value = selectedItemList.value.map(item => ({
+      id: item.id,
+      operator: item.operator,
+    }));
+  };
+
   const applyFilterConditions = (filterConditions: Record<string, any>) => {
-    // 默认时间范围（近6个月）
-    const defaultDatetime = [
-      dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    ];
-    const defaultDatetimeOrigin = ['now-6M', 'now'];
+    const defaultDatetime = createDefaultDatetime();
+    const defaultDatetimeOrigin = createDefaultDatetimeOrigin();
+    const nextModel = _.cloneDeep(searchModel.value);
 
-    const newModel: Record<string, any> = {
-      datetime: defaultDatetime,
-      datetime_origin: defaultDatetimeOrigin,
-    };
+    if (!Array.isArray(nextModel.datetime) || nextModel.datetime.length < 2) {
+      nextModel.datetime = defaultDatetime;
+    }
+    if (!Array.isArray(nextModel.datetime_origin) || nextModel.datetime_origin.length < 2) {
+      nextModel.datetime_origin = defaultDatetimeOrigin;
+    }
 
-    // 处理时间范围：仅当 AI 明确返回了时间字段时才覆盖默认值
+    // 仅覆盖 AI 本次明确识别出的时间条件，未识别则保留当前条件
     if (filterConditions.start_time || filterConditions.end_time) {
+      const currentDatetime = Array.isArray(nextModel.datetime) && nextModel.datetime.length >= 2
+        ? nextModel.datetime
+        : defaultDatetime;
       const startTime = filterConditions.start_time
         ? dayjs(filterConditions.start_time).format('YYYY-MM-DD HH:mm:ss')
-        : defaultDatetime[0];
+        : currentDatetime[0];
       const endTime = filterConditions.end_time
         ? dayjs(filterConditions.end_time).format('YYYY-MM-DD HH:mm:ss')
-        : defaultDatetime[1];
-      newModel.datetime = [startTime, endTime];
-      newModel.datetime_origin = [startTime, endTime];
+        : currentDatetime[1];
+      nextModel.datetime = [startTime, endTime];
+      nextModel.datetime_origin = [startTime, endTime];
     }
 
-    // 批量处理映射表中的字段
+    // 仅覆盖本次命中的字段，未命中的保留现有标签
     Object.entries(fieldTransformMap).forEach(([field, transform]) => {
-      const value = filterConditions[field];
-      // has_report 为布尔值，需要用 undefined 判断；其他字段用 truthiness 判断
-      const hasValue = transform === 'bool-array' ? value !== undefined : Boolean(value);
-      if (hasValue) {
-        newModel[field] = transformFieldValue(value, transform);
+      if (!Object.prototype.hasOwnProperty.call(filterConditions, field)) {
+        return;
       }
+      const value = filterConditions[field];
+      const hasValue = transform === 'bool-array'
+        ? value !== undefined
+        : value !== undefined && value !== null && value !== '';
+      if (!hasValue) {
+        return;
+      }
+      nextModel[field] = transformFieldValue(value, transform);
     });
 
-    searchModel.value = newModel;
-
-    // 处理事件字段筛选 event_filters
-    if (Array.isArray(filterConditions.event_filters)) {
-      selectedItemList.value = filterConditions.event_filters.map((ef: any) => ({
-        id: `${ef.field}:${ef.display_name}`,
-        field_name: ef.field,
-        display_name: ef.display_name,
-        operator: ef.operator,
-        value: (() => {
-          const isInOperator = ef.operator === 'IN' || ef.operator === 'NOT IN';
-          if (isInOperator && typeof ef.value === 'string') {
-            return ef.value.split(',');
-          }
-          return ef.value;
-        })(),
-      }));
-      selectedVal.value = selectedItemList.value.map(item => item.id);
-      selectedItemListOperator.value = selectedItemList.value.map(item => ({
-        id: item.id,
-        operator: item.operator,
-      }));
-    } else {
-      // API 未返回 event_filters 时，清空上次的事件字段条件
-      selectedItemList.value = [];
-      selectedVal.value = [];
-      selectedItemListOperator.value = [];
-    }
+    // 处理排序条件
     if (Array.isArray(filterConditions.sort) && filterConditions.sort.length > 0) {
       const needSecondarySortFields = ['risk_level', 'last_operate_time', 'display_status'];
       const sortArray: string[] = [...filterConditions.sort];
@@ -597,7 +631,36 @@
         && !sortArray.includes('-event_time')) {
         sortArray.push('-event_time');
       }
-      newModel.sort = sortArray;
+      nextModel.sort = sortArray;
+    }
+
+    searchModel.value = nextModel;
+
+    // 事件字段按字段增量合并：已存在则替换操作符和值，不存在则追加
+    if (Array.isArray(filterConditions.event_filters) && filterConditions.event_filters.length > 0) {
+      const mergedEventFilters = [...selectedItemList.value];
+      filterConditions.event_filters.forEach((ef: any) => {
+        const id = `${ef.field}:${ef.display_name}`;
+        const nextItem = {
+          id,
+          field_name: ef.field,
+          display_name: ef.display_name,
+          operator: ef.operator,
+          value: normalizeEventFilterValue(ef.operator, ef.value),
+        };
+        const matchIndex = mergedEventFilters.findIndex(item => item.id === id);
+        if (matchIndex > -1) {
+          mergedEventFilters.splice(matchIndex, 1, {
+            ...mergedEventFilters[matchIndex],
+            operator: nextItem.operator,
+            value: nextItem.value,
+          });
+          return;
+        }
+        mergedEventFilters.push(nextItem);
+      });
+      selectedItemList.value = mergedEventFilters;
+      syncEventFilterState();
     }
   };
 
@@ -656,7 +719,7 @@
     if (!_.isEmpty(filterConditions)) {
       showParseWarning.value = false;
       applyFilterConditions(filterConditions);
-      parseSuccessMessage.value = await buildParseSuccessMessage();
+      parseSuccessMessage.value = await buildParseSuccessMessage(filterConditions);
 
       // 通知父组件字段变化（用于获取事件字段）
       emit('modelValueWatch', searchModel.value);
@@ -699,6 +762,7 @@
     const newModel = { ...searchModel.value };
     delete newModel[fieldName];
     searchModel.value = newModel;
+    emit('modelValueWatch', searchModel.value);
     handleSubmit();
   };
   // 标签开始编辑时记录快照
@@ -896,6 +960,7 @@
     nlInputRef.value?.clear();
     // 清空 URL 上的搜索参数
     replaceSearchParams({});
+    emit('modelValueWatch', searchModel.value);
     handleSubmit(true);
   };
 
@@ -946,6 +1011,7 @@
         operator: item.operator,
       }));
     }
+    emit('modelValueWatch', searchModel.value);
     handleSubmit();
   });
 
