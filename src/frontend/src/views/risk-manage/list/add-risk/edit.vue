@@ -44,7 +44,7 @@
                   filterable
                   @select="handleSelect">
                   <bk-option
-                    v-for="item in strategyList.results"
+                    v-for="item in strategyResults"
                     :id="item.strategy_id"
                     :key="item.strategy_id"
                     :disabled="item.status !== 'running'"
@@ -172,9 +172,10 @@
             </div>
             <div class="table-value">
               <field-com
+                :key="`${item.field_name}-${item.typeValue}`"
                 ref="fieldComRef"
+                :initial-value="item.valueText"
                 :type="item.typeValue"
-                :value="item.valueText"
                 @update="(val: any) => handlerUpdate(val, item)" />
             </div>
           </div>
@@ -190,15 +191,16 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import useRequest from '@hooks/use-request';
-
   import CardPartVue from '../../../scene-config/tool-manege/create-tool/components/card-part.vue';
 
   import fieldCom from './field-components.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import { convertGMTTimeToStandard, convertToTimestamp } from '@/utils/assist/timestamp-conversion';
+
+  interface Props {
+    useAllStrategyList?: boolean;
+  }
 
   interface Exposes{
     getEditData: () => void;
@@ -209,6 +211,10 @@
     (e: 'validateSuccess'): void
     (e: 'getselectedRiskValue', data: any): void
   }
+
+  const props = withDefaults(defineProps<Props>(), {
+    useAllStrategyList: false,
+  });
 
   const emits = defineEmits<Emits>();
 
@@ -223,11 +229,9 @@
   const selectedValue = ref('');
   const eventList = ref<Array<Record<string, any>>>([]);
   const selectedRiskValue = ref();
-  const handleSelect = (value: string) => {
-    selectedValue.value = value;
-    // eslint-disable-next-line max-len
-    selectedRiskValue.value = strategyList.value.results.find((item: Record<string, any>) => item.strategy_id === value);
-    eventList.value = selectedRiskValue.value?.event_data_field_configs.map((item: Record<string, any>) => {
+
+  const buildEventList = (strategy: Record<string, any>) => {
+    eventList.value = strategy?.event_data_field_configs?.map((item: Record<string, any>) => {
       let typeValueDefault = 'input';
       if (item.field_type === 'string') {
         typeValueDefault = 'input';
@@ -245,9 +249,30 @@
         ...item,
         typeValue: typeValueDefault,
         value: '',
+        valueText: '',
         fieldTypeList: comTypeList(item.field_type),
       };
-    }).filter((e: Record<string, any>) => e.is_show);
+    }).filter((e: Record<string, any>) => e.is_show) || [];
+  };
+
+  const applySelectedStrategy = (strategy: Record<string, any> | undefined) => {
+    selectedRiskValue.value = strategy;
+    buildEventList(strategy || {});
+  };
+
+  const handleSelect = (value: string) => {
+    selectedValue.value = value;
+    if (props.useAllStrategyList) {
+      StrategyManageService.fetchStrategyInfo({ strategy_id: Number(value) }).then((strategy) => {
+        if (strategy) {
+          applySelectedStrategy(strategy);
+        }
+      });
+      return;
+    }
+    const matchedStrategy = strategyResults.value
+      .find((item: Record<string, any>) => String(item.strategy_id) === String(value));
+    applySelectedStrategy(matchedStrategy);
   };
   const typeList = ref([
     {
@@ -290,44 +315,44 @@
     return typeList.value;
   };
 
-  // 策略列表
-  const {
-    data: strategyList,
-    run: fetchStrategyList,
-  } = useRequest(StrategyManageService.fetchStrategyList, {
-    defaultParams: {
+  const strategyResults = ref<Array<Record<string, any>>>([]);
+
+  const loadStrategyList = async () => {
+    if (props.useAllStrategyList) {
+      const data = await StrategyManageService.fetchAllStrategyList({});
+      strategyResults.value = (data || []).map((item: { label: string; value: number; status?: string }) => ({
+        strategy_id: item.value,
+        strategy_name: item.label,
+        status: item.status || 'running',
+      }));
+      return;
+    }
+    const data = await StrategyManageService.fetchStrategyList({
       strategy_type: 'rule',
-      scene_id: getSceneSystemParams().scope_id,
-      scene_type: getSceneSystemParams().scope_type,
-    },
-    defaultValue: {
-      results: [],
-      page: 1,
-      num_pages: 1,
-      total: 1,
-    },
-    manual: true,
-  });
+    });
+    strategyResults.value = data?.results || [];
+  };
 
   const handlerUpdate = (value: any, item: any) => {
-    // 当 long double float int 类型时，需要转换时间格式
     let valueText: string | number | null = null;
     if ((item.field_type === 'long' || item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int')
       && item.typeValue === 'date-picker') {
       valueText = convertToTimestamp(value);
     } else if (item.typeValue === 'user-selector') {
       valueText = value.join(',');
+    } else if (item.typeValue === 'number-input' && value !== '' && value !== null && value !== undefined) {
+      valueText = Number(value);
     } else {
       valueText = value;
     }
-    eventList.value.forEach((eventItem: any) => {
-      if (eventItem.field_name === item.field_name  && eventItem.display_name === item.display_name) {
-        // eslint-disable-next-line no-param-reassign
-        eventItem.valueText = value;
-        // eslint-disable-next-line no-param-reassign
-        eventItem.value = valueText;
-      }
-    });
+    const target = eventList.value.find((eventItem: any) => (
+      eventItem.field_name === item.field_name && eventItem.display_name === item.display_name
+    ));
+    if (!target) {
+      return;
+    }
+    target.valueText = value;
+    target.value = valueText;
   };
 
   // 表单验证
@@ -338,6 +363,7 @@
   };
 
   onMounted(() => {
+    loadStrategyList();
   });
 
   defineExpose<Exposes>({
@@ -355,8 +381,17 @@
         selectedValue.value = data.formData.strategy_id;
         formData.value = data.formData;
         eventList.value = data.eventData;
-        fetchStrategyList().then((res) => {
-          selectedRiskValue.value = res.results.find((item: any) => item.strategy_id === data.formData.strategy_id);
+        if (props.useAllStrategyList) {
+          loadStrategyList().then(() => StrategyManageService.fetchStrategyInfo({
+            strategy_id: Number(data.formData.strategy_id),
+          }).then((strategy) => {
+            selectedRiskValue.value = strategy;
+          }));
+          return;
+        }
+        loadStrategyList().then(() => {
+          selectedRiskValue.value = strategyResults.value
+            .find((item: any) => item.strategy_id === data.formData.strategy_id);
         });
       });
     },

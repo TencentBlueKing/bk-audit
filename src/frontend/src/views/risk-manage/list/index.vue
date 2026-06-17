@@ -63,6 +63,7 @@
   </div>
   <add-risk
     ref="addRiskRef"
+    use-all-strategy-list
     @add-success="handleAddRiskSuccess" />
 </template>
 

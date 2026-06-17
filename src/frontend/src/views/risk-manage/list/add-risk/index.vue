@@ -27,6 +27,7 @@
     <edit
       v-if="isEdit"
       ref="editRef"
+      :use-all-strategy-list="useAllStrategyList"
       @validate-success="handlePreviewSuccess" />
     <preview
       v-else
@@ -80,6 +81,14 @@
   interface Emits {
     (e: 'addSuccess'): void
   }
+
+  interface Props {
+    useAllStrategyList?: boolean;
+  }
+
+  withDefaults(defineProps<Props>(), {
+    useAllStrategyList: false,
+  });
 
   const emits = defineEmits<Emits>();
   const isShow = ref(false);

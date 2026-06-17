@@ -27,7 +27,6 @@
     <bk-input
       v-if="type === 'number-input'"
       v-model="numberValue"
-      :precision="999"
       style="width: 248px;height: 40px"
       type="number"
       @update:modelValue="handleChange('number-input')" />
@@ -59,13 +58,13 @@
 
 
 <script setup lang='ts'>
-  import { nextTick, onMounted, ref } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
 
   import { convertGMTTimeToStandard } from '@/utils/assist/timestamp-conversion';
 
   interface Props {
     type: string;
-    value: string | number | string[];
+    initialValue?: string | number | string[];
   }
 
   interface Emits {
@@ -76,9 +75,32 @@
   const emits = defineEmits<Emits>();
   const inputValue = ref('');
   const textareaValue = ref('');
-  const numberValue = ref();
+  const numberValue = ref<string | number>('');
   const userValue = ref<string[]>([]);
   const timeValue = ref<string>('');
+
+  const hasValue = (val: unknown) => val !== '' && val !== undefined && val !== null;
+
+  const syncValueFromProps = () => {
+    if (!hasValue(props.initialValue)) {
+      return;
+    }
+    if (props.type === 'textarea' && typeof props.initialValue === 'string') {
+      textareaValue.value = props.initialValue;
+    }
+    if (props.type === 'number-input') {
+      numberValue.value = props.initialValue as string | number;
+    }
+    if (props.type === 'user-selector' && Array.isArray(props.initialValue)) {
+      userValue.value = props.initialValue;
+    }
+    if (props.type === 'date-picker' && typeof props.initialValue === 'string') {
+      timeValue.value = props.initialValue;
+    }
+    if (props.type === 'input' && (typeof props.initialValue === 'string' || typeof props.initialValue === 'number')) {
+      inputValue.value = String(props.initialValue);
+    }
+  };
 
   const handleChange = (type: string) => {
     if (type === 'textarea') {
@@ -100,23 +122,13 @@
 
   onMounted(() => {
     nextTick(() => {
-      if (props.value !== '') {
-        if (props.type === 'textarea' && typeof props.value === 'string') {
-          textareaValue.value = props.value;
-        }
-        if (props.type === 'number-input' && typeof props.value === 'number') {
-          numberValue.value = props.value;
-        }
-        if (props.type === 'user-selector' && Array.isArray(props.value)) {
-          userValue.value = props.value;
-        }
-        if (props.type === 'date-picker' && typeof props.value === 'string') {
-          timeValue.value = props.value;
-        }
-        if (props.type === 'input' && typeof props.value === 'string') {
-          inputValue.value = props.value;
-        }
-      }
+      syncValueFromProps();
+    });
+  });
+
+  watch(() => props.type, () => {
+    nextTick(() => {
+      syncValueFromProps();
     });
   });
 
