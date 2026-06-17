@@ -1,6 +1,6 @@
 <!--
   TencentBlueKing is pleased to support the open source community by making
-  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  BlueKing - Audit Center available.
   Copyright (C) 2023 THL A29 Limited,
   a Tencent company. All rights reserved.
   Licensed under the MIT License (the "License");
@@ -60,8 +60,14 @@
             {{ t('推荐示例') }}
           </div>
           <div
-            v-for="item in recommendationList"
+            v-for="(item, index) in recommendationList"
             :key="item"
+            :ref="(el) => setPanelItemRef(getPanelItemKey('recommendation', index), el as HTMLElement | null)"
+            v-bk-tooltips="{
+              content: item,
+              disabled: !panelItemOverflowMap[getPanelItemKey('recommendation', index)],
+              extCls: 'nl-tag-tooltip-wrap',
+            }"
             class="nl-input-panel-item"
             @mousedown.prevent="handleSelectPanelItem(item)">
             {{ item }}
@@ -74,8 +80,14 @@
           </div>
           <template v-if="historyList.length">
             <div
-              v-for="item in historyList"
+              v-for="(item, index) in historyList"
               :key="item.id"
+              :ref="(el) => setPanelItemRef(getPanelItemKey('history', index), el as HTMLElement | null)"
+              v-bk-tooltips="{
+                content: item.query,
+                disabled: !panelItemOverflowMap[getPanelItemKey('history', index)],
+                extCls: 'nl-tag-tooltip-wrap',
+              }"
               class="nl-input-panel-item is-history"
               @mousedown.prevent="handleSelectPanelItem(item.query)">
               {{ item.query }}
@@ -91,9 +103,11 @@
     </div>
   </div>
 </template>
+
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -112,6 +126,7 @@
     historyRefreshKey?: number;
     loading?: boolean;
   }
+
   interface Emits {
     (e: 'submit', value: string): void;
   }
@@ -130,14 +145,17 @@
   const isPanelVisible = ref(false);
   const hasLoadedHistory = ref(false);
   const historyList = ref<INL2RiskFilterLogItem[]>([]);
+  const panelItemRefs = ref<Record<string, HTMLElement | null>>({});
+  const panelItemOverflowMap = ref<Record<string, boolean>>({});
+  let resizeObserver: ResizeObserver | null = null;
 
   const recommendationList = computed(() => ([
-    t('责任人为 admin 的风险单'),
-    t('风险等级为 高 的风险单'),
-    t('风险命中策略为 虚拟资源管控 的风险单'),
-    t('风险ID为 20260604105353041234 的风险单'),
-    t('风险标题包含 虚拟资源 的风险单'),
-    t('事件字段云区域ID为 0 的风险单'),
+    t('责任人为「替换为实际责任人」的风险单'),
+    t('风险等级为「替换为实际风险等级」的风险单'),
+    t('风险命中策略为「替换为实际策略名称」的风险单'),
+    t('风险ID为「替换为实际风险ID」的风险单'),
+    t('风险标题包含「替换为实际风险标题」的风险单'),
+    t('事件字段云区域ID为「替换为实际云区域ID」的风险单'),
   ]));
 
   const {
@@ -161,6 +179,26 @@
     page_size: 6,
     status: 'success',
   });
+
+  const getPanelItemKey = (type: 'recommendation' | 'history', index: number) => `${type}-${index}`;
+
+  const setPanelItemRef = (key: string, el: HTMLElement | null) => {
+    if (el) {
+      panelItemRefs.value[key] = el;
+      return;
+    }
+    delete panelItemRefs.value[key];
+  };
+
+  const checkPanelItemOverflow = () => {
+    const result: Record<string, boolean> = {};
+    Object.entries(panelItemRefs.value).forEach(([key, el]) => {
+      if (el) {
+        result[key] = el.scrollWidth > el.clientWidth;
+      }
+    });
+    panelItemOverflowMap.value = result;
+  };
 
   const openPanel = () => {
     isPanelVisible.value = true;
@@ -187,7 +225,6 @@
     inputRef.value?.focus();
   };
 
-  // 提交搜索
   const handleSubmit = () => {
     if (isComposing.value || props.loading) return;
     const value = inputValue.value.trim();
@@ -196,7 +233,6 @@
     emit('submit', value);
   };
 
-  // 清空输入
   const handleClear = () => {
     inputValue.value = '';
     inputRef.value?.focus();
@@ -214,15 +250,42 @@
     loadHistory();
   });
 
+  watch(historyList, () => {
+    nextTick(() => {
+      checkPanelItemOverflow();
+    });
+  });
+
+  watch(recommendationList, () => {
+    nextTick(() => {
+      checkPanelItemOverflow();
+    });
+  });
+
+  watch(isPanelVisible, (visible) => {
+    if (!visible) {
+      return;
+    }
+    nextTick(() => {
+      checkPanelItemOverflow();
+    });
+  });
+
   onMounted(() => {
+    resizeObserver = new ResizeObserver(() => {
+      checkPanelItemOverflow();
+    });
+    if (rootRef.value) {
+      resizeObserver.observe(rootRef.value);
+    }
     document.addEventListener('click', handleDocumentClick);
   });
 
   onBeforeUnmount(() => {
+    resizeObserver?.disconnect();
     document.removeEventListener('click', handleDocumentClick);
   });
 
-  // 对外暴露
   defineExpose({
     clear() {
       inputValue.value = '';
@@ -236,6 +299,7 @@
     },
   });
 </script>
+
 <style lang="postcss">
   @keyframes rotate {
     0% { transform: rotate(0deg); }
@@ -376,8 +440,6 @@
       font-size: 12px;
       font-weight: 500;
       line-height: 20px;
-
-      /* color: #c7c8cf; */
       color: #979ba5;
     }
 
