@@ -71,6 +71,7 @@
 
   export interface AnalyzeWatchPayload {
     title: string;
+    reportId: string | number;
   }
 
   export interface HistoryReportItem {
@@ -118,7 +119,7 @@
   const searchValue = ref<SearchKey[]>([]);
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const originalQuery = ref<Record<string, any>>({});
-  const pendingReportTitles = ref<string[]>([]);
+  const pendingReportIds = ref<Array<string | number>>([]);
   const listPollingTimer = ref<ReturnType<typeof setTimeout> | null>(null);
   const LIST_POLL_INTERVAL = 3000;
 
@@ -128,23 +129,30 @@
 
   const hasGeneratingInList = () => getListData().some(row => String(row.status || '').toLowerCase() === 'generating' || row.title_generating);
 
-  const shouldPollList = () => show.value && (hasGeneratingInList() || pendingReportTitles.value.length > 0);
+  const shouldPollList = () => show.value && (hasGeneratingInList() || pendingReportIds.value.length > 0);
+
+  const isSameReportId = (left: string | number, right: string | number) => String(left) === String(right);
 
   const resolveRowData = (row: Record<string, any>) => (row?.row || row) as HistoryReportItem;
 
   const getRowClassName = (row: Record<string, any>) => {
     const rowData = resolveRowData(row);
-    if (String(rowData.status || '').toLowerCase() !== 'generating') {
+    const reportId = getRowReportId(rowData);
+    if (!reportId) {
       return '';
     }
-    if (pendingReportTitles.value.includes(rowData.title)) {
+    if (!pendingReportIds.value.some(id => isSameReportId(id, reportId))) {
+      return '';
+    }
+    const status = String(rowData.status || '').toLowerCase();
+    if (status === 'generating' || rowData.title_generating) {
       return 'new-row';
     }
     return '';
   };
 
-  const removePendingTitle = (title: string) => {
-    pendingReportTitles.value = pendingReportTitles.value.filter(item => item !== title);
+  const removePendingReportId = (reportId: string | number) => {
+    pendingReportIds.value = pendingReportIds.value.filter(id => !isSameReportId(id, reportId));
   };
 
   const stopListPolling = () => {
@@ -185,8 +193,8 @@
   const checkPendingReports = () => {
     const listData = getListData();
 
-    [...pendingReportTitles.value].forEach((title) => {
-      const matched = listData.find(item => item.title === title);
+    [...pendingReportIds.value].forEach((reportId) => {
+      const matched = listData.find(item => isSameReportId(getRowReportId(item), reportId));
       if (!matched) {
         return;
       }
@@ -196,12 +204,12 @@
         return;
       }
 
-      removePendingTitle(title);
+      removePendingReportId(reportId);
       if (status === 'success') {
-        const reportId = getRowReportId(matched);
-        if (reportId) {
+        const matchedReportId = getRowReportId(matched);
+        if (matchedReportId) {
           getAiAnalyseReportDetail({
-            report_id: reportId,
+            report_id: matchedReportId,
           });
         }
       }
@@ -214,13 +222,17 @@
   };
 
   const beginAnalyzeWatch = (payload: AnalyzeWatchPayload) => {
-    if (!pendingReportTitles.value.includes(payload.title)) {
-      pendingReportTitles.value = [...pendingReportTitles.value, payload.title];
+    if (!payload.reportId) {
+      return;
     }
+    if (!pendingReportIds.value.some(id => isSameReportId(id, payload.reportId))) {
+      pendingReportIds.value = [...pendingReportIds.value, payload.reportId];
+    }
+    scheduleNextListPoll();
   };
 
-  const markAnalyzeFailed = (title: string) => {
-    removePendingTitle(title);
+  const markAnalyzeFailed = (reportId: string | number) => {
+    removePendingReportId(reportId);
     scheduleNextListPoll();
   };
 

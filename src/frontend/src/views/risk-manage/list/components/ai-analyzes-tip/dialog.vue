@@ -88,7 +88,7 @@
             <bk-button
               class="custom-analysis-btn"
               theme="primary"
-              @click="handleCustomReport">
+              @click.stop="handleCustomReport">
               {{ t('分析') }}
             </bk-button>
           </div>
@@ -130,6 +130,7 @@
 
   export interface AnalyzeStartPayload {
     title: string;
+    reportId: string | number;
   }
 
   const props = withDefaults(
@@ -256,19 +257,26 @@
   // 提交分析报告请求
   const submitAnalyseReport = (params: Record<string, any>) => {
     const analysisScope = JSON.stringify(buildAnalysisScope());
-    const startPayload: AnalyzeStartPayload = {
-      title: params.title,
-    };
     isShow.value = false;
-    emit('analyze-started', startPayload);
     getAiAnalyseReport({
       ...params,
       analysis_scope: analysisScope,
       target_risks_filter: props.searchParams,
       generate_title: params.report_type === 'custom',
-    }).catch(() => {
-      emit('analyze-failed', { title: params.title });
-    });
+    }).then((data) => {
+      const reportId = data?.report_id ?? data?.id;
+      if (!reportId) {
+        emit('analyze-failed', { title: params.title });
+        return;
+      }
+      emit('analyze-started', {
+        title: params.title,
+        reportId,
+      });
+    })
+      .catch(() => {
+        emit('analyze-failed', { title: params.title });
+      });
   };
 
   const getReportDateSuffix = () => dayjs().format('YYYYMMDD');
