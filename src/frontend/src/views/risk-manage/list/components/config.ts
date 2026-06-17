@@ -95,7 +95,7 @@ export default {
     label: '处理状态',
     type: 'select',
     required: false,
-    service: (params: Record<string, any>) => RiskManageService.fetchRiskStatusCommon(params)
+    service: () => RiskManageService.fetchRiskStatusCommon()
       .then(data => sortRiskStatusOptions(data)),
     filterList: ['new'],
   },
