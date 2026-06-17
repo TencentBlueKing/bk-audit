@@ -224,8 +224,10 @@
     });
   };
 
-  const handleAnalyzeFailed = (payload: { title: string }) => {
-    historyDrawerRef.value?.markAnalyzeFailed(payload.title);
+  const handleAnalyzeFailed = (payload: { title: string; reportId?: string | number }) => {
+    if (payload.reportId) {
+      historyDrawerRef.value?.markAnalyzeFailed(payload.reportId);
+    }
   };
 
   const handleAnalyzeFinished = (data: string) => {
