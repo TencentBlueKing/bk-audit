@@ -50,9 +50,9 @@ class TestSearchLogSystemSearchPermission(TestCase):
         "apps.meta.permissions.SearchLogPermission.has_system_search_permission",
         mock.Mock(return_value=False),
     )
-    @mock.patch("apps.permission.handlers.permission.Permission")
-    def test_has_permission_raise_apply_exception_when_unauthorized(self, permission_cls):
-        permission_cls.return_value.get_apply_data.return_value = (
+    @mock.patch("apps.permission.handlers.service.PermissionService")
+    def test_has_permission_raise_apply_exception_when_unauthorized(self, permission_service_cls):
+        permission_service_cls.return_value.get_apply_data.return_value = (
             [{"id": ActionEnum.VIEW_SYSTEM.id}],
             "https://iam.example/apply",
         )
@@ -62,6 +62,7 @@ class TestSearchLogSystemSearchPermission(TestCase):
         exception_data = json.loads(cm.exception.data)
         self.assertEqual(exception_data["apply_url"], "https://iam.example/apply")
         self.assertEqual(exception_data["permission"], [{"id": ActionEnum.VIEW_SYSTEM.id}])
+        permission_service_cls.assert_called_once_with(username="admin")
 
 
 class TestSearchLogPermission(TestCase):

@@ -22,8 +22,8 @@ from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.exceptions import PermissionException
 from services.web.risk.models import Risk, TicketPermission, UserType
 from services.web.strategy_v2.models import Strategy
@@ -120,7 +120,7 @@ class GenerateStrategyRiskPermission:
 
     def __init__(self, request):
         self.request = request
-        self.perm_client = Permission(request=request)
+        self.perm_client = PermissionService(request=request)
 
     @staticmethod
     def _collect_strategy_ids(events: List[dict]) -> Set[int]:

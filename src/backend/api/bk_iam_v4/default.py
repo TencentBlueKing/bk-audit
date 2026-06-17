@@ -222,7 +222,7 @@ class RevokeAuthorizationResource(IAMV4AuthorizationResource):
         return super().parse_response(response)
 
 
-class ListAuthorizationSubjectResource(IAMV4BaseResource):
+class ListAuthorizationSubjectResource(IAMV4OperatorResource):
     name = gettext_lazy("IAM V4 查询角色授权用户列表")
     action = "/api/v1/open/rbac/mgmt/systems/{system_id}/authorizations/query-subject/"
     method = "POST"

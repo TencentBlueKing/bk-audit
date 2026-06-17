@@ -18,7 +18,6 @@ ScopePermission 权限组件单元测试
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db.models import Q
 from django.test import RequestFactory
 
 from apps.meta.models import System
@@ -545,7 +544,7 @@ class TestScopePermissionCache(TestCase):
     def test_get_scene_ids_cache(self, mock_perm_cls):
         """同一 scope+action 调用两次只查询一次 IAM"""
         mock_instance = MagicMock()
-        mock_instance.get_policies_for_action.return_value = {}
+        mock_instance.get_authorized_resource_ids.return_value = []
         mock_perm_cls.return_value = mock_instance
 
         sp = ScopePermission("admin")
@@ -555,8 +554,8 @@ class TestScopePermissionCache(TestCase):
         result2 = sp.get_scene_ids(scope, ActionEnum.VIEW_SCENE)
 
         assert result1 == result2
-        # 只调用一次 get_policies_for_action
-        assert mock_instance.get_policies_for_action.call_count == 1
+        # 只调用一次 get_authorized_resource_ids
+        assert mock_instance.get_authorized_resource_ids.call_count == 1
 
     @patch("services.web.common.scope_permission.Permission")
     def test_get_scene_ids_with_single_scene_denied_returns_empty(self, mock_perm_cls):
@@ -583,18 +582,17 @@ class TestScopePermissionCache(TestCase):
 
         assert result == []
 
-    @patch("services.web.common.scope_permission.SceneDjangoQuerySetConverter")
     @patch("services.web.common.scope_permission.Permission")
-    def test_get_scene_ids_with_cross_scene_filters_disabled_scene(self, mock_perm_cls, mock_converter_cls):
+    def test_get_scene_ids_with_cross_scene_filters_disabled_scene(self, mock_perm_cls):
         """跨场景 scope 过滤停用场景"""
         enabled_scene = Scene.objects.create(name="启用跨场景", status=SceneStatus.ENABLED)
         disabled_scene = Scene.objects.create(name="停用跨场景", status=SceneStatus.DISABLED)
         mock_instance = MagicMock()
-        mock_instance.get_policies_for_action.return_value = {"any": "policy"}
+        mock_instance.get_authorized_resource_ids.return_value = [
+            str(enabled_scene.scene_id),
+            str(disabled_scene.scene_id),
+        ]
         mock_perm_cls.return_value = mock_instance
-        mock_converter = MagicMock()
-        mock_converter.convert.return_value = Q(scene_id__in=[enabled_scene.scene_id, disabled_scene.scene_id])
-        mock_converter_cls.return_value = mock_converter
 
         sp = ScopePermission("admin")
         result = sp.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
@@ -606,7 +604,7 @@ class TestScopePermissionCache(TestCase):
     def test_get_system_ids_cache(self, mock_perm_cls, mock_managed):
         """get_system_ids 缓存"""
         mock_instance = MagicMock()
-        mock_instance.get_policies_for_action.return_value = {}
+        mock_instance.get_authorized_resource_ids.return_value = []
         mock_perm_cls.return_value = mock_instance
 
         sp = ScopePermission("admin")
@@ -616,7 +614,7 @@ class TestScopePermissionCache(TestCase):
         result2 = sp.get_system_ids(scope, ActionEnum.VIEW_SYSTEM)
 
         assert result1 == result2
-        assert mock_instance.get_policies_for_action.call_count == 1
+        assert mock_instance.get_authorized_resource_ids.call_count == 1
 
     @patch("services.web.common.scope_permission.System.is_manager", return_value=False)
     @patch("services.web.common.scope_permission.Permission")
