@@ -2015,14 +2015,10 @@ class TestRiskPermissionFilters(TestCase):
         """mock IAM 返回仅包含 R-IAM 的策略"""
         return Q(risk_id="R-IAM")
 
-    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
-    @mock.patch("services.web.risk.models.Permission")
-    def test_iam_risk_filter_only_returns_iam_risks(self, mock_perm_cls, mock_converter_cls):
+    @mock.patch("services.web.risk.models.PermissionService")
+    def test_iam_risk_filter_only_returns_iam_risks(self, mock_service_cls):
         """iam_risk_filter 应仅返回 IAM 策略匹配的风险"""
-        mock_perm = mock_perm_cls.return_value
-        mock_perm.make_request.return_value = mock.MagicMock()
-        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
-        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+        mock_service_cls.return_value.get_risk_filter.return_value = self._mock_iam_policies()
 
         q = Risk.iam_risk_filter(ActionEnum.LIST_RISK)
         risk_ids = set(Risk.objects.filter(q).values_list("risk_id", flat=True))
@@ -2030,6 +2026,16 @@ class TestRiskPermissionFilters(TestCase):
         self.assertIn("R-IAM", risk_ids)
         self.assertNotIn("R-LOCAL", risk_ids)
         self.assertNotIn("R-NONE", risk_ids)
+
+    @mock.patch("services.web.risk.models.get_request_username", return_value="request_user")
+    @mock.patch("services.web.risk.models.PermissionService")
+    def test_iam_risk_filter_uses_explicit_username(self, mock_service_cls, _mock_request_username):
+        """显式传入 username 时，应按目标用户查询 IAM 风险范围。"""
+        mock_service_cls.return_value.get_risk_filter.return_value = Q(pk__in=[])
+
+        Risk.iam_risk_filter(ActionEnum.LIST_RISK, username="export_user")
+
+        mock_service_cls.assert_called_once_with(username="export_user")
 
     def test_local_risk_filter_only_returns_ticket_permission_risks(self):
         """local_risk_filter 应仅返回 TicketPermission 中有记录的风险"""
@@ -2067,12 +2073,10 @@ class TestRiskPermissionFilters(TestCase):
         self.assertIn(["user", "action", "user_type", "risk_id"], index_fields)
         self.assertIn(["user", "action", "user_type", "authorized_at", "risk_id"], index_fields)
 
-    @mock.patch("services.web.risk.models.Permission")
-    def test_iam_risk_filter_no_policies_returns_empty(self, mock_perm_cls):
+    @mock.patch("services.web.risk.models.PermissionService")
+    def test_iam_risk_filter_no_policies_returns_empty(self, mock_service_cls):
         """IAM 无策略时应返回空集"""
-        mock_perm = mock_perm_cls.return_value
-        mock_perm.make_request.return_value = mock.MagicMock()
-        mock_perm.iam_client._do_policy_query.return_value = None
+        mock_service_cls.return_value.get_risk_filter.return_value = Q(pk__in=[])
 
         q = Risk.iam_risk_filter(ActionEnum.LIST_RISK)
         risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
@@ -2096,28 +2100,20 @@ class TestRiskPermissionFilters(TestCase):
         self.assertTrue(hasattr(risk, "event_content_short"))
         self.assertTrue(hasattr(risk, "_has_report"))
 
-    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
-    @mock.patch("services.web.risk.models.Permission")
-    def test_load_iam_authed_risks_returns_plain_queryset(self, mock_perm_cls, mock_converter_cls):
+    @mock.patch("services.web.risk.models.PermissionService")
+    def test_load_iam_authed_risks_returns_plain_queryset(self, mock_service_cls):
         """load_iam_authed_risks 返回不带注解的纯净 QuerySet"""
-        mock_perm = mock_perm_cls.return_value
-        mock_perm.make_request.return_value = mock.MagicMock()
-        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
-        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+        mock_service_cls.return_value.get_risk_filter.return_value = self._mock_iam_policies()
 
         qs = Risk.load_iam_authed_risks(ActionEnum.LIST_RISK)
         risk = qs.first()
         self.assertFalse(hasattr(risk, "event_content_short"))
         self.assertFalse(hasattr(risk, "_has_report"))
 
-    @mock.patch("services.web.risk.models.RiskPathEqDjangoQuerySetConverter")
-    @mock.patch("services.web.risk.models.Permission")
-    def test_load_authed_risks_backward_compatible(self, mock_perm_cls, mock_converter_cls):
+    @mock.patch("services.web.risk.models.PermissionService")
+    def test_load_authed_risks_backward_compatible(self, mock_service_cls):
         """load_authed_risks 应保持向后兼容，返回 IAM + TicketPermission 的并集"""
-        mock_perm = mock_perm_cls.return_value
-        mock_perm.make_request.return_value = mock.MagicMock()
-        mock_perm.iam_client._do_policy_query.return_value = {"some": "policy"}
-        mock_converter_cls.return_value.convert.return_value = self._mock_iam_policies()
+        mock_service_cls.return_value.get_risk_filter.return_value = self._mock_iam_policies()
 
         qs = Risk.load_authed_risks(ActionEnum.LIST_RISK)
         risk_ids = set(qs.values_list("risk_id", flat=True))

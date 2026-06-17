@@ -38,10 +38,12 @@ from services.web.common.constants import ScopeType
 
 class SearchLogPermission:
     @classmethod
-    def raise_system_view_permission_exception(cls) -> None:
-        from apps.permission.handlers.permission import Permission
+    def raise_system_view_permission_exception(cls, username: str | None = None) -> None:
+        from apps.permission.handlers.service import PermissionService
 
-        apply_data, apply_url = Permission().get_apply_data([ActionEnum.VIEW_SYSTEM])
+        apply_data, apply_url = PermissionService(username=username or get_request_username()).get_apply_data(
+            [ActionEnum.VIEW_SYSTEM]
+        )
         raise PermissionException(
             action_name=ActionEnum.VIEW_SYSTEM.name,
             apply_url=apply_url,
@@ -102,9 +104,10 @@ class SearchLogSystemSearchPermission(InstancePermission):
 
     def has_permission(self, request, view) -> bool:
         system_id = self._get_instance_id(request, view)
-        if SearchLogPermission.has_system_search_permission(system_id=system_id, username=get_request_username()):
+        username = get_request_username()
+        if SearchLogPermission.has_system_search_permission(system_id=system_id, username=username):
             return True
-        SearchLogPermission.raise_system_view_permission_exception()
+        SearchLogPermission.raise_system_view_permission_exception(username=username)
 
 
 class SystemManagerPermission(InstancePermission):

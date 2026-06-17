@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import importlib
 from unittest import mock
 
 from bk_resource.exceptions import APIRequestError, ValidateException
+from django.conf import settings
 from django.test import SimpleTestCase
 from requests.exceptions import HTTPError
 
@@ -291,6 +293,39 @@ class TestIAMV4RoleResources(SimpleTestCase):
         self.assertNotIn("system_id", kwargs["json"])
         self.assertEqual(kwargs["json"]["role_id"], "scene_admin")
 
+    def test_list_authorization_subject_strips_operator_from_body(self):
+        resource = ListAuthorizationSubjectResource()
+        resource.session.request = mock.Mock(return_value=_mock_response({"results": []}))
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "operator": "operator_user",
+                "role_id": "scene_admin",
+                "page": 1,
+                "page_size": 100,
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["headers"]["X-Bkiam-Operator"], "operator_user")
+        self.assertNotIn("operator", kwargs["json"])
+
+    @mock.patch("api.bk_iam_v4.default.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
+    def test_list_authorization_subject_uses_default_operator_header(self):
+        resource = ListAuthorizationSubjectResource()
+
+        headers = resource.build_header({})
+
+        self.assertEqual(headers["X-Bkiam-Operator"], "system_operator")
+
+    def test_list_authorization_subject_uses_request_operator_header(self):
+        resource = ListAuthorizationSubjectResource()
+
+        headers = resource.build_header({"operator": "operator_user"})
+
+        self.assertEqual(headers["X-Bkiam-Operator"], "operator_user")
+
 
 class TestIAMV4ApplyResource(SimpleTestCase):
     @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
@@ -324,3 +359,34 @@ class TestIAMV4SystemResources(SimpleTestCase):
         url = resource.build_url({"system_id": "bk-audit"})
 
         self.assertTrue(url.endswith("/api/v1/open/rabc/share/model/systems/bk-audit/"))
+
+    def test_retrieve_system_accepts_fields_query(self):
+        resource = RetrieveSystemResource()
+        resource.session.request = mock.Mock(return_value=_mock_response({"system_info": {"id": "bk-audit"}}))
+
+        resource.request({"system_id": "bk-audit", "fields": "system_info"})
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["params"]["fields"], "system_info")
+
+
+class TestIAMV4Endpoint(SimpleTestCase):
+    def test_default_endpoint_uses_stage_gateway(self):
+        import api.domains as domains
+
+        try:
+            with mock.patch.object(settings, "BK_IAM_V4_API_URL", ""):
+                importlib.reload(domains)
+                self.assertTrue(domains.BK_IAM_V4_API_URL.endswith("/stage"))
+        finally:
+            importlib.reload(domains)
+
+    def test_endpoint_can_be_overridden_for_dev_e2e(self):
+        import api.domains as domains
+
+        try:
+            with mock.patch.object(settings, "BK_IAM_V4_API_URL", "http://bkiam.dev"):
+                importlib.reload(domains)
+                self.assertEqual(domains.BK_IAM_V4_API_URL, "http://bkiam.dev")
+        finally:
+            importlib.reload(domains)
