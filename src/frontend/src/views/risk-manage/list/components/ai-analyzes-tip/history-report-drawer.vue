@@ -65,6 +65,7 @@
   import useRequest from '@hooks/use-request';
 
   import TdesignList from '@components/tdesign-list/index.vue';
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import ReportTitleCell from './report-title-cell.vue';
   import RiskTablePopover from './risk-table-popover.vue';
@@ -323,6 +324,20 @@
     }
   };
 
+  const getAnalysisScopeText = (row: HistoryReportItem) => {
+    try {
+      const scopeArray = JSON.parse(row.analysis_scope);
+      return scopeArray.map((item: any) => {
+        if (item.label === '首次发现时间') {
+          return `${item.label}=${Array.isArray(item.value) ? item.value.join('-') : item.value}`;
+        }
+        return `${item.label}=${Array.isArray(item.value) ? item.value.join(',') : item.value}`;
+      }).join('，');
+    } catch {
+      return row.analysis_scope || '--';
+    }
+  };
+
   const getReportStatusText = (status: string) => reportStatusTextMap[String(status || '').toLowerCase()] || status;
   const renderReportStatus = (row: HistoryReportItem) => {
     const { status, error_message: errorMessage } = row;
@@ -395,28 +410,19 @@
         ],
       },
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
-         <bk-tag>{row.report_type ===  'system' ? t('系统分析') : t('自定义分析')}</bk-tag>
-    )    },
+        <bk-tag>{row.report_type === 'system' ? t('系统分析') : t('自定义分析')}</bk-tag>
+      ),
+    },
     {
       title: t('分析范围'),
       colKey: 'analysisScope',
       minWidth: 200,
       ellipsis: true,
-      cell: (h: any, { row }: { row: HistoryReportItem }) => {
-        try {
-          const scopeArray = JSON.parse(row.analysis_scope);
-          const formattedText = scopeArray.map((item: any) => {
-            if (item.label === '首次发现时间') {
-              return `${item.label}=${Array.isArray(item.value) ? item.value.join('-') : item.value}`;
-            }
-            return `${item.label}=${Array.isArray(item.value) ? item.value.join(',') : item.value
-            }`;
-          }).join('，');
-          return <span>{formattedText}</span>;
-        } catch {
-          return <span>{row.analysis_scope}</span>;
-        }
-      },
+      cell: (h: any, { row }: { row: HistoryReportItem }) => (
+        <Tooltips
+          data={getAnalysisScopeText(row)}
+          maxWidth={480} />
+      ),
     },
     {
       title: t('关联风险数量'),
@@ -461,6 +467,10 @@
       title: t('生成人'),
       colKey: 'created_by',
       width: 120,
+      ellipsis: true,
+      cell: (h: any, { row }: { row: HistoryReportItem }) => (
+        <Tooltips data={row.created_by || '--'} />
+      ),
     },
     {
       title: t('生成时间'),
@@ -468,6 +478,10 @@
       width: 180,
       sortType: 'all',
       sorter: true,
+      ellipsis: true,
+      cell: (h: any, { row }: { row: HistoryReportItem }) => (
+        <Tooltips data={row.created_at || '--'} />
+      ),
     },
   ];
 
@@ -536,6 +550,10 @@
 
   :deep(.audit-tdesign-list) {
     background-color: #fff;
+
+    .show-tooltips-text {
+      max-width: 100%;
+    }
 
     .t-table,
     .t-table__content,

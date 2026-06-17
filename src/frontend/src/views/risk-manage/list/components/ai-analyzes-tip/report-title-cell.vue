@@ -37,13 +37,12 @@
           v-if="canOpen"
           class="report-title-link"
           @click="emit('open')">
-          {{ title }}
+          <tooltips :data="title" />
         </span>
-        <span
+        <tooltips
           v-else
-          class="report-title-text">
-          {{ title }}
-        </span>
+          class="report-title-text"
+          :data="title" />
         <audit-icon
           v-if="!loading && canEdit"
           class="report-title-edit hover-show-icon"
@@ -62,6 +61,8 @@
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import useMessage from '@hooks/use-message';
 
@@ -149,6 +150,8 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .report-title-generating-placeholder {
@@ -158,11 +161,15 @@
 }
 
 .report-title-link {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: #3a84ff;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: pointer;
+
+  :deep(.show-tooltips-text) {
+    color: inherit;
+  }
 
   &:hover {
     color: #699df4;
@@ -171,10 +178,10 @@
 }
 
 .report-title-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: #313238;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .report-title-input {
