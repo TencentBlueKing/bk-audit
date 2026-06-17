@@ -22,19 +22,23 @@
     :is-show="isShow"
     placement="bottom-start"
     theme="light"
-    trigger="click"
+    trigger="manual"
     @after-hidden="handleAfterHidden">
     <span
+      ref="triggerRef"
       class="nl-add-condition-trigger"
       :class="{ 'is-active': shouldActivate }"
-      @click="isShow = !isShow">
+      @click.stop="handleTogglePopover">
       <audit-icon
         class="nl-add-condition-icon"
         type="add" />
       <span>{{ t('添加条件') }}</span>
     </span>
     <template #content>
-      <div class="nl-add-condition-panel">
+      <div
+        class="nl-add-condition-panel"
+        @click.stop
+        @mousedown.stop>
         <!-- Tab 切换：风险字段 / 事件字段 -->
         <div class="panel-tabs">
           <span
@@ -114,7 +118,9 @@
 <script setup lang="ts">
   import {
     computed,
+    onBeforeUnmount,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -137,6 +143,7 @@
 
   const { t } = useI18n();
   const popoverRef = ref<{ hide?:() => void }>();
+  const triggerRef = ref<HTMLElement>();
   const isShow = ref(false);
   const pendingSelection = ref<null | {
     type: 'risk';
@@ -252,6 +259,22 @@
     popoverRef.value?.hide?.();
   };
 
+  const handleTogglePopover = () => {
+    isShow.value = !isShow.value;
+  };
+
+  const handleDocumentClick = (event: MouseEvent) => {
+    if (!isShow.value) return;
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    if (triggerRef.value?.contains(target)) return;
+    if (target.closest('.nl-add-condition-popover')) return;
+
+    closePopover();
+  };
+
   // 选择风险字段（点击后先关闭下拉，再通知父组件添加字段，避免两个弹窗同时出现互相遮挡）
   const handleSelectField = (fieldName: string, config: IFieldConfig) => {
     pendingSelection.value = {
@@ -270,6 +293,21 @@
     };
     closePopover();
   };
+
+  watch(isShow, (value) => {
+    if (value) {
+      setTimeout(() => {
+        document.addEventListener('click', handleDocumentClick);
+      });
+      return;
+    }
+
+    document.removeEventListener('click', handleDocumentClick);
+  });
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClick);
+  });
 </script>
 <style lang="postcss">
   .nl-add-condition-trigger {
