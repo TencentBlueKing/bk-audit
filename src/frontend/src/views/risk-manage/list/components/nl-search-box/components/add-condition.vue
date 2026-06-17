@@ -28,7 +28,8 @@
       ref="triggerRef"
       class="nl-add-condition-trigger"
       :class="{ 'is-active': shouldActivate }"
-      @click.stop="handleTogglePopover">
+      @click.stop="handleTogglePopover"
+      @mousedown.stop>
       <audit-icon
         class="nl-add-condition-icon"
         type="add" />
@@ -263,14 +264,22 @@
     isShow.value = !isShow.value;
   };
 
+  const isInPopoverLayer = (target: Node) => {
+    const el = target as HTMLElement;
+    if (!el?.closest) {
+      return false;
+    }
+    return !!el.closest('.nl-add-condition-popover, .tippy-box, .bk-popover, .bk-pop2-content, .bk-popover2');
+  };
+
   const handleDocumentClick = (event: MouseEvent) => {
     if (!isShow.value) return;
 
-    const target = event.target as HTMLElement | null;
+    const target = event.target as Node | null;
     if (!target) return;
 
-    if (triggerRef.value?.contains(target)) return;
-    if (target.closest('.nl-add-condition-popover')) return;
+    if (triggerRef.value?.contains(target as HTMLElement)) return;
+    if (isInPopoverLayer(target)) return;
 
     closePopover();
   };
@@ -297,16 +306,16 @@
   watch(isShow, (value) => {
     if (value) {
       setTimeout(() => {
-        document.addEventListener('click', handleDocumentClick);
+        document.addEventListener('mousedown', handleDocumentClick, true);
       });
       return;
     }
 
-    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('mousedown', handleDocumentClick, true);
   });
 
   onBeforeUnmount(() => {
-    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('mousedown', handleDocumentClick, true);
   });
 </script>
 <style lang="postcss">
