@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import hashlib
 from functools import cached_property
 from typing import Any, List, Optional, Union
 
@@ -939,6 +940,7 @@ class NL2RiskFilterLog(OperateRecordModel):
     """
 
     query = models.CharField(gettext_lazy("查询文本"), max_length=2048)
+    query_hash = models.CharField(gettext_lazy("查询文本哈希"), max_length=64, blank=True, default="")
     request_params = models.JSONField(gettext_lazy("请求参数"), default=dict)
     response_data = models.JSONField(gettext_lazy("响应数据"), default=dict)
     status = models.CharField(
@@ -949,6 +951,19 @@ class NL2RiskFilterLog(OperateRecordModel):
         db_index=True,
     )
     error_message = models.TextField(gettext_lazy("错误信息"), blank=True, default="")
+
+    @staticmethod
+    def build_query_hash(query: str) -> str:
+        """生成查询文本哈希，用于长 query 的索引查询。"""
+        return hashlib.sha256((query or "").encode("utf-8")).hexdigest()
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if not self.query_hash or (update_fields is not None and "query" in update_fields):
+            self.query_hash = self.build_query_hash(self.query)
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"query_hash"}
+        super().save(*args, **kwargs)
 
     @classmethod
     def save_nl2risk_filter_log(
@@ -974,8 +989,10 @@ class NL2RiskFilterLog(OperateRecordModel):
             payload["message"] = message
 
         try:
-            cls.objects.create(
-                query=(query or "")[:2048],
+            raw_query = query or ""
+            log = cls(
+                query=raw_query[:2048],
+                query_hash=cls.build_query_hash(raw_query),
                 request_params=request_params or {},
                 response_data=payload,
                 status=status,
@@ -983,6 +1000,7 @@ class NL2RiskFilterLog(OperateRecordModel):
                 created_by=username,
                 updated_by=username,
             )
+            log.save()
         except Exception:  # pylint: disable=broad-except
             logger.exception("[NL2RiskFilter] Failed to save query log")
 
@@ -992,3 +1010,6 @@ class NL2RiskFilterLog(OperateRecordModel):
         verbose_name_plural = verbose_name
         ordering = ["-created_at"]
         index_together = [["status", "created_at"]]
+        indexes = [
+            models.Index(fields=["created_by", "query_hash", "created_at"], name="risk_nl2log_user_qh_time"),
+        ]
