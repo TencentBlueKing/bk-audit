@@ -85,10 +85,57 @@
 
           <div class="ai-report-section">
             <div class="ai-report-section-header">
-              <img
-                class="ai-report-section-icon"
-                src="@images/ai-icon.svg">
-              <span class="title">{{ t('报告内容') }}</span>
+              <div class="ai-report-section-title">
+                <img
+                  class="ai-report-section-icon"
+                  src="@images/ai-icon.svg">
+                <span class="title">{{ t('报告内容') }}</span>
+              </div>
+              <bk-popover
+                v-if="isCustomReport"
+                ext-cls="analyze-content-popover-wrap"
+                placement="bottom-end"
+                theme="light"
+                trigger="click"
+                :width="analyzeContentPopoverWidth">
+                <span class="analyze-content-trigger">
+                  <img
+                    alt=""
+                    class="analyze-content-icon"
+                    src="@images/edit.svg">
+                  <span class="analyze-content-text">{{ t('分析内容') }}</span>
+                </span>
+                <template #content>
+                  <div class="analyze-content-popover">
+                    <div class="analyze-content-row">
+                      <div class="analyze-content-label">
+                        {{ t('需求内容') }}
+                      </div>
+                      <div class="analyze-content-value">
+                        {{ customPrompt || '--' }}
+                      </div>
+                    </div>
+                    <div class="analyze-content-row">
+                      <div class="analyze-content-label">
+                        {{ t('条件范围') }}
+                      </div>
+                      <div class="analyze-content-value">
+                        <template v-if="analysisScopeLines.length">
+                          <div
+                            v-for="(line, index) in analysisScopeLines"
+                            :key="index"
+                            class="analyze-content-scope-line">
+                            {{ line }}
+                          </div>
+                        </template>
+                        <template v-else>
+                          --
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </bk-popover>
             </div>
 
             <div class="ai-report-section-body">
@@ -197,45 +244,83 @@
     }
   };
 
-  const metaList = computed(() => {
+  const parseReportInfo = () => {
     if (!props.itemInfo) {
+      return null;
+    }
+    try {
+      return JSON.parse(props.itemInfo);
+    } catch {
+      return null;
+    }
+  };
+
+  const reportInfo = computed(() => parseReportInfo());
+  const isCustomReport = computed(() => reportInfo.value?.report_type === 'custom');
+  const customPrompt = computed(() => reportInfo.value?.custom_prompt || '');
+  const analysisScopeLines = computed(() => {
+    const analysisScope = reportInfo.value?.analysis_scope;
+    if (!analysisScope) {
       return [];
     }
     try {
-      const info = JSON.parse(props.itemInfo);
-      return [
-        {
-          key: 'report_type',
-          label: t('报告类型'),
-          value: info.report_type === 'system' ? t('系统分析') : t('自定义分析'),
-        },
-        {
-          key: 'analysis_scope',
-          label: t('分析范围'),
-          value: formatAnalysisScope(info.analysis_scope),
-        },
-        {
-          key: 'risk_count',
-          label: t('风险条数'),
-          value: info.risk_count,
-        },
-        {
-          key: 'created_by',
-          label: t('生成人'),
-          value: info.created_by,
-        },
-        {
-          key: 'created_at',
-          label: t('生成时间'),
-          value: info.created_at,
-        },
-      ];
+      const scopeList = JSON.parse(analysisScope) || [];
+      return scopeList.map((item: { label: string; value: string | string[] }) => {
+        let value: string;
+        if (item.label === '首次发现时间') {
+          value = Array.isArray(item.value) ? item.value.join('-') : String(item.value ?? '');
+        } else {
+          value = Array.isArray(item.value) ? item.value.join(',') : String(item.value ?? '');
+        }
+        return `${item.label}=${value}`;
+      });
     } catch {
-      return [];
+      return analysisScope ? [analysisScope] : [];
     }
   });
-  const title = computed(() => JSON.parse(props.itemInfo).title || '');
+
+  const metaList = computed(() => {
+    const info = reportInfo.value;
+    if (!info) {
+      return [];
+    }
+    return [
+      {
+        key: 'report_type',
+        label: t('报告类型'),
+        value: info.report_type === 'system' ? t('系统分析') : t('自定义分析'),
+      },
+      {
+        key: 'analysis_scope',
+        label: t('分析范围'),
+        value: formatAnalysisScope(info.analysis_scope),
+      },
+      {
+        key: 'risk_count',
+        label: t('风险条数'),
+        value: info.risk_count,
+      },
+      {
+        key: 'created_by',
+        label: t('生成人'),
+        value: info.created_by,
+      },
+      {
+        key: 'created_at',
+        label: t('生成时间'),
+        value: info.created_at,
+      },
+    ];
+  });
+  const title = computed(() => reportInfo.value?.title || '');
   const drawerWidth = computed(() => (isFullscreen.value ? '100vw' : 1100));
+  const analyzeContentPopoverWidth = computed(() => {
+    const sectionHorizontalPadding = 80;
+    if (isFullscreen.value && typeof window !== 'undefined') {
+      return window.innerWidth - sectionHorizontalPadding;
+    }
+    return 900 - sectionHorizontalPadding;
+  });
   const tooltipMaxWidth = computed(() => (
     isFullscreen.value ? 'calc(100vw - 48px)' : 912
   ));
@@ -446,8 +531,91 @@
 .ai-report-section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 12px 40px;
   border-bottom: 1px solid #e1e6f0;
+}
+
+.ai-report-section-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.analyze-content-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #3a84ff;
+  cursor: pointer;
+  border-radius: 2px;
+  user-select: none;
+  gap: 4px;
+
+  &:hover {
+    background: #f0f1f5;
+  }
+
+  &:active {
+    background: #e1ecff;
+  }
+}
+
+.analyze-content-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.analyze-content-text {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+}
+
+.analyze-content-popover {
+  overflow: hidden;
+  font-size: 12px;
+  color: #313238;
+  border: 1px solid #dcdee5;
+  border-radius: 2px;
+}
+
+.analyze-content-row {
+  display: flex;
+  border-bottom: 1px solid #dcdee5;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.analyze-content-label {
+  flex: 0 0 80px;
+  padding: 10px 12px;
+  line-height: 20px;
+  background: #f5f7fa;
+  border-right: 1px solid #dcdee5;
+}
+
+.analyze-content-value {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  line-height: 20px;
+  word-break: break-word;
+}
+
+.analyze-content-scope-line {
+  white-space: nowrap;
+}
+
+.analyze-content-scope-line + .analyze-content-scope-line {
+  margin-top: 4px;
 }
 
 .ai-report-section-icon {
@@ -459,6 +627,7 @@
 .ai-report-section-header .title {
   font-size: 16px;
   font-weight: 700;
+  line-height: 20px;
   color: #313238;
 }
 
@@ -571,4 +740,10 @@
   }
 }
 
+</style>
+
+<style lang="postcss">
+.analyze-content-popover-wrap.bk-popover.bk-pop2-content {
+  padding: 0;
+}
 </style>
