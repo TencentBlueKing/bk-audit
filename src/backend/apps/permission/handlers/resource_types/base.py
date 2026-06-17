@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import operator
-from typing import List
+from typing import List, Optional
 
 from django.conf import settings
 from django.core.cache import cache
@@ -58,6 +58,14 @@ class ResourceTypeMeta(metaclass=abc.ABCMeta):
     name: str = ""
     selection_mode: str = ""
     related_instance_selections: List = ""
+    # IAM V4 是否支持对该顶层资源执行 list_authorized_resource 反向查询。
+    iam_v4_reverse_lookup: bool = False
+    # 二级资源无法反向查询时，是否通过候选 ID 批量鉴权解析用户可见范围。
+    iam_v4_batch_scope: bool = False
+    # “是否有任意权限”检查使用的 V4 授权资源类型，适用于权限挂在父资源上的场景。
+    iam_v4_auth_resource_type: Optional[str] = None
+    # 创建场景下资源后默认授予创建者的 V4 角色 ID；为空表示该资源不做创建者授权。
+    iam_v4_creator_role_id: Optional[str] = None
 
     @classmethod
     def to_json(cls):
@@ -93,6 +101,16 @@ class ResourceTypeMeta(metaclass=abc.ABCMeta):
         批量创建实例
         """
         return [[cls.create_simple_instance(instance_id, attribute=attribute)] for instance_id in instance_ids]
+
+    @classmethod
+    def list_all_ids(cls) -> List[str]:
+        """List all active IDs for wildcard IAM V4 reverse-lookup expansion."""
+        return []
+
+    @classmethod
+    def get_iam_v4_creator_authorization_resource(cls, resource: Resource) -> Resource:
+        """Return the resource that should carry creator role authorization."""
+        return resource
 
     @classmethod
     def batch_create_by_instances(cls, instances, attribute=None, cache_key=None):

@@ -29,6 +29,7 @@ class System(ResourceTypeMeta):
     name = gettext("接入系统")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "system"}]
+    iam_v4_reverse_lookup = True
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -43,3 +44,9 @@ class System(ResourceTypeMeta):
 
         resource.attribute = {"id": str(instance_id), "name": instance_name}
         return resource
+
+    @classmethod
+    def list_all_ids(cls) -> list[str]:
+        from apps.meta.models import System
+
+        return list(System.objects.values_list("system_id", flat=True))
