@@ -35,8 +35,8 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="nl2riskfilterlog",
             index=models.Index(
-                fields=["created_by", "query_hash", "created_at"],
-                name="risk_nl2log_user_qh_time",
+                fields=["created_by", "status", "query_hash", "id"],
+                name="risk_nl2log_user_st_qh_id",
             ),
         ),
     ]

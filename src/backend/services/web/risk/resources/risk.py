@@ -38,7 +38,7 @@ from django.db.models import (
     CharField,
     Count,
     IntegerField,
-    OuterRef,
+    Max,
     Q,
     QuerySet,
     Subquery,
@@ -1621,12 +1621,8 @@ class ListNL2RiskFilterLog(RiskMeta):
             queryset = queryset.filter(created_at__lte=end_time)
 
         if validated_request_data.get("deduplicate", True):
-            latest_log_pk = (
-                queryset.filter(query_hash=OuterRef("query_hash"), query=OuterRef("query"))
-                .order_by("-created_at", "-id")
-                .values("pk")[:1]
-            )
-            queryset = queryset.filter(pk=Subquery(latest_log_pk))
+            latest_log_ids = queryset.order_by().values("query_hash").annotate(latest_id=Max("id")).values("latest_id")
+            queryset = queryset.filter(pk__in=Subquery(latest_log_ids))
 
         # 分页由框架 enable_paginate 自动处理
-        return queryset.order_by("-created_at", "-id")
+        return queryset.order_by("-id")

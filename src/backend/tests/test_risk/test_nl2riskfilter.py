@@ -661,6 +661,16 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
         self.assertEqual(len(results), 6)
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_orders_by_id_desc(self, mock_user):
+        """默认按 id 倒序返回"""
+        self._create_log("older_id_newer_time", 40)
+        newer_log = self._create_log("newer_id_older_time", 30)
+
+        results = self.resource.request({"deduplicate": False})
+
+        self.assertEqual(results[0]["id"], newer_log.id)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
     def test_default_deduplicates_same_query_and_returns_latest(self, mock_user):
         """默认按 query 去重且只返回最新记录"""
         self._create_log("same_query", 30, {"marker": "old"})
@@ -671,6 +681,18 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
 
         self.assertEqual(len(same_query_results), 1)
         self.assertEqual(same_query_results[0]["response_data"]["marker"], "new")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_deduplicates_by_latest_id(self, mock_user):
+        """默认按 query 去重时使用最新写入记录，避免相关子查询慢查询"""
+        self._create_log("same_query", 40, {"marker": "older_id_newer_time"})
+        self._create_log("same_query", 30, {"marker": "newer_id_older_time"})
+
+        results = self.resource.request({})
+        same_query_results = [item for item in results if item["query"] == "same_query"]
+
+        self.assertEqual(len(same_query_results), 1)
+        self.assertEqual(same_query_results[0]["response_data"]["marker"], "newer_id_older_time")
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
     def test_disable_deduplicate_returns_all_query_logs(self, mock_user):

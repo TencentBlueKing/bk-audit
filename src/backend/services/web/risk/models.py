@@ -1015,5 +1015,5 @@ class NL2RiskFilterLog(OperateRecordModel):
         ordering = ["-created_at"]
         index_together = [["status", "created_at"]]
         indexes = [
-            models.Index(fields=["created_by", "query_hash", "created_at"], name="risk_nl2log_user_qh_time"),
+            models.Index(fields=["created_by", "status", "query_hash", "id"], name="risk_nl2log_user_st_qh_id"),
         ]
