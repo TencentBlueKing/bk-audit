@@ -231,7 +231,7 @@
       list = list.filter(item => item.display_name.toLowerCase().includes(keyword)
         || item.field_name.toLowerCase().includes(keyword));
     }
-    return list.sort((first, second) => compareAscii(first.field_name, second.field_name));
+    return list.sort((first, second) => compareAscii(first.display_name, second.display_name));
   });
 
   // 列表是否为空
