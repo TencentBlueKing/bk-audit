@@ -3,7 +3,10 @@
 NL2Risk 序列化器及工具函数单测
 """
 
+import datetime
 from unittest.mock import patch
+
+from django.utils import timezone
 
 from services.web.risk.constants import NL2RiskFilterLogStatus
 from services.web.risk.exceptions import NL2RiskFilterServiceError
@@ -58,6 +61,12 @@ class NL2RiskFilterRequestSerializerTest(TestCase):
 
     def test_empty_query_invalid(self):
         data = {"query": ""}
+        serializer = NL2RiskFilterRequestSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("query", serializer.errors)
+
+    def test_query_max_length(self):
+        data = {"query": "x" * 2049}
         serializer = NL2RiskFilterRequestSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("query", serializer.errors)
@@ -445,10 +454,10 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
         self.assertEqual(log.status, NL2RiskFilterLogStatus.API_ERROR)
         self.assertEqual(log.error_message, "timeout")
 
-    @patch("services.web.risk.models.NL2RiskFilterLog.objects.create")
-    def test_save_fail_silent(self, mock_create):
+    @patch("services.web.risk.models.NL2RiskFilterLog.save")
+    def test_save_fail_silent(self, mock_save):
         """保存异常时不抛出，fail-silent"""
-        mock_create.side_effect = Exception("DB error")
+        mock_save.side_effect = Exception("DB error")
         # 不应抛出异常
         NL2RiskFilterLog.save_nl2risk_filter_log(
             username="admin",
@@ -468,6 +477,28 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
         )
         log = NL2RiskFilterLog.objects.first()
         self.assertEqual(len(log.query), 2048)
+
+    def test_query_hash_uses_original_query_before_truncation(self):
+        """query_hash 使用原始 query，避免长 query 截断后误去重"""
+        same_prefix = "x" * 2048
+        long_query_a = f"{same_prefix}a"
+        long_query_b = f"{same_prefix}b"
+
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query=long_query_a,
+            request_params={},
+            response_data={},
+        )
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query=long_query_b,
+            request_params={},
+            response_data={},
+        )
+
+        query_hashes = set(NL2RiskFilterLog.objects.values_list("query_hash", flat=True))
+        self.assertEqual(len(query_hashes), 2)
 
 
 class NL2RiskFilterWithLoggingTest(TestCase):
@@ -531,6 +562,13 @@ class ListNL2RiskFilterLogRequestSerializerTest(TestCase):
         ser = ListNL2RiskFilterLogRequestSerializer(data={})
         self.assertTrue(ser.is_valid(), ser.errors)
         self.assertEqual(ser.validated_data["status"], "")
+        self.assertTrue(ser.validated_data["deduplicate"])
+
+    def test_deduplicate_filter(self):
+        """支持关闭按 query 去重"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={"deduplicate": False})
+        self.assertTrue(ser.is_valid(), ser.errors)
+        self.assertFalse(ser.validated_data["deduplicate"])
 
     def test_status_filter(self):
         """有效 status 值通过验证"""
@@ -552,9 +590,10 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
 
     def setUp(self):
         self.resource = ListNL2RiskFilterLog()
+        self.base_time = timezone.now()
         # 预置测试数据
         for i in range(5):
-            NL2RiskFilterLog.objects.create(
+            log = NL2RiskFilterLog.objects.create(
                 query=f"query_{i}",
                 request_params={"query": f"query_{i}"},
                 response_data={"filter_conditions": {"level": "high"}},
@@ -562,7 +601,8 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
                 created_by="admin",
                 updated_by="admin",
             )
-        NL2RiskFilterLog.objects.create(
+            self._set_created_at(log, i)
+        failed_log = NL2RiskFilterLog.objects.create(
             query="failed_query",
             request_params={"query": "failed_query"},
             response_data={},
@@ -570,7 +610,8 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
             created_by="admin",
             updated_by="admin",
         )
-        NL2RiskFilterLog.objects.create(
+        self._set_created_at(failed_log, 10)
+        other_user_log = NL2RiskFilterLog.objects.create(
             query="other_user_query",
             request_params={"query": "other"},
             response_data={},
@@ -578,6 +619,32 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
             created_by="other_user",
             updated_by="other_user",
         )
+        self._set_created_at(other_user_log, 20)
+
+    def _set_created_at(self, log, seconds):
+        NL2RiskFilterLog.objects.filter(id=log.id).update(
+            created_at=self.base_time + datetime.timedelta(seconds=seconds)
+        )
+        log.refresh_from_db()
+        return log
+
+    def _create_log(
+        self,
+        query,
+        seconds,
+        response_data=None,
+        status=NL2RiskFilterLogStatus.SUCCESS,
+        created_by="admin",
+    ):
+        log = NL2RiskFilterLog.objects.create(
+            query=query,
+            request_params={"query": query},
+            response_data=response_data or {},
+            status=status,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+        return self._set_created_at(log, seconds)
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
     def test_status_filter(self, mock_user):
@@ -592,3 +659,93 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
         results = self.resource.request({})
         # 应返回所有 admin 的记录，未手动切片
         self.assertEqual(len(results), 6)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_orders_by_id_desc(self, mock_user):
+        """默认按 id 倒序返回"""
+        self._create_log("older_id_newer_time", 40)
+        newer_log = self._create_log("newer_id_older_time", 30)
+
+        results = self.resource.request({"deduplicate": False})
+
+        self.assertEqual(results[0]["id"], newer_log.id)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_default_deduplicates_same_query_and_returns_latest(self, mock_user):
+        """默认按 query 去重且只返回最新记录"""
+        self._create_log("same_query", 30, {"marker": "old"})
+        self._create_log("same_query", 40, {"marker": "new"})
+
+        results = self.resource.request({})
+        same_query_results = [item for item in results if item["query"] == "same_query"]
+
+        self.assertEqual(len(same_query_results), 1)
+        self.assertEqual(same_query_results[0]["response_data"]["marker"], "new")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_deduplicates_by_latest_id(self, mock_user):
+        """默认按 query 去重时使用最新写入记录，避免相关子查询慢查询"""
+        self._create_log("same_query", 40, {"marker": "older_id_newer_time"})
+        self._create_log("same_query", 30, {"marker": "newer_id_older_time"})
+
+        results = self.resource.request({})
+        same_query_results = [item for item in results if item["query"] == "same_query"]
+
+        self.assertEqual(len(same_query_results), 1)
+        self.assertEqual(same_query_results[0]["response_data"]["marker"], "newer_id_older_time")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_disable_deduplicate_returns_all_query_logs(self, mock_user):
+        """关闭去重后返回相同 query 的全部记录"""
+        self._create_log("same_query", 30, {"marker": "old"})
+        self._create_log("same_query", 40, {"marker": "new"})
+
+        results = self.resource.request({"deduplicate": False})
+        same_query_results = [item for item in results if item["query"] == "same_query"]
+
+        self.assertEqual(len(same_query_results), 2)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_deduplicates_after_status_filter(self, mock_user):
+        """先按 status 过滤，再按 query 返回最新记录"""
+        self._create_log(
+            "same_query",
+            30,
+            {"marker": "parse_failed"},
+            status=NL2RiskFilterLogStatus.PARSE_FAILED,
+        )
+        self._create_log("same_query", 40, {"marker": "success"}, status=NL2RiskFilterLogStatus.SUCCESS)
+
+        results = self.resource.request({"status": NL2RiskFilterLogStatus.PARSE_FAILED})
+        same_query_results = [item for item in results if item["query"] == "same_query"]
+
+        self.assertEqual(len(same_query_results), 1)
+        self.assertEqual(same_query_results[0]["response_data"]["marker"], "parse_failed")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_long_queries_with_same_stored_query_are_not_deduplicated(self, mock_user):
+        """超长 query 截断后相同但原始 query 不同时不去重"""
+        same_prefix = "x" * 2048
+        long_query_a = f"{same_prefix}a"
+        long_query_b = f"{same_prefix}b"
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query=long_query_a,
+            request_params={},
+            response_data={"marker": "a"},
+        )
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query=long_query_b,
+            request_params={},
+            response_data={"marker": "b"},
+        )
+
+        results = self.resource.request({})
+        long_query_results = [
+            item
+            for item in results
+            if item["query"] == same_prefix and item["response_data"].get("marker") in {"a", "b"}
+        ]
+
+        self.assertEqual(len(long_query_results), 2)
