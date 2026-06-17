@@ -22,11 +22,21 @@
     @click.stop="handleTogglePanel">
     <span class="tag-label">{{ t(tag.label) }}：</span>
     <span
+      v-if="!isPanelOpen"
+      ref="valueWrapperRef"
+      v-bk-tooltips="shortcutTooltipOptions"
+      class="tag-value-wrapper tag-value-date-wrapper">
+      <span class="tag-value tag-date-display-text">{{ displayText }}</span>
+    </span>
+    <span
+      v-else
+      ref="valueWrapperRef"
       class="tag-value-wrapper tag-value-date-wrapper">
       <bk-date-picker
         ref="datePickerRef"
         v-model="localValue"
         append-to-body
+        class="nl-tag-date-picker"
         :clearable="false"
         format="yyyy-MM-dd HH:mm:ss"
         :open="isPanelOpen"
@@ -35,12 +45,15 @@
         type="datetimerange"
         use-shortcut-text
         @change="handleChange"
-        @pick-success="handlePickSuccess">
+        @pick-success="handlePickSuccess"
+        @shortcut-change="handleShortcutChange">
         <template #confirm>
           <span />
         </template>
       </bk-date-picker>
-      <!-- 隐藏的测量元素，用于动态计算日期文本宽度 -->
+      <span class="tag-date-display-text tag-date-display-text-editing">
+        {{ displayText }}
+      </span>
       <span
         ref="measureRef"
         class="date-measure-span">
@@ -90,10 +103,25 @@
   const { t } = useI18n();
 
   const tagRef = ref<HTMLElement>();
+  const valueWrapperRef = ref<HTMLElement>();
   const datePickerRef = ref();
   const measureRef = ref<HTMLSpanElement>();
   const isPanelOpen = ref(false);
   const measureText = ref('');
+  const pendingShortcutSelectedIndex = ref<number | null>(null);
+  const pendingShortcutOrigin = ref<string[] | null>(null);
+
+  const formatRangeText = (value: any) => {
+    if (!Array.isArray(value) || value.length < 2) {
+      return '';
+    }
+    const start = value[0] instanceof Date ? dayjs(value[0]).format('YYYY-MM-DD HH:mm:ss') : String(value[0] || '');
+    const end = value[1] instanceof Date ? dayjs(value[1]).format('YYYY-MM-DD HH:mm:ss') : String(value[1] || '');
+    if (!start || !end) {
+      return '';
+    }
+    return `${start} - ${end}`;
+  };
 
   const handleTogglePanel = () => {
     const wasOpen = isPanelOpen.value;
@@ -112,14 +140,14 @@
   const handleDocumentClick = (e: MouseEvent) => {
     if (!isPanelOpen.value) return;
     const target = e.target as HTMLElement;
-    // 点击在标签自身内部 → 不关闭（由 handleTogglePanel 控制）
+    // 点击在标签自身内部 -> 不关闭（由 handleTogglePanel 控制）
     if (tagRef.value?.contains(target)) return;
-    // 点击在日期面板弹出层内部 → 不关闭
+    // 点击在日期面板弹出层内部 -> 不关闭
     const pickerDropdowns = document.querySelectorAll('.bk-date-picker-dropdown');
     for (const dropdown of Array.from(pickerDropdowns)) {
       if (dropdown.contains(target)) return;
     }
-    // 其他区域 → 关闭面板，并通知上层触发搜索
+    // 其他区域 -> 关闭面板，并通知上层触发搜索
     isPanelOpen.value = false;
     emit('finishEdit');
   };
@@ -151,7 +179,7 @@
     shortcutOriginMap[item.origin] = idx;
   });
 
-  const shortcutSelectedIndex = computed(() => {
+  const resolvedShortcutSelectedIndex = computed(() => {
     const origin = props.searchModel.datetime_origin;
     if (Array.isArray(origin) && origin.length > 0) {
       const idx = shortcutOriginMap[origin[0]];
@@ -159,6 +187,12 @@
     }
     return -1;
   });
+
+  const shortcutSelectedIndex = computed(() => (
+    pendingShortcutSelectedIndex.value
+    ?? (resolvedShortcutSelectedIndex.value >= 0 ? resolvedShortcutSelectedIndex.value : null)
+    ?? inferredShortcutSelectedIndex.value
+  ));
 
   const parseDateValue = (val: any) => {
     if (!val || !Array.isArray(val) || val.length < 2) return [];
@@ -174,6 +208,24 @@
 
   const localValue = ref<any>(parseDateValue(props.tag.value));
 
+  const inferredShortcutSelectedIndex = computed(() => {
+    if (!Array.isArray(localValue.value) || localValue.value.length < 2) {
+      return -1;
+    }
+    const start = dayjs(localValue.value[0]);
+    const end = dayjs(localValue.value[1]);
+    if (!start.isValid() || !end.isValid()) {
+      return -1;
+    }
+    const now = dayjs();
+    const endDiffMinutes = Math.abs(end.diff(now, 'minute'));
+    if (endDiffMinutes > 5) {
+      return -1;
+    }
+    const diffMinutes = end.diff(start, 'minute');
+    return shortcutConfigs.findIndex(item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2);
+  });
+
   const handleChange = (value: any) => {
     if (!value || !Array.isArray(value) || value.length < 2) return;
     const formatted = value.map((item: any) => (
@@ -183,6 +235,26 @@
     ));
     localValue.value = formatted;
     emit('update', props.tag.fieldName, formatted);
+    if (pendingShortcutOrigin.value) {
+      emit('update', 'datetime_origin', pendingShortcutOrigin.value);
+      return;
+    }
+    pendingShortcutSelectedIndex.value = null;
+    emit('update', 'datetime_origin', formatted);
+  };
+
+  const handleShortcutChange = (
+    shortcut: { text: string; value: () => [Date, Date] },
+    index: number,
+  ) => {
+    const shortcutConfig = shortcutConfigs[index];
+    if (!shortcutConfig || typeof shortcut?.value !== 'function') {
+      return;
+    }
+    pendingShortcutSelectedIndex.value = index;
+    pendingShortcutOrigin.value = [shortcutConfig.origin, 'now'];
+    localValue.value = shortcut.value();
+    updateEditorWidth();
   };
 
   const handlePickSuccess = () => {
@@ -202,17 +274,44 @@
     }
   }, { deep: true });
 
+  watch(() => props.searchModel.datetime_origin, (val) => {
+    const origin = Array.isArray(val) ? val : [];
+    const pendingOrigin = pendingShortcutOrigin.value;
+    if (pendingOrigin && pendingOrigin.join(',') === origin.join(',')) {
+      pendingShortcutOrigin.value = null;
+      pendingShortcutSelectedIndex.value = null;
+      return;
+    }
+    if (pendingOrigin) {
+      return;
+    }
+    if (!origin.length || typeof origin[0] !== 'string' || shortcutOriginMap[origin[0]] === undefined) {
+      pendingShortcutOrigin.value = null;
+      pendingShortcutSelectedIndex.value = null;
+    }
+  }, { deep: true });
+
   const getDisplayTextForInput = () => {
     if (shortcutSelectedIndex.value >= 0) {
+      return t(shortcutConfigs[shortcutSelectedIndex.value].label);
+    }
+    return formatRangeText(localValue.value);
+  };
+
+  const displayText = computed(() => getDisplayTextForInput());
+
+  const shortcutTooltipContent = computed(() => {
+    if (shortcutSelectedIndex.value < 0) {
       return '';
     }
-    const val = localValue.value;
-    if (!val || !Array.isArray(val) || val.length < 2) return '';
-    const start = val[0] instanceof Date ? dayjs(val[0]).format('YYYY-MM-DD HH:mm:ss') : val[0];
-    const end = val[1] instanceof Date ? dayjs(val[1]).format('YYYY-MM-DD HH:mm:ss') : val[1];
-    if (!start || !end) return '';
-    return `${start} - ${end}`;
-  };
+    return formatRangeText(localValue.value);
+  });
+
+  const shortcutTooltipOptions = computed(() => ({
+    content: shortcutTooltipContent.value,
+    disabled: !shortcutTooltipContent.value,
+    extCls: 'nl-tag-tooltip-wrap',
+  }));
 
   let updateWidthTimer: ReturnType<typeof setTimeout> | null = null;
   const updateEditorWidth = async () => {
@@ -223,22 +322,29 @@
     updateWidthTimer = setTimeout(() => {
       const pickerEl = datePickerRef.value?.$el || datePickerRef.value;
       const editorInput = pickerEl?.querySelector('.bk-date-picker-editor') as HTMLInputElement | null;
+      const valueWrapperEl = valueWrapperRef.value;
       if (pickerEl && editorInput) {
-        const manualText = getDisplayTextForInput();
-        if (manualText) {
-          editorInput.value = manualText;
-        }
-
-        const displayText = editorInput.value || '';
-        measureText.value = displayText;
+        const currentDisplayText = displayText.value;
+        measureText.value = currentDisplayText || editorInput.value || '';
         nextTick(() => {
           if (measureRef.value) {
             const textWidth = measureRef.value.scrollWidth + 16; // 加上内边距余量
             const finalWidth = `${Math.max(40, textWidth)}px`;
+            if (valueWrapperEl) {
+              valueWrapperEl.style.width = finalWidth;
+              valueWrapperEl.style.minWidth = finalWidth;
+              valueWrapperEl.style.flex = '0 0 auto';
+            }
+            pickerEl.style.width = finalWidth;
+            pickerEl.style.minWidth = finalWidth;
+            pickerEl.style.flex = '0 0 auto';
             editorInput.style.width = finalWidth;
+            editorInput.style.minWidth = finalWidth;
             const relEl = pickerEl.querySelector('.bk-date-picker-rel') as HTMLElement;
             if (relEl) {
               relEl.style.width = finalWidth;
+              relEl.style.minWidth = finalWidth;
+              relEl.style.flex = '0 0 auto';
             }
           }
         });
@@ -251,6 +357,14 @@
   }, { deep: true });
 
   watch(shortcutSelectedIndex, () => {
+    updateEditorWidth();
+  });
+
+  watch(displayText, () => {
+    updateEditorWidth();
+  });
+
+  watch(isPanelOpen, () => {
     updateEditorWidth();
   });
 
@@ -269,20 +383,53 @@
 <style lang="postcss" scoped>
   .condition-tag-date-item {
     .tag-value-date-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: auto;
+      max-width: fit-content;
       padding: 4px;
+      white-space: nowrap;
       cursor: pointer;
       border-radius: 2px;
       transition: background .15s;
 
+      .tag-date-display-text {
+        max-width: none;
+      }
+
+      .tag-date-display-text-editing {
+        position: absolute;
+        top: 50%;
+        left: 8px;
+        z-index: 1;
+        max-width: calc(100% - 16px);
+        overflow: hidden;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 22px;
+        color: #4d4f56;
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translateY(-50%);
+      }
+
+      :deep(.nl-tag-date-picker),
       :deep(.bk-date-picker) {
         display: inline-flex;
-        width: auto;
+        width: auto !important;
+        max-width: fit-content;
+        min-width: auto !important;
         background: transparent;
         border: none;
+        flex: 0 0 auto;
 
         .bk-date-picker-rel {
           display: inline-flex;
-          width: auto;
+          width: auto !important;
+          max-width: fit-content;
+          min-width: auto !important;
+          flex: 0 0 auto;
 
           /* 隐藏日历图标容器 */
           .icon-wrapper {
@@ -291,18 +438,23 @@
 
           /* 去掉为图标预留的左侧空间，调整尺寸，宽度根据内容自适应 */
           .bk-date-picker-editor {
-            width: auto;
+            display: inline-block;
+            width: auto !important;
             height: 22px;
             min-width: 40px;
             padding: 4px;
             font-size: 12px;
             font-weight: 700;
             line-height: 22px;
-            color: #4d4f56;
+            color: transparent;
+            text-overflow: clip;
+            white-space: nowrap;
             cursor: pointer;
             background: transparent;
             border: none;
             box-shadow: none;
+            user-select: none;
+            caret-color: transparent;
 
             &:focus {
               border: none;
@@ -316,6 +468,7 @@
           }
         }
       }
+
     }
 
     /* 面板打开时（is-editing 状态）value 区域蓝色高亮 */
@@ -327,9 +480,13 @@
         :deep(.bk-date-picker) {
           .bk-date-picker-rel {
             .bk-date-picker-editor {
-              color: #1768ef;
+              color: transparent;
             }
           }
+        }
+
+        .tag-date-display-text-editing {
+          color: #1768ef;
         }
       }
     }
@@ -352,5 +509,3 @@
     }
   }
 </style>
-
-
