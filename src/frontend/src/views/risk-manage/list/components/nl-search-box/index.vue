@@ -86,7 +86,6 @@
     nextTick,
     onMounted,
     ref,
-    resolveComponent,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -99,6 +98,7 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
@@ -365,59 +365,56 @@
       LOW: { label: t('低'), color: '#979ba5' },
     };
     return h('span', {
-      style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+      style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
     }, values.map((value) => {
       const config = riskLevelStyleMap[String(value)];
       return h('span', {
-        style: `display:inline-block;padding:3px 8px;border-radius:3px;color:#fff;background:${config?.color || '#c4c6cc'};line-height:18px;`,
+        style: `display:inline-flex;align-items:center;padding:3px 8px;border-radius:3px;color:#fff;background:${config?.color || '#c4c6cc'};line-height:18px;vertical-align:middle;`,
       }, config?.label || value);
     }));
   };
 
-  const renderStatusNode = (values: string[], labels: string[]) => {
-    const AuditIcon = resolveComponent('audit-icon');
+  const renderStatusNode = (values: string[], labels: string[]) => h('span', {
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
+  }, values.map((value, index) => {
+    const config = statusToMap[String(value)] || {};
+    const themeStyleMap: Record<string, string> = {
+      info: 'color:#3a84ff;background:#edf4ff;border:1px solid #a3c5fd;',
+      warning: 'color:#ff9e00;background:#fff3e1;border:1px solid #ffd48a;',
+      success: 'color:#0ca668;background:#e4faf0;border:1px solid rgba(12,166,104,.3);',
+    };
     return h('span', {
-      style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
-    }, values.map((value, index) => {
-      const config = statusToMap[String(value)] || {};
-      const themeStyleMap: Record<string, string> = {
-        info: 'color:#3a84ff;background:#edf4ff;border:1px solid #a3c5fd;',
-        warning: 'color:#ff9e00;background:#fff3e1;border:1px solid #ffd48a;',
-        success: 'color:#0ca668;background:#e4faf0;border:1px solid rgba(12,166,104,.3);',
-      };
-      return h('span', {
-        style: `display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;border-radius:2px;${themeStyleMap[config.tag] || 'color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;'}`,
-      }, [
-        h('span', { style: 'display:flex;align-items:center;' }, [
-          h(AuditIcon as any, {
-            type: config.icon,
-            style: `margin-right: 6px; color: ${config.color || ''}; font-size: 14px;`,
-          }),
-          h('span', labels[index] || value || '--'),
-        ]),
-      ]);
-    }));
-  };
+      style: `display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;border-radius:2px;${themeStyleMap[config.tag] || 'color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;'}`,
+    }, [
+      h('span', { style: 'display:flex;align-items:center;' }, [
+        h(AuditIcon as any, {
+          type: config.icon,
+          style: `margin-right: 6px; color: ${config.color || ''}; font-size: 14px;`,
+        }),
+        h('span', labels[index] || value || '--'),
+      ]),
+    ]);
+  }));
 
   const renderRiskLabelNode = (values: string[]) => h('span', {
-    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
   }, values.map((value) => {
     const isMisreport = value === 'misreport';
     return h('span', {
-      style: `display:inline-block;padding:1px 8px;font-size:12px;border-radius:11px;line-height:18px;border:1px solid ${isMisreport ? '#ea35364d' : 'rgb(20 165 104 / 30%)'};background:${isMisreport ? '#fedddc99' : '#e4faf0'};color:${isMisreport ? '#ea3536' : '#14a568'};`,
+      style: `display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;border-radius:11px;line-height:18px;border:1px solid ${isMisreport ? '#ea35364d' : 'rgb(20 165 104 / 30%)'};background:${isMisreport ? '#fedddc99' : '#e4faf0'};color:${isMisreport ? '#ea3536' : '#14a568'};vertical-align:middle;`,
     }, isMisreport ? t('误报') : t('正常'));
   }));
 
   const renderCommonTagNode = (values: string[]) => h('span', {
-    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
   }, values.map(value => h('span', {
-    style: 'display:inline-block;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;',
+    style: 'display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
   }, value || '--')));
 
   const renderEditTagNode = (values: string[]) => h('span', {
-    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;',
+    style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
   }, values.map(value => h('span', {
-    style: 'display:inline-block;max-width:160px;padding:1px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;',
+    style: 'display:inline-flex;align-items:center;max-width:160px;padding:1px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
   }, value || '--')));
 
   const renderPlainTextNode = (values: string[]) => h('span', values.join('，') || '--');
@@ -489,7 +486,7 @@
     })));
 
     return h('span', {
-      style: 'display:inline;line-height:20px;max-width:100%;white-space:normal;word-break:break-word;',
+      style: 'display:inline;line-height:30px;max-width:100%;white-space:normal;word-break:break-word;',
     }, [
       h('span', `${t('已识别为')}`),
       ...visibleTags.flatMap((item, index) => ([
@@ -502,6 +499,18 @@
         ...(index < visibleTags.length - 1 ? [h('span', '；')] : []),
       ])),
     ]);
+  };
+
+  const showParseSuccessTip = () => {
+    historyRefreshKey.value += 1;
+    nlInputRef.value?.clear();
+    Message({
+      theme: 'success',
+      message: parseSuccessMessage.value || t('已识别到搜索条件'),
+      delay: 8000,
+      width: 720,
+      extCls: 'audit-nl-success-message',
+    });
   };
 
   // 关闭警告提示
@@ -720,6 +729,9 @@
       showParseWarning.value = false;
       applyFilterConditions(filterConditions);
       parseSuccessMessage.value = await buildParseSuccessMessage(filterConditions);
+      showParseSuccessTip();
+      isNLSearching.value = false;
+      emit('parsing', false);
 
       // 通知父组件字段变化（用于获取事件字段）
       emit('modelValueWatch', searchModel.value);
@@ -1020,14 +1032,6 @@
     notifySearchComplete() {
       if (isNLSearching.value) {
         isNLSearching.value = false;
-        historyRefreshKey.value += 1;
-        nlInputRef.value?.clear();
-        Message({
-          theme: 'success',
-          message: parseSuccessMessage.value || t('已识别到搜索条件'),
-          delay: 8000,
-          extCls: 'audit-nl-success-message',
-        });
       }
     },
     clearValue() {

@@ -409,7 +409,7 @@
       top: 68px;
       left: 24px;
       z-index: 120;
-      width: min(690px, calc(100% - 48px));
+      width: min(790px, calc(100% - 48px));
       overflow: hidden;
       background: #fff;
       border: 1px solid #eaebf0;
