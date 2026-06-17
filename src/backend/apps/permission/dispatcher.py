@@ -28,6 +28,10 @@ from iam.contrib.django.dispatcher.exceptions import KeywordTooShortException
 
 
 class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
+    @staticmethod
+    def _normalize_resource_type(data: dict):
+        return data.get("type") or data.get("resource_type_id") or data.get("resource_type")
+
     def _dispatch(self, request):
         request_id = request.META.get("HTTP_X_REQUEST_ID", "")
 
@@ -47,17 +51,21 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
 
         # check basic params
         method = data.get("method")
-        resource_type = data.get("type")
+        resource_type = self._normalize_resource_type(data)
         if not (method and resource_type):
             logger.error(
-                "resource request(%s) failed with invalid data: %s. method and type required", request_id, data
+                "resource request(%s) failed with invalid data: %s. method and resource type required",
+                request_id,
+                data,
             )
-            return fail_response(400, "method and type is required field", request_id)
+            return fail_response(400, "method and resource type is required field", request_id)
 
         # check resource type
         if resource_type not in self._provider:
             logger.error("resource request(%s) failed with unsupported resource type: %s", request_id, resource_type)
             return fail_response(404, "unsupported resource type: {}".format(resource_type), request_id)
+
+        data["type"] = resource_type
 
         # check method and process
         processor = getattr(self, "_dispatch_{}".format(method), None)
