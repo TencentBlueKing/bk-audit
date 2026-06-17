@@ -28,19 +28,23 @@
       <div class="action-toolbar">
         <div class="action-left">
           <slot name="toolbar-before-analyze" />
-          <bk-button
+          <span
             v-bk-tooltips="analyzeTooltip"
-            class="analyze-btn"
-            :disabled="!isAnalyzeEnabled"
-            outline
-            @click="handleAnalyze">
-            <img
-              class="ai-agent-ai"
-              height="14"
-              src="@images/ai.svg"
-              width="24">
-            {{ t('智能分析') }}
-          </bk-button>
+            class="analyze-btn-wrapper"
+            :class="{ 'is-analyze-disabled': !isAnalyzeEnabled }">
+            <bk-button
+              class="analyze-btn"
+              :disabled="!isAnalyzeEnabled"
+              outline
+              @click="handleAnalyze">
+              <img
+                class="ai-agent-ai"
+                height="14"
+                src="@images/ai.svg"
+                width="24">
+              {{ t('智能分析') }}
+            </bk-button>
+          </span>
           <slot name="toolbar-after-analyze" />
         </div>
         <div class="action-right">
@@ -154,7 +158,7 @@
     if (props.total === 0) {
       return {
         prefix: t('共搜索到'),
-        suffix: t('条风险单，可重置筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告'),
+        suffix: t('条风险单，建议修改筛选条件后重新搜索'),
       };
     }
     if (props.total >= 100) {
@@ -171,12 +175,24 @@
 
   const isAnalyzeEnabled = computed(() => props.total > 0 && props.total < 100 && hasUserSearchConditions.value);
 
-  const analyzeTooltip = computed(() => ({
-    disabled: !(props.total === 0 || props.total >= 100),
-    content: props.total === 0
-      ? t('至少选择 1 条风险数据才能使用')
-      : t('当前数据量为 {total} 条，最多支持分析 100 条数据', { total: props.total }),
-  }));
+  const analyzeTooltip = computed(() => {
+    if (isAnalyzeEnabled.value) {
+      return { disabled: true, content: '' };
+    }
+    if (!hasUserSearchConditions.value) {
+      return { disabled: false, content: t('可添加筛选条件后进行') };
+    }
+    if (props.total === 0) {
+      return { disabled: false, content: t('建议修改筛选条件后重新搜索') };
+    }
+    if (props.total >= 100) {
+      return {
+        disabled: false,
+        content: t('当前数据量为 {total} 条，最多支持分析 100 条数据', { total: props.total }),
+      };
+    }
+    return { disabled: true, content: '' };
+  });
 
   const handleAnalyze = () => {
     if (isAnalyzeEnabled.value) {
@@ -306,18 +322,35 @@
       font-size: 12px;
     }
 
+    .analyze-btn-wrapper {
+      display: inline-flex;
+
+      &.is-analyze-disabled :deep(.analyze-btn) {
+        color: #c4c6cc;
+        cursor: not-allowed;
+        background-color: #fff;
+        border-color: #dcdee5;
+
+        .ai-agent-ai {
+          opacity: 50%;
+        }
+
+        &:hover,
+        &:active {
+          color: #c4c6cc;
+          background-color: #fff;
+          border-color: #dcdee5;
+        }
+      }
+    }
+
     :deep(.analyze-btn) {
       color: #7b29ff;
       border-color: #7b29ff;
 
-      &:not(.is-disabled):hover {
+      &:not(.is-disabled, [disabled]):hover {
         color: #9b5cff;
         border-color: #9b5cff;
-      }
-
-      &.is-disabled {
-        color: #c4c6cc;
-        border-color: #dcdee5;
       }
 
       .ai-agent-ai {
