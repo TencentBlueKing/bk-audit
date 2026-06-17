@@ -1527,7 +1527,7 @@ class NL2RiskSceneItemSerializer(serializers.Serializer):
 
 
 class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
-    query = serializers.CharField(label=gettext_lazy("Natural Language Query"), allow_blank=False)
+    query = serializers.CharField(label=gettext_lazy("Natural Language Query"), allow_blank=False, max_length=2048)
     tags = NL2RiskTagItemSerializer(label=gettext_lazy("Tags"), many=True, required=False, default=list)
     strategies = NL2RiskStrategyItemSerializer(
         label=gettext_lazy("Strategies"), many=True, required=False, default=list
@@ -1564,6 +1564,11 @@ class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
     )
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
+    deduplicate = serializers.BooleanField(
+        label=gettext_lazy("Deduplicate"),
+        help_text=gettext_lazy("是否按 query 去重，仅返回相同 query 的最新一条记录"),
+        default=True,
+    )
 
 
 class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
