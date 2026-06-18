@@ -147,6 +147,8 @@
 
   // 当前正在编辑的字段
   const editingField = ref<string | null>(null);
+  // 标记是否正在程序化添加字段（用于防止 searchModel watch 竞态时误清空 editingField）
+  const isAddingField = ref(false);
   // 选项缓存（供 select 子组件复用）
   const optionsCache = ref<Record<string, Array<Record<string, any>>>>({});
   // 事件字段组件引用
@@ -260,7 +262,12 @@
 
   // 外部调用：让指定风险字段进入编辑态
   const startEditField = (fieldName: string) => {
+    isAddingField.value = true;
     editingField.value = fieldName;
+    // 短暂延迟后清除标志，确保 searchModel 变化引起的 watch 已完成
+    setTimeout(() => {
+      isAddingField.value = false;
+    }, 100);
     emit('startEdit');
   };
 
@@ -302,6 +309,8 @@
 
   // 监听 searchModel 变化
   watch(() => props.searchModel, () => {
+    // 程序化添加字段期间跳过检查，避免竞态时误清空 editingField 导致下拉框闪屏
+    if (isAddingField.value) return;
     if (editingField.value) {
       const currentTag = conditionTags.value.find(item => item.fieldName === editingField.value);
       if (!currentTag) {
