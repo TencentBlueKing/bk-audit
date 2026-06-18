@@ -133,6 +133,7 @@
   const searchKey = ref('');
   const tagRef = ref<HTMLElement>();
   const popoverRef = ref();
+  let ignoreCloseBefore = 0;
 
   const valName = computed(() => props.tag.config.valName || 'id');
   const labelName = computed(() => props.tag.config.labelName || 'name');
@@ -227,13 +228,14 @@
   const isInPopoverLayer = (target: Node) => {
     const el = target as HTMLElement;
     if (!el?.closest) return false;
-    return !!el.closest('.tippy-box[data-theme~="nl-tag-popover"], .bk-popover.bk-pop2-content');
+    return !!el.closest('.nl-tag-select-popover, .nl-tag-editor-popover, .tippy-box[data-theme~="nl-tag-popover"], .bk-popover.bk-pop2-content');
   };
 
   // 点击外部区域关闭下拉框（使用 mousedown + 捕获阶段，与 add-condition 保持一致，
   // 避免 setTimeout 延迟绑定导致的竞态窗口中事件泄漏从而闪屏）
   const handleDocumentMousedown = (e: Event) => {
     if (!isShow.value) return;
+    if (Date.now() < ignoreCloseBefore) return;
     const target = e.target as HTMLElement;
     // 点击标签自身内部 → 由 handleToggle 处理
     if (tagRef.value?.contains(target)) return;
@@ -295,10 +297,13 @@
   watch(() => props.isEditing, (val) => {
     isShow.value = val;
     if (val) {
+      ignoreCloseBefore = Date.now() + 200;
       localValue.value = _.cloneDeep(props.tag.value) || [];
       searchKey.value = '';
       loadOptions();
-      document.addEventListener('mousedown', handleDocumentMousedown, true);
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleDocumentMousedown, true);
+      });
     } else {
       document.removeEventListener('mousedown', handleDocumentMousedown, true);
     }
