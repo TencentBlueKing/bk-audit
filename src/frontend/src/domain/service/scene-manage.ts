@@ -163,15 +163,4 @@ export default {
     return SceneManageSource.getSceneAll(params)
       .then(({ data }) => data);
   },
-
-  /**
-   * @desc 获取场景下用户组成员列表
-   * @param { String|Number } sceneId - 场景 ID
-   */
-  fetchSceneMembers(params:{
-    scene_id: string | number;
-  }) {
-    return SceneManageSource.getSceneMembers(params)
-      .then(({ data }) => data);
-  },
 };
