@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    class="list-check"
+    class="cross-page-select-header"
     :class="{ disabled }">
     <bk-checkbox
       :model-value="isChecked"
@@ -72,13 +72,13 @@
 
   watch(() => props.value, (value) => {
     select.value = value;
-  });
+  }, { immediate: true });
 
   const triggerChange = (actionType: string) => {
     emits('change', actionType);
   };
 
-  const handleAllCheckCancle = () => {
+  const handleAllCheckCancel = () => {
     select.value = '';
     triggerChange('allCancel');
   };
@@ -94,7 +94,7 @@
   const handleCheckboxChange = (value: boolean | string | number) => {
     if (!value) {
       if (select.value === 'all') {
-        handleAllCheckCancle();
+        handleAllCheckCancel();
       } else {
         handlePageChange(false);
         select.value = '';
@@ -117,7 +117,7 @@
   };
 </script>
 <style lang="postcss" scoped>
-  .list-check {
+  .cross-page-select-header {
     position: relative;
     display: inline-flex;
     vertical-align: middle;

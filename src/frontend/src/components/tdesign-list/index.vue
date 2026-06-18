@@ -91,67 +91,79 @@
             type="setting" />
         </bk-popover>
       </div>
-      <primary-table
-        ref="tableRef"
-        v-model:selected-row-keys="selectedRowKeys"
-        :active-row-keys="[]"
-        active-row-type="multiple"
-        :allow-multiple-sort="allowMultipleSort"
-        :bordered="border"
-        class="tdesign-list"
-        :columns="tableColumns"
-        :data="tableData"
-        :height="height"
-        hover
-        :max-height="effectiveTableMaxHeight"
-        :row-class-name="rowClassName"
-        :row-key="rowKey as any"
-        v-bind="$attrs"
-        @filter-change="handleFilterChange"
-        @select-change="handleSelectChange"
-        @sort-change="handleSortChange">
-        <template
-          v-for="(slotData, name) in $slots"
-          #[name]="slotProps">
-          <slot
-            :name="name"
-            v-bind="slotProps" />
-        </template>
-        <template #empty>
-          <slot
-            v-if="slot.empty"
-            name="empty" />
-          <bk-exception
-            v-else-if="isSearching && needEmptySearchTip"
-            scene="part"
-            style="height: 280px;padding-top: 40px;"
-            type="search-empty">
-            <div>
-              <div style="color: #63656e;">
-                {{ t('搜索结果为空') }}
+      <div
+        :ref="enableCrossPageSelect ? bindTableAreaRef : undefined"
+        :class="{ 'tdesign-list-table-area': enableCrossPageSelect }">
+        <div
+          v-if="enableCrossPageSelect && showSelectAllBanner"
+          class="tdesign-list-select-banner-bar"
+          :style="{ top: `${selectBannerTop}px` }">
+          {{ selectBannerText }}
+        </div>
+        <primary-table
+          ref="tableRef"
+          v-model:selected-row-keys="selectedRowKeys"
+          :active-row-keys="[]"
+          active-row-type="multiple"
+          :allow-multiple-sort="allowMultipleSort"
+          :bordered="border"
+          class="tdesign-list"
+          :columns="tableColumns"
+          :data="tableData"
+          :first-full-row="enableCrossPageSelect ? selectAllBanner : undefined"
+          :height="height"
+          hover
+          :max-height="effectiveTableMaxHeight"
+          reserve-selected-row-on-paginate
+          :row-class-name="rowClassName"
+          :row-key="rowKey as any"
+          v-bind="$attrs"
+          @filter-change="handleFilterChange"
+          @select-change="handleSelectChange"
+          @sort-change="handleSortChange">
+          <template
+            v-for="(slotData, name) in $slots"
+            #[name]="slotProps">
+            <slot
+              :name="name"
+              v-bind="slotProps" />
+          </template>
+          <template #empty>
+            <slot
+              v-if="slot.empty"
+              name="empty" />
+            <bk-exception
+              v-else-if="isSearching && needEmptySearchTip"
+              scene="part"
+              style="height: 280px;padding-top: 40px;"
+              type="search-empty">
+              <div>
+                <div style="color: #63656e;">
+                  {{ t('搜索结果为空') }}
+                </div>
+                <div
+                  v-if="!isNeedHideClearSearchTip"
+                  style="margin-top: 8px; color: #979ba5;">
+                  {{ t('可以尝试调整关键词') }} {{ t('或') }}
+                  <bk-button
+                    text
+                    theme="primary"
+                    @click="handleClearSearch">
+                    {{ t('清空搜索条件') }}
+                  </bk-button>
+                </div>
               </div>
-              <div
-                v-if="!isNeedHideClearSearchTip"
-                style="margin-top: 8px; color: #979ba5;">
-                {{ t('可以尝试调整关键词') }} {{ t('或') }}
-                <bk-button
-                  text
-                  theme="primary"
-                  @click="handleClearSearch">
-                  {{ t('清空搜索条件') }}
-                </bk-button>
-              </div>
-            </div>
-          </bk-exception>
-          <bk-exception
-            v-else
-            scene="part"
-            style="height: 280px;padding-top: 40px;color: #63656e;"
-            type="empty">
-            {{ t('暂无数据') }}
-          </bk-exception>
-        </template>
-      </primary-table>
+            </bk-exception>
+            <bk-exception
+              v-else
+              scene="part"
+              style="height: 280px;padding-top: 40px;color: #63656e;"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+          </template>
+        </primary-table>
+      </div>
       <div
         v-if="pagination.count > 0"
         class="tdesign-list-pagination">
@@ -176,6 +188,7 @@
     onBeforeUnmount,
     onMounted,
     reactive,
+    type ComponentPublicInstance,
     type Ref,
     ref,
     useAttrs,
@@ -188,6 +201,8 @@
   import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
+
+  import { useCrossPageSelect } from './hooks/use-cross-page-select';
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
 
@@ -233,6 +248,10 @@
     sceneIdKey?: string,
     /** 是否允许多列同时排序（按住 Ctrl/Shift 点击多个列头），默认 false */
     allowMultipleSort?: boolean,
+    /** 是否启用跨页全选模式（表头本页全选/跨页全选、选中提示条）；默认 false，使用 TDesign 内置多选 */
+    enableCrossPageSelect?: boolean,
+    /** 跨页全选解析 ID 上限，用于批量导出等场景 */
+    crossPageSelectMaxCount?: number,
   }
 
   interface Emits {
@@ -246,7 +265,20 @@
     refreshList: () => void,
     silentRefreshList: () => Promise<void>,
     getListData: () => Array<Record<string, any>>,
-    getSelection: () => void
+    getSelection: () => Array<Record<string, any>>,
+    getSelectionMeta: () => {
+      mode: '' | 'page' | 'all',
+      count: number,
+      total: number,
+      isSelectAll: boolean,
+    },
+    resolveSelectedRowKeys: () => Promise<Array<string | number>>,
+    resolveExportSelection: () => Promise<{
+      keys: Array<string | number>,
+      truncated: boolean,
+      total: number,
+      isSelectAll: boolean,
+    }>,
     initTableHeight: () => void,
     listDataUnshift: (data: Record<string, any>) => void,
     initListData: (data: any, key: string) => void
@@ -271,6 +303,8 @@
     isNeedSceneId: false,
     sceneIdKey: 'scope_id',
     allowMultipleSort: false,
+    enableCrossPageSelect: false,
+    crossPageSelectMaxCount: 300,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -278,12 +312,12 @@
   // 从 $attrs 中获取 row-key（kebab-case），如果没有则使用 props.rowKey
   const rowKey = computed(() => (attrs['row-key'] as string | ((row: any) => string | number)) || props.rowKey);
 
-  // 管理选中的行键
+  // 管理选中的行键（默认模式与跨页全选模式共用）
   const selectedRowKeys = ref<(string | number)[]>([]);
 
-  // 处理选择变更事件
-  const handleSelectChange = (value: (string | number)[]) => {
-    selectedRowKeys.value = value || [];
+  const getRowKeyValue = (row: Record<string, any>) => {
+    const currentRowKey = rowKey.value;
+    return typeof currentRowKey === 'function' ? currentRowKey(row) : row[currentRowKey];
   };
 
   // 列控制相关状态
@@ -355,35 +389,6 @@
     const { fixed, ...rest } = col;
     return rest;
   };
-
-  // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
-  const tableColumns = computed(() => {
-    if (props.settings.length === 0) {
-      // loading 时移除所有列的 fixed 属性，避免固定列 z-index 穿透 loading 遮罩
-      if (isLoading.value) {
-        return props.columns.map(removeFixed);
-      }
-      return props.columns;
-    }
-
-    // 过滤显示的列
-    const filteredColumns = props.columns.filter((column) => {
-      // 选择列 / 操作列 / event_filters 动态列 始终显示
-      if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
-        return true;
-      }
-      if (column.colKey.startsWith('event_data.')) {
-        return true;
-      }
-      return visibleColumnKeys.value.includes(column.colKey);
-    });
-
-    // loading 时移除所有列的 fixed 属性，避免固定列 z-index 穿透 loading 遮罩
-    if (isLoading.value) {
-      return filteredColumns.map(removeFixed);
-    }
-    return filteredColumns;
-  });
 
   const handlePopoverShow = () => {
     // 打开 popover 时，初始化临时选择为当前选择
@@ -484,12 +489,6 @@
     return listData.value?.results || [];
   });
 
-  watch(listData, (newData) => {
-    if (newData && typeof newData.total === 'number') {
-      pagination.count = newData.total;
-    }
-  }, { deep: true, immediate: true });
-
   const buildFetchParams = (): Record<string, any> | null => {
     const currentLimit = pagination.limit;
     const { isNeedSceneParams, isNeedSceneId } = props;
@@ -508,6 +507,75 @@
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
     };
   };
+
+  const crossPageSelectEnabled = computed(() => props.enableCrossPageSelect);
+
+  const {
+    tableAreaRef,
+    selectBannerTop,
+    showSelectAllBanner,
+    selectBannerText,
+    selectAllBanner,
+    enhanceSelectColumn,
+    resetCrossPageSelection,
+    handleCrossPageSelectChange,
+    updateSelectBannerPosition,
+    resolveSelectedRowKeys,
+    resolveExportSelection,
+    getSelectionMeta,
+  } = useCrossPageSelect({
+    enabled: crossPageSelectEnabled,
+    selectedRowKeys,
+    tableData,
+    getRowKeyValue,
+    pagination,
+    dataSource: props.dataSource,
+    buildFetchParams,
+    t,
+    maxResolveCount: props.crossPageSelectMaxCount,
+  });
+
+  const bindTableAreaRef = (el: Element | ComponentPublicInstance | null) => {
+    if (props.enableCrossPageSelect) {
+      tableAreaRef.value = (el instanceof Element ? el : null) as HTMLElement | undefined;
+    }
+  };
+
+  const handleSelectChange = (value: (string | number)[]) => {
+    selectedRowKeys.value = value || [];
+    handleCrossPageSelectChange();
+  };
+
+  // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
+  const tableColumns = computed(() => {
+    if (props.settings.length === 0) {
+      if (isLoading.value) {
+        return enhanceSelectColumn(props.columns.map(removeFixed));
+      }
+      return enhanceSelectColumn(props.columns);
+    }
+
+    const filteredColumns = props.columns.filter((column) => {
+      if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
+        return true;
+      }
+      if (column.colKey.startsWith('event_data.')) {
+        return true;
+      }
+      return visibleColumnKeys.value.includes(column.colKey);
+    });
+
+    if (isLoading.value) {
+      return enhanceSelectColumn(filteredColumns.map(removeFixed));
+    }
+    return enhanceSelectColumn(filteredColumns);
+  });
+
+  watch(listData, (newData) => {
+    if (newData && typeof newData.total === 'number') {
+      pagination.count = newData.total;
+    }
+  }, { deep: true, immediate: true });
 
   const isListResponseEqual = (oldData: any, newData: any) => {
     if (!oldData || !newData) {
@@ -722,8 +790,14 @@
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       calcTableHeight();
+      updateSelectBannerPosition();
     }, 120);
   };
+
+  watch([tableColumns, isLoading], () => {
+    updateSelectBannerPosition();
+  });
+
   onMounted(() => {
     parseURL();
     calcTableHeight();
@@ -834,11 +908,15 @@
         internalTableMaxHeight.value = dimensions.tableHeaderHeight
           + dimensions.rowNum * dimensions.tableRowHeight + TABLE_PADDING + TABLE_ROW_HEIGHT;
       }
+      updateSelectBannerPosition();
     });
   };
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
+      if (props.enableCrossPageSelect) {
+        resetCrossPageSelection();
+      }
       const { sort } = getSearchParams();
       const urlSortParams: Record<string, any> = {};
       if (sort) {
@@ -885,6 +963,9 @@
         return selectedRowKeys.value.includes(key);
       });
     },
+    getSelectionMeta,
+    resolveSelectedRowKeys,
+    resolveExportSelection,
     initTableHeight() {
       initTableHeight();
     },
@@ -1060,5 +1141,36 @@
 
 }
 
+.tdesign-list-table-area {
+  position: relative;
+}
+
+.tdesign-list-select-banner-bar {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 12px;
+  color: #63656e;
+  pointer-events: none;
+  background: #f0f5ff;
+  align-items: center;
+  justify-content: center;
+}
+
+:deep(.tdesign-list-select-banner-placeholder) {
+  height: 32px;
+}
+
+:deep(.cross-page-select-header) {
+  gap: 6px;
+
+  .pop-menu {
+    z-index: 3000;
+  }
+}
 
 </style>

@@ -20,10 +20,8 @@
       :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
-      is-export
       @change="handleSearchChange"
       @change-table-height="handleChangeTableHeight"
-      @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div
       :key="fieldConfigKey"
@@ -42,11 +40,17 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <bk-button
+          outline
+          @click="handleExport">
+          {{ t('批量导出') }}
+        </bk-button>
       </div>
       <tdesign-list
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
+        enable-cross-page-select
         is-need-scene-params
         need-empty-search-tip
         :row-class-name="getRowClassName"
@@ -256,11 +260,15 @@
   const newAddedRiskIds = ref<string[]>([]);
   const dataSource = RiskManageService.fetchRiskList;
   // 导出数据
-  const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
+  const handleExport = async () => {
+    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
+    const selectedData = keys.map((id: string | number) => id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
+    }
+    if (truncated) {
+      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
     }
     searchBoxRef.value.exportData(selectedData, 'processed');
   };
@@ -496,6 +504,9 @@
     background-color: white;
 
     .add-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       padding-bottom: 5px;
 
       .add-icon {
