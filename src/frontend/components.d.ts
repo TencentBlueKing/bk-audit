@@ -27,6 +27,7 @@ declare module 'vue' {
     CreateNoticeGroup: typeof import('./src/components/skeleton-loading/components/create-notice-group.vue')['default']
     CreateStrategy: typeof import('./src/components/skeleton-loading/components/create-strategy.vue')['default']
     CreateTools: typeof import('./src/components/skeleton-loading/components/create-tools.vue')['default']
+    CrossPageSelectHeader: typeof import('./src/components/tdesign-list/components/cross-page-select-header.vue')['default']
     Datetimerange: typeof import('./src/components/search-box/components/render-field-config/components/datetimerange.vue')['default']
     Dialog: typeof import('./src/components/apply-permission/dialog.vue')['default']
     Editor: typeof import('./src/components/editor/index.vue')['default']

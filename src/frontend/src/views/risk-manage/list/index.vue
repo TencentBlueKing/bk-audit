@@ -19,10 +19,8 @@
     <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
-      is-export
       :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
-      @export="handleExport"
       @model-value-watch="handleModelValueWatch"
       @parsing="handleParsing" />
     <ai-analyzes
@@ -39,8 +37,6 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
-      </template>
-      <template #toolbar-after-analyze>
         <bk-button
           outline
           @click="handleExport">
@@ -51,6 +47,7 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
+        enable-cross-page-select
         need-empty-search-tip
         :row-class-name="getRowClassName"
         row-key="risk_id"
@@ -344,11 +341,15 @@
   const conditionTags = ref<any[]>([]);
 
   // 导出数据
-  const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
+  const handleExport = async () => {
+    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
+    const selectedData = keys.map((id: string | number) => id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
+    }
+    if (truncated) {
+      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
     }
     searchBoxRef.value.exportData(selectedData, 'all');
   };
