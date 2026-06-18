@@ -109,7 +109,7 @@
                   <div class="analyze-content-popover">
                     <div class="analyze-content-row">
                       <div class="analyze-content-label">
-                        {{ t('需求内容') }}
+                        {{ t('自定义提示词') }}
                       </div>
                       <div class="analyze-content-value">
                         {{ customPrompt || '--' }}
