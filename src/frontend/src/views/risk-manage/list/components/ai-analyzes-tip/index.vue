@@ -68,9 +68,10 @@
   </div>
   <analyze-dialog
     ref="analyzeDialogRef"
+    :analyze-count="analyzeCount"
     :condition-tags="conditionTags"
+    :resolve-selected-risk-ids="resolveSelectedRiskIds"
     :search-params="searchParams"
-    :total="total"
     @analyze-failed="handleAnalyzeFailed"
     @analyze-started="handleAnalyzeStarted" />
 
@@ -102,10 +103,19 @@
   import HistoryReportDrawer from './history-report-drawer.vue';
   import ReportDrawer from './report-drawer.vue';
 
+  interface SelectionMeta {
+    mode: '' | 'page' | 'all',
+    count: number,
+    total: number,
+    isSelectAll: boolean,
+  }
+
   interface Props {
     total?: number;
     conditionTags?: any[];
     searchParams?: Record<string, any>;
+    selectionMeta?: SelectionMeta;
+    resolveSelectedRiskIds?: () => Promise<string[]>;
   }
 
   interface Exposes {
@@ -118,8 +128,22 @@
       total: 0,
       conditionTags: () => [],
       searchParams: () => ({}),
+      selectionMeta: () => ({
+        mode: '',
+        count: 0,
+        total: 0,
+        isSelectAll: false,
+      }),
+      resolveSelectedRiskIds: () => Promise.resolve([]),
     },
   );
+
+  const ANALYZE_RISK_ID_LIMIT = 100;
+
+  const analyzeCount = computed(() => {
+    const { isSelectAll, count, total } = props.selectionMeta;
+    return isSelectAll ? total : count;
+  });
 
   const hasTagValue = (value: unknown) => {
     if (value === undefined || value === null || value === '') {
@@ -152,7 +176,7 @@
     if (!hasUserSearchConditions.value) {
       return {
         prefix: t('当前共有'),
-        suffix: t('条风险单，可选择目标风险单进行智能分析，或查看历史分析报告'),
+        suffix: t('条风险单，请勾选目标风险单后进行智能分析，或查看历史分析报告'),
       };
     }
     if (props.total === 0) {
@@ -161,34 +185,38 @@
         suffix: t('条风险单，建议修改筛选条件后重新搜索'),
       };
     }
-    if (props.total >= 100) {
+    if (props.total >= ANALYZE_RISK_ID_LIMIT) {
       return {
         prefix: t('共搜索到'),
-        suffix: t('条风险单，可添加筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告'),
+        suffix: t('条风险单，请勾选不超过 {limit} 条风险单后进行智能分析，或查看历史分析报告', {
+          limit: ANALYZE_RISK_ID_LIMIT,
+        }),
       };
     }
     return {
       prefix: t('共搜索到'),
-      suffix: t('条风险单，可选择目标风险单进行智能分析，或查看历史分析报告'),
+      suffix: t('条风险单，请勾选目标风险单后进行智能分析，或查看历史分析报告'),
     };
   });
 
-  const isAnalyzeEnabled = computed(() => props.total > 0 && props.total < 100 && hasUserSearchConditions.value);
+  const isAnalyzeEnabled = computed(() => (
+    analyzeCount.value > 0 && analyzeCount.value < ANALYZE_RISK_ID_LIMIT
+  ));
 
   const analyzeTooltip = computed(() => {
     if (isAnalyzeEnabled.value) {
       return { disabled: true, content: '' };
     }
-    if (!hasUserSearchConditions.value) {
-      return { disabled: false, content: t('可添加筛选条件后进行') };
+    if (analyzeCount.value === 0) {
+      return { disabled: false, content: t('请至少选择 1 条风险单') };
     }
-    if (props.total === 0) {
-      return { disabled: false, content: t('建议修改筛选条件后重新搜索') };
-    }
-    if (props.total >= 100) {
+    if (analyzeCount.value >= ANALYZE_RISK_ID_LIMIT) {
       return {
         disabled: false,
-        content: t('当前数据量为 {total} 条，最多支持分析 100 条数据', { total: props.total }),
+        content: t('当前已选 {count} 条，最多支持分析 {limit} 条数据', {
+          count: analyzeCount.value,
+          limit: ANALYZE_RISK_ID_LIMIT,
+        }),
       };
     }
     return { disabled: true, content: '' };

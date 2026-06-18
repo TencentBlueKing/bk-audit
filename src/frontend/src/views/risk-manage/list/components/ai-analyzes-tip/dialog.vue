@@ -10,7 +10,7 @@
     @confirm="() => isShow = false">
     <div class="ai-analyzes-dialog-content">
       <div class="subtitle">
-        {{ t('基于当前') }} <span class="highlight">{{ total }}</span> {{ t('条风险数据，为您推荐以下分析报告：') }}
+        {{ t('基于当前') }} <span class="highlight">{{ analyzeCount }}</span> {{ t('条风险数据，为您推荐以下分析报告：') }}
       </div>
 
       <div
@@ -113,9 +113,10 @@
   import iconZrren from '@images/zrren.svg';
 
   interface Props {
-    total?: number;
+    analyzeCount?: number;
     conditionTags?: any[];
     searchParams?: Record<string, any>;
+    resolveSelectedRiskIds?: () => Promise<string[]>;
   }
   interface reportsItem {
     description: string;
@@ -136,9 +137,10 @@
   const props = withDefaults(
     defineProps<Props>(),
     {
-      total: 0,
+      analyzeCount: 0,
       conditionTags: () => [],
       searchParams: () => ({}),
+      resolveSelectedRiskIds: () => Promise.resolve([]),
     },
   );
 
@@ -255,13 +257,17 @@
   });
 
   // 提交分析报告请求
-  const submitAnalyseReport = (params: Record<string, any>) => {
+  const submitAnalyseReport = async (params: Record<string, any>) => {
     const analysisScope = JSON.stringify(buildAnalysisScope());
+    const selectedRiskIds = await props.resolveSelectedRiskIds();
     isShow.value = false;
     getAiAnalyseReport({
       ...params,
       analysis_scope: analysisScope,
-      target_risks_filter: props.searchParams,
+      target_risks_filter: {
+        ...props.searchParams,
+        risk_id: selectedRiskIds.join(','),
+      },
       generate_title: params.report_type === 'custom',
     }).then((data) => {
       const reportId = data?.report_id ?? data?.id;

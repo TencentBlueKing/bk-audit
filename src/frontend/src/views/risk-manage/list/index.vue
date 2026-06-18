@@ -26,7 +26,9 @@
     <ai-analyzes
       ref="aiAnalyzesRef"
       :condition-tags="conditionTags"
+      :resolve-selected-risk-ids="resolveSelectedRiskIdsForAnalyze"
       :search-params="searchModel"
+      :selection-meta="selectionMeta"
       :total="totalCount">
       <template #toolbar-before-analyze>
         <bk-button
@@ -56,7 +58,8 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess" />
+        @request-success="handleRequestSuccess"
+        @selection-change="handleSelectionChange" />
     </ai-analyzes>
   </div>
   <add-risk
@@ -339,6 +342,23 @@
   const searchModel = ref<Record<string, any>>({});
   const totalCount = ref(0);
   const conditionTags = ref<any[]>([]);
+  const selectionMeta = ref({
+    mode: '' as '' | 'page' | 'all',
+    count: 0,
+    total: 0,
+    isSelectAll: false,
+  });
+
+  const ANALYZE_RISK_ID_LIMIT = 100;
+
+  const handleSelectionChange = (meta: typeof selectionMeta.value) => {
+    selectionMeta.value = meta;
+  };
+
+  const resolveSelectedRiskIdsForAnalyze = async () => {
+    const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
+    return keys.slice(0, ANALYZE_RISK_ID_LIMIT).map((id: string | number) => String(id));
+  };
 
   // 导出数据
   const handleExport = async () => {
