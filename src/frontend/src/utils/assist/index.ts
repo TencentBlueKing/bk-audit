@@ -21,5 +21,6 @@ export * from './encode';
 export * from './exec-copy';
 export * from './make-map';
 export * from './permission-dialog';
+export * from './pinyin-sort';
 export * from './url';
 export * from './vue-helper';

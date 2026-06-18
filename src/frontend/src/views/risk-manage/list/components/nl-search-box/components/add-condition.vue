@@ -127,6 +127,8 @@
 
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
+  import { compareFieldName } from '@/utils/assist';
+
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
     selectedFields: string[];       // 已选中的风险字段名列表
@@ -182,7 +184,6 @@
     'scene_id',
   ];
   const riskFieldOrderMap = new Map(riskFieldOrder.map((field, index) => [field, index]));
-  const compareAscii = (first = '', second = '') => first.localeCompare(second, 'en', { sensitivity: 'base' });
 
   // 判断是否有已添加的条件（风险字段或事件字段）
   const hasAddedConditions = computed(() => props.selectedFields.length > 0 || props.selectedEventFieldIds.length > 0);
@@ -219,7 +220,7 @@
           return firstOrder - secondOrder;
         }
 
-        return compareAscii(first.fieldName, second.fieldName);
+        return compareFieldName(first.fieldName, second.fieldName);
       });
   });
 
@@ -232,7 +233,12 @@
       list = list.filter(item => item.display_name.toLowerCase().includes(keyword)
         || item.field_name.toLowerCase().includes(keyword));
     }
-    return list.sort((first, second) => compareAscii(first.display_name, second.display_name));
+    return list.sort((first, second) => {
+      const displayNameCompare = compareFieldName(first.display_name, second.display_name);
+
+      if (displayNameCompare !== 0) return displayNameCompare;
+      return compareFieldName(first.field_name, second.field_name);
+    });
   });
 
   // 列表是否为空
