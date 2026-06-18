@@ -40,11 +40,18 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
-        <bk-button
-          outline
-          @click="handleExport">
-          {{ t('批量导出') }}
-        </bk-button>
+        <span
+          v-bk-tooltips="exportTooltip"
+          class="export-btn-wrapper"
+          :class="{ 'is-export-disabled': !isExportEnabled }">
+          <bk-button
+            class="export-btn"
+            :disabled="!isExportEnabled"
+            outline
+            @click="handleExport">
+            {{ t('批量导出') }}
+          </bk-button>
+        </span>
       </div>
       <tdesign-list
         ref="listRef"
@@ -60,7 +67,8 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess" />
+        @request-success="handleRequestSuccess"
+        @selection-change="handleSelectionChange" />
     </div>
   </div>
   <add-risk
@@ -258,7 +266,32 @@
   const searchModel = ref<Record<string, any>>({});
   const fieldConfigKey = ref(0);
   const newAddedRiskIds = ref<string[]>([]);
+  const selectionMeta = ref({
+    mode: '' as '' | 'page' | 'all',
+    count: 0,
+    total: 0,
+    isSelectAll: false,
+  });
   const dataSource = RiskManageService.fetchRiskList;
+
+  const handleSelectionChange = (meta: typeof selectionMeta.value) => {
+    selectionMeta.value = meta;
+  };
+
+  const exportCount = computed(() => {
+    const { isSelectAll, count, total } = selectionMeta.value;
+    return isSelectAll ? total : count;
+  });
+
+  const isExportEnabled = computed(() => exportCount.value > 0);
+
+  const exportTooltip = computed(() => {
+    if (isExportEnabled.value) {
+      return { disabled: true, content: '' };
+    }
+    return { disabled: false, content: t('请至少选择 1 条风险单') };
+  });
+
   // 导出数据
   const handleExport = async () => {
     const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
@@ -512,6 +545,24 @@
       .add-icon {
         margin-right: 5px;
         font-size: 12px;
+      }
+
+      .export-btn-wrapper {
+        display: inline-flex;
+
+        &.is-export-disabled :deep(.export-btn) {
+          color: #c4c6cc;
+          cursor: not-allowed;
+          background-color: #fff;
+          border-color: #dcdee5;
+
+          &:hover,
+          &:active {
+            color: #c4c6cc;
+            background-color: #fff;
+            border-color: #dcdee5;
+          }
+        }
       }
     }
   }
