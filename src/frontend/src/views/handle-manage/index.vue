@@ -18,6 +18,7 @@
   <div class="risk-manage-list-page-wrap">
     <search-box
       ref="searchBoxRef"
+      :export-disabled="!isExportEnabled"
       :field-config="FieldConfig"
       is-export
       is-reassignment
@@ -31,6 +32,7 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
+        enable-cross-page-select
         need-empty-search-tip
         row-key="risk_id"
         :search-params="searchModel"
@@ -38,7 +40,8 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess" />
+        @request-success="handleRequestSuccess"
+        @selection-change="handleSelectionChange" />
     </div>
 
     <bk-dialog
@@ -222,6 +225,23 @@
   const listRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
+  const selectionMeta = ref({
+    mode: '' as '' | 'page' | 'all',
+    count: 0,
+    total: 0,
+    isSelectAll: false,
+  });
+
+  const handleSelectionChange = (meta: typeof selectionMeta.value) => {
+    selectionMeta.value = meta;
+  };
+
+  const exportCount = computed(() => {
+    const { isSelectAll, count, total } = selectionMeta.value;
+    return isSelectAll ? total : count;
+  });
+
+  const isExportEnabled = computed(() => exportCount.value > 0);
 
   // 默认的可配置列键
   const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
@@ -271,10 +291,14 @@
   const formRef = ref();
   const rules = ref<Record<string, any>>({});
   const handleConfirm = () => {
-    formRef.value.validate().then(() => {
-      const selectedData = listRef.value.getSelection();
+    formRef.value.validate().then(async () => {
+      const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
+      if (!keys.length) {
+        messageWarn(t('请选择要操作的数据'));
+        return;
+      }
       batchTransRisk({
-        risk_ids: selectedData.map((item: RiskManageModel) => item.risk_id),
+        risk_ids: keys.map((id: string | number) => String(id)),
         new_operators: formData.value.new_operators,
         description: formData.value.description,
       }).then(() => {
@@ -292,9 +316,9 @@
     };
   };
   // 批量操作
-  const handleBatch = () => {
-    const selectedData = listRef.value.getSelection();
-    if (!selectedData.length) {
+  const handleBatch = async () => {
+    const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
+    if (!keys.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
     }
@@ -304,11 +328,15 @@
     });
   };
   // 导出数据
-  const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id);
+  const handleExport = async () => {
+    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
+    const selectedData = keys.map((id: string | number) => id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
+    }
+    if (truncated) {
+      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
     }
     searchBoxRef.value.exportData(selectedData, 'todo');
   };

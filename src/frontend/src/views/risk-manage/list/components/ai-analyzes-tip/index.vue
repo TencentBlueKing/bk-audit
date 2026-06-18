@@ -350,6 +350,24 @@
       font-size: 12px;
     }
 
+    .export-btn-wrapper {
+      display: inline-flex;
+
+      &.is-export-disabled :deep(.export-btn) {
+        color: #c4c6cc;
+        cursor: not-allowed;
+        background-color: #fff;
+        border-color: #dcdee5;
+
+        &:hover,
+        &:active {
+          color: #c4c6cc;
+          background-color: #fff;
+          border-color: #dcdee5;
+        }
+      }
+    }
+
     .analyze-btn-wrapper {
       display: inline-flex;
 

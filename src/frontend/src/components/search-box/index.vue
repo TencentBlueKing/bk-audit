@@ -32,13 +32,19 @@
             @click="handleBatch">
             {{ t('批量转单') }}
           </bk-button>
-          <bk-button
+          <span
             v-if="isExport"
-            class="mr8"
-            :loading="isLoading"
-            @click="handleExport">
-            {{ t('批量导出') }}
-          </bk-button>
+            v-bk-tooltips="exportTooltip"
+            class="export-btn-wrapper"
+            :class="{ 'is-export-disabled': exportDisabled }">
+            <bk-button
+              class="export-btn mr8"
+              :disabled="exportDisabled"
+              :loading="isLoading"
+              @click="handleExport">
+              {{ t('批量导出') }}
+            </bk-button>
+          </span>
         </template>
         <template #more-list>
           <div class="box-row">
@@ -164,6 +170,7 @@
     fieldConfig: Record<string, IFieldConfig>;
     isReassignment?: boolean,
     isExport?: boolean,
+    exportDisabled?: boolean,
   }
   interface Exposes {
     clearValue: () => void;
@@ -176,6 +183,7 @@
   const props = withDefaults(defineProps<Props>(), {
     isReassignment: false,
     isExport: false,
+    exportDisabled: false,
   });
   const emit = defineEmits<Emits>();
 
@@ -184,6 +192,13 @@
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
   const { t } = useI18n();
   const isLoading = ref(false);
+
+  const exportTooltip = computed(() => {
+    if (!props.exportDisabled) {
+      return { disabled: true, content: '' };
+    }
+    return { disabled: false, content: t('请至少选择 1 条风险单') };
+  });
   const comMap = {
     key: RenderKey,
     value: RenderValue,
@@ -319,6 +334,9 @@
   });
 
   const handleExport = () => {
+    if (props.exportDisabled) {
+      return;
+    }
     emit('export');
   };
   const handleExportData = (val: string[], type: string) => {
@@ -529,6 +547,24 @@
   background-color: #fff;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+
+  .export-btn-wrapper {
+    display: inline-flex;
+
+    &.is-export-disabled :deep(.export-btn) {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      background-color: #fff;
+      border-color: #dcdee5;
+
+      &:hover,
+      &:active {
+        color: #c4c6cc;
+        background-color: #fff;
+        border-color: #dcdee5;
+      }
+    }
+  }
 
   .panel-toggle-btn {
     position: absolute;

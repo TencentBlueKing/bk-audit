@@ -39,11 +39,18 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
-        <bk-button
-          outline
-          @click="handleExport">
-          {{ t('批量导出') }}
-        </bk-button>
+        <span
+          v-bk-tooltips="exportTooltip"
+          class="export-btn-wrapper"
+          :class="{ 'is-export-disabled': !isExportEnabled }">
+          <bk-button
+            class="export-btn"
+            :disabled="!isExportEnabled"
+            outline
+            @click="handleExport">
+            {{ t('批量导出') }}
+          </bk-button>
+        </span>
       </template>
       <tdesign-list
         ref="listRef"
@@ -354,6 +361,20 @@
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
   };
+
+  const exportCount = computed(() => {
+    const { isSelectAll, count, total } = selectionMeta.value;
+    return isSelectAll ? total : count;
+  });
+
+  const isExportEnabled = computed(() => exportCount.value > 0);
+
+  const exportTooltip = computed(() => {
+    if (isExportEnabled.value) {
+      return { disabled: true, content: '' };
+    }
+    return { disabled: false, content: t('请至少选择 1 条风险单') };
+  });
 
   const resolveSelectedRiskIdsForAnalyze = async () => {
     const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];

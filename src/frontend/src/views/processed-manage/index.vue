@@ -18,6 +18,7 @@
   <div class="risk-manage-list-page-wrap">
     <search-box
       ref="searchBoxRef"
+      :export-disabled="!isExportEnabled"
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
@@ -29,6 +30,7 @@
         ref="listRef"
         :columns="tableColumns"
         :data-source="dataSource"
+        enable-cross-page-select
         :height="tableHeight"
         need-empty-search-tip
         row-key="risk_id"
@@ -37,7 +39,8 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
-        @request-success="handleRequestSuccess" />
+        @request-success="handleRequestSuccess"
+        @selection-change="handleSelectionChange" />
     </div>
   </div>
 </template>
@@ -209,15 +212,36 @@
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const dataSource = RiskManageService.fetchProcessedRiskList;
+  const selectionMeta = ref({
+    mode: '' as '' | 'page' | 'all',
+    count: 0,
+    total: 0,
+    isSelectAll: false,
+  });
   // TDesign 默认行高约 42px，这里固定 10 行高度
   const tableHeight = 42 * 10;
 
+  const handleSelectionChange = (meta: typeof selectionMeta.value) => {
+    selectionMeta.value = meta;
+  };
+
+  const exportCount = computed(() => {
+    const { isSelectAll, count, total } = selectionMeta.value;
+    return isSelectAll ? total : count;
+  });
+
+  const isExportEnabled = computed(() => exportCount.value > 0);
+
   // 导出数据
-  const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
+  const handleExport = async () => {
+    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
+    const selectedData = keys.map((id: string | number) => id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
+    }
+    if (truncated) {
+      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
     }
     searchBoxRef.value.exportData(selectedData, 'processed');
   };
