@@ -102,6 +102,7 @@
         </div>
         <primary-table
           ref="tableRef"
+          v-model:filter-value="tableFilterValue"
           v-model:selected-row-keys="selectedRowKeys"
           :active-row-keys="[]"
           active-row-type="multiple"
@@ -114,7 +115,6 @@
           :height="height"
           hover
           :max-height="effectiveTableMaxHeight"
-          :pagination="tableFilterPagination"
           reserve-selected-row-on-paginate
           :row-class-name="rowClassName"
           :row-key="rowKey as any"
@@ -128,6 +128,17 @@
             <slot
               :name="name"
               v-bind="slotProps" />
+          </template>
+          <template #filterRow>
+            <div class="t-table__filter-result tdesign-list-filter-result">
+              <span>{{ tableFilterResultText }}</span>
+              <bk-button
+                text
+                theme="primary"
+                @click="handleClearAllTableFilters">
+                {{ t('清空筛选') }}
+              </bk-button>
+            </div>
           </template>
           <template #empty>
             <slot
@@ -471,10 +482,7 @@
     location: 'left',
   });
 
-  // 供表头筛选结果行展示服务端总数；不传时 TDesign 会回退为当前页 data.length
-  const tableFilterPagination = computed(() => ({
-    total: pagination.count,
-  }));
+  const tableFilterValue = ref<Record<string, any>>({});
 
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
@@ -680,6 +688,96 @@
   };
 
   // 处理筛选变更
+  const isFilterValueExist = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value !== null && typeof value === 'object') {
+      return Object.keys(value).length > 0;
+    }
+    return !['null', '', 'undefined'].includes(String(value));
+  };
+
+  const collectAllColumns = (cols: any[], result: any[] = []) => {
+    cols.forEach((col) => {
+      if (col.children) {
+        collectAllColumns(col.children, result);
+      }
+      result.push(col);
+    });
+    return result;
+  };
+
+  const getTableFilterResultContent = () => {
+    const filters = tableFilterValue.value || {};
+    const parts: string[] = [];
+    collectAllColumns(tableColumns.value)
+      .filter(col => col.filter)
+      .forEach((col) => {
+        let value = filters[col.colKey];
+        if (!isFilterValueExist(value)) {
+          return;
+        }
+        if (col.filter.list && !['null'].includes(String(value))) {
+          const formattedValue = Array.isArray(value) ? value : [value];
+          const labels: string[] = [];
+          col.filter.list.forEach((option: { label: string; value: unknown }) => {
+            if (formattedValue.includes(option.value)) {
+              labels.push(option.label);
+            }
+          });
+          value = labels.join();
+        }
+        const label = col.filter?.label
+          || (typeof col.title === 'string' ? col.title : col.colKey);
+        parts.push(`${label}：${value}`);
+      });
+    return parts.join('；');
+  };
+
+  const tableFilterResultText = computed(() => {
+    const result = getTableFilterResultContent();
+    if (!result) {
+      return '';
+    }
+    return `搜索"${result}"，找到 ${pagination.count} 条结果`;
+  });
+
+  const getColumnsResetValue = (columns: any[]) => {
+    const resetValue: Record<string, any> = {};
+    const typeDefaults: Record<string, unknown> = {
+      single: '',
+      multiple: [],
+      input: '',
+    };
+    collectAllColumns(columns).forEach((col) => {
+      if (!col.filter || !col.colKey) {
+        return;
+      }
+      if (col.filter.resetValue !== undefined) {
+        resetValue[col.colKey] = col.filter.resetValue;
+        return;
+      }
+      resetValue[col.colKey] = typeDefaults[col.filter.type] ?? '';
+    });
+    return resetValue;
+  };
+
+  const handleClearAllTableFilters = () => {
+    pagination.current = 1;
+    isUnload.value = false;
+    const nextParams = { ...paramsMemo };
+    collectAllColumns(tableColumns.value).forEach((col) => {
+      if (col.colKey && col.filter) {
+        delete nextParams[col.colKey];
+      }
+    });
+    paramsMemo = nextParams;
+    tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+    isLoading.value = true;
+    fetchListData();
+  };
+
   const handleFilterChange = (filters: Record<string, any>) => {
     pagination.current = 1;
     isUnload.value = false;
@@ -1078,9 +1176,11 @@
   }
 }
 
-/* 仅将 pagination.total 传给 TDesign 用于筛选结果计数，底部分页仍使用 bk-pagination */
-.tdesign-list :deep([class*='table__pagination-wrap']) {
-  display: none;
+/* 表头筛选结果行 */
+.tdesign-list-filter-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tdesign-list-pagination {
