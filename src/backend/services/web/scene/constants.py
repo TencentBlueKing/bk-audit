@@ -18,6 +18,7 @@ class VisibilityScope(TextChoices):
     ALL_SYSTEMS = "all_systems", gettext_lazy("全系统")
     SPECIFIC_SCENES = "specific_scenes", gettext_lazy("指定场景")
     SPECIFIC_SYSTEMS = "specific_systems", gettext_lazy("指定系统")
+    SCENES_AND_SYSTEMS = "scenes_and_systems", gettext_lazy("场景和系统")
 
 
 class SceneRole(TextChoices):
