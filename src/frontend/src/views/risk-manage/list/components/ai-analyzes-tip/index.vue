@@ -326,7 +326,7 @@
     width: 100%;
     min-width: 0;
     padding: 0 20px 16px;
-    overflow: hidden;
+    overflow: visible;
     background-color: #fff;
     border: 1px solid #e2e6ed;
     box-sizing: border-box;
@@ -423,7 +423,7 @@
     width: 100%;
     min-width: 0;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
 
     :deep(.audit-tdesign-list) {
       width: 100%;

@@ -114,6 +114,7 @@
           :height="height"
           hover
           :max-height="effectiveTableMaxHeight"
+          :pagination="tableFilterPagination"
           reserve-selected-row-on-paginate
           :row-class-name="rowClassName"
           :row-key="rowKey as any"
@@ -396,6 +397,25 @@
     return rest;
   };
 
+  // 表头筛选弹层挂到 body，避免无数据或父级 overflow:hidden 时遮挡
+  const enhanceFilterPopupColumns = (columns: any[]) => columns.map((column) => {
+    if (!column?.filter) {
+      return column;
+    }
+    return {
+      ...column,
+      filter: {
+        ...column.filter,
+        popupProps: {
+          attach: 'body',
+          ...(column.filter.popupProps || {}),
+        },
+      },
+    };
+  });
+
+  const buildTableColumns = (columns: any[]) => enhanceFilterPopupColumns(enhanceSelectColumn(columns));
+
   const handlePopoverShow = () => {
     // 打开 popover 时，初始化临时选择为当前选择
     tempVisibleColumnKeys.value = [...visibleColumnKeys.value];
@@ -450,6 +470,11 @@
     layout: ['total', 'limit', 'list'],
     location: 'left',
   });
+
+  // 供表头筛选结果行展示服务端总数；不传时 TDesign 会回退为当前页 data.length
+  const tableFilterPagination = computed(() => ({
+    total: pagination.count,
+  }));
 
   let paramsMemo: Record<string, any> = {};
   const isSearching = ref(false);
@@ -568,9 +593,9 @@
   const tableColumns = computed(() => {
     if (props.settings.length === 0) {
       if (isLoading.value) {
-        return enhanceSelectColumn(props.columns.map(removeFixed));
+        return buildTableColumns(props.columns.map(removeFixed));
       }
-      return enhanceSelectColumn(props.columns);
+      return buildTableColumns(props.columns);
     }
 
     const filteredColumns = props.columns.filter((column) => {
@@ -584,9 +609,9 @@
     });
 
     if (isLoading.value) {
-      return enhanceSelectColumn(filteredColumns.map(removeFixed));
+      return buildTableColumns(filteredColumns.map(removeFixed));
     }
-    return enhanceSelectColumn(filteredColumns);
+    return buildTableColumns(filteredColumns);
   });
 
   watch(listData, (newData) => {
@@ -656,6 +681,8 @@
 
   // 处理筛选变更
   const handleFilterChange = (filters: Record<string, any>) => {
+    pagination.current = 1;
+    isUnload.value = false;
     // TDesign 会返回 { colKey: value | value[] }
     const nextParams: Record<string, any> = { ...paramsMemo };
 
@@ -1049,6 +1076,11 @@
   &:hover th {
     background-color: #d8f5e6 !important;
   }
+}
+
+/* 仅将 pagination.total 传给 TDesign 用于筛选结果计数，底部分页仍使用 bk-pagination */
+.tdesign-list :deep([class*='table__pagination-wrap']) {
+  display: none;
 }
 
 .tdesign-list-pagination {
