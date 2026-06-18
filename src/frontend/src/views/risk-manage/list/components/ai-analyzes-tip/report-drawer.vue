@@ -284,17 +284,18 @@
     if (!info) {
       return [];
     }
+    const isCustom = info.report_type === 'custom';
     return [
       {
         key: 'report_type',
         label: t('报告类型'),
         value: info.report_type === 'system' ? t('系统分析') : t('自定义分析'),
       },
-      {
+      ...(isCustom ? [] : [{
         key: 'analysis_scope',
         label: t('分析范围'),
         value: formatAnalysisScope(info.analysis_scope),
-      },
+      }]),
       {
         key: 'risk_count',
         label: t('风险条数'),
@@ -457,7 +458,7 @@
 }
 
 .ai-report-meta {
-  padding: 16px 24px;
+  padding: 16px 40px;
   background: #f5f7fa;
   border: 1px solid #e1e6f0;
   border-bottom: none;
@@ -469,12 +470,13 @@
   gap: 24px;
   align-items: flex-start;
   justify-content: space-between;
-  text-align: center;
+  text-align: left;
 }
 
 .ai-report-meta-item {
   min-width: 0;
   overflow: hidden;
+  text-align: left;
 }
 
 .ai-report-meta-item--report_type {
@@ -508,12 +510,14 @@
   margin-bottom: 4px;
   font-size: 12px;
   color: #979ba5;
+  text-align: left;
 }
 
 .ai-report-meta-item .value {
   width: 100%;
   font-size: 13px;
   color: #313238;
+  text-align: left;
 }
 
 .ai-report-meta-scope-item {
