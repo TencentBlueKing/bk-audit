@@ -258,6 +258,12 @@
     (e: 'requestSuccess', value: any): void,
     (e: 'clearSearch'): void,
     (e: 'on-setting-change', value: any): void,
+    (e: 'selection-change', meta: {
+      mode: '' | 'page' | 'all',
+      count: number,
+      total: number,
+      isSelectAll: boolean,
+    }): void,
   }
   interface Exposes {
     fetchData: (params: Record<string, any>) => void,
@@ -545,6 +551,18 @@
     selectedRowKeys.value = value || [];
     handleCrossPageSelectChange();
   };
+
+  const emitSelectionChange = () => {
+    emits('selection-change', getSelectionMeta());
+  };
+
+  watch(
+    [selectedRowKeys, () => pagination.count, () => getSelectionMeta().isSelectAll],
+    () => {
+      emitSelectionChange();
+    },
+    { deep: true },
+  );
 
   // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
   const tableColumns = computed(() => {
