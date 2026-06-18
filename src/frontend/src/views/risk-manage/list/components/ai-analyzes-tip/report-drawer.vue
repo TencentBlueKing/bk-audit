@@ -599,9 +599,10 @@
 }
 
 .analyze-content-label {
-  flex: 0 0 80px;
+  flex: 0 0 100px;
   padding: 10px 12px;
   line-height: 20px;
+  white-space: nowrap;
   background: #f5f7fa;
   border-right: 1px solid #dcdee5;
 }
