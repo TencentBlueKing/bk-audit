@@ -99,6 +99,7 @@
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -213,94 +214,129 @@
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
-  const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'riskManageDetail',
-        overrides: {
-          // risk_id 列：stand_by 状态不可点击
-          risk_id: {
-            cell: (h: any, { row }: { row: RiskManageModel }) => {
-              const to = {
-                name: 'riskManageDetail',
-                params: {
-                  riskId: row.risk_id,
-                },
-              };
-              return (row.status === 'stand_by'
-                ? <span>{row.risk_id}</span>
-                : (<router-link to={to}>
-                <Tooltips data={row.risk_id} />
-              </router-link>));
+  const riskLevelFilterList = ref<Array<{ label: string; value: string }>>([]);
+
+  const statusFilterList = computed(() => riskStatusCommon.value
+    .filter((item: { id: string }) => item.id !== 'new')
+    .map((item: { id: string; name: string }) => ({
+      label: item.name,
+      value: item.id,
+    })));
+
+  const riskLabelFilterList = computed(() => [
+    { label: t('正常'), value: 'normal' },
+    { label: t('误报'), value: 'misreport' },
+  ]);
+
+  const buildBaseTableColumns = () => useRiskColumns({
+    deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+    detailRouteName: 'riskManageDetail',
+    overrides: {
+      // risk_id 列：stand_by 状态不可点击
+      risk_id: {
+        cell: (h: any, { row }: { row: RiskManageModel }) => {
+          const to = {
+            name: 'riskManageDetail',
+            params: {
+              riskId: row.risk_id,
             },
-          },
-          // operator 列：传 row.operator || []
-          operator: {
-            cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator || []} />,
-          },
-          // 风险标签：超过 1 个时展示首个标签 +N，hover 查看全部
-          tags: {
-            width: 180,
-            minWidth: 160,
-            cell: (h: any, { row }: { row: RiskManageModel }) => {
-              const tags = (row.tags || []).map((item: string) => strategyTagMap.value[item] || item);
-              return (
-                <EditTag
-                  data={tags}
-                  key={row.risk_id}
-                  max={tags.length > 1 ? 1 : 0}
-                />
-              );
-            },
-          },
-          // status 列：宽 130，增加 stand_by 状态处理
-          status: {
-            width: 130,
-            cell: (h: any, { row }: { row: RiskManageModel }) => (
-              // eslint-disable-next-line no-nested-ternary
-              row.status === 'stand_by' ? (
-                 <span style='font-size: 14px;color: #3a84ff;'>
-                 <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
-                </span>
-              )
-                : (row.status === 'closed' && row.experiences > 0
-                  ? (
-                    <div style='display: flex;align-items: center;height: 100%;'>
-                      <bk-tag
-                        theme={statusToMap[row.status]?.tag}>
-                        <p style='display: flex;align-items: center;'>
-                          <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                          <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-                        </p>
-                      </bk-tag>
-                      <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
-                        <audit-icon v-bk-tooltips={t('已填写"风险总结"')} type="report" style='font-size: 14px;' />
-                      </bk-button>
-                    </div>
-                  )
-                  : (
-                    <bk-tag
-                      theme={statusToMap[row.status]?.tag}>
-                      <p style='display: flex;align-items: center;'>
-                        <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                        <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
-                      </p>
-                    </bk-tag>))
-            ),
-          },
+          };
+          return (row.status === 'stand_by'
+            ? <span>{row.risk_id}</span>
+            : (<router-link to={to}>
+            <Tooltips data={row.risk_id} />
+          </router-link>));
         },
-        appendColumns: [actionColumn],
-      });
-    }
+      },
+      // operator 列：传 row.operator || []
+      operator: {
+        cell: (h: any, { row }: { row: RiskManageModel }) => <EditTag data={row.operator || []} />,
+      },
+      // 风险标签：超过 1 个时展示首个标签 +N，hover 查看全部
+      tags: {
+        width: 180,
+        minWidth: 160,
+        cell: (h: any, { row }: { row: RiskManageModel }) => {
+          const tags = (row.tags || []).map((item: string) => strategyTagMap.value[item] || item);
+          return (
+            <EditTag
+              data={tags}
+              key={row.risk_id}
+              max={tags.length > 1 ? 1 : 0}
+            />
+          );
+        },
+      },
+      risk_level: {
+        filter: {
+          type: 'multiple',
+          showConfirmAndReset: true,
+          resetValue: [],
+          list: riskLevelFilterList.value,
+        },
+      },
+      // status 列：宽 130，增加 stand_by 状态处理
+      status: {
+        width: 130,
+        filter: {
+          type: 'multiple',
+          showConfirmAndReset: true,
+          resetValue: [],
+          list: statusFilterList.value,
+        },
+        cell: (h: any, { row }: { row: RiskManageModel }) => (
+          // eslint-disable-next-line no-nested-ternary
+          row.status === 'stand_by' ? (
+             <span style='font-size: 14px;color: #3a84ff;'>
+             <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
+            </span>
+          )
+            : (row.status === 'closed' && row.experiences > 0
+              ? (
+                <div style='display: flex;align-items: center;height: 100%;'>
+                  <bk-tag
+                    theme={statusToMap[row.status]?.tag}>
+                    <p style='display: flex;align-items: center;'>
+                      <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+                      <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                    </p>
+                  </bk-tag>
+                  <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
+                    <audit-icon v-bk-tooltips={t('已填写"风险总结"')} type="report" style='font-size: 14px;' />
+                  </bk-button>
+                </div>
+              )
+              : (
+                <bk-tag
+                  theme={statusToMap[row.status]?.tag}>
+                  <p style='display: flex;align-items: center;'>
+                    <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
+                    <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                  </p>
+                </bk-tag>))
+        ),
+      },
+      risk_label: {
+        filter: {
+          type: 'single',
+          showConfirmAndReset: true,
+          resetValue: undefined,
+          list: riskLabelFilterList.value,
+        },
+      },
+    },
+    appendColumns: [actionColumn],
+  });
+
+  const tableColumns = computed(() => {
+    const baseColumns = buildBaseTableColumns();
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
-      return initTableColumns;
+      return baseColumns;
     }
-    const actionIndex = initTableColumns.findIndex((c: any) => c.colKey === 'action');
-    const beforeAction = actionIndex >= 0 ? initTableColumns.slice(0, actionIndex) : initTableColumns;
-    const afterAction = actionIndex >= 0 ? initTableColumns.slice(actionIndex) : [];
+    const actionIndex = baseColumns.findIndex((c: any) => c.colKey === 'action');
+    const beforeAction = actionIndex >= 0 ? baseColumns.slice(0, actionIndex) : baseColumns;
+    const afterAction = actionIndex >= 0 ? baseColumns.slice(actionIndex) : [];
     const eventColumns = eventFilters
       .filter((f: any) => f && typeof f.field === 'string')
       .map((f: any) => ({
@@ -416,9 +452,22 @@
   });
   const {
     data: riskStatusCommon,
+    run: fetchRiskStatusCommon,
   } = useRequest(RiskManageService.fetchRiskStatusCommon, {
     manual: true,
     defaultValue: [],
+  });
+  const {
+    run: fetchStrategyCommon,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+    onSuccess: (data) => {
+      riskLevelFilterList.value = (data.risk_level || []).map((item: { label: string; value: string }) => ({
+        label: item.label,
+        value: item.value,
+      }));
+    },
   });
   const {
     data: strategyList,
@@ -660,6 +709,8 @@
       getEventFields();
       fetchRiskScenes();
       fetchSceneAll();
+      fetchRiskStatusCommon();
+      fetchStrategyCommon();
       sessionStorage.removeItem('addEventRiskIds');
       newAddedRiskIds.value = [];
       // 初始获取conditionTags
