@@ -218,6 +218,7 @@
   // 切换编辑态
   const handleToggle = () => {
     if (isShow.value) {
+      if (Date.now() < ignoreCloseBefore) return;
       emit('finishEdit');
     } else {
       emit('startEdit', props.tag.fieldName);
@@ -297,7 +298,7 @@
   watch(() => props.isEditing, (val) => {
     isShow.value = val;
     if (val) {
-      ignoreCloseBefore = Date.now() + 200;
+      ignoreCloseBefore = Date.now() + 500;
       localValue.value = _.cloneDeep(props.tag.value) || [];
       searchKey.value = '';
       loadOptions();
