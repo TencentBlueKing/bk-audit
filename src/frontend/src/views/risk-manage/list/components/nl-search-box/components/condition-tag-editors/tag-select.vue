@@ -223,16 +223,22 @@
     }
   };
 
-  // 点击外部区域关闭下拉框
-  // 注意：popover 内容区域已通过 @click.stop 阻止冒泡，不会触发此处理函数
-  const handleDocumentClick = (e: MouseEvent) => {
+  // 判断点击目标是否在下拉弹出层内部
+  const isInPopoverLayer = (target: Node) => {
+    const el = target as HTMLElement;
+    if (!el?.closest) return false;
+    return !!el.closest('.tippy-box[data-theme~="nl-tag-popover"], .bk-popover.bk-pop2-content');
+  };
+
+  // 点击外部区域关闭下拉框（使用 mousedown + 捕获阶段，与 add-condition 保持一致，
+  // 避免 setTimeout 延迟绑定导致的竞态窗口中事件泄漏从而闪屏）
+  const handleDocumentMousedown = (e: Event) => {
     if (!isShow.value) return;
     const target = e.target as HTMLElement;
     // 点击标签自身内部 → 由 handleToggle 处理
     if (tagRef.value?.contains(target)) return;
-    // 兜底：检查点击是否在 tippy-box 弹出层内（如 bk-input 的 clearable 图标等可能冒泡的元素）
-    const closestTippy = (target as Element)?.closest?.('.tippy-box[data-theme~="nl-tag-popover"]');
-    if (closestTippy) return;
+    // 点击弹出层内部 → 忽略
+    if (isInPopoverLayer(target)) return;
     // 其他区域 → 关闭
     emit('finishEdit');
   };
@@ -284,24 +290,22 @@
     loadOptions();
   });
 
-  // 监听编辑态切换，管理 document 点击事件和 popover 显示
+  // 监听编辑态切换，管理 document mousedown 事件和 popover 显示
+  // 使用 mousedown 捕获阶段同步绑定（不加 setTimeout），消除延迟窗口导致的闪屏竞态条件
   watch(() => props.isEditing, (val) => {
     isShow.value = val;
     if (val) {
       localValue.value = _.cloneDeep(props.tag.value) || [];
       searchKey.value = '';
       loadOptions();
-      // 使用 setTimeout 确保当前点击事件处理完毕后再绑定，避免立即触发关闭
-      setTimeout(() => {
-        document.addEventListener('click', handleDocumentClick);
-      });
+      document.addEventListener('mousedown', handleDocumentMousedown, true);
     } else {
-      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('mousedown', handleDocumentMousedown, true);
     }
   });
 
   onBeforeUnmount(() => {
-    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('mousedown', handleDocumentMousedown, true);
   });
 </script>
 <style lang="postcss" scoped>
