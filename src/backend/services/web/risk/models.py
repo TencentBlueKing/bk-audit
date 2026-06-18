@@ -235,19 +235,25 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         return Q(pk__in=[])
 
     @classmethod
-    def local_risk_filter(cls, user_types: Optional[List[UserType]] = None, username: Optional[str] = None) -> Q:
+    def local_risk_filter(
+        cls,
+        user_types: Optional[List[UserType]] = None,
+        username: Optional[str] = None,
+        authorized_at_start: Optional[datetime.datetime] = None,
+    ) -> Q:
         """
         本地权限：通过 TicketPermission 授权的风险（处理人/关注人）
         """
 
         user_types = user_types or [UserType.NOTICE_USER, UserType.OPERATOR]
-        return Q(
-            risk_id__in=TicketPermission.objects.filter(
-                user_type__in=user_types,
-                user=username or get_request_username(),
-                action=ActionEnum.LIST_RISK.id,
-            ).values("risk_id")
-        )
+        permission_filters = {
+            "user_type__in": user_types,
+            "user": username or get_request_username(),
+            "action": ActionEnum.LIST_RISK.id,
+        }
+        if authorized_at_start:
+            permission_filters["authorized_at__gte"] = authorized_at_start
+        return Q(risk_id__in=TicketPermission.objects.filter(**permission_filters).values("risk_id"))
 
     # ──── 组合权限 ────
 
@@ -571,6 +577,10 @@ class TicketPermission(models.Model):
         unique_together = [["risk_id", "action", "user", "user_type"]]
         indexes = [
             models.Index(fields=["user", "action", "user_type", "risk_id"], name="risk_tp_user_act_rid_idx"),
+            models.Index(
+                fields=["user", "action", "user_type", "authorized_at", "risk_id"],
+                name="risk_tp_user_act_auth_rid_idx",
+            ),
         ]
 
 

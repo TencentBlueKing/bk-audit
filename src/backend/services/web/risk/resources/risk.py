@@ -806,9 +806,11 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
+        # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
+        event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.local_risk_filter(user_types=[UserType.OPERATOR]),
+            Risk.local_risk_filter(user_types=[UserType.OPERATOR], authorized_at_start=event_time_start),
             current_operator__contains=get_request_username(),
         ).distinct()
 
@@ -818,9 +820,11 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         q = self._build_filter_query(validated_request_data)
+        # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
+        event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.local_risk_filter(user_types=[UserType.NOTICE_USER]),
+            Risk.local_risk_filter(user_types=[UserType.NOTICE_USER], authorized_at_start=event_time_start),
             notice_users__contains=get_request_username(),
         ).distinct()
 

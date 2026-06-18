@@ -1380,6 +1380,63 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
         self.assertEqual(response["sql"], [])
 
+    def test_list_mine_risk_filters_permission_by_start_time(self):
+        """待办风险按查询开始时间收敛本地权限范围。"""
+        fresh_permission_risk = Risk.objects.create(
+            risk_id="risk-fresh-permission",
+            raw_event_id="raw-fresh-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[self.username],
+            notice_users=[],
+            event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+        )
+        fresh_permission = TicketPermission.objects.create(
+            risk_id=fresh_permission_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        TicketPermission.objects.filter(pk=fresh_permission.pk).update(
+            authorized_at=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc)
+        )
+
+        old_permission_risk = Risk.objects.create(
+            risk_id="risk-old-permission",
+            raw_event_id="raw-old-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[self.username],
+            notice_users=[],
+            event_time=datetime.datetime(2024, 1, 7, tzinfo=datetime.timezone.utc),
+        )
+        old_permission = TicketPermission.objects.create(
+            risk_id=old_permission_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+        TicketPermission.objects.filter(pk=old_permission.pk).update(
+            authorized_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
+        )
+
+        request = self._make_request()
+        response = ListMineRisk().request(
+            self._payload(
+                page=1,
+                page_size=10,
+                start_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).isoformat(),
+                end_time=datetime.datetime(2024, 1, 8, tzinfo=datetime.timezone.utc).isoformat(),
+            ),
+            _request=request,
+        )
+
+        risk_ids = {item["risk_id"] for item in response["results"]}
+        self.assertIn(fresh_permission_risk.risk_id, risk_ids)
+        self.assertNotIn(old_permission_risk.risk_id, risk_ids)
+
     def test_list_mine_risk_via_bkbase(self):
         request = self._make_request()
         sql_log: List[str] = []
@@ -1435,6 +1492,65 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
         self.assertNotIn(self.risk_noticed_without_permission.risk_id, risk_ids)
         self.assertNotIn(self.risk_notice_permission_but_not_noticed.risk_id, risk_ids)
+
+    def test_list_noticing_risk_filters_permission_by_start_time(self):
+        """关注风险按查询开始时间收敛本地权限范围。"""
+        from services.web.risk.resources.risk import ListNoticingRisk
+
+        fresh_permission_risk = Risk.objects.create(
+            risk_id="risk-fresh-notice-permission",
+            raw_event_id="raw-fresh-notice-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[],
+            notice_users=[self.username],
+            event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
+        )
+        fresh_permission = TicketPermission.objects.create(
+            risk_id=fresh_permission_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.NOTICE_USER,
+        )
+        TicketPermission.objects.filter(pk=fresh_permission.pk).update(
+            authorized_at=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc)
+        )
+
+        old_permission_risk = Risk.objects.create(
+            risk_id="risk-old-notice-permission",
+            raw_event_id="raw-old-notice-permission",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            current_operator=[],
+            notice_users=[self.username],
+            event_time=datetime.datetime(2024, 1, 7, tzinfo=datetime.timezone.utc),
+        )
+        old_permission = TicketPermission.objects.create(
+            risk_id=old_permission_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.NOTICE_USER,
+        )
+        TicketPermission.objects.filter(pk=old_permission.pk).update(
+            authorized_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
+        )
+
+        request = self._make_request()
+        response = ListNoticingRisk().request(
+            self._payload(
+                page=1,
+                page_size=10,
+                start_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).isoformat(),
+                end_time=datetime.datetime(2024, 1, 8, tzinfo=datetime.timezone.utc).isoformat(),
+            ),
+            _request=request,
+        )
+
+        risk_ids = {item["risk_id"] for item in response["results"]}
+        self.assertIn(fresh_permission_risk.risk_id, risk_ids)
+        self.assertNotIn(old_permission_risk.risk_id, risk_ids)
 
     def test_list_mine_risk_without_scope(self):
         """个人视图不传 scope 时也应可查询。"""
@@ -1917,11 +2033,32 @@ class TestRiskPermissionFilters(TestCase):
         self.assertNotIn("R-IAM", risk_ids)
         self.assertNotIn("R-NONE", risk_ids)
 
+    def test_local_risk_filter_supports_authorized_at_start(self):
+        """local_risk_filter 可按授权时间起点收敛 TicketPermission 范围"""
+        permission = TicketPermission.objects.get(
+            risk_id=self.risk_local.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user="admin",
+            user_type=UserType.OPERATOR,
+        )
+        TicketPermission.objects.filter(pk=permission.pk).update(
+            authorized_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
+        )
+
+        q = Risk.local_risk_filter(
+            user_types=[UserType.OPERATOR],
+            authorized_at_start=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
+        risk_ids = set(Risk.objects.filter(q).values_list("risk_id", flat=True))
+
+        self.assertNotIn("R-LOCAL", risk_ids)
+
     def test_ticket_permission_has_user_query_index(self):
         """TicketPermission 应具备按用户查询风险的联合索引"""
         index_fields = [index.fields for index in TicketPermission._meta.indexes]
 
         self.assertIn(["user", "action", "user_type", "risk_id"], index_fields)
+        self.assertIn(["user", "action", "user_type", "authorized_at", "risk_id"], index_fields)
 
     @mock.patch("services.web.risk.models.Permission")
     def test_iam_risk_filter_no_policies_returns_empty(self, mock_perm_cls):
