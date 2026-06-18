@@ -60,12 +60,12 @@
                 <div class="scene-info">
                   <div class="scene-name-row">
                     <span class="scene-name">{{ item.name }}</span>
-                    <template v-if="(sceneManagers[item.scene_id] || []).length > 0">
+                    <template v-if="(item.managers || []).length > 0">
                       <audit-icon
                         class="admin-icon"
                         type="user" />
                       <span class="admin-name">
-                        {{ sceneManagers[item.scene_id].map(m => `${m.id}(${m.name})`).join('、') }}
+                        {{ (item.managers || []).join('、') }}
                       </span>
                     </template>
                   </div>
@@ -161,20 +161,13 @@
     status: 'enabled' | 'disabled';
     permission: Record<string, boolean>;
     description?: string;
-    managers?: string[];
-  }
-
-  interface SceneMember {
-    id: string;
-    name: string;
-    role?: string;
+    managers: string[];
   }
 
   const { t } = useI18n();
   const router = useRouter();
 
   const sceneList = ref<SceneItem[]>([]);
-  const sceneManagers = ref<Record<number, SceneMember[]>>({});
 
   const {
     data: configData,
@@ -186,21 +179,8 @@
     run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
-    onSuccess: async (data) => {
-      const list = data.filter(item => item.permission?.view_scene);
-      sceneList.value = list;
-
-      // 逐个获取每个场景的管理员
-      await Promise.all(list.map(async (item) => {
-        try {
-          const members = await SceneManageService.fetchSceneMembers({ scene_id: item.scene_id });
-          if (members && Array.isArray(members)) {
-            sceneManagers.value[item.scene_id] = members.filter((m: SceneMember) => m.role === 'manager');
-          }
-        } catch {
-          // 忽略单个请求失败
-        }
-      }));
+    onSuccess: (data) => {
+      sceneList.value = data.filter(item => item.permission?.view_scene);
     },
   });
 
