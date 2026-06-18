@@ -332,7 +332,9 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
         end_time = datetime.datetime.fromtimestamp(end_ms / 1000.0, tz=timezone.utc)
         # 上界扩展 1ms，确保包含毫秒边界
         end_time_inclusive = end_time + datetime.timedelta(milliseconds=1)
-        queryset = TicketPermission.objects.filter(authorized_at__gt=start_time, authorized_at__lte=end_time_inclusive)
+        queryset = TicketPermission.objects.filter(
+            authorized_at__gt=start_time, authorized_at__lte=end_time_inclusive
+        ).order_by("authorized_at", "id")
         page_queryset = queryset[page.slice_from : page.slice_to]
         # 顶层时间戳要求为毫秒级
         results = [
