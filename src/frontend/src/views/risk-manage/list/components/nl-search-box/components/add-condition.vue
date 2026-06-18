@@ -262,6 +262,7 @@
   };
 
   const closePopover = () => {
+    document.removeEventListener('mousedown', handleDocumentClick, true);
     isShow.value = false;
     popoverRef.value?.hide?.();
   };
