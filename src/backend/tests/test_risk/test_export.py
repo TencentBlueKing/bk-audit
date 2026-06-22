@@ -18,12 +18,18 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import io
 from unittest import mock
+from urllib.parse import unquote
 
 import openpyxl
 from bk_resource import resource
 
 from core.utils.time import mstimestamp_to_date_string
-from services.web.risk.constants import RAW_EVENT_ID_REMARK, RiskExportField, RiskStatus
+from services.web.risk.constants import (
+    RAW_EVENT_ID_REMARK,
+    RiskExportField,
+    RiskStatus,
+    RiskViewType,
+)
 from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
 from services.web.risk.serializers import RetrieveRiskStrategyInfoResponseSerializer
@@ -199,6 +205,18 @@ class TestRiskExport(TestCase):
         # Row 3 (risk004, no events)
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_scene_view_type_filename(self, mock_get_event_list, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_get_event_list.return_value = [{"results": []}]
+
+        resp = resource.risk.risk_export(risk_ids=[self.risk_1.risk_id], risk_view_type=RiskViewType.SCENE.value)
+        content_disposition = resp["Content-Disposition"]
+
+        self.assertIn("attachment; filename*", content_disposition)
+        self.assertIn("场景风险", unquote(content_disposition))
 
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
