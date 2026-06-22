@@ -265,6 +265,10 @@
     enableCrossPageSelect?: boolean,
     /** 跨页全选解析 ID 上限，用于批量导出等场景 */
     crossPageSelectMaxCount?: number,
+    /** 是否持久化表头筛选（离开页面后返回时恢复），默认开启 */
+    persistTableFilters?: boolean,
+    /** 表头筛选 sessionStorage 键后缀，默认使用 pathname */
+    tableFilterPersistKey?: string,
   }
 
   interface Emits {
@@ -324,6 +328,8 @@
     allowMultipleSort: false,
     enableCrossPageSelect: false,
     crossPageSelectMaxCount: 300,
+    persistTableFilters: true,
+    tableFilterPersistKey: undefined,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -712,6 +718,168 @@
     return !['null', '', 'undefined'].includes(String(value));
   };
 
+  const TABLE_FILTER_STORAGE_PREFIX = 'audit-table-filter-state';
+
+  const getTableFilterColumnKeys = () => {
+    const keys: string[] = [];
+    collectAllColumns(tableColumns.value).forEach((col) => {
+      if (col.colKey && col.filter) {
+        keys.push(col.colKey);
+      }
+    });
+    return keys;
+  };
+
+  const getTableFilterStorageKey = () => {
+    const suffix = props.tableFilterPersistKey || window.location.pathname;
+    return `${TABLE_FILTER_STORAGE_PREFIX}:${suffix}`;
+  };
+
+  const getTableFilterParamsFromMemo = () => {
+    const result: Record<string, any> = {};
+    getTableFilterColumnKeys().forEach((key) => {
+      const value = paramsMemo[key];
+      if (value !== undefined && value !== null && value !== '') {
+        result[key] = value;
+      }
+    });
+    return result;
+  };
+
+  const parseFilterValueFromUrl = (col: any, urlValue: string) => {
+    const filterType = col.filter?.type;
+    if (filterType === 'multiple') {
+      const values = urlValue.split(',').filter(item => item !== '');
+      if (col.filter?.list?.length) {
+        return values.map((value) => {
+          const matched = col.filter.list.find((option: { value: unknown }) => String(option.value) === value);
+          return matched ? matched.value : value;
+        });
+      }
+      return values;
+    }
+    if (filterType === 'single') {
+      if (col.filter?.list?.length) {
+        const matched = col.filter.list.find((option: { value: unknown }) => String(option.value) === urlValue);
+        if (matched) {
+          return matched.value;
+        }
+      }
+      if (urlValue === 'true') {
+        return true;
+      }
+      if (urlValue === 'false') {
+        return false;
+      }
+      return urlValue;
+    }
+    return urlValue;
+  };
+
+  const convertFilterValueToParam = (value: unknown) => {
+    if (Array.isArray(value)) {
+      if (!value.length) {
+        return undefined;
+      }
+      return value.length === 1 ? value[0] : value.join(',');
+    }
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return value;
+  };
+
+  const isEmptyTableFilterValue = (filters: Record<string, any>) => (
+    Object.keys(filters).every(key => !isFilterValueExist(filters[key]))
+  );
+
+  const saveTableFilterState = () => {
+    if (!props.persistTableFilters) {
+      return;
+    }
+    const filterKeys = getTableFilterColumnKeys();
+    if (!filterKeys.length) {
+      return;
+    }
+    const filterParams = getTableFilterParamsFromMemo();
+    if (!Object.keys(filterParams).length && isEmptyTableFilterValue(tableFilterValue.value)) {
+      sessionStorage.removeItem(getTableFilterStorageKey());
+      return;
+    }
+    sessionStorage.setItem(getTableFilterStorageKey(), JSON.stringify({
+      tableFilterValue: tableFilterValue.value,
+      filterParams,
+    }));
+  };
+
+  const restoreTableFilterState = (): boolean => {
+    if (!props.persistTableFilters) {
+      return false;
+    }
+    const raw = sessionStorage.getItem(getTableFilterStorageKey());
+    if (!raw) {
+      return false;
+    }
+    try {
+      const state = JSON.parse(raw) as {
+        tableFilterValue?: Record<string, any>,
+        filterParams?: Record<string, any>,
+      };
+      if (state.filterParams && Object.keys(state.filterParams).length) {
+        paramsMemo = {
+          ...paramsMemo,
+          ...state.filterParams,
+        };
+      }
+      if (state.tableFilterValue) {
+        tableFilterValue.value = {
+          ...getColumnsResetValue(tableColumns.value),
+          ...state.tableFilterValue,
+        };
+      }
+      return Boolean(state.filterParams && Object.keys(state.filterParams).length);
+    } catch {
+      return false;
+    }
+  };
+
+  const restoreTableFiltersFromUrl = () => {
+    const urlParams = getSearchParams();
+    const nextFilterValue = {
+      ...getColumnsResetValue(tableColumns.value),
+    };
+    const nextParams: Record<string, any> = {};
+    let hasFilter = false;
+
+    collectAllColumns(tableColumns.value).forEach((col) => {
+      if (!col.colKey || !col.filter) {
+        return;
+      }
+      const urlValue = urlParams[col.colKey];
+      if (!urlValue) {
+        return;
+      }
+      const parsed = parseFilterValueFromUrl(col, urlValue);
+      if (!isFilterValueExist(parsed)) {
+        return;
+      }
+      nextFilterValue[col.colKey] = parsed;
+      const paramValue = convertFilterValueToParam(parsed);
+      if (paramValue !== undefined) {
+        nextParams[col.colKey] = paramValue;
+        hasFilter = true;
+      }
+    });
+
+    if (hasFilter) {
+      paramsMemo = {
+        ...paramsMemo,
+        ...nextParams,
+      };
+      tableFilterValue.value = nextFilterValue;
+    }
+  };
+
   const collectAllColumns = (cols: any[], result: any[] = []) => {
     cols.forEach((col) => {
       if (col.children) {
@@ -788,6 +956,7 @@
     });
     paramsMemo = nextParams;
     tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+    saveTableFilterState();
     isLoading.value = true;
     fetchListData();
   };
@@ -817,6 +986,7 @@
     });
 
     paramsMemo = nextParams;
+    saveTableFilterState();
     isLoading.value = true;
     fetchListData();
   };
@@ -963,6 +1133,10 @@
 
   onMounted(() => {
     parseURL();
+    const restoredFromStorage = restoreTableFilterState();
+    if (!restoredFromStorage) {
+      restoreTableFiltersFromUrl();
+    }
     calcTableHeight();
     window.addEventListener('resize', handleWindowResize);
     // 初始化时加载数据
@@ -986,6 +1160,7 @@
 
   // 销毁组件时去除监听，防止多次绑定触发
   onBeforeUnmount(() => {
+    saveTableFilterState();
     off('show-notice');
     window.removeEventListener('resize', handleWindowResize);
     if (resizeTimer) clearTimeout(resizeTimer);
@@ -1085,11 +1260,21 @@
       if (sort) {
         urlSortParams.sort = [sort];
       }
+      const preservedTableFilterParams = getTableFilterParamsFromMemo();
+      const tableFilterKeys = getTableFilterColumnKeys();
       paramsMemo = {
         ...paramsMemo,
         ...urlSortParams,
         ...params,
       };
+      tableFilterKeys.forEach((key) => {
+        const preserved = preservedTableFilterParams[key];
+        if (preserved !== undefined
+          && preserved !== ''
+          && (params[key] === '' || params[key] === undefined)) {
+          paramsMemo[key] = preserved;
+        }
+      });
       if (isReady) {
         pagination.current = 1;
       }
