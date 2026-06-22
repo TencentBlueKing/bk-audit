@@ -55,6 +55,7 @@
         :search-params="searchModel"
         secondary-sort-field="-event_time"
         :settings="settings"
+        table-filter-persist-key="risk-manage-list"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
