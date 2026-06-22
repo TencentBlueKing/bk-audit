@@ -22,7 +22,6 @@
 from dataclasses import dataclass
 from typing import List
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 
@@ -143,7 +142,7 @@ def check_and_report_quality(content: str, risk_id: str) -> List[ContentQualityI
             },
         )
         try:
-            api.bk_monitor.report_event(event.to_json())
+            event.report()
         except ApiRequestError as e:
             logger.error(
                 "[ContentQualityCheck] Report event failed. risk_id=%s, issue_type=%s, error=%s",

@@ -204,6 +204,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.reopen_risk, endpoint="reopen", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.process_risk_ticket, endpoint="process_risk_ticket", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.risk_export, endpoint="export"),
+        ResourceRoute("POST", resource.risk.risk_export_async, endpoint="export/async"),
         # 风险编辑
         ResourceRoute("PUT", resource.risk.update_risk, pk_field="risk_id"),
         # 风险简要列表（用于策略配置时选择风险单进行预览）

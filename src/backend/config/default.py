@@ -383,6 +383,9 @@ ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
 
+# monitor event
+MONITOR_EVENT_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_EVENT_TASK_TIMEOUT", 60))
+
 # Throttler
 throttler_config = ThrottlerConfig(
     redis_client=Redis(host=REDIS_HOST, port=int(REDIS_PORT), password=REDIS_PASSWORD, db=int(REDIS_DB)),
@@ -482,6 +485,24 @@ LOG_EXPORT_TASK_MAX_PERIODIC_TIME = int(os.getenv("BKAPP_LOG_EXPORT_TASK_MAX_PER
 
 # 日志导出任务分页大小
 LOG_EXPORT_TASK_PAGE_SIZE = int(os.getenv("BKAPP_LOG_EXPORT_TASK_PAGE_SIZE", 100))
+
+# 风险导出同步阈值
+RISK_EXPORT_SYNC_MAX_COUNT = int(os.getenv("BKAPP_RISK_EXPORT_SYNC_MAX_COUNT", 300))
+
+# 风险导出异步最大风险数
+RISK_EXPORT_ASYNC_MAX_COUNT = int(os.getenv("BKAPP_RISK_EXPORT_ASYNC_MAX_COUNT", 10000))
+
+# 单个风险导出时最多拉取的关联事件数
+RISK_EXPORT_EVENT_LIMIT_PER_RISK = int(os.getenv("BKAPP_RISK_EXPORT_EVENT_LIMIT_PER_RISK", 10))
+
+# 风险导出异步任务最大重试次数
+RISK_EXPORT_TASK_MAX_RETRY = int(os.getenv("BKAPP_RISK_EXPORT_TASK_MAX_RETRY", 3))
+
+# 风险导出异步任务重试延迟，单位秒
+RISK_EXPORT_TASK_RETRY_DELAY = int(os.getenv("BKAPP_RISK_EXPORT_TASK_RETRY_DELAY", 60))
+
+# 风险导出异步任务超时时间，默认 2 小时
+RISK_EXPORT_TASK_TIME_LIMIT = int(os.getenv("BKAPP_RISK_EXPORT_TASK_TIME_LIMIT", 60 * 60 * 2))
 
 # 初始化系统管理员
 SYSTEM_ADMIN = [p for p in os.getenv("BKAPP_SYSTEM_ADMIN", "admin").split(",") if p]
