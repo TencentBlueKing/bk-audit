@@ -274,7 +274,7 @@
       ...value,
       event_filters: exValue,
     };
-    listRef.value.initTableHeight();
+    listRef.value?.initTableHeight?.();
     fetchList();
   };
   const handleChangeTableHeight = () => {
