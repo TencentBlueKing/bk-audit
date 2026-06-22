@@ -19,13 +19,14 @@
     <search-box
       ref="searchBoxRef"
       :export-disabled="!isExportEnabled"
+      :export-disabled-tooltip="exportDisabledTooltip"
+      :export-request="runExport"
       :field-config="FieldConfig"
       is-export
       is-reassignment
       @batch="handleBatch"
       @change="handleSearchChange"
       @change-table-height="handleChangeTableHeight"
-      @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <tdesign-list
@@ -107,6 +108,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import { createRiskExportRequest } from '@hooks/use-risk-batch-export';
+  import useRiskExportLimit from '@hooks/use-risk-export-limit';
   import useUrlSearch from '@hooks/use-url-search';
 
   import SearchBox from '@components/search-box/index.vue';
@@ -236,12 +239,16 @@
     selectionMeta.value = meta;
   };
 
-  const exportCount = computed(() => {
-    const { isSelectAll, count, total } = selectionMeta.value;
-    return isSelectAll ? total : count;
-  });
+  const {
+    isExportEnabled,
+    exportDisabledTooltip,
+  } = useRiskExportLimit(selectionMeta);
 
-  const isExportEnabled = computed(() => exportCount.value > 0);
+  const runExport = createRiskExportRequest({
+    listRef,
+    searchBoxRef,
+    riskViewType: 'todo',
+  });
 
   // 默认的可配置列键
   const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
@@ -326,19 +333,6 @@
     nextTick(() => {
       formRef.value.clearValidate();
     });
-  };
-  // 导出数据
-  const handleExport = async () => {
-    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
-    const selectedData = keys.map((id: string | number) => id.toString());
-    if (!selectedData.length) {
-      messageWarn(t('请选择要操作的数据'));
-      return;
-    }
-    if (truncated) {
-      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
-    }
-    searchBoxRef.value.exportData(selectedData, 'todo');
   };
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {

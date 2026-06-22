@@ -980,6 +980,7 @@
   // 导出
   const {
     run: batchExport,
+    loading: isExportRequestLoading,
   } = useRequest(RiskManageService.batchExport, {
     defaultValue: [],
     onSuccess() {
@@ -987,8 +988,16 @@
     },
   });
 
+  let exportPromise: Promise<unknown> | null = null;
+
   const handleExportData = (val: string[], type: string) => {
-    batchExport({ risk_ids: val, risk_view_type: type });
+    if (isExportRequestLoading.value && exportPromise) {
+      return exportPromise;
+    }
+    exportPromise = batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
+      exportPromise = null;
+    });
+    return exportPromise;
   };
 
   // URL 事件字段初始化（与 search-box 一致）
@@ -1038,7 +1047,7 @@
       handleClear();
     },
     exportData(val, type) {
-      handleExportData(val, type);
+      return handleExportData(val, type);
     },
     initSelectedItems(val) {
       selectedItems.value = val;

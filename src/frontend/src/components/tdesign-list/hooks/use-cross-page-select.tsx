@@ -59,7 +59,10 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     if (selectCheckMode.value === 'all') {
       return 'all';
     }
-    return isCurrentPageAllSelected.value ? 'page' : '';
+    if (selectCheckMode.value === 'page' || isCurrentPageAllSelected.value) {
+      return 'page';
+    }
+    return '';
   });
 
   const resetCrossPageSelection = () => {
@@ -83,12 +86,28 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     mergeSelectedKeys(currentPageKeys.value);
   };
 
+  const syncCurrentPageSelectionForPageMode = () => {
+    if (!enabled.value || selectCheckMode.value !== 'page' || !currentPageKeys.value.length) {
+      return;
+    }
+    mergeSelectedKeys(currentPageKeys.value);
+  };
+
+  const preservePageSelectionForPageSizeChange = () => {
+    if (!enabled.value) {
+      return;
+    }
+    if (selectCheckMode.value === 'page' || isCurrentPageAllSelected.value) {
+      selectCheckMode.value = 'page';
+    }
+  };
+
   const handleListCheckChange = (type: string) => {
     if (!enabled.value) {
       return;
     }
     if (type === 'page') {
-      selectCheckMode.value = '';
+      selectCheckMode.value = 'page';
       mergeSelectedKeys(currentPageKeys.value);
       return;
     }
@@ -117,7 +136,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       return;
     }
     removeSelectedKeys([key]);
-    if (selectCheckMode.value === 'all') {
+    if (selectCheckMode.value === 'all' || selectCheckMode.value === 'page') {
       selectCheckMode.value = '';
     }
   };
@@ -128,15 +147,21 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     }
     if (selectCheckMode.value === 'all' && !isCurrentPageAllSelected.value) {
       selectCheckMode.value = '';
+      return;
+    }
+    if (selectCheckMode.value === 'page' && !isCurrentPageAllSelected.value) {
+      selectCheckMode.value = '';
     }
   };
 
-  const selectBannerSelectedCount = computed(() => {
-    if (selectCheckMode.value === 'all') {
+  const getEffectiveSelectedCount = () => {
+    if (enabled.value && selectCheckMode.value === 'all') {
       return pagination.count;
     }
     return selectedRowKeys.value.length;
-  });
+  };
+
+  const selectBannerSelectedCount = computed(() => getEffectiveSelectedCount());
 
   const showSelectAllBanner = computed(() => {
     if (!enabled.value || !pagination.count) {
@@ -241,13 +266,14 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
 
   const getSelectionMeta = () => ({
     mode: enabled.value ? selectCheckMode.value : '' as SelectCheckMode,
-    count: selectedRowKeys.value.length,
+    count: getEffectiveSelectedCount(),
     total: pagination.count,
     isSelectAll: enabled.value && selectCheckMode.value === 'all',
   });
 
   watch(tableData, () => {
     syncCurrentPageSelectionForAllMode();
+    syncCurrentPageSelectionForPageMode();
   });
 
   watch(showSelectAllBanner, (visible) => {
@@ -264,6 +290,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     selectAllBanner,
     enhanceSelectColumn,
     resetCrossPageSelection,
+    preservePageSelectionForPageSizeChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,

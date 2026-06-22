@@ -336,6 +336,7 @@ export default {
   '已选中{count}条数据，共有{total}条数据': 'Selected {count} items, {total} items in total',
   '选择所有 {total} 条': 'Select all {total} items',
   '最多支持导出 300 条数据，已按前 300 条导出': 'Maximum 300 records can be exported; exporting the first 300',
+  当前最多导出300条数据: 'A maximum of 300 records can be exported',
   服务模板: 'Service Template',
   集群模板: 'Set Template',
   动态拓扑: 'Dynamic Topo.',

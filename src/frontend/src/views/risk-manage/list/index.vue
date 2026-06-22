@@ -39,18 +39,10 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
-        <span
-          v-bk-tooltips="exportTooltip"
-          class="export-btn-wrapper"
-          :class="{ 'is-export-disabled': !isExportEnabled }">
-          <bk-button
-            class="export-btn"
-            :disabled="!isExportEnabled"
-            outline
-            @click="handleExport">
-            {{ t('批量导出') }}
-          </bk-button>
-        </span>
+        <all-risk-export-button
+          :disabled="!isExportEnabled"
+          :export-fn="runAllRiskExport"
+          :tooltip="exportTooltip" />
       </template>
       <tdesign-list
         ref="listRef"
@@ -101,8 +93,9 @@
   import type RiskManageModel from '@model/risk/risk';
   import CommonDataModel from '@model/strategy/common-data';
 
-  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import useRiskExportLimit from '@hooks/use-risk-export-limit';
+  import useMessage from '@hooks/use-message';
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
@@ -113,6 +106,7 @@
   import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
 
   import addRisk from './add-risk/index.vue';
+  import AllRiskExportButton from './components/all-risk-export-button.vue';
   import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
@@ -126,9 +120,9 @@
     size: string
   }
 
-  const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
+  const { messageWarn } = useMessage();
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
@@ -398,37 +392,24 @@
     selectionMeta.value = meta;
   };
 
-  const exportCount = computed(() => {
-    const { isSelectAll, count, total } = selectionMeta.value;
-    return isSelectAll ? total : count;
-  });
+  const {
+    isExportEnabled,
+    exportTooltip,
+  } = useRiskExportLimit(selectionMeta);
 
-  const isExportEnabled = computed(() => exportCount.value > 0);
-
-  const exportTooltip = computed(() => {
-    if (isExportEnabled.value) {
-      return { disabled: true, content: '' };
-    }
-    return { disabled: false, content: t('请至少选择 1 条风险单') };
-  });
-
-  const resolveSelectedRiskIdsForAnalyze = async () => {
-    const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
-    return keys.slice(0, ANALYZE_RISK_ID_LIMIT).map((id: string | number) => String(id));
-  };
-
-  // 导出数据
-  const handleExport = async () => {
-    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
+  const runAllRiskExport = async () => {
+    const { keys } = await listRef.value?.resolveExportSelection?.() || { keys: [] };
     const selectedData = keys.map((id: string | number) => id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
     }
-    if (truncated) {
-      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
-    }
-    searchBoxRef.value.exportData(selectedData, 'all');
+    await searchBoxRef.value?.exportData?.(selectedData, 'all');
+  };
+
+  const resolveSelectedRiskIdsForAnalyze = async () => {
+    const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
+    return keys.slice(0, ANALYZE_RISK_ID_LIMIT).map((id: string | number) => String(id));
   };
 
   const {
