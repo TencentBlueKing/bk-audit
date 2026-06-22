@@ -913,6 +913,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     # 风险视图类型与风险类的映射
     risk_cls_map: Dict[str, Type[ListRisk]] = {
         RiskViewType.ALL.value: ListRisk,
+        RiskViewType.SCENE.value: ListRisk,
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
         RiskViewType.PROCESSED.value: ListProcessedRisk,
