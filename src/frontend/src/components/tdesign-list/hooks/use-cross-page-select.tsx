@@ -42,10 +42,10 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   } = options;
 
   const selectCheckMode = ref<SelectCheckMode>('');
-  const selectBannerTop = ref(0);
+  const selectBannerTop = ref(44);
   const selectBannerHeight = ref(32);
-  const selectBannerReady = ref(false);
   const tableAreaRef = ref<HTMLElement>();
+  let bannerPositionTimer: ReturnType<typeof setTimeout> | null = null;
 
   const currentPageKeys = computed(() => tableData.value.map(row => getRowKeyValue(row)));
 
@@ -220,43 +220,61 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
+  /** 按表头 + 筛选行高度计算，避免随每页条数/滚动导致 getBoundingClientRect 偏移 */
   const getBannerTopInArea = (area: HTMLElement) => {
-    const bodyFullRow = area.querySelector('.t-table__body tr.t-table__first-full-row') as HTMLElement | null;
-    if (bodyFullRow) {
-      const areaRect = area.getBoundingClientRect();
-      const rowRect = bodyFullRow.getBoundingClientRect();
-      return {
-        top: Math.round(rowRect.top - areaRect.top + area.scrollTop),
-        height: Math.round(rowRect.height) || 32,
-      };
+    const table = area.querySelector('.t-table');
+    const scrollContent = table?.querySelector('.t-table__content--scrollable')
+      || table?.querySelector('.t-table__content');
+    if (!scrollContent) {
+      return { top: 44, height: 32 };
     }
-    const scrollContent = area.querySelector('.t-table__content--scrollable')
-      || area.querySelector('.t-table__content');
-    const header = scrollContent?.querySelector('.t-table__header') as HTMLElement | null;
-    const filterRow = scrollContent?.querySelector('.t-table__filter-row') as HTMLElement | null;
-    let top = header?.offsetHeight ?? 44;
+
+    const areaRect = area.getBoundingClientRect();
+    const contentRect = scrollContent.getBoundingClientRect();
+    let top = Math.round(contentRect.top - areaRect.top);
+
+    const header = scrollContent.querySelector('.t-table__header') as HTMLElement | null;
+    const filterRow = scrollContent.querySelector('.t-table__filter-row') as HTMLElement | null;
+    if (header) {
+      top += header.offsetHeight;
+    }
     if (filterRow?.offsetHeight) {
       top += filterRow.offsetHeight;
     }
-    return { top, height: 32 };
+
+    const fullRow = scrollContent.querySelector('.t-table__body tr.t-table__first-full-row') as HTMLElement | null;
+    const height = fullRow?.offsetHeight || 32;
+
+    return { top, height };
   };
 
-  const updateSelectBannerPosition = () => {
-    if (!enabled.value || !showSelectAllBanner.value || !tableAreaRef.value) {
-      selectBannerReady.value = false;
+  const applySelectBannerPosition = (retries = 0) => {
+    const area = tableAreaRef.value;
+    if (!enabled.value || !showSelectAllBanner.value || !area) {
       return;
     }
-    selectBannerReady.value = false;
+    const { top, height } = getBannerTopInArea(area);
+    if (top > 0) {
+      selectBannerTop.value = top;
+      selectBannerHeight.value = height;
+      return;
+    }
+    if (retries > 0) {
+      bannerPositionTimer = setTimeout(() => applySelectBannerPosition(retries - 1), 60);
+    }
+  };
+
+  const updateSelectBannerPosition = (retries = 4) => {
+    if (!enabled.value || !showSelectAllBanner.value || !tableAreaRef.value) {
+      return;
+    }
+    if (bannerPositionTimer) {
+      clearTimeout(bannerPositionTimer);
+      bannerPositionTimer = null;
+    }
     nextTick(() => {
       requestAnimationFrame(() => {
-        const area = tableAreaRef.value;
-        if (!area || !showSelectAllBanner.value) {
-          return;
-        }
-        const { top, height } = getBannerTopInArea(area);
-        selectBannerTop.value = top;
-        selectBannerHeight.value = height;
-        selectBannerReady.value = true;
+        applySelectBannerPosition(retries);
       });
     });
   };
@@ -313,8 +331,6 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   watch(showSelectAllBanner, (visible) => {
     if (visible) {
       updateSelectBannerPosition();
-    } else {
-      selectBannerReady.value = false;
     }
   });
 
@@ -322,7 +338,6 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     tableAreaRef,
     selectBannerTop,
     selectBannerHeight,
-    selectBannerReady,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,
