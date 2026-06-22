@@ -43,12 +43,18 @@
         <span
           v-bk-tooltips="exportTooltip"
           class="export-btn-wrapper"
-          :class="{ 'is-export-disabled': !isExportEnabled }">
+          :class="{ 'is-export-disabled': !isExportEnabled && !isExportLoading }">
           <bk-button
             class="export-btn"
-            :disabled="!isExportEnabled"
+            :class="{ 'is-exporting': isExportLoading }"
+            :disabled="!isExportEnabled || isExportLoading"
             outline
             @click="handleExport">
+            <audit-icon
+              v-if="isExportLoading"
+              class="rotate-loading"
+              style="margin-right: 4px; font-size: 12px; color: #3a84ff;"
+              type="loading" />
             {{ t('批量导出') }}
           </bk-button>
         </span>
@@ -102,8 +108,9 @@
   import type RiskManageModel from '@model/risk/risk';
 
   import useEventBus from '@hooks/use-event-bus';
-  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import useRiskBatchExport from '@hooks/use-risk-batch-export';
+  import useRiskExportLimit from '@hooks/use-risk-export-limit';
   import useUrlSearch from '@hooks/use-url-search';
 
   import SearchBox from '@components/search-box/index.vue';
@@ -124,7 +131,6 @@
     size: string
   }
 
-  const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
@@ -278,33 +284,20 @@
     selectionMeta.value = meta;
   };
 
-  const exportCount = computed(() => {
-    const { isSelectAll, count, total } = selectionMeta.value;
-    return isSelectAll ? total : count;
+  const {
+    isExportEnabled,
+    exportTooltip,
+  } = useRiskExportLimit(selectionMeta);
+
+  const {
+    isExportLoading,
+    handleExport,
+  } = useRiskBatchExport({
+    listRef,
+    searchBoxRef,
+    riskViewType: 'scene',
+    isExportEnabled,
   });
-
-  const isExportEnabled = computed(() => exportCount.value > 0);
-
-  const exportTooltip = computed(() => {
-    if (isExportEnabled.value) {
-      return { disabled: true, content: '' };
-    }
-    return { disabled: false, content: t('请至少选择 1 条风险单') };
-  });
-
-  // 导出数据
-  const handleExport = async () => {
-    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
-    const selectedData = keys.map((id: string | number) => id.toString());
-    if (!selectedData.length) {
-      messageWarn(t('请选择要操作的数据'));
-      return;
-    }
-    if (truncated) {
-      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
-    }
-    searchBoxRef.value.exportData(selectedData, 'processed');
-  };
 
   const handleGenerateReport = (data: RiskManageModel) => {
     router.push({
@@ -550,8 +543,14 @@
       .export-btn-wrapper {
         display: inline-flex;
 
+        :deep(.export-btn.is-exporting) {
+          cursor: wait;
+          opacity: 85%;
+        }
+
         &.is-export-disabled :deep(.export-btn) {
           color: #c4c6cc;
+          pointer-events: none;
           cursor: not-allowed;
           background-color: #fff;
           border-color: #dcdee5;

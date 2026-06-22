@@ -19,11 +19,12 @@
     <search-box
       ref="searchBoxRef"
       :export-disabled="!isExportEnabled"
+      :export-disabled-tooltip="exportDisabledTooltip"
+      :export-request="runExport"
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
       @change-table-height="handleChangeTableHeight"
-      @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <tdesign-list
@@ -69,8 +70,9 @@
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
 
-  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import { createRiskExportRequest } from '@hooks/use-risk-batch-export';
+  import useRiskExportLimit from '@hooks/use-risk-export-limit';
   import useUrlSearch from '@hooks/use-url-search';
 
   import SearchBox from '@components/search-box/index.vue';
@@ -88,7 +90,6 @@
     size: string
   }
 
-  const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
@@ -225,26 +226,16 @@
     selectionMeta.value = meta;
   };
 
-  const exportCount = computed(() => {
-    const { isSelectAll, count, total } = selectionMeta.value;
-    return isSelectAll ? total : count;
+  const {
+    isExportEnabled,
+    exportDisabledTooltip,
+  } = useRiskExportLimit(selectionMeta);
+
+  const runExport = createRiskExportRequest({
+    listRef,
+    searchBoxRef,
+    riskViewType: 'processed',
   });
-
-  const isExportEnabled = computed(() => exportCount.value > 0);
-
-  // 导出数据
-  const handleExport = async () => {
-    const { keys, truncated } = await listRef.value?.resolveExportSelection?.() || { keys: [], truncated: false };
-    const selectedData = keys.map((id: string | number) => id.toString());
-    if (!selectedData.length) {
-      messageWarn(t('请选择要操作的数据'));
-      return;
-    }
-    if (truncated) {
-      messageWarn(t('最多支持导出 300 条数据，已按前 300 条导出'));
-    }
-    searchBoxRef.value.exportData(selectedData, 'processed');
-  };
 
   const handleGenerateReport = (data: RiskManageModel) => {
     router.push({

@@ -247,6 +247,7 @@ export default {
     请先勾选要分析的风险单: 'Please check risk tickets to analyze first',
     '请至少选择 1 条风险单': 'Please select at least 1 risk ticket',
     '当前已选 {count} 条，最多支持分析 {limit} 条数据': 'Selected {count} records, maximum {limit} records can be analyzed',
+    当前最多分析100条数据: 'A maximum of 100 records can be analyzed',
     '条风险单，可添加筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告': ' risk tickets. Add filter conditions or select target risk tickets for AI analysis, or view historical analysis reports',
     '条风险单，可重置筛选条件或选择目标风险单后进行智能分析，或查看历史分析报告': ' risk tickets. Reset filter conditions or select target risk tickets for AI analysis, or view historical analysis reports',
     '条风险单，建议修改筛选条件后重新搜索': ' risk tickets. Please modify filter conditions and search again',
