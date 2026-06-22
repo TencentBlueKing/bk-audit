@@ -1315,11 +1315,24 @@ class RiskExportReqSerializer(serializers.Serializer):
     """
 
     risk_ids = serializers.ListField(
-        label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1, max_length=300
+        label=gettext_lazy("Risk IDs"),
+        child=serializers.CharField(),
+        min_length=1,
+        max_length=settings.RISK_EXPORT_ASYNC_MAX_COUNT,
     )
     risk_view_type = serializers.ChoiceField(
         label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
     )
+
+
+class RiskExportAsyncRespSerializer(serializers.Serializer):
+    """风险异步导出响应"""
+
+    export_type = serializers.CharField(label=gettext_lazy("Export Type"))
+    task_id = serializers.CharField(label=gettext_lazy("Task ID"))
+    notice_users = serializers.ListField(label=gettext_lazy("Notice Users"), child=serializers.CharField())
+    total = serializers.IntegerField(label=gettext_lazy("Total"))
+    message = serializers.CharField(label=gettext_lazy("Message"))
 
 
 class AIPreviewRequestSerializer(serializers.Serializer):
