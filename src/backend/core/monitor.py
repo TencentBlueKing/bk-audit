@@ -18,6 +18,8 @@ to the current version of the project delivered to anyone in the future.
 import time
 from typing import Dict, List, Optional
 
+from bk_resource import api
+from blueapps.core.celery import celery_app
 from django.conf import settings
 
 from core.utils.service import get_service_name
@@ -63,3 +65,20 @@ class Event:
                 }
             ],
         }
+
+    def report(self):
+        """同步上报监控事件。"""
+
+        return api.bk_monitor.report_event(self.to_json())
+
+    def async_report(self):
+        """异步上报监控事件，避免业务流程阻塞在监控 API 调用上。"""
+
+        return report_event_to_bk_monitor.delay(self.to_json())
+
+
+@celery_app.task(time_limit=settings.MONITOR_EVENT_TASK_TIMEOUT)
+def report_event_to_bk_monitor(payload: Dict):
+    """统一的监控事件异步上报任务。"""
+
+    return api.bk_monitor.report_event(payload)

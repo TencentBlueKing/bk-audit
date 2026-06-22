@@ -18,7 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 from core.monitor import Event
 
-__all__ = ["LostSceneDetectedEvent", "RiskReportRenderFailedEvent", "RiskReportContentQualityEvent"]
+__all__ = [
+    "LostSceneDetectedEvent",
+    "RiskReportRenderFailedEvent",
+    "RiskReportContentQualityEvent",
+    "RiskExportFailedEvent",
+]
 
 
 class LostSceneDetectedEvent(Event):
@@ -46,3 +51,16 @@ class RiskReportContentQualityEvent(Event):
     name = "risk_report_content_quality"
     documentation = "风险报告内容质量异常"
     labelnames = ["risk_id", "issue_type"]
+
+
+class RiskExportFailedEvent(Event):
+    """风险异步导出失败事件
+
+    维度字段:
+    - username: 导出发起人
+    - risk_count: 本次导出的风险单数量
+    """
+
+    name = "risk_export_failed"
+    documentation = "风险异步导出失败"
+    labelnames = ["username", "risk_count"]

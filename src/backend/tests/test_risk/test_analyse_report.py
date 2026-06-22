@@ -1568,6 +1568,13 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
     def setUp(self):
         super().setUp()
+        self.iam_patcher = mock.patch.object(
+            Risk,
+            "iam_risk_filter",
+            return_value=Q(risk_id__in=[self.risk1.risk_id, self.risk2.risk_id]),
+        )
+        self.iam_patcher.start()
+        self.addCleanup(self.iam_patcher.stop)
         self.report = AnalyseReport.objects.create(
             title="异步生成测试",
             report_type=AnalyseReportType.SYSTEM,

@@ -16,18 +16,6 @@
             margin: 20px;
         }
 
-        .title {
-            font-weight: bold;
-            font-size: 18px;
-            margin: 20px 20px 2px 20px;
-        }
-
-        .second-title {
-            font-size: 12px;
-            margin: 2px 20px 20px 20px;
-            color: #9d9d9d;
-        }
-
         .content {
             margin: 20px 20px;
             font-size: 14px;
@@ -67,16 +55,8 @@
             font-size: 14px;
         }
     </style>
-    <title>{{ title }}</title>
 </head>
 <body style="margin: 20px; width: 800px; background: white; border-radius: 6px">
-<div class="title" style="font-weight: bold; font-size: 18px; margin: 20px 20px 2px 20px;">
-    {{ title }}
-</div>
-<div class="second-title" style="font-size: 12px; margin: 2px 20px 20px 20px; color: #9d9d9d">
-    {{ notice_time }}
-</div>
-<hr/>
 <div class="content" style="font-size: 14px; margin: 20px 20px; color: #181818">
     {% for content_config in content.content_configs %}
         {% if not content_config.display_name %}
