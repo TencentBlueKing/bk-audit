@@ -36,12 +36,17 @@
             v-if="isExport"
             v-bk-tooltips="exportTooltip"
             class="export-btn-wrapper"
-            :class="{ 'is-export-disabled': exportDisabled }">
+            :class="{ 'is-export-disabled': exportDisabled && !isRiskExportLoading }">
             <bk-button
               class="export-btn mr8"
-              :disabled="exportDisabled"
-              :loading="isLoading"
+              :class="{ 'is-exporting': isRiskExportLoading }"
+              :disabled="exportDisabled || isRiskExportLoading"
               @click="handleExport">
+              <audit-icon
+                v-if="isRiskExportLoading"
+                class="rotate-loading"
+                style="margin-right: 4px; font-size: 12px; color: #3a84ff;"
+                type="loading" />
               {{ t('批量导出') }}
             </bk-button>
           </span>
@@ -140,7 +145,6 @@
   import _ from 'lodash';
   import {
     computed,
-    // nextTick,
     onMounted,
     ref,
     watch,
@@ -152,6 +156,7 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import { isRiskExportLoading, withRiskExportLoading } from '@hooks/use-risk-export-loading';
   import useUrlSearch from '@hooks/use-url-search';
 
   import type { IFieldConfig } from './components/render-field-config/config';
@@ -171,10 +176,12 @@
     isReassignment?: boolean,
     isExport?: boolean,
     exportDisabled?: boolean,
+    exportDisabledTooltip?: string,
+    exportRequest?: () => Promise<void>,
   }
   interface Exposes {
     clearValue: () => void;
-    exportData: (val: string[], type: string) => void;
+    exportData: (val: string[], type: string) => Promise<unknown>;
     initSelectedItems:(val: Array< Record<string, any>>) => void;
     getSelectedItemList: (val: Array< Record<string, any>>) => void;
   }
@@ -184,6 +191,8 @@
     isReassignment: false,
     isExport: false,
     exportDisabled: false,
+    exportDisabledTooltip: '',
+    exportRequest: undefined,
   });
   const emit = defineEmits<Emits>();
 
@@ -191,13 +200,15 @@
   const searchRef = ref();
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
   const { t } = useI18n();
-  const isLoading = ref(false);
 
   const exportTooltip = computed(() => {
     if (!props.exportDisabled) {
       return { disabled: true, content: '' };
     }
-    return { disabled: false, content: t('请至少选择 1 条风险单') };
+    return {
+      disabled: false,
+      content: props.exportDisabledTooltip || t('请至少选择 1 条风险单'),
+    };
   });
   const comMap = {
     key: RenderKey,
@@ -326,6 +337,7 @@
   // 批量导出
   const {
     run: batchExport,
+    loading: isExportRequestLoading,
   } = useRequest(RiskManageService.batchExport, {
     defaultValue: [],
     onSuccess() {
@@ -333,17 +345,26 @@
     },
   });
 
-  const handleExport = () => {
-    if (props.exportDisabled) {
+  let exportPromise: Promise<unknown> | null = null;
+
+  const handleExport = async () => {
+    if (props.exportDisabled || isRiskExportLoading.value) {
       return;
     }
-    emit('export');
+    if (!props.exportRequest) {
+      return;
+    }
+    await withRiskExportLoading(() => props.exportRequest!());
   };
+
   const handleExportData = (val: string[], type: string) => {
-    isLoading.value = true;
-    batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
-      isLoading.value = false;
+    if (isExportRequestLoading.value && exportPromise) {
+      return exportPromise;
+    }
+    exportPromise = batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
+      exportPromise = null;
     });
+    return exportPromise;
   };
 
 
@@ -530,7 +551,7 @@
       handleClear();
     },
     exportData(val, type) {
-      handleExportData(val, type);
+      return handleExportData(val, type);
     },
     initSelectedItems(val) {
       selectedItems.value = val;
@@ -551,8 +572,14 @@
   .export-btn-wrapper {
     display: inline-flex;
 
+    :deep(.export-btn.is-exporting) {
+      cursor: wait;
+      opacity: 85%;
+    }
+
     &.is-export-disabled :deep(.export-btn) {
       color: #c4c6cc;
+      pointer-events: none;
       cursor: not-allowed;
       background-color: #fff;
       border-color: #dcdee5;

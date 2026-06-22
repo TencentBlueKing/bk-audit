@@ -103,7 +103,6 @@
         <primary-table
           ref="tableRef"
           v-model:filter-value="tableFilterValue"
-          v-model:selected-row-keys="selectedRowKeys"
           :active-row-keys="[]"
           active-row-type="multiple"
           :allow-multiple-sort="allowMultipleSort"
@@ -118,10 +117,12 @@
           reserve-selected-row-on-paginate
           :row-class-name="rowClassName"
           :row-key="rowKey as any"
+          :selected-row-keys="selectedRowKeys"
           v-bind="$attrs"
           @filter-change="handleFilterChange"
           @select-change="handleSelectChange"
-          @sort-change="handleSortChange">
+          @sort-change="handleSortChange"
+          @update:selected-row-keys="handleSelectedRowKeysUpdate">
           <template
             v-for="(slotData, name) in $slots"
             #[name]="slotProps">
@@ -557,11 +558,14 @@
     selectAllBanner,
     enhanceSelectColumn,
     resetCrossPageSelection,
+    preservePageSelectionForPageSizeChange,
+    materializePageModeSelection,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
     resolveExportSelection,
     getSelectionMeta,
+    selectionStateVersion,
   } = useCrossPageSelect({
     enabled: crossPageSelectEnabled,
     selectedRowKeys,
@@ -581,8 +585,18 @@
   };
 
   const handleSelectChange = (value: (string | number)[]) => {
+    if (props.enableCrossPageSelect) {
+      return;
+    }
     selectedRowKeys.value = value || [];
     handleCrossPageSelectChange();
+  };
+
+  const handleSelectedRowKeysUpdate = (value: (string | number)[]) => {
+    if (props.enableCrossPageSelect) {
+      return;
+    }
+    selectedRowKeys.value = value || [];
   };
 
   const emitSelectionChange = () => {
@@ -590,15 +604,15 @@
   };
 
   watch(
-    [selectedRowKeys, () => pagination.count, () => getSelectionMeta().isSelectAll],
+    [() => getSelectionMeta().count, () => getSelectionMeta().mode, () => pagination.count],
     () => {
       emitSelectionChange();
     },
-    { deep: true },
   );
 
   // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
   const tableColumns = computed(() => {
+    selectionStateVersion.value;
     if (props.settings.length === 0) {
       if (isLoading.value) {
         return buildTableColumns(props.columns.map(removeFixed));
@@ -900,6 +914,9 @@
 
   // 切换页码
   const handlePageChange = (pageValue: number) => {
+    if (props.enableCrossPageSelect) {
+      materializePageModeSelection();
+    }
     pagination.current = pageValue;
     isUnload.value = false;
     isLoading.value = true;
@@ -908,6 +925,9 @@
 
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
+    if (props.enableCrossPageSelect) {
+      preservePageSelectionForPageSizeChange();
+    }
     pagination.limit = pageLimit;
     pagination.current = 1; // 切换每页条数时重置到第一页
     // 确保新的 pageLimit 在 limitList 中

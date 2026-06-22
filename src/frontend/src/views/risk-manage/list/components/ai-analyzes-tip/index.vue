@@ -140,10 +140,7 @@
 
   const ANALYZE_RISK_ID_LIMIT = 100;
 
-  const analyzeCount = computed(() => {
-    const { isSelectAll, count, total } = props.selectionMeta;
-    return isSelectAll ? total : count;
-  });
+  const analyzeCount = computed(() => props.selectionMeta.count);
 
   const hasTagValue = (value: unknown) => {
     if (value === undefined || value === null || value === '') {
@@ -200,7 +197,7 @@
   });
 
   const isAnalyzeEnabled = computed(() => (
-    analyzeCount.value > 0 && analyzeCount.value < ANALYZE_RISK_ID_LIMIT
+    analyzeCount.value > 0 && analyzeCount.value <= ANALYZE_RISK_ID_LIMIT
   ));
 
   const analyzeTooltip = computed(() => {
@@ -210,13 +207,10 @@
     if (analyzeCount.value === 0) {
       return { disabled: false, content: t('请至少选择 1 条风险单') };
     }
-    if (analyzeCount.value >= ANALYZE_RISK_ID_LIMIT) {
+    if (analyzeCount.value > ANALYZE_RISK_ID_LIMIT) {
       return {
         disabled: false,
-        content: t('当前已选 {count} 条，最多支持分析 {limit} 条数据', {
-          count: analyzeCount.value,
-          limit: ANALYZE_RISK_ID_LIMIT,
-        }),
+        content: t('当前最多分析100条数据'),
       };
     }
     return { disabled: true, content: '' };
@@ -350,29 +344,12 @@
       font-size: 12px;
     }
 
-    .export-btn-wrapper {
-      display: inline-flex;
-
-      &.is-export-disabled :deep(.export-btn) {
-        color: #c4c6cc;
-        cursor: not-allowed;
-        background-color: #fff;
-        border-color: #dcdee5;
-
-        &:hover,
-        &:active {
-          color: #c4c6cc;
-          background-color: #fff;
-          border-color: #dcdee5;
-        }
-      }
-    }
-
     .analyze-btn-wrapper {
       display: inline-flex;
 
       &.is-analyze-disabled :deep(.analyze-btn) {
         color: #c4c6cc;
+        pointer-events: none;
         cursor: not-allowed;
         background-color: #fff;
         border-color: #dcdee5;
