@@ -42,7 +42,9 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   } = options;
 
   const selectCheckMode = ref<SelectCheckMode>('');
-  const selectBannerTop = ref(44);
+  const selectBannerTop = ref(0);
+  const selectBannerHeight = ref(32);
+  const selectBannerReady = ref(false);
   const tableAreaRef = ref<HTMLElement>();
 
   const currentPageKeys = computed(() => tableData.value.map(row => getRowKeyValue(row)));
@@ -218,15 +220,44 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
+  const getBannerTopInArea = (area: HTMLElement) => {
+    const bodyFullRow = area.querySelector('.t-table__body tr.t-table__first-full-row') as HTMLElement | null;
+    if (bodyFullRow) {
+      const areaRect = area.getBoundingClientRect();
+      const rowRect = bodyFullRow.getBoundingClientRect();
+      return {
+        top: Math.round(rowRect.top - areaRect.top + area.scrollTop),
+        height: Math.round(rowRect.height) || 32,
+      };
+    }
+    const scrollContent = area.querySelector('.t-table__content--scrollable')
+      || area.querySelector('.t-table__content');
+    const header = scrollContent?.querySelector('.t-table__header') as HTMLElement | null;
+    const filterRow = scrollContent?.querySelector('.t-table__filter-row') as HTMLElement | null;
+    let top = header?.offsetHeight ?? 44;
+    if (filterRow?.offsetHeight) {
+      top += filterRow.offsetHeight;
+    }
+    return { top, height: 32 };
+  };
+
   const updateSelectBannerPosition = () => {
-    if (!enabled.value || !showSelectAllBanner.value) {
+    if (!enabled.value || !showSelectAllBanner.value || !tableAreaRef.value) {
+      selectBannerReady.value = false;
       return;
     }
+    selectBannerReady.value = false;
     nextTick(() => {
-      const header = tableAreaRef.value?.querySelector('.t-table__header') as HTMLElement | null;
-      if (header) {
-        selectBannerTop.value = header.offsetHeight;
-      }
+      requestAnimationFrame(() => {
+        const area = tableAreaRef.value;
+        if (!area || !showSelectAllBanner.value) {
+          return;
+        }
+        const { top, height } = getBannerTopInArea(area);
+        selectBannerTop.value = top;
+        selectBannerHeight.value = height;
+        selectBannerReady.value = true;
+      });
     });
   };
 
@@ -274,17 +305,24 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   watch(tableData, () => {
     syncCurrentPageSelectionForAllMode();
     syncCurrentPageSelectionForPageMode();
+    if (showSelectAllBanner.value) {
+      updateSelectBannerPosition();
+    }
   });
 
   watch(showSelectAllBanner, (visible) => {
     if (visible) {
       updateSelectBannerPosition();
+    } else {
+      selectBannerReady.value = false;
     }
   });
 
   return {
     tableAreaRef,
     selectBannerTop,
+    selectBannerHeight,
+    selectBannerReady,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,

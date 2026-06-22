@@ -93,11 +93,19 @@
       </div>
       <div
         :ref="enableCrossPageSelect ? bindTableAreaRef : undefined"
-        :class="{ 'tdesign-list-table-area': enableCrossPageSelect }">
+        :class="{
+          'tdesign-list-table-area': enableCrossPageSelect,
+          'has-select-banner': enableCrossPageSelect && showSelectAllBanner,
+        }">
         <div
-          v-if="enableCrossPageSelect && showSelectAllBanner"
+          v-if="enableCrossPageSelect && showSelectAllBanner && selectBannerReady"
           class="tdesign-list-select-banner-bar"
-          :style="{ top: `${selectBannerTop}px` }">
+          :style="{
+            top: `${selectBannerTop}px`,
+            height: `${selectBannerHeight}px`,
+          }"
+          @click.stop
+          @mousedown.stop>
           {{ selectBannerText }}
         </div>
         <primary-table
@@ -559,6 +567,8 @@
   const {
     tableAreaRef,
     selectBannerTop,
+    selectBannerHeight,
+    selectBannerReady,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,
@@ -920,6 +930,12 @@
       return '';
     }
     return `搜索"${result}"，找到 ${pagination.count} 条结果`;
+  });
+
+  watch([showSelectAllBanner, tableFilterResultText], () => {
+    if (showSelectAllBanner.value) {
+      updateSelectBannerPosition();
+    }
   });
 
   const getColumnsResetValue = (columns: any[]) => {
@@ -1494,20 +1510,50 @@
   position: relative;
 }
 
+/* 跨页全选提示行：主表体 + 左右固定列单元格背景，并禁止该行响应点击 */
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row) {
+  pointer-events: none;
+}
+
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row > td),
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__row--full.t-table__first-full-row > td),
+.tdesign-list-table-area.has-select-banner :deep(.t-table--column-fixed tr.t-table__first-full-row > td),
+.tdesign-list-table-area.has-select-banner :deep(.t-table__content tr.t-table__first-full-row > td) {
+  height: 32px !important;
+  padding: 0 !important;
+  background-color: #f0f5ff !important;
+  border-bottom-color: #f0f5ff !important;
+}
+
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left),
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right),
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-left-last),
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__cell--fixed-right-first) {
+  background-color: #f0f5ff !important;
+}
+
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-inner),
+.tdesign-list-table-area.has-select-banner :deep(tr.t-table__first-full-row .t-table__row-full-element) {
+  height: 32px;
+  min-height: 32px;
+  background-color: #f0f5ff;
+}
+
 .tdesign-list-select-banner-bar {
   position: absolute;
   right: 0;
   left: 0;
-  z-index: 3;
+  z-index: 35;
   display: flex;
-  height: 32px;
   padding: 0 16px;
   font-size: 12px;
   color: #63656e;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: default;
   background: #f0f5ff;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 :deep(.tdesign-list-select-banner-placeholder) {
