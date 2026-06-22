@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
-from bk_resource import CacheResource, api, resource
+from bk_resource import CacheResource, api
 from bk_resource.base import Empty
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
@@ -47,7 +47,9 @@ from django.db.models import (
 from django.db.models.functions import Cast
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
+from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
 from api.constants import AIAgentCode
@@ -60,11 +62,9 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
-from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import build_preserved_order_queryset, choices_to_dict, data2string
+from core.utils.data import build_preserved_order_queryset, choices_to_dict
 from core.utils.page import paginate_queryset
-from core.utils.time import ceil_to_second, mstimestamp_to_date_string
 from services.web.common.constants import ScopeQueryField
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
@@ -76,14 +76,11 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
-    EVENT_EXPORT_FIELD_PREFIX,
-    RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
-    RiskExportField,
     RiskFields,
     RiskLabel,
     RiskStatus,
@@ -105,16 +102,13 @@ from services.web.risk.converter.bkbase import (
     FinalSelectAssembler,
     ManualUnsyncedRiskPrepender,
 )
-from services.web.risk.exceptions import (
-    ExportRiskNoPermission,
-    NL2RiskFilterServiceError,
-)
+from services.web.risk.exceptions import NL2RiskFilterServiceError
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.nl2riskfilter import (
     build_nl2risk_user_message,
     extract_filter_conditions_from_ai_result,
 )
-from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
+from services.web.risk.handlers.risk_export_service import RiskExportService
 from services.web.risk.handlers.ticket import (
     AutoProcess,
     CloseRisk,
@@ -169,6 +163,7 @@ from services.web.risk.serializers import (
     RetrieveRiskStrategyInfoAPIGWResponseSerializer,
     RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
+    RiskExportAsyncRespSerializer,
     RiskExportReqSerializer,
     RiskInfoSerializer,
     TicketNodeSerializer,
@@ -177,6 +172,7 @@ from services.web.risk.serializers import (
 )
 from services.web.risk.tasks import (
     _build_manual_event_time_range,
+    export_risks_to_mail,
     process_one_risk,
     sync_auto_result,
 )
@@ -1273,107 +1269,69 @@ class ProcessRiskTicket(RiskMeta):
         return
 
 
+def build_async_risk_export_response(username: str, risk_ids: List[str], risk_view_type: str) -> Response:
+    """提交异步导出任务并返回 202 响应。"""
+
+    requested_at = timezone.localtime().strftime(api_settings.DATETIME_FORMAT)
+    task = export_risks_to_mail.apply_async(
+        kwargs={
+            "username": username,
+            "risk_ids": risk_ids,
+            "risk_view_type": risk_view_type,
+            "requested_at": requested_at,
+        }
+    )
+    serializer = RiskExportAsyncRespSerializer(
+        data={
+            "export_type": "async",
+            "task_id": task.id,
+            "notice_users": [username],
+            "total": len(risk_ids),
+            "message": gettext("导出任务已提交，完成后将邮件通知"),
+        }
+    )
+    serializer.is_valid(raise_exception=True)
+    return Response(data=serializer.data, status=202)
+
+
 class RiskExport(RiskMeta):
+    """风险导出
+
+    根据风险数量自动选择导出方式：不超过同步阈值时直接返回 XLSX 文件；超过阈值时提交异步导出任务，
+    返回 HTTP 202 和任务信息，任务完成后通过邮件附件通知当前用户。
+    """
+
     name = gettext_lazy("风险导出")
     RequestSerializer = RiskExportReqSerializer
 
     def perform_request(self, validated_request_data):
         risk_view_type: str = validated_request_data.get("risk_view_type", "")
         risk_ids: List[str] = validated_request_data["risk_ids"]
+        username = get_request_username()
+        service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
+        service.validate_permission()
 
-        # 1. 获取有权限的风险列表
-        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK)
-        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.annotated_queryset(qs)).filter(risk_id__in=risk_ids)
+        if len(risk_ids) > settings.RISK_EXPORT_SYNC_MAX_COUNT:
+            return build_async_risk_export_response(username, risk_ids, risk_view_type)
 
-        authed_risk_ids = list(risks.values_list("risk_id", flat=True))
-        no_authed_risk_ids = set(risk_ids) - set(authed_risk_ids)
-        if no_authed_risk_ids:
-            raise ExportRiskNoPermission(risk_ids=",".join(no_authed_risk_ids))
-
-        # 2. 按策略分组风险
-        strategies = list(
-            Strategy.objects.filter(strategy_id__in=risks.values_list("strategy_id", flat=True)).order_by("strategy_id")
-        )
-
-        # 3. 获取策略的导出字段
-        strategy_export_fields: Dict[str, List[ExportField]] = defaultdict(list)
-        for strategy in strategies:
-            risk_basic_fields = RiskExportField.export_fields()
-            event_fields = [
-                ExportField(
-                    raw_name=f"{EVENT_EXPORT_FIELD_PREFIX}{field['field_name']}",
-                    display_name=field["display_name"] or field["field_name"],
-                )
-                for field in strategy.event_data_field_configs
-            ]
-            strategy_export_fields[strategy.build_sheet_name()] = risk_basic_fields + event_fields
-
-        # 4. 获取风险关联的事件,按策略分组并格式化数据
-        bulk_events_params = []
-        formatted_risks_by_strategy = defaultdict(list)
-        risk_map = {risk.risk_id: risk for risk in risks}
-        for risk_id in risk_ids:
-            risk = risk_map[risk_id]
-            # 时间转为 +8 时间字符串
-            start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
-            event_end_time = ceil_to_second(risk.event_end_time) or datetime.now()
-            end_time = mstimestamp_to_date_string(int(event_end_time.timestamp() * 1000))
-            risk_id = risk.risk_id
-            bulk_events_params.append(
-                {"risk_id": risk_id, "start_time": start_time, "end_time": end_time, "page": 1, "page_size": 10}
-            )
-        bulk_resp = resource.risk.list_event.bulk_request(bulk_events_params)
-        for risk_id, resp in zip(risk_ids, bulk_resp):
-            risk = risk_map[risk_id]
-            events = resp["results"]
-            risk_basic_data = {
-                RiskExportField.RISK_ID: risk_id,
-                RiskExportField.RISK_TITLE: risk.title,
-                RiskExportField.EVENT_CONTENT: risk.event_content,
-                RiskExportField.RISK_TAGS: data2string(
-                    [tag_rel.tag.tag_name for tag_rel in risk.strategy.prefetched_tags]
-                ),
-                RiskExportField.EVENT_TYPE: data2string(risk.event_type),
-                RiskExportField.RISK_LEVEL: str(RiskLevel.get_label(risk.strategy.risk_level)),
-                RiskExportField.STRATEGY_NAME: risk.strategy.strategy_name,
-                RiskExportField.STRATEGY_ID: risk.strategy.strategy_id,
-                RiskExportField.RAW_EVENT_ID: risk.raw_event_id,
-                RiskExportField.EVENT_END_TIME: risk.event_end_time.strftime(api_settings.DATETIME_FORMAT),
-                RiskExportField.EVENT_TIME: risk.event_time.strftime(api_settings.DATETIME_FORMAT),
-                RiskExportField.RISK_HAZARD: risk.strategy.risk_hazard,
-                RiskExportField.RISK_GUIDANCE: risk.strategy.risk_guidance,
-                RiskExportField.STATUS: str(RiskDisplayStatus.get_label(risk.display_status)),
-                RiskExportField.RULE_ID: risk.rule_id,
-                RiskExportField.OPERATOR: data2string(risk.operator),
-                RiskExportField.CURRENT_OPERATOR: data2string(risk.current_operator),
-                RiskExportField.NOTICE_USERS: data2string(risk.notice_users),
-            }
-            if not events:
-                formatted_risks_by_strategy[risk.strategy.build_sheet_name()].append(risk_basic_data)
-                continue
-            for event in events:
-                event_data = {
-                    field["field_name"]: event.get("event_data", {}).get(field["field_name"], "")
-                    for field in risk.strategy.event_data_field_configs
-                }
-                # 合并风险和事件字段，事件字段增加前缀
-                formatted_risk = {
-                    **risk_basic_data,
-                    **{f"{EVENT_EXPORT_FIELD_PREFIX}{k}": v for k, v in event_data.items()},
-                }
-                formatted_risks_by_strategy[risk.strategy.build_sheet_name()].append(formatted_risk)
-
-        # 5. 导出 excel
-        exporter = MultiSheetRiskExporterXlsx()
-        exporter.write(sheets_data=formatted_risks_by_strategy, sheets_headers=strategy_export_fields)
-        excel_file = exporter.save()
-        filename = RISK_EXPORT_FILE_NAME_TMP.format(
-            risk_view_type=str(RiskViewType.get_label(risk_view_type)),
-            datetime=datetime.now().strftime('%Y%m%d_%H%M%S'),
-        )
-        stream_response = FileResponse(excel_file, as_attachment=True, filename=filename)
+        export_file = service.build_export_file()
+        stream_response = FileResponse(export_file.file, as_attachment=True, filename=export_file.filename)
         stream_response["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         return stream_response
+
+
+class RiskExportAsync(RiskMeta):
+    """主动发起风险异步导出，提交任务后通过邮件附件通知当前用户。"""
+
+    name = gettext_lazy("风险异步导出")
+    RequestSerializer = RiskExportReqSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_view_type: str = validated_request_data.get("risk_view_type", "")
+        risk_ids: List[str] = validated_request_data["risk_ids"]
+        username = get_request_username()
+        RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type).validate_permission()
+        return build_async_risk_export_response(username, risk_ids, risk_view_type)
 
 
 class ListEventFieldsByStrategy(RiskMeta):

@@ -256,7 +256,7 @@ class TestRiskRenderTask(TestCase):
         assert call_kwargs["countdown"] == 10
         assert "exc" not in call_kwargs
 
-    @mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event")
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
     @mock.patch("services.web.risk.tasks.render_risk_report.retry")
     @mock.patch("services.web.risk.handlers.report.submit_render_task")
     def test_render_task_max_retries_exceeded(self, mock_submit, mock_retry, mock_report_event):
@@ -491,13 +491,13 @@ class TestRiskReportHandlerUnit(TestCase):
 
     # ========== _check_content_quality 方法测试 ==========
 
-    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
     def test_check_content_quality_no_issues(self, mock_report_event):
         """测试正常内容不上报事件"""
         self.handler._check_content_quality("这是一段正常的报告内容，包含详细的分析说明，足够长度。")
         mock_report_event.assert_not_called()
 
-    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
     def test_check_content_quality_empty_content(self, mock_report_event):
         """测试空内容上报 empty 事件并抛出 ContentQualityError"""
         from services.web.risk.constants import ContentQualityError
@@ -514,7 +514,7 @@ class TestRiskReportHandlerUnit(TestCase):
         self.assertEqual(event_data["dimension"]["issue_type"], "empty")
         self.assertEqual(event_data["dimension"]["risk_id"], self.risk.risk_id)
 
-    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
     def test_check_content_quality_multiple_issues(self, mock_report_event):
         """测试多种质量问题分别上报并抛出 ContentQualityError"""
         from services.web.risk.constants import ContentQualityError
@@ -532,7 +532,7 @@ class TestRiskReportHandlerUnit(TestCase):
         }
         self.assertEqual(reported_issue_types, {"ai_error", "ai_thinking"})
 
-    @mock.patch("services.web.risk.report.quality.api.bk_monitor.report_event")
+    @mock.patch("core.monitor.api.bk_monitor.report_event")
     def test_check_content_quality_report_event_failure(self, mock_report_event):
         """测试上报失败时仍然抛出 ContentQualityError（上报失败不影响质量判定）"""
         from core.exceptions import ApiRequestError

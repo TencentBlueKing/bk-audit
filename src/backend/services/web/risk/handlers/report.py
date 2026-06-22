@@ -3,7 +3,6 @@ import datetime
 import uuid
 from typing import Optional
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
@@ -121,7 +120,7 @@ class RiskReportHandler:
             extra={"error": str(exc)},
         )
         try:
-            api.bk_monitor.report_event(event.to_json())
+            event.report()
             logger.info("[RiskReportHandler] Report event success. risk_id=%s, task_id=%s", self.risk_id, self.task_id)
         except ApiRequestError as e:
             logger.error(

@@ -46,6 +46,7 @@ from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
 from core.utils.data import data_chunks
+from services.web.common.monitor import RiskExportFailedEvent
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
@@ -62,6 +63,7 @@ from services.web.risk.handlers import (
     RiskReportHandler,
 )
 from services.web.risk.handlers.risk import RiskHandler
+from services.web.risk.handlers.risk_export_service import RiskExportService
 from services.web.risk.handlers.ticket import (
     AutoProcess,
     ForApprove,
@@ -211,6 +213,47 @@ def _build_manual_event_time_range(event_time: datetime.datetime, window: dateti
     start_time = (local_time - window).strftime(api_settings.DATETIME_FORMAT)
     end_time = (local_time + window).strftime(api_settings.DATETIME_FORMAT)
     return start_time, end_time
+
+
+def report_risk_export_failed_event(username: str, risk_count: int, error: Exception) -> None:
+    """风险导出耗尽重试后上报监控事件。"""
+
+    event = RiskExportFailedEvent(
+        target=username,
+        context={"username": username, "risk_count": str(risk_count)},
+        extra={"error": str(error)},
+    )
+    event.report()
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=settings.RISK_EXPORT_TASK_MAX_RETRY,
+    time_limit=settings.RISK_EXPORT_TASK_TIME_LIMIT,
+)
+def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_type: str, requested_at: str) -> dict:
+    """异步导出风险并通过邮件附件发送给当前用户。"""
+
+    total = len(risk_ids)
+    self.update_state(state="RUNNING", meta={"current": 0, "total": total})
+    service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
+    try:
+        export_file = service.build_export_file()
+        self.update_state(state="PROGRESS", meta={"current": total, "total": total})
+        service.send_mail(export_file=export_file, requested_at=requested_at)
+        return {"total": export_file.total, "filename": export_file.filename}
+    except Exception as exc:
+        logger_celery.exception("[RiskExportTaskFailed] username=%s, total=%s", username, total)
+        try:
+            # 不传 exc，确保达到最大重试次数时 Celery 抛 MaxRetriesExceededError。
+            raise self.retry(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
+        except MaxRetriesExceededError:
+            try:
+                report_risk_export_failed_event(username=username, risk_count=total, error=exc)
+            except Exception:  # NOCC:broad-except(监控上报失败不能遮蔽原始任务失败)
+                logger_celery.exception("[RiskExportTaskReportFailed] username=%s, total=%s", username, total)
+            # 让 Celery 最终 FAILURE 记录原始业务异常，而不是 MaxRetriesExceededError。
+            raise exc
 
 
 def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta = datetime.timedelta(hours=1)) -> None:

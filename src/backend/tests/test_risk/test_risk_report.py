@@ -554,14 +554,17 @@ class TestRiskReportHandlerMaxRetries(TestCase):
         handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-123")
         test_exception = Exception("Test render error")
 
-        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+        with mock.patch(
+            "services.web.risk.handlers.report.RiskReportRenderFailedEvent.report", autospec=True
+        ) as mock_report_event:
             handler.handle_max_retries_exceeded(test_exception)
 
             # 验证 report_event 被调用
             mock_report_event.assert_called_once()
 
             # 验证调用参数（to_json 返回的结构）
-            call_args = mock_report_event.call_args[0][0]
+            event_instance = mock_report_event.call_args[0][0]
+            call_args = event_instance.to_json()
             self.assertIn("data", call_args)
             event_data = call_args["data"][0]
             self.assertEqual(event_data["target"], f"risk_{self.risk.risk_id}")
@@ -576,7 +579,7 @@ class TestRiskReportHandlerMaxRetries(TestCase):
         handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-456")
         test_exception = ValueError("Specific error")
 
-        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event"):
+        with mock.patch("services.web.risk.handlers.report.RiskReportRenderFailedEvent.report", autospec=True):
             with mock.patch("services.web.risk.handlers.report.logger") as mock_logger:
                 handler.handle_max_retries_exceeded(test_exception)
 
@@ -594,7 +597,9 @@ class TestRiskReportHandlerMaxRetries(TestCase):
         handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-789")
         test_exception = Exception("Render failed")
 
-        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+        with mock.patch(
+            "services.web.risk.handlers.report.RiskReportRenderFailedEvent.report", autospec=True
+        ) as mock_report_event:
             # 模拟上报失败
             mock_report_event.side_effect = ApiRequestError("API error")
 
@@ -613,7 +618,7 @@ class TestRiskReportHandlerMaxRetries(TestCase):
         handler = RiskReportHandler(risk_id=self.risk.risk_id, task_id="test-task-tail")
         test_exception = Exception("Render failed")
 
-        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event"):
+        with mock.patch("services.web.risk.handlers.report.RiskReportRenderFailedEvent.report", autospec=True):
             with mock.patch.object(handler, "_handle_tail_trigger") as mock_tail:
                 handler.handle_max_retries_exceeded(test_exception)
 
@@ -628,10 +633,13 @@ class TestRiskReportHandlerMaxRetries(TestCase):
         error_message = "Connection timeout to render service"
         test_exception = TimeoutError(error_message)
 
-        with mock.patch("services.web.risk.handlers.report.api.bk_monitor.report_event") as mock_report_event:
+        with mock.patch(
+            "services.web.risk.handlers.report.RiskReportRenderFailedEvent.report", autospec=True
+        ) as mock_report_event:
             handler.handle_max_retries_exceeded(test_exception)
 
-            call_args = mock_report_event.call_args[0][0]
+            event_instance = mock_report_event.call_args[0][0]
+            call_args = event_instance.to_json()
             event_data = call_args["data"][0]
             # 验证事件内容包含错误信息
             self.assertIn(error_message, event_data["event"]["content"])

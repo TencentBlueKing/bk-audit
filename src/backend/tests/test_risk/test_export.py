@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import base64
 import datetime
 import io
 from unittest import mock
@@ -22,6 +23,9 @@ from urllib.parse import unquote
 
 import openpyxl
 from bk_resource import resource
+from django.conf import settings
+from django.test import override_settings
+from rest_framework.response import Response
 
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
@@ -30,9 +34,14 @@ from services.web.risk.constants import (
     RiskStatus,
     RiskViewType,
 )
+from services.web.risk.handlers.risk_export_service import RiskExportService
 from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
-from services.web.risk.serializers import RetrieveRiskStrategyInfoResponseSerializer
+from services.web.risk.serializers import (
+    RetrieveRiskStrategyInfoResponseSerializer,
+    RiskExportReqSerializer,
+)
+from services.web.risk.tasks import export_risks_to_mail
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
@@ -141,6 +150,189 @@ class TestRiskExport(TestCase):
             {"results": []},
         ]
 
+    def test_risk_export_serializer_allows_async_limit(self):
+        max_count = settings.RISK_EXPORT_ASYNC_MAX_COUNT
+        serializer = RiskExportReqSerializer(data={"risk_ids": [f"risk-{index}" for index in range(max_count)]})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.fields["risk_ids"].max_length, max_count)
+        self.assertEqual(len(serializer.validated_data["risk_ids"]), max_count)
+
+    def test_risk_export_serializer_blocks_over_async_limit(self):
+        serializer = RiskExportReqSerializer(
+            data={"risk_ids": [f"risk-{index}" for index in range(settings.RISK_EXPORT_ASYNC_MAX_COUNT + 1)]}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("risk_ids", serializer.errors)
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=1, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_risk_export_auto_uses_async_when_over_sync_limit(self, mock_load_authed_risks, mock_task):
+        mock_load_authed_risks.return_value = Risk.objects.filter(
+            risk_id__in=[self.risk_1.risk_id, self.risk_2.risk_id]
+        )
+        mock_task.apply_async.return_value = mock.Mock(id="task-risk-export-1")
+
+        resp = resource.risk.risk_export.request(
+            risk_ids=[self.risk_1.risk_id, self.risk_2.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        )
+
+        self.assertIsInstance(resp, Response)
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data["export_type"], "async")
+        self.assertEqual(resp.data["task_id"], "task-risk-export-1")
+        self.assertEqual(resp.data["total"], 2)
+        self.assertEqual(resp.data["notice_users"], ["admin"])
+        mock_task.apply_async.assert_called_once()
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=400)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_large_request_only_schedules_async(
+        self, mock_get_event_list, mock_load_authed_risks, mock_task
+    ):
+        risk_ids = [f"bulk-risk-{index:03d}" for index in range(301)]
+        Risk.objects.bulk_create(
+            [
+                Risk(
+                    risk_id=risk_id,
+                    title=f"Bulk Risk {index}",
+                    strategy=self.strategy_1,
+                    status=RiskStatus.NEW,
+                    event_time=datetime.datetime(2023, 1, 6, 10, 0, 0),
+                    event_end_time=datetime.datetime(2023, 1, 6, 11, 0, 0),
+                )
+                for index, risk_id in enumerate(risk_ids)
+            ]
+        )
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id__in=risk_ids)
+        mock_task.apply_async.return_value = mock.Mock(id="task-risk-export-large")
+
+        resp = resource.risk.risk_export.request(risk_ids=risk_ids, risk_view_type=RiskViewType.ALL.value)
+
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data["task_id"], "task-risk-export-large")
+        self.assertEqual(resp.data["total"], 301)
+        mock_get_event_list.assert_not_called()
+        task_kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
+        self.assertEqual(task_kwargs["risk_ids"], risk_ids)
+        self.assertEqual(task_kwargs["risk_view_type"], RiskViewType.ALL.value)
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=2, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_uses_sync_when_equal_sync_limit(self, mock_get_event_list, mock_load_authed_risks, mock_task):
+        mock_load_authed_risks.return_value = Risk.objects.filter(
+            risk_id__in=[self.risk_1.risk_id, self.risk_2.risk_id]
+        )
+        mock_get_event_list.return_value = [{"results": []}, {"results": []}]
+
+        resp = resource.risk.risk_export.request(
+            risk_ids=[self.risk_1.risk_id, self.risk_2.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        )
+
+        self.assertIn("attachment; filename*", resp["Content-Disposition"])
+        mock_task.apply_async.assert_not_called()
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_risk_export_async_always_uses_celery(self, mock_load_authed_risks, mock_task):
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_task.apply_async.return_value = mock.Mock(id="task-risk-export-small")
+
+        resp = resource.risk.risk_export_async.request(
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        )
+
+        self.assertIsInstance(resp, Response)
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data["export_type"], "async")
+        self.assertEqual(resp.data["task_id"], "task-risk-export-small")
+        self.assertEqual(resp.data["total"], 1)
+        mock_task.apply_async.assert_called_once()
+
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    def test_risk_export_async_blocks_unauthed_risks_before_celery(self, mock_load_authed_risks, mock_task):
+        from services.web.risk.exceptions import ExportRiskNoPermission
+
+        mock_load_authed_risks.return_value = Risk.objects.none()
+
+        with self.assertRaises(ExportRiskNoPermission):
+            resource.risk.risk_export_async.request(
+                risk_ids=[self.risk_1.risk_id],
+                risk_view_type=RiskViewType.ALL.value,
+            )
+
+        mock_task.apply_async.assert_not_called()
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_service_builds_file(self, mock_get_event_list, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id__in=[self.risk_1.risk_id])
+        mock_get_event_list.return_value = [{"results": []}]
+
+        export_file = RiskExportService(
+            username="admin",
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        ).build_export_file()
+
+        self.assertEqual(export_file.total, 1)
+        self.assertIn("审计风险", export_file.filename)
+        workbook = openpyxl.load_workbook(io.BytesIO(export_file.file.read()))
+        self.assertEqual(workbook.sheetnames, [self.strategy_1.build_sheet_name()])
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    @mock.patch("services.web.risk.handlers.risk_export_service.MailSender")
+    def test_risk_export_service_send_mail_with_attachment(
+        self, mock_mail_sender, mock_get_event_list, mock_load_authed_risks
+    ):
+        sender = mock_mail_sender.return_value
+        sender.send.return_value = {"result": True, "code": 0, "message": "OK"}
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_get_event_list.return_value = [{"results": []}]
+        export_file = RiskExportService(
+            username="admin",
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        ).build_export_file()
+        export_file.file.seek(0)
+        expected_content = base64.b64encode(export_file.file.read()).decode("utf-8")
+
+        result = RiskExportService(
+            username="admin",
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        ).send_mail(export_file=export_file, requested_at="2026-06-22 19:33:36")
+
+        self.assertEqual(result["result"], True)
+        mock_mail_sender.assert_called_once()
+        sender.send.assert_called_once()
+        kwargs = mock_mail_sender.call_args.kwargs
+        self.assertEqual(kwargs["receivers"], ["admin"])
+        self.assertEqual(kwargs["title"], "【蓝鲸审计中心】风险数据导出结果通知")
+        self.assertEqual(kwargs["attachments"][0]["filename"], export_file.filename)
+        self.assertEqual(kwargs["attachments"][0]["content"], expected_content)
+        self.assertEqual(kwargs["attachments"][0]["type"], "xlsx")
+        self.assertEqual(kwargs["attachments"][0]["disposition"], "attachment")
+        content_text = str(kwargs["content"])
+        self.assertIn("您好 admin：", content_text)
+        self.assertIn("2026-06-22 19:33:36", content_text)
+        self.assertIn(export_file.view_label, content_text)
+        self.assertIn("本次共导出风险单 1 条", content_text)
+        self.assertIn("详细数据请见附件", content_text)
+        self.assertIn("此邮件为系统自动发送，请勿直接回复", content_text)
+
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
     def test_risk_export(self, mock_get_event_list, mock_load_authed_risks):
@@ -154,6 +346,7 @@ class TestRiskExport(TestCase):
 
         # Verify response
         self.assertIn("attachment; filename*", resp["Content-Disposition"])
+        self.assertEqual(resp["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         # Verify excel content
         workbook = openpyxl.load_workbook(io.BytesIO(b"".join(resp.streaming_content)))
@@ -205,6 +398,38 @@ class TestRiskExport(TestCase):
         # Row 3 (risk004, no events)
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
+
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    @mock.patch("services.web.risk.handlers.risk_export_service.MailSender")
+    @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
+    def test_export_risks_to_mail_task_builds_file_and_sends_downloadable_attachment(
+        self, mock_update_state, mock_mail_sender, mock_get_event_list, mock_load_authed_risks
+    ):
+        sender = mock_mail_sender.return_value
+        sender.send.return_value = {"result": True}
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_get_event_list.return_value = [{"results": [{"event_data": {"user": "alice", "action": "login_success"}}]}]
+
+        result = export_risks_to_mail(
+            username="admin",
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+            requested_at="2026-06-22 19:33:36",
+        )
+
+        self.assertEqual(result["total"], 1)
+        mock_update_state.assert_any_call(state="RUNNING", meta={"current": 0, "total": 1})
+        mock_update_state.assert_any_call(state="PROGRESS", meta={"current": 1, "total": 1})
+        sender.send.assert_called_once()
+        attachment = mock_mail_sender.call_args.kwargs["attachments"][0]
+        workbook = openpyxl.load_workbook(io.BytesIO(base64.b64decode(attachment["content"])))
+        sheet = workbook[self.strategy_1.build_sheet_name()]
+        header_map = {cell.value: index for index, cell in enumerate(sheet[1], 1)}
+        self.assertEqual(sheet.max_row, 2)
+        self.assertEqual(sheet.cell(row=2, column=header_map[str(RiskExportField.RISK_ID.label)]).value, "risk001")
+        self.assertEqual(sheet.cell(row=2, column=header_map["Username"]).value, "alice")
+        self.assertEqual(sheet.cell(row=2, column=header_map["Action"]).value, "login_success")
 
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
