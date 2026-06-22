@@ -98,7 +98,7 @@
           'has-select-banner': enableCrossPageSelect && showSelectAllBanner,
         }">
         <div
-          v-if="enableCrossPageSelect && showSelectAllBanner && selectBannerReady"
+          v-if="enableCrossPageSelect && showSelectAllBanner"
           class="tdesign-list-select-banner-bar"
           :style="{
             top: `${selectBannerTop}px`,
@@ -568,7 +568,6 @@
     tableAreaRef,
     selectBannerTop,
     selectBannerHeight,
-    selectBannerReady,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,
@@ -1137,8 +1136,28 @@
     }, 120);
   };
 
-  watch([tableColumns, isLoading], () => {
-    updateSelectBannerPosition();
+  watch(tableColumns, () => {
+    if (showSelectAllBanner.value) {
+      updateSelectBannerPosition();
+    }
+  });
+
+  watch(isLoading, (loading, wasLoading) => {
+    if (!loading && wasLoading && showSelectAllBanner.value) {
+      updateSelectBannerPosition(6);
+    }
+  });
+
+  watch(() => pagination.limit, () => {
+    if (showSelectAllBanner.value) {
+      updateSelectBannerPosition(6);
+    }
+  });
+
+  watch(effectiveTableMaxHeight, () => {
+    if (showSelectAllBanner.value) {
+      updateSelectBannerPosition();
+    }
   });
 
   onMounted(() => {
