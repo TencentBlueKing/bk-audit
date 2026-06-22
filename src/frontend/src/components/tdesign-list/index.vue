@@ -565,13 +565,11 @@
     enhanceSelectColumn,
     resetCrossPageSelection,
     preservePageSelectionForPageSizeChange,
-    materializePageModeSelection,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
     resolveExportSelection,
     getSelectionMeta,
-    selectionStateVersion,
   } = useCrossPageSelect({
     enabled: crossPageSelectEnabled,
     selectedRowKeys,
@@ -618,7 +616,6 @@
 
   // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
   const tableColumns = computed(() => {
-    selectionStateVersion.value;
     if (props.settings.length === 0) {
       if (isLoading.value) {
         return buildTableColumns(props.columns.map(removeFixed));
@@ -1084,9 +1081,6 @@
 
   // 切换页码
   const handlePageChange = (pageValue: number) => {
-    if (props.enableCrossPageSelect) {
-      materializePageModeSelection();
-    }
     pagination.current = pageValue;
     isUnload.value = false;
     isLoading.value = true;
