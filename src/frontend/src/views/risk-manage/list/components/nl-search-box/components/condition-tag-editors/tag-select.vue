@@ -126,7 +126,7 @@
 
   const MAX_MULTI_LEN = 10;
 
-  const isShow = ref(props.isEditing);
+  const isShow = ref(false);
   const localValue = ref<any[]>([]);
   const options = ref<Array<Record<string, any>>>([]);
   const loading = ref(false);
@@ -215,11 +215,42 @@
     return false;
   };
 
+  const bindDocumentMousedown = () => {
+    setTimeout(() => {
+      document.addEventListener('mousedown', handleDocumentMousedown, true);
+    });
+  };
+
+  const unbindDocumentMousedown = () => {
+    document.removeEventListener('mousedown', handleDocumentMousedown, true);
+  };
+
+  const openPopover = () => {
+    ignoreCloseBefore = Date.now() + 500;
+    if (!isShow.value) {
+      localValue.value = _.cloneDeep(props.tag.value) || [];
+      searchKey.value = '';
+      isShow.value = true;
+      loadOptions();
+    }
+    // 每次进入编辑态都确保绑定外部点击监听（挂载时 isEditing 已为 true 的场景也需要）
+    unbindDocumentMousedown();
+    bindDocumentMousedown();
+  };
+
+  const closePopover = () => {
+    isShow.value = false;
+    unbindDocumentMousedown();
+  };
+
   // 切换编辑态
   const handleToggle = () => {
     if (isShow.value) {
       if (Date.now() < ignoreCloseBefore) return;
       emit('finishEdit');
+    } else if (props.isEditing) {
+      // 已处于编辑态但 popover 未展开（如程序化添加字段时），点击重新展开
+      openPopover();
     } else {
       emit('startEdit', props.tag.fieldName);
     }
@@ -294,24 +325,16 @@
   });
 
   // 监听编辑态切换，管理 document mousedown 事件和 popover 显示
-  // 使用 mousedown 捕获阶段同步绑定（不加 setTimeout），消除延迟窗口导致的闪屏竞态条件
   watch(() => props.isEditing, (val) => {
-    isShow.value = val;
     if (val) {
-      ignoreCloseBefore = Date.now() + 500;
-      localValue.value = _.cloneDeep(props.tag.value) || [];
-      searchKey.value = '';
-      loadOptions();
-      setTimeout(() => {
-        document.addEventListener('mousedown', handleDocumentMousedown, true);
-      });
+      openPopover();
     } else {
-      document.removeEventListener('mousedown', handleDocumentMousedown, true);
+      closePopover();
     }
-  });
+  }, { immediate: true });
 
   onBeforeUnmount(() => {
-    document.removeEventListener('mousedown', handleDocumentMousedown, true);
+    unbindDocumentMousedown();
   });
 </script>
 <style lang="postcss" scoped>
