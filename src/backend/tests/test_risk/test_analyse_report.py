@@ -1450,6 +1450,14 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
         self.assertEqual(risk_ids, {self.risk1.risk_id, self.risk2.risk_id})
         self.assertNotIn(unbound_risk.risk_id, risk_ids)
 
+    @override_settings(ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER=True)
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_apigw_list_report_risks_checks_owner_when_enabled(self, _mock_username):
+        """APIGW开启报告归属校验后，只允许报告创建人访问"""
+
+        with self.assertRaises(Http404):
+            self.request_apigw_resource()
+
     def test_apigw_with_detail_excludes_risk_report(self):
         """APIGW风险详情不返回风险报告内容"""
         RiskReport.objects.create(risk=self.risk1, content="sensitive report content")
