@@ -1,6 +1,6 @@
 import { InfoBox } from 'bkui-vue';
 
-import i18n from '@/language';
+import i18n from '@language/index.js';
 
 export const ASYNC_EXPORT_NOTIFY_STORAGE_KEY = 'audit-risk-async-export-notify-dismissed';
 
@@ -21,7 +21,6 @@ export function showAsyncExportNotifyIfNeeded(): Promise<boolean> {
 
   return new Promise((resolve) => {
     InfoBox({
-      type: 'info',
       title: t('变更为异步导出通知'),
       content: t('当前导出数据量超出300条，需采用异步导出，导出成功后将发送邮件通知'),
       confirmText: t('我知道了'),
