@@ -41,39 +41,107 @@
               <span class="detail-value">{{ userInfo.username }}</span>
             </div>
           </div>
-          <!-- 第2行：微信（脱敏） | QQ（脱敏） -->
+          <!-- 第2行：微信 | QQ -->
           <div class="detail-row">
+            <!-- 微信 -->
             <div
-              class="detail-group"
+              class="detail-group account-field"
               @mouseenter="hoverField = 'wechat'"
               @mouseleave="hoverField = ''">
               <span class="detail-label">{{ t('微信') }}：</span>
-              <span class="detail-value">{{ wechatDisplay }}</span>
+              <span class="account-value-wrap">
+                <span class="tag-current">{{ t('当前') }}</span>
+                <span
+                  v-if="wechatCurrentList.length > 0"
+                  class="account-values">{{ wechatCurrentDisplay }}</span>
+                <span
+                  v-if="wechatCurrentOverflow > 0"
+                  v-bk-tooltips="{ content: wechatCurrentOverflowTip, placement: 'top', theme: 'dark' }"
+                  class="overflow-count">; +{{ wechatCurrentOverflow }}</span>
+                <!-- 当前与历史之间的灰色竖线分隔 -->
+                <span
+                  v-if="wechatCurrentList.length > 0 && wechatHistoryList.length > 0"
+                  class="divider-line">|</span>
+                <span
+                  v-if="wechatHistoryList.length > 0"
+                  class="tag-history">{{ t('历史') }}</span>
+                <span
+                  v-if="wechatHistoryList.length > 0"
+                  class="account-values">{{ wechatHistoryDisplay }}</span>
+                <span
+                  v-if="wechatHistoryOverflow > 0"
+                  v-bk-tooltips="{ content: wechatHistoryOverflowTip, placement: 'top', theme: 'dark' }"
+                  class="overflow-count">; +{{ wechatHistoryOverflow }}</span>
+              </span>
               <audit-icon
                 class="eye-icon"
                 :type="wechatVisible ? 'view' : 'unview'"
                 @click="wechatVisible = !wechatVisible" />
-              <audit-icon
-                v-if="hoverField === 'wechat'"
-                class="copy-icon"
-                type="copy"
-                @click="handleCopy(userInfo.wechat)" />
+              <!-- 复制浮层（hover 整个区域时显示，紧跟在眼睛图标后） -->
+              <div class="account-copy-wrap">
+                <div
+                  v-show="hoverField === 'wechat' && (userInfo.wechat || wechatHistoryList.length > 0)"
+                  class="account-copy-panel">
+                  <span
+                    v-if="userInfo.wechat"
+                    class="copy-link"
+                    @click="handleCopy(wechatRawCurrent)">{{ t('复制当前') }}</span>
+                  <span
+                    v-if="wechatHistoryList.length > 0"
+                    class="copy-link"
+                    @click="handleCopy(wechatRawHistory)">{{ t('复制历史') }}</span>
+                </div>
+              </div>
             </div>
+            <!-- QQ -->
             <div
-              class="detail-group"
+              class="detail-group account-field"
               @mouseenter="hoverField = 'qq'"
               @mouseleave="hoverField = ''">
               <span class="detail-label">QQ：</span>
-              <span class="detail-value">{{ qqDisplay }}</span>
+              <span class="account-value-wrap">
+                <span class="tag-current">{{ t('当前') }}</span>
+                <span
+                  v-if="qqCurrentList.length > 0"
+                  class="account-values">{{ qqCurrentDisplay }}</span>
+                <span
+                  v-if="qqCurrentOverflow > 0"
+                  v-bk-tooltips="{ content: qqCurrentOverflowTip, placement: 'top', theme: 'dark' }"
+                  class="overflow-count">; +{{ qqCurrentOverflow }}</span>
+                <!-- 当前与历史之间的灰色竖线分隔 -->
+                <span
+                  v-if="qqCurrentList.length > 0 && qqHistoryList.length > 0"
+                  class="divider-line">|</span>
+                <span
+                  v-if="qqHistoryList.length > 0"
+                  class="tag-history">{{ t('历史') }}</span>
+                <span
+                  v-if="qqHistoryList.length > 0"
+                  class="account-values">{{ qqHistoryDisplay }}</span>
+                <span
+                  v-if="qqHistoryOverflow > 0"
+                  v-bk-tooltips="{ content: qqHistoryOverflowTip, placement: 'top', theme: 'dark' }"
+                  class="overflow-count">; +{{ qqHistoryOverflow }}</span>
+              </span>
               <audit-icon
                 class="eye-icon"
                 :type="qqVisible ? 'view' : 'unview'"
                 @click="qqVisible = !qqVisible" />
-              <audit-icon
-                v-if="hoverField === 'qq'"
-                class="copy-icon"
-                type="copy"
-                @click="handleCopy(userInfo.qq)" />
+              <!-- 复制浮层（hover 整个区域时显示，紧跟在眼睛图标后） -->
+              <div class="account-copy-wrap">
+                <div
+                  v-show="hoverField === 'qq' && (userInfo.qq || qqHistoryList.length > 0)"
+                  class="account-copy-panel">
+                  <span
+                    v-if="userInfo.qq"
+                    class="copy-link"
+                    @click="handleCopy(qqRawCurrent)">{{ t('复制当前') }}</span>
+                  <span
+                    v-if="qqHistoryList.length > 0"
+                    class="copy-link"
+                    @click="handleCopy(qqRawHistory)">{{ t('复制历史') }}</span>
+                </div>
+              </div>
             </div>
           </div>
           <!-- 第3行：在职状态 | 部门 -->
@@ -146,6 +214,20 @@
 
   import { execCopy } from '@utils/assist';
 
+  const props = withDefaults(defineProps<Props>(), {
+    historyAccounts: () => [],
+  });
+
+  const emit = defineEmits<Emits>();
+
+  // 最大显示的账号数量（超出则显示 +n）
+  const MAX_DISPLAY_COUNT = 3;
+
+  interface HistoryAccountItem {
+    type: string;   // 'wechat' | 'qq' | '微信' | 'QQ'
+    account: string;
+  }
+
   interface UserInfo {
     avatar: string;
     wecom: string;
@@ -160,22 +242,23 @@
 
   interface Props {
     userInfo: UserInfo;
+    historyAccounts?: HistoryAccountItem[];
   }
 
   interface Emits {
     (e: 'viewDetail'): void;
   }
 
-  const props = defineProps<Props>();
-  const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
   // 眼睛图标控制显示/隐藏
   const wechatVisible = ref(false);
   const qqVisible = ref(false);
 
-  // hover 状态
+  // hover 状态（用于控制复制浮层显示）
   const hoverField = ref('');
+
+  // ========== 脱敏 / 格式化工具函数 ==========
 
   // 脱敏单个账号
   const maskSingle = (value: string) => {
@@ -184,36 +267,106 @@
     return `${value[0]}${'*'.repeat(value.length - 2)}${value[value.length - 1]}`;
   };
 
-  // 脱敏显示（支持多账号，仅使用英文分号 ; 分隔，输出以 "; " 拼接）
-  const maskValue = (value: string) => {
-    if (!value) return '';
-    const parts = String(value)
-      .split(';')
-      .map(v => v.trim())
+  // 将原始字符串按分号拆分为数组并清理
+  const splitAccounts = (raw: string): string[] => {
+    if (!raw) return [];
+    return raw.split(';').map(v => v.trim())
       .filter(Boolean);
-    if (parts.length <= 1) return maskSingle(parts[0] || '');
-    return parts.map(maskSingle).join(' ; ');
   };
 
-  // 明文显示时，仅按 ; 分隔并统一以 " ; " 拼接（与脱敏态保持一致）
-  const formatValue = (value: string) => {
-    if (!value) return '';
-    const parts = String(value)
-      .split(';')
-      .map(v => v.trim())
-      .filter(Boolean);
-    return parts.join(' ; ');
+  // 从历史列表中按类型筛选
+  const filterHistoryByType = (type: string): HistoryAccountItem[] => {
+    const targetType = type === 'wechat' ? '微信' : 'QQ';
+    return props.historyAccounts.filter(item => item.type === type || item.type === targetType);
   };
 
-  // 计算微信/QQ 的最终展示文本（控制行长度）
-  const wechatDisplay = computed(() => (
-    wechatVisible.value ? formatValue(props.userInfo.wechat) : maskValue(props.userInfo.wechat)
-  ));
-  const qqDisplay = computed(() => (
-    qqVisible.value ? formatValue(props.userInfo.qq) : maskValue(props.userInfo.qq)
+  // 截断显示（最多 MAX_DISPLAY_COUNT 个）
+  const truncateList = (
+    list: string[],
+    maxCount: number,
+  ): { display: string[]; overflow: number } => {
+    if (list.length <= maxCount) return { display: list, overflow: 0 };
+    return { display: list.slice(0, maxCount), overflow: list.length - maxCount };
+  };
+
+  // ========== 微信数据计算 ==========
+  const wechatHistoryList = computed(() => filterHistoryByType('wechat'));
+  const wechatCurrentList = computed(() => splitAccounts(props.userInfo.wechat));
+
+  const wechatCurrentTruncated = computed(() => truncateList(wechatCurrentList.value, MAX_DISPLAY_COUNT));
+  const wechatHistoryTruncated = computed(() => truncateList(
+    wechatHistoryList.value.map(i => i.account),
+    MAX_DISPLAY_COUNT,
   ));
 
-  // 复制功能
+  const wechatCurrentDisplay = computed(() => {
+    const fn = wechatVisible.value ? (v: string) => v : maskSingle;
+    return wechatCurrentTruncated.value.display.map(fn).join(' ; ');
+  });
+
+  const wechatHistoryDisplay = computed(() => {
+    const fn = wechatVisible.value ? (v: string) => v : maskSingle;
+    return wechatHistoryTruncated.value.display.map(fn).join(' ; ');
+  });
+
+  const wechatCurrentOverflow = computed(() => wechatCurrentTruncated.value.overflow);
+  const wechatHistoryOverflow = computed(() => wechatHistoryTruncated.value.overflow);
+
+  // 用于复制的原始文本（明文，分号拼接）
+  const wechatRawCurrent = computed(() => wechatCurrentList.value.join(';'));
+  const wechatRawHistory = computed(() => wechatHistoryList.value.map(i => i.account).join(';'));
+
+  // +n tooltip 内容：仅展示溢出的数据（不含前导分号）
+  const wechatCurrentOverflowTip = computed(() => {
+    if (wechatCurrentOverflow.value <= 0) return '';
+    const overflowItems = wechatCurrentList.value.slice(MAX_DISPLAY_COUNT);
+    return overflowItems.join(';');
+  });
+  const wechatHistoryOverflowTip = computed(() => {
+    if (wechatHistoryOverflow.value <= 0) return '';
+    const overflowItems = wechatHistoryList.value.map(i => i.account).slice(MAX_DISPLAY_COUNT);
+    return overflowItems.join(';');
+  });
+
+  // ========== QQ数据计算 ==========
+  const qqHistoryList = computed(() => filterHistoryByType('qq'));
+  const qqCurrentList = computed(() => splitAccounts(props.userInfo.qq));
+
+  const qqCurrentTruncated = computed(() => truncateList(qqCurrentList.value, MAX_DISPLAY_COUNT));
+  const qqHistoryTruncated = computed(() => truncateList(
+    qqHistoryList.value.map(i => i.account),
+    MAX_DISPLAY_COUNT,
+  ));
+
+  const qqCurrentDisplay = computed(() => {
+    const fn = qqVisible.value ? (v: string) => v : maskSingle;
+    return qqCurrentTruncated.value.display.map(fn).join(' ; ');
+  });
+
+  const qqHistoryDisplay = computed(() => {
+    const fn = qqVisible.value ? (v: string) => v : maskSingle;
+    return qqHistoryTruncated.value.display.map(fn).join(' ; ');
+  });
+
+  const qqCurrentOverflow = computed(() => qqCurrentTruncated.value.overflow);
+  const qqHistoryOverflow = computed(() => qqHistoryTruncated.value.overflow);
+
+  const qqRawCurrent = computed(() => qqCurrentList.value.join(';'));
+  const qqRawHistory = computed(() => qqHistoryList.value.map(i => i.account).join(';'));
+
+  // +n tooltip 内容：仅展示溢出的数据（不含前导分号）
+  const qqCurrentOverflowTip = computed(() => {
+    if (qqCurrentOverflow.value <= 0) return '';
+    const overflowItems = qqCurrentList.value.slice(MAX_DISPLAY_COUNT);
+    return overflowItems.join(';');
+  });
+  const qqHistoryOverflowTip = computed(() => {
+    if (qqHistoryOverflow.value <= 0) return '';
+    const overflowItems = qqHistoryList.value.map(i => i.account).slice(MAX_DISPLAY_COUNT);
+    return overflowItems.join(';');
+  });
+
+  // ========== 复制功能 ==========
   const handleCopy = (text: string) => {
     execCopy(text, t('复制成功'));
   };
@@ -312,6 +465,7 @@
     font-size: 14px;
     color: #979ba5;
     cursor: pointer;
+    flex-shrink: 0;
 
     &:hover {
       color: #3a84ff;
@@ -326,6 +480,135 @@
 
     &:hover {
       color: #3a84ff;
+    }
+  }
+}
+
+/* 微信 / QQ 账号字段样式 */
+.account-field {
+  position: relative;
+
+  .account-value-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 180px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 当前标签 - 蓝紫色 */
+  .tag-current {
+    display: inline-flex;
+    width: 32px;
+    height: 16px;
+    font-size: 10px;
+    line-height: 16px;
+    color: #3a84ff;
+    white-space: nowrap;
+    background: #e1efff;
+    border-radius: 2px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* 历史标签 - 灰色 */
+  .tag-history {
+    display: inline-flex;
+    width: 32px;
+    height: 16px;
+    font-size: 10px;
+    line-height: 16px;
+    color: #4d4f56;
+    white-space: nowrap;
+    background: #f0f1f5;
+    border-radius: 2px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .account-values {
+    font-size: 12px;
+    color: #313238;
+    white-space: nowrap;
+  }
+
+  /* 当前/历史之间的灰色竖线分隔 */
+  .divider-line {
+    margin: 0 4px;
+    font-size: 12px;
+    color: #c4c6cc;
+    flex-shrink: 0;
+  }
+
+  .overflow-count {
+    font-size: 12px;
+    color: #313238;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* 复制浮层包裹容器 - 紧跟在眼睛图标后面 */
+  .account-copy-wrap {
+    position: relative;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 4px rgb(0 0 0 / 15%));
+  }
+
+  /* 复制浮层 - 带尖头的白色气泡，紧跟在包裹容器右侧 */
+  .account-copy-panel {
+    position: absolute;
+    top: 50%;
+    left: 4px;
+    z-index: 100;
+    display: inline-flex;
+    padding: 8px 12px;
+    white-space: nowrap;
+    background: #fff;
+    border-radius: 2px;
+    transform: translateY(-50%);
+    gap: 16px;
+
+    /* 左侧尖头（三角形） */
+    &::before {
+      position: absolute;
+      top: 50%;
+      left: -5px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-right: 5px solid #fff;
+      border-bottom: 5px solid transparent;
+      content: '';
+      transform: translateY(-50%);
+    }
+
+    .copy-link {
+      position: relative;
+      font-size: 12px;
+      line-height: 20px;
+      color: #3a84ff;
+      white-space: nowrap;
+      cursor: pointer;
+
+      /* 两个链接之间用灰色竖线分隔 */
+      &:not(:last-child)::after {
+        position: absolute;
+        top: 50%;
+        right: -8px;
+        width: 1px;
+        height: 12px;
+        background: #dcdee5;
+        content: '';
+        transform: translateY(-50%);
+      }
+
+      &:hover {
+        color: #1768ef;
+      }
     }
   }
 }

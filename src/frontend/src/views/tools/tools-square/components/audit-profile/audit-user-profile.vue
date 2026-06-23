@@ -43,6 +43,7 @@
           class="user-info-loading-placeholder" />
         <profile-user-info
           v-else
+          :history-accounts="historyAccounts"
           :user-info="userInfo"
           @view-detail="handleViewDetail" />
       </bk-loading>
@@ -268,15 +269,18 @@
 
   const userInfo = ref({
     avatar: '',
-    wecom: '',       // 企业微信
-    username: '',    // 用户名
-    wechat: '',      // 微信（来自 main_qqwechat_list）
-    qq: '',          // QQ（来自 main_qqwechat_list）
-    status: '',      // 在职状态
-    department: '',  // 部门
-    responsibilityCount: 0,  // 责任单数（来自 main_auditrisk_stat）
-    riskLevel: '',           // 风险系数（来自 main_auditrisk_stat）
+    wecom: '',
+    username: '',
+    wechat: '',
+    qq: '',
+    status: '',
+    department: '',
+    responsibilityCount: 0,
+    riskLevel: '',
   });
+
+  // 历史账号列表
+  const historyAccounts = ref<Array<{ type: string; account: string }>>([]);
 
   // 关联游戏列表（接口返回后填充）
   const gameList = ref<Array<Record<string, any>>>([]);
@@ -426,24 +430,50 @@
       const results = getResults(data);
       if (results) {
         const qqwechatData = Array.isArray(results) ? results : [results];
-        // 从结果中提取微信和QQ账号
+        // 从结果中提取微信和QQ账号（当前账号）
         const wechatAccounts: string[] = [];
         const qqAccounts: string[] = [];
+        // 从结果中提取历史账号
+        const historyList: Array<{ type: string; account: string }> = [];
         qqwechatData.forEach((item: any) => {
           const accountType = item[PROFILE_FIELDS.ACCOUNT_TYPE] || item.account_type || '';
           const accountList = item[PROFILE_FIELDS.ACCOUNT_LIST] || item.account_list || '';
-          if (accountType === '微信' || accountType === 'wechat') {
-            wechatAccounts.push(accountList);
-          } else if (accountType === 'QQ' || accountType === 'qq') {
-            qqAccounts.push(accountList);
+          // 判断是当前还是历史账号（后端通过 account_type 区分）
+          const isHistory = item.is_history || accountType === 'history' || accountType === '历史';
+          if (isHistory) {
+            // 历史账号
+            if (accountList) {
+              historyList.push({ type: accountType, account: accountList });
+            }
+          } else {
+            // 当前账号
+            if (accountType === '微信' || accountType === 'wechat') {
+              wechatAccounts.push(accountList);
+            } else if (accountType === 'QQ' || accountType === 'qq') {
+              qqAccounts.push(accountList);
+            }
           }
         });
+        // 也检查是否有单独的历史账号列表字段
+        const historyListField = data?.data?.result?.history_list
+          || data?.history_list
+          || (results && (Array.isArray(results) ? results[0] : results)?.[PROFILE_FIELDS.ACCOUNT_HISTORY_LIST]);
+        if (Array.isArray(historyListField)) {
+          historyListField.forEach((item: any) => {
+            const accountType = item[PROFILE_FIELDS.ACCOUNT_TYPE] || item.account_type || '';
+            const accountList = item[PROFILE_FIELDS.ACCOUNT_LIST] || item.account_list || '';
+            if (accountList) {
+              historyList.push({ type: accountType, account: accountList });
+            }
+          });
+        }
         if (wechatAccounts.length > 0) {
           userInfo.value.wechat = wechatAccounts.join(';');
         }
         if (qqAccounts.length > 0) {
           userInfo.value.qq = qqAccounts.join(';');
         }
+        historyAccounts.value = historyList;
       }
     },
   });
@@ -604,8 +634,21 @@
   //   window.open(routeData.href, '_blank');
   // };
 
-  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(代) | 累计充值(代)
+  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(元) | 累计充值(元)
   // | 累计发放(¥) | 累计赠送次数(隐藏) | 累计交易次数(隐藏) | 登录次数/月(隐藏) | 责任单数(隐藏) | 操作）
+  // 代币字段已替换为元，null时醒目提示"未设汇率"
+  const renderCoinField = (data: Record<string, any>, field: string) => {
+    const val = data[field];
+    if (val === null || val === undefined || val === '') {
+      return h(
+        'span',
+        { style: 'color: #ea3636; cursor: default;' },
+        t('未设汇率'),
+      );
+    }
+    return h('span', {}, val);
+  };
+
   const gameColumns: Array<Record<string, any>> = [
     {
       label: () => t('游戏名称'),
@@ -649,8 +692,8 @@
         );
       },
     },
-    { label: () => `${t('代币存量')} (${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.COIN_BALANCE_UNIT] ?? '--') },
-    { label: () => `${t('累计充值')} (${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_RECHARGE_UNIT] ?? '--') },
+    { label: () => `${t('代币存量')} (¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => renderCoinField(data, PROFILE_FIELDS.COIN_BALANCE_UNIT) },
+    { label: () => `${t('累计充值')} (¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => renderCoinField(data, PROFILE_FIELDS.TOTAL_RECHARGE_UNIT) },
     { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
     // TODO: 后端暂未返回"累计赠送次数"与"累计交易次数"，待接口支持后取消注释
     // { label: () => t('累计赠送次数'), field: PROFILE_FIELDS.TOTAL_GIFT_COUNT,
@@ -813,6 +856,8 @@
       status: '', department: '',
       responsibilityCount: 0, riskLevel: '',
     };
+    // 重置历史账号
+    historyAccounts.value = [];
     // 重置游戏列表
     gameList.value = [];
     gameSearchKey.value = '';
@@ -840,8 +885,8 @@
   const exportContentOptions = [
     { id: 'gameName', name: t('游戏名称'), field: PROFILE_FIELDS.GAME_NAME, fallbackField: 'name' },
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
-    { id: 'coinBalance', name: `${t('代币存量')}(${t('代')})`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
-    { id: 'totalRecharge', name: `${t('累计充值')}(${t('代')})`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
+    { id: 'coinBalance', name: `${t('代币存量')}(¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
+    { id: 'totalRecharge', name: `${t('累计充值')}(¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
     { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
     { id: 'loginDays', name: t('登录天数（31天）'), field: PROFILE_FIELDS.LOGIN_DAYS_31, fallbackField: '' },
     // TODO: 后端暂未返回以下字段，待接口支持后取消注释

@@ -50,11 +50,11 @@
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('代币存量') }}</span>
-          <span class="info-value"><span class="info-unit">{{ t('代') }}</span> {{ gameData.coinBalance }}</span>
+          <span class="info-value"><span class="info-unit">¥</span> {{ gameData.coinBalance ?? '--' }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('累计充值') }}</span>
-          <span class="info-value"><span class="info-unit">{{ t('代') }}</span> {{ gameData.totalRecharge }}</span>
+          <span class="info-value"><span class="info-unit">¥</span> {{ gameData.totalRecharge ?? '--' }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('累计发放') }}</span>
