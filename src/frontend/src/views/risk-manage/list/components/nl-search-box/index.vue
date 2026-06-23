@@ -765,8 +765,9 @@
       ...searchModel.value,
       [fieldName]: defaultValue,
     };
-    await nextTick();
+    // 与 searchModel 更新同一渲染周期内进入编辑态，避免 select 标签先以非编辑态挂载导致下拉不自动展开
     conditionTagsRef.value?.startEditField?.(fieldName);
+    await nextTick();
   };
 
   // 移除单个条件
