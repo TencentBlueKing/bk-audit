@@ -271,8 +271,6 @@
     allowMultipleSort?: boolean,
     /** 是否启用跨页全选模式（表头本页全选/跨页全选、选中提示条）；默认 false，使用 TDesign 内置多选 */
     enableCrossPageSelect?: boolean,
-    /** 跨页全选解析 ID 上限，用于批量导出等场景 */
-    crossPageSelectMaxCount?: number,
     /** 是否持久化表头筛选（离开页面后返回时恢复），默认开启 */
     persistTableFilters?: boolean,
     /** 表头筛选 sessionStorage 键后缀，默认使用 pathname */
@@ -303,7 +301,7 @@
       total: number,
       isSelectAll: boolean,
     },
-    resolveSelectedRowKeys: () => Promise<Array<string | number>>,
+    resolveSelectedRowKeys: (options?: { maxCount?: number }) => Promise<Array<string | number>>,
     resolveExportSelection: () => Promise<{
       keys: Array<string | number>,
       truncated: boolean,
@@ -335,7 +333,6 @@
     sceneIdKey: 'scope_id',
     allowMultipleSort: false,
     enableCrossPageSelect: false,
-    crossPageSelectMaxCount: 300,
     persistTableFilters: true,
     tableFilterPersistKey: undefined,
   });
@@ -491,7 +488,7 @@
     count: 0,
     current: 1,
     limit: 10,
-    limitList: [10, 20, 50, 100, 500],
+    limitList: [10, 20, 50, 100, 200],
     align: 'left',
     layout: ['total', 'limit', 'list'],
     location: 'left',
@@ -588,7 +585,6 @@
     dataSource: props.dataSource,
     buildFetchParams,
     t,
-    maxResolveCount: props.crossPageSelectMaxCount,
   });
 
   const bindTableAreaRef = (el: Element | ComponentPublicInstance | null) => {

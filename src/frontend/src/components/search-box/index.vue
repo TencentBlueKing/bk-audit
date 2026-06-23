@@ -32,24 +32,12 @@
             @click="handleBatch">
             {{ t('批量转单') }}
           </bk-button>
-          <span
+          <risk-export-button
             v-if="isExport"
-            v-bk-tooltips="exportTooltip"
-            class="export-btn-wrapper"
-            :class="{ 'is-export-disabled': exportDisabled && !isRiskExportLoading }">
-            <bk-button
-              class="export-btn mr8"
-              :class="{ 'is-exporting': isRiskExportLoading }"
-              :disabled="exportDisabled || isRiskExportLoading"
-              @click="handleExport">
-              <audit-icon
-                v-if="isRiskExportLoading"
-                class="rotate-loading"
-                style="margin-right: 4px; font-size: 12px; color: #3a84ff;"
-                type="loading" />
-              {{ t('批量导出') }}
-            </bk-button>
-          </span>
+            button-class="mr8"
+            :disabled="exportDisabled"
+            :export-fn="handleExport"
+            :tooltip="resolvedExportTooltip" />
         </template>
         <template #more-list>
           <div class="box-row">
@@ -156,7 +144,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
-  import { isRiskExportLoading, withRiskExportLoading } from '@hooks/use-risk-export-loading';
+
+  import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
 
   import type { IFieldConfig } from './components/render-field-config/config';
@@ -177,6 +166,7 @@
     isExport?: boolean,
     exportDisabled?: boolean,
     exportDisabledTooltip?: string,
+    exportTooltip?: Record<string, unknown>,
     exportRequest?: () => Promise<void>,
   }
   interface Exposes {
@@ -192,6 +182,7 @@
     isExport: false,
     exportDisabled: false,
     exportDisabledTooltip: '',
+    exportTooltip: undefined,
     exportRequest: undefined,
   });
   const emit = defineEmits<Emits>();
@@ -201,7 +192,10 @@
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
   const { t } = useI18n();
 
-  const exportTooltip = computed(() => {
+  const resolvedExportTooltip = computed(() => {
+    if (props.exportTooltip) {
+      return props.exportTooltip;
+    }
     if (!props.exportDisabled) {
       return { disabled: true, content: '' };
     }
@@ -336,34 +330,52 @@
   };
   // 批量导出
   const {
-    run: batchExport,
+    run: submitRiskExport,
     loading: isExportRequestLoading,
-  } = useRequest(RiskManageService.batchExport, {
-    defaultValue: [],
-    onSuccess() {
-      messageSuccess(t('导出成功'));
-    },
+  } = useRequest(RiskManageService.submitRiskExport, {
+    defaultValue: null,
   });
 
   let exportPromise: Promise<unknown> | null = null;
 
   const handleExport = async () => {
-    if (props.exportDisabled || isRiskExportLoading.value) {
+    if (props.exportDisabled) {
       return;
     }
     if (!props.exportRequest) {
       return;
     }
-    await withRiskExportLoading(() => props.exportRequest!());
+    await props.exportRequest();
   };
 
-  const handleExportData = (val: string[], type: string) => {
+  const handleExportData = (
+    val: string[],
+    type: string,
+    options?: { async?: boolean; showSuccessMessage?: boolean },
+  ) => {
     if (isExportRequestLoading.value && exportPromise) {
       return exportPromise;
     }
-    exportPromise = batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
-      exportPromise = null;
-    });
+    const isAsyncExport = options?.async === true;
+    exportPromise = submitRiskExport({
+      risk_ids: val,
+      risk_view_type: type,
+      async: isAsyncExport,
+    })
+      .then((result) => {
+        if (isAsyncExport) {
+          const asyncResult = result as { message?: string };
+          messageSuccess(asyncResult?.message || t('导出任务已提交'));
+          return result;
+        }
+        if (options?.showSuccessMessage !== false) {
+          messageSuccess(t('导出成功'));
+        }
+        return result;
+      })
+      .finally(() => {
+        exportPromise = null;
+      });
     return exportPromise;
   };
 
@@ -550,8 +562,8 @@
     clearValue() {
       handleClear();
     },
-    exportData(val, type) {
-      return handleExportData(val, type);
+    exportData(val, type, options) {
+      return handleExportData(val, type, options);
     },
     initSelectedItems(val) {
       selectedItems.value = val;
@@ -568,30 +580,6 @@
   background-color: #fff;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
-
-  .export-btn-wrapper {
-    display: inline-flex;
-
-    :deep(.export-btn.is-exporting) {
-      cursor: wait;
-      opacity: 85%;
-    }
-
-    &.is-export-disabled :deep(.export-btn) {
-      color: #c4c6cc;
-      pointer-events: none;
-      cursor: not-allowed;
-      background-color: #fff;
-      border-color: #dcdee5;
-
-      &:hover,
-      &:active {
-        color: #c4c6cc;
-        background-color: #fff;
-        border-color: #dcdee5;
-      }
-    }
-  }
 
   .panel-toggle-btn {
     position: absolute;

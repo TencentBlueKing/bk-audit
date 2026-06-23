@@ -59,6 +59,7 @@ declare module 'vue' {
     RenderValue: typeof import('./src/components/search-box/components/render-value/index.vue')['default']
     Reports: typeof import('./src/components/statement-sidebar/reports.vue')['default']
     RichEditor: typeof import('./src/components/rich-editor/index.vue')['default']
+    RiskExportButton: typeof import('./src/components/risk-export-button/index.vue')['default']
     RouterBack: typeof import('./src/components/router-back/index.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

@@ -18,6 +18,14 @@ import RiskManageModel from '@model/risk/risk';
 
 import RiskManageSource from '../source/risk-manage';
 
+export interface RiskAsyncExportResult {
+  export_type: 'async';
+  task_id: string;
+  notice_users?: string[];
+  total: number;
+  message: string;
+}
+
 export default {
   /**
    * @desc 获取风险列表
@@ -240,6 +248,34 @@ export default {
     risk_view_type: string,
   }) {
     return RiskManageSource.batchExport(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 异步批量导出（HTTP 202）
+   */
+  batchAsyncExport(params: {
+    risk_ids: string[],
+    risk_view_type: string,
+  }) {
+    return RiskManageSource.batchAsyncExport(params)
+      .then(({ data }) => data as RiskAsyncExportResult);
+  },
+
+  /**
+   * @desc 风险批量导出（按同步/异步分流）
+   */
+  submitRiskExport(params: {
+    risk_ids: string[],
+    risk_view_type: string,
+    async?: boolean,
+  }) {
+    const { async: isAsync, risk_ids, risk_view_type } = params;
+    if (isAsync) {
+      return RiskManageSource.batchAsyncExport({ risk_ids, risk_view_type })
+        .then(({ data }) => data as RiskAsyncExportResult);
+    }
+    return RiskManageSource.batchExport({ risk_ids, risk_view_type })
       .then(({ data }) => data);
   },
   /**

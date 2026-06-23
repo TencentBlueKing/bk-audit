@@ -94,9 +94,9 @@
   import type RiskManageModel from '@model/risk/risk';
   import CommonDataModel from '@model/strategy/common-data';
 
-  import useRequest from '@hooks/use-request';
+  import { createRiskExportRequest } from '@hooks/use-risk-batch-export';
   import useRiskExportLimit from '@hooks/use-risk-export-limit';
-  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
@@ -123,7 +123,6 @@
 
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
-  const { messageWarn } = useMessage();
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const aiAnalyzesRef = ref<InstanceType<typeof aiAnalyzes> | null>(null);
@@ -398,19 +397,16 @@
     exportTooltip,
   } = useRiskExportLimit(selectionMeta);
 
-  const runAllRiskExport = async () => {
-    const { keys } = await listRef.value?.resolveExportSelection?.() || { keys: [] };
-    const selectedData = keys.map((id: string | number) => id.toString());
-    if (!selectedData.length) {
-      messageWarn(t('请选择要操作的数据'));
-      return;
-    }
-    await searchBoxRef.value?.exportData?.(selectedData, 'all');
-  };
+  const runAllRiskExport = createRiskExportRequest({
+    listRef,
+    searchBoxRef,
+    riskViewType: 'all',
+    selectionMeta,
+  });
 
   const resolveSelectedRiskIdsForAnalyze = async () => {
-    const keys = await listRef.value?.resolveSelectedRowKeys?.() || [];
-    return keys.slice(0, ANALYZE_RISK_ID_LIMIT).map((id: string | number) => String(id));
+    const keys = await listRef.value?.resolveSelectedRowKeys?.({ maxCount: ANALYZE_RISK_ID_LIMIT }) || [];
+    return keys.map((id: string | number) => String(id));
   };
 
   const {
