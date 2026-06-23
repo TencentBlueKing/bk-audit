@@ -15,28 +15,14 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <span
-    v-bk-tooltips="tooltip"
-    class="all-risk-export-btn-wrapper"
-    :class="{ 'is-export-disabled': disabled && !isLoading }">
-    <bk-button
-      class="all-risk-export-btn"
-      :class="{ 'is-exporting': isLoading }"
-      :disabled="disabled || isLoading"
-      outline
-      @click="handleClick">
-      <audit-icon
-        v-if="isLoading"
-        class="rotate-loading all-risk-export-btn__loading"
-        type="loading" />
-      {{ t('批量导出') }}
-    </bk-button>
-  </span>
+  <risk-export-button
+    :disabled="disabled"
+    :export-fn="exportFn"
+    :tooltip="tooltip" />
 </template>
 
 <script setup lang="ts">
-  import { nextTick, ref } from 'vue';
-  import { useI18n } from 'vue-i18n';
+  import RiskExportButton from '@components/risk-export-button/index.vue';
 
   interface Props {
     disabled?: boolean;
@@ -44,58 +30,8 @@
     exportFn: () => Promise<void>;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
+  withDefaults(defineProps<Props>(), {
     disabled: false,
     tooltip: () => ({ disabled: true, content: '' }),
   });
-
-  const { t } = useI18n();
-  const isLoading = ref(false);
-
-  const handleClick = async () => {
-    if (props.disabled || isLoading.value) {
-      return;
-    }
-    isLoading.value = true;
-    await nextTick();
-    try {
-      await props.exportFn();
-    } finally {
-      isLoading.value = false;
-    }
-  };
 </script>
-
-<style lang="postcss" scoped>
-.all-risk-export-btn-wrapper {
-  display: inline-flex;
-
-  &.is-export-disabled :deep(.all-risk-export-btn) {
-    color: #c4c6cc;
-    pointer-events: none;
-    cursor: not-allowed;
-    background-color: #fff;
-    border-color: #dcdee5;
-
-    &:hover,
-    &:active {
-      color: #c4c6cc;
-      background-color: #fff;
-      border-color: #dcdee5;
-    }
-  }
-}
-
-.all-risk-export-btn {
-  &.is-exporting {
-    cursor: wait;
-    opacity: 85%;
-  }
-}
-
-.all-risk-export-btn__loading {
-  margin-right: 4px;
-  font-size: 12px;
-  color: #3a84ff;
-}
-</style>

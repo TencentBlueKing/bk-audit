@@ -242,6 +242,15 @@ class RiskManage extends ModuleBase {
       responseType: 'blob',
     });
   }
+  // 异步批量导出
+  batchAsyncExport(params: {
+      risk_ids: string[],
+      risk_view_type: string,
+    }) {
+    return Request.post(`${this.module}/export/async/`, {
+      params,
+    });
+  }
   addEvent(params: Record<string, any>) {
     return Request.post(`${this.api}/events/`, {
       params,

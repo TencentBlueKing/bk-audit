@@ -41,9 +41,18 @@ export interface IConditionTag {
 }
 
 // 组件 Expose
+export interface INLSearchBoxExportOptions {
+  async?: boolean;
+  showSuccessMessage?: boolean;
+}
+
 export interface INLSearchBoxExposes {
   clearValue: () => void;
-  exportData: (val: string[], type: string) => Promise<unknown>;
+  exportData: (
+    val: string[],
+    type: string,
+    options?: INLSearchBoxExportOptions,
+  ) => Promise<unknown>;
   initSelectedItems: (val: Array<Record<string, any>>) => void;
   getSelectedItemList: () => Array<Record<string, any>>;
   getConditionTags: () => IConditionTag[];

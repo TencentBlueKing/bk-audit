@@ -25,7 +25,6 @@ export interface UseCrossPageSelectOptions {
   dataSource: (params: Record<string, any>) => Promise<{ results?: Array<Record<string, any>> }>;
   buildFetchParams: () => Record<string, any> | null;
   t: ComposerTranslation;
-  maxResolveCount?: number;
 }
 
 export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
@@ -38,7 +37,6 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     dataSource,
     buildFetchParams,
     t,
-    maxResolveCount = 300,
   } = options;
 
   const selectCheckMode = ref<SelectCheckMode>('');
@@ -279,10 +277,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
-  const resolveSelectedRowKeys = async () => {
-    if (!enabled.value || selectCheckMode.value !== 'all') {
-      return [...selectedRowKeys.value];
-    }
+  const fetchSelectAllRowKeys = async (maxCount?: number) => {
     const total = pagination.count;
     if (!total) {
       return [];
@@ -291,23 +286,32 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     if (!params) {
       return [];
     }
-    const pageSize = Math.min(total, maxResolveCount);
+
+    const targetCount = maxCount === undefined ? total : Math.min(total, maxCount);
     const data = await dataSource({
       ...params,
       page: 1,
-      page_size: pageSize,
+      page_size: targetCount,
     });
     const results = data?.results || [];
-    return results.map((row: Record<string, any>) => getRowKeyValue(row));
+    return results
+      .map((row: Record<string, any>) => getRowKeyValue(row))
+      .slice(0, targetCount);
+  };
+
+  const resolveSelectedRowKeys = async (options?: { maxCount?: number }) => {
+    if (!enabled.value || selectCheckMode.value !== 'all') {
+      return [...selectedRowKeys.value];
+    }
+    return fetchSelectAllRowKeys(options?.maxCount);
   };
 
   const resolveExportSelection = async () => {
     const keys = await resolveSelectedRowKeys();
     const isSelectAll = enabled.value && selectCheckMode.value === 'all';
-    const truncated = isSelectAll && pagination.count > maxResolveCount;
     return {
       keys,
-      truncated,
+      truncated: false,
       total: pagination.count,
       isSelectAll,
     };
