@@ -165,56 +165,6 @@ class StrategyStatusChecker:
 
         return None
 
-    def report_anomaly(self, strategy: Strategy, anomaly):
-        """上报异常事件"""
-        try:
-            # 统一处理异常信息（支持字符串、字典和其他类型）
-            if isinstance(anomaly, dict):
-                reason = anomaly.get("reason", str(anomaly))
-            elif hasattr(anomaly, 'reason'):
-                reason = getattr(anomaly, 'reason', str(anomaly))
-            else:
-                reason = str(anomaly)
-
-            # 构造监控事件数据
-            event_data = {
-                "data_id": settings.ALERT_DATA_ID,
-                "access_token": settings.ALERT_ACCESS_TOKEN,
-                "data": [
-                    {
-                        "target": strategy.strategy_id,
-                        "event_name": f"strategy_exception_{strategy.strategy_id}",
-                        "event": {"content": reason},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                    }
-                ],
-            }
-
-            api.bk_monitor.report_event(**event_data)
-
-            if "missing flow_id" in reason or "expect_flow=" in reason:
-                logger_celery.warning(
-                    "[StrategyStatusMismatch] strategy=%s namespace=%s type=%s status=%s flow_status=%s reason=%s",
-                    strategy.strategy_id,
-                    strategy.namespace,
-                    strategy.strategy_type,
-                    strategy.status,
-                    (strategy.backend_data or {}).get("flow_id", "no_flow"),
-                    reason,
-                )
-            else:
-                logger_celery.error(
-                    "[StrategyStatusAnomaly] strategy=%s namespace=%s type=%s status=%s reason=%s",
-                    strategy.strategy_id,
-                    strategy.namespace,
-                    strategy.strategy_type,
-                    strategy.status,
-                    reason,
-                )
-
-        except Exception as e:
-            logger_celery.error("[StrategyStatusReportFailed] strategy=%s error=%s", strategy.strategy_id, str(e))
-
 
 @periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:check_strategy_status_anomalies")
@@ -226,6 +176,9 @@ def check_strategy_status_anomalies():
 
     # 获取所有策略
     strategies = Strategy.objects.all()
+
+    # 收集所有状态不匹配的策略
+    mismatches = []
 
     for strategy in strategies:
         try:
@@ -243,12 +196,56 @@ def check_strategy_status_anomalies():
                 # 实时策略：使用judge方法检查状态一致性
                 anomaly_reason = checker.judge(strategy, flow_status)
             else:
-                # 离线策略：检查调度记录情况
-                anomaly_reason = checker.check_no_schedule_records(strategy, flow_status, running_data)
+                # 离线策略：先进行状态一致性检查
+                anomaly_reason = checker.judge(strategy, flow_status)
 
-            # 如果有异常，上报监控事件
+                # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+                if not anomaly_reason and flow_status == FlowNodeStatusChoices.RUNNING.value:
+                    schedule_anomaly = checker.check_no_schedule_records(strategy, flow_status, running_data)
+                    if schedule_anomaly:
+                        anomaly_reason = schedule_anomaly
+
+            # 如果有异常，添加到不匹配列表
             if anomaly_reason:
-                checker.report_anomaly(strategy, anomaly_reason)
+                mismatches.append({"strategy": strategy, "flow_status": flow_status, "reason": anomaly_reason})
+        except Exception as e:
+            logger_celery.error("[StrategyStatusCheckError] strategy=%s error=%s", strategy.strategy_id, str(e))
+
+    # 批量上报所有异常
+    if mismatches:
+        try:
+            # 构造批量监控事件数据
+            event_data = {"data_id": settings.ALERT_DATA_ID, "access_token": settings.ALERT_ACCESS_TOKEN, "data": []}
+
+            for mismatch in mismatches:
+                strategy = mismatch["strategy"]
+                reason = mismatch["reason"]
+
+                event_data["data"].append(
+                    {
+                        "target": strategy.strategy_id,
+                        "event_name": "strategy_exception",
+                        "event": {
+                            "content": reason,
+                            "strategy_id": strategy.strategy_id,
+                            "strategy_name": getattr(strategy, 'name', ''),
+                            "namespace": strategy.namespace,
+                            "strategy_type": strategy.strategy_type,
+                            "strategy_status": strategy.status,
+                            "flow_status": mismatch.get("flow_status", "unknown"),
+                        },
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                    }
+                )
+
+            # 一次性上报所有异常事件
+            api.bk_monitor.report_event(**event_data)
+
+            # 上报成功后记录每个异常策略的详细信息
+            for mismatch in mismatches:
+                strategy = mismatch["strategy"]
+                reason = mismatch["reason"]
+                flow_status = mismatch.get("flow_status", "unknown")
 
                 logger_celery.warning(
                     "[StrategyStatusAnomalyDetected] strategy=%s namespace=%s "
@@ -258,19 +255,18 @@ def check_strategy_status_anomalies():
                     strategy.strategy_type,
                     strategy.status,
                     flow_status,
-                    anomaly_reason,
+                    reason,
                 )
-            else:
-                logger_celery.debug(
-                    "[StrategyStatusNormal] strategy=%s namespace=%s " "type=%s status=%s flow_status=%s",
-                    strategy.strategy_id,
-                    strategy.namespace,
-                    strategy.strategy_type,
-                    strategy.status,
-                    flow_status,
-                )
+
+            logger_celery.info(
+                "[StrategyStatusBatchReported] total_mismatches=%s strategies=%s",
+                len(mismatches),
+                ",".join([str(m["strategy"].strategy_id) for m in mismatches]),
+            )
 
         except Exception as e:
-            logger_celery.error("[StrategyStatusCheckError] strategy=%s error=%s", strategy.strategy_id, str(e))
+            logger_celery.error("[StrategyStatusBatchReportFailed] error=%s", str(e))
 
-    logger_celery.info("[StrategyStatusCheckCompleted] total_strategies=%s", len(strategies))
+    logger_celery.info(
+        "[StrategyStatusCheckCompleted] total_strategies=%s total_mismatches=%s", len(strategies), len(mismatches)
+    )

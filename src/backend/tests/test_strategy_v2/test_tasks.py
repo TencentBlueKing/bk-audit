@@ -167,33 +167,6 @@ class TestStrategyStatusChecker(TestCase):
         result = self.checker.check_no_schedule_records(self.strategy, "running", running_data)
         assert result == "schedule failed: 调度失败"
 
-    def test_report_anomaly_with_string(self):
-        """测试上报字符串异常"""
-        anomaly = "策略状态异常"
-        self.checker.report_anomaly(self.strategy, anomaly)
-
-        # 验证监控事件上报被调用
-        self.mock_bk_monitor_report_event.assert_called_once()
-
-    def test_report_anomaly_with_dict(self):
-        """测试上报字典异常"""
-        anomaly = {"reason": "策略状态不匹配"}
-        self.checker.report_anomaly(self.strategy, anomaly)
-
-        self.mock_bk_monitor_report_event.assert_called_once()
-
-    def test_report_anomaly_with_exception_object(self):
-        """测试上报异常对象"""
-
-        class CustomException(Exception):
-            def __init__(self, reason):
-                self.reason = reason
-
-        anomaly = CustomException("自定义异常")
-        self.checker.report_anomaly(self.strategy, anomaly)
-
-        self.mock_bk_monitor_report_event.assert_called_once()
-
     def test_judge_all_expected_status_mappings(self):
         """测试EXPECTED_FLOW_STATUS中的所有状态映射"""
         from services.web.strategy_v2.tasks import EXPECTED_FLOW_STATUS
@@ -236,6 +209,131 @@ class TestStrategyStatusChecker(TestCase):
         # 这种情况下应该返回None（不检查未知状态）
         result = self.checker.judge(self.strategy, "running")
         assert result is None, "未知策略状态应返回None"
+
+    def test_batch_strategy_running_flow_no_start(self):
+        """测试离线策略：策略运行中但Flow未启动的情况"""
+        # 设置为离线策略
+        self.strategy.configs = {"data_source": {"source_type": RuleAuditSourceType.BATCH}}
+        self.strategy.status = StrategyStatusChoices.RUNNING.value
+
+        # Mock flow状态为no-start
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "no-start"}
+
+        # 模拟定时任务中的检查逻辑
+        flow_status = self.checker.fetch_flow_status(self.strategy.backend_data["flow_id"])
+        running_data = []  # 空的运行数据
+
+        # 离线策略：先进行状态一致性检查
+        anomaly_reason = self.checker.judge(self.strategy, flow_status)
+
+        # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+        if not anomaly_reason and flow_status == "running":
+            schedule_anomaly = self.checker.check_no_schedule_records(self.strategy, flow_status, running_data)
+            if schedule_anomaly:
+                anomaly_reason = schedule_anomaly
+
+        # 验证应该上报状态不匹配异常
+        assert anomaly_reason == "expect_flow=running, actual=no-start"
+
+    def test_batch_strategy_fetch_flow_status_error(self):
+        """测试离线策略：fetch_flow_status返回错误的情况"""
+        # 设置为离线策略
+        self.strategy.configs = {"data_source": {"source_type": RuleAuditSourceType.BATCH}}
+        self.strategy.status = StrategyStatusChoices.RUNNING.value
+
+        # Mock API调用失败
+        self.mock_bk_base_get_flow_deploy_data.side_effect = Exception("网络连接失败")
+
+        # 模拟定时任务中的检查逻辑
+        flow_status = self.checker.fetch_flow_status(self.strategy.backend_data["flow_id"])
+        running_data = []  # 空的运行数据
+
+        # 离线策略：先进行状态一致性检查
+        anomaly_reason = self.checker.judge(self.strategy, flow_status)
+
+        # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+        if not anomaly_reason and flow_status == "running":
+            schedule_anomaly = self.checker.check_no_schedule_records(self.strategy, flow_status, running_data)
+            if schedule_anomaly:
+                anomaly_reason = schedule_anomaly
+
+        # 验证应该上报API错误异常
+        assert anomaly_reason == "error:网络连接失败"
+
+    def test_batch_strategy_flow_running_no_schedule_records(self):
+        """测试离线策略：Flow运行中但无调度记录的情况"""
+        # 设置为离线策略
+        self.strategy.configs = {"data_source": {"source_type": RuleAuditSourceType.BATCH}}
+        self.strategy.status = StrategyStatusChoices.RUNNING.value
+
+        # Mock flow状态为running
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "running"}
+
+        # 模拟定时任务中的检查逻辑
+        flow_status = self.checker.fetch_flow_status(self.strategy.backend_data["flow_id"])
+        running_data = []  # 空的运行数据
+
+        # 离线策略：先进行状态一致性检查
+        anomaly_reason = self.checker.judge(self.strategy, flow_status)
+
+        # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+        if not anomaly_reason and flow_status == "running":
+            schedule_anomaly = self.checker.check_no_schedule_records(self.strategy, flow_status, running_data)
+            if schedule_anomaly:
+                anomaly_reason = schedule_anomaly
+
+        # 验证应该上报无调度记录异常
+        assert anomaly_reason == "running flow has no schedule records in last 1 day"
+
+    def test_batch_strategy_flow_running_with_schedule_records(self):
+        """测试离线策略：Flow运行中且有调度记录的情况（正常情况）"""
+        # 设置为离线策略
+        self.strategy.configs = {"data_source": {"source_type": RuleAuditSourceType.BATCH}}
+        self.strategy.status = StrategyStatusChoices.RUNNING.value
+
+        # Mock flow状态为running
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "running"}
+
+        # 模拟定时任务中的检查逻辑
+        flow_status = self.checker.fetch_flow_status(self.strategy.backend_data["flow_id"])
+        running_data = [{"status": "success", "schedule_time": "2023-01-01 10:00:00"}]  # 有调度记录
+
+        # 离线策略：先进行状态一致性检查
+        anomaly_reason = self.checker.judge(self.strategy, flow_status)
+
+        # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+        if not anomaly_reason and flow_status == "running":
+            schedule_anomaly = self.checker.check_no_schedule_records(self.strategy, flow_status, running_data)
+            if schedule_anomaly:
+                anomaly_reason = schedule_anomaly
+
+        # 验证应该无异常
+        assert anomaly_reason is None
+
+    def test_batch_strategy_disabled_flow_no_start(self):
+        """测试离线策略：策略已禁用且Flow未启动的情况（正常情况）"""
+        # 设置为离线策略
+        self.strategy.configs = {"data_source": {"source_type": RuleAuditSourceType.BATCH}}
+        self.strategy.status = StrategyStatusChoices.DISABLED.value
+
+        # Mock flow状态为no-start
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "no-start"}
+
+        # 模拟定时任务中的检查逻辑
+        flow_status = self.checker.fetch_flow_status(self.strategy.backend_data["flow_id"])
+        running_data = []  # 空的运行数据
+
+        # 离线策略：先进行状态一致性检查
+        anomaly_reason = self.checker.judge(self.strategy, flow_status)
+
+        # 如果状态一致性检查无异常且Flow状态为RUNNING，再检查调度记录
+        if not anomaly_reason and flow_status == "running":
+            schedule_anomaly = self.checker.check_no_schedule_records(self.strategy, flow_status, running_data)
+            if schedule_anomaly:
+                anomaly_reason = schedule_anomaly
+
+        # 验证应该无异常（DISABLED策略期望flow状态为no-start）
+        assert anomaly_reason is None
 
 
 class TestCheckStrategyStatusAnomaliesTask(TestCase):
@@ -297,8 +395,25 @@ class TestCheckStrategyStatusAnomaliesTask(TestCase):
         # 执行任务
         check_strategy_status_anomalies()
 
-        # 验证异常上报被调用
-        assert self.mock_bk_monitor_report_event.call_count == 3
+        # 验证批量异常上报被调用一次，且包含3个策略的异常数据
+        assert self.mock_bk_monitor_report_event.call_count == 1
+
+        # 获取上报的数据
+        call_args = self.mock_bk_monitor_report_event.call_args
+        event_data = call_args.kwargs
+
+        # 验证数据结构
+        assert "data" in event_data
+        assert len(event_data["data"]) == 3
+
+        # 验证每个策略的异常数据
+        for i, event in enumerate(event_data["data"]):
+            assert event["target"] == i  # strategy_id
+            assert event["event_name"] == "strategy_exception"
+            assert event["event"]["content"] == "expect_flow=running, actual=no-start"
+            assert event["event"]["strategy_id"] == i
+            assert event["event"]["strategy_status"] == "running"
+            assert event["event"]["flow_status"] == "no-start"
 
     def test_task_execution_with_exception(self):
         """测试任务执行过程中出现异常"""
@@ -324,3 +439,111 @@ class TestCheckStrategyStatusAnomaliesTask(TestCase):
 
         # 验证任务正常执行完成
         assert True  # 如果没有异常抛出，测试通过
+
+    def test_batch_report_with_multiple_anomalies(self):
+        """测试批量上报多个异常策略"""
+        # Mock批量上报
+        self.mock_bk_monitor_report_event.return_value = {"result": True, "message": "success"}
+
+        # 验证批量上报功能（通过调用主任务来测试）
+        from services.web.strategy_v2.tasks import check_strategy_status_anomalies
+
+        # Mock策略查询返回异常策略
+        self.mock_strategy_objects.return_value = self.strategies
+
+        # Mock异常的flow状态
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "no-start"}
+
+        # 执行任务
+        check_strategy_status_anomalies()
+
+        # 验证批量上报被调用
+        assert self.mock_bk_monitor_report_event.call_count == 1
+
+        # 验证上报的数据结构
+        call_args = self.mock_bk_monitor_report_event.call_args
+        event_data = call_args[1]  # kwargs
+
+        assert "data_id" in event_data
+        assert "access_token" in event_data
+        assert "data" in event_data
+        assert len(event_data["data"]) == 3
+
+        # 验证每个策略的异常数据
+        for i, anomaly_data in enumerate(event_data["data"]):
+            assert anomaly_data["target"] == i  # strategy_id
+            assert anomaly_data["event_name"] == "strategy_exception"
+            assert "strategy_id" in anomaly_data["event"]
+            assert "strategy_name" in anomaly_data["event"]
+            assert "namespace" in anomaly_data["event"]
+            assert "strategy_type" in anomaly_data["event"]
+            assert "strategy_status" in anomaly_data["event"]
+            assert "flow_status" in anomaly_data["event"]
+
+    def test_batch_report_with_no_anomalies(self):
+        """测试无异常策略时的批量上报"""
+        # Mock正常的flow状态
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "running"}
+
+        # 执行任务
+        from services.web.strategy_v2.tasks import check_strategy_status_anomalies
+
+        check_strategy_status_anomalies()
+
+        # 验证没有异常上报
+        assert self.mock_bk_monitor_report_event.call_count == 0
+
+    def test_batch_report_with_api_error(self):
+        """测试批量上报API错误的情况"""
+        # Mock异常的flow状态
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "no-start"}
+
+        # Mock批量上报失败
+        self.mock_bk_monitor_report_event.side_effect = Exception("监控API调用失败")
+
+        # 执行任务（应该不会抛出异常，而是记录错误日志）
+        from services.web.strategy_v2.tasks import check_strategy_status_anomalies
+
+        try:
+            check_strategy_status_anomalies()
+        except Exception:
+            self.fail("批量上报失败不应该抛出异常")
+
+    def test_batch_report_with_mixed_strategies(self):
+        """测试混合策略类型的批量上报"""
+        # 创建实时和离线策略的混合列表
+        realtime_strategy = Strategy(
+            strategy_id=1,
+            strategy_name="实时策略",
+            strategy_type=StrategyType.RULE,
+            status=StrategyStatusChoices.RUNNING.value,
+            configs={"data_source": {"source_type": RuleAuditSourceType.REALTIME}},
+            backend_data={"flow_id": 10001},
+        )
+
+        batch_strategy = Strategy(
+            strategy_id=2,
+            strategy_name="离线策略",
+            strategy_type=StrategyType.RULE,
+            status=StrategyStatusChoices.RUNNING.value,
+            configs={"data_source": {"source_type": RuleAuditSourceType.BATCH}},
+            backend_data={"flow_id": 10002},
+        )
+
+        self.mock_strategy_objects.return_value = [realtime_strategy, batch_strategy]
+
+        # Mock异常的flow状态
+        self.mock_bk_base_get_flow_deploy_data.return_value = {"flow_status": "failure"}
+
+        # 执行任务
+        from services.web.strategy_v2.tasks import check_strategy_status_anomalies
+
+        check_strategy_status_anomalies()
+
+        # 验证批量上报被调用（两个策略都应该上报异常）
+        assert self.mock_bk_monitor_report_event.call_count == 1
+
+        # 验证上报的数据包含两个异常
+        call_args = self.mock_bk_monitor_report_event.call_args
+        event_data = call_args[1]  # kwargs
+        assert len(event_data["data"]) == 2
