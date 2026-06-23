@@ -316,6 +316,21 @@ STRATEGY_STATUS_DEFAULT_INTERVAL = 30 * 6
 STRATEGY_RISK_DEFAULT_INTERVAL = 30 * 6
 
 
+class StrategyStatusAnomalyReason(TextChoices):
+    """策略状态检查异常原因"""
+
+    MISSING_FLOW_ID = "missing_flow_id", gettext_lazy("missing flow_id")
+    FLOW_STATUS_MISMATCH = "flow_status_mismatch", gettext_lazy("expect_flow={expected}, actual={actual}")
+    OPERATION_FAILED = "operation_failed", gettext_lazy("{status} operation failed")
+    STARTING_STRATEGY_HAS_ERRORS = "starting_strategy_has_errors", gettext_lazy(
+        "starting strategy has error messages: {msg}"
+    )
+    RUNNING_FLOW_NO_SCHEDULE_RECORDS = "running_flow_no_schedule_records", gettext_lazy(
+        "running flow has no schedule records in last 1 day"
+    )
+    SCHEDULE_FAILED = "schedule_failed", gettext_lazy("schedule failed: {error_msg}")
+
+
 @register_choices("strategy_field_source")
 class StrategyFieldSourceEnum(TextChoices):
     """
