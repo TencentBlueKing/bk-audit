@@ -22,9 +22,10 @@ class TestRiskExportTask(TestCase):
 
         self.assertEqual(task.time_limit, settings.MONITOR_EVENT_TASK_TIMEOUT)
 
+    @mock.patch("services.web.risk.tasks.logger_celery.info")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
-    def test_export_risks_to_mail_success(self, mock_service_cls, mock_update_state):
+    def test_export_risks_to_mail_success(self, mock_service_cls, mock_update_state, mock_logger_info):
         service = mock_service_cls.return_value
         export_file = mock.Mock()
         export_file.total = 2
@@ -53,6 +54,16 @@ class TestRiskExportTask(TestCase):
         )
         mock_update_state.assert_any_call(state="RUNNING", meta={"current": 0, "total": 2})
         mock_update_state.assert_any_call(state="PROGRESS", meta={"current": 2, "total": 2})
+        log_messages = [call.args[0] for call in mock_logger_info.call_args_list]
+        self.assertIn(
+            "[RiskExportTask] start username=%s total=%s risk_view_type=%s requested_at=%s",
+            log_messages,
+        )
+        self.assertIn(
+            "[RiskExportTask] export file built username=%s total=%s filename=%s",
+            log_messages,
+        )
+        self.assertIn("[RiskExportTask] mail sent username=%s total=%s filename=%s", log_messages)
 
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")

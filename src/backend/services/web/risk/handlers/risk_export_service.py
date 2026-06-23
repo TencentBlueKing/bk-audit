@@ -5,6 +5,7 @@
 """
 
 import base64
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,6 +34,8 @@ from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class RiskExportFile:
@@ -55,13 +58,29 @@ class RiskExportService:
     def validate_permission(self) -> None:
         """校验当前用户是否具备所有待导出风险的查看权限。"""
 
+        logger.info(
+            "[RiskExportService] validate permission start username=%s total=%s",
+            self.username,
+            len(self.risk_ids),
+        )
         risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK, username=self.username).filter(
             risk_id__in=self.risk_ids
         )
         authed_risk_ids = set(risks.values_list("risk_id", flat=True))
         no_authed_risk_ids = set(self.risk_ids) - authed_risk_ids
         if no_authed_risk_ids:
+            logger.warning(
+                "[RiskExportService] validate permission failed username=%s total=%s denied=%s",
+                self.username,
+                len(self.risk_ids),
+                len(no_authed_risk_ids),
+            )
             raise ExportRiskNoPermission(risk_ids=",".join(sorted(no_authed_risk_ids)))
+        logger.info(
+            "[RiskExportService] validate permission finished username=%s total=%s",
+            self.username,
+            len(self.risk_ids),
+        )
 
     @classmethod
     def build_filename(cls, risk_view_type: str) -> str:
@@ -78,18 +97,33 @@ class RiskExportService:
         XLSX 写入使用临时文件和 xlsxwriter constant_memory，但风险与事件行当前会先组装到内存中。
         """
 
+        logger.info(
+            "[RiskExportService] build export file start username=%s total=%s risk_view_type=%s",
+            self.username,
+            len(self.risk_ids),
+            self.risk_view_type,
+        )
         self.validate_permission()
         risks = self._load_risks()
+        logger.info("[RiskExportService] risks loaded username=%s loaded=%s", self.username, len(risks))
         strategy_export_fields = self._build_strategy_export_fields(risks)
         formatted_risks_by_strategy = self._build_rows(risks)
         exporter = MultiSheetRiskExporterXlsx()
         exporter.write(sheets_data=formatted_risks_by_strategy, sheets_headers=strategy_export_fields)
-        return RiskExportFile(
+        export_file = RiskExportFile(
             file=exporter.save(),
             filename=self.build_filename(self.risk_view_type),
             total=len(self.risk_ids),
             view_label=str(RiskViewType.get_label(self.risk_view_type)),
         )
+        logger.info(
+            "[RiskExportService] build export file finished username=%s total=%s sheets=%s filename=%s",
+            self.username,
+            export_file.total,
+            len(formatted_risks_by_strategy),
+            export_file.filename,
+        )
+        return export_file
 
     def _load_risks(self) -> List[Risk]:
         """按请求顺序加载有权限的风险单。"""
@@ -144,6 +178,12 @@ class RiskExportService:
     def _fetch_events(self, risks: List[Risk]) -> list:
         """复用现有 bulk_request 拉取每个风险最近的事件数据。"""
 
+        logger.info(
+            "[RiskExportService] fetch events start username=%s total=%s event_limit=%s",
+            self.username,
+            len(risks),
+            settings.RISK_EXPORT_EVENT_LIMIT_PER_RISK,
+        )
         bulk_events_params = []
         for risk in risks:
             start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
@@ -158,7 +198,9 @@ class RiskExportService:
                     "page_size": settings.RISK_EXPORT_EVENT_LIMIT_PER_RISK,
                 }
             )
-        return resource.risk.list_event.bulk_request(bulk_events_params)
+        bulk_resp = resource.risk.list_event.bulk_request(bulk_events_params)
+        logger.info("[RiskExportService] fetch events finished username=%s total=%s", self.username, len(bulk_resp))
+        return bulk_resp
 
     def _build_risk_basic_data(self, risk: Risk) -> dict:
         """构造单条风险的基础字段。"""
@@ -190,13 +232,26 @@ class RiskExportService:
         邮件 API 要求附件内容为 base64，因此这里会一次性读取导出文件并产生短时内存峰值。
         """
 
+        logger.info(
+            "[RiskExportService] send mail start username=%s total=%s filename=%s",
+            self.username,
+            export_file.total,
+            export_file.filename,
+        )
         export_file.file.seek(0)
+        attachment_content = base64.b64encode(export_file.file.read()).decode("utf-8")
         attachment = {
             "filename": export_file.filename,
-            "content": base64.b64encode(export_file.file.read()).decode("utf-8"),
+            "content": attachment_content,
             "type": "xlsx",
             "disposition": "attachment",
         }
+        logger.info(
+            "[RiskExportService] mail attachment ready username=%s filename=%s encoded_size=%s",
+            self.username,
+            export_file.filename,
+            len(attachment_content),
+        )
         content = NoticeContent(
             NoticeContentConfig(
                 key="body",
@@ -209,9 +264,17 @@ class RiskExportService:
                 ),
             )
         )
-        return MailSender(
+        result = MailSender(
             receivers=[self.username],
             title="【蓝鲸审计中心】风险数据导出结果通知",
             content=content,
             attachments=[attachment],
         ).send()
+        logger.info(
+            "[RiskExportService] send mail finished username=%s total=%s filename=%s result=%s",
+            self.username,
+            export_file.total,
+            export_file.filename,
+            result,
+        )
+        return result
