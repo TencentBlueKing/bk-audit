@@ -295,6 +295,35 @@ class TestRiskExport(TestCase):
         self.assertIn("[RiskExportService] build export file start", logs)
         self.assertIn("[RiskExportService] build export file finished", logs)
 
+    @override_settings(RISK_EXPORT_EVENT_FETCH_BATCH_SIZE=2)
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_service_fetches_events_by_batch(self, mock_get_event_list, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.all()
+        mock_get_event_list.side_effect = [
+            [{"results": []}, {"results": []}],
+            [{"results": []}, {"results": []}],
+        ]
+
+        with self.assertLogs("services.web.risk.handlers.risk_export_service", level="INFO") as log_context:
+            export_file = RiskExportService(
+                username="admin",
+                risk_ids=[self.risk_1.risk_id, self.risk_2.risk_id, self.risk_3.risk_id, self.risk_4.risk_id],
+                risk_view_type=RiskViewType.ALL.value,
+            ).build_export_file()
+
+        self.assertEqual(export_file.total, 4)
+        self.assertEqual(mock_get_event_list.call_count, 2)
+        self.assertEqual(len(mock_get_event_list.call_args_list[0].args[0]), 2)
+        self.assertEqual(len(mock_get_event_list.call_args_list[1].args[0]), 2)
+        self.assertEqual(mock_get_event_list.call_args_list[0].args[0][0]["risk_id"], self.risk_1.risk_id)
+        self.assertEqual(mock_get_event_list.call_args_list[1].args[0][0]["risk_id"], self.risk_3.risk_id)
+        logs = "\n".join(log_context.output)
+        self.assertIn("[RiskExportService] fetch events batch start", logs)
+        self.assertIn("[RiskExportService] fetch events batch finished", logs)
+        self.assertIn("batch=1/2", logs)
+        self.assertIn("batch=2/2", logs)
+
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
     @mock.patch("services.web.risk.handlers.risk_export_service.MailSender")

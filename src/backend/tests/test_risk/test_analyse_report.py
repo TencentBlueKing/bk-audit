@@ -1450,6 +1450,14 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
         self.assertEqual(risk_ids, {self.risk1.risk_id, self.risk2.risk_id})
         self.assertNotIn(unbound_risk.risk_id, risk_ids)
 
+    @override_settings(ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER=True)
+    @mock.patch("services.web.risk.resources.analyse_report.get_request_username", return_value="admin")
+    def test_apigw_list_report_risks_checks_owner_when_enabled(self, _mock_username):
+        """APIGW开启报告归属校验后，只允许报告创建人访问"""
+
+        with self.assertRaises(Http404):
+            self.request_apigw_resource()
+
     def test_apigw_with_detail_excludes_risk_report(self):
         """APIGW风险详情不返回风险报告内容"""
         RiskReport.objects.create(risk=self.risk1, content="sensitive report content")
@@ -2569,9 +2577,49 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.report.refresh_from_db()
         self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
 
+    @mock.patch("services.web.risk.tasks.logger_celery.error")
+    @mock.patch("services.web.risk.tasks.logger_celery.warning")
+    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
     @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_fails_before_chat_if_link_fails_on_max_retry(self, mock_chat, mock_link):
+    def test_task_logs_warning_when_link_fails_before_max_retry(
+        self, mock_chat, mock_link, mock_retry, mock_logger_warning, mock_logger_error
+    ):
+        """未达到最大重试次数时，只记录 warning 并触发重试"""
+        mock_retry.side_effect = RuntimeError("retry called")
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        original_retries = generate_analyse_report.request.retries
+        generate_analyse_report.request.retries = 0
+        try:
+            with self.assertRaisesRegex(RuntimeError, "retry called"):
+                generate_analyse_report(report_id=self.report.report_id)
+        finally:
+            generate_analyse_report.request.retries = original_retries
+
+        mock_chat.assert_not_called()
+        mock_retry.assert_called_once()
+        self.assertEqual(mock_retry.call_args.kwargs["countdown"], 60)
+        self.assertEqual(str(mock_retry.call_args.kwargs["exc"]), "关联失败")
+        mock_logger_warning.assert_called_once()
+        self.assertEqual(
+            mock_logger_warning.call_args.args[0],
+            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
+        )
+        self.assertTrue(mock_logger_warning.call_args.kwargs["exc_info"])
+        mock_logger_error.assert_not_called()
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
+
+    @mock.patch("services.web.risk.tasks.logger_celery.error")
+    @mock.patch("services.web.risk.tasks.logger_celery.warning")
+    @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_fails_before_chat_if_link_fails_on_max_retry(
+        self, mock_chat, mock_link, mock_logger_warning, mock_logger_error
+    ):
         """风险关联失败时不调用 Agent，最终重试失败后记录错误信息"""
         from services.web.risk.tasks import generate_analyse_report
 
@@ -2589,6 +2637,13 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.assertIn("execution", self.report.extra_info)
         self.assertEqual(self.report.extra_info["error"]["error_message"], "关联失败")
         mock_chat.assert_not_called()
+        mock_logger_warning.assert_not_called()
+        mock_logger_error.assert_called_once()
+        self.assertEqual(
+            mock_logger_error.call_args.args[0],
+            "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+        )
+        self.assertEqual(str(mock_logger_error.call_args.kwargs["exc_info"][1]), "关联失败")
 
 
 class TestAnalyseReportAdmin(AnalyseReportTestBase):

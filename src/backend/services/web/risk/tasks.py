@@ -253,6 +253,12 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
             export_file.filename,
         )
         self.update_state(state="PROGRESS", meta={"current": total, "total": total})
+        logger_celery.info(
+            "[RiskExportTask] send mail start username=%s total=%s filename=%s",
+            username,
+            export_file.total,
+            export_file.filename,
+        )
         service.send_mail(export_file=export_file, requested_at=requested_at)
         logger_celery.info(
             "[RiskExportTask] mail sent username=%s total=%s filename=%s",
@@ -262,11 +268,32 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
         )
         return {"total": export_file.total, "filename": export_file.filename}
     except Exception as exc:
-        logger_celery.exception("[RiskExportTaskFailed] username=%s, total=%s", username, total)
+        retries = getattr(self.request, "retries", 0)
+        max_retries = self.max_retries
         try:
+            if retries >= max_retries:
+                raise MaxRetriesExceededError()
+            logger_celery.warning(
+                "[RiskExportTaskRetrying] username=%s total=%s retries=%s max_retries=%s countdown=%s error=%s",
+                username,
+                total,
+                retries,
+                max_retries,
+                settings.RISK_EXPORT_TASK_RETRY_DELAY,
+                exc,
+                exc_info=True,
+            )
             # 不传 exc，确保达到最大重试次数时 Celery 抛 MaxRetriesExceededError。
             raise self.retry(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
         except MaxRetriesExceededError:
+            logger_celery.error(
+                "[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s",
+                username,
+                total,
+                retries,
+                max_retries,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
             try:
                 report_risk_export_failed_event(username=username, risk_count=total, error=exc)
             except Exception:  # NOCC:broad-except(监控上报失败不能遮蔽原始任务失败)
@@ -813,7 +840,6 @@ def generate_analyse_report(self, report_id: int):
         return {"report_id": report.report_id}
 
     except Exception as exc:
-        logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
         max_retries = self.max_retries
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
@@ -825,8 +851,23 @@ def generate_analyse_report(self, report_id: int):
                 error=_build_analyse_report_error_info(exc, current_retries, max_retries),
             )
             report.save(update_fields=["status", "extra_info", "updated_at"])
-            logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            logger_celery.error(
+                "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+                report_id,
+                current_retries,
+                max_retries,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
             raise
+        logger_celery.warning(
+            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
+            report_id,
+            current_retries,
+            max_retries,
+            60,
+            exc,
+            exc_info=True,
+        )
         raise self.retry(exc=exc, countdown=60)
 
 

@@ -26,6 +26,7 @@ from urllib.parse import unquote, urlparse
 
 from blueapps.utils.request_provider import get_request_username
 from celery.result import AsyncResult
+from django.conf import settings
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -588,17 +589,24 @@ class ListAnalyseReportRiskAPIGW(AnalyseReportRiskListBase):
     """报告关联风险列表(APIGW)"""
 
     name = gettext_lazy("报告关联风险列表(APIGW)")
-    # TODO: APIGW 接入 Agent 身份后补充报告归属/租户校验。
-    check_report_owner = False
     audit_action = None
     bind_request = True
     ResponseSerializer = ListAnalyseReportRiskPageResponseSerializer
     many_response_data = False
 
+    @property
+    def check_report_owner(self) -> bool:
+        """部分测试环境暂不支持 APIGW 身份鉴权，上线后可通过环境变量开启报告归属校验。"""
+
+        return settings.ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER
+
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
         with_detail = validated_request_data.get("with_detail", False)
         report_id = validated_request_data["report_id"]
+        if self.check_report_owner:
+            self.get_user_report(report_id)
+
         queryset = self.get_report_risk_queryset(report_id)
         queryset = self.filter_report_risks(queryset, validated_request_data)
 
