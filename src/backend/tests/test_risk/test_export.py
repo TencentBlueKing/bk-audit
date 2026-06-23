@@ -30,6 +30,7 @@ from rest_framework.response import Response
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
+    RiskDisplayStatus,
     RiskExportField,
     RiskStatus,
     RiskViewType,
@@ -152,7 +153,12 @@ class TestRiskExport(TestCase):
 
     def test_risk_export_serializer_allows_async_limit(self):
         max_count = settings.RISK_EXPORT_ASYNC_MAX_COUNT
-        serializer = RiskExportReqSerializer(data={"risk_ids": [f"risk-{index}" for index in range(max_count)]})
+        serializer = RiskExportReqSerializer(
+            data={
+                "risk_ids": [f"risk-{index}" for index in range(max_count)],
+                "risk_view_type": RiskViewType.ALL.value,
+            }
+        )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.fields["risk_ids"].max_length, max_count)
@@ -165,6 +171,103 @@ class TestRiskExport(TestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("risk_ids", serializer.errors)
+
+    def test_risk_export_serializer_allows_filter_mode_with_view_type(self):
+        serializer = RiskExportReqSerializer(
+            data={
+                "risk_view_type": RiskViewType.ALL.value,
+                "filters": {
+                    "status": RiskStatus.NEW.value,
+                    "sort": ["-event_time"],
+                },
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("risk_ids", serializer.validated_data)
+        self.assertEqual(serializer.validated_data["risk_view_type"], RiskViewType.ALL.value)
+        self.assertEqual(serializer.validated_data["filters"]["display_status"], [RiskStatus.NEW.value])
+        self.assertEqual(serializer.validated_data["filters"]["order_fields"], ["-event_time"])
+
+    def test_risk_export_serializer_requires_view_type_for_filter_mode(self):
+        serializer = RiskExportReqSerializer(data={"filters": {"status": RiskStatus.NEW.value}})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("risk_view_type", serializer.errors)
+
+    def test_risk_export_serializer_requires_view_type_for_exact_mode(self):
+        serializer = RiskExportReqSerializer(data={"risk_ids": [self.risk_1.risk_id]})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("risk_view_type", serializer.errors)
+
+    def test_risk_export_serializer_blocks_mixed_risk_ids_and_filters(self):
+        serializer = RiskExportReqSerializer(
+            data={
+                "risk_ids": [self.risk_1.risk_id],
+                "risk_view_type": RiskViewType.ALL.value,
+                "filters": {"status": RiskStatus.NEW.value},
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("params_error", serializer.errors)
+
+    def test_risk_export_serializer_allows_risk_ids_with_view_type_only(self):
+        serializer = RiskExportReqSerializer(
+            data={"risk_ids": [self.risk_1.risk_id], "risk_view_type": RiskViewType.SCENE.value}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["risk_ids"], [self.risk_1.risk_id])
+        self.assertEqual(serializer.validated_data["risk_view_type"], RiskViewType.SCENE.value)
+
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_load_filter_risk_ids_reuses_list_risk_filters(self, mock_load_iam_authed_risks):
+        from services.web.risk.resources.risk import ListRisk
+
+        self.risk_2.status = RiskStatus.CLOSED
+        self.risk_2.display_status = RiskDisplayStatus.CLOSED
+        self.risk_2.save(update_fields=["status", "display_status"])
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+
+        serializer = RiskExportReqSerializer(
+            data={"risk_view_type": RiskViewType.ALL.value, "filters": {"status": RiskStatus.NEW.value}}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        filter_data = dict(serializer.validated_data["filters"])
+        risk_ids = ListRisk().load_filter_risk_ids(filter_data, username="admin", risk_limit=10)
+
+        self.assertIn(self.risk_1.risk_id, risk_ids)
+        self.assertNotIn(self.risk_2.risk_id, risk_ids)
+
+    @mock.patch("services.web.risk.resources.risk.ListRisk.retrieve_via_bkbase")
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_load_filter_risk_ids_uses_bkbase_when_event_filters_exist(
+        self, mock_load_iam_authed_risks, mock_retrieve_via_bkbase
+    ):
+        from services.web.risk.resources.risk import ListRisk
+
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+        mock_retrieve_via_bkbase.return_value = ([self.risk_1], mock.MagicMock(), [])
+        serializer = RiskExportReqSerializer(
+            data={
+                "risk_view_type": RiskViewType.ALL.value,
+                "filters": {
+                    "event_filters": [
+                        {"field": "user", "display_name": "Username", "operator": "CONTAINS", "value": "alice"}
+                    ],
+                },
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        filter_data = dict(serializer.validated_data["filters"])
+        risk_ids = ListRisk().load_filter_risk_ids(filter_data, username="admin", risk_limit=10)
+
+        self.assertEqual(risk_ids, [self.risk_1.risk_id])
+        mock_retrieve_via_bkbase.assert_called_once()
 
     @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=1, RISK_EXPORT_ASYNC_MAX_COUNT=10)
     @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
@@ -187,6 +290,76 @@ class TestRiskExport(TestCase):
         self.assertEqual(resp.data["total"], 2)
         self.assertEqual(resp.data["notice_users"], ["admin"])
         mock_task.apply_async.assert_called_once()
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_exact_mode_validates_permission_once(self, mock_get_event_list, mock_load_authed_risks):
+        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
+        mock_get_event_list.return_value = [{"results": []}]
+
+        resource.risk.risk_export.request(risk_ids=[self.risk_1.risk_id], risk_view_type=RiskViewType.ALL.value)
+
+        mock_load_authed_risks.assert_called_once()
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_filter_mode_exports_resolved_ids(self, mock_get_event_list, mock_load_iam_authed_risks):
+        Risk.objects.exclude(risk_id=self.risk_1.risk_id).update(display_status=RiskDisplayStatus.CLOSED)
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+        mock_get_event_list.return_value = [{"results": []}]
+
+        resp = resource.risk.risk_export.request(
+            risk_view_type=RiskViewType.ALL.value,
+            filters={"status": RiskStatus.NEW.value},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(mock_get_event_list.call_args.args[0][0]["risk_id"], self.risk_1.risk_id)
+
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=1, RISK_EXPORT_ASYNC_MAX_COUNT=10)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_risk_export_filter_mode_auto_async_when_resolved_count_over_sync_limit(
+        self, mock_load_iam_authed_risks, mock_task
+    ):
+        mock_load_iam_authed_risks.return_value = Risk.objects.filter(
+            risk_id__in=[self.risk_1.risk_id, self.risk_2.risk_id]
+        )
+        mock_task.apply_async.return_value = mock.Mock(id="task-filter-export")
+
+        resp = resource.risk.risk_export.request(risk_view_type=RiskViewType.ALL.value)
+
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data["total"], 2)
+        task_kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
+        self.assertCountEqual(task_kwargs["risk_ids"], [self.risk_1.risk_id, self.risk_2.risk_id])
+        self.assertEqual(task_kwargs["risk_view_type"], RiskViewType.ALL.value)
+
+    @override_settings(RISK_EXPORT_ASYNC_MAX_COUNT=1)
+    @mock.patch("services.web.risk.resources.risk.ListRisk.load_filter_risk_ids")
+    def test_risk_export_filter_mode_blocks_over_limit(self, mock_load_filter_risk_ids):
+        mock_load_filter_risk_ids.return_value = [self.risk_1.risk_id, self.risk_2.risk_id]
+
+        with self.assertRaisesMessage(Exception, "当前筛选结果超过导出上限"):
+            resource.risk.risk_export.request(risk_view_type=RiskViewType.ALL.value)
+
+    @mock.patch("services.web.risk.resources.risk.ListRisk.load_filter_risk_ids")
+    def test_risk_export_filter_mode_blocks_empty_result(self, mock_load_filter_risk_ids):
+        mock_load_filter_risk_ids.return_value = []
+
+        with self.assertRaisesMessage(Exception, "当前筛选条件未命中风险"):
+            resource.risk.risk_export.request(risk_view_type=RiskViewType.ALL.value)
+
+    @mock.patch("services.web.risk.resources.risk.ListMineRisk.load_filter_risk_ids")
+    def test_risk_export_filter_mode_uses_todo_view_loader(self, mock_load_filter_risk_ids):
+        mock_load_filter_risk_ids.return_value = [self.risk_1.risk_id]
+
+        with mock.patch.object(ListEvent, "bulk_request", return_value=[{"results": []}]):
+            resource.risk.risk_export.request(risk_view_type=RiskViewType.TODO.value)
+
+        mock_load_filter_risk_ids.assert_called_once()
 
     @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=400)
     @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
@@ -274,10 +447,8 @@ class TestRiskExport(TestCase):
 
         mock_task.apply_async.assert_not_called()
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
-    def test_risk_export_service_builds_file(self, mock_get_event_list, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id__in=[self.risk_1.risk_id])
+    def test_risk_export_service_builds_file(self, mock_get_event_list):
         mock_get_event_list.return_value = [{"results": []}]
 
         with self.assertLogs("services.web.risk.handlers.risk_export_service", level="INFO") as log_context:
@@ -296,10 +467,8 @@ class TestRiskExport(TestCase):
         self.assertIn("[RiskExportService] build export file finished", logs)
 
     @override_settings(RISK_EXPORT_EVENT_FETCH_BATCH_SIZE=2)
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
-    def test_risk_export_service_fetches_events_by_batch(self, mock_get_event_list, mock_load_authed_risks):
-        mock_load_authed_risks.return_value = Risk.objects.all()
+    def test_risk_export_service_fetches_events_by_batch(self, mock_get_event_list):
         mock_get_event_list.side_effect = [
             [{"results": []}, {"results": []}],
             [{"results": []}, {"results": []}],
@@ -324,15 +493,11 @@ class TestRiskExport(TestCase):
         self.assertIn("batch=1/2", logs)
         self.assertIn("batch=2/2", logs)
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
     @mock.patch("services.web.risk.handlers.risk_export_service.MailSender")
-    def test_risk_export_service_send_mail_with_attachment(
-        self, mock_mail_sender, mock_get_event_list, mock_load_authed_risks
-    ):
+    def test_risk_export_service_send_mail_with_attachment(self, mock_mail_sender, mock_get_event_list):
         sender = mock_mail_sender.return_value
         sender.send.return_value = {"result": True, "code": 0, "message": "OK"}
-        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
         mock_get_event_list.return_value = [{"results": []}]
         export_file = RiskExportService(
             username="admin",
@@ -376,7 +541,7 @@ class TestRiskExport(TestCase):
 
         # Call resource
         risk_ids = ["risk001", "risk002", "risk003", "risk004"]
-        resp = resource.risk.risk_export(risk_ids=risk_ids)
+        resp = resource.risk.risk_export(risk_ids=risk_ids, risk_view_type=RiskViewType.ALL.value)
 
         # Verify response
         self.assertIn("attachment; filename*", resp["Content-Disposition"])
@@ -433,16 +598,14 @@ class TestRiskExport(TestCase):
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
 
-    @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
     @mock.patch("services.web.risk.handlers.risk_export_service.MailSender")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     def test_export_risks_to_mail_task_builds_file_and_sends_downloadable_attachment(
-        self, mock_update_state, mock_mail_sender, mock_get_event_list, mock_load_authed_risks
+        self, mock_update_state, mock_mail_sender, mock_get_event_list
     ):
         sender = mock_mail_sender.return_value
         sender.send.return_value = {"result": True}
-        mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
         mock_get_event_list.return_value = [{"results": [{"event_data": {"user": "alice", "action": "login_success"}}]}]
 
         result = export_risks_to_mail(
@@ -483,7 +646,7 @@ class TestRiskExport(TestCase):
         mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
         mock_get_event_list.return_value = [{"results": []}]
 
-        resource.risk.risk_export(risk_ids=[self.risk_1.risk_id])
+        resource.risk.risk_export(risk_ids=[self.risk_1.risk_id], risk_view_type=RiskViewType.ALL.value)
 
         params = mock_get_event_list.call_args.args[0][0]
         risk = Risk.objects.get(risk_id=self.risk_1.risk_id)
@@ -517,7 +680,7 @@ class TestRiskExport(TestCase):
         mock_load_authed_risks.return_value = Risk.objects.filter(risk_id=self.risk_1.risk_id)
 
         with self.assertRaises(ExportRiskNoPermission):
-            resource.risk.risk_export(risk_ids=[risk.risk_id])
+            resource.risk.risk_export(risk_ids=[risk.risk_id], risk_view_type=RiskViewType.ALL.value)
 
     def test_retrieve_strategy_serializer_populates_raw_event_description(self):
         strategy = Strategy(

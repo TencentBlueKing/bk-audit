@@ -21,6 +21,7 @@ import json
 import logging
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
@@ -49,6 +50,7 @@ from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
+from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
@@ -102,7 +104,10 @@ from services.web.risk.converter.bkbase import (
     FinalSelectAssembler,
     ManualUnsyncedRiskPrepender,
 )
-from services.web.risk.exceptions import NL2RiskFilterServiceError
+from services.web.risk.exceptions import (
+    ExportRiskNoPermission,
+    NL2RiskFilterServiceError,
+)
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.nl2riskfilter import (
     build_nl2risk_user_message,
@@ -651,7 +656,9 @@ class ListRisk(RiskMeta):
         q = self._build_filter_query(validated_request_data)
         return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
 
-    def load_report_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
+    def load_filter_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
+        """复用列表筛选、权限过滤和 DB/BKBase 检索分支，按指定用户加载风险 ID。"""
+
         filter_data = dict(validated_request_data)
 
         order_fields = filter_data.pop("order_fields", [])
@@ -800,28 +807,38 @@ class ListRiskAPIGW(ListRisk):
 class ListMineRisk(ListRisk):
     name = gettext_lazy("获取待我处理的风险列表")
 
-    def load_risks(self, validated_request_data):
+    def load_risks(self, validated_request_data, username: str = None):
+        username = username or get_request_username()
         q = self._build_filter_query(validated_request_data)
         # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
         event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.local_risk_filter(user_types=[UserType.OPERATOR], authorized_at_start=event_time_start),
-            current_operator__contains=get_request_username(),
+            Risk.local_risk_filter(
+                user_types=[UserType.OPERATOR],
+                username=username,
+                authorized_at_start=event_time_start,
+            ),
+            current_operator__contains=username,
         ).distinct()
 
 
 class ListNoticingRisk(ListRisk):
     name = gettext_lazy("获取我关注的风险列表")
 
-    def load_risks(self, validated_request_data):
+    def load_risks(self, validated_request_data, username: str = None):
+        username = username or get_request_username()
         q = self._build_filter_query(validated_request_data)
         # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
         event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.local_risk_filter(user_types=[UserType.NOTICE_USER], authorized_at_start=event_time_start),
-            notice_users__contains=get_request_username(),
+            Risk.local_risk_filter(
+                user_types=[UserType.NOTICE_USER],
+                username=username,
+                authorized_at_start=event_time_start,
+            ),
+            notice_users__contains=username,
         ).distinct()
 
 
@@ -832,9 +849,9 @@ class ListProcessedRisk(ListRisk):
 
     name = gettext_lazy("获取处理历史风险列表")
 
-    def load_risks(self, validated_request_data):
+    def load_risks(self, validated_request_data, username: str = None):
         q = self._build_filter_query(validated_request_data)
-        username = get_request_username()
+        username = username or get_request_username()
         # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
@@ -1269,6 +1286,84 @@ class ProcessRiskTicket(RiskMeta):
         return
 
 
+@dataclass(frozen=True)
+class RiskExportResolvedRequest:
+    """风险导出解析结果：后续导出链路只消费已确定的风险 ID。"""
+
+    username: str
+    risk_ids: List[str]
+    risk_view_type: str
+
+
+class RiskExportRiskIDResolver:
+    """将精确 ID 或列表筛选条件解析为导出使用的风险 ID，并保证权限只校验一次。"""
+
+    # 多取 1 条即可判断是否超过导出上限，避免为了判断超限拉取全量风险 ID。
+    OVER_LIMIT_DETECT_EXTRA = 1
+
+    def __init__(self, username: str, risk_limit: Optional[int] = None) -> None:
+        self.username = username
+        self.risk_limit = settings.RISK_EXPORT_ASYNC_MAX_COUNT if risk_limit is None else risk_limit
+
+    def resolve(self, validated_request_data: dict) -> RiskExportResolvedRequest:
+        """根据请求模式解析风险 ID：risk_ids 为勾选导出，filters 为范围筛选导出。"""
+
+        request_data = dict(validated_request_data)
+        risk_view_type = request_data.pop("risk_view_type", "")
+        risk_ids = request_data.pop("risk_ids", None)
+        filters = request_data.pop("filters", {}) or {}
+        if risk_ids:
+            return self._resolve_explicit_risk_ids(risk_ids=risk_ids, risk_view_type=risk_view_type)
+        return self._resolve_filter_risk_ids(filter_data=filters, risk_view_type=risk_view_type)
+
+    def _resolve_explicit_risk_ids(self, risk_ids: List[str], risk_view_type: str) -> RiskExportResolvedRequest:
+        """精确 ID 模式在入口统一鉴权，后续导出服务不再重复校验权限。"""
+
+        risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK, username=self.username).filter(risk_id__in=risk_ids)
+        authed_risk_ids = set(risks.values_list("risk_id", flat=True))
+        no_authed_risk_ids = set(risk_ids) - authed_risk_ids
+        if no_authed_risk_ids:
+            raise ExportRiskNoPermission(risk_ids=",".join(sorted(no_authed_risk_ids)))
+        return RiskExportResolvedRequest(
+            username=self.username,
+            risk_ids=risk_ids,
+            risk_view_type=risk_view_type,
+        )
+
+    def _resolve_filter_risk_ids(self, filter_data: dict, risk_view_type: str) -> RiskExportResolvedRequest:
+        """范围筛选模式根据视图复用对应列表资源，并统一校验空结果和导出上限。"""
+
+        risk_cls = ListRiskMetaBase.risk_cls_map.get(risk_view_type)
+        if not risk_cls:
+            raise drf_serializers.ValidationError(gettext("风险视图类型无效"))
+
+        risk_ids = self._load_filter_risk_ids(risk_cls=risk_cls, filter_data=filter_data)
+        self._validate_filter_risk_ids(risk_ids)
+        return RiskExportResolvedRequest(
+            username=self.username,
+            risk_ids=risk_ids,
+            risk_view_type=risk_view_type,
+        )
+
+    def _load_filter_risk_ids(self, risk_cls: Type[ListRisk], filter_data: dict) -> List[str]:
+        """按视图和筛选条件加载风险 ID；多取 1 条用于判断是否超过导出上限。"""
+
+        risk_ids = risk_cls().load_filter_risk_ids(
+            validated_request_data=filter_data,
+            username=self.username,
+            risk_limit=self.risk_limit + self.OVER_LIMIT_DETECT_EXTRA,
+        )
+        return risk_ids
+
+    def _validate_filter_risk_ids(self, risk_ids: List[str]) -> None:
+        """统一校验范围筛选结果，避免空结果或超过导出上限继续进入导出流程。"""
+
+        if not risk_ids:
+            raise drf_serializers.ValidationError(gettext("当前筛选条件未命中风险"))
+        if len(risk_ids) > self.risk_limit:
+            raise drf_serializers.ValidationError(gettext("当前筛选结果超过导出上限，请缩小筛选范围"))
+
+
 def build_async_risk_export_response(username: str, risk_ids: List[str], risk_view_type: str) -> Response:
     """提交异步导出任务并返回 202 响应。"""
 
@@ -1305,14 +1400,20 @@ class RiskExport(RiskMeta):
     RequestSerializer = RiskExportReqSerializer
 
     def perform_request(self, validated_request_data):
-        risk_view_type: str = validated_request_data.get("risk_view_type", "")
-        risk_ids: List[str] = validated_request_data["risk_ids"]
         username = get_request_username()
-        service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
-        service.validate_permission()
+        resolved = RiskExportRiskIDResolver(username=username).resolve(validated_request_data)
+        service = RiskExportService(
+            username=resolved.username,
+            risk_ids=resolved.risk_ids,
+            risk_view_type=resolved.risk_view_type,
+        )
 
-        if len(risk_ids) > settings.RISK_EXPORT_SYNC_MAX_COUNT:
-            return build_async_risk_export_response(username, risk_ids, risk_view_type)
+        if len(resolved.risk_ids) > settings.RISK_EXPORT_SYNC_MAX_COUNT:
+            return build_async_risk_export_response(
+                resolved.username,
+                resolved.risk_ids,
+                resolved.risk_view_type,
+            )
 
         export_file = service.build_export_file()
         stream_response = FileResponse(export_file.file, as_attachment=True, filename=export_file.filename)
@@ -1327,11 +1428,13 @@ class RiskExportAsync(RiskMeta):
     RequestSerializer = RiskExportReqSerializer
 
     def perform_request(self, validated_request_data):
-        risk_view_type: str = validated_request_data.get("risk_view_type", "")
-        risk_ids: List[str] = validated_request_data["risk_ids"]
         username = get_request_username()
-        RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type).validate_permission()
-        return build_async_risk_export_response(username, risk_ids, risk_view_type)
+        resolved = RiskExportRiskIDResolver(username=username).resolve(validated_request_data)
+        return build_async_risk_export_response(
+            resolved.username,
+            resolved.risk_ids,
+            resolved.risk_view_type,
+        )
 
 
 class ListEventFieldsByStrategy(RiskMeta):

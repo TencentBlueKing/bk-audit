@@ -1310,19 +1310,41 @@ class RetrieveRiskStrategyInfoAPIGWResponseSerializer(RetrieveRiskStrategyInfoRe
 
 
 class RiskExportReqSerializer(serializers.Serializer):
-    """
-    Risk Export Request Serializer
+    """风险导出请求。
+
+    支持两种导出范围：传 risk_ids 表示用户勾选导出；传 risk_view_type 和 filters 表示按当前视图筛选结果导出。
+    risk_ids 与 filters 不能同时传入。
     """
 
     risk_ids = serializers.ListField(
-        label=gettext_lazy("Risk IDs"),
+        label=gettext_lazy("风险 ID 列表"),
+        help_text=gettext_lazy("用户勾选导出时传入的风险 ID 列表；与 filters 二选一，最多支持导出配置上限条。"),
         child=serializers.CharField(),
-        min_length=1,
+        required=False,
+        allow_empty=False,
         max_length=settings.RISK_EXPORT_ASYNC_MAX_COUNT,
     )
     risk_view_type = serializers.ChoiceField(
-        label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
+        label=gettext_lazy("风险视图类型"),
+        help_text=gettext_lazy("导出来源视图，例如待我处理、我的关注、处理历史、场景风险、所有风险；用于确定筛选范围和导出文件名。"),
+        required=True,
+        choices=RiskViewType.choices,
     )
+    filters = ListRiskRequestSerializer(
+        label=gettext_lazy("风险筛选条件"),
+        help_text=gettext_lazy("范围导出时传入，结构与风险列表查询参数一致；与 risk_ids 二选一。"),
+        required=False,
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        risk_ids = attrs.get("risk_ids")
+        filters = attrs.get("filters")
+
+        if risk_ids and filters:
+            raise serializers.ValidationError(gettext("risk_ids 与筛选条件不能同时传入"))
+
+        attrs["filters"] = filters or {}
+        return attrs
 
 
 class RiskExportAsyncRespSerializer(serializers.Serializer):

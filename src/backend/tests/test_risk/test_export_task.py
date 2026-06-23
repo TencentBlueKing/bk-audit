@@ -67,6 +67,29 @@ class TestRiskExportTask(TestCase):
 
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
+    def test_export_risks_to_mail_uses_resolved_ids(self, mock_service_cls, mock_update_state):
+        export_file = mock.Mock()
+        export_file.total = 1
+        export_file.filename = "审计风险_全部风险_20260623_100000.xlsx"
+        service = mock_service_cls.return_value
+        service.build_export_file.return_value = export_file
+
+        result = export_risks_to_mail(
+            username="admin",
+            risk_ids=["risk001"],
+            risk_view_type="all",
+            requested_at="2026-06-23 10:00:00",
+        )
+
+        self.assertEqual(result["total"], 1)
+        mock_service_cls.assert_called_once_with(
+            username="admin",
+            risk_ids=["risk001"],
+            risk_view_type="all",
+        )
+
+    @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
+    @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_apply_returns_success_state(self, mock_service_cls, mock_update_state):
         service = mock_service_cls.return_value
         export_file = mock.Mock()
