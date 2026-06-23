@@ -137,6 +137,7 @@
 
   const valName = computed(() => props.tag.config.valName || 'id');
   const labelName = computed(() => props.tag.config.labelName || 'name');
+  const isMultiple = computed(() => props.tag.config.multiple ?? true);
 
   // 获取选项展示文本
   const getItemLabel = (item: Record<string, any>) => {
@@ -280,6 +281,14 @@
   // 选项勾选切换
   const handleToggleOption = (item: Record<string, any>) => {
     const val = item[valName.value];
+    if (!isMultiple.value) {
+      const selected = Array.isArray(localValue.value) ? localValue.value : [];
+      const index = selected.findIndex((v: any) => String(v) === String(val));
+      const nextValue = index >= 0 ? [] : [val];
+      localValue.value = nextValue;
+      emit('update', props.tag.fieldName, [...nextValue]);
+      return;
+    }
     if (!Array.isArray(localValue.value)) {
       localValue.value = [];
     }
