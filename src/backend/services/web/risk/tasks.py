@@ -840,7 +840,6 @@ def generate_analyse_report(self, report_id: int):
         return {"report_id": report.report_id}
 
     except Exception as exc:
-        logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
         max_retries = self.max_retries
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
@@ -852,8 +851,23 @@ def generate_analyse_report(self, report_id: int):
                 error=_build_analyse_report_error_info(exc, current_retries, max_retries),
             )
             report.save(update_fields=["status", "extra_info", "updated_at"])
-            logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            logger_celery.error(
+                "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+                report_id,
+                current_retries,
+                max_retries,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
             raise
+        logger_celery.warning(
+            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
+            report_id,
+            current_retries,
+            max_retries,
+            60,
+            exc,
+            exc_info=True,
+        )
         raise self.retry(exc=exc, countdown=60)
 
 
