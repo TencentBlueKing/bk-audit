@@ -243,7 +243,11 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
         requested_at,
     )
     self.update_state(state="RUNNING", meta={"current": 0, "total": total})
-    service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
+    service = RiskExportService(
+        username=username,
+        risk_ids=risk_ids,
+        risk_view_type=risk_view_type,
+    )
     try:
         export_file = service.build_export_file()
         logger_celery.info(
@@ -672,14 +676,14 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     return q
 
 
-def _load_report_risk_ids(report, risk_limit: int) -> list:
+def _load_analyse_report_risk_ids(report, risk_limit: int) -> list:
     """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
     from services.web.risk.resources.risk import ListRisk
 
     list_risk = ListRisk()
     serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
     serializer.is_valid(raise_exception=True)
-    return list_risk.load_report_risk_ids(
+    return list_risk.load_filter_risk_ids(
         dict(serializer.validated_data), username=report.created_by, risk_limit=risk_limit
     )
 
@@ -705,7 +709,7 @@ def _link_risks_to_report(report) -> int:
         return 0
 
     # 查询报告创建人实际有权限且符合条件的风险 ID 列表
-    risk_ids = _load_report_risk_ids(report, risk_limit)
+    risk_ids = _load_analyse_report_risk_ids(report, risk_limit)
     if not risk_ids:
         logger_celery.info(
             "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s",
