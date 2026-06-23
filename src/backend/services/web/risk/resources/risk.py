@@ -66,7 +66,6 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.models import get_request_username
 from core.utils.data import build_preserved_order_queryset, choices_to_dict
-from core.utils.page import paginate_queryset
 from services.web.common.constants import ScopeQueryField
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
@@ -425,14 +424,24 @@ class ListRisk(RiskMeta):
         end_date = end_dt.date().strftime("%Y%m%d")
         return start_date, end_date
 
-    def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str]):
+    def _paginate_queryset(self, queryset: QuerySet, request, base_queryset: QuerySet = None, pagination_class=None):
+        """按指定分页器分页 QuerySet；导出场景会传入更高的分页上限，避免被列表分页上限截断。"""
+
+        page = (pagination_class or api_settings.DEFAULT_PAGINATION_CLASS)()
+        paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
+        if base_queryset is None:
+            base_queryset = queryset.model.objects
+        return base_queryset.filter(pk__in=[item.pk for item in paged_queryset]), page
+
+    def retrieve_via_db(self, base_queryset: QuerySet, request, order_fields: List[str], pagination_class=None):
         # base_queryset 是不带注解的纯净 QS，用于 COUNT（避免 SUBSTRING/EXISTS 子查询开销）
         risks = self._apply_ordering(base_queryset, order_fields).only("pk")
-        paged_queryset, page = paginate_queryset(
+        paged_queryset, page = self._paginate_queryset(
             queryset=risks,
             request=request,
             # 数据加载阶段套上展示注解（event_content_short / _has_report）
             base_queryset=Risk.annotated_queryset(),
+            pagination_class=pagination_class,
         )
         paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_fields)
         paged_risks = list(paged_queryset)
@@ -522,7 +531,9 @@ class ListRisk(RiskMeta):
         order_fields: List[str],
         event_filters: List[Dict[str, Any]],
         thedate_range: Optional[Tuple[str, str]] = None,
+        pagination_class=None,
     ):
+        pagination_class = pagination_class or api_settings.DEFAULT_PAGINATION_CLASS
         manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_fields, self._apply_ordering)
         manual_unsynced_count = manual_helper.count()
         resolver = BkBaseFieldResolver(order_fields, event_filters, self._duplicate_event_field_map)
@@ -538,7 +549,7 @@ class ListRisk(RiskMeta):
         )
         base_sql = expression_builder.compile_queryset_sql(values_queryset.order_by())
         if base_sql is None:
-            page = api_settings.DEFAULT_PAGINATION_CLASS()
+            page = pagination_class()
             page.paginate_queryset(range(manual_unsynced_count), request)
             manual_ids = []
             if manual_unsynced_count and getattr(page, "page", None):
@@ -552,7 +563,6 @@ class ListRisk(RiskMeta):
             return paged_risks, page, []
 
         base_expression = expression_builder.convert_to_expression(base_sql)
-        pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
         components_builder = BkBaseQueryComponentsBuilder(
             resolver=resolver,
             duplicate_field_map=self._duplicate_event_field_map,
@@ -685,6 +695,7 @@ class ListRisk(RiskMeta):
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
         request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
+        pagination_class = self._build_export_pagination_class(risk_limit)
 
         if use_bkbase:
             paged_risks, _, _ = self.retrieve_via_bkbase(
@@ -693,6 +704,7 @@ class ListRisk(RiskMeta):
                 order_fields=order_fields,
                 event_filters=event_filters,
                 thedate_range=thedate_range,
+                pagination_class=pagination_class,
             )
             return [risk.risk_id for risk in paged_risks]
 
@@ -700,8 +712,19 @@ class ListRisk(RiskMeta):
             base_queryset=base_queryset,
             request=request,
             order_fields=order_fields,
+            pagination_class=pagination_class,
         )
         return risk_ids
+
+    @staticmethod
+    def _build_export_pagination_class(page_size: int) -> Type:
+        """构造导出 ID 解析专用分页器，避免复用列表分页器时被 max_page_size=1000 截断。"""
+
+        return type(
+            "RiskExportPageNumberPagination",
+            (api_settings.DEFAULT_PAGINATION_CLASS,),
+            {"page_size": page_size, "max_page_size": page_size},
+        )
 
     def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
         if not risk_ids:

@@ -337,6 +337,34 @@ class TestRiskExport(TestCase):
         self.assertCountEqual(task_kwargs["risk_ids"], [self.risk_1.risk_id, self.risk_2.risk_id])
         self.assertEqual(task_kwargs["risk_view_type"], RiskViewType.ALL.value)
 
+    @override_settings(RISK_EXPORT_SYNC_MAX_COUNT=300, RISK_EXPORT_ASYNC_MAX_COUNT=1100)
+    @mock.patch("services.web.risk.resources.risk.export_risks_to_mail")
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_risk_export_filter_mode_uses_export_limit_not_list_page_limit(self, mock_load_iam_authed_risks, mock_task):
+        risk_ids = [f"export-page-risk-{index:04d}" for index in range(1001)]
+        Risk.objects.bulk_create(
+            [
+                Risk(
+                    risk_id=risk_id,
+                    title=f"Export Page Risk {index}",
+                    strategy=self.strategy_1,
+                    status=RiskStatus.NEW,
+                    event_time=datetime.datetime(2023, 1, 6, 10, 0, 0),
+                    event_end_time=datetime.datetime(2023, 1, 6, 11, 0, 0),
+                )
+                for index, risk_id in enumerate(risk_ids)
+            ]
+        )
+        mock_load_iam_authed_risks.return_value = Risk.objects.filter(risk_id__in=risk_ids)
+        mock_task.apply_async.return_value = mock.Mock(id="task-filter-export-page-limit")
+
+        resp = resource.risk.risk_export.request(risk_view_type=RiskViewType.ALL.value)
+
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.data["total"], 1001)
+        task_kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
+        self.assertEqual(len(task_kwargs["risk_ids"]), 1001)
+
     @override_settings(RISK_EXPORT_ASYNC_MAX_COUNT=1)
     @mock.patch("services.web.risk.resources.risk.ListRisk.load_filter_risk_ids")
     def test_risk_export_filter_mode_blocks_over_limit(self, mock_load_filter_risk_ids):
