@@ -19,7 +19,7 @@ from apps.notice.models import NoticeContent, NoticeContentConfig
 from apps.notice.senders.mail import MailSender
 from apps.permission.handlers.actions import ActionEnum
 from core.exporter.constants import ExportField
-from core.utils.data import data2string
+from core.utils.data import data2string, data_chunks
 from core.utils.time import ceil_to_second, mstimestamp_to_date_string
 from services.web.risk.constants import (
     EVENT_EXPORT_FIELD_PREFIX,
@@ -155,6 +155,7 @@ class RiskExportService:
     def _build_rows(self, risks: List[Risk]) -> Dict[str, List[dict]]:
         """组装导出行数据；一个风险最多展开最近 N 条事件。"""
 
+        logger.info("[RiskExportService] build rows start username=%s total=%s", self.username, len(risks))
         bulk_resp = self._fetch_events(risks)
         formatted_risks_by_strategy = defaultdict(list)
         for risk, resp in zip(risks, bulk_resp):
@@ -173,34 +174,70 @@ class RiskExportService:
                     **{f"{EVENT_EXPORT_FIELD_PREFIX}{key}": value for key, value in event_data.items()},
                 }
                 formatted_risks_by_strategy[risk.strategy.build_sheet_name()].append(formatted_risk)
+        logger.info(
+            "[RiskExportService] build rows finished username=%s total=%s sheets=%s rows=%s",
+            self.username,
+            len(risks),
+            len(formatted_risks_by_strategy),
+            sum(len(rows) for rows in formatted_risks_by_strategy.values()),
+        )
         return formatted_risks_by_strategy
 
     def _fetch_events(self, risks: List[Risk]) -> list:
         """复用现有 bulk_request 拉取每个风险最近的事件数据。"""
 
+        total = len(risks)
+        batch_size = max(settings.RISK_EXPORT_EVENT_FETCH_BATCH_SIZE, 1)
+        batch_count = (total + batch_size - 1) // batch_size
         logger.info(
-            "[RiskExportService] fetch events start username=%s total=%s event_limit=%s",
+            "[RiskExportService] fetch events start username=%s total=%s event_limit=%s batch_size=%s",
             self.username,
-            len(risks),
+            total,
             settings.RISK_EXPORT_EVENT_LIMIT_PER_RISK,
+            batch_size,
         )
-        bulk_events_params = []
-        for risk in risks:
-            start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
-            event_end_time = ceil_to_second(risk.event_end_time) or datetime.now()
-            end_time = mstimestamp_to_date_string(int(event_end_time.timestamp() * 1000))
-            bulk_events_params.append(
-                {
-                    "risk_id": risk.risk_id,
-                    "start_time": start_time,
-                    "end_time": end_time,
-                    "page": 1,
-                    "page_size": settings.RISK_EXPORT_EVENT_LIMIT_PER_RISK,
-                }
+        bulk_resp = []
+        for batch_index, risk_batch in enumerate(data_chunks(risks, batch_size), start=1):
+            start_position = len(bulk_resp) + 1
+            end_position = start_position + len(risk_batch) - 1
+            logger.info(
+                "[RiskExportService] fetch events batch start username=%s batch=%s/%s range=%s-%s total=%s",
+                self.username,
+                batch_index,
+                batch_count,
+                start_position,
+                end_position,
+                total,
             )
-        bulk_resp = resource.risk.list_event.bulk_request(bulk_events_params)
+            bulk_events_params = [self._build_event_query_params(risk) for risk in risk_batch]
+            batch_resp = resource.risk.list_event.bulk_request(bulk_events_params)
+            bulk_resp.extend(batch_resp)
+            logger.info(
+                "[RiskExportService] fetch events batch finished "
+                "username=%s batch=%s/%s current=%s total=%s fetched=%s",
+                self.username,
+                batch_index,
+                batch_count,
+                len(bulk_resp),
+                total,
+                len(batch_resp),
+            )
         logger.info("[RiskExportService] fetch events finished username=%s total=%s", self.username, len(bulk_resp))
         return bulk_resp
+
+    def _build_event_query_params(self, risk: Risk) -> dict:
+        """构造单个风险查询最近事件的请求参数。"""
+
+        start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
+        event_end_time = ceil_to_second(risk.event_end_time) or datetime.now()
+        end_time = mstimestamp_to_date_string(int(event_end_time.timestamp() * 1000))
+        return {
+            "risk_id": risk.risk_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "page": 1,
+            "page_size": settings.RISK_EXPORT_EVENT_LIMIT_PER_RISK,
+        }
 
     def _build_risk_basic_data(self, risk: Risk) -> dict:
         """构造单条风险的基础字段。"""

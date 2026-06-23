@@ -145,12 +145,14 @@ class TestRiskExportTask(TestCase):
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
         mock_report_event.assert_not_called()
 
+    @mock.patch("services.web.risk.tasks.logger_celery.error")
+    @mock.patch("services.web.risk.tasks.logger_celery.warning")
     @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_retries_before_max_retry(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event
+        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event, mock_logger_warning, mock_logger_error
     ):
         mock_retry.side_effect = RuntimeError("retry called")
         service = mock_service_cls.return_value
@@ -171,13 +173,21 @@ class TestRiskExportTask(TestCase):
 
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
         mock_report_event.assert_not_called()
+        warning_messages = [call.args[0] for call in mock_logger_warning.call_args_list]
+        error_messages = [call.args[0] for call in mock_logger_error.call_args_list]
+        self.assertIn(
+            "[RiskExportTaskRetrying] username=%s total=%s retries=%s max_retries=%s countdown=%s error=%s",
+            warning_messages,
+        )
+        self.assertNotIn("[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s", error_messages)
 
     @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.logger_celery.error")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_reports_alert_after_max_retry(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event
+        self, mock_service_cls, mock_update_state, mock_retry, mock_logger_error, mock_report_event
     ):
         mock_retry.side_effect = MaxRetriesExceededError()
         service = mock_service_cls.return_value
@@ -193,6 +203,11 @@ class TestRiskExportTask(TestCase):
 
         mock_report_event.assert_called_once()
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
+        error_messages = [call.args[0] for call in mock_logger_error.call_args_list]
+        self.assertIn(
+            "[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s",
+            error_messages,
+        )
 
     @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
