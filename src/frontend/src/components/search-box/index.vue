@@ -169,9 +169,17 @@
     exportTooltip?: Record<string, unknown>,
     exportRequest?: () => Promise<void>,
   }
+  interface ExportOptions {
+    async?: boolean;
+    showSuccessMessage?: boolean;
+  }
   interface Exposes {
     clearValue: () => void;
-    exportData: (val: string[], type: string) => Promise<unknown>;
+    exportData: (
+      val: string[],
+      type: string,
+      options?: ExportOptions,
+    ) => Promise<unknown>;
     initSelectedItems:(val: Array< Record<string, any>>) => void;
     getSelectedItemList: (val: Array< Record<string, any>>) => void;
   }
@@ -562,7 +570,7 @@
     clearValue() {
       handleClear();
     },
-    exportData(val, type, options) {
+    exportData(val: string[], type: string, options?: ExportOptions) {
       return handleExportData(val, type, options);
     },
     initSelectedItems(val) {
