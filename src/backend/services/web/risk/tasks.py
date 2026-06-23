@@ -230,6 +230,7 @@ def report_risk_export_failed_event(username: str, risk_count: int, error: Excep
     bind=True,
     max_retries=settings.RISK_EXPORT_TASK_MAX_RETRY,
     time_limit=settings.RISK_EXPORT_TASK_TIME_LIMIT,
+    acks_late=True,  # 任务级别的延迟确认
 )
 def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_type: str, requested_at: str) -> dict:
     """异步导出风险并通过邮件附件发送给当前用户。"""
@@ -243,7 +244,11 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
         requested_at,
     )
     self.update_state(state="RUNNING", meta={"current": 0, "total": total})
-    service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
+    service = RiskExportService(
+        username=username,
+        risk_ids=risk_ids,
+        risk_view_type=risk_view_type,
+    )
     try:
         export_file = service.build_export_file()
         logger_celery.info(
@@ -672,14 +677,14 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     return q
 
 
-def _load_report_risk_ids(report, risk_limit: int) -> list:
+def _load_analyse_report_risk_ids(report, risk_limit: int) -> list:
     """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
     from services.web.risk.resources.risk import ListRisk
 
     list_risk = ListRisk()
     serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
     serializer.is_valid(raise_exception=True)
-    return list_risk.load_report_risk_ids(
+    return list_risk.load_filter_risk_ids(
         dict(serializer.validated_data), username=report.created_by, risk_limit=risk_limit
     )
 
@@ -705,7 +710,7 @@ def _link_risks_to_report(report) -> int:
         return 0
 
     # 查询报告创建人实际有权限且符合条件的风险 ID 列表
-    risk_ids = _load_report_risk_ids(report, risk_limit)
+    risk_ids = _load_analyse_report_risk_ids(report, risk_limit)
     if not risk_ids:
         logger_celery.info(
             "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s",
@@ -840,7 +845,6 @@ def generate_analyse_report(self, report_id: int):
         return {"report_id": report.report_id}
 
     except Exception as exc:
-        logger_celery.exception("[GenerateAnalyseReport] Failed report_id=%s: %s", report_id, exc)
         max_retries = self.max_retries
         current_retries = getattr(self.request, "retries", 0)
         if max_retries is not None and current_retries >= max_retries:
@@ -852,8 +856,23 @@ def generate_analyse_report(self, report_id: int):
                 error=_build_analyse_report_error_info(exc, current_retries, max_retries),
             )
             report.save(update_fields=["status", "extra_info", "updated_at"])
-            logger_celery.error("[GenerateAnalyseReport] Max retries reached for report_id=%s", report_id)
+            logger_celery.error(
+                "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+                report_id,
+                current_retries,
+                max_retries,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
             raise
+        logger_celery.warning(
+            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
+            report_id,
+            current_retries,
+            max_retries,
+            60,
+            exc,
+            exc_info=True,
+        )
         raise self.retry(exc=exc, countdown=60)
 
 

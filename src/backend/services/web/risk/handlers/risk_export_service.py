@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """风险导出服务。
 
-同步导出和异步邮件导出共用本服务，保证权限校验、风险数据组装、事件补充和 XLSX 文件生成逻辑一致。
+同步导出和异步邮件导出共用本服务，负责风险数据组装、事件补充和 XLSX 文件生成。
 """
 
 import base64
@@ -17,7 +17,6 @@ from rest_framework.settings import api_settings
 
 from apps.notice.models import NoticeContent, NoticeContentConfig
 from apps.notice.senders.mail import MailSender
-from apps.permission.handlers.actions import ActionEnum
 from core.exporter.constants import ExportField
 from core.utils.data import data2string, data_chunks
 from core.utils.time import ceil_to_second, mstimestamp_to_date_string
@@ -28,7 +27,6 @@ from services.web.risk.constants import (
     RiskExportField,
     RiskViewType,
 )
-from services.web.risk.exceptions import ExportRiskNoPermission
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RiskLevel
@@ -48,39 +46,17 @@ class RiskExportFile:
 
 
 class RiskExportService:
-    """风险导出领域服务，负责将风险单及最近事件转换为多 Sheet XLSX。"""
+    """风险导出领域服务，负责将上层已授权风险单及最近事件转换为多 Sheet XLSX。"""
 
-    def __init__(self, username: str, risk_ids: List[str], risk_view_type: str = "") -> None:
+    def __init__(
+        self,
+        username: str,
+        risk_ids: List[str],
+        risk_view_type: str = "",
+    ) -> None:
         self.username = username
         self.risk_ids = risk_ids
         self.risk_view_type = risk_view_type
-
-    def validate_permission(self) -> None:
-        """校验当前用户是否具备所有待导出风险的查看权限。"""
-
-        logger.info(
-            "[RiskExportService] validate permission start username=%s total=%s",
-            self.username,
-            len(self.risk_ids),
-        )
-        risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK, username=self.username).filter(
-            risk_id__in=self.risk_ids
-        )
-        authed_risk_ids = set(risks.values_list("risk_id", flat=True))
-        no_authed_risk_ids = set(self.risk_ids) - authed_risk_ids
-        if no_authed_risk_ids:
-            logger.warning(
-                "[RiskExportService] validate permission failed username=%s total=%s denied=%s",
-                self.username,
-                len(self.risk_ids),
-                len(no_authed_risk_ids),
-            )
-            raise ExportRiskNoPermission(risk_ids=",".join(sorted(no_authed_risk_ids)))
-        logger.info(
-            "[RiskExportService] validate permission finished username=%s total=%s",
-            self.username,
-            len(self.risk_ids),
-        )
 
     @classmethod
     def build_filename(cls, risk_view_type: str) -> str:
@@ -103,7 +79,6 @@ class RiskExportService:
             len(self.risk_ids),
             self.risk_view_type,
         )
-        self.validate_permission()
         risks = self._load_risks()
         logger.info("[RiskExportService] risks loaded username=%s loaded=%s", self.username, len(risks))
         strategy_export_fields = self._build_strategy_export_fields(risks)
@@ -126,10 +101,9 @@ class RiskExportService:
         return export_file
 
     def _load_risks(self) -> List[Risk]:
-        """按请求顺序加载有权限的风险单。"""
+        """按请求顺序加载风险单，权限校验由入口解析阶段负责。"""
 
-        qs = Risk.load_authed_risks(action=ActionEnum.LIST_RISK, username=self.username)
-        risks = Risk.prefetch_strategy_tags(Risk.annotated_queryset(qs)).filter(risk_id__in=self.risk_ids)
+        risks = Risk.prefetch_strategy_tags(Risk.annotated_queryset()).filter(risk_id__in=self.risk_ids)
         risk_map = {risk.risk_id: risk for risk in risks}
         return [risk_map[risk_id] for risk_id in self.risk_ids if risk_id in risk_map]
 
@@ -252,7 +226,9 @@ class RiskExportService:
             RiskExportField.STRATEGY_NAME: risk.strategy.strategy_name,
             RiskExportField.STRATEGY_ID: risk.strategy.strategy_id,
             RiskExportField.RAW_EVENT_ID: risk.raw_event_id,
-            RiskExportField.EVENT_END_TIME: risk.event_end_time.strftime(api_settings.DATETIME_FORMAT),
+            RiskExportField.EVENT_END_TIME: (
+                risk.event_end_time.strftime(api_settings.DATETIME_FORMAT) if risk.event_end_time else ""
+            ),
             RiskExportField.EVENT_TIME: risk.event_time.strftime(api_settings.DATETIME_FORMAT),
             RiskExportField.RISK_HAZARD: risk.strategy.risk_hazard,
             RiskExportField.RISK_GUIDANCE: risk.strategy.risk_guidance,
