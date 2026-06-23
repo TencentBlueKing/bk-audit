@@ -170,8 +170,8 @@ export const PROFILE_FIELDS = {
   RISK_LEVEL: '风险系数',
   // 游戏列表字段
   GAME_NAME: '游戏名称',
-  COIN_BALANCE_UNIT: '代币存量（代）',
-  TOTAL_RECHARGE_UNIT: '累计充值（代）',
+  COIN_BALANCE_UNIT: '代币存量（元）',
+  TOTAL_RECHARGE_UNIT: '累计充值（元）',
   TOTAL_GIFT_YUAN: '累计赠送（¥）',
   TOTAL_ISSUE_YUAN: '累计发放（元）',
   LOGIN_COUNT_MONTH: '登录次数/月',
