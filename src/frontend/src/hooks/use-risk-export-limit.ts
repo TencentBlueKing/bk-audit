@@ -15,16 +15,11 @@ export function useRiskExportLimit(selectionMeta: Ref<RiskSelectionMeta>) {
 
   const exportCount = computed(() => selectionMeta.value.count);
 
-  const isExportEnabled = computed(() => (
-    exportCount.value > 0 && exportCount.value <= RISK_EXPORT_MAX_COUNT
-  ));
+  const isExportEnabled = computed(() => exportCount.value > 0);
 
   const exportTooltip = computed(() => {
     if (exportCount.value <= 0) {
       return { disabled: false, content: t('请至少选择 1 条风险单') };
-    }
-    if (exportCount.value > RISK_EXPORT_MAX_COUNT) {
-      return { disabled: false, content: t('当前最多导出300条数据') };
     }
     return { disabled: true, content: '' };
   });

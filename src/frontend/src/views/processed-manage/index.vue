@@ -19,8 +19,8 @@
     <search-box
       ref="searchBoxRef"
       :export-disabled="!isExportEnabled"
-      :export-disabled-tooltip="exportDisabledTooltip"
       :export-request="runExport"
+      :export-tooltip="exportTooltip"
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
@@ -228,13 +228,14 @@
 
   const {
     isExportEnabled,
-    exportDisabledTooltip,
+    exportTooltip,
   } = useRiskExportLimit(selectionMeta);
 
   const runExport = createRiskExportRequest({
     listRef,
     searchBoxRef,
     riskViewType: 'processed',
+    selectionMeta,
   });
 
   const handleGenerateReport = (data: RiskManageModel) => {

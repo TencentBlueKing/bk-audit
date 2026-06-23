@@ -40,24 +40,10 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
-        <span
-          v-bk-tooltips="exportTooltip"
-          class="export-btn-wrapper"
-          :class="{ 'is-export-disabled': !isExportEnabled && !isExportLoading }">
-          <bk-button
-            class="export-btn"
-            :class="{ 'is-exporting': isExportLoading }"
-            :disabled="!isExportEnabled || isExportLoading"
-            outline
-            @click="handleExport">
-            <audit-icon
-              v-if="isExportLoading"
-              class="rotate-loading"
-              style="margin-right: 4px; font-size: 12px; color: #3a84ff;"
-              type="loading" />
-            {{ t('批量导出') }}
-          </bk-button>
-        </span>
+        <risk-export-button
+          :disabled="!isExportEnabled"
+          :export-fn="runExport"
+          :tooltip="exportTooltip" />
       </div>
       <tdesign-list
         ref="listRef"
@@ -111,6 +97,8 @@
   import useRequest from '@hooks/use-request';
   import useRiskBatchExport from '@hooks/use-risk-batch-export';
   import useRiskExportLimit from '@hooks/use-risk-export-limit';
+
+  import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
 
   import SearchBox from '@components/search-box/index.vue';
@@ -290,12 +278,12 @@
   } = useRiskExportLimit(selectionMeta);
 
   const {
-    isExportLoading,
-    handleExport,
+    runExport,
   } = useRiskBatchExport({
     listRef,
     searchBoxRef,
     riskViewType: 'scene',
+    selectionMeta,
     isExportEnabled,
   });
 
@@ -538,30 +526,6 @@
       .add-icon {
         margin-right: 5px;
         font-size: 12px;
-      }
-
-      .export-btn-wrapper {
-        display: inline-flex;
-
-        :deep(.export-btn.is-exporting) {
-          cursor: wait;
-          opacity: 85%;
-        }
-
-        &.is-export-disabled :deep(.export-btn) {
-          color: #c4c6cc;
-          pointer-events: none;
-          cursor: not-allowed;
-          background-color: #fff;
-          border-color: #dcdee5;
-
-          &:hover,
-          &:active {
-            color: #c4c6cc;
-            background-color: #fff;
-            border-color: #dcdee5;
-          }
-        }
       }
     }
   }

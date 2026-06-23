@@ -979,24 +979,42 @@
 
   // 导出
   const {
-    run: batchExport,
+    run: submitRiskExport,
     loading: isExportRequestLoading,
-  } = useRequest(RiskManageService.batchExport, {
-    defaultValue: [],
-    onSuccess() {
-      messageSuccess(t('导出成功'));
-    },
+  } = useRequest(RiskManageService.submitRiskExport, {
+    defaultValue: null,
   });
 
   let exportPromise: Promise<unknown> | null = null;
 
-  const handleExportData = (val: string[], type: string) => {
+  const handleExportData = (
+    val: string[],
+    type: string,
+    options?: { async?: boolean; showSuccessMessage?: boolean },
+  ) => {
     if (isExportRequestLoading.value && exportPromise) {
       return exportPromise;
     }
-    exportPromise = batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
-      exportPromise = null;
-    });
+    const isAsyncExport = options?.async === true;
+    exportPromise = submitRiskExport({
+      risk_ids: val,
+      risk_view_type: type,
+      async: isAsyncExport,
+    })
+      .then((result) => {
+        if (isAsyncExport) {
+          const asyncResult = result as { message?: string };
+          messageSuccess(asyncResult?.message || t('导出任务已提交'));
+          return result;
+        }
+        if (options?.showSuccessMessage !== false) {
+          messageSuccess(t('导出成功'));
+        }
+        return result;
+      })
+      .finally(() => {
+        exportPromise = null;
+      });
     return exportPromise;
   };
 
@@ -1046,8 +1064,8 @@
     clearValue() {
       handleClear();
     },
-    exportData(val, type) {
-      return handleExportData(val, type);
+    exportData(val, type, options) {
+      return handleExportData(val, type, options);
     },
     initSelectedItems(val) {
       selectedItems.value = val;
