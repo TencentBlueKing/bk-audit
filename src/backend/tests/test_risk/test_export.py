@@ -280,16 +280,20 @@ class TestRiskExport(TestCase):
         mock_load_authed_risks.return_value = Risk.objects.filter(risk_id__in=[self.risk_1.risk_id])
         mock_get_event_list.return_value = [{"results": []}]
 
-        export_file = RiskExportService(
-            username="admin",
-            risk_ids=[self.risk_1.risk_id],
-            risk_view_type=RiskViewType.ALL.value,
-        ).build_export_file()
+        with self.assertLogs("services.web.risk.handlers.risk_export_service", level="INFO") as log_context:
+            export_file = RiskExportService(
+                username="admin",
+                risk_ids=[self.risk_1.risk_id],
+                risk_view_type=RiskViewType.ALL.value,
+            ).build_export_file()
 
         self.assertEqual(export_file.total, 1)
         self.assertIn("审计风险", export_file.filename)
         workbook = openpyxl.load_workbook(io.BytesIO(export_file.file.read()))
         self.assertEqual(workbook.sheetnames, [self.strategy_1.build_sheet_name()])
+        logs = "\n".join(log_context.output)
+        self.assertIn("[RiskExportService] build export file start", logs)
+        self.assertIn("[RiskExportService] build export file finished", logs)
 
     @mock.patch("services.web.risk.models.Risk.load_authed_risks")
     @mock.patch.object(ListEvent, "bulk_request")
@@ -326,6 +330,7 @@ class TestRiskExport(TestCase):
         self.assertEqual(kwargs["attachments"][0]["type"], "xlsx")
         self.assertEqual(kwargs["attachments"][0]["disposition"], "attachment")
         content_text = str(kwargs["content"])
+        self.assertNotIn("【蓝鲸审计中心】风险数据导出结果通知", content_text)
         self.assertIn("您好 admin：", content_text)
         self.assertIn("2026-06-22 19:33:36", content_text)
         self.assertIn(export_file.view_label, content_text)

@@ -235,12 +235,31 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
     """异步导出风险并通过邮件附件发送给当前用户。"""
 
     total = len(risk_ids)
+    logger_celery.info(
+        "[RiskExportTask] start username=%s total=%s risk_view_type=%s requested_at=%s",
+        username,
+        total,
+        risk_view_type,
+        requested_at,
+    )
     self.update_state(state="RUNNING", meta={"current": 0, "total": total})
     service = RiskExportService(username=username, risk_ids=risk_ids, risk_view_type=risk_view_type)
     try:
         export_file = service.build_export_file()
+        logger_celery.info(
+            "[RiskExportTask] export file built username=%s total=%s filename=%s",
+            username,
+            export_file.total,
+            export_file.filename,
+        )
         self.update_state(state="PROGRESS", meta={"current": total, "total": total})
         service.send_mail(export_file=export_file, requested_at=requested_at)
+        logger_celery.info(
+            "[RiskExportTask] mail sent username=%s total=%s filename=%s",
+            username,
+            export_file.total,
+            export_file.filename,
+        )
         return {"total": export_file.total, "filename": export_file.filename}
     except Exception as exc:
         logger_celery.exception("[RiskExportTaskFailed] username=%s, total=%s", username, total)
