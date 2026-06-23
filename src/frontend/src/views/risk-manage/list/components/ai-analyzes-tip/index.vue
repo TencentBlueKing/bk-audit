@@ -210,7 +210,7 @@
     if (analyzeCount.value > ANALYZE_RISK_ID_LIMIT) {
       return {
         disabled: false,
-        content: t('当前最多分析100条数据'),
+        content: t('当前最多支持分析100条数据'),
       };
     }
     return { disabled: true, content: '' };
