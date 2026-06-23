@@ -911,6 +911,23 @@
         return res;
       }
       if (value === allText) return res;
+      if (key === 'has_report') {
+        if (_.isArray(value)) {
+          const normalized = normalizeSearchArray(value);
+          if (normalized.length === 0) return res;
+          return {
+            ...res,
+            has_report: normalized[0] === 'true',
+          };
+        }
+        if (value === true || value === false) {
+          return { ...res, has_report: value };
+        }
+        if (value === 'true' || value === 'false') {
+          return { ...res, has_report: value === 'true' };
+        }
+        return res;
+      }
       if (!_.isEmpty(value)) {
         if (_.isArray(value)) {
           const normalized = normalizeSearchArray(value);
