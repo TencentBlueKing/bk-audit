@@ -608,7 +608,7 @@
       event_filters: exValue,
     };
     listRef.value?.initTableHeight();
-    fetchList();
+    fetchList(isClear);
     // 更新conditionTags
     updateConditionTags();
   };
@@ -631,7 +631,7 @@
     searchBoxRef.value.clearValue();
   };
 
-  const fetchList = () => {
+  const fetchList = (resetSearch = false) => {
     if (!listRef.value) return;
     const params = {
       risk_id: '',
@@ -658,7 +658,10 @@
     if (!dataParams.sort) {
       dataParams.sort = ['-event_time', '-risk_id'];
     }
-    listRef.value.fetchData(dataParams);
+    listRef.value.fetchData(
+      dataParams,
+      resetSearch ? { resetSearch: true } : undefined,
+    );
   };
 
   const handleAddRisk = () => {
