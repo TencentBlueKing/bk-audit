@@ -234,9 +234,10 @@ class RiskManage extends ModuleBase {
   }
   // 批量导出
   batchExport(params: {
-      risk_ids: string[],
-      risk_view_type: string,
-    }) {
+    risk_view_type: string,
+    risk_ids?: string[],
+    filters?: Record<string, any>,
+  }) {
     return Request.post(`${this.module}/export/`, {
       params,
       responseType: 'blob',
@@ -244,9 +245,10 @@ class RiskManage extends ModuleBase {
   }
   // 异步批量导出
   batchAsyncExport(params: {
-      risk_ids: string[],
-      risk_view_type: string,
-    }) {
+    risk_view_type: string,
+    risk_ids?: string[],
+    filters?: Record<string, any>,
+  }) {
     return Request.post(`${this.module}/export/async/`, {
       params,
     });

@@ -107,6 +107,7 @@
   import NlInput from './components/nl-input.vue';
   import useNLParse from './hooks/use-nl-parse';
   import type { INLSearchBoxExposes } from './types';
+  import type { RiskExportDataOptions } from '@hooks/use-risk-export-types';
 
   const props = defineProps<Props>();
 
@@ -1008,17 +1009,22 @@
   const handleExportData = (
     val: string[],
     type: string,
-    options?: { async?: boolean; showSuccessMessage?: boolean },
+    options?: RiskExportDataOptions,
   ) => {
     if (isExportRequestLoading.value && exportPromise) {
       return exportPromise;
     }
     const isAsyncExport = options?.async === true;
-    exportPromise = submitRiskExport({
-      risk_ids: val,
+    const exportParams: Record<string, any> = {
       risk_view_type: type,
       async: isAsyncExport,
-    })
+    };
+    if (options?.filters) {
+      exportParams.filters = options.filters;
+    } else if (val.length) {
+      exportParams.risk_ids = val;
+    }
+    exportPromise = submitRiskExport(exportParams as Parameters<typeof submitRiskExport>[0])
       .then((result) => {
         if (isAsyncExport) {
           const asyncResult = result as { message?: string };
