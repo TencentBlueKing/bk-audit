@@ -466,12 +466,12 @@
                 historyField = parsed;
               } else {
                 // 不是数组，当作分号分隔字符串处理
-                historyField = historyField.split(';').map(v => v.trim())
+                historyField = historyField.split(';').map((v: string) => v.trim())
                   .filter(Boolean);
               }
             } catch {
               // JSON 解析失败，当作分号分隔字符串处理
-              historyField = historyField.split(';').map(v => v.trim())
+              historyField = historyField.split(';').map((v: string) => v.trim())
                 .filter(Boolean);
             }
           }
