@@ -32,6 +32,7 @@ export default {
       name: 'sceneRiskManageList',
       meta: {
         title: '场景风险',
+        keepAlive: true,
       },
     },
     {
