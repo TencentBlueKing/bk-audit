@@ -82,7 +82,7 @@
                   v-model="gameSearchKey"
                   class="game-search-input"
                   clearable
-                  :placeholder="t('搜索 游戏名称、openid')"
+                  :placeholder="t('搜索 游戏名称、账号、openid')"
                   type="search" />
                 <bk-popover
                   ref="exportPopoverRef"
@@ -173,6 +173,9 @@
 
   import useRequest from '@/hooks/use-request';
 
+  import qqSvg from '@/images/qq.svg';
+  import wechatSvg from '@/images/wechat.svg';
+
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
     toolConfig?: {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
@@ -201,6 +204,7 @@
   // 避免请求发起前出现"用户信息块不渲染、loading 也未起来"的空白时间窗
   const isQuerying = ref(false);
   const gameSearchKey = ref('');
+  const showAccount = ref(false); // 账号列显隐控制，默认隐藏
 
   // ========== 状态持久化（sessionStorage）==========
   // key 按 toolUid 区分：
@@ -697,6 +701,45 @@
         },
         data[PROFILE_FIELDS.GAME_NAME] || data.name || '--',
       ),
+    },
+    {
+      label: () => h('span', { style: 'display: inline-flex; align-items: center; gap: 6px;' }, [
+        t('账号'),
+        h('i', {
+          class: `audit-icon audit-icon-${showAccount.value ? 'view' : 'unview'}`,
+          style: 'cursor: pointer; font-size: 14px;',
+          onClick: (e: Event) => {
+            e.stopPropagation();
+            showAccount.value = !showAccount.value;
+          },
+        }),
+      ]),
+      field: 'platformAccount',
+      minWidth: 180,
+      showOverflowTooltip: true,
+      render: ({ data }: { data: Record<string, any> }) => {
+        const account = data.platformAccount || data[PROFILE_FIELDS.PLATFORM_ACCOUNT] || '';
+        const platType = data.platType || data[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || '';
+        if (!account) return h('span', {}, '--');
+        const iconSrc = platType === 'qq' ? qqSvg : wechatSvg;
+        const displayAccount = !showAccount.value
+          ? (account.length <= 2
+            ? account
+            : `${account[0]}${'*'.repeat(account.length - 2)}${account.at(-1)}`)
+          : account;
+        return h(
+          'span',
+          { style: 'display: inline-flex; align-items: center; gap: 4px;' },
+          [
+            h('img', {
+              src: iconSrc,
+              style: 'width: 16px; height: 16px;',
+              alt: platType === 'qq' ? 'QQ' : 'WeChat',
+            }),
+            h('span', {}, displayAccount),
+          ],
+        );
+      },
     },
     {
       label: () => 'openid',
