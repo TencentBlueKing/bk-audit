@@ -230,6 +230,7 @@ def report_risk_export_failed_event(username: str, risk_count: int, error: Excep
     bind=True,
     max_retries=settings.RISK_EXPORT_TASK_MAX_RETRY,
     time_limit=settings.RISK_EXPORT_TASK_TIME_LIMIT,
+    acks_late=True,  # 任务级别的延迟确认
 )
 def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_type: str, requested_at: str) -> dict:
     """异步导出风险并通过邮件附件发送给当前用户。"""
