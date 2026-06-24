@@ -190,4 +190,5 @@ export const PROFILE_FIELDS = {
   LOGIN_COUNT_7DAYS: '登录次数（7天）',
   TOTAL_GIFT_COUNT: '累计赠送次数',
   TOTAL_TRADE_COUNT: '累计交易次数',
+  ACCOUNT_HISTORY_LIST: '历史账号列表',
 } as const;
