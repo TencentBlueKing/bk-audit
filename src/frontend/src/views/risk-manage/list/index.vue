@@ -99,6 +99,8 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import { isPageReload } from '@utils/assist';
+
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
@@ -687,6 +689,9 @@
 
   onMounted(() => {
     nextTick(() => {
+      if (isPageReload()) {
+        fetchList(true);
+      }
       getEventFields();
       fetchRiskScenes();
       fetchSceneAll();

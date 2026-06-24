@@ -44,7 +44,12 @@
       return;
     }
     if (route.meta?.routerBackName) {
-      router.push({ name: route.meta.routerBackName as string });
+      const rest = { ...route.query };
+      delete rest.tab;
+      router.push({
+        name: route.meta.routerBackName as string,
+        query: rest,
+      });
       return;
     }
     routerBack.value();

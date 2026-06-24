@@ -233,6 +233,7 @@
 
   import {
     getOffset,
+    isPageReload,
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
@@ -1230,10 +1231,18 @@
   });
 
   onMounted(() => {
-    parseURL();
-    const restoredFromStorage = restoreTableFilterState();
-    if (!restoredFromStorage) {
-      restoreTableFiltersFromUrl();
+    const pageReloaded = isPageReload();
+    if (pageReloaded && props.persistTableFilters) {
+      sessionStorage.removeItem(getTableFilterStorageKey());
+      tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+      paramsMemo = {};
+    }
+    if (!pageReloaded) {
+      parseURL();
+      const restoredFromStorage = restoreTableFilterState();
+      if (!restoredFromStorage) {
+        restoreTableFiltersFromUrl();
+      }
     }
     calcTableHeight();
     window.addEventListener('resize', handleWindowResize);

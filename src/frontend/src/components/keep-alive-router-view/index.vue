@@ -1,4 +1,4 @@
-/*
+<!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,36 +13,20 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
-*/
-export default {
-  path: '/risk-manage',
-  name: 'riskManage',
-  redirect: {
-    name: 'riskManageList',
-  },
-  meta: {
-    navName: 'auditRiskManage',
-  },
-  children: [
-    {
-      path: 'list',
-      component: () => import('@views/risk-manage/list/index.vue'),
-      name: 'riskManageList',
-      meta: {
-        title: '所有风险',
-        skeleton: 'noticeGroupList',
-        permission: 'list_risk_v2',
-        keepAlive: true,
-      },
-    },
-    {
-      path: 'detail/:riskId',
-      component: () => import('@views/risk-manage/detail/index.vue'),
-      name: 'riskManageDetail',
-      meta: {
-        title: '风险详情',
-        skeleton: 'noticeGroupList',
-      },
-    },
-  ],
-};
+-->
+<template>
+  <router-view v-slot="{ Component, route: currentRoute }">
+    <template v-if="Component">
+      <keep-alive>
+        <component
+          :is="Component"
+          v-if="currentRoute.meta?.keepAlive"
+          :key="String(currentRoute.name)" />
+      </keep-alive>
+      <component
+        :is="Component"
+        v-if="!currentRoute.meta?.keepAlive"
+        :key="String(currentRoute.name)" />
+    </template>
+  </router-view>
+</template>

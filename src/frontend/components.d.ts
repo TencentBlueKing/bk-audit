@@ -38,6 +38,7 @@ declare module 'vue' {
     IpSelector: typeof import('./src/components/ip-selector/index.vue')['default']
     Item: typeof import('./src/components/audit-menu/item.vue')['default']
     ItemGroup: typeof import('./src/components/audit-menu/item-group.vue')['default']
+    KeepAliveRouterView: typeof import('./src/components/keep-alive-router-view/index.vue')['default']
     ListCheck: typeof import('./src/components/ip-selector/selector-box/components/list-check.vue')['default']
     MultipleLineClamp: typeof import('./src/components/multiple-line-clamp/index.vue')['default']
     NoticeGroup: typeof import('./src/components/skeleton-loading/components/notice-group.vue')['default']
