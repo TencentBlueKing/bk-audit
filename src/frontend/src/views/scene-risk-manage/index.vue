@@ -81,7 +81,6 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
-    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -122,7 +121,6 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
-  const route = useRoute();
   const { getSearchParamsPost } = useUrlSearch();
   const actionColumn = {
     title: t('操作'),
@@ -319,13 +317,13 @@
     localStorage.setItem('audit-scene-risk-list-setting', JSON.stringify(setting));
   };
 
-  const handleSearchChange = (value: Record<string, any>, exValue: Record<string, any>) => {
+  const handleSearchChange = (value: Record<string, any>, exValue: Record<string, any>, isClear?: boolean) => {
     searchModel.value = {
       ...value,
       event_filters: exValue,
     };
     listRef.value?.initTableHeight?.();
-    fetchList();
+    fetchList(isClear);
   };
   const handleChangeTableHeight = () => {
     nextTick(() => {
@@ -337,14 +335,14 @@
     searchBoxRef.value.clearValue();
   };
 
-  const fetchList = () => {
+  const fetchList = (resetSearch = false) => {
     if (!listRef.value) return;
     const params = {
       risk_id: '',
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: route.query.strategy_id || '',
+      strategy_id: '',
       operator: '',
       current_operator: '',
       status: '',
@@ -363,7 +361,10 @@
     if (!dataParams.sort) {
       dataParams.sort = ['-last_operate_time', '-risk_id'];
     }
-    listRef.value.fetchData(dataParams);
+    listRef.value.fetchData(
+      dataParams,
+      resetSearch ? { resetSearch: true } : undefined,
+    );
   };
 
   // 新增风险

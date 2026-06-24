@@ -481,6 +481,17 @@
     return result;
   };
   // 提交搜索条件
+  const syncSearchParamsToUrl = (options?: { includeEventFilters?: boolean }) => {
+    const searchParams = getSearchParams();
+    const replaceUrl: Record<string, any> = { ...searchParams };
+    if (Array.isArray(searchModel.value.datetime_origin) && searchModel.value.datetime_origin.length) {
+      replaceUrl.datetime_origin = searchModel.value.datetime_origin.join(',');
+    }
+    if (options?.includeEventFilters !== false && eventFiltersParams.value.length > 0) {
+      replaceUrl.event_filters = eventFiltersParams.value;
+    }
+    replaceSearchParams(replaceUrl);
+  };
   const handleSubmit = (isClear = false) => {
     emit('change', getSearchParams(), eventFiltersParams.value, isClear);
   };
@@ -502,6 +513,7 @@
     }));
 
     selectedVal.value = selectedItemList.value.map(item => item.id);
+    syncSearchParamsToUrl({ includeEventFilters: false });
     handleSubmit(true);
   };
   const findIdByDisplayAndField = (display: string, field: string, ary: Array<Record<string, any>>) => {
