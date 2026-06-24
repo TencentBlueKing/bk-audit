@@ -17,25 +17,42 @@
 <template>
   <div
     class="cross-page-select-header"
-    :class="{ disabled }">
-    <bk-checkbox
-      :model-value="isChecked"
-      @change="handleCheckboxChange" />
+    :class="{ disabled: disabled || isHeaderLoading }">
+    <span class="tdesign-list-select-slot">
+      <select-checkbox-loading v-if="isHeaderLoading" />
+      <bk-checkbox
+        v-else
+        :disabled="disabled"
+        :model-value="isChecked"
+        @change="handleCheckboxChange" />
+    </span>
     <bk-popover
+      ref="popoverRef"
+      :arrow="false"
+      :is-show="popoverVisible"
       placement="bottom"
       theme="light"
-      trigger="click">
-      <audit-icon type="angle-line-down" />
+      trigger="manual"
+      @after-hidden="handleAfterHidden">
+      <audit-icon
+        type="angle-line-down"
+        @click.stop="handleTogglePopover"
+        @mousedown.stop />
       <template #content>
-        <div class="pop-menu">
+        <div
+          class="pop-menu"
+          @click.stop
+          @mousedown.stop>
           <div
             class="item"
-            @click="handleChange('page')">
+            @click.stop="handleChange('page')"
+            @mousedown.stop>
             {{ t('本页全选') }}
           </div>
           <div
             class="item"
-            @click="handleChange('all')">
+            @click.stop="handleChange('all')"
+            @mousedown.stop>
             {{ t('跨页全选') }}
           </div>
         </div>
@@ -51,9 +68,12 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import SelectCheckboxLoading from './select-checkbox-loading.vue';
+
   interface Props {
     value?: string,
     disabled: boolean;
+    loading?: boolean;
   }
   interface Emits {
     (e: 'change', actionType: string): void
@@ -62,58 +82,99 @@
   const props = withDefaults(defineProps<Props>(), {
     value: '',
     disabled: true,
+    loading: false,
   });
 
   const emits = defineEmits<Emits>();
   const select = ref('');
+  const popoverRef = ref<{ hide?:() => void }>();
+  const popoverVisible = ref(false);
+  const localLoading = ref(false);
   const { t } = useI18n();
 
-  const isChecked = computed(() => select.value === 'page' || select.value === 'all');
+  const isChecked = computed(() => (
+    !isHeaderLoading.value && (select.value === 'page' || select.value === 'all')
+  ));
+  const isHeaderLoading = computed(() => props.loading || localLoading.value);
 
   watch(() => props.value, (value) => {
     select.value = value;
   }, { immediate: true });
+
+  const closePopover = () => {
+    popoverVisible.value = false;
+    popoverRef.value?.hide?.();
+  };
+
+  const handleAfterHidden = () => {
+    popoverVisible.value = false;
+  };
+
+  const handleTogglePopover = () => {
+    if (props.disabled || isHeaderLoading.value) {
+      return;
+    }
+    popoverVisible.value = !popoverVisible.value;
+  };
+
+  watch(() => props.loading, (loading) => {
+    if (!loading) {
+      localLoading.value = false;
+    }
+    if (loading) {
+      closePopover();
+    }
+  });
 
   const triggerChange = (actionType: string) => {
     emits('change', actionType);
   };
 
   const handleAllCheckCancel = () => {
-    select.value = '';
+    localLoading.value = true;
     triggerChange('allCancel');
   };
 
   const handlePageChange = (value: boolean | string | number) => {
     if (!value) {
+      localLoading.value = true;
       triggerChange('pageCancel');
     } else {
+      localLoading.value = true;
       triggerChange('page');
     }
   };
 
   const handleCheckboxChange = (value: boolean | string | number) => {
+    if (isHeaderLoading.value) {
+      return;
+    }
+    closePopover();
     if (!value) {
       if (select.value === 'all') {
         handleAllCheckCancel();
       } else {
         handlePageChange(false);
-        select.value = '';
       }
       return;
     }
     if (select.value === 'page' || select.value === 'all') {
       return;
     }
-    select.value = 'page';
+    localLoading.value = true;
     triggerChange('page');
   };
 
   const handleChange = (value: string) => {
+    if (isHeaderLoading.value) {
+      return;
+    }
+    closePopover();
     if (value === select.value) {
       return;
     }
-    select.value = value;
-    triggerChange(select.value);
+    localLoading.value = true;
+    triggerChange(value);
   };
 </script>
 <style lang="postcss" scoped>

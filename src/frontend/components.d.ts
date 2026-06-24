@@ -70,6 +70,7 @@ declare module 'vue' {
     ScrollFaker: typeof import('./src/components/scroll-faker/index.vue')['default']
     SearchBox: typeof import('./src/components/search-box/index.vue')['default']
     Select: typeof import('./src/components/search-box/components/render-field-config/components/select.vue')['default']
+    SelectCheckboxLoading: typeof import('./src/components/tdesign-list/components/select-checkbox-loading.vue')['default']
     SelectorBox: typeof import('./src/components/ip-selector/selector-box/index.vue')['default']
     SelectVerify: typeof import('./src/components/select-verify/index.vue')['default']
     ShowTooltipsText: typeof import('./src/components/show-tooltips-text/index.vue')['default']
