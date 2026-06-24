@@ -56,7 +56,6 @@
   } from 'vue';
   import {
     onBeforeRouteLeave,
-    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -88,7 +87,6 @@
 
   const strategyTagMap = ref<Record<string, string>>({});
   const router = useRouter();
-  const route = useRoute();
   const { getSearchParamsPost } = useUrlSearch();
 
   // attention-manege 列顺序与其他页面不同，通过指定列顺序重新排列
@@ -298,12 +296,12 @@
     router.push(params);
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>, isClear?: boolean) => {
     searchModel.value = {
       ...value,
       event_filters: exValue };
     listRef.value?.initTableHeight?.();
-    fetchList();
+    fetchList(isClear);
   };
   const handleChangeTableHeight = () => {
     nextTick(() => {
@@ -313,7 +311,7 @@
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
   };
-  const fetchList = () => {
+  const fetchList = (resetSearch = false) => {
     if (!listRef.value) return;
     const params = {
       risk_id: '',
@@ -321,7 +319,7 @@
       scene_id: '',
       start_time: '',
       end_time: '',
-      strategy_id: route.query.strategy_id || '',
+      strategy_id: '',
       operator: '',
       status: '',
       event_content: '',
@@ -337,7 +335,10 @@
     if (!dataParams.sort) {
       dataParams.sort = ['-event_time', '-risk_id'];
     }
-    listRef.value.fetchData(dataParams);
+    listRef.value.fetchData(
+      dataParams,
+      resetSearch ? { resetSearch: true } : undefined,
+    );
   };
 
   const {
