@@ -227,12 +227,14 @@ def check_strategy_status_anomalies():
                         "event_name": "strategy_exception",
                         "event": {
                             "content": reason,
-                            "strategy_id": strategy.strategy_id,
-                            "strategy_name": getattr(strategy, 'name', ''),
-                            "namespace": strategy.namespace,
-                            "strategy_type": strategy.strategy_type,
-                            "strategy_status": strategy.status,
-                            "flow_status": mismatch.get("flow_status", "unknown"),
+                        },
+                        "dimension": {
+                            "strategy_id": str(strategy.strategy_id),
+                            "strategy_name": str(strategy.strategy_name),
+                            "namespace": str(strategy.namespace),
+                            "strategy_type": str(strategy.strategy_type),
+                            "strategy_status": str(strategy.status),
+                            "flow_status": str(mismatch.get("flow_status", "unknown")),
                         },
                         "timestamp": int(datetime.now().timestamp() * 1000),
                     }

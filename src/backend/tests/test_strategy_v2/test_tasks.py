@@ -411,9 +411,9 @@ class TestCheckStrategyStatusAnomaliesTask(TestCase):
             assert event["target"] == i  # strategy_id
             assert event["event_name"] == "strategy_exception"
             assert event["event"]["content"] == "expect_flow=running, actual=no-start"
-            assert event["event"]["strategy_id"] == i
-            assert event["event"]["strategy_status"] == "running"
-            assert event["event"]["flow_status"] == "no-start"
+            assert event["dimension"]["strategy_id"] == str(i)
+            assert event["dimension"]["strategy_status"] == "running"
+            assert event["dimension"]["flow_status"] == "no-start"
 
     def test_task_execution_with_exception(self):
         """测试任务执行过程中出现异常"""
@@ -473,12 +473,12 @@ class TestCheckStrategyStatusAnomaliesTask(TestCase):
         for i, anomaly_data in enumerate(event_data["data"]):
             assert anomaly_data["target"] == i  # strategy_id
             assert anomaly_data["event_name"] == "strategy_exception"
-            assert "strategy_id" in anomaly_data["event"]
-            assert "strategy_name" in anomaly_data["event"]
-            assert "namespace" in anomaly_data["event"]
-            assert "strategy_type" in anomaly_data["event"]
-            assert "strategy_status" in anomaly_data["event"]
-            assert "flow_status" in anomaly_data["event"]
+            assert "strategy_id" in anomaly_data["dimension"]
+            assert "strategy_name" in anomaly_data["dimension"]
+            assert "namespace" in anomaly_data["dimension"]
+            assert "strategy_type" in anomaly_data["dimension"]
+            assert "strategy_status" in anomaly_data["dimension"]
+            assert "flow_status" in anomaly_data["dimension"]
 
     def test_batch_report_with_no_anomalies(self):
         """测试无异常策略时的批量上报"""
