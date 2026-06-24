@@ -94,7 +94,6 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
-    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -133,7 +132,6 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
-  const route = useRoute();
   const { getSearchParamsPost } = useUrlSearch();
   const isShow = ref(false);
   const actionColumn = {
@@ -411,12 +409,12 @@
     router.push(params);
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>, isClear?: boolean) => {
     searchModel.value = {
       ...value,
       event_filters: exValue };
     listRef.value?.initTableHeight?.();
-    fetchList();
+    fetchList(isClear);
   };
   const handleChangeTableHeight = () => {
     nextTick(() => {
@@ -426,7 +424,7 @@
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
   };
-  const fetchList = () => {
+  const fetchList = (resetSearch = false) => {
     if (!listRef.value) return;
     const params = {
       risk_id: '',
@@ -434,7 +432,7 @@
       scene_id: '',
       start_time: '',
       end_time: '',
-      strategy_id: route.query.strategy_id || '',
+      strategy_id: '',
       operator: '',
       status: '',
       event_content: '',
@@ -451,7 +449,10 @@
       dataParams.sort = ['-risk_level', '-event_time', '-risk_id'];
     }
     // use_bkbase 参数已移除，由 event_filters 自动决定
-    listRef.value.fetchData(dataParams);
+    listRef.value.fetchData(
+      dataParams,
+      resetSearch ? { resetSearch: true } : undefined,
+    );
   };
 
   const {
