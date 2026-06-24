@@ -639,6 +639,7 @@
     tableAreaRef,
     selectBannerTop,
     selectBannerHeight,
+    isSelectAllLoading,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,
@@ -664,6 +665,13 @@
   const bindTableAreaRef = (el: Element | ComponentPublicInstance | null) => {
     if (props.enableCrossPageSelect) {
       tableAreaRef.value = (el instanceof Element ? el : null) as HTMLElement | undefined;
+    }
+  };
+
+  /** 搜索条件 / 表头筛选 / 排序变更时与选中态互斥，需清空跨页选择 */
+  const clearSelectionOnSearchScopeChange = () => {
+    if (props.enableCrossPageSelect) {
+      resetCrossPageSelection();
     }
   };
 
@@ -695,6 +703,10 @@
 
   // 实际传给表格的列：选择列 + 当前勾选的列 + 固定的操作列
   const tableColumns = computed(() => {
+    // 全选 loading / 勾选变化时刷新选择列渲染
+    const selectRenderKey = `${isSelectAllLoading.value}-${selectedRowKeys.value.length}`;
+    void selectRenderKey;
+
     if (props.settings.length === 0) {
       if (isLoading.value) {
         return buildTableColumns(props.columns.map(removeFixed));
@@ -1039,6 +1051,7 @@
     paramsMemo = nextParams;
     tableFilterValue.value = getColumnsResetValue(tableColumns.value);
     saveTableFilterState();
+    clearSelectionOnSearchScopeChange();
     isLoading.value = true;
     fetchListData();
   };
@@ -1069,6 +1082,7 @@
 
     paramsMemo = nextParams;
     saveTableFilterState();
+    clearSelectionOnSearchScopeChange();
     isLoading.value = true;
     fetchListData();
   };
@@ -1160,6 +1174,7 @@
 
       paramsMemo = nextParams;
     }
+    clearSelectionOnSearchScopeChange();
     isLoading.value = true;
     fetchListData();
   };
@@ -1370,9 +1385,7 @@
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>, options?: { resetSearch?: boolean }) {
-      if (props.enableCrossPageSelect) {
-        resetCrossPageSelection();
-      }
+      clearSelectionOnSearchScopeChange();
       const { sort } = getSearchParams();
       const urlSortParams: Record<string, any> = {};
       if (sort) {
@@ -1603,6 +1616,8 @@
 
 .tdesign-list-table-area {
   position: relative;
+
+  --tdesign-list-select-left: 16px;
 }
 
 /* 跨页全选提示行：主表体 + 左右固定列单元格背景，并禁止该行响应点击 */
@@ -1649,6 +1664,61 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  gap: 6px;
+}
+
+:deep(.tdesign-list-select-slot) {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 勾选列：表头/表体统一左偏移 */
+.tdesign-list-table-area :deep(.t-table th.tdesign-list-select-col),
+.tdesign-list-table-area :deep(.t-table td.tdesign-list-select-col),
+.tdesign-list-table-area :deep(.t-table th.t-table__cell-check),
+.tdesign-list-table-area :deep(.t-table td.t-table__cell-check),
+.tdesign-list-table-area :deep(.t-table--column-fixed th.tdesign-list-select-col),
+.tdesign-list-table-area :deep(.t-table--column-fixed td.tdesign-list-select-col) {
+  position: relative !important;
+  padding: 0 !important;
+  overflow: visible;
+  text-align: left !important;
+  vertical-align: middle;
+}
+
+.tdesign-list-table-area :deep(.t-table th.tdesign-list-select-col .t-table__th-cell-inner),
+.tdesign-list-table-area :deep(.t-table td.tdesign-list-select-col > *),
+.tdesign-list-table-area :deep(.t-table td.tdesign-list-select-col .t-table__td),
+.tdesign-list-table-area :deep(.t-table td.tdesign-list-select-col .t-table__cell),
+.tdesign-list-table-area :deep(.t-table td.tdesign-list-select-col .t-table-td--ellipsis) {
+  padding: 0 !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+.tdesign-list-table-area :deep(td.tdesign-list-select-col .tdesign-list-select-slot) {
+  position: absolute;
+  top: 50%;
+  left: var(--tdesign-list-select-left);
+  z-index: 1;
+  transform: translateY(-50%);
+}
+
+.tdesign-list-table-area :deep(th.tdesign-list-select-col .cross-page-select-header) {
+  position: absolute;
+  top: 50%;
+  left: var(--tdesign-list-select-left);
+  z-index: 1;
+  display: inline-flex;
+  padding: 0;
+  margin: 0;
+  transform: translateY(-50%);
+  align-items: center;
+  gap: 6px;
 }
 
 :deep(.tdesign-list-select-banner-placeholder) {
