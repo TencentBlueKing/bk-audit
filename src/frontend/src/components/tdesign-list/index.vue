@@ -289,7 +289,7 @@
     }): void,
   }
   interface Exposes {
-    fetchData: (params: Record<string, any>) => void,
+    fetchData: (params: Record<string, any>, options?: { resetSearch?: boolean }) => void,
     loading: Ref<boolean>,
     refreshList: () => void,
     silentRefreshList: () => Promise<void>,
@@ -550,13 +550,81 @@
       return null;
     }
 
-    return {
+    const rawParams: Record<string, any> = {
       ...paramsMemo,
       page: isUnload.value ? 1 : pagination.current,
       page_size: currentLimit < 10 ? 10 : currentLimit,
       ...(isNeedSceneParams ? sceneParams : {}),
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
     };
+    Object.keys(rawParams).forEach((key) => {
+      const value = rawParams[key];
+      if (value === '' || value === undefined || value === null) {
+        delete rawParams[key];
+        return;
+      }
+      if (Array.isArray(value) && value.length === 0) {
+        delete rawParams[key];
+      }
+    });
+    return rawParams;
+  };
+
+  const mergeParamsMemo = (
+    params: Record<string, any>,
+    urlSortParams: Record<string, any>,
+    options?: { resetSearch?: boolean },
+  ) => {
+    const tableFilterKeys = getTableFilterColumnKeys();
+
+    if (options?.resetSearch) {
+      paramsMemo = {
+        ...urlSortParams,
+        ...params,
+      };
+      tableFilterKeys.forEach((key) => {
+        delete paramsMemo[key];
+      });
+      Object.keys(paramsMemo).forEach((key) => {
+        const value = paramsMemo[key];
+        if (value === '' || value === undefined || value === null) {
+          delete paramsMemo[key];
+        }
+      });
+      tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+      saveTableFilterState();
+    } else {
+      const preservedTableFilterParams = getTableFilterParamsFromMemo();
+      paramsMemo = {
+        ...paramsMemo,
+        ...urlSortParams,
+        ...params,
+      };
+      tableFilterKeys.forEach((key) => {
+        const preserved = preservedTableFilterParams[key];
+        const tableFilterActive = isFilterValueExist(tableFilterValue.value?.[key]);
+        if (tableFilterActive
+          && preserved !== undefined
+          && preserved !== ''
+          && (params[key] === '' || params[key] === undefined)) {
+          paramsMemo[key] = preserved;
+          return;
+        }
+        if ((params[key] === '' || params[key] === undefined || params[key] === null)
+          && !tableFilterActive) {
+          delete paramsMemo[key];
+        }
+      });
+    }
+
+    Object.keys(params).forEach((key) => {
+      if (tableFilterKeys.includes(key)) {
+        return;
+      }
+      if (params[key] === '' || params[key] === undefined || params[key] === null) {
+        delete paramsMemo[key];
+      }
+    });
   };
 
   const crossPageSelectEnabled = computed(() => props.enableCrossPageSelect);
@@ -1276,7 +1344,7 @@
   };
 
   defineExpose<Exposes>({
-    fetchData(params = {} as Record<string, any>) {
+    fetchData(params = {} as Record<string, any>, options?: { resetSearch?: boolean }) {
       if (props.enableCrossPageSelect) {
         resetCrossPageSelection();
       }
@@ -1285,21 +1353,7 @@
       if (sort) {
         urlSortParams.sort = [sort];
       }
-      const preservedTableFilterParams = getTableFilterParamsFromMemo();
-      const tableFilterKeys = getTableFilterColumnKeys();
-      paramsMemo = {
-        ...paramsMemo,
-        ...urlSortParams,
-        ...params,
-      };
-      tableFilterKeys.forEach((key) => {
-        const preserved = preservedTableFilterParams[key];
-        if (preserved !== undefined
-          && preserved !== ''
-          && (params[key] === '' || params[key] === undefined)) {
-          paramsMemo[key] = preserved;
-        }
-      });
+      mergeParamsMemo(params, urlSortParams, options);
       if (isReady) {
         pagination.current = 1;
       }
