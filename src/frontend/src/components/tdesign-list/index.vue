@@ -221,6 +221,10 @@
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
+  import {
+    normalizeRiskListExportFilters,
+    type RiskExportFilters,
+  } from '@hooks/use-risk-export-types';
   import useUrlSearch from '@hooks/use-url-search';
 
   import { useCrossPageSelect } from './hooks/use-cross-page-select';
@@ -290,6 +294,7 @@
   }
   interface Exposes {
     fetchData: (params: Record<string, any>, options?: { resetSearch?: boolean }) => void,
+    getExportFilters: () => RiskExportFilters,
     loading: Ref<boolean>,
     refreshList: () => void,
     silentRefreshList: () => Promise<void>,
@@ -1343,6 +1348,17 @@
     });
   };
 
+  const getExportFilters = (): RiskExportFilters => {
+    const params = buildFetchParams();
+    if (!params) {
+      return normalizeRiskListExportFilters(props.searchParams || {});
+    }
+    const rest = { ...params };
+    delete rest.page;
+    delete rest.page_size;
+    return normalizeRiskListExportFilters(rest);
+  };
+
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>, options?: { resetSearch?: boolean }) {
       if (props.enableCrossPageSelect) {
@@ -1414,6 +1430,7 @@
     initData() {
       fetchListData();
     },
+    getExportFilters,
   });
 </script>
 

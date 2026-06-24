@@ -144,6 +144,7 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+  import type { RiskExportDataOptions } from '@hooks/use-risk-export-types';
 
   import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
@@ -169,10 +170,7 @@
     exportTooltip?: Record<string, unknown>,
     exportRequest?: () => Promise<void>,
   }
-  interface ExportOptions {
-    async?: boolean;
-    showSuccessMessage?: boolean;
-  }
+  interface ExportOptions extends RiskExportDataOptions {}
   interface Exposes {
     clearValue: () => void;
     exportData: (
@@ -359,17 +357,22 @@
   const handleExportData = (
     val: string[],
     type: string,
-    options?: { async?: boolean; showSuccessMessage?: boolean },
+    options?: RiskExportDataOptions,
   ) => {
     if (isExportRequestLoading.value && exportPromise) {
       return exportPromise;
     }
     const isAsyncExport = options?.async === true;
-    exportPromise = submitRiskExport({
-      risk_ids: val,
+    const exportParams: Record<string, any> = {
       risk_view_type: type,
       async: isAsyncExport,
-    })
+    };
+    if (options?.filters) {
+      exportParams.filters = options.filters;
+    } else if (val.length) {
+      exportParams.risk_ids = val;
+    }
+    exportPromise = submitRiskExport(exportParams as Parameters<typeof submitRiskExport>[0])
       .then((result) => {
         if (isAsyncExport) {
           const asyncResult = result as { message?: string };

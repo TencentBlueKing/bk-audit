@@ -16,11 +16,16 @@
 */
 import RiskManageModel from '@model/risk/risk';
 
+import {
+  normalizeRiskListExportFilters,
+  type RiskExportSubmitParams,
+} from '@hooks/use-risk-export-types';
+
 import RiskManageSource from '../source/risk-manage';
 
 export interface RiskAsyncExportResult {
   export_type: 'async';
-  task_id: string;
+  task_id?: string;
   notice_users?: string[];
   total: number;
   message: string;
@@ -243,10 +248,7 @@ export default {
   /**
    * @desc 批量导出
    */
-  batchExport(params: {
-    risk_ids: string[],
-    risk_view_type: string,
-  }) {
+  batchExport(params: Omit<RiskExportSubmitParams, 'async'>) {
     return RiskManageSource.batchExport(params)
       .then(({ data }) => data);
   },
@@ -254,10 +256,7 @@ export default {
   /**
    * @desc 异步批量导出（HTTP 202）
    */
-  batchAsyncExport(params: {
-    risk_ids: string[],
-    risk_view_type: string,
-  }) {
+  batchAsyncExport(params: Omit<RiskExportSubmitParams, 'async'>) {
     return RiskManageSource.batchAsyncExport(params)
       .then(({ data }) => data as RiskAsyncExportResult);
   },
@@ -265,17 +264,19 @@ export default {
   /**
    * @desc 风险批量导出（按同步/异步分流）
    */
-  submitRiskExport(params: {
-    risk_ids: string[],
-    risk_view_type: string,
-    async?: boolean,
-  }) {
-    const { async: isAsync, risk_ids, risk_view_type } = params;
+  submitRiskExport(params: RiskExportSubmitParams) {
+    const { async: isAsync, risk_view_type, filters } = params;
+    const payload: Omit<RiskExportSubmitParams, 'async'> = { risk_view_type };
+    if (filters) {
+      payload.filters = normalizeRiskListExportFilters(filters);
+    } else if (params.risk_ids?.length) {
+      payload.risk_ids = params.risk_ids;
+    }
     if (isAsync) {
-      return RiskManageSource.batchAsyncExport({ risk_ids, risk_view_type })
+      return RiskManageSource.batchAsyncExport(payload)
         .then(({ data }) => data as RiskAsyncExportResult);
     }
-    return RiskManageSource.batchExport({ risk_ids, risk_view_type })
+    return RiskManageSource.batchExport(payload)
       .then(({ data }) => data);
   },
   /**
