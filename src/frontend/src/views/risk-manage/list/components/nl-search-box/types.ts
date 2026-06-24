@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import type { RiskExportDataOptions } from '@hooks/use-risk-export-types';
+
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
 // nl2risk_filter 接口响应结果
@@ -41,17 +43,14 @@ export interface IConditionTag {
 }
 
 // 组件 Expose
-export interface INLSearchBoxExportOptions {
-  async?: boolean;
-  showSuccessMessage?: boolean;
-}
+export type { RiskExportDataOptions };
 
 export interface INLSearchBoxExposes {
   clearValue: () => void;
   exportData: (
     val: string[],
     type: string,
-    options?: INLSearchBoxExportOptions,
+    options?: RiskExportDataOptions,
   ) => Promise<unknown>;
   initSelectedItems: (val: Array<Record<string, any>>) => void;
   getSelectedItemList: () => Array<Record<string, any>>;

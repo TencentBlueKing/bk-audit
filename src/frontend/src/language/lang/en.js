@@ -338,6 +338,8 @@ export default {
   '最多支持导出 300 条数据，已按前 300 条导出': 'Maximum 300 records can be exported; exporting the first 300',
   当前最多导出300条数据: 'A maximum of 300 records can be exported',
   变更为异步导出通知: 'Changed to asynchronous export notification',
+  '跨页全选导出将采用异步导出，导出成功后将通过邮件发送附件': 'Cross-page export runs asynchronously. The file will be sent as an email attachment when ready.',
+  '导出数据量超过10000条，请缩小筛选范围后重试': 'Export exceeds 10,000 records. Please narrow your filters and try again.',
   '当前导出数据量超出300条，需采用异步导出，导出成功后将发送邮件通知': 'The current export exceeds 300 records and will be processed asynchronously. You will receive an email notification when the export is complete.',
   导出任务已提交: 'Export task submitted',
   服务模板: 'Service Template',

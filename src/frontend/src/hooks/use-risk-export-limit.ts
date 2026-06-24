@@ -1,7 +1,10 @@
 import { computed, type Ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-export const RISK_EXPORT_MAX_COUNT = 300;
+/** 超过该条数时走异步导出 */
+export const RISK_EXPORT_ASYNC_THRESHOLD = 300;
+/** 导出上限，超出后禁止导出 */
+export const RISK_EXPORT_MAX_COUNT = 10000;
 
 export interface RiskSelectionMeta {
   mode: '' | 'page' | 'all';
