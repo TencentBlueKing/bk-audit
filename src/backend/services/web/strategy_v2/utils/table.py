@@ -29,8 +29,11 @@ from django.utils.module_loading import import_string
 from api.bk_base.constants import UserAuthActionEnum
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from apps.meta.resources import SystemListAllResource
 from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
+from apps.permission.handlers.actions import ActionEnum
 from services.web.analyze.utils import is_asset
+from services.web.common.constants import ScopeType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import (
@@ -91,6 +94,22 @@ class EventLogTableHandler(TableHandler):
         self.namespace = namespace
 
     def list_tables(self) -> List[dict]:
+        # 检查场景是否有授权系统
+        try:
+            authorized_systems = SystemListAllResource().request(
+                namespace=settings.DEFAULT_NAMESPACE,
+                action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id,
+                scope_type=ScopeType.SCENE,
+                scope_id=self.namespace,
+            )
+            # 如果没有授权系统，返回空列表
+            if not authorized_systems:
+                return []
+        except Exception as e:
+            logger.error("[EventLogTableHandler] Error checking scene authorization systems: %s", e)
+            # 如果检查失败，抛出异常
+            raise Exception(f"检查场景授权系统失败: {str(e)}")
+
         collector_plugin_id = GlobalMetaConfig.get(
             config_key=COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
@@ -229,43 +248,8 @@ class MineBizRtTableHandler(TableHandler):
 
     def __init__(self, table_type: str, *args, **kwargs):
         super().__init__(table_type)
-        self.bk_username = kwargs.get("bk_username", "")
         self.bk_biz_id = kwargs.get("bk_biz_id")
-        # 如果 bk_username 为空，则使用当前请求的用户名
-        if not self.bk_username:
-            self.bk_username = get_request_username() or ""
-
-    def _ensure_project_permission(self, bk_biz_id: int, result_table_ids: List[str]):
-        """
-        确保项目对结果表有权限，如果没有则进行授权
-        """
-        if not result_table_ids:
-            return
-
-        # 1. 批量检查项目是否对这些结果表有权限
-        try:
-            check_result = api.bk_base.project_data_batch_check(
-                project_id=settings.BKBASE_PROJECT_ID,
-                action_id=UserAuthActionEnum.RT_QUERY.value,
-                object_ids=result_table_ids,
-            )
-            no_permission_rt_ids = (
-                set(check_result.get("no_permissions", [])) if isinstance(check_result, dict) else set()
-            )
-        except Exception as e:
-            logger.error("[EnsureProjectPermission] 项目权限检查失败: %s", e)
-            raise
-
-        # 2. 对没有权限的表进行批量授权
-        if no_permission_rt_ids:
-            try:
-                api.bk_base.project_data_batch_add(
-                    project_id=settings.BKBASE_PROJECT_ID,
-                    bk_biz_id=bk_biz_id,
-                    object_ids=list(no_permission_rt_ids),
-                )
-            except Exception as e:
-                logger.error("[EnsureProjectPermission] 项目权限授权失败: %s", e)
+        self.bk_username = get_request_username() or ""
 
     def list_tables(self) -> List[dict]:
         """
@@ -277,18 +261,28 @@ class MineBizRtTableHandler(TableHandler):
             if not isinstance(biz_list_result, list):
                 return []
 
-            biz_trees = []
+            # 构建批量请求参数
+            request_params = []
             for biz in biz_list_result:
+                biz_id = biz.get("bk_biz_id")
+                request_params.append(
+                    {
+                        "bk_username": self.bk_username,
+                        "action_id": UserAuthActionEnum.RT_QUERY.value,
+                        "bk_biz_id": biz_id,
+                    }
+                )
+
+            # 批量获取所有业务的结果表
+            batch_results = api.bk_base.get_mine_result_tables.bulk_request(request_params)
+
+            biz_trees = []
+            for i, result in enumerate(batch_results):
+                biz = biz_list_result[i]
                 biz_id = biz.get("bk_biz_id")
                 biz_name = biz.get("bk_biz_name", "")
 
-                # 获取该业务下个人有权限的结果表
                 try:
-                    result = api.bk_base.get_mine_result_tables(
-                        bk_username=self.bk_username,
-                        action_id=UserAuthActionEnum.RT_QUERY.value,
-                        bk_biz_id=biz_id,
-                    )
                     result_tables = (
                         result
                         if isinstance(result, list)
@@ -299,28 +293,17 @@ class MineBizRtTableHandler(TableHandler):
 
                     children = []
                     if result_tables:
-                        result_table_ids = [
-                            rt.get("result_table_id", "") for rt in result_tables if rt.get("result_table_id")
-                        ]
-
-                        # 确保项目权限
-                        try:
-                            self._ensure_project_permission(biz_id, result_table_ids)
-                        except Exception as e:
-                            logger.error("[ListTables] 业务 %s 权限检查失败，但继续处理: %s", biz_id, e)
-
-                        # 构建子项
                         children = [
                             {
                                 "label": rt.get("result_table_name", ""),
                                 "value": rt.get("result_table_id", ""),
                             }
                             for rt in result_tables
+                            if rt.get("result_table_id")
                         ]
 
                     # 构建业务节点
                     biz_node = {"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": children}
-
                     biz_trees.append(biz_node)
 
                 except Exception as e:

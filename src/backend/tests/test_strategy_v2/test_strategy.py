@@ -20,8 +20,10 @@ import copy
 from unittest import mock
 
 from bk_resource import resource
+from bk_resource.exceptions import ValidateException
 from django.conf import settings
 from django.http import Http404
+from rest_framework import serializers
 
 from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
@@ -864,3 +866,118 @@ class StrategyEnumMappingResourceTest(TestCase):
             }
         ]
         self.assertEqual(result, expected)
+
+
+class TestMineBizRtPermissionTest(StrategyTest):
+    """
+    测试 MINE_BIZ_RT 类型的权限验证逻辑
+    """
+
+    @mock.patch("services.web.strategy_v2.serializers.SceneDataFilter.get_table_ids")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._check_user_table_permission")
+    def test_ensure_project_permission_not_called_when_user_has_no_permission(
+        self, mock_check_user_permission, mock_ensure_project_permission, mock_get_table_ids
+    ):
+        """
+        测试：当用户对结果表没有权限时，_ensure_project_permission 不应被调用
+
+        根据用户提供的代码逻辑：
+        1. 如果 rt_id 在场景授权范围内，不需要校验用户权限，直接调用 _ensure_project_permission
+        2. 如果 rt_id 不在场景授权范围内，需要校验用户权限
+           - 如果用户有权限，调用 _ensure_project_permission
+           - 如果用户无权限，抛出 ValidationError，_ensure_project_permission 不应被调用
+        """
+        # 模拟场景授权范围为空（rt_id 不在范围内）
+        mock_get_table_ids.return_value = []
+        # 模拟用户权限校验失败（抛出 ValidationError）
+        mock_check_user_permission.side_effect = serializers.ValidationError(
+            {"rt_id": "当前用户没有权限使用数据表[test_mine_biz_rt]"}
+        )
+
+        # 构建 MINE_BIZ_RT 类型的请求数据
+        params = self._build_rule_strategy_payload(name_suffix="mine_biz_rt_permission_test")
+        params["configs"]["config_type"] = RuleAuditConfigType.MINE_BIZ_RT.value
+        params["configs"]["data_source"] = {
+            "source_type": RuleAuditSourceType.REALTIME.value,
+            "rt_id": "test_mine_biz_rt",
+        }
+        params["scene_id"] = self.scene_id
+
+        # 验证创建策略时抛出 ValidateException
+        with self.assertRaises(ValidateException):
+            CreateStrategy()(**params)
+
+        # 验证 _ensure_project_permission 没有被调用（因为用户无权限，在调用前就抛出了异常）
+        mock_ensure_project_permission.assert_not_called()
+
+    @mock.patch("services.web.strategy_v2.serializers.SceneDataFilter.get_table_ids")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._check_user_table_permission")
+    def test_ensure_project_permission_called_when_user_has_permission(
+        self, mock_check_user_permission, mock_ensure_project_permission, mock_get_table_ids
+    ):
+        """
+        测试：当用户对结果表有权限时，_ensure_project_permission 应该被调用
+        """
+        # 模拟场景授权范围为空（rt_id 不在范围内）
+        mock_get_table_ids.return_value = []
+        # 模拟用户权限校验通过
+        mock_check_user_permission.return_value = None
+        # 模拟项目权限授权通过
+        mock_ensure_project_permission.return_value = None
+
+        # 构建 MINE_BIZ_RT 类型的请求数据
+        params = self._build_rule_strategy_payload(name_suffix="mine_biz_rt_permission_test_2")
+        params["configs"]["config_type"] = RuleAuditConfigType.MINE_BIZ_RT.value
+        params["configs"]["data_source"] = {
+            "source_type": RuleAuditSourceType.REALTIME.value,
+            "rt_id": "test_mine_biz_rt",
+        }
+        params["scene_id"] = self.scene_id
+
+        # 由于还有其他校验可能会失败，我们只需验证 _check_user_table_permission 被调用后，
+        # _ensure_project_permission 也会被调用
+        try:
+            CreateStrategy()(**params)
+        except Exception:
+            pass
+
+        # 验证用户权限校验被调用
+        mock_check_user_permission.assert_called()
+        # 验证项目权限授权被调用
+        mock_ensure_project_permission.assert_called()
+
+    @mock.patch("services.web.strategy_v2.serializers.SceneDataFilter.get_table_ids")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission")
+    @mock.patch("services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._check_user_table_permission")
+    def test_no_permission_check_when_rt_in_scene_scope(
+        self, mock_check_user_permission, mock_ensure_project_permission, mock_get_table_ids
+    ):
+        """
+        测试：当 rt_id 在场景授权范围内时，不需要校验用户权限
+        """
+        # 模拟场景授权范围包含该 rt_id
+        mock_get_table_ids.return_value = ["test_mine_biz_rt"]
+        # 模拟项目权限授权通过
+        mock_ensure_project_permission.return_value = None
+
+        # 构建 MINE_BIZ_RT 类型的请求数据
+        params = self._build_rule_strategy_payload(name_suffix="mine_biz_rt_in_scope_test")
+        params["configs"]["config_type"] = RuleAuditConfigType.MINE_BIZ_RT.value
+        params["configs"]["data_source"] = {
+            "source_type": RuleAuditSourceType.REALTIME.value,
+            "rt_id": "test_mine_biz_rt",
+        }
+        params["scene_id"] = self.scene_id
+
+        # 由于还有其他校验可能会失败，我们只需验证权限校验的调用情况
+        try:
+            CreateStrategy()(**params)
+        except Exception:
+            pass
+
+        # 验证用户权限校验没有被调用（因为在场景授权范围内）
+        mock_check_user_permission.assert_not_called()
+        # 验证项目权限授权被调用
+        mock_ensure_project_permission.assert_called()

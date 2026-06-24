@@ -1159,7 +1159,7 @@ class GetStrategyCommon(StrategyV2Base):
 class ListTables(StrategyV2Base, CacheResource):
     name = gettext_lazy("List Tables")
     RequestSerializer = ListTablesRequestSerializer
-    cache_type = CacheTypeItem(key="ListTables", timeout=60, user_related=False)
+    cache_type = CacheTypeItem(key="ListTables", timeout=300, user_related=True)
 
     def perform_request(self, validated_request_data):
         return TableHandler(**validated_request_data).list_tables()

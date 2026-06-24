@@ -834,9 +834,10 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_user_has_permission(
-        self, mock_system_resource, mock_user_auth, mock_get_username
+        self, mock_system_resource, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 用户有权限"""
         # 模拟用户名
@@ -863,9 +864,10 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_user_no_permission(
-        self, mock_system_resource, mock_user_auth, mock_get_username
+        self, mock_system_resource, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 用户没有权限"""
         # 模拟用户名
@@ -892,9 +894,10 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_partial_permission(
-        self, mock_system_resource, mock_user_auth, mock_get_username
+        self, mock_system_resource, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 部分有权限，部分没有"""
         # 模拟用户名
@@ -922,9 +925,10 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_auth_check_failed(
-        self, mock_system_resource, mock_user_auth, mock_get_username
+        self, mock_system_resource, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 用户权限校验失败"""
         # 模拟用户名
@@ -950,8 +954,11 @@ class TestLinkTableDataPermissionMixin(TestCase):
         self.assertIn("校验用户权限失败", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
-    def test_validate_link_table_data_permission_mine_biz_rt_no_username(self, mock_system_resource, mock_get_username):
+    def test_validate_link_table_data_permission_mine_biz_rt_no_username(
+        self, mock_system_resource, mock_ensure_project, mock_get_username
+    ):
         """测试MINE_BIZ_RT类型 - 用户名为空时跳过校验"""
         # 用户名为空
         mock_get_username.return_value = ""
@@ -972,9 +979,10 @@ class TestLinkTableDataPermissionMixin(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch('services.web.strategy_v2.serializers.LinkTableDataPermissionMixin._ensure_project_permission')
     @unittest.mock.patch('apps.meta.resources.SystemListAllResource')
     def test_validate_link_table_data_permission_mine_biz_rt_with_other_types(
-        self, mock_system_resource, mock_user_auth, mock_get_username
+        self, mock_system_resource, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型与其他类型混合配置"""
         # 模拟用户名
@@ -1208,9 +1216,12 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch(
+        'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
+    )
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
     def test_validate_strategy_data_permission_mine_biz_rt_in_scene_scope(
-        self, mock_get_table_ids, mock_user_auth, mock_get_username
+        self, mock_get_table_ids, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - RT在场景授权范围内时直接通过"""
         # 模拟用户名
@@ -1230,9 +1241,12 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch(
+        'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
+    )
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
     def test_validate_strategy_data_permission_mine_biz_rt_user_has_permission(
-        self, mock_get_table_ids, mock_user_auth, mock_get_username
+        self, mock_get_table_ids, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - RT不在场景范围内但用户有权限"""
         # 模拟用户名
@@ -1258,9 +1272,12 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch(
+        'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
+    )
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
     def test_validate_strategy_data_permission_mine_biz_rt_user_no_permission(
-        self, mock_get_table_ids, mock_user_auth, mock_get_username
+        self, mock_get_table_ids, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 用户没有权限使用数据表"""
         # 模拟用户名
@@ -1282,9 +1299,12 @@ class TestStrategyDataPermissionValidation(TestCase):
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
     @unittest.mock.patch('services.web.strategy_v2.serializers.api.bk_base.user_auth_check')
+    @unittest.mock.patch(
+        'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
+    )
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
     def test_validate_strategy_data_permission_mine_biz_rt_user_auth_check_failed(
-        self, mock_get_table_ids, mock_user_auth, mock_get_username
+        self, mock_get_table_ids, mock_ensure_project, mock_user_auth, mock_get_username
     ):
         """测试MINE_BIZ_RT类型 - 用户权限校验失败"""
         # 模拟用户名
@@ -1305,8 +1325,13 @@ class TestStrategyDataPermissionValidation(TestCase):
         self.assertIn("校验用户权限失败", str(cm.exception))
 
     @unittest.mock.patch('services.web.strategy_v2.serializers.get_request_username')
+    @unittest.mock.patch(
+        'services.web.strategy_v2.serializers.CreateStrategyRequestSerializer._ensure_project_permission'
+    )
     @unittest.mock.patch('services.web.scene.data_filter.SceneDataFilter.get_table_ids')
-    def test_validate_strategy_data_permission_mine_biz_rt_no_username(self, mock_get_table_ids, mock_get_username):
+    def test_validate_strategy_data_permission_mine_biz_rt_no_username(
+        self, mock_get_table_ids, mock_ensure_project, mock_get_username
+    ):
         """测试MINE_BIZ_RT类型 - 用户名为空时跳过校验"""
         # 用户名为空
         mock_get_username.return_value = ""

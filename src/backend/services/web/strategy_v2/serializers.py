@@ -22,6 +22,7 @@ from typing import List
 from bk_resource import api
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
+from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -431,6 +432,8 @@ class StrategySerializer(serializers.Serializer):
                     if rt_id not in set(scene_table_ids):
                         # 不在场景授权范围内，校验用户是否有权限使用此表
                         self._check_user_table_permission([rt_id])
+                    # 用户有权限使用此表（或表在场景授权范围内），确保项目也有权限
+                    self._ensure_project_permission([rt_id])
             if config_type == RuleAuditConfigType.EVENT_LOG.value:
                 self._check_systems_permission(data_source.get("system_ids", []), scene_id)
             if config_type == RuleAuditConfigType.LINK_TABLE.value:
@@ -478,6 +481,8 @@ class StrategySerializer(serializers.Serializer):
                         if rt_id not in set(scene_table_ids):
                             # 不在场景授权范围内，校验用户是否有权限使用此表
                             self._check_user_table_permission([rt_id])
+                        # 用户有权限使用此表，确保项目也有权限
+                        self._ensure_project_permission([rt_id])
 
     def _check_systems_permission(self, system_ids: list, scene_id: int):
         """校验系统是否在场景授权范围内"""
@@ -547,6 +552,58 @@ class StrategySerializer(serializers.Serializer):
 
             if not result:
                 raise serializers.ValidationError({"rt_id": gettext("当前用户没有权限使用数据表[%s]") % rt_id})
+
+    def _ensure_project_permission(self, result_table_ids: List[str]):
+        """
+        确保项目对结果表有权限，如果没有则进行授权
+        注意：需要从结果表元数据获取 bk_biz_id，按业务分组调用 project_data_batch_add
+        """
+        if not result_table_ids:
+            return
+
+        # 1. 批量检查项目是否对这些结果表有权限
+        try:
+            check_result = api.bk_base.project_data_batch_check(
+                project_id=settings.BKBASE_PROJECT_ID,
+                action_id=UserAuthActionEnum.RT_QUERY.value,
+                object_ids=result_table_ids,
+            )
+            no_permission_rt_ids = (
+                set(check_result.get("no_permissions", [])) if isinstance(check_result, dict) else set()
+            )
+        except Exception as e:
+            logger.error("[EnsureProjectPermission] 项目权限检查失败: %s", e)
+            raise
+
+        # 2. 对没有权限的表进行授权
+        if no_permission_rt_ids:
+            # 批量获取结果表的 bk_biz_id 元数据，按业务分组
+            biz_rt_map = {}
+
+            # 使用批量接口获取结果表元数据
+            try:
+                rts = api.bk_base.get_result_tables(result_table_ids=list(no_permission_rt_ids))
+                for rt in rts:
+                    rt_id = rt.get("result_table_id")
+                    bk_biz_id = rt.get("bk_biz_id")
+                    if rt_id and bk_biz_id:
+                        biz_rt_map.setdefault(bk_biz_id, []).append(rt_id)
+                    else:
+                        logger.warning("[EnsureProjectPermission] 结果表[%s]缺少 bk_biz_id")
+            except Exception as e:
+                logger.error("[EnsureProjectPermission] 批量获取结果表元数据失败: %s", e)
+
+            # 按业务分组调用 project_data_batch_add
+            for bk_biz_id, rt_ids in biz_rt_map.items():
+                try:
+                    api.bk_base.project_data_batch_add(
+                        project_id=settings.BKBASE_PROJECT_ID,
+                        bk_biz_id=bk_biz_id,
+                        object_ids=rt_ids,
+                    )
+                except Exception as e:
+                    logger.error("[EnsureProjectPermission] 项目权限授权失败: %s", e)
+                    raise serializers.ValidationError({"config": gettext("项目对数据表[%s]授权失败，请联系管理员") % ",".join(rt_ids)})
 
 
 class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
@@ -1184,8 +1241,6 @@ class ListTablesRequestSerializer(serializers.Serializer):
 
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
-    bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), required=False)
-    bk_username = serializers.CharField(label=gettext_lazy("用户名"), required=False)
 
 
 class GetRTFieldsRequestSerializer(serializers.Serializer):
@@ -1525,7 +1580,65 @@ class LinkTableDataPermissionMixin:
 
         # 校验用户对结果表的权限（MINE_BIZ_RT 类型）
         if mine_biz_rt_ids:
-            self._check_user_table_permission(list(mine_biz_rt_ids))
+            # 先检查是否在场景授权范围内
+            scene_table_ids = SceneDataFilter.get_table_ids(scene_id)
+            for rt_id in mine_biz_rt_ids:
+                if rt_id not in set(scene_table_ids):
+                    # 不在场景授权范围内，校验用户是否有权限使用此表
+                    self._check_user_table_permission([rt_id])
+            # 确保项目对结果表有权限（在循环外统一调用，避免重复）
+            self._ensure_project_permission(list(mine_biz_rt_ids))
+
+    def _ensure_project_permission(self, result_table_ids: List[str]):
+        """
+        确保项目对结果表有权限，如果没有则进行授权
+        """
+        if not result_table_ids:
+            return
+
+        # 1. 批量检查项目是否对这些结果表有权限
+        try:
+            check_result = api.bk_base.project_data_batch_check(
+                project_id=settings.BKBASE_PROJECT_ID,
+                action_id=UserAuthActionEnum.RT_QUERY.value,
+                object_ids=result_table_ids,
+            )
+            no_permission_rt_ids = (
+                set(check_result.get("no_permissions", [])) if isinstance(check_result, dict) else set()
+            )
+        except Exception as e:
+            logger.error("[LinkTableEnsureProjectPermission] 项目权限检查失败: %s", e)
+            raise
+
+        # 2. 对没有权限的表进行授权（需要获取 bk_biz_id 并按业务分组）
+        if no_permission_rt_ids:
+            # 批量获取结果表的 bk_biz_id 元数据，按业务分组
+            biz_rt_map = {}
+
+            # 使用批量接口获取结果表元数据
+            try:
+                rts = api.bk_base.get_result_tables(result_table_ids=list(no_permission_rt_ids))
+                for rt in rts:
+                    rt_id = rt.get("result_table_id")
+                    bk_biz_id = rt.get("bk_biz_id")
+                    if rt_id and bk_biz_id:
+                        biz_rt_map.setdefault(bk_biz_id, []).append(rt_id)
+                    else:
+                        logger.warning("[LinkTableEnsureProjectPermission] 结果表[%s]缺少 bk_biz_id")
+            except Exception as e:
+                logger.error("[LinkTableEnsureProjectPermission] 批量获取结果表元数据失败: %s", e)
+
+            # 按业务分组调用 project_data_batch_add
+            for bk_biz_id, rt_ids in biz_rt_map.items():
+                try:
+                    api.bk_base.project_data_batch_add(
+                        project_id=settings.BKBASE_PROJECT_ID,
+                        bk_biz_id=bk_biz_id,
+                        object_ids=rt_ids,
+                    )
+                except Exception as e:
+                    logger.error("[LinkTableEnsureProjectPermission] 项目权限授权失败: %s", e)
+                    raise serializers.ValidationError({"config": gettext("项目对数据表[%s]授权失败，请联系管理员") % ",".join(rt_ids)})
 
     def _check_user_table_permission(self, rt_ids: list):
         """
