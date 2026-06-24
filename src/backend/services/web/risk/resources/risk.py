@@ -694,10 +694,10 @@ class ListRisk(RiskMeta):
 
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
-        request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
-        pagination_class = self._build_export_pagination_class(risk_limit)
 
         if use_bkbase:
+            request = SimpleNamespace(query_params={"page": "1", "page_size": str(risk_limit)})
+            pagination_class = self._build_export_pagination_class(risk_limit)
             paged_risks, _, _ = self.retrieve_via_bkbase(
                 base_queryset=base_queryset,
                 request=request,
@@ -708,13 +708,22 @@ class ListRisk(RiskMeta):
             )
             return [risk.risk_id for risk in paged_risks]
 
-        _, _, risk_ids = self.retrieve_via_db(
+        return self._load_filter_risk_ids_via_db(
             base_queryset=base_queryset,
-            request=request,
             order_fields=order_fields,
-            pagination_class=pagination_class,
+            risk_limit=risk_limit,
         )
-        return risk_ids
+
+    def _load_filter_risk_ids_via_db(
+        self,
+        base_queryset: QuerySet["Risk"],
+        order_fields: List[str],
+        risk_limit: int,
+    ) -> List[str]:
+        """范围导出 DB 分支只加载 risk_id，避免复用列表详情加载导致大批量模型对象和标签预取。"""
+
+        risk_queryset = self._apply_ordering(base_queryset, order_fields)
+        return list(risk_queryset.values_list("risk_id", flat=True)[:risk_limit])
 
     @staticmethod
     def _build_export_pagination_class(page_size: int) -> Type:

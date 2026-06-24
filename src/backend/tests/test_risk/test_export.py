@@ -242,6 +242,29 @@ class TestRiskExport(TestCase):
         self.assertIn(self.risk_1.risk_id, risk_ids)
         self.assertNotIn(self.risk_2.risk_id, risk_ids)
 
+    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
+    def test_load_filter_risk_ids_db_path_does_not_prefetch_full_risks(self, mock_load_iam_authed_risks):
+        from services.web.risk.resources.risk import ListRisk
+
+        mock_load_iam_authed_risks.return_value = Risk.objects.all()
+        serializer = RiskExportReqSerializer(
+            data={"risk_view_type": RiskViewType.ALL.value, "filters": {"sort": ["-event_time", "-risk_id"]}}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with mock.patch(
+            "services.web.risk.resources.risk.Risk.prefetch_strategy_tags",
+            wraps=Risk.prefetch_strategy_tags,
+        ) as mock_prefetch_strategy_tags:
+            risk_ids = ListRisk().load_filter_risk_ids(
+                dict(serializer.validated_data["filters"]),
+                username="admin",
+                risk_limit=10,
+            )
+
+        self.assertEqual(risk_ids, [self.risk_4.risk_id, self.risk_3.risk_id, self.risk_2.risk_id, self.risk_1.risk_id])
+        mock_prefetch_strategy_tags.assert_not_called()
+
     @mock.patch("services.web.risk.resources.risk.ListRisk.retrieve_via_bkbase")
     @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
     def test_load_filter_risk_ids_uses_bkbase_when_event_filters_exist(
