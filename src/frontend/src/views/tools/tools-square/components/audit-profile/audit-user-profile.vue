@@ -454,12 +454,46 @@
             }
           }
         });
-        // 也检查是否有单独的历史账号列表字段
-        const historyListField = data?.data?.result?.history_list
-          || data?.history_list
-          || (results && (Array.isArray(results) ? results[0] : results)?.[PROFILE_FIELDS.ACCOUNT_HISTORY_LIST]);
-        if (Array.isArray(historyListField)) {
-          historyListField.forEach((item: any) => {
+        // 遍历所有记录，提取每条记录的"历史账号列表"字段
+        qqwechatData.forEach((item: any) => {
+          const itemAccountType = item[PROFILE_FIELDS.ACCOUNT_TYPE] || item.account_type || '';
+          let historyField = item[PROFILE_FIELDS.ACCOUNT_HISTORY_LIST];
+          // 兼容多种格式：数组、JSON 字符串、分号分隔字符串
+          if (typeof historyField === 'string' && historyField) {
+            try {
+              const parsed = JSON.parse(historyField);
+              if (Array.isArray(parsed)) {
+                historyField = parsed;
+              } else {
+                // 不是数组，当作分号分隔字符串处理
+                historyField = historyField.split(';').map(v => v.trim())
+                  .filter(Boolean);
+              }
+            } catch {
+              // JSON 解析失败，当作分号分隔字符串处理
+              historyField = historyField.split(';').map(v => v.trim())
+                .filter(Boolean);
+            }
+          }
+          if (Array.isArray(historyField)) {
+            historyField.forEach((hItem: any) => {
+              if (typeof hItem === 'string' && hItem) {
+                historyList.push({ type: itemAccountType, account: hItem });
+              } else if (hItem && typeof hItem === 'object') {
+                const hType = hItem[PROFILE_FIELDS.ACCOUNT_TYPE] || hItem.account_type || itemAccountType;
+                const hAccount = hItem[PROFILE_FIELDS.ACCOUNT_LIST] || hItem.account_list || '';
+                if (hAccount) {
+                  historyList.push({ type: hType, account: hAccount });
+                }
+              }
+            });
+          }
+        });
+        // 也检查顶层 history_list 字段（兼容旧数据结构）
+        const topLevelHistoryField = data?.data?.result?.history_list
+          || data?.history_list;
+        if (Array.isArray(topLevelHistoryField)) {
+          topLevelHistoryField.forEach((item: any) => {
             const accountType = item[PROFILE_FIELDS.ACCOUNT_TYPE] || item.account_type || '';
             const accountList = item[PROFILE_FIELDS.ACCOUNT_LIST] || item.account_list || '';
             if (accountList) {

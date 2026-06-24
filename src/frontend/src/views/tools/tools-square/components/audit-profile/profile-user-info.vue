@@ -274,10 +274,12 @@
       .filter(Boolean);
   };
 
-  // 从历史列表中按类型筛选
+  // 从历史列表中按类型筛选（兼容 企业微信/wechat/微信/QQ/qq 等多种命名）
   const filterHistoryByType = (type: string): HistoryAccountItem[] => {
-    const targetType = type === 'wechat' ? '微信' : 'QQ';
-    return props.historyAccounts.filter(item => item.type === type || item.type === targetType);
+    const wechatTypes = ['wechat', '微信', '企业微信', 'wecom'];
+    const qqTypes = ['qq', 'QQ'];
+    const targetTypes = type === 'wechat' ? wechatTypes : qqTypes;
+    return props.historyAccounts.filter(item => targetTypes.includes(item.type));
   };
 
   // 截断显示（最多 MAX_DISPLAY_COUNT 个）
