@@ -54,7 +54,7 @@
     const currentTarget = target || props.target;
     if (!currentTarget) return;
     const confirmName = ref('');
-    let deleteInfoInstance: any; // eslint-disable-line prefer-const -- 赋值在闭包定义之后，必须使用 let
+    let deleteInfoInstance: any; // eslint-disable-line prefer-const
     const handleConfirm = () => {
       if (confirmName.value !== currentTarget.name) return;
       const scopeParams = getSceneSystemParams();
