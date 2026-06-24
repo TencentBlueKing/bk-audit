@@ -8,7 +8,14 @@ import {
 } from 'vue';
 import type { ComposerTranslation } from 'vue-i18n';
 
+import { RISK_EXPORT_ASYNC_THRESHOLD } from '@hooks/use-risk-export-limit';
+
 import CrossPageSelectHeader from '../components/cross-page-select-header.vue';
+import SelectCheckboxLoading from '../components/select-checkbox-loading.vue';
+
+const renderSelectSlotContent = (loading: boolean, checkboxNode: any) => (
+  loading ? <SelectCheckboxLoading /> : checkboxNode
+);
 
 export type SelectCheckMode = '' | 'page' | 'all';
 
@@ -40,6 +47,8 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   } = options;
 
   const selectCheckMode = ref<SelectCheckMode>('');
+  const isSelectAllLoading = ref(false);
+  const selectAllLoadingMode = ref<'select' | 'cancel'>('select');
   const selectBannerTop = ref(44);
   const selectBannerHeight = ref(32);
   const tableAreaRef = ref<HTMLElement>();
@@ -80,14 +89,14 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
   };
 
   const syncCurrentPageSelectionForAllMode = () => {
-    if (!enabled.value || selectCheckMode.value !== 'all' || !currentPageKeys.value.length) {
+    if (!enabled.value || isSelectAllLoading.value || selectCheckMode.value !== 'all' || !currentPageKeys.value.length) {
       return;
     }
     mergeSelectedKeys(currentPageKeys.value);
   };
 
   const syncCurrentPageSelectionForPageMode = () => {
-    if (!enabled.value || selectCheckMode.value !== 'page' || !currentPageKeys.value.length) {
+    if (!enabled.value || isSelectAllLoading.value || selectCheckMode.value !== 'page' || !currentPageKeys.value.length) {
       return;
     }
     mergeSelectedKeys(currentPageKeys.value);
@@ -102,32 +111,90 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     }
   };
 
-  const handleListCheckChange = (type: string) => {
-    if (!enabled.value) {
+  const waitForSelectAllLoadingPaint = async () => {
+    await nextTick();
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  };
+
+  const runSelectColumnLoading = async (task: () => void | Promise<void>, mode: 'select' | 'cancel' = 'select') => {
+    isSelectAllLoading.value = true;
+    selectAllLoadingMode.value = mode;
+    await waitForSelectAllLoadingPaint();
+    try {
+      await task();
+      await nextTick();
+    } finally {
+      isSelectAllLoading.value = false;
+    }
+  };
+
+  const isRowSelectLoading = (key: string | number) => (
+    isSelectAllLoading.value && currentPageKeys.value.includes(key)
+  );
+
+  const renderRowSelectCell = (row: Record<string, any>) => {
+    const key = getRowKeyValue(row);
+    const loading = isRowSelectLoading(key);
+    const checked = selectedRowKeys.value.includes(key);
+    return (
+      <span class="tdesign-list-select-slot">
+        {renderSelectSlotContent(
+          loading, (
+          <bk-checkbox
+            modelValue={checked}
+            onChange={(val: boolean | string | number) => {
+              handleRowCheckboxChange(row, Boolean(val));
+            }}
+          />
+          ),
+        )}
+      </span>
+    );
+  };
+
+  const handleListCheckChange = async (type: string) => {
+    if (!enabled.value || isSelectAllLoading.value) {
       return;
     }
     if (type === 'page') {
-      selectCheckMode.value = 'page';
-      mergeSelectedKeys(currentPageKeys.value);
+      await runSelectColumnLoading(() => {
+        mergeSelectedKeys(currentPageKeys.value);
+        selectCheckMode.value = 'page';
+      }, 'select');
       return;
     }
     if (type === 'pageCancel') {
-      selectCheckMode.value = '';
-      removeSelectedKeys(currentPageKeys.value);
+      await runSelectColumnLoading(() => {
+        removeSelectedKeys(currentPageKeys.value);
+        selectCheckMode.value = '';
+      }, 'cancel');
       return;
     }
     if (type === 'all') {
-      selectCheckMode.value = 'all';
-      mergeSelectedKeys(currentPageKeys.value);
+      await runSelectColumnLoading(async () => {
+        if (pagination.count > 0 && pagination.count <= RISK_EXPORT_ASYNC_THRESHOLD) {
+          const keys = await fetchSelectAllRowKeys();
+          selectedRowKeys.value = keys;
+        } else {
+          mergeSelectedKeys(currentPageKeys.value);
+        }
+        selectCheckMode.value = 'all';
+      }, 'select');
       return;
     }
     if (type === 'allCancel') {
-      resetCrossPageSelection();
+      await runSelectColumnLoading(() => {
+        resetCrossPageSelection();
+      }, 'cancel');
     }
   };
 
   const handleRowCheckboxChange = (row: Record<string, any>, checked: boolean) => {
-    if (!enabled.value) {
+    if (!enabled.value || isSelectAllLoading.value) {
       return;
     }
     const key = getRowKeyValue(row);
@@ -167,13 +234,23 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     if (!enabled.value || !pagination.count) {
       return false;
     }
+    if (isSelectAllLoading.value) {
+      return true;
+    }
     return selectedRowKeys.value.length > 0 || selectCheckMode.value === 'all';
   });
 
-  const selectBannerText = computed(() => t('已选中{count}条数据，共有{total}条数据', {
-    count: selectBannerSelectedCount.value,
-    total: pagination.count,
-  }));
+  const selectBannerText = computed(() => {
+    if (isSelectAllLoading.value) {
+      return selectAllLoadingMode.value === 'cancel'
+        ? t('正在取消选择...')
+        : t('正在全选...');
+    }
+    return t('已选中{count}条数据，共有{total}条数据', {
+      count: selectBannerSelectedCount.value,
+      total: pagination.count,
+    });
+  });
 
   const selectAllBanner = computed(() => {
     if (!showSelectAllBanner.value) {
@@ -195,25 +272,19 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       return {
         ...restColumn,
         width: column.width || 80,
+        align: 'left',
+        className: 'tdesign-list-select-col',
+        thClassName: 'tdesign-list-select-col',
+        cellClassName: 'tdesign-list-select-col',
         title: () => (
           <CrossPageSelectHeader
             disabled={!tableData.value.length}
+            loading={isSelectAllLoading.value}
             value={listCheckValue.value}
             onChange={handleListCheckChange}
           />
         ),
-        cell: (_h: unknown, { row }: { row: Record<string, any> }) => {
-          const key = getRowKeyValue(row);
-          const checked = selectedRowKeys.value.includes(key);
-          return (
-            <bk-checkbox
-              modelValue={checked}
-              onChange={(val: boolean | string | number) => {
-                handleRowCheckboxChange(row, Boolean(val));
-              }}
-            />
-          );
-        },
+        cell: (_h: unknown, { row }: { row: Record<string, any> }) => renderRowSelectCell(row),
       };
     });
   };
@@ -338,10 +409,17 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     }
   });
 
+  watch(isSelectAllLoading, (loading) => {
+    if (loading || showSelectAllBanner.value) {
+      updateSelectBannerPosition();
+    }
+  });
+
   return {
     tableAreaRef,
     selectBannerTop,
     selectBannerHeight,
+    isSelectAllLoading,
     showSelectAllBanner,
     selectBannerText,
     selectAllBanner,
