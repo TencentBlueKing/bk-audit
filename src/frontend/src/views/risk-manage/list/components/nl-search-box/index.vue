@@ -100,6 +100,7 @@
 
   import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
+  import { isPageReload } from '@utils/assist';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import AddCondition from './components/add-condition.vue';
@@ -138,6 +139,7 @@
     replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
+  const shouldRestoreFromUrl = !isPageReload();
   // 搜索模型（与 search-box 完全一致的数据结构）
   const searchModel = ref<Record<string, any>>({
     datetime: [
@@ -161,24 +163,26 @@
     return value?.toString().split(',');
   };
 
-  Object.keys(urlSearchParams).forEach((searchFieldName) => {
-    const config = props.fieldConfig[searchFieldName];
-    if (!config) return;
-    if (urlSearchParams[searchFieldName] === undefined
-      || urlSearchParams[searchFieldName] === null
-      || urlSearchParams[searchFieldName] === '') return;
-    if (config.type !== 'string') {
-      searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
-    } else {
-      const value = urlSearchParams[searchFieldName];
-      searchModel.value[searchFieldName] = value === null ? '' : value.toString();
+  if (shouldRestoreFromUrl) {
+    Object.keys(urlSearchParams).forEach((searchFieldName) => {
+      const config = props.fieldConfig[searchFieldName];
+      if (!config) return;
+      if (urlSearchParams[searchFieldName] === undefined
+        || urlSearchParams[searchFieldName] === null
+        || urlSearchParams[searchFieldName] === '') return;
+      if (config.type !== 'string') {
+        searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
+      } else {
+        const value = urlSearchParams[searchFieldName];
+        searchModel.value[searchFieldName] = value === null ? '' : value.toString();
+      }
+    });
+    if (urlSearchParams.start_time && urlSearchParams.end_time) {
+      searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
     }
-  });
-  if (urlSearchParams.start_time && urlSearchParams.end_time) {
-    searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
-  }
-  if (urlSearchParams.datetime_origin) {
-    searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
+    if (urlSearchParams.datetime_origin) {
+      searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
+    }
   }
 
   // 事件字段相关（与 search-box 完全一致）
@@ -1060,6 +1064,11 @@
   onMounted(() => {
     if (!riskStatusCommon.value.length) {
       fetchRiskStatusCommon();
+    }
+    if (isPageReload()) {
+      emit('modelValueWatch', searchModel.value);
+      handleSubmit(true);
+      return;
     }
     if (urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({

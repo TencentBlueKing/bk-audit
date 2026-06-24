@@ -101,3 +101,12 @@ export const buildURLParams = (params: any) => {
   });
   return parts.join('&');
 };
+
+/** 判断当前页面是否为浏览器刷新（F5 / 刷新按钮）进入 */
+export const isPageReload = (): boolean => {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
+    return false;
+  }
+  const [navigation] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+  return navigation?.type === 'reload';
+};

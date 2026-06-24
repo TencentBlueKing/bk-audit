@@ -31,6 +31,7 @@ export default {
       name: 'handleManageList',
       meta: {
         title: '待我处理',
+        keepAlive: true,
         // skeleton: 'noticeGroupList',
       },
     },

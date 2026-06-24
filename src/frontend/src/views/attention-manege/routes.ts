@@ -31,6 +31,7 @@ export default {
       name: 'attentionManageList',
       meta: {
         title: '我的关注',
+        keepAlive: true,
         // skeleton: 'noticeGroupList',
       },
     },

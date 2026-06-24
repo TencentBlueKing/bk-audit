@@ -132,9 +132,9 @@
       <template
         v-if="(route.meta?.nodeSideContent && !(route.params?.isShowSideBar === 'true'))"
         #nodeSideContent>
-        <router-view />
+        <keep-alive-router-view />
       </template>
-      <router-view v-if="(!route.meta?.nodeSideContent || (route.params?.isShowSideBar === 'true'))" />
+      <keep-alive-router-view v-if="(!route.meta?.nodeSideContent || (route.params?.isShowSideBar === 'true'))" />
       <version-log v-model:is-show="isShowVersionLog" />
     </layout>
   </bk-config-provider>
@@ -164,6 +164,7 @@
   import useRequest from '@hooks/use-request';
 
   import RouterBack from '@components/router-back/index.vue';
+  import KeepAliveRouterView from '@components/keep-alive-router-view/index.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 

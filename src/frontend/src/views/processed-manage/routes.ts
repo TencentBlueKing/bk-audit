@@ -31,6 +31,7 @@ export default {
       name: 'processedManageList',
       meta: {
         title: '处理历史',
+        keepAlive: true,
         // skeleton: 'noticeGroupList',
       },
     },

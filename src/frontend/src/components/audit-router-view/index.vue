@@ -19,7 +19,7 @@
     <permission-page
       v-if="needApplyPermission"
       :data="permissionResult" />
-    <router-view v-if="!needApplyPermission" />
+    <keep-alive-router-view v-if="!needApplyPermission" />
   </div>
 </template>
 <script setup lang="ts">
@@ -30,6 +30,7 @@
   import useEventBus from '@hooks/use-event-bus';
 
   import PermissionPage from '@components/apply-permission/page.vue';
+  import KeepAliveRouterView from '@components/keep-alive-router-view/index.vue';
 
   const { on } = useEventBus();
 
