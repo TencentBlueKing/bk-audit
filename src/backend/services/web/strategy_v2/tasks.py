@@ -235,6 +235,7 @@ def check_strategy_status_anomalies():
                             "strategy_type": str(strategy.strategy_type),
                             "strategy_status": str(strategy.status),
                             "flow_status": str(mismatch.get("flow_status", "unknown")),
+                            "abnormal_reason": str(reason),
                         },
                         "timestamp": int(datetime.now().timestamp() * 1000),
                     }
