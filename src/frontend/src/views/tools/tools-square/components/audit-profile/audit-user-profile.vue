@@ -726,7 +726,7 @@
           if (value.length <= 2) {
             return value;
           }
-          return `${value[0]}${'*'.repeat(value.length - 2)}${value.at(-1)}`;
+          return `${value[0]}${'*'.repeat(value.length - 2)}${value[value.length - 1]}`;
         };
         const displayAccount = showAccount.value ? account : maskAccount(account);
         return h(
