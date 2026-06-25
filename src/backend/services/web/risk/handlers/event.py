@@ -234,18 +234,15 @@ class EventHandler(ElasticHandler):
     @classmethod
     def search_all_event(cls, namespace: str, start_time: str, end_time: str, page: int, page_size: int, **kwargs):
         # 获取单次结果
-        resp = FuncRunner(
-            func=cls.search_event,
-            kwargs={
-                "namespace": namespace,
-                "start_time": start_time,
-                "end_time": end_time,
-                "page": page,
-                "page_size": page_size,
-                "scroll": RISK_SYNC_SCROLL,
-                **kwargs,
-            },
-        ).run()
+        resp = cls.search_event(
+            namespace=namespace,
+            start_time=start_time,
+            end_time=end_time,
+            page=page,
+            page_size=page_size,
+            scroll=RISK_SYNC_SCROLL,
+            **kwargs,
+        )
         data: list = resp["results"]
         # 判断是否需要滚动查询
         if resp["total"] <= page_size:
@@ -272,6 +269,24 @@ class EventHandler(ElasticHandler):
 
     @classmethod
     def search_event(cls, namespace: str, start_time: str, end_time: str, page: int, page_size: int, **kwargs):
+        """查询风险事件，对 BKLog 查询的短暂异常做轻量重试。"""
+
+        return FuncRunner(
+            func=cls._search_event_once,
+            kwargs={
+                "namespace": namespace,
+                "start_time": start_time,
+                "end_time": end_time,
+                "page": page,
+                "page_size": page_size,
+                **kwargs,
+            },
+        ).run()
+
+    @classmethod
+    def _search_event_once(cls, namespace: str, start_time: str, end_time: str, page: int, page_size: int, **kwargs):
+        """单次查询风险事件；重试由 search_event 统一封装。"""
+
         return resource.query.search_all(
             namespace=namespace,
             start_time=start_time,
