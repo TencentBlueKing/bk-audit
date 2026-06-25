@@ -40,6 +40,8 @@ from core.utils.page import paginate_data
 from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
 from services.web.risk.models import (
     AnalyseReport,
+    AnalyseReportErrorInfo,
+    AnalyseReportExtraInfo,
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
@@ -77,6 +79,23 @@ def _build_analyse_report_temp_title(scenario: AnalyseReportScenario | None) -> 
         title_prefix = str(AnalyseReportType.CUSTOM.label)
     timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
     return f"{title_prefix}_{timestamp}"
+
+
+def _mark_analyse_report_submit_failed(report: AnalyseReport, exc: Exception) -> None:
+    ended_at = timezone.now()
+    report.status = AnalyseReportStatus.FAILED
+    report.title_generating = False
+    report.extra_info = AnalyseReportExtraInfo.build(
+        started_at=ended_at,
+        ended_at=ended_at,
+        error=AnalyseReportErrorInfo(
+            error_type=exc.__class__.__name__,
+            error_message=str(exc),
+            retry_count=0,
+            max_retries=0,
+        ),
+    ).model_dump(exclude_none=True)
+    report.save(update_fields=["status", "title_generating", "extra_info", "updated_at"])
 
 
 class AnalyseReportMeta(AuditMixinResource, abc.ABC):
@@ -137,7 +156,15 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         )
 
         # 4. 提交 Celery 异步任务
-        task = generate_analyse_report.delay(report_id=report.report_id)
+        try:
+            task = generate_analyse_report.delay(report_id=report.report_id)
+        except Exception as exc:
+            _mark_analyse_report_submit_failed(report, exc)
+            logging.getLogger(__name__).exception(
+                "[GenerateAnalyseReport] Submit task failed report_id=%s",
+                report.report_id,
+            )
+            raise
 
         # 5. 更新 task_id
         report.task_id = task.id

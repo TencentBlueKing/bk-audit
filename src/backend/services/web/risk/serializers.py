@@ -1913,6 +1913,7 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
         help_text=gettext_lazy("命中策略风险等级"),
         required=False,
         allow_blank=True,
+        allow_null=True,
         default="",
     )
     strategy_id = serializers.IntegerField(
@@ -1945,7 +1946,7 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
             instance = {
                 "risk_id": instance.risk_id,
                 "title": instance.title,
-                "risk_level": getattr(instance.strategy, "risk_level", ""),
+                "risk_level": getattr(instance.strategy, "risk_level", None),
                 "status": instance.status,
                 "event_time": instance.event_time,
                 "event_end_time": instance.event_end_time,
