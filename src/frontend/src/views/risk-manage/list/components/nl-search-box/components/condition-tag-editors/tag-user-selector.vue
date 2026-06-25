@@ -18,7 +18,7 @@
   <div
     ref="wrapperRef"
     class="condition-tag-item nl-tag-user-selector-item"
-    :class="{ 'is-editing': isEditing }">
+    :class="{ 'is-editing': isEditing, 'has-users': hasUsers }">
     <template v-if="!isEditing">
       <div
         class="tag-view-content"
@@ -42,13 +42,17 @@
 
     <template v-else>
       <span class="tag-label">{{ t(tag.label) }}:</span>
-      <div class="nl-tag-user-selector-edit-zone">
+      <div
+        class="nl-tag-user-selector-edit-zone"
+        :class="{ 'has-users': hasUsers }">
         <audit-user-selector-tenant
           v-model="localValue"
           allow-create
           auto-focus
           class="nl-tag-user-selector"
+          :class="{ 'has-users': hasUsers }"
           :placeholder="t('请输入人员')"
+          @blur="handleSelectorBlur"
           @update:model-value="handleValueChange" />
       </div>
       <audit-icon
@@ -87,10 +91,12 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const maxMultiLen = 10;
+  const tagValueMaxDisplayLength = 24;
 
   const localValue = ref<string[]>([]);
   const wrapperRef = ref<HTMLElement>();
+  let blurTimer: ReturnType<typeof setTimeout> | null = null;
+  let ignoreCloseBefore = 0;
 
   const formatUsers = (value: unknown) => {
     if (!Array.isArray(value) || value.length === 0) {
@@ -105,32 +111,35 @@
   });
 
   const displayValue = computed(() => {
-    const users = formatUsers(props.tag.value);
-    if (users.length === 0) {
-      return '--';
+    const text = fullDisplayValue.value;
+    if (text === '--') {
+      return text;
     }
-    let displayText = '';
-    let visibleCount = 0;
-    for (const user of users) {
-      const nextText = visibleCount === 0 ? user : `${displayText}, ${user}`;
-      if (nextText.length > maxMultiLen && visibleCount > 0) {
-        break;
-      }
-      displayText = nextText;
-      visibleCount += 1;
+    if (text.length > tagValueMaxDisplayLength) {
+      return `${text.slice(0, tagValueMaxDisplayLength)}...`;
     }
-    const remaining = users.length - visibleCount;
-    return remaining > 0 ? `${displayText}, +${remaining}` : displayText;
+    return text;
   });
 
-  const isOverflow = computed(() => fullDisplayValue.value.length > maxMultiLen);
+  const isOverflow = computed(() => fullDisplayValue.value.length > tagValueMaxDisplayLength);
 
-  const isInSelectPopover = (target: Node) => {
+  const hasUsers = computed(() => localValue.value.length > 0);
+
+  const isInUserSelectorLayer = (target: Node | null) => {
     const el = target as HTMLElement;
     if (!el?.closest) {
       return false;
     }
-    return !!el.closest('.bk-select-popover, .bk-select-content, .bk-popover2, .bk-popover, .bk-pop2-content');
+    return !!el.closest('.bk-user-selector-popover, .bk-user-selector, .nl-tag-user-selector-edit-zone, .tippy-box');
+  };
+
+  const isUserSelectorPopoverVisible = () => {
+    const popover = document.querySelector('.bk-user-selector-popover') as HTMLElement | null;
+    if (!popover) {
+      return false;
+    }
+    const style = window.getComputedStyle(popover);
+    return style.display !== 'none' && style.visibility !== 'hidden' && popover.offsetParent !== null;
   };
 
   const handleStartEdit = () => {
@@ -148,36 +157,94 @@
     emit('update', props.tag.fieldName, [...nextValue]);
   };
 
-  const handleDocumentClick = (e: MouseEvent) => {
+  const clearBlurTimer = () => {
+    if (blurTimer) {
+      clearTimeout(blurTimer);
+      blurTimer = null;
+    }
+  };
+
+  const handleConfirm = () => {
+    clearBlurTimer();
+    emit('update', props.tag.fieldName, [...localValue.value]);
+    emit('finishEdit');
+  };
+
+  const handleSelectorBlur = () => {
+    clearBlurTimer();
+    blurTimer = setTimeout(() => {
+      if (!props.isEditing) {
+        return;
+      }
+      const activeEl = document.activeElement;
+      if (activeEl && isInUserSelectorLayer(activeEl)) {
+        return;
+      }
+      if (isUserSelectorPopoverVisible()) {
+        return;
+      }
+      handleConfirm();
+    }, 200);
+  };
+
+  const handleDocumentMousedown = (e: MouseEvent) => {
     if (!props.isEditing) {
+      return;
+    }
+    if (Date.now() < ignoreCloseBefore) {
       return;
     }
     const target = e.target as Node;
     if (wrapperRef.value?.contains(target as HTMLElement)) {
       return;
     }
-    if (isInSelectPopover(target)) {
+    if (isInUserSelectorLayer(target)) {
       return;
     }
-    emit('finishEdit');
+    handleConfirm();
+  };
+
+  const handleDocumentKeydown = (e: KeyboardEvent) => {
+    if (!props.isEditing || e.key !== 'Enter') {
+      return;
+    }
+    if (isUserSelectorPopoverVisible()) {
+      return;
+    }
+    e.preventDefault();
+    handleConfirm();
+  };
+
+  const bindDocumentListeners = () => {
+    ignoreCloseBefore = Date.now() + 300;
+    setTimeout(() => {
+      document.addEventListener('mousedown', handleDocumentMousedown, true);
+      document.addEventListener('keydown', handleDocumentKeydown, true);
+    });
+  };
+
+  const unbindDocumentListeners = () => {
+    document.removeEventListener('mousedown', handleDocumentMousedown, true);
+    document.removeEventListener('keydown', handleDocumentKeydown, true);
   };
 
   watch(() => props.isEditing, (val) => {
     if (val) {
       localValue.value = _.cloneDeep(formatUsers(props.tag.value));
-      document.body.classList.add('nl-tag-user-selector-editing');
-      setTimeout(() => {
-        document.addEventListener('mousedown', handleDocumentClick, true);
-      });
+      document.body.classList.add('nl-tag-user-selector-scope');
+      unbindDocumentListeners();
+      bindDocumentListeners();
       return;
     }
-    document.body.classList.remove('nl-tag-user-selector-editing');
-    document.removeEventListener('mousedown', handleDocumentClick, true);
-  });
+    clearBlurTimer();
+    document.body.classList.remove('nl-tag-user-selector-scope');
+    unbindDocumentListeners();
+  }, { immediate: true });
 
   onBeforeUnmount(() => {
-    document.body.classList.remove('nl-tag-user-selector-editing');
-    document.removeEventListener('mousedown', handleDocumentClick, true);
+    clearBlurTimer();
+    document.body.classList.remove('nl-tag-user-selector-scope');
+    unbindDocumentListeners();
   });
 </script>
 
@@ -185,45 +252,170 @@
   .nl-tag-user-selector-item {
     min-height: 26px;
 
+    &:not(.is-editing) .tag-value-wrapper {
+      max-width: 280px;
+    }
+
+    &:not(.is-editing) .tag-value {
+      max-width: 100%;
+    }
+
     &.is-editing {
-      height: auto;
-      min-height: 26px;
+      overflow: visible;
+      align-items: center;
+
+      &:not(.has-users) {
+        height: 26px;
+        max-height: 26px;
+        min-height: 26px;
+      }
+
+      &.has-users {
+        height: 26px;
+        max-height: 26px;
+        min-height: 26px;
+      }
     }
   }
 
   .nl-tag-user-selector-edit-zone {
     position: relative;
     display: inline-flex;
-    max-width: min(400px, calc(100vw - 260px));
-    min-width: 120px;
+    align-items: center;
+    height: 20px;
+    flex: 0 0 auto;
+
+    &:not(.has-users) {
+      width: 120px;
+      max-width: 120px;
+      min-width: 120px;
+    }
+
+    &.has-users {
+      width: auto;
+      height: 20px;
+      max-width: min(480px, calc(100vw - 260px));
+      min-width: 120px;
+    }
   }
 
   .nl-tag-user-selector {
     width: 100%;
+    height: 20px;
+
+    &.has-users {
+      width: auto;
+      height: 20px;
+    }
   }
 </style>
 
 <style lang="postcss">
-  body.nl-tag-user-selector-editing {
-    .nl-tag-user-selector.bk-user-selector {
-      width: auto !important;
-      height: auto !important;
-      max-width: min(400px, calc(100vw - 260px)) !important;
-      min-width: 120px !important;
-      font-size: 12px;
+  /* 样式挂在 .is-editing 上，避免首次添加时 isEditing 初始为 true 但 watch 未触发导致样式缺失 */
+  .nl-tag-user-selector-item.is-editing {
+    &.condition-tag-item:not(.has-users) {
+      height: 26px !important;
+      max-height: 26px !important;
+      min-height: 26px !important;
+      overflow: hidden !important;
+      align-items: center !important;
     }
 
-    .nl-tag-user-selector.bk-user-selector .tags-container {
-      height: auto !important;
+    &.condition-tag-item.has-users {
+      height: 26px !important;
+      max-height: 26px !important;
+      min-height: 26px !important;
+      overflow: hidden !important;
+      align-items: center !important;
+    }
+
+    /* 覆盖 bk-user-selector 默认 32px 高度 */
+    .nl-tag-user-selector.bk-user-selector {
+      position: relative !important;
+      width: 100% !important;
+      height: 20px !important;
+      max-height: 20px !important;
+      min-height: 20px !important;
+      font-size: 12px !important;
+      line-height: 18px !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users {
+      width: auto !important;
+      height: 20px !important;
+      max-width: min(480px, calc(100vw - 260px)) !important;
+      max-height: 20px !important;
+      min-height: 20px !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .tags-container {
+      width: max-content !important;
+      height: 20px !important;
+      max-width: min(480px, calc(100vw - 260px)) !important;
+      max-height: 20px !important;
       min-height: 20px !important;
       padding: 0 4px !important;
-      overflow-y: visible !important;
+      overflow: hidden !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .tag-list {
+      height: 18px !important;
+      max-height: 18px !important;
+      min-height: 18px !important;
+      overflow: hidden !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .tag-wrapper {
+      max-width: none !important;
+      flex-shrink: 0 !important;
+      min-width: 0;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .bk-user-selector-tag,
+    .nl-tag-user-selector.bk-user-selector.has-users .user-tag {
+      max-width: none !important;
+      flex-shrink: 0 !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .bk-user-selector-tag-text,
+    .nl-tag-user-selector.bk-user-selector.has-users .custom-tag,
+    .nl-tag-user-selector.bk-user-selector.has-users .user-tag .tag-content .user-name {
+      max-width: min(420px, calc(100vw - 300px)) !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector.has-users .search-input,
+    .nl-tag-user-selector.bk-user-selector.has-users .search-input.input-inline,
+    .nl-tag-user-selector.bk-user-selector.has-users .search-input.input-last,
+    .nl-tag-user-selector.bk-user-selector.has-users .search-input.search-input-collapsed {
+      width: 40px !important;
+      max-width: 80px !important;
+      min-width: 40px !important;
+      flex: 0 0 40px !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector .me-tag {
+      display: none !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector .tags-container,
+    .nl-tag-user-selector.bk-user-selector .tags-container.tags-container-collapsed {
+      width: 100% !important;
+      height: 20px !important;
+      max-height: 20px !important;
+      min-height: 20px !important;
+      padding: 0 4px !important;
+      overflow: hidden !important;
       background: #fff !important;
       border: 1px solid #3a84ff !important;
       border-radius: 2px !important;
       box-shadow: none !important;
       box-sizing: border-box !important;
       transition: none !important;
+      scrollbar-width: none;
+    }
+
+    .nl-tag-user-selector.bk-user-selector .tags-container::-webkit-scrollbar {
+      display: none;
     }
 
     .nl-tag-user-selector.bk-user-selector .tags-container.focused {
@@ -232,37 +424,55 @@
     }
 
     .nl-tag-user-selector.bk-user-selector .tag-list {
-      height: auto !important;
+      display: flex !important;
+      height: 18px !important;
+      max-height: 18px !important;
       min-height: 18px !important;
-      flex-wrap: wrap !important;
-      align-items: flex-start !important;
+      overflow: hidden !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      row-gap: 0 !important;
+    }
+
+    .nl-tag-user-selector.bk-user-selector:not(.has-users) .tag-wrapper {
+      display: none !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .tag-wrapper {
-      max-width: 100%;
-      margin-top: 1px !important;
-      margin-bottom: 1px !important;
+      max-width: calc(100% - 48px);
+      min-width: 0;
+      margin: 0 !important;
+      flex-shrink: 1;
     }
 
     .nl-tag-user-selector.bk-user-selector .search-input,
     .nl-tag-user-selector.bk-user-selector .search-input.input-inline,
     .nl-tag-user-selector.bk-user-selector .search-input.input-last,
     .nl-tag-user-selector.bk-user-selector .search-input.search-input-collapsed {
+      width: 100% !important;
       height: 18px !important;
-      min-width: 40px !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
       padding: 0 !important;
+      margin: 0 !important;
       font-size: 12px !important;
       line-height: 18px !important;
+      flex: 1 1 auto !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag,
     .nl-tag-user-selector.bk-user-selector .user-tag {
+      display: inline-flex !important;
       height: 18px !important;
+      max-width: 100%;
       padding: 0 4px 0 6px !important;
+      margin: 0 4px 0 0 !important;
       color: #1768ef !important;
       background: #e1ecff !important;
       border: none !important;
       border-radius: 2px !important;
+      box-sizing: border-box !important;
+      align-items: center !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag:hover,
@@ -272,24 +482,80 @@
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-text,
     .nl-tag-user-selector.bk-user-selector .custom-tag {
+      display: inline-flex !important;
+      max-width: 160px;
+      overflow: hidden;
       font-size: 12px !important;
-      line-height: 18px !important;
+      line-height: 1 !important;
       color: #1768ef !important;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       background: transparent !important;
+      align-items: center !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-close {
+      display: inline-flex !important;
       margin-left: 4px !important;
+      font-size: 12px !important;
+      line-height: 1 !important;
       color: #1768ef !important;
+      align-items: center !important;
     }
 
     .nl-tag-user-selector.bk-user-selector .bk-user-selector-tag-close:hover {
       color: #0f5bd8 !important;
     }
+  }
 
-    .bk-user-selector-popover.bk-popover.bk-pop2-content[data-theme^='light'] {
+  /*
+   * 下拉层 teleport 到 body，不能嵌套在 .is-editing 内；
+   * tippy 会按触发器宽度（120px）收缩，需单独覆盖。
+   */
+  body.nl-tag-user-selector-scope {
+    .tippy-box:has(.bk-user-selector-popover) {
       width: 460px !important;
-      max-width: calc(100vw - 120px);
+      max-width: calc(100vw - 120px) !important;
+      min-width: 460px !important;
+    }
+
+    .bk-user-selector-popover.bk-popover.bk-pop2-content {
+      width: 460px !important;
+      max-width: calc(100vw - 120px) !important;
+      min-width: 460px !important;
+    }
+
+    .bk-user-selector-popover {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 100% !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    .bk-user-selector-popover .dropdown-content {
+      width: 100% !important;
+      overflow-x: hidden !important;
+    }
+
+    .bk-user-selector-popover .dropdown-panel,
+    .bk-user-selector-popover .dropdown-panels {
+      width: 100% !important;
+      min-width: 100% !important;
+    }
+
+    .bk-user-selector-popover .user-option {
+      height: auto !important;
+      min-height: 32px !important;
+      white-space: nowrap !important;
+    }
+
+    .bk-user-selector-popover .user-name,
+    .bk-user-selector-popover .tenant-name,
+    .bk-user-selector-popover .user-main {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
     }
   }
 </style>
