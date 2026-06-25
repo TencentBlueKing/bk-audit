@@ -722,11 +722,13 @@
         const platType = data.platType || data[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || '';
         if (!account) return h('span', {}, '--');
         const iconSrc = platType === 'qq' ? qqSvg : wechatSvg;
-        const displayAccount = !showAccount.value
-          ? (account.length <= 2
-            ? account
-            : `${account[0]}${'*'.repeat(account.length - 2)}${account.at(-1)}`)
-          : account;
+        const maskAccount = (value: string) => {
+          if (value.length <= 2) {
+            return value;
+          }
+          return `${value[0]}${'*'.repeat(value.length - 2)}${value.at(-1)}`;
+        };
+        const displayAccount = showAccount.value ? account : maskAccount(account);
         return h(
           'span',
           { style: 'display: inline-flex; align-items: center; gap: 4px;' },
