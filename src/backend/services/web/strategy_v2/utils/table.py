@@ -31,7 +31,6 @@ from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.resources import SystemListAllResource
 from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
-from apps.permission.handlers.actions import ActionEnum
 from services.web.analyze.utils import is_asset
 from services.web.common.constants import ScopeType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
@@ -89,18 +88,18 @@ class TableHandler:
 
 
 class EventLogTableHandler(TableHandler):
-    def __init__(self, table_type: str, namespace: str):
+    def __init__(self, table_type: str, namespace: str, scene_id: str):
         super().__init__(table_type)
         self.namespace = namespace
+        self.scene_id = scene_id
 
     def list_tables(self) -> List[dict]:
         # 检查场景是否有授权系统
         try:
             authorized_systems = SystemListAllResource().request(
                 namespace=settings.DEFAULT_NAMESPACE,
-                action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id,
                 scope_type=ScopeType.SCENE,
-                scope_id=self.namespace,
+                scope_id=self.scene_id,
             )
             # 如果没有授权系统，返回空列表
             if not authorized_systems:
