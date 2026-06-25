@@ -248,6 +248,32 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
         self.assertIsNone(report.scenario)
         self.assertEqual(report.custom_prompt, "分析张三在英雄联盟业务的资产转移行为")
 
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_generate_report_marks_failed_when_submit_task_failed(self, mock_task):
+        """Celery任务投递失败时标记报告失败并记录原因"""
+        mock_task.delay.side_effect = RuntimeError("connection limit is reached")
+
+        with self.assertRaises(RuntimeError):
+            self.resource.risk.generate_analyse_report(
+                {
+                    "scenario_key": "",
+                    "report_type": AnalyseReportType.CUSTOM,
+                    "title": "投递失败报告",
+                    "target_risks_filter": {},
+                    "custom_prompt": "分析近期高危风险",
+                }
+            )
+
+        report = AnalyseReport.objects.get(title="投递失败报告")
+        self.assertEqual(report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(report.task_id, "")
+        self.assertFalse(report.title_generating)
+        self.assertEqual(report.extra_info["error"]["error_type"], "RuntimeError")
+        self.assertEqual(report.extra_info["error"]["error_message"], "connection limit is reached")
+        self.assertEqual(report.extra_info["error"]["retry_count"], 0)
+        self.assertEqual(report.extra_info["error"]["max_retries"], 0)
+        AnalyseReportExtraInfo.model_validate(report.extra_info)
+
     def test_generate_report_serializer_validation(self):
         """测试请求序列化器校验"""
         # 缺少必填字段
@@ -1476,6 +1502,39 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["total"], 2)
+
+    def test_apigw_list_report_risks_allows_empty_risk_level(self):
+        """APIGW响应兼容旧策略风险等级为空的数据"""
+        self.strategy.risk_level = None
+        self.strategy.save(update_fields=["risk_level"])
+
+        result = self.request_apigw_resource()
+
+        self.assertEqual(result["total"], 2)
+        self.assertEqual({item["risk_level"] for item in result["results"]}, {None})
+
+    def test_apigw_list_report_risks_allows_nullable_base_fields(self):
+        """APIGW响应兼容旧风险基础字段为空的数据"""
+        self.strategy.risk_level = None
+        self.strategy.save(update_fields=["risk_level"])
+        self.risk1.title = None
+        self.risk1.event_end_time = None
+        self.risk1.operator = None
+        self.risk1.current_operator = None
+        self.risk1.risk_label = None
+        self.risk1.save(update_fields=["title", "event_end_time", "operator", "current_operator", "risk_label"])
+
+        result = self.request_apigw_resource({"risk_id": self.risk1.risk_id, "with_detail": True})
+
+        self.assertEqual(result["total"], 1)
+        risk_data = result["results"][0]
+        self.assertIsNone(risk_data["risk_level"])
+        self.assertIsNone(risk_data["title"])
+        self.assertIsNone(risk_data["event_end_time"])
+        self.assertIsNone(risk_data["operator"])
+        self.assertIsNone(risk_data["current_operator"])
+        self.assertIsNone(risk_data["risk_label"])
+        self.assertIn("detail", risk_data)
 
     @mock.patch("core.permissions.get_app_info")
     def test_apigw_viewset_paginates_before_returning_detail(self, mock_get_app_info):
