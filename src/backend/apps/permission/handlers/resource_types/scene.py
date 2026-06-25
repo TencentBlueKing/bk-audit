@@ -30,6 +30,7 @@ class Scene(ResourceTypeMeta):
     name = gettext("审计场景")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "scene_list"}]
+    iam_v4_reverse_lookup = True
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -40,3 +41,7 @@ class Scene(ResourceTypeMeta):
             instance_name = scene.name
         resource.attribute = {"id": str(instance_id), "name": instance_name}
         return resource
+
+    @classmethod
+    def list_all_ids(cls) -> list[str]:
+        return [str(scene_id) for scene_id in SceneModel.objects.values_list("scene_id", flat=True)]
