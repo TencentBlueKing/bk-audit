@@ -94,7 +94,7 @@ IS_USE_CELERY = True
 CELERYD_CONCURRENCY = os.getenv("BK_CELERYD_CONCURRENCY", 2)  # noqa
 
 # Celery 生产者 Broker 连接池上限（每个进程），避免 Web/Worker 大量进程打满 RabbitMQ 连接数
-BROKER_POOL_LIMIT = int(os.getenv("BKAPP_CELERY_BROKER_POOL_LIMIT", 3))
+BROKER_POOL_LIMIT = int(os.getenv("BKAPP_CELERY_BROKER_POOL_LIMIT", 10))
 
 # CELERY 配置，申明任务的文件路径，即包含有 @task 装饰器的函数文件
 CELERY_IMPORTS = ()

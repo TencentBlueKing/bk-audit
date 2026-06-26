@@ -80,10 +80,7 @@ from services.web.risk.models import (
 )
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
-from services.web.risk.serializers import (
-    CreateEventSerializer,
-    ListRiskRequestSerializer,
-)
+from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
@@ -677,64 +674,6 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     return q
 
 
-def _load_analyse_report_risk_ids(report, risk_limit: int) -> list:
-    """复用 ListRisk 的参数校验、权限过滤和检索分支，按报告创建人加载最终风险 ID。"""
-    from services.web.risk.resources.risk import ListRisk
-
-    list_risk = ListRisk()
-    serializer = ListRiskRequestSerializer(data=report.prompt_params or {})
-    serializer.is_valid(raise_exception=True)
-    return list_risk.load_filter_risk_ids(
-        dict(serializer.validated_data), username=report.created_by, risk_limit=risk_limit
-    )
-
-
-def _link_risks_to_report(report) -> int:
-    """
-    根据报告的 prompt_params 查询关联风险，批量创建 AnalyseReportRisk 关联记录。
-
-    Returns:
-        关联的风险数量
-    """
-    from services.web.risk.models import AnalyseReportRisk
-
-    if not report.created_by:
-        logger_celery.warning("[LinkRisksToReport] Skip report without creator, report_id=%s", report.report_id)
-        return 0
-
-    risk_limit = int(getattr(settings, "ANALYSE_REPORT_RISK_LIMIT", 100))
-    if risk_limit <= 0:
-        logger_celery.info(
-            "[LinkRisksToReport] Skip because risk limit is %s, report_id=%s", risk_limit, report.report_id
-        )
-        return 0
-
-    # 查询报告创建人实际有权限且符合条件的风险 ID 列表
-    risk_ids = _load_analyse_report_risk_ids(report, risk_limit)
-    if not risk_ids:
-        logger_celery.info(
-            "[LinkRisksToReport] No risks found for report_id=%s, prompt_params=%s",
-            report.report_id,
-            report.prompt_params,
-        )
-        return 0
-
-    # 批量创建关联记录（忽略已存在的重复记录）
-    report_risks = [AnalyseReportRisk(report=report, risk_id=rid) for rid in risk_ids]
-    AnalyseReportRisk.objects.bulk_create(report_risks, ignore_conflicts=True)
-
-    # 更新报告的 risk_count
-    report.risk_count = len(risk_ids)
-    report.save(update_fields=["risk_count"])
-
-    logger_celery.info(
-        "[LinkRisksToReport] Linked %d risks to report_id=%s",
-        len(risk_ids),
-        report.report_id,
-    )
-    return len(risk_ids)
-
-
 def _build_analyse_report_error_info(
     exc: Exception, current_retries: int, max_retries: int | None
 ) -> AnalyseReportErrorInfo:
@@ -788,9 +727,6 @@ def generate_analyse_report(self, report_id: int):
     _update_analyse_report_extra_info(report, _build_analyse_report_extra_info(started_at=started_at))
 
     try:
-        # 先根据 prompt_params 关联风险记录并填充 risk_count，失败报告也保留本次分析范围的风险数量
-        _link_risks_to_report(report)
-
         # 1. 构造分析要求 prompt
         scenario = report.scenario
         if scenario:

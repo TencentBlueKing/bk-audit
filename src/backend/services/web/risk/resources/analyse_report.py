@@ -27,6 +27,7 @@ from urllib.parse import unquote, urlparse
 from blueapps.utils.request_provider import get_request_username
 from celery.result import AsyncResult
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -46,6 +47,7 @@ from services.web.risk.models import (
     AnalyseReportScenario,
     Risk,
 )
+from services.web.risk.report.analyse_report import bind_risks_to_analyse_report
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import (
     DeleteAnalyseReportRequestSerializer,
@@ -61,6 +63,8 @@ from services.web.risk.serializers import (
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportRequestSerializer,
     RetrieveAnalyseReportResponseSerializer,
+    RetryAnalyseReportRequestSerializer,
+    RetryAnalyseReportResponseSerializer,
     TaskResultRequestSerializer,
     TaskResultResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
@@ -143,17 +147,19 @@ class GenerateAnalyseReport(AnalyseReportMeta):
         generate_title = validated_request_data.get("generate_title", False)
         title = _build_analyse_report_temp_title(scenario) if generate_title else validated_request_data["title"]
         title_task_id = str(uuid.uuid4()) if generate_title else ""
-        report = AnalyseReport.objects.create(
-            title=title,
-            report_type=validated_request_data["report_type"],
-            scenario=scenario,
-            analysis_scope=validated_request_data.get("analysis_scope", ""),
-            status=AnalyseReportStatus.GENERATING,
-            title_generating=generate_title,
-            title_task_id=title_task_id,
-            prompt_params=prompt_params,
-            custom_prompt=validated_request_data.get("custom_prompt", ""),
-        )
+        with transaction.atomic():
+            report = AnalyseReport.objects.create(
+                title=title,
+                report_type=validated_request_data["report_type"],
+                scenario=scenario,
+                analysis_scope=validated_request_data.get("analysis_scope", ""),
+                status=AnalyseReportStatus.GENERATING,
+                title_generating=generate_title,
+                title_task_id=title_task_id,
+                prompt_params=prompt_params,
+                custom_prompt=validated_request_data.get("custom_prompt", ""),
+            )
+            bind_risks_to_analyse_report(report)
 
         # 4. 提交 Celery 异步任务
         try:
@@ -181,6 +187,50 @@ class GenerateAnalyseReport(AnalyseReportMeta):
             "status": "PENDING",
             "title_task_id": title_task_id,
             "title_task_status": title_task_status,
+        }
+
+
+class RetryAnalyseReport(AnalyseReportMeta):
+    """重试 AI 分析报告"""
+
+    name = gettext_lazy("重试AI分析报告")
+    RequestSerializer = RetryAnalyseReportRequestSerializer
+    ResponseSerializer = RetryAnalyseReportResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        report_id = validated_request_data["report_id"]
+        report = self.get_user_report(report_id)
+
+        updated = AnalyseReport.objects.filter(
+            report_id=report.report_id,
+            status__in=[AnalyseReportStatus.SUCCESS, AnalyseReportStatus.FAILED],
+        ).update(
+            status=AnalyseReportStatus.GENERATING,
+            content="",
+            task_id="",
+            extra_info={},
+            updated_at=timezone.now(),
+        )
+        if not updated:
+            raise drf_serializers.ValidationError({"status": gettext_lazy("报告生成中，不能重复重试")})
+
+        report.refresh_from_db()
+        try:
+            task = generate_analyse_report.delay(report_id=report.report_id)
+        except Exception as exc:
+            _mark_analyse_report_submit_failed(report, exc)
+            logging.getLogger(__name__).exception(
+                "[RetryAnalyseReport] Submit task failed report_id=%s",
+                report.report_id,
+            )
+            raise
+
+        report.task_id = task.id
+        report.save(update_fields=["task_id", "updated_at"])
+        return {
+            "report_id": report.report_id,
+            "task_id": task.id,
+            "status": "PENDING",
         }
 
 

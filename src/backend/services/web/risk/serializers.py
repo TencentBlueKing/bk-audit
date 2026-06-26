@@ -1704,6 +1704,20 @@ class GenerateAnalyseReportResponseSerializer(serializers.Serializer):
     title_task_status = serializers.CharField(label=gettext_lazy("标题生成任务状态"), required=False, allow_blank=True)
 
 
+class RetryAnalyseReportRequestSerializer(serializers.Serializer):
+    """重试 AI 分析报告请求"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+
+
+class RetryAnalyseReportResponseSerializer(serializers.Serializer):
+    """重试 AI 分析报告响应"""
+
+    report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
+    task_id = serializers.CharField(label=gettext_lazy("异步任务ID"))
+    status = serializers.CharField(label=gettext_lazy("任务状态"))
+
+
 class ListAnalyseReportRequestSerializer(serializers.Serializer):
     """历史报告列表请求"""
 

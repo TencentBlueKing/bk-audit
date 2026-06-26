@@ -438,6 +438,8 @@ class AnalyseReportViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_analyse_report_scenario, endpoint="scenarios"),
         # 生成报告（异步）
         ResourceRoute("POST", resource.risk.generate_analyse_report, endpoint="generate"),
+        # 重试报告（异步）
+        ResourceRoute("POST", resource.risk.retry_analyse_report, pk_field="report_id", endpoint="retry"),
         # 查询任务状态
         ResourceRoute("GET", resource.risk.get_analyse_report_task_result, endpoint="task"),
         # 历史报告列表（POST支持复杂搜索）

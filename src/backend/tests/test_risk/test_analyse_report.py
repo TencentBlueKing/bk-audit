@@ -58,6 +58,7 @@ from services.web.risk.serializers import (
     ListAnalyseReportRiskResponseSerializer,
     ListAnalyseReportScenarioResponseSerializer,
     RetrieveAnalyseReportResponseSerializer,
+    RetryAnalyseReportResponseSerializer,
     UpdateAnalyseReportRequestSerializer,
 )
 from services.web.risk.views import AnalyseReportAPIGWViewSet
@@ -180,6 +181,15 @@ class TestListAnalyseReportScenario(AnalyseReportTestBase):
 class TestGenerateAnalyseReport(AnalyseReportTestBase):
     """测试生成AI分析报告"""
 
+    def setUp(self):
+        super().setUp()
+        self.bind_risks_patcher = mock.patch(
+            "services.web.risk.resources.analyse_report.bind_risks_to_analyse_report",
+            return_value=0,
+        )
+        self.bind_risks_patcher.start()
+        self.addCleanup(self.bind_risks_patcher.stop)
+
     @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
     def test_generate_report_with_scenario(self, mock_task):
         """测试使用内置场景生成报告"""
@@ -273,6 +283,66 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(report.extra_info["error"]["retry_count"], 0)
         self.assertEqual(report.extra_info["error"]["max_retries"], 0)
         AnalyseReportExtraInfo.model_validate(report.extra_info)
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    @mock.patch("services.web.risk.resources.analyse_report.bind_risks_to_analyse_report", return_value=2)
+    def test_generate_report_binds_risks_before_submit_task(self, mock_bind, mock_task):
+        """创建报告时先绑定风险快照，再投递生成任务"""
+        mock_task.delay.return_value.id = "celery-task-id-bind"
+
+        result = self.resource.risk.generate_analyse_report(
+            {
+                "scenario_key": "person_investigation",
+                "report_type": AnalyseReportType.SYSTEM,
+                "title": "创建即绑定风险",
+                "target_risks_filter": {"operator": "zhangsan"},
+            }
+        )
+
+        report = AnalyseReport.objects.get(report_id=result["report_id"])
+        mock_bind.assert_called_once_with(report)
+        mock_task.delay.assert_called_once_with(report_id=report.report_id)
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    @mock.patch("services.web.risk.resources.analyse_report.bind_risks_to_analyse_report")
+    def test_generate_report_rolls_back_when_bind_risks_failed(self, mock_bind, mock_task):
+        """绑定风险失败时不残留半创建报告"""
+        mock_bind.side_effect = RuntimeError("绑定失败")
+
+        with self.assertRaisesRegex(RuntimeError, "绑定失败"):
+            self.resource.risk.generate_analyse_report(
+                {
+                    "scenario_key": "",
+                    "report_type": AnalyseReportType.CUSTOM,
+                    "title": "绑定失败报告",
+                    "target_risks_filter": {},
+                    "custom_prompt": "分析近期高危风险",
+                }
+            )
+
+        self.assertFalse(AnalyseReport.objects.filter(title="绑定失败报告").exists())
+        mock_task.delay.assert_not_called()
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    @mock.patch("services.web.risk.resources.analyse_report.bind_risks_to_analyse_report")
+    def test_generate_report_keeps_bound_snapshot_when_submit_task_failed(self, mock_bind, mock_task):
+        """任务投递失败时报告失败，但创建阶段的风险快照已经完成"""
+        mock_task.delay.side_effect = RuntimeError("connection limit is reached")
+
+        with self.assertRaises(RuntimeError):
+            self.resource.risk.generate_analyse_report(
+                {
+                    "scenario_key": "",
+                    "report_type": AnalyseReportType.CUSTOM,
+                    "title": "投递失败但已绑定",
+                    "target_risks_filter": {},
+                    "custom_prompt": "分析近期高危风险",
+                }
+            )
+
+        report = AnalyseReport.objects.get(title="投递失败但已绑定")
+        self.assertEqual(report.status, AnalyseReportStatus.FAILED)
+        mock_bind.assert_called_once_with(report)
 
     def test_generate_report_serializer_validation(self):
         """测试请求序列化器校验"""
@@ -429,6 +499,104 @@ class TestGenerateAnalyseReport(AnalyseReportTestBase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("target_risks_filter", serializer.errors)
+
+
+class TestRetryAnalyseReport(AnalyseReportTestBase):
+    """测试手动重试 AI 分析报告"""
+
+    def setUp(self):
+        super().setUp()
+        self.report = AnalyseReport.objects.create(
+            title="可重试报告",
+            report_type=AnalyseReportType.SYSTEM,
+            scenario=self.scenario_person,
+            content="# 旧内容",
+            risk_count=1,
+            status=AnalyseReportStatus.FAILED,
+            task_id="old-task-id",
+            prompt_params={},
+            extra_info={
+                "error": {
+                    "error_type": "Exception",
+                    "error_message": "旧错误",
+                    "retry_count": 2,
+                    "max_retries": 2,
+                }
+            },
+            created_by="admin",
+        )
+        AnalyseReportRisk.objects.create(report=self.report, risk_id=self.risk1.risk_id)
+
+    def test_retry_response_serializer(self):
+        serializer = RetryAnalyseReportResponseSerializer(
+            data={
+                "report_id": self.report.report_id,
+                "task_id": "new-task-id",
+                "status": "PENDING",
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_retry_failed_report_reuses_report_and_keeps_risk_snapshot(self, mock_task):
+        mock_task.delay.return_value.id = "new-task-id"
+
+        result = self.resource.risk.retry_analyse_report.request({"report_id": self.report.report_id})
+
+        self.report.refresh_from_db()
+        self.assertEqual(result["report_id"], self.report.report_id)
+        self.assertEqual(result["task_id"], "new-task-id")
+        self.assertEqual(result["status"], "PENDING")
+        self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
+        self.assertEqual(self.report.content, "")
+        self.assertEqual(self.report.task_id, "new-task-id")
+        self.assertEqual(self.report.extra_info, {})
+        self.assertEqual(self.report.risk_count, 1)
+        self.assertEqual(AnalyseReportRisk.objects.filter(report=self.report).count(), 1)
+        mock_task.delay.assert_called_once_with(report_id=self.report.report_id)
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_retry_success_report_is_allowed(self, mock_task):
+        mock_task.delay.return_value.id = "success-retry-task-id"
+        self.report.status = AnalyseReportStatus.SUCCESS
+        self.report.save(update_fields=["status"])
+
+        result = self.resource.risk.retry_analyse_report.request({"report_id": self.report.report_id})
+
+        self.report.refresh_from_db()
+        self.assertEqual(result["task_id"], "success-retry-task-id")
+        self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_retry_generating_report_is_rejected(self, mock_task):
+        self.report.status = AnalyseReportStatus.GENERATING
+        self.report.save(update_fields=["status"])
+
+        with self.assertRaises(drf_serializers.ValidationError):
+            self.resource.risk.retry_analyse_report.request({"report_id": self.report.report_id})
+
+        mock_task.delay.assert_not_called()
+
+    @mock.patch("services.web.risk.resources.analyse_report.generate_analyse_report")
+    def test_retry_marks_failed_when_submit_task_failed(self, mock_task):
+        mock_task.delay.side_effect = RuntimeError("connection limit is reached")
+
+        with self.assertRaises(RuntimeError):
+            self.resource.risk.retry_analyse_report.request({"report_id": self.report.report_id})
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.task_id, "")
+        self.assertEqual(self.report.extra_info["error"]["error_type"], "RuntimeError")
+        self.assertEqual(self.report.extra_info["error"]["error_message"], "connection limit is reached")
+
+    def test_retry_route_resolves_to_resource(self):
+        from django.urls import resolve
+
+        match = resolve(f"/api/v1/analyse_report/{self.report.report_id}/retry/")
+
+        self.assertEqual(match.func.actions["post"], "retry")
 
 
 class TestListAnalyseReport(AnalyseReportTestBase):
@@ -1819,19 +1987,20 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertIn("duration_seconds", self.report.extra_info["execution"])
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_links_risks_before_chat_completion(self, mock_chat):
-        """调用 Agent 前先关联风险并填充 risk_count"""
-        self.report.risk_count = 0
+    def test_task_uses_existing_risk_count_before_chat_completion(self, mock_chat):
+        """调用 Agent 前使用创建阶段已写入的 risk_count"""
+        self.report.risk_count = 3
         self.report.prompt_params = {"risk_id": self.risk1.risk_id}
         self.report.save(update_fields=["risk_count", "prompt_params"])
 
-        def assert_risk_count_filled(**kwargs):
+        def assert_risk_count_used(**kwargs):
             self.report.refresh_from_db()
-            self.assertEqual(self.report.risk_count, 1)
-            self.assertTrue(AnalyseReportRisk.objects.filter(report=self.report, risk_id=self.risk1.risk_id).exists())
+            self.assertEqual(self.report.risk_count, 3)
+            agent_input = json.loads(kwargs["input"])
+            self.assertEqual(agent_input["已绑定风险数量"], 3)
             return "# 已生成报告"
 
-        mock_chat.side_effect = assert_risk_count_filled
+        mock_chat.side_effect = assert_risk_count_used
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -1839,7 +2008,7 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-        self.assertEqual(self.report.risk_count, 1)
+        self.assertEqual(self.report.risk_count, 3)
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
     def test_task_saves_agent_request_before_chat_completion(self, mock_chat):
@@ -2297,9 +2466,9 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
         )
 
     def _call(self, report):
-        from services.web.risk.tasks import _link_risks_to_report
+        from services.web.risk.report.analyse_report import bind_risks_to_analyse_report
 
-        return _link_risks_to_report(report)
+        return bind_risks_to_analyse_report(report)
 
     def test_link_risks_with_matching_params(self):
         """测试根据 prompt_params 关联风险"""
@@ -2546,63 +2715,22 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         )
 
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_creates_report_risk_records(self, mock_chat):
-        """测试任务成功后自动创建 AnalyseReportRisk 关联记录"""
-        mock_chat.return_value = (
-            "# 分析结果\n\n"
-            "## 一、关联风险分析\n\n"
-            "基于风险过滤条件，共发现与张三相关的异常操作风险。\n\n"
-            "## 二、关键发现\n\n"
-            "1. 张三在近30天内的敏感数据访问频次显著高于同岗位平均水平\n"
-            "2. 多次在非授权时间段执行数据导出操作\n\n"
-            "## 三、建议\n\n"
-            "建议加强对张三账号的实时监控，并通知其直属主管进行约谈。\n"
-        )
-
-        from services.web.risk.tasks import generate_analyse_report
-
-        result = generate_analyse_report(report_id=self.report.report_id)
-
-        self.assertEqual(result["report_id"], self.report.report_id)
-        self.report.refresh_from_db()
-        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-
-        # 验证 AnalyseReportRisk 关联记录已创建
-        linked_risk_ids = list(AnalyseReportRisk.objects.filter(report=self.report).values_list("risk_id", flat=True))
-        self.assertIn(self.risk1.risk_id, linked_risk_ids)
-        self.assertNotIn(self.risk2.risk_id, linked_risk_ids)
-
-        # 验证 risk_count 已更新
-        self.assertEqual(self.report.risk_count, 1)
-
-    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_links_all_risks_with_empty_params(self, mock_chat):
-        """测试 prompt_params 为空时关联所有风险"""
-        self.report.prompt_params = {}
-        self.report.save(update_fields=["prompt_params"])
-
-        mock_chat.return_value = (
-            "# 全量风险分析报告\n\n"
-            "## 一、概述\n\n"
-            "本报告对所有风险进行了全面扫描和分类分析。\n\n"
-            "## 二、风险分类统计\n\n"
-            "| 类别 | 数量 | 占比 |\n"
-            "|---|---|---|\n"
-            "| 数据安全 | 15 | 30% |\n"
-            "| 权限管理 | 20 | 40% |\n"
-            "| 异常行为 | 15 | 30% |\n\n"
-            "## 三、建议\n\n"
-            "建议按风险等级优先处理高危事件，加强日常安全巡检。\n"
-        )
+    def test_task_does_not_bind_risks(self, mock_chat):
+        """生成任务只生成内容，不创建报告风险快照"""
+        self.report.risk_count = 7
+        self.report.prompt_params = {"operator": "zhangsan"}
+        self.report.save(update_fields=["risk_count", "prompt_params"])
+        AnalyseReportRisk.objects.filter(report=self.report).delete()
+        mock_chat.return_value = "# 已生成报告"
 
         from services.web.risk.tasks import generate_analyse_report
 
         generate_analyse_report(report_id=self.report.report_id)
 
         self.report.refresh_from_db()
-        linked_count = AnalyseReportRisk.objects.filter(report=self.report).count()
-        self.assertEqual(linked_count, Risk.objects.count())
-        self.assertEqual(self.report.risk_count, Risk.objects.count())
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+        self.assertEqual(self.report.risk_count, 7)
+        self.assertFalse(AnalyseReportRisk.objects.filter(report=self.report).exists())
 
     @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
@@ -2635,74 +2763,6 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         mock_retry.assert_called_once()
         self.report.refresh_from_db()
         self.assertNotEqual(self.report.status, AnalyseReportStatus.SUCCESS)
-
-    @mock.patch("services.web.risk.tasks.logger_celery.error")
-    @mock.patch("services.web.risk.tasks.logger_celery.warning")
-    @mock.patch("services.web.risk.tasks.generate_analyse_report.retry")
-    @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
-    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_logs_warning_when_link_fails_before_max_retry(
-        self, mock_chat, mock_link, mock_retry, mock_logger_warning, mock_logger_error
-    ):
-        """未达到最大重试次数时，只记录 warning 并触发重试"""
-        mock_retry.side_effect = RuntimeError("retry called")
-
-        from services.web.risk.tasks import generate_analyse_report
-
-        original_retries = generate_analyse_report.request.retries
-        generate_analyse_report.request.retries = 0
-        try:
-            with self.assertRaisesRegex(RuntimeError, "retry called"):
-                generate_analyse_report(report_id=self.report.report_id)
-        finally:
-            generate_analyse_report.request.retries = original_retries
-
-        mock_chat.assert_not_called()
-        mock_retry.assert_called_once()
-        self.assertEqual(mock_retry.call_args.kwargs["countdown"], 60)
-        self.assertEqual(str(mock_retry.call_args.kwargs["exc"]), "关联失败")
-        mock_logger_warning.assert_called_once()
-        self.assertEqual(
-            mock_logger_warning.call_args.args[0],
-            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
-        )
-        self.assertTrue(mock_logger_warning.call_args.kwargs["exc_info"])
-        mock_logger_error.assert_not_called()
-
-        self.report.refresh_from_db()
-        self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
-
-    @mock.patch("services.web.risk.tasks.logger_celery.error")
-    @mock.patch("services.web.risk.tasks.logger_celery.warning")
-    @mock.patch("services.web.risk.tasks._link_risks_to_report", side_effect=Exception("关联失败"))
-    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_fails_before_chat_if_link_fails_on_max_retry(
-        self, mock_chat, mock_link, mock_logger_warning, mock_logger_error
-    ):
-        """风险关联失败时不调用 Agent，最终重试失败后记录错误信息"""
-        from services.web.risk.tasks import generate_analyse_report
-
-        original_retries = generate_analyse_report.request.retries
-        generate_analyse_report.request.retries = generate_analyse_report.max_retries
-        try:
-            with self.assertRaisesRegex(Exception, "关联失败"):
-                generate_analyse_report(report_id=self.report.report_id)
-        finally:
-            generate_analyse_report.request.retries = original_retries
-
-        self.report.refresh_from_db()
-        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
-        self.assertNotIn("agent_request", self.report.extra_info)
-        self.assertIn("execution", self.report.extra_info)
-        self.assertEqual(self.report.extra_info["error"]["error_message"], "关联失败")
-        mock_chat.assert_not_called()
-        mock_logger_warning.assert_not_called()
-        mock_logger_error.assert_called_once()
-        self.assertEqual(
-            mock_logger_error.call_args.args[0],
-            "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
-        )
-        self.assertEqual(str(mock_logger_error.call_args.kwargs["exc_info"][1]), "关联失败")
 
 
 class TestAnalyseReportAdmin(AnalyseReportTestBase):
