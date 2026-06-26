@@ -48,7 +48,6 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
 
   const selectCheckMode = ref<SelectCheckMode>('');
   const isSelectAllLoading = ref(false);
-  const selectAllLoadingMode = ref<'select' | 'cancel'>('select');
   const selectBannerTop = ref(44);
   const selectBannerHeight = ref(32);
   const tableAreaRef = ref<HTMLElement>();
@@ -120,9 +119,8 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
-  const runSelectColumnLoading = async (task: () => void | Promise<void>, mode: 'select' | 'cancel' = 'select') => {
+  const runSelectColumnLoading = async (task: () => void | Promise<void>) => {
     isSelectAllLoading.value = true;
-    selectAllLoadingMode.value = mode;
     await waitForSelectAllLoadingPaint();
     try {
       await task();
@@ -164,14 +162,14 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       await runSelectColumnLoading(() => {
         mergeSelectedKeys(currentPageKeys.value);
         selectCheckMode.value = 'page';
-      }, 'select');
+      });
       return;
     }
     if (type === 'pageCancel') {
       await runSelectColumnLoading(() => {
         removeSelectedKeys(currentPageKeys.value);
         selectCheckMode.value = '';
-      }, 'cancel');
+      });
       return;
     }
     if (type === 'all') {
@@ -183,13 +181,13 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
           mergeSelectedKeys(currentPageKeys.value);
         }
         selectCheckMode.value = 'all';
-      }, 'select');
+      });
       return;
     }
     if (type === 'allCancel') {
       await runSelectColumnLoading(() => {
         resetCrossPageSelection();
-      }, 'cancel');
+      });
     }
   };
 
@@ -206,6 +204,16 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     if (selectCheckMode.value === 'all' || selectCheckMode.value === 'page') {
       selectCheckMode.value = '';
     }
+  };
+
+  const clearAllSelection = () => {
+    if (!enabled.value || isSelectAllLoading.value) {
+      return;
+    }
+    if (!selectedRowKeys.value.length && selectCheckMode.value !== 'all') {
+      return;
+    }
+    handleListCheckChange('allCancel');
   };
 
   const handleCrossPageSelectChange = () => {
@@ -240,17 +248,10 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     return selectedRowKeys.value.length > 0 || selectCheckMode.value === 'all';
   });
 
-  const selectBannerText = computed(() => {
-    if (isSelectAllLoading.value) {
-      return selectAllLoadingMode.value === 'cancel'
-        ? t('正在取消选择...')
-        : t('正在全选...');
-    }
-    return t('已选中{count}条数据，共有{total}条数据', {
-      count: selectBannerSelectedCount.value,
-      total: pagination.count,
-    });
-  });
+  const selectBannerText = computed(() => t('已选中{count}条数据，共有{total}条数据', {
+    count: selectBannerSelectedCount.value,
+    total: pagination.count,
+  }));
 
   const selectAllBanner = computed(() => {
     if (!showSelectAllBanner.value) {
@@ -425,6 +426,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     selectAllBanner,
     enhanceSelectColumn,
     resetCrossPageSelection,
+    clearAllSelection,
     preservePageSelectionForPageSizeChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
