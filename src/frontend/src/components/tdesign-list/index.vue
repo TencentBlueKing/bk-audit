@@ -106,7 +106,12 @@
           }"
           @click.stop
           @mousedown.stop>
-          {{ selectBannerText }}
+          <span>{{ selectBannerText }}</span>
+          <span
+            class="tdesign-list-select-banner-clear"
+            @click="clearAllSelection">
+            {{ t('清除所有勾选') }}
+          </span>
         </div>
         <primary-table
           ref="tableRef"
@@ -645,6 +650,7 @@
     selectAllBanner,
     enhanceSelectColumn,
     resetCrossPageSelection,
+    clearAllSelection,
     preservePageSelectionForPageSizeChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
@@ -1664,7 +1670,16 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  gap: 6px;
+  gap: 4px;
+}
+
+.tdesign-list-select-banner-clear {
+  color: #3a84ff;
+  cursor: pointer;
+
+  &:hover {
+    color: #699df4;
+  }
 }
 
 :deep(.tdesign-list-select-slot) {
