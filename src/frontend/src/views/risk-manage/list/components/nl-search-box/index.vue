@@ -92,7 +92,6 @@
 
   import MetaManageService from '@service/meta-manage';
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -221,25 +220,6 @@
   });
   // 编辑开始前的快照
   let editSnapshot = '';
-
-  // 获取风险标签和策略列表（用于传给 nl2risk_filter 接口）
-  const {
-    data: riskTagsList,
-  } = useRequest(RiskManageService.fetchRiskTags, {
-    defaultParams: {
-      page: 1,
-      page_size: 200,
-    },
-    defaultValue: [],
-    manual: true,
-  });
-
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
 
   const {
     data: riskStatusCommon,
@@ -678,6 +658,20 @@
     }
   };
 
+  const getNlParseOptions = () => {
+    const [startTime, endTime] = searchModel.value.datetime || [];
+    return {
+      risk_view_type: urlSearchParams.risk_view_type || 'all',
+      start_time: startTime,
+      end_time: endTime,
+      scope_type: urlSearchParams.scope_type,
+      scope_id: urlSearchParams.scope_id,
+      scenes: props.scenes
+        ?.filter((item: any) => item && item.scene_id && item.name)
+        .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [],
+    };
+  };
+
   // 自然语言搜索提交
   const handleNLSubmit = async (query: string) => {
     // 进入智能搜索整体流程（input 按钮开始转动）
@@ -687,29 +681,7 @@
     // 通知父组件：NL 解析开始，列表进入 loading 状态
     emit('parsing', true);
 
-    // 构建 tags 参数
-    const tags = riskTagsList.value
-      .filter((item: any) => item && item.id && item.name)
-      .map((item: any) => ({ id: Number(item.id), name: item.name }));
-
-    // 构建 strategies 参数
-    const strategies = strategyList.value
-      .filter((item: any) => item && (item.value || item.id))
-      .map((item: any) => ({
-        id: Number(item.value || item.id),
-        name: item.label || item.name || '',
-      }));
-
-    // 构建 scenes 参数
-    const scenes = props.scenes
-      ?.filter((item: any) => item && item.scene_id && item.name)
-      .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [];
-
-    // 获取 scope_type 和 scope_id（从 URL 参数或默认值）
-    const { scope_type } = urlSearchParams;
-    const { scope_id } = urlSearchParams;
-
-    const result = await parse(query, tags, strategies, scenes, scope_type, scope_id);
+    const result = await parse(query, getNlParseOptions());
     if (!result) {
       // 解析失败，取消列表 loading 和 input 转动
       isNLSearching.value = false;
