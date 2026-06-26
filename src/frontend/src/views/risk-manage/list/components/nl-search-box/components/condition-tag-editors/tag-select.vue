@@ -151,10 +151,14 @@
   const filteredOptions = computed(() => {
     const keyword = searchKey.value.trim().toLowerCase();
     if (!keyword) return options.value;
-    return options.value.filter(item => String(item[labelName.value]).toLowerCase()
-      .includes(keyword)
-      || String(item[valName.value]).toLowerCase()
-        .includes(keyword));
+    return options.value.filter((item) => {
+      const displayLabel = getItemLabel(item).toLowerCase();
+      return displayLabel.includes(keyword)
+        || String(item[labelName.value]).toLowerCase()
+          .includes(keyword)
+        || String(item[valName.value]).toLowerCase()
+          .includes(keyword);
+    });
   });
 
   // 获取label列表

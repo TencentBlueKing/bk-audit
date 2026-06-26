@@ -58,6 +58,13 @@ export default {
     service: StrategyManageService.fetchScopedStrategyList,
     labelName: 'label',
     valName: 'value',
+    formatLabel: (item: Record<string, any>) => {
+      const id = item.value ?? item.id;
+      const name = item.label || item.name || '';
+      return id !== undefined && id !== null && id !== ''
+        ? `${name}（${id}）`
+        : String(name);
+    },
     defaultParams: {
       risk_view_type: 'all',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
