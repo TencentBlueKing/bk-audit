@@ -291,6 +291,7 @@
     (e: 'requestSuccess', value: any): void,
     (e: 'clearSearch'): void,
     (e: 'on-setting-change', value: any): void,
+    (e: 'filterChange', value: Record<string, any>): void,
     (e: 'selection-change', meta: {
       mode: '' | 'page' | 'all',
       count: number,
@@ -605,27 +606,23 @@
       tableFilterValue.value = getColumnsResetValue(tableColumns.value);
       saveTableFilterState();
     } else {
-      const preservedTableFilterParams = getTableFilterParamsFromMemo();
       paramsMemo = {
         ...paramsMemo,
         ...urlSortParams,
         ...params,
       };
       tableFilterKeys.forEach((key) => {
-        const preserved = preservedTableFilterParams[key];
-        const tableFilterActive = isFilterValueExist(tableFilterValue.value?.[key]);
-        if (tableFilterActive
-          && preserved !== undefined
-          && preserved !== ''
-          && (params[key] === '' || params[key] === undefined)) {
-          paramsMemo[key] = preserved;
-          return;
-        }
-        if ((params[key] === '' || params[key] === undefined || params[key] === null)
-          && !tableFilterActive) {
+        const value = params[key];
+        if (value === '' || value === undefined || value === null
+          || (Array.isArray(value) && value.length === 0)) {
           delete paramsMemo[key];
+        } else if (Array.isArray(value)) {
+          paramsMemo[key] = value.length === 1 ? value[0] : value.join(',');
+        } else if (Object.prototype.hasOwnProperty.call(params, key)) {
+          paramsMemo[key] = value;
         }
       });
+      syncTableFilterValueFromParams(params);
     }
 
     Object.keys(params).forEach((key) => {
@@ -840,10 +837,24 @@
     return result;
   };
 
-  const parseFilterValueFromUrl = (col: any, urlValue: string) => {
+  const getFilterEmptyValue = (col: any) => {
+    if (col.filter?.resetValue !== undefined) {
+      return col.filter.resetValue;
+    }
+    return col.filter?.type === 'multiple' ? [] : '';
+  };
+
+  const convertParamToFilterValue = (col: any, paramValue: unknown) => {
+    if (paramValue === undefined || paramValue === null || paramValue === ''
+      || (Array.isArray(paramValue) && paramValue.length === 0)) {
+      return getFilterEmptyValue(col);
+    }
+
     const filterType = col.filter?.type;
     if (filterType === 'multiple') {
-      const values = urlValue.split(',').filter(item => item !== '');
+      const values = (Array.isArray(paramValue)
+        ? paramValue.map(item => String(item))
+        : String(paramValue).split(',')).filter(item => item !== '');
       if (col.filter?.list?.length) {
         return values.map((value) => {
           const matched = col.filter.list.find((option: { value: unknown }) => String(option.value) === value);
@@ -853,6 +864,7 @@
       return values;
     }
     if (filterType === 'single') {
+      const urlValue = Array.isArray(paramValue) ? String(paramValue[0]) : String(paramValue);
       if (col.filter?.list?.length) {
         const matched = col.filter.list.find((option: { value: unknown }) => String(option.value) === urlValue);
         if (matched) {
@@ -867,8 +879,23 @@
       }
       return urlValue;
     }
-    return urlValue;
+    return paramValue;
   };
+
+  const syncTableFilterValueFromParams = (params: Record<string, any> = {}) => {
+    const nextFilterValue = {
+      ...getColumnsResetValue(tableColumns.value),
+    };
+    collectAllColumns(tableColumns.value).forEach((col) => {
+      if (!col.colKey || !col.filter) {
+        return;
+      }
+      nextFilterValue[col.colKey] = convertParamToFilterValue(col, params[col.colKey]);
+    });
+    tableFilterValue.value = nextFilterValue;
+  };
+
+  const parseFilterValueFromUrl = (col: any, urlValue: string) => convertParamToFilterValue(col, urlValue);
 
   const convertFilterValueToParam = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -1058,6 +1085,7 @@
     tableFilterValue.value = getColumnsResetValue(tableColumns.value);
     saveTableFilterState();
     clearSelectionOnSearchScopeChange();
+    emits('filterChange', getColumnsResetValue(tableColumns.value));
     isLoading.value = true;
     fetchListData();
   };
@@ -1089,6 +1117,7 @@
     paramsMemo = nextParams;
     saveTableFilterState();
     clearSelectionOnSearchScopeChange();
+    emits('filterChange', filters || {});
     isLoading.value = true;
     fetchListData();
   };
@@ -1250,6 +1279,13 @@
       updateSelectBannerPosition();
     }
   });
+
+  watch(() => props.searchParams, (params) => {
+    if (!params) {
+      return;
+    }
+    syncTableFilterValueFromParams(params);
+  }, { deep: true });
 
   onMounted(() => {
     const pageReloaded = isPageReload();

@@ -56,4 +56,5 @@ export interface INLSearchBoxExposes {
   getSelectedItemList: () => Array<Record<string, any>>;
   getConditionTags: () => IConditionTag[];
   notifySearchComplete: () => void;
+  syncTableFilterFields: (filters: Record<string, any>) => void;
 }

@@ -100,6 +100,7 @@
   import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
   import { isPageReload } from '@utils/assist';
+  import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import AddCondition from './components/add-condition.vue';
@@ -116,6 +117,7 @@
 
   interface Emits {
     (e: 'change', value: Record<string, any>, otherValue?: any, isClear?: boolean): void;
+    (e: 'sync', value: Record<string, any>, otherValue?: any): void;
     (e: 'export'): void;
     (e: 'batch'): void;
     (e: 'modelValueWatch', value: Record<string, any>): void;
@@ -925,6 +927,28 @@
   };
 
   // 提交搜索
+  const syncTableFilterFields = (filters: Record<string, any>) => {
+    searchModel.value = applyTableFiltersToSearchModel(
+      searchModel.value,
+      filters,
+      props.fieldConfig,
+    );
+
+    const searchParams = getSearchParams();
+    const replaceUrl: Record<string, any> = { ...searchParams };
+    if (searchModel.value.datetime_origin) {
+      const origin = searchModel.value.datetime_origin;
+      if (Array.isArray(origin) && origin.length > 0) {
+        replaceUrl.datetime_origin = origin.join(',');
+      }
+    }
+    if (eventFiltersParams.value.length > 0) {
+      replaceUrl.event_filters = eventFiltersParams.value;
+    }
+    replaceSearchParams(replaceUrl);
+    emit('sync', searchParams, eventFiltersParams.value);
+  };
+
   const handleSubmit = (isClear = false) => {
     // 将搜索参数同步到 URL（刷新后可恢复）
     const searchParams = getSearchParams();
@@ -1081,6 +1105,7 @@
     getConditionTags() {
       return getConditionTags();
     },
+    syncTableFilterFields,
   });
 </script>
 <style lang="postcss">
