@@ -754,6 +754,7 @@
 
 .risk-manage-list-page-wrap {
   position: relative;
+  padding-bottom: 44px;
   overflow-x: hidden;
 }
 
