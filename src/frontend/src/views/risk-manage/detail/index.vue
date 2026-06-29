@@ -85,31 +85,35 @@
         </div>
       </scroll-faker>
     </div>
-    <teleport to="#teleport-router-link">
-      <bk-button
-        v-bk-tooltips="t('复制链接')"
-        text
-        theme="primary"
-        @click="handleCopyLink">
-        <audit-icon
-          style="font-size: 14px;"
-          type="link" />
-      </bk-button>
-    </teleport>
-    <teleport
-      v-if="detailData.permission?.edit_risk_v2 && !detailData.has_report"
-      to="#teleport-generate-report">
-      <bk-button
-        v-bk-tooltips="t('生成调查报告')"
-        theme="primary"
-        @click="handleGenerateReport">
-        <audit-icon
-          style="margin-right: 8px;font-size: 14px;"
-          type="add" />
-        {{ t('创建调查报告') }}
-      </bk-button>
-    </teleport>
   </bk-loading>
+  <teleport
+    v-if="isHeaderSlotActive"
+    to="#teleport-router-link">
+    <bk-button
+      :key="`risk-copy-link-${route.fullPath}`"
+      v-bk-tooltips="t('复制链接')"
+      text
+      theme="primary"
+      @click="handleCopyLink">
+      <audit-icon
+        style="font-size: 14px;"
+        type="link" />
+    </bk-button>
+  </teleport>
+  <teleport
+    v-if="showGenerateReportButton"
+    to="#teleport-generate-report">
+    <bk-button
+      :key="`risk-generate-report-${route.fullPath}`"
+      v-bk-tooltips="t('生成调查报告')"
+      theme="primary"
+      @click="handleGenerateReport">
+      <audit-icon
+        style="margin-right: 8px;font-size: 14px;"
+        type="add" />
+      {{ t('创建调查报告') }}
+    </bk-button>
+  </teleport>
   <edit-event-report
     v-model:isShowEditEventReport="isShowEditEventReport"
     :report-auto-render="detailData.report_auto_render"
@@ -141,6 +145,7 @@
   import StrategyInfo from '@model/risk/strategy-info';
 
   import useRequest from '@hooks/use-request';
+  import usePageHeaderSlot from '@hooks/use-page-header-slot';
   import useRouterBack from '@hooks/use-router-back';
 
   import {
@@ -161,6 +166,7 @@
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
+  const { isActive: isHeaderSlotActive, claim: claimHeaderSlot, release: releaseHeaderSlot } = usePageHeaderSlot();
 
   let timeout: undefined | number = undefined;
   let reportGeneratingTimer: undefined | number = undefined;
@@ -275,11 +281,20 @@
     isShowEditEventReport.value = true;
   };
 
+  let layoutObserver: MutationObserver | null = null;
+
   // 合并数据（包含事件信息配置）
   const detailData = computed(() => ({
     ...riskData.value,
     ...strategyInfoData.value,
   }));
+
+  const showGenerateReportButton = computed(() => (
+    isHeaderSlotActive.value
+    && !!detailData.value.permission?.edit_risk_v2
+    && !detailData.value.has_report
+  ));
+
   // 获取事件信息
   const handleGetEventData = (data: any) => {
     eventDataList.value = data;
@@ -333,34 +348,45 @@
       immediate: true,
     },
   );
+  watch(
+    () => route.fullPath,
+    () => {
+      if (isHeaderSlotActive.value) {
+        claimHeaderSlot();
+      }
+    },
+  );
+
   onMounted(() => {
-    const observer = new MutationObserver(() => {
+    claimHeaderSlot();
+    nextTick(() => {
+      if (route.query.openEditReport === 'false') {
+        handleGenerateReport();
+      }
+    });
+    layoutObserver = new MutationObserver(() => {
       const left = document.querySelector('.left');
       const right = document.querySelector('.right') as HTMLDivElement;
       if (left && right) {
         right.style.height = `${left.scrollHeight}px`;
       }
     });
-    observer.observe(document.querySelector('.left') as Node, {
+    layoutObserver.observe(document.querySelector('.left') as Node, {
       subtree: true,
       childList: true,
       characterData: true,
       attributes: true,
     });
-    nextTick(() => {
-      if (route.query.openEditReport === 'false') {
-        handleGenerateReport();
-      }
-    });
-    onBeforeUnmount(() => {
-      // 清理所有定时器
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      stopReportGeneratingPolling();
-      observer.takeRecords();
-      observer.disconnect();
-    });
+  });
+
+  onBeforeUnmount(() => {
+    releaseHeaderSlot();
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    stopReportGeneratingPolling();
+    layoutObserver?.disconnect();
+    layoutObserver = null;
   });
 </script>
 <style scoped lang="postcss">

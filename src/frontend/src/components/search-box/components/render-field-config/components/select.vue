@@ -33,7 +33,7 @@
       <bk-option
         v-for="item in filterList"
         :key="config.valName ? item[config.valName] : item.id"
-        :label="item[config.labelName ? config.labelName : 'name']"
+        :label="getOptionLabel(item)"
         :value="item[config.valName ? config.valName : 'id']" />
       <template
         v-if="simple"
@@ -104,6 +104,14 @@
 
   // multiple 默认为 true
   const isMultiple = computed(() => props.config.multiple ?? true);
+
+  const getOptionLabel = (item: Record<string, string>) => {
+    if (props.config.formatLabel) {
+      return props.config.formatLabel(item);
+    }
+    const labelName = props.config.labelName ? props.config.labelName : 'name';
+    return item[labelName];
+  };
 
   const filterList = computed(() => {
     if (props.config.filterList) {
