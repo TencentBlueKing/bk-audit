@@ -304,14 +304,19 @@ paths:
   /risks/{id}/strategy_info/:
     get:
       operationId: retrieve_risk_strategy_info
-      description: 获取风险关联策略的配置信息
+      description: >-
+        获取风险关联策略的可下钻字段配置。MCP Agent 应先调用本接口读取字段的 drill_config，
+        再调用 execute_tool：path uid 使用 drill_config.tool.uid，body.caller_resource_type 传 risk，
+        body.caller_resource_id 传当前风险ID，body.drill_field 传所选字段的 field_name，
+        body.params.tool_variables 按 drill_config.config 生成。target_value_type=fixed_value 时直接使用
+        target_value；target_value_type=field 时从风险事件数据中读取 target_value 指定的字段值。
       tags: []
       parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: 风险ID
+          description: 风险ID；后续调用 execute_tool 时作为 caller_resource_id 使用。
       responses:
         "200":
           description: 成功
@@ -333,7 +338,7 @@ paths:
                 description: 处理指引
               event_basic_field_configs:
                 type: array
-                description: 事件基础字段配置
+                description: 事件基础字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
                 items:
                   type: object
                   properties:
@@ -351,41 +356,53 @@ paths:
                       description: 字段描述
                     drill_config:
                       type: array
-                      description: 下钻配置
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
                       items:
                         type: object
                         properties:
                           tool:
                             type: object
-                            description: 下钻工具信息
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
                             properties:
                               uid:
                                 type: string
-                                description: 工具UID
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
                               version:
                                 type: integer
-                                description: 工具版本
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
                           config:
                             type: array
-                            description: 下钻变量映射
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
                             items:
                               type: object
                               properties:
                                 source_field:
                                   type: string
-                                  description: 工具变量名
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
                                 target_value_type:
                                   type: string
-                                  description: 值类型（fixed_value/field）
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
                                 target_field_type:
                                   type: string
-                                  description: 目标字段类型
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
                                 target_value:
                                   type: string
-                                  description: 目标值
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
                           drill_name:
                             type: string
-                            description: 下钻工具名称
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
                     is_show:
                       type: boolean
                       description: 是否展示
@@ -397,7 +414,7 @@ paths:
                       description: 字段类型
               event_data_field_configs:
                 type: array
-                description: 事件数据字段配置
+                description: 事件数据字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
                 items:
                   type: object
                   properties:
@@ -440,41 +457,53 @@ paths:
                                 description: 枚举名称
                     drill_config:
                       type: array
-                      description: 下钻配置
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
                       items:
                         type: object
                         properties:
                           tool:
                             type: object
-                            description: 下钻工具信息
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
                             properties:
                               uid:
                                 type: string
-                                description: 工具UID
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
                               version:
                                 type: integer
-                                description: 工具版本
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
                           config:
                             type: array
-                            description: 下钻变量映射
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
                             items:
                               type: object
                               properties:
                                 source_field:
                                   type: string
-                                  description: 工具变量名
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
                                 target_value_type:
                                   type: string
-                                  description: 值类型（fixed_value/field）
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
                                 target_field_type:
                                   type: string
-                                  description: 目标字段类型
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
                                 target_value:
                                   type: string
-                                  description: 目标值
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
                           drill_name:
                             type: string
-                            description: 下钻工具名称
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
                     is_show:
                       type: boolean
                       description: 是否展示
@@ -486,7 +515,7 @@ paths:
                       description: 字段类型
               event_evidence_field_configs:
                 type: array
-                description: 事件证据字段配置
+                description: 事件证据字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
                 items:
                   type: object
                   properties:
@@ -529,41 +558,53 @@ paths:
                                 description: 枚举名称
                     drill_config:
                       type: array
-                      description: 下钻配置
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
                       items:
                         type: object
                         properties:
                           tool:
                             type: object
-                            description: 下钻工具信息
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
                             properties:
                               uid:
                                 type: string
-                                description: 工具UID
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
                               version:
                                 type: integer
-                                description: 工具版本
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
                           config:
                             type: array
-                            description: 下钻变量映射
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
                             items:
                               type: object
                               properties:
                                 source_field:
                                   type: string
-                                  description: 工具变量名
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
                                 target_value_type:
                                   type: string
-                                  description: 值类型（fixed_value/field）
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
                                 target_field_type:
                                   type: string
-                                  description: 目标字段类型
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
                                 target_value:
                                   type: string
-                                  description: 目标值
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
                           drill_name:
                             type: string
-                            description: 下钻工具名称
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
                     is_show:
                       type: boolean
                       description: 是否展示
@@ -575,7 +616,7 @@ paths:
                       description: 字段类型
               risk_meta_field_config:
                 type: array
-                description: 风险元字段配置
+                description: 风险元字段配置。APIGW 默认仅返回配置了 drill_config 的字段；如需从风险事件数据取值，优先使用 basic/data/evidence 字段组。
                 items:
                   type: object
                   properties:
@@ -618,41 +659,53 @@ paths:
                                 description: 枚举名称
                     drill_config:
                       type: array
-                      description: 下钻配置
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
                       items:
                         type: object
                         properties:
                           tool:
                             type: object
-                            description: 下钻工具信息
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
                             properties:
                               uid:
                                 type: string
-                                description: 工具UID
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
                               version:
                                 type: integer
-                                description: 工具版本
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
                           config:
                             type: array
-                            description: 下钻变量映射
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
                             items:
                               type: object
                               properties:
                                 source_field:
                                   type: string
-                                  description: 工具变量名
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
                                 target_value_type:
                                   type: string
-                                  description: 值类型（fixed_value/field）
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
                                 target_field_type:
                                   type: string
-                                  description: 目标字段类型
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
                                 target_value:
                                   type: string
-                                  description: 目标值
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
                           drill_name:
                             type: string
-                            description: 下钻工具名称
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
                     is_show:
                       type: boolean
                       description: 是否展示
@@ -1433,7 +1486,11 @@ paths:
   /{namespace}/tools/{uid}/execute/:
     post:
       operationId: execute_tool
-      description: 执行工具
+      description: >-
+        执行工具。若基于 retrieve_risk_strategy_info 返回的 drill_config 做风险下钻，
+        请同时传 caller_resource_type=risk、caller_resource_id=风险ID、drill_field=所选字段 field_name、
+        event_start_time/event_end_time，以及按 drill_config.config 生成的 params.tool_variables。
+        后端会使用风险事件数据校验 tool_variables 是否符合该字段的 drill_config。
       tags: []
       parameters:
         - in: path
@@ -1445,7 +1502,7 @@ paths:
           name: uid
           type: string
           required: true
-          description: 工具唯一标识
+          description: 工具唯一标识；风险下钻时使用 retrieve_risk_strategy_info 返回的 drill_config.tool.uid。
         - in: body
           name: body
           required: true
@@ -1456,20 +1513,25 @@ paths:
             properties:
               params:
                 type: object
-                description: 工具执行参数
+                description: 工具执行参数。风险下钻时按 retrieve_risk_strategy_info 返回的 drill_config.config 组装 tool_variables。
                 properties:
                   tool_variables:
                     type: array
-                    description: 工具变量列表
+                    description: >-
+                      工具变量列表。风险下钻时每一项由 drill_config.config 生成：
+                      raw_name 使用 source_field，value 按 target_value_type/target_value/target_field_type
+                      从固定值或风险事件数据中取值。
                     items:
                       type: object
                       properties:
                         raw_name:
                           type: string
-                          description: 变量原始名称
+                          description: 工具变量原始名称；风险下钻时填写 drill_config.config[].source_field。
                         value:
                           type: string
-                          description: 变量值，类型根据变量类型决定（string/number/array）
+                          description: >-
+                            工具变量值，类型根据工具变量决定（string/number/array 等）。风险下钻时：
+                            fixed_value 直接填写 target_value；field 从风险事件记录中读取 target_value 指定的字段值。
                   page:
                     type: integer
                     description: 页码（仅 data_search 类型）
@@ -1478,15 +1540,27 @@ paths:
                     type: integer
                     description: 每页数量（仅 data_search 类型）
                     default: 100
+              caller_resource_type:
+                type: string
+                description: 调用方资源类型。风险下钻时固定传 risk，用于声明本次工具执行来自风险上下文。
+              caller_resource_id:
+                type: string
+                description: 调用方资源实例ID。风险下钻时传风险ID，应与 retrieve_risk_strategy_info 的 id 一致。
               drill_field:
                 type: string
-                description: 指定使用哪个字段的 drill_config 进行变量值校验
+                description: >-
+                  指定使用哪个策略字段的 drill_config 进行变量值校验。风险下钻时传所选字段的 field_name，
+                  后端仅使用该字段下与当前 uid 匹配的 config 校验 params.tool_variables。
               event_start_time:
                 type: string
-                description: 事件开始时间（用于 list_event 获取事件数据）
+                description: >-
+                  风险事件开始时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
+                  需要与 drill_field、event_end_time 一起传入。
               event_end_time:
                 type: string
-                description: 事件结束时间（用于 list_event 获取事件数据）
+                description: >-
+                  风险事件结束时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
+                  需要与 drill_field、event_start_time 一起传入。
       responses:
         "200":
           description: 执行成功
