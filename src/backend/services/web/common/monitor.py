@@ -23,6 +23,8 @@ __all__ = [
     "RiskReportRenderFailedEvent",
     "RiskReportContentQualityEvent",
     "RiskExportFailedEvent",
+    "NL2RiskFilterFailedEvent",
+    "AnalyseReportGenerateFailedEvent",
 ]
 
 
@@ -64,3 +66,19 @@ class RiskExportFailedEvent(Event):
     name = "risk_export_failed"
     documentation = "风险异步导出失败"
     labelnames = ["username", "risk_count"]
+
+
+class NL2RiskFilterFailedEvent(Event):
+    """自然语言转风险筛选条件失败事件"""
+
+    name = "nl2risk_filter_failed"
+    documentation = "自然语言转风险筛选条件失败"
+    labelnames = ["status", "scope_type", "error_type"]
+
+
+class AnalyseReportGenerateFailedEvent(Event):
+    """AI 分析报告最终生成失败事件"""
+
+    name = "analyse_report_generate_failed"
+    documentation = "AI 分析报告最终生成失败"
+    labelnames = ["report_type", "has_scenario", "error_type"]
