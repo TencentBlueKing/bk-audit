@@ -23,6 +23,8 @@ import StrategyManageService from '@service/strategy-manage';
 
 import useRequest from '@hooks/use-request';
 
+import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+
 import type { INL2RiskFilterResponse } from '../types';
 
 export interface INLParseOptions {
@@ -41,7 +43,7 @@ const mapStrategyOptions = (list: Array<Record<string, any>>) => list
     const label = String(item.label || item.name || '');
     return {
       id,
-      name: `${label}（${id}）`,
+      name: formatStrategyNameWithId(label, id),
     };
   });
 

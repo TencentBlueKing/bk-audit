@@ -101,6 +101,12 @@
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
   import { isPageReload } from '@utils/assist';
   import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
+  import {
+    applyDatetimeUrlParams,
+    ensureDatetimeSynced,
+    isRelativeDatetimeOrigin,
+    syncDatetimeFromOrigin,
+  } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import AddCondition from './components/add-condition.vue';
@@ -137,6 +143,7 @@
   // URL 参数同步（与 search-box 保持一致）
   const {
     getSearchParamsPost,
+    mergeAndReplaceSearchParams,
     replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
@@ -161,7 +168,7 @@
     if (value === null || value === '') {
       return [];
     }
-    return value?.toString().split(',');
+    return value?.toString().split(',') ?? [];
   };
 
   if (shouldRestoreFromUrl) {
@@ -178,12 +185,7 @@
         searchModel.value[searchFieldName] = value === null ? '' : value.toString();
       }
     });
-    if (urlSearchParams.start_time && urlSearchParams.end_time) {
-      searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
-    }
-    if (urlSearchParams.datetime_origin) {
-      searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
-    }
+    applyDatetimeUrlParams(searchModel.value, urlSearchParams, normalizeParamArray);
   }
 
   // 事件字段相关（与 search-box 完全一致）
@@ -874,6 +876,9 @@
   );
 
   const getSearchParams = () => {
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
     const result = Object.keys(searchModel.value).reduce((res, key) => {
       const value = searchModel.value[key];
       if (key === 'datetime') {
@@ -945,7 +950,7 @@
     if (eventFiltersParams.value.length > 0) {
       replaceUrl.event_filters = eventFiltersParams.value;
     }
-    replaceSearchParams(replaceUrl);
+    mergeAndReplaceSearchParams(replaceUrl);
     emit('sync', searchParams, eventFiltersParams.value);
   };
 
@@ -964,7 +969,7 @@
     if (eventFiltersParams.value.length > 0) {
       replaceUrl.event_filters = eventFiltersParams.value;
     }
-    replaceSearchParams(replaceUrl);
+    mergeAndReplaceSearchParams(replaceUrl);
 
     emit('change', searchParams, eventFiltersParams.value, isClear);
   };
@@ -1061,12 +1066,7 @@
     if (!riskStatusCommon.value.length) {
       fetchRiskStatusCommon();
     }
-    if (isPageReload()) {
-      emit('modelValueWatch', searchModel.value);
-      handleSubmit(true);
-      return;
-    }
-    if (urlSearchParams?.event_filters) {
+    if (!isPageReload() && urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         id: item.id ? item.id : `${item.field}:${item.display_name}`,
         field_name: item.field,
@@ -1079,8 +1079,11 @@
         operator: item.operator,
       }));
     }
-    emit('modelValueWatch', searchModel.value);
-    handleSubmit();
+    ensureDatetimeSynced(searchModel.value);
+    nextTick(() => {
+      emit('modelValueWatch', searchModel.value);
+      handleSubmit(isPageReload());
+    });
   });
 
   // Expose（与 search-box 完全一致的对外接口）

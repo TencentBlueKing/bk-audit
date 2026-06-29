@@ -133,6 +133,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onMounted,
     ref,
     watch,
@@ -148,6 +149,13 @@
 
   import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
+
+  import {
+    applyDatetimeUrlParams,
+    ensureDatetimeSynced,
+    isRelativeDatetimeOrigin,
+    syncDatetimeFromOrigin,
+  } from '@utils/sync-datetime-from-url';
 
   import type { IFieldConfig } from './components/render-field-config/config';
   // import FieldConfig from './components/render-field-config/config';
@@ -221,6 +229,7 @@
   const {
     getSearchParamsPost,
     appendSearchParams,
+    mergeAndReplaceSearchParams,
     replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
@@ -409,7 +418,7 @@
     if (value === null || value === '') {
       return [];
     }
-    return value?.toString().split(',');
+    return value?.toString().split(',') ?? [];
   };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
@@ -427,12 +436,7 @@
       searchModel.value[searchFieldName] = value === null ? '' : value.toString();
     }
   });
-  if (urlSearchParams.start_time && urlSearchParams.end_time) {
-    searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
-  }
-  if (urlSearchParams.datetime_origin) {
-    searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
-  }
+  applyDatetimeUrlParams(searchModel.value, urlSearchParams, normalizeParamArray);
 
   const handleRenderTypeChange = () => {
     renderType.value = renderType.value === 'key' ? 'value' : 'key';
@@ -448,6 +452,9 @@
       .filter(item => item !== '' && item !== allText)
   );
   const getSearchParams = () => {
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
     const result = Object.keys(searchModel.value).reduce((result, key) => {
       const value = searchModel.value[key];
       if (key === 'datetime') {
@@ -490,7 +497,7 @@
     if (options?.includeEventFilters !== false && eventFiltersParams.value.length > 0) {
       replaceUrl.event_filters = eventFiltersParams.value;
     }
-    replaceSearchParams(replaceUrl);
+    mergeAndReplaceSearchParams(replaceUrl);
   };
   const handleSubmit = (isClear = false) => {
     emit('change', getSearchParams(), eventFiltersParams.value, isClear);
@@ -578,7 +585,11 @@
         operator: item.operator,
       }));
     }
-    handleSubmit();
+    ensureDatetimeSynced(searchModel.value);
+    nextTick(() => {
+      syncSearchParamsToUrl();
+      handleSubmit();
+    });
   });
 
   defineExpose<Exposes>({

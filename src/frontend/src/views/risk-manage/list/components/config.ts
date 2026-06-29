@@ -21,6 +21,8 @@ import StrategyManageService from '@service/strategy-manage';
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
+import { formatStrategyOptionLabel } from '@utils/format-strategy-name';
+
 const riskStatusOrder = [
   '待处理',
   '处理中',
@@ -52,19 +54,13 @@ export default {
     required: false,
   },
   strategy_id: {
-    label: '风险命中策略',
+    label: '风险命中策略(ID)',
     type: 'select',
     required: false,
     service: StrategyManageService.fetchScopedStrategyList,
     labelName: 'label',
     valName: 'value',
-    formatLabel: (item: Record<string, any>) => {
-      const id = item.value ?? item.id;
-      const name = item.label || item.name || '';
-      return id !== undefined && id !== null && id !== ''
-        ? `${name}（${id}）`
-        : String(name);
-    },
+    formatLabel: formatStrategyOptionLabel,
     defaultParams: {
       risk_view_type: 'all',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
