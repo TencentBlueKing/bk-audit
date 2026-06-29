@@ -1730,6 +1730,20 @@ class ListAnalyseReportRequestSerializer(serializers.Serializer):
         default="",
         help_text=gettext_lazy("模糊搜索报告标题、分析范围、生成人"),
     )
+    title = serializers.CharField(
+        label=gettext_lazy("报告标题"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按报告标题模糊筛选"),
+    )
+    analysis_scope = serializers.CharField(
+        label=gettext_lazy("分析范围"),
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按分析范围模糊筛选"),
+    )
     report_type = serializers.ChoiceField(
         label=gettext_lazy("报告类型筛选"),
         choices=AnalyseReportType.choices,
