@@ -25,7 +25,7 @@
         <render-info-item
           v-for="(fieldItem, itemIndex) in fieldGroup.filter(item => item)"
           :key="itemIndex"
-          :label="fieldItem.display_name"
+          :label="fieldItem.field_name === 'strategy_name' ? t('风险命中策略(ID)') : fieldItem.display_name"
           :label-width="labelWidth"
           :style="getFieldStyle(fieldItem.field_name)">
           <template v-if="fieldItem.field_name === 'risk_id'">
@@ -61,7 +61,7 @@
           </template>
           <template v-else-if="fieldItem.field_name === 'strategy_name'">
             <router-link
-              v-if="strategyName"
+              v-if="strategyDisplayText"
               target="_blank"
               :to="{
                 name: 'strategyList',
@@ -71,7 +71,7 @@
                   scope_type: 'scene',
                 },
               }">
-              {{ strategyName }}
+              {{ strategyDisplayText }}
             </router-link>
             <span v-else>--</span>
           </template>
@@ -188,6 +188,8 @@
   import { RISK_STATUS_THEME_MAP } from '@views/risk-manage/constants';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
+  import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+
   import RenderInfoItem from './render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -286,10 +288,13 @@
     // 3. 其他情况直接返回原值
     return value ;
   };
-  const strategyName = computed(() => {
+  const strategyDisplayText = computed(() => {
     const { data } = props;
     const item = props.strategyList.find(item => item.value === data.strategy_id);
-    return item && item.label ? item.label : '';
+    if (!item?.label && !data.strategy_id) {
+      return '';
+    }
+    return formatStrategyNameWithId(item?.label, data.strategy_id);
   });
 
   const riskRule = computed(() => {

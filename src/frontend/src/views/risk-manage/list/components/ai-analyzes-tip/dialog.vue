@@ -112,6 +112,8 @@
   import iconZonghe from '@images/zonghe.svg';
   import iconZrren from '@images/zrren.svg';
 
+  import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+
   interface Props {
     analyzeCount?: number;
     conditionTags?: any[];
@@ -238,9 +240,13 @@
   const buildAnalysisScope = () => props.conditionTags.map((tag) => {
     // 策略id：从策略列表中匹配对应的策略名称
     if (tag.fieldName === 'strategy_id') {
+      const values = Array.isArray(tag.value) ? tag.value : [tag.value];
       return {
         label: tag.label,
-        value: strategyList.value.find((strategy: any) => tag.value.includes(strategy.value.toString()))?.label,
+        value: values.map((id: string | number) => {
+          const strategy = strategyList.value.find((item: any) => String(item.value) === String(id));
+          return formatStrategyNameWithId(strategy?.label, id);
+        }).join(', '),
       };
     }
     // 标签：从标签映射中获取标签名称

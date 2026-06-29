@@ -128,25 +128,25 @@
                           v-for="(basicItem, itemIndex) in basicArr"
                           :key="itemIndex"
                           :description="basicItem.description"
-                          :label="basicItem.display_name"
+                          :label="basicItem.field_name === 'strategy_id' ? t('风险命中策略(ID)') : basicItem.display_name"
                           :label-width="labelWidth"
                           :label-width-percent="25"
                           style="flex-basis: 50%;">
                           <!-- 策略id -->
                           <template v-if="basicItem.field_name === 'strategy_id'">
                             <bk-button
-                              v-if="strategyList.find((item: any) => item.value === eventItem?.strategy_id)?.label"
+                              v-if="getStrategyDisplayText(eventItem?.strategy_id)"
                               text
                               theme="primary"
                               @click="handlerStrategy()">
-                              {{ strategyList.find((item: any) => item.value === eventItem?.strategy_id)?.label }} ({{ eventItem?.strategy_id }})
+                              {{ getStrategyDisplayText(eventItem?.strategy_id) }}
                             </bk-button>
                             <span v-else> -- </span>
                             <audit-icon
                               v-bk-tooltips="t('复制')"
                               class="copy-btn"
                               type="copy"
-                              @click.stop="handleCopyValue(strategyList.find((item: any) => item.value === eventItem?.strategy_id)?.label)" />
+                              @click.stop="handleCopyValue(getStrategyDisplayText(eventItem?.strategy_id))" />
                           </template>
                           <!-- 其他字段 -->
                           <template v-else>
@@ -646,6 +646,7 @@
   import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import { execCopy } from '@utils/assist';
+  import { formatStrategyNameWithId } from '@utils/format-strategy-name';
 
   import addEvent from '../add-event/index.vue';
 
@@ -717,6 +718,16 @@
   type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+
+  const getStrategyDisplayText = (strategyId?: string | number | null) => {
+    if (strategyId === undefined || strategyId === null || strategyId === '') {
+      return '';
+    }
+    const normalizedId = Number(strategyId);
+    const label = props.strategyList.find(item => item.value === normalizedId)?.label;
+    return formatStrategyNameWithId(label, strategyId);
+  };
+
   const isShowSide = ref(false);
   const isManuallyCollapsed = ref(false); // 标记是否手动收起
   let timeout: number| undefined = undefined;
