@@ -19,7 +19,7 @@
     v-model:isShow="show"
     :show-footer="false"
     :title="t('历史分析报告')"
-    width="1200">
+    :width="drawerWidth">
     <div
       v-if="show"
       class="history-report-drawer-content">
@@ -62,6 +62,7 @@
   import RiskManageService from '@service/risk-manage';
   import MetaManageService from '@service/meta-manage';
 
+  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
   import TdesignList from '@components/tdesign-list/index.vue';
@@ -110,7 +111,25 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
   const router = useRouter();
+
+  const drawerWidth = ref('1200');
+  const titleColumnMinWidth = ref(240);
+
+  const updateDrawerLayout = () => {
+    const viewportWidth = window.innerWidth;
+    if (viewportWidth >= 1920) {
+      drawerWidth.value = '1440';
+      titleColumnMinWidth.value = 320;
+    } else if (viewportWidth >= 1600) {
+      drawerWidth.value = '1320';
+      titleColumnMinWidth.value = 280;
+    } else {
+      drawerWidth.value = '1200';
+      titleColumnMinWidth.value = 240;
+    }
+  };
 
   const show = computed({
     get: () => props.isShow,
@@ -121,6 +140,7 @@
   const listRef = ref<InstanceType<typeof TdesignList>>();
   const originalQuery = ref<Record<string, any>>({});
   const pendingReportIds = ref<Array<string | number>>([]);
+  const retryingReportIds = ref<Array<string | number>>([]);
   const listPollingTimer = ref<ReturnType<typeof setTimeout> | null>(null);
   const LIST_POLL_INTERVAL = 3000;
 
@@ -190,6 +210,41 @@
       emit('analyze-finished', JSON.stringify(data));
     },
   });
+
+  const {
+    run: retryAiAnalyseReport,
+  } = useRequest(RiskManageService.retryAiAnalyseReport, {
+    defaultValue: null,
+    onSuccess() {
+      messageSuccess(t('已重新提交生成'));
+    },
+  });
+
+  const isRetryingReport = (reportId: string | number) => (
+    retryingReportIds.value.some(id => isSameReportId(id, reportId))
+  );
+
+  const handleRetryReport = async (row: HistoryReportItem) => {
+    const reportId = getRowReportId(row);
+    if (!reportId || isRetryingReport(reportId)) {
+      return;
+    }
+    retryingReportIds.value = [...retryingReportIds.value, reportId];
+    try {
+      const result = await retryAiAnalyseReport({ report_id: reportId });
+      const listData = getListData();
+      const target = listData.find(item => isSameReportId(getRowReportId(item), reportId));
+      if (target) {
+        target.status = result?.status || 'generating';
+        target.error_message = '';
+        target.title_generating = false;
+      }
+      beginAnalyzeWatch({ title: row.title, reportId });
+      listRef.value?.refreshList();
+    } finally {
+      retryingReportIds.value = retryingReportIds.value.filter(id => !isSameReportId(id, reportId));
+    }
+  };
 
   const checkPendingReports = () => {
     const listData = getListData();
@@ -358,8 +413,8 @@
         <span class="report-status-text">{getReportStatusText(status)}</span>
       </span>
     );
-    if (normalizedStatus === 'failed' && errorMessage) {
-      return (
+    if (normalizedStatus === 'failed') {
+      const statusContent = errorMessage ? (
         <span
           class="report-status-failed"
           v-bk-tooltips={{
@@ -368,16 +423,37 @@
           }}>
           {statusCell}
         </span>
+        ) : statusCell;
+      const reportId = getRowReportId(row);
+      return (
+        <span class="report-status-cell-wrap">
+          {statusContent}
+          <bk-button
+            class="report-retry-btn"
+            disabled={isRetryingReport(reportId)}
+            text
+            v-bk-tooltips={{
+              content: t('重试'),
+            }}
+            onClick={(event: MouseEvent) => {
+              event.stopPropagation();
+              handleRetryReport(row);
+            }}>
+            <audit-icon
+              class={isRetryingReport(reportId) ? 'rotate-loading' : ''}
+              type="refresh" />
+          </bk-button>
+        </span>
       );
     }
     return statusCell;
   };
 
-  const tableColumns = [
+  const tableColumns = computed(() => [
     {
       title: t('报告标题'),
       colKey: 'title',
-      minWidth: 180,
+      minWidth: titleColumnMinWidth.value,
       ellipsis: true,
       cell: (h: any, { row }: { row: HistoryReportItem }) => (
         <ReportTitleCell
@@ -441,7 +517,7 @@
     {
       title: t('状态'),
       colKey: 'status',
-      width: 120,
+      width: 160,
       filter: {
         type: 'single',
         showConfirmAndReset: true,
@@ -483,7 +559,7 @@
         <Tooltips data={row.created_at || '--'} />
       ),
     },
-  ];
+  ]);
 
   // 获取历史报告列表占位
   const dataSource = RiskManageService.getHistoryReportList;
@@ -513,6 +589,7 @@
 
   watch(show, (val) => {
     if (val) {
+      updateDrawerLayout();
       // 记录当前URL参数
       originalQuery.value = { ...router.currentRoute.value.query };
       searchValue.value = [];
@@ -596,9 +673,38 @@
   visibility: visible;
 }
 
+@media (width >= 1600px) {
+  .history-report-drawer-content {
+    margin-right: 32px;
+    margin-left: 32px;
+  }
+}
+
+:deep(.report-status-cell-wrap) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 :deep(.report-status-failed) {
   display: inline-flex;
   cursor: help;
+}
+
+:deep(.report-retry-btn) {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  color: #3a84ff;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+
+  .audit-icon {
+    font-size: 14px;
+  }
 }
 
 :deep(.report-status-cell) {

@@ -367,6 +367,16 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 重试AI分析报告
+  retryAiAnalyseReport(params: {
+    report_id: string | number,
+  }) {
+    return Request.post(`${this.api}/analyse_report/${params.report_id}/retry/`, {
+      params: {
+        report_id: params.report_id,
+      },
+    });
+  }
   // 获取历史报告列表
   getHistoryReportList(params: {
     page: number,
