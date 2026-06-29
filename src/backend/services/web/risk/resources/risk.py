@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 import logging
+import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
@@ -65,8 +66,16 @@ from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.models import get_request_username
+from core.observability import (
+    OBSERVATION_METRIC_STATUS_ERROR,
+    OBSERVATION_METRIC_STATUS_SUCCESS,
+    report_observation_metric,
+    set_span_attributes,
+    start_observation_span,
+)
 from core.utils.data import build_preserved_order_queryset, choices_to_dict
 from services.web.common.constants import ScopeQueryField
+from services.web.common.monitor import NL2RiskFilterFailedEvent
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
@@ -1550,64 +1559,142 @@ class NL2RiskFilter(RiskMeta):
         scenes = validated_request_data.get("scenes", [])
         scope_type = validated_request_data.get(ScopeQueryField.SCOPE_TYPE)
         scope_id = validated_request_data.get(ScopeQueryField.SCOPE_ID)
-        thread_id = validated_request_data.get("thread_id") or str(uuid.uuid4())
+        input_thread_id = validated_request_data.get("thread_id")
+        thread_id = input_thread_id or str(uuid.uuid4())
         username = get_request_username()
+        metric_started_at = time.perf_counter()
 
-        request_params = {
-            "query": query,
-            "tags": tags,
-            "strategies": strategies,
-            "scenes": scenes,
-            "scope_type": scope_type,
-            "scope_id": scope_id,
-            "thread_id": thread_id,
-        }
-        user_message = build_nl2risk_user_message(
-            query=query,
-            tags=tags,
-            strategies=strategies,
-            username=username,
-            scenes=scenes,
-            scope_type=scope_type,
-            scope_id=scope_id,
-        )
-
-        try:
-            result = api.bk_plugins_ai_agent.chat_completion(
-                agent_code=AIAgentCode.RISK_SEARCH,
-                user=username,
-                input=user_message,
-                chat_history=[],
-                execute_kwargs={"stream": False, "thread_id": thread_id},
+        with start_observation_span(
+            "risk.nl2risk_filter.generate",
+            attributes={
+                "bk_audit.service": "risk",
+                "bk_audit.operation": "nl2risk_filter",
+                "bk_audit.scope.type": scope_type,
+                "bk_audit.scope.has_scope_id": bool(scope_id),
+                "bk_audit.nl2risk.tags_count": len(tags),
+                "bk_audit.nl2risk.strategies_count": len(strategies),
+                "bk_audit.nl2risk.scenes_count": len(scenes),
+                "bk_audit.nl2risk.has_thread_id": bool(input_thread_id),
+            },
+        ) as span:
+            request_params = {
+                "query": query,
+                "tags": tags,
+                "strategies": strategies,
+                "scenes": scenes,
+                "scope_type": scope_type,
+                "scope_id": scope_id,
+                "thread_id": thread_id,
+            }
+            user_message = build_nl2risk_user_message(
+                query=query,
+                tags=tags,
+                strategies=strategies,
+                username=username,
+                scenes=scenes,
+                scope_type=scope_type,
+                scope_id=scope_id,
             )
-        except Exception as e:
-            logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
+
+            try:
+                with start_observation_span(
+                    "risk.nl2risk_filter.call_ai_agent",
+                    attributes={
+                        "bk_audit.service": "risk",
+                        "bk_audit.operation": "nl2risk_filter",
+                        "bk_audit.stage": "call_ai_agent",
+                        "bk_audit.scope.type": scope_type,
+                    },
+                ):
+                    result = api.bk_plugins_ai_agent.chat_completion(
+                        agent_code=AIAgentCode.RISK_SEARCH,
+                        user=username,
+                        input=user_message,
+                        chat_history=[],
+                        execute_kwargs={"stream": False, "thread_id": thread_id},
+                    )
+            except Exception as e:
+                logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
+                NL2RiskFilterLog.save_nl2risk_filter_log(
+                    username=username,
+                    query=query,
+                    request_params=request_params,
+                    response_data={},
+                    status=NL2RiskFilterLogStatus.API_ERROR,
+                    error_message=str(e),
+                )
+                NL2RiskFilterFailedEvent(
+                    target="nl2risk_filter",
+                    context={
+                        "status": NL2RiskFilterLogStatus.API_ERROR,
+                        "scope_type": scope_type,
+                        "error_type": e.__class__.__name__,
+                    },
+                    extra={"error": str(e)},
+                ).async_report()
+                report_observation_metric(
+                    name="risk.nl2risk_filter.generate",
+                    started_at=metric_started_at,
+                    status=OBSERVATION_METRIC_STATUS_ERROR,
+                    error_type=e.__class__.__name__,
+                    dimensions={
+                        "service": "risk",
+                        "operation": "nl2risk_filter",
+                        "scope_type": scope_type,
+                        "business_status": NL2RiskFilterLogStatus.API_ERROR,
+                    },
+                )
+                raise NL2RiskFilterServiceError()
+
+            raw_text = str(result)
+            with start_observation_span(
+                "risk.nl2risk_filter.parse_result",
+                attributes={
+                    "bk_audit.service": "risk",
+                    "bk_audit.operation": "nl2risk_filter",
+                    "bk_audit.stage": "parse_result",
+                },
+            ):
+                filter_conditions, message = extract_filter_conditions_from_ai_result(result)
+            response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
+
+            status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED
+            metric_status = (
+                OBSERVATION_METRIC_STATUS_SUCCESS
+                if status == NL2RiskFilterLogStatus.SUCCESS
+                else OBSERVATION_METRIC_STATUS_ERROR
+            )
+            metric_error_type = "" if status == NL2RiskFilterLogStatus.SUCCESS else status
+            set_span_attributes(
+                span,
+                {
+                    "bk_audit.nl2risk.status": status,
+                    "bk_audit.nl2risk.filter_condition_count": len(filter_conditions),
+                },
+            )
             NL2RiskFilterLog.save_nl2risk_filter_log(
                 username=username,
                 query=query,
                 request_params=request_params,
-                response_data={},
-                status=NL2RiskFilterLogStatus.API_ERROR,
-                error_message=str(e),
+                response_data=response_data,
+                status=status,
+                result=raw_text,
+                message=message,
             )
-            raise NL2RiskFilterServiceError()
+            report_observation_metric(
+                name="risk.nl2risk_filter.generate",
+                started_at=metric_started_at,
+                status=metric_status,
+                error_type=metric_error_type,
+                dimensions={
+                    "service": "risk",
+                    "operation": "nl2risk_filter",
+                    "scope_type": scope_type,
+                    "business_status": status,
+                },
+            )
 
-        raw_text = str(result)
-        filter_conditions, message = extract_filter_conditions_from_ai_result(result)
-        response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
-
-        status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED
-        NL2RiskFilterLog.save_nl2risk_filter_log(
-            username=username,
-            query=query,
-            request_params=request_params,
-            response_data=response_data,
-            status=status,
-            result=raw_text,
-            message=message,
-        )
-
-        return response_data
+            return response_data
 
 
 class ListEventFieldsByStrategyBrief(ListEventFieldsByStrategy):

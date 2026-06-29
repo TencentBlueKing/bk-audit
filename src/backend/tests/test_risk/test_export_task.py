@@ -112,11 +112,11 @@ class TestRiskExportTask(TestCase):
         mock_update_state.assert_any_call(state="RUNNING", meta={"current": 0, "total": 2})
         mock_update_state.assert_any_call(state="PROGRESS", meta={"current": 2, "total": 2})
 
-    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.async_report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_apply_returns_failure_state_after_max_retry(
-        self, mock_service_cls, mock_update_state, mock_report_event
+        self, mock_service_cls, mock_update_state, mock_async_report_event
     ):
         service = mock_service_cls.return_value
         service.build_export_file.side_effect = RuntimeError("export failed")
@@ -135,14 +135,14 @@ class TestRiskExportTask(TestCase):
         self.assertEqual(result.state, "FAILURE")
         self.assertIsInstance(result.result, RuntimeError)
         self.assertIn("export failed", str(result.result))
-        mock_report_event.assert_called_once()
+        mock_async_report_event.assert_called_once()
 
-    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.async_report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_retries_when_send_mail_failed(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event
+        self, mock_service_cls, mock_update_state, mock_retry, mock_async_report_event
     ):
         mock_retry.side_effect = RuntimeError("retry called")
         service = mock_service_cls.return_value
@@ -166,16 +166,24 @@ class TestRiskExportTask(TestCase):
             requested_at="2026-06-22 19:33:36",
         )
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
-        mock_report_event.assert_not_called()
+        mock_async_report_event.assert_not_called()
 
     @mock.patch("services.web.risk.tasks.logger_celery.error")
     @mock.patch("services.web.risk.tasks.logger_celery.warning")
-    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.report_observation_metric")
+    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.async_report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_retries_before_max_retry(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event, mock_logger_warning, mock_logger_error
+        self,
+        mock_service_cls,
+        mock_update_state,
+        mock_retry,
+        mock_async_report_event,
+        mock_report_metric,
+        mock_logger_warning,
+        mock_logger_error,
     ):
         mock_retry.side_effect = RuntimeError("retry called")
         service = mock_service_cls.return_value
@@ -195,7 +203,8 @@ class TestRiskExportTask(TestCase):
             export_risks_to_mail.request.retries = original_retries
 
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
-        mock_report_event.assert_not_called()
+        mock_async_report_event.assert_not_called()
+        mock_report_metric.assert_not_called()
         warning_messages = [call.args[0] for call in mock_logger_warning.call_args_list]
         error_messages = [call.args[0] for call in mock_logger_error.call_args_list]
         self.assertIn(
@@ -204,13 +213,13 @@ class TestRiskExportTask(TestCase):
         )
         self.assertNotIn("[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s", error_messages)
 
-    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.async_report")
     @mock.patch("services.web.risk.tasks.logger_celery.error")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
     def test_export_risks_to_mail_reports_alert_after_max_retry(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_logger_error, mock_report_event
+        self, mock_service_cls, mock_update_state, mock_retry, mock_logger_error, mock_async_report_event
     ):
         mock_retry.side_effect = MaxRetriesExceededError()
         service = mock_service_cls.return_value
@@ -224,7 +233,7 @@ class TestRiskExportTask(TestCase):
                 requested_at="2026-06-22 19:33:36",
             )
 
-        mock_report_event.assert_called_once()
+        mock_async_report_event.assert_called_once()
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
         error_messages = [call.args[0] for call in mock_logger_error.call_args_list]
         self.assertIn(
@@ -232,15 +241,15 @@ class TestRiskExportTask(TestCase):
             error_messages,
         )
 
-    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.report")
+    @mock.patch("services.web.risk.tasks.report_observation_metric")
+    @mock.patch("services.web.risk.tasks.RiskExportFailedEvent.async_report")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.retry")
     @mock.patch("services.web.risk.tasks.export_risks_to_mail.update_state")
     @mock.patch("services.web.risk.tasks.RiskExportService")
-    def test_export_risks_to_mail_keeps_original_error_when_report_failed(
-        self, mock_service_cls, mock_update_state, mock_retry, mock_report_event
+    def test_export_risks_to_mail_reports_event_and_keeps_original_error(
+        self, mock_service_cls, mock_update_state, mock_retry, mock_async_report_event, mock_report_metric
     ):
         mock_retry.side_effect = MaxRetriesExceededError()
-        mock_report_event.side_effect = RuntimeError("report failed")
         service = mock_service_cls.return_value
         service.build_export_file.side_effect = RuntimeError("export failed")
 
@@ -252,5 +261,12 @@ class TestRiskExportTask(TestCase):
                 requested_at="2026-06-22 19:33:36",
             )
 
-        mock_report_event.assert_called_once()
+        mock_async_report_event.assert_called_once()
         mock_retry.assert_called_once_with(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
+        mock_report_metric.assert_called_once()
+        metric_kwargs = mock_report_metric.call_args.kwargs
+        self.assertEqual(metric_kwargs["name"], "risk.export_risks_to_mail")
+        self.assertEqual(metric_kwargs["status"], "error")
+        self.assertEqual(metric_kwargs["error_type"], "RuntimeError")
+        self.assertEqual(metric_kwargs["dimensions"]["operation"], "export_risks_to_mail")
+        self.assertEqual(metric_kwargs["dimensions"]["business_status"], "failed")
