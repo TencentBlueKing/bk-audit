@@ -722,6 +722,18 @@ class TestListAnalyseReport(AnalyseReportTestBase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["title"], "风险综合分析报告")
 
+    def test_list_reports_filter_by_title(self):
+        """支持按报告标题单独筛选"""
+        result = self.resource.risk.list_analyse_report.request({"title": "风险综合"})
+
+        self.assertEqual([item["report_id"] for item in result], [self.report2.report_id])
+
+    def test_list_reports_filter_by_analysis_scope(self):
+        """支持按分析范围单独筛选"""
+        result = self.resource.risk.list_analyse_report.request({"analysis_scope": "近30天"})
+
+        self.assertEqual([item["report_id"] for item in result], [self.report1.report_id])
+
     def test_list_reports_only_current_user(self):
         """测试列表只返回当前用户的报告，不包含其他用户的报告"""
         result = self.resource.risk.list_analyse_report({})

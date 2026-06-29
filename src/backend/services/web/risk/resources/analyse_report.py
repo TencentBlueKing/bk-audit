@@ -278,6 +278,10 @@ class ListAnalyseReport(AnalyseReportMeta):
     RequestSerializer = ListAnalyseReportRequestSerializer
     ResponseSerializer = ListAnalyseReportResponseSerializer
     many_response_data = True
+    SEARCH_FILTERS = {
+        "title": "title__icontains",
+        "analysis_scope": "analysis_scope__icontains",
+    }
 
     def perform_request(self, validated_request_data):
         # 默认按当前用户过滤，只返回自己创建的报告
@@ -289,6 +293,11 @@ class ListAnalyseReport(AnalyseReportMeta):
             queryset = queryset.filter(
                 Q(title__icontains=keyword) | Q(analysis_scope__icontains=keyword) | Q(created_by__icontains=keyword)
             )
+
+        for request_field, lookup in self.SEARCH_FILTERS.items():
+            value = validated_request_data.get(request_field)
+            if value:
+                queryset = queryset.filter(**{lookup: value})
 
         # report_type 筛选
         report_type = validated_request_data.get("report_type")
