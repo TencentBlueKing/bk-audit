@@ -413,6 +413,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 重试AI分析报告
+   */
+  retryAiAnalyseReport(params: {
+    report_id: string | number,
+  }) {
+    return RiskManageSource.retryAiAnalyseReport(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 编辑AI报告
    */
   updateAiAnalyseReport(params: {
