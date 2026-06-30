@@ -555,6 +555,10 @@ LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 # 日志导出状态上报的数据token
 LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
+# Asset Sync Observability（资产同步可观测性）
+# 卡在启动中超过该时长（秒）视为异常，默认 6 小时
+ASSET_SYNC_PREPARING_TIMEOUT = int(os.getenv("BKAPP_ASSET_SYNC_PREPARING_TIMEOUT", 6 * 3600))
+
 # metric report
 METRIC_REPORT_TRACE_URL = os.getenv("BKAPP_METRIC_REPORT_TRACE_URL", "")
 # bkvision是否更新
