@@ -405,6 +405,8 @@ export default {
     page: number,
     page_size: number,
     keyword?: string,
+    title?: string,
+    analysis_scope?: string,
     report_type?: string,
     status?: string,
     sort?: any,
