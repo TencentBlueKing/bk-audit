@@ -10,11 +10,14 @@ from unittest import mock
 from django.core.cache import cache, caches
 from django.test import override_settings
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.fields import EXTEND_DATA, SNAPSHOT_USER_INFO
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.observability import start_observation_span
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.scene.constants import (
@@ -284,6 +287,44 @@ class StrategyResourcesTest(TestCase):
         )
         self.assertEqual(result["managers"], ["tom"])
         self.assertEqual(result["formatted_fields"], [{"field_name": "formatted"}])
+
+    @mock.patch("services.web.strategy_v2.resources.enhance_rt_fields")
+    @mock.patch.object(GetRTMeta, "get_sensitivity_info")
+    @mock.patch.object(GetRTMeta, "get_data_manager")
+    @mock.patch.object(GetRTMeta, "get_meta")
+    def test_get_rt_meta_thread_pool_preserves_otel_context(
+        self,
+        mock_get_meta,
+        mock_get_data_manager,
+        mock_get_sensitivity_info,
+        mock_enhance_fields,
+    ):
+        provider = TracerProvider()
+        seen_span_ids = []
+
+        def capture_current_span(result):
+            seen_span_ids.append(trace.get_current_span().get_span_context().span_id)
+            return result
+
+        mock_get_meta.side_effect = lambda table_id: capture_current_span(
+            {"fields": [{"field_name": table_id, "field_alias": "RT", "field_type": "string"}]}
+        )
+        mock_get_data_manager.side_effect = lambda table_id: capture_current_span(
+            {"managers": [table_id], "viewers": []}
+        )
+        mock_get_sensitivity_info.side_effect = lambda table_id: capture_current_span(
+            {"sensitivity_info": {"level": table_id}}
+        )
+        mock_enhance_fields.return_value = [{"field_name": "formatted"}]
+
+        with mock.patch("core.observability.trace.get_tracer_provider", return_value=provider):
+            with start_observation_span("strategy.get_rt_meta") as parent_span:
+                parent_span_id = parent_span.get_span_context().span_id
+                result = GetRTMeta().perform_request({"table_id": "rt"})
+
+        self.assertEqual(result["formatted_fields"], [{"field_name": "formatted"}])
+        self.assertEqual(len(seen_span_ids), 3)
+        self.assertTrue(all(span_id == parent_span_id for span_id in seen_span_ids))
 
     @mock.patch("services.web.strategy_v2.resources.enhance_rt_fields")
     @mock.patch.object(GetRTMeta, "get_sensitivity_info")
