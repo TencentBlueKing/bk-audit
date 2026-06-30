@@ -27,6 +27,7 @@ from blueapps.utils.logger import logger_celery
 from jinja2 import nodes
 from markupsafe import Markup
 
+from core.observability import submit_with_observation_context
 from core.render import jinja2_environment
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.providers import Provider
@@ -323,7 +324,7 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
     with ThreadPoolExecutor(max_workers=min(max_workers, len(provider_calls))) as executor:
         # 提交所有任务，直接使用call中的provider实例
         future_to_call: dict[Future, ProviderCall] = {
-            executor.submit(_execute_provider_call, call): call for call in provider_calls
+            submit_with_observation_context(executor, _execute_provider_call, call): call for call in provider_calls
         }
 
         # 收集结果
