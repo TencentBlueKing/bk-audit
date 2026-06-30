@@ -981,6 +981,12 @@
   // 导出内容选项（对应表格列）
   const exportContentOptions = [
     { id: 'gameName', name: t('游戏名称'), field: PROFILE_FIELDS.GAME_NAME, fallbackField: 'name' },
+    {
+      id: 'platformAccount',
+      name: t('账号'),
+      field: PROFILE_FIELDS.PLATFORM_ACCOUNT,
+      fallbackField: 'platformAccount',
+    },
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
     { id: 'coinBalance', name: `${t('代币存量')}(¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
     { id: 'totalRecharge', name: `${t('累计充值')}(¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
