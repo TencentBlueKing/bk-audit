@@ -139,16 +139,28 @@
                 </bk-popover>
               </div>
             </div>
-            <bk-table
-              :border="['none']"
+            <primary-table
+              class="game-list-table"
               :columns="gameColumns"
               :data="paginatedGameList"
-              :pagination="frontendPagination"
-              remote-pagination
-              stripe
-              @column-sort="handleColumnSort"
-              @page-limit-change="handlePageLimitChange"
-              @page-value-change="handlePageChange" />
+              hover
+              :row-key="getGameRowKey as any"
+              :sort="tableSort"
+              @sort-change="handleSortChange" />
+            <div
+              v-if="filteredGameList.length > 0"
+              class="game-list-pagination">
+              <bk-pagination
+                v-model="pagination.current"
+                align="left"
+                :count="filteredGameList.length"
+                :layout="['total', 'limit', 'list']"
+                :limit="pagination.limit"
+                :limit-list="paginationLimitList"
+                location="left"
+                @change="handlePageChange"
+                @limit-change="handlePageLimitChange" />
+            </div>
           </div>
         </template>
       </bk-loading>
@@ -164,6 +176,8 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import { PrimaryTable } from '@blueking/tdesign-ui';
+
   import { execCopy } from '@utils/assist';
 
   import { PROFILE_FIELDS } from '../game/game-field-keys';
@@ -172,6 +186,8 @@
   import ProfileUserInfo from './profile-user-info.vue';
 
   import useRequest from '@/hooks/use-request';
+
+  import '@blueking/tdesign-ui/vue3/index.css';
 
   import qqSvg from '@/images/qq.svg';
   import wechatSvg from '@/images/wechat.svg';
@@ -336,12 +352,22 @@
     return sortedGameList.value.slice(start, end);
   });
 
-  // 前端分页配置
-  const frontendPagination = computed(() => ({
-    count: filteredGameList.value.length,
-    current: pagination.value.current,
-    limit: pagination.value.limit,
-  }));
+  const tableSort = computed(() => {
+    const { column, type } = sortState.value;
+    if (!column || !type || type === 'null') {
+      return undefined;
+    }
+    return {
+      sortBy: column,
+      descending: type === 'desc',
+    };
+  });
+
+  const paginationLimitList = [10, 20, 50, 100];
+
+  const getGameRowKey = (row: Record<string, any>) => (
+    `${row.openid || ''}__${row[PROFILE_FIELDS.GAME_NAME] || row.name || ''}`
+  );
 
   // 搜索关键词变化时重置分页到第一页
   watch(gameSearchKey, () => {
@@ -689,21 +715,21 @@
 
   const gameColumns: Array<Record<string, any>> = [
     {
-      label: () => t('游戏名称'),
-      field: 'name',
+      title: () => t('游戏名称'),
+      colKey: 'name',
       width: 220,
-      showOverflowTooltip: true,
-      render: ({ data }: { data: Record<string, any> }) => h(
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => h(
         'span',
         {
           style: 'color: #3a84ff; cursor: pointer;',
-          onClick: () => handleClickGame(data),
+          onClick: () => handleClickGame(row),
         },
-        data[PROFILE_FIELDS.GAME_NAME] || data.name || '--',
+        row[PROFILE_FIELDS.GAME_NAME] || row.name || '--',
       ),
     },
     {
-      label: () => h('span', { style: 'display: inline-flex; align-items: center; gap: 6px;' }, [
+      title: () => h('span', { style: 'display: inline-flex; align-items: center; gap: 6px;' }, [
         t('账号'),
         h('i', {
           class: `audit-icon audit-icon-${showAccount.value ? 'view' : 'unview'}`,
@@ -714,12 +740,12 @@
           },
         }),
       ]),
-      field: 'platformAccount',
+      colKey: 'platformAccount',
       minWidth: 180,
-      showOverflowTooltip: true,
-      render: ({ data }: { data: Record<string, any> }) => {
-        const account = data.platformAccount || data[PROFILE_FIELDS.PLATFORM_ACCOUNT] || '';
-        const platType = data.platType || data[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || '';
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => {
+        const account = row.platformAccount || row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || '';
+        const platType = row.platType || row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || '';
         if (!account) return h('span', {}, '--');
         const iconSrc = platType === 'qq' ? qqSvg : wechatSvg;
         const maskAccount = (value: string) => {
@@ -744,12 +770,12 @@
       },
     },
     {
-      label: () => 'openid',
-      field: 'openid',
+      title: () => 'openid',
+      colKey: 'openid',
       minWidth: 320,
-      showOverflowTooltip: true,
-      render: ({ data }: { data: Record<string, any> }) => {
-        if (data.openid === null || data.openid === undefined || data.openid === '') {
+      ellipsis: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => {
+        if (row.openid === null || row.openid === undefined || row.openid === '') {
           return h('span', {}, '--');
         }
         return h(
@@ -759,71 +785,53 @@
             style: 'display: inline-flex; align-items: center; gap: 4px;',
           },
           [
-            h('span', {}, data.openid),
+            h('span', {}, row.openid),
             h('i', {
               class: 'audit-icon audit-icon-copy hover-show-icon openid-copy-icon',
               onClick: (e: Event) => {
                 e.stopPropagation();
-                handleCopyOpenid(data.openid);
+                handleCopyOpenid(row.openid);
               },
             }),
           ],
         );
       },
     },
-    { label: () => `${t('代币存量')} (¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, sort: { value: 'desc' }, render: ({ data }: { data: Record<string, any> }) => renderCoinField(data, PROFILE_FIELDS.COIN_BALANCE_UNIT) },
-    { label: () => `${t('累计充值')} (¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, sort: true, render: ({ data }: { data: Record<string, any> }) => renderCoinField(data, PROFILE_FIELDS.TOTAL_RECHARGE_UNIT) },
-    { label: () => `${t('累计发放')} (¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, sort: true, render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--') },
-    // TODO: 后端暂未返回"累计赠送次数"与"累计交易次数"，待接口支持后取消注释
-    // { label: () => t('累计赠送次数'), field: PROFILE_FIELDS.TOTAL_GIFT_COUNT,
-    //   sort: true, render: ({ data }: { data: Record<string, any> }) =>
-    //   h('span', {}, data[PROFILE_FIELDS.TOTAL_GIFT_COUNT] ?? '--') },
-    // { label: () => t('累计交易次数'), field: PROFILE_FIELDS.TOTAL_TRADE_COUNT,
-    //   sort: true, render: ({ data }: { data: Record<string, any> }) =>
-    //   h('span', {}, data[PROFILE_FIELDS.TOTAL_TRADE_COUNT] ?? '--') },
-    // TODO: 后端暂未返回"责任单数"数据，待接口支持后取消注释
     {
-      label: () => t('登录天数（31天）'),
-      field: PROFILE_FIELDS.LOGIN_DAYS_31, sort: true,
-      render: ({ data }: { data: Record<string, any> }) => h('span', {}, data[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--') },
-    // {
-    //   label: () => t('责任单数'),
-    //   field: PROFILE_FIELDS.RESPONSIBILITY_COUNT,
-    //   sort: true,
-    //   render: ({ data }: { data: Record<string, any> }) => {
-    //     const count = data[PROFILE_FIELDS.RESPONSIBILITY_COUNT] ?? data.responsibility_count;
-    //     if (count === null || count === undefined) return h('span', {}, '--');
-    //     const hasRisk = count > 0;
-    //     return h(
-    //       'span',
-    //       {
-    //         style: hasRisk ? 'display: inline-flex; align-items: center; gap: 4px;' : '',
-    //       },
-    //       [
-    //         h('span', {}, count),
-    //         hasRisk
-    //           ? h('i', {
-    //             class: 'audit-icon audit-icon-jump-link hover-show-icon responsibility-jump-icon',
-    //             style: 'cursor: pointer;',
-    //             onClick: (e: Event) => {
-    //               e.stopPropagation();
-    //               handleJumpToSceneRisk(data.openid);
-    //             },
-    //           })
-    //           : null,
-    //       ],
-    //     );
-    //   },
-    // },
+      title: () => `${t('代币存量')} (¥)`,
+      colKey: PROFILE_FIELDS.COIN_BALANCE_UNIT,
+      sorter: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => renderCoinField(row, PROFILE_FIELDS.COIN_BALANCE_UNIT),
+    },
     {
-      label: () => t('操作'),
-      field: 'action',
+      title: () => `${t('累计充值')} (¥)`,
+      colKey: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT,
+      sorter: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => (
+        renderCoinField(row, PROFILE_FIELDS.TOTAL_RECHARGE_UNIT)
+      ),
+    },
+    {
+      title: () => `${t('累计发放')} (¥)`,
+      colKey: PROFILE_FIELDS.TOTAL_ISSUE_YUAN,
+      sorter: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--'),
+    },
+    {
+      title: () => t('登录天数（31天）'),
+      colKey: PROFILE_FIELDS.LOGIN_DAYS_31,
+      sorter: true,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--'),
+    },
+    {
+      title: () => t('操作'),
+      colKey: 'action',
       width: 100,
-      render: ({ data }: { data: Record<string, any> }) => h(
+      cell: (_h: any, { row }: { row: Record<string, any> }) => h(
         'span',
         {
           style: 'color: #3a84ff; cursor: pointer;',
-          onClick: () => handleViewRecord(data),
+          onClick: () => handleViewRecord(row),
         },
         t('查看记录'),
       ),
@@ -846,11 +854,21 @@
     pagination.value.current = 1;
   };
 
-  // 排序事件处理
-  const handleColumnSort = ({ column, type }: { column: any; type: string }) => {
-    // bk-table 的 column-sort 事件中 column 是列配置对象，需要取 column.field 作为排序字段名
-    const field = column?.field || column;
-    sortState.value = { column: field, type };
+  const handleSortChange = (sort: any) => {
+    let sortInfo: { sortBy?: string; descending?: boolean } | undefined;
+    if (Array.isArray(sort)) {
+      [sortInfo] = sort;
+    } else if (sort?.sortBy !== undefined) {
+      sortInfo = sort;
+    }
+    if (!sortInfo?.sortBy) {
+      sortState.value = { column: '', type: 'null' };
+    } else {
+      sortState.value = {
+        column: sortInfo.sortBy,
+        type: sortInfo.descending ? 'desc' : 'asc',
+      };
+    }
     pagination.value.current = 1;
   };
 
@@ -1229,6 +1247,39 @@
   }
 }
 
+.game-list-pagination {
+  padding-top: 12px;
+
+  :deep(.bk-pagination) {
+    display: flex;
+    align-items: center;
+    width: 100%;
+
+    .is-last {
+      margin-left: auto;
+    }
+  }
+}
+
+:deep(.game-list-table) {
+  .t-table,
+  .t-table__content,
+  .t-table__body,
+  .t-table td {
+    background-color: transparent;
+  }
+
+  .t-table--header-wrapper,
+  .t-table__header,
+  .t-table th {
+    background-color: #f0f1f5 !important;
+  }
+
+  .t-table--striped .t-table__body tr:nth-child(even) td {
+    background-color: transparent !important;
+  }
+}
+
 /* 默认隐藏 hover-show-icon */
 :deep(.hover-show-icon) {
   font-size: 14px;
@@ -1251,7 +1302,7 @@
 }
 
 /* 鼠标移入表格行时显示图标 */
-:deep(tr:hover .hover-show-icon) {
+:deep(.game-list-table .t-table__body tr:hover .hover-show-icon) {
   visibility: visible;
 }
 </style>
