@@ -27,6 +27,7 @@ from client_throttler.constants import TimeDurationUnit
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
+from core.observability import BKResourceAPIInstrumentor
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
 
@@ -310,7 +311,7 @@ AUTH_BACKEND_DOMAIN = SESSION_COOKIE_DOMAIN
 ENABLE_OTEL_TRACE = strtobool(os.getenv("BKAPP_ENABLE_OTEL_TRACE", "False"))
 BK_APP_OTEL_INSTRUMENT_DB_API = strtobool(os.getenv("BKAPP_OTEL_INSTRUMENT_DB_API", "False"))
 BKAPP_OTEL_SERVICE_NAME = os.getenv("BKAPP_OTEL_SERVICE_NAME", "bk-audit")
-BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = []
+BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = [BKResourceAPIInstrumentor()]
 
 # TAM
 AEGIS_ID = os.getenv("BKAPP_AEGIS_ID")
@@ -545,6 +546,8 @@ ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
 
 #  Alert Configuration
 ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
+
+MONITOR_METRIC_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_METRIC_TASK_TIMEOUT", 60))
 
 # 日志导出状态上报的数据ID
 LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))

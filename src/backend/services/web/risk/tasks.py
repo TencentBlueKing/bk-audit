@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import os
+import time
 from typing import Any
 
 from bk_resource import api
@@ -45,8 +46,18 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
+from core.observability import (
+    OBSERVATION_METRIC_STATUS_ERROR,
+    OBSERVATION_METRIC_STATUS_SUCCESS,
+    report_observation_metric,
+    set_span_attributes,
+    start_observation_span,
+)
 from core.utils.data import data_chunks
-from services.web.common.monitor import RiskExportFailedEvent
+from services.web.common.monitor import (
+    AnalyseReportGenerateFailedEvent,
+    RiskExportFailedEvent,
+)
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
@@ -220,7 +231,7 @@ def report_risk_export_failed_event(username: str, risk_count: int, error: Excep
         context={"username": username, "risk_count": str(risk_count)},
         extra={"error": str(error)},
     )
-    event.report()
+    event.async_report()
 
 
 @celery_app.task(
@@ -233,75 +244,127 @@ def export_risks_to_mail(self, username: str, risk_ids: list[str], risk_view_typ
     """异步导出风险并通过邮件附件发送给当前用户。"""
 
     total = len(risk_ids)
-    logger_celery.info(
-        "[RiskExportTask] start username=%s total=%s risk_view_type=%s requested_at=%s",
-        username,
-        total,
-        risk_view_type,
-        requested_at,
-    )
-    self.update_state(state="RUNNING", meta={"current": 0, "total": total})
-    service = RiskExportService(
-        username=username,
-        risk_ids=risk_ids,
-        risk_view_type=risk_view_type,
-    )
-    try:
-        export_file = service.build_export_file()
+    metric_started_at = time.perf_counter()
+    with start_observation_span(
+        "risk.export_risks_to_mail",
+        attributes={
+            "bk_audit.service": "risk",
+            "bk_audit.operation": "export_risks_to_mail",
+            "bk_audit.risk.count": total,
+            "bk_audit.risk.view_type": risk_view_type,
+        },
+    ) as span:
         logger_celery.info(
-            "[RiskExportTask] export file built username=%s total=%s filename=%s",
+            "[RiskExportTask] start username=%s total=%s risk_view_type=%s requested_at=%s",
             username,
-            export_file.total,
-            export_file.filename,
+            total,
+            risk_view_type,
+            requested_at,
         )
-        self.update_state(state="PROGRESS", meta={"current": total, "total": total})
-        logger_celery.info(
-            "[RiskExportTask] send mail start username=%s total=%s filename=%s",
-            username,
-            export_file.total,
-            export_file.filename,
+        self.update_state(state="RUNNING", meta={"current": 0, "total": total})
+        service = RiskExportService(
+            username=username,
+            risk_ids=risk_ids,
+            risk_view_type=risk_view_type,
         )
-        service.send_mail(export_file=export_file, requested_at=requested_at)
-        logger_celery.info(
-            "[RiskExportTask] mail sent username=%s total=%s filename=%s",
-            username,
-            export_file.total,
-            export_file.filename,
-        )
-        return {"total": export_file.total, "filename": export_file.filename}
-    except Exception as exc:
-        retries = getattr(self.request, "retries", 0)
-        max_retries = self.max_retries
         try:
-            if retries >= max_retries:
-                raise MaxRetriesExceededError()
-            logger_celery.warning(
-                "[RiskExportTaskRetrying] username=%s total=%s retries=%s max_retries=%s countdown=%s error=%s",
+            with start_observation_span(
+                "risk.export_risks_to_mail.build_file",
+                attributes={
+                    "bk_audit.service": "risk",
+                    "bk_audit.operation": "export_risks_to_mail",
+                    "bk_audit.stage": "build_file",
+                    "bk_audit.risk.count": total,
+                    "bk_audit.risk.view_type": risk_view_type,
+                },
+            ):
+                export_file = service.build_export_file()
+            set_span_attributes(span, {"bk_audit.export.total": export_file.total})
+            logger_celery.info(
+                "[RiskExportTask] export file built username=%s total=%s filename=%s",
                 username,
-                total,
-                retries,
-                max_retries,
-                settings.RISK_EXPORT_TASK_RETRY_DELAY,
-                exc,
-                exc_info=True,
+                export_file.total,
+                export_file.filename,
             )
-            # 不传 exc，确保达到最大重试次数时 Celery 抛 MaxRetriesExceededError。
-            raise self.retry(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
-        except MaxRetriesExceededError:
-            logger_celery.error(
-                "[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s",
+            self.update_state(state="PROGRESS", meta={"current": total, "total": total})
+            logger_celery.info(
+                "[RiskExportTask] send mail start username=%s total=%s filename=%s",
                 username,
-                total,
-                retries,
-                max_retries,
-                exc_info=(type(exc), exc, exc.__traceback__),
+                export_file.total,
+                export_file.filename,
             )
+            with start_observation_span(
+                "risk.export_risks_to_mail.send_mail",
+                attributes={
+                    "bk_audit.service": "risk",
+                    "bk_audit.operation": "export_risks_to_mail",
+                    "bk_audit.stage": "send_mail",
+                    "bk_audit.risk.count": export_file.total,
+                    "bk_audit.risk.view_type": risk_view_type,
+                },
+            ):
+                service.send_mail(export_file=export_file, requested_at=requested_at)
+            logger_celery.info(
+                "[RiskExportTask] mail sent username=%s total=%s filename=%s",
+                username,
+                export_file.total,
+                export_file.filename,
+            )
+            report_observation_metric(
+                name="risk.export_risks_to_mail",
+                started_at=metric_started_at,
+                status=OBSERVATION_METRIC_STATUS_SUCCESS,
+                dimensions={
+                    "service": "risk",
+                    "operation": "export_risks_to_mail",
+                    "risk_view_type": risk_view_type,
+                    "business_status": "success",
+                },
+            )
+            return {"total": export_file.total, "filename": export_file.filename}
+        except Exception as exc:
+            retries = getattr(self.request, "retries", 0)
+            max_retries = self.max_retries
             try:
+                if retries >= max_retries:
+                    raise MaxRetriesExceededError()
+                set_span_attributes(span, {"bk_audit.retry.current": retries, "bk_audit.retry.max": max_retries})
+                logger_celery.warning(
+                    "[RiskExportTaskRetrying] username=%s total=%s retries=%s max_retries=%s countdown=%s error=%s",
+                    username,
+                    total,
+                    retries,
+                    max_retries,
+                    settings.RISK_EXPORT_TASK_RETRY_DELAY,
+                    exc,
+                    exc_info=True,
+                )
+                # 不传 exc，确保达到最大重试次数时 Celery 抛 MaxRetriesExceededError。
+                raise self.retry(countdown=settings.RISK_EXPORT_TASK_RETRY_DELAY)
+            except MaxRetriesExceededError:
+                logger_celery.error(
+                    "[RiskExportTaskFailed] username=%s total=%s retries=%s max_retries=%s",
+                    username,
+                    total,
+                    retries,
+                    max_retries,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+                report_observation_metric(
+                    name="risk.export_risks_to_mail",
+                    started_at=metric_started_at,
+                    status=OBSERVATION_METRIC_STATUS_ERROR,
+                    error_type=exc.__class__.__name__,
+                    dimensions={
+                        "service": "risk",
+                        "operation": "export_risks_to_mail",
+                        "risk_view_type": risk_view_type,
+                        "business_status": "failed",
+                    },
+                )
                 report_risk_export_failed_event(username=username, risk_count=total, error=exc)
-            except Exception:  # NOCC:broad-except(监控上报失败不能遮蔽原始任务失败)
-                logger_celery.exception("[RiskExportTaskReportFailed] username=%s, total=%s", username, total)
-            # 让 Celery 最终 FAILURE 记录原始业务异常，而不是 MaxRetriesExceededError。
-            raise exc
+                # 让 Celery 最终 FAILURE 记录原始业务异常，而不是 MaxRetriesExceededError。
+                raise exc
 
 
 def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta = datetime.timedelta(hours=1)) -> None:
@@ -722,94 +785,161 @@ def generate_analyse_report(self, report_id: int):
     from services.web.risk.models import AnalyseReport
 
     report = AnalyseReport.objects.get(report_id=report_id)
-    started_at = timezone.now()
-    agent_request = None
-    _update_analyse_report_extra_info(report, _build_analyse_report_extra_info(started_at=started_at))
+    metric_started_at = time.perf_counter()
+    with start_observation_span(
+        "risk.analyse_report.generate",
+        attributes={
+            "bk_audit.service": "risk",
+            "bk_audit.operation": "generate_analyse_report",
+            "bk_audit.report.id": report.report_id,
+            "bk_audit.report.type": report.report_type,
+            "bk_audit.report.risk_count": report.risk_count,
+            "bk_audit.report.has_scenario": bool(report.scenario_id),
+        },
+    ) as span:
+        started_at = timezone.now()
+        agent_request = None
+        _update_analyse_report_extra_info(report, _build_analyse_report_extra_info(started_at=started_at))
 
-    try:
-        # 1. 构造分析要求 prompt
-        scenario = report.scenario
-        if scenario:
-            # 内置场景：使用场景配置的 system_prompt 作为分析要求前缀
-            analysis_request = scenario.system_prompt
-        else:
-            # 自定义分析：使用用户自定义描述
-            analysis_request = report.custom_prompt or "请使用风险查询条件查询风险详细数据生成分析报告。"
+        try:
+            # 1. 构造分析要求 prompt
+            scenario = report.scenario
+            if scenario:
+                # 内置场景：使用场景配置的 system_prompt 作为分析要求前缀
+                analysis_request = scenario.system_prompt
+            else:
+                # 自定义分析：使用用户自定义描述
+                analysis_request = report.custom_prompt or "请使用风险查询条件查询风险详细数据生成分析报告。"
 
-        # prompt_params 仅用于后端筛选并绑定报告风险；Agent 只接收报告参数配置。
-        agent_input = {
-            "报告ID": report.report_id,
-            "报告标题": report.title,
-            "报告类型": report.report_type,
-            "场景标识": scenario.scenario_key if scenario else "",
-            "分析要求": analysis_request,
-            "已绑定风险数量": report.risk_count,
-        }
-        chat_user = report.created_by or "admin"
-        execute_kwargs = {"stream": True}
-        agent_request = AnalyseReportAgentRequestInfo(
-            user=chat_user,
-            input=agent_input,
-            execute_kwargs=execute_kwargs,
-        )
-        _update_analyse_report_extra_info(
-            report,
-            _build_analyse_report_extra_info(
-                started_at=started_at,
-                agent_request=agent_request,
-            ),
-        )
-
-        # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
-        result = api.bk_plugins_ai_audit_analyse.chat_completion(
-            user=chat_user,
-            input=json.dumps(agent_input, ensure_ascii=False),
-            execute_kwargs=execute_kwargs,
-        )
-        result = _validate_analyse_report_content(result, report.report_id)
-
-        # 3. 更新报告
-        report.content = result
-        report.status = AnalyseReportStatus.SUCCESS
-        report.extra_info = _build_analyse_report_extra_info(
-            started_at=started_at,
-            ended_at=timezone.now(),
-            agent_request=agent_request,
-        )
-        report.save(update_fields=["content", "status", "extra_info", "updated_at"])
-
-        return {"report_id": report.report_id}
-
-    except Exception as exc:
-        max_retries = self.max_retries
-        current_retries = getattr(self.request, "retries", 0)
-        if max_retries is not None and current_retries >= max_retries:
-            report.status = AnalyseReportStatus.FAILED
-            report.extra_info = _build_analyse_report_extra_info(
-                started_at=started_at,
-                ended_at=timezone.now(),
-                agent_request=agent_request,
-                error=_build_analyse_report_error_info(exc, current_retries, max_retries),
+            # prompt_params 仅用于后端筛选并绑定报告风险；Agent 只接收报告参数配置。
+            agent_input = {
+                "报告ID": report.report_id,
+                "报告标题": report.title,
+                "报告类型": report.report_type,
+                "场景标识": scenario.scenario_key if scenario else "",
+                "分析要求": analysis_request,
+                "已绑定风险数量": report.risk_count,
+            }
+            chat_user = report.created_by or "admin"
+            execute_kwargs = {"stream": True}
+            agent_request = AnalyseReportAgentRequestInfo(
+                user=chat_user,
+                input=agent_input,
+                execute_kwargs=execute_kwargs,
             )
-            report.save(update_fields=["status", "extra_info", "updated_at"])
-            logger_celery.error(
-                "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+            _update_analyse_report_extra_info(
+                report,
+                _build_analyse_report_extra_info(
+                    started_at=started_at,
+                    agent_request=agent_request,
+                ),
+            )
+
+            # 2. 调用 Analyse Agent API（sub_agent 配置在 agent 服务中已预配置）
+            with start_observation_span(
+                "risk.analyse_report.call_ai_agent",
+                attributes={
+                    "bk_audit.service": "risk",
+                    "bk_audit.operation": "generate_analyse_report",
+                    "bk_audit.stage": "call_ai_agent",
+                    "bk_audit.report.type": report.report_type,
+                    "bk_audit.report.risk_count": report.risk_count,
+                },
+            ):
+                result = api.bk_plugins_ai_audit_analyse.chat_completion(
+                    user=chat_user,
+                    input=json.dumps(agent_input, ensure_ascii=False),
+                    execute_kwargs=execute_kwargs,
+                )
+            result = _validate_analyse_report_content(result, report.report_id)
+            set_span_attributes(span, {"bk_audit.report.content_size": len(result or "")})
+
+            # 3. 更新报告
+            with start_observation_span(
+                "risk.analyse_report.save_result",
+                attributes={
+                    "bk_audit.service": "risk",
+                    "bk_audit.operation": "generate_analyse_report",
+                    "bk_audit.stage": "save_result",
+                    "bk_audit.report.type": report.report_type,
+                },
+            ):
+                report.content = result
+                report.status = AnalyseReportStatus.SUCCESS
+                report.extra_info = _build_analyse_report_extra_info(
+                    started_at=started_at,
+                    ended_at=timezone.now(),
+                    agent_request=agent_request,
+                )
+                report.save(update_fields=["content", "status", "extra_info", "updated_at"])
+
+            report_observation_metric(
+                name="risk.analyse_report.generate",
+                started_at=metric_started_at,
+                status=OBSERVATION_METRIC_STATUS_SUCCESS,
+                dimensions={
+                    "service": "risk",
+                    "operation": "generate_analyse_report",
+                    "report_type": report.report_type,
+                    "has_scenario": bool(report.scenario_id),
+                    "business_status": AnalyseReportStatus.SUCCESS,
+                },
+            )
+            return {"report_id": report.report_id}
+
+        except Exception as exc:
+            max_retries = self.max_retries
+            current_retries = getattr(self.request, "retries", 0)
+            set_span_attributes(span, {"bk_audit.retry.current": current_retries, "bk_audit.retry.max": max_retries})
+            if max_retries is not None and current_retries >= max_retries:
+                report.status = AnalyseReportStatus.FAILED
+                report.extra_info = _build_analyse_report_extra_info(
+                    started_at=started_at,
+                    ended_at=timezone.now(),
+                    agent_request=agent_request,
+                    error=_build_analyse_report_error_info(exc, current_retries, max_retries),
+                )
+                report.save(update_fields=["status", "extra_info", "updated_at"])
+                logger_celery.error(
+                    "[GenerateAnalyseReport] Max retries reached report_id=%s retries=%s max_retries=%s",
+                    report_id,
+                    current_retries,
+                    max_retries,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+                report_observation_metric(
+                    name="risk.analyse_report.generate",
+                    started_at=metric_started_at,
+                    status=OBSERVATION_METRIC_STATUS_ERROR,
+                    error_type=exc.__class__.__name__,
+                    dimensions={
+                        "service": "risk",
+                        "operation": "generate_analyse_report",
+                        "report_type": report.report_type,
+                        "has_scenario": bool(report.scenario_id),
+                        "business_status": AnalyseReportStatus.FAILED,
+                    },
+                )
+                AnalyseReportGenerateFailedEvent(
+                    target=str(report.report_id),
+                    context={
+                        "report_type": report.report_type,
+                        "has_scenario": bool(report.scenario_id),
+                        "error_type": exc.__class__.__name__,
+                    },
+                    extra={"report_id": report.report_id, "error": str(exc)},
+                ).async_report()
+                raise
+            logger_celery.warning(
+                "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
                 report_id,
                 current_retries,
                 max_retries,
-                exc_info=(type(exc), exc, exc.__traceback__),
+                60,
+                exc,
+                exc_info=True,
             )
-            raise
-        logger_celery.warning(
-            "[GenerateAnalyseReport] Retrying report_id=%s retries=%s max_retries=%s countdown=%s error=%s",
-            report_id,
-            current_retries,
-            max_retries,
-            60,
-            exc,
-            exc_info=True,
-        )
-        raise self.retry(exc=exc, countdown=60)
+            raise self.retry(exc=exc, countdown=60)
 
 
 def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:

@@ -2044,14 +2044,17 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         generate_analyse_report(report_id=self.report.report_id)
 
+    @mock.patch("services.web.risk.tasks.report_observation_metric")
+    @mock.patch("services.web.risk.tasks.AnalyseReportGenerateFailedEvent")
     @mock.patch("services.web.risk.tasks.timezone.now")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_failure(self, mock_chat, mock_now):
+    def test_task_failure(self, mock_chat, mock_now, mock_event_cls, mock_report_metric):
         """测试达到最大重试次数后标记为失败"""
         start_time = datetime.datetime(2026, 6, 5, 11, 0, 0, tzinfo=datetime.timezone.utc)
         end_time = datetime.datetime(2026, 6, 5, 11, 0, 1, 500000, tzinfo=datetime.timezone.utc)
         mock_now.side_effect = [start_time, start_time, end_time, end_time, end_time]
         mock_chat.side_effect = Exception("API调用失败")
+        mock_event = mock_event_cls.return_value
 
         from services.web.risk.tasks import generate_analyse_report
 
@@ -2075,9 +2078,23 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         extra_info = AnalyseReportExtraInfo.model_validate(self.report.extra_info)
         self.assertEqual(extra_info.error.error_message, "API调用失败")
         self.assertEqual(AnalyseReportExtraInfo.model_fields["error"].description, "报告最终失败时的错误信息")
+        mock_event_cls.assert_called_once()
+        event_kwargs = mock_event_cls.call_args.kwargs
+        self.assertEqual(event_kwargs["target"], str(self.report.report_id))
+        self.assertEqual(event_kwargs["context"]["report_type"], self.report.report_type)
+        self.assertEqual(event_kwargs["context"]["error_type"], "Exception")
+        mock_event.async_report.assert_called_once()
+        mock_report_metric.assert_called_once()
+        metric_kwargs = mock_report_metric.call_args.kwargs
+        self.assertEqual(metric_kwargs["name"], "risk.analyse_report.generate")
+        self.assertEqual(metric_kwargs["status"], "error")
+        self.assertEqual(metric_kwargs["error_type"], "Exception")
+        self.assertEqual(metric_kwargs["dimensions"]["operation"], "generate_analyse_report")
+        self.assertEqual(metric_kwargs["dimensions"]["business_status"], AnalyseReportStatus.FAILED)
 
+    @mock.patch("services.web.risk.tasks.report_observation_metric")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
-    def test_task_keeps_generating_status_before_max_retries(self, mock_chat):
+    def test_task_keeps_generating_status_before_max_retries(self, mock_chat, mock_report_metric):
         """未达到最大重试次数前，报告状态保持生成中"""
         mock_chat.side_effect = Exception("API调用失败")
 
@@ -2090,6 +2107,7 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
+        mock_report_metric.assert_not_called()
 
 
 class TestAnalyseReportModel(AnalyseReportTestBase):

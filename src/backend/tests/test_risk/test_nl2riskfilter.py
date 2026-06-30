@@ -6,6 +6,7 @@ NL2Risk 序列化器及工具函数单测
 import datetime
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.utils import timezone
 
 from services.web.risk.constants import NL2RiskFilterLogStatus
@@ -552,6 +553,69 @@ class NL2RiskFilterWithLoggingTest(TestCase):
         call_kwargs = mock_save_log.call_args[1]
         self.assertEqual(call_kwargs["status"], NL2RiskFilterLogStatus.API_ERROR)
         self.assertIn("Connection refused", call_kwargs["error_message"])
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterFailedEvent")
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_api_error_reports_custom_event(self, mock_chat, mock_user, mock_save_log, mock_event_cls):
+        """AI 平台异常时上报自定义事件"""
+        mock_chat.side_effect = Exception("Connection refused")
+        mock_event = mock_event_cls.return_value
+
+        with self.assertRaises(NL2RiskFilterServiceError):
+            self.resource.request({"query": "测试", "tags": [], "strategies": []})
+
+        mock_event_cls.assert_called_once()
+        event_kwargs = mock_event_cls.call_args.kwargs
+        self.assertEqual(event_kwargs["target"], "nl2risk_filter")
+        self.assertEqual(event_kwargs["context"]["status"], NL2RiskFilterLogStatus.API_ERROR)
+        self.assertEqual(event_kwargs["context"]["error_type"], "Exception")
+        mock_event.async_report.assert_called_once()
+
+    @override_settings(LOG_EXPORT_STATUS_DATA_ID=123, LOG_EXPORT_STATUS_ACCESS_TOKEN="token")
+    @patch("core.monitor.report_metric_to_bk_monitor.delay")
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_success_reports_business_metric(self, mock_chat, mock_user, mock_save_log, mock_delay):
+        """成功生成筛选条件时上报业务调用量和耗时指标"""
+        mock_chat.return_value = '{"filter_conditions": {"level": "high"}}'
+
+        self.resource.request({"query": "高危风险", "tags": [], "strategies": []})
+
+        mock_delay.assert_called_once()
+        payload = mock_delay.call_args[0][0]
+        self.assertEqual(payload["data_id"], 123)
+        data = payload["data"][0]
+        self.assertEqual(data["metrics"]["call_count"], 1)
+        self.assertGreaterEqual(data["metrics"]["duration_ms"], 0)
+        self.assertEqual(data["dimension"]["service"], "risk")
+        self.assertEqual(data["dimension"]["operation"], "nl2risk_filter")
+        self.assertEqual(data["dimension"]["status"], "success")
+        self.assertEqual(data["dimension"]["business_status"], NL2RiskFilterLogStatus.SUCCESS)
+
+    @override_settings(LOG_EXPORT_STATUS_DATA_ID=123, LOG_EXPORT_STATUS_ACCESS_TOKEN="token")
+    @patch("core.monitor.report_metric_to_bk_monitor.delay")
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_parse_failed_reports_error_business_metric(self, mock_chat, mock_user, mock_save_log, mock_delay):
+        """AI 返回不可解析内容时计入业务错误率"""
+        mock_chat.return_value = "抱歉，我无法理解您的查询"
+
+        self.resource.request({"query": "无效查询", "tags": [], "strategies": []})
+
+        mock_delay.assert_called_once()
+        payload = mock_delay.call_args[0][0]
+        data = payload["data"][0]
+        self.assertEqual(data["metrics"]["call_count"], 1)
+        self.assertGreaterEqual(data["metrics"]["duration_ms"], 0)
+        self.assertEqual(data["dimension"]["service"], "risk")
+        self.assertEqual(data["dimension"]["operation"], "nl2risk_filter")
+        self.assertEqual(data["dimension"]["status"], "error")
+        self.assertEqual(data["dimension"]["business_status"], NL2RiskFilterLogStatus.PARSE_FAILED)
+        self.assertEqual(data["dimension"]["error_type"], NL2RiskFilterLogStatus.PARSE_FAILED)
 
 
 class ListNL2RiskFilterLogRequestSerializerTest(TestCase):
