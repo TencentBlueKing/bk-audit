@@ -565,24 +565,35 @@
   const dataSource = RiskManageService.getHistoryReportList;
 
 
-  const handleSearch = (keyword: SearchKey[]) => {
-    const search: Record<string, any> = {
+  const buildHistoryReportSearchParams = (searchKeys: SearchKey[]) => {
+    const search: Record<string, string | undefined> = {
       keyword: undefined,
+      title: undefined,
+      analysis_scope: undefined,
       report_type: undefined,
     };
 
-    keyword.forEach((item) => {
+    searchKeys.forEach((item) => {
       if (!item.values?.length) return;
       const value = item.values.map(v => v.id).join(',');
+      if (!value) return;
       if (item.id === 'report_type') {
         search.report_type = value;
+      } else if (item.id === 'title') {
+        search.title = value;
+      } else if (item.id === 'analysis_scope') {
+        search.analysis_scope = value;
       } else {
         search.keyword = value;
       }
     });
 
+    return search;
+  };
+
+  const handleSearch = (keyword: SearchKey[]) => {
     listRef.value?.fetchData({
-      ...search,
+      ...buildHistoryReportSearchParams(keyword),
       sort: ['-created_at'],
     });
   };
@@ -595,7 +606,12 @@
       searchValue.value = [];
       nextTick(() => {
         // 避免复用外层页面 URL 中的 sort（如 -event_time）导致历史报告接口排序字段非法
-        listRef.value?.fetchData({ keyword: undefined, sort: ['-created_at'] });
+        listRef.value?.fetchData({
+          keyword: undefined,
+          title: undefined,
+          analysis_scope: undefined,
+          sort: ['-created_at'],
+        });
         resumeListPolling();
       });
     } else {
