@@ -16,7 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.core.management.base import BaseCommand
+import json
+
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.meta.models import ResourceType, System
 from services.web.databus.collector.snapshot.join.etl_storage import (
@@ -31,14 +33,32 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--system-id", required=True, help="系统ID")
         parser.add_argument("--resource-type-id", required=True, help="资源类型ID")
+        parser.add_argument("--custom-config", help="写入 Snapshot.custom_config 的 JSON 对象")
+
+    def parse_custom_config(self, raw_config: str | None) -> dict | None:
+        if raw_config is None:
+            return None
+        try:
+            custom_config = json.loads(raw_config)
+        except json.JSONDecodeError as err:
+            raise CommandError(f"--custom-config must be valid JSON: {err}") from err
+        if not isinstance(custom_config, dict):
+            raise CommandError("--custom-config must be a JSON object")
+        return custom_config
 
     def handle(self, *args, **kwargs):
         system_id = kwargs["system_id"]
         resource_type_id = kwargs["resource_type_id"]
+        custom_config = self.parse_custom_config(kwargs.get("custom_config"))
 
         snapshot = Snapshot.objects.get(system_id=system_id, resource_type_id=resource_type_id)
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+
+        if custom_config is not None:
+            snapshot.custom_config = custom_config
+            snapshot.save(update_fields=["custom_config"])
+            self.stdout.write("[update_asset_etl] 自定义配置已更新")
 
         self.stdout.write(
             f"[update_asset_etl] SystemID => {system_id}, ResourceTypeID => {resource_type_id}, "

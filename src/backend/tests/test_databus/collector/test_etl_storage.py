@@ -4,6 +4,8 @@ from types import SimpleNamespace as _SN
 from typing import List
 from unittest import mock as _mock
 
+from django.core.management.base import CommandError
+
 from services.web.databus.collector.snapshot.join.base import AssetHandler
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
@@ -11,7 +13,11 @@ from services.web.databus.collector.snapshot.join.etl_storage import (
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     JsonSchemaFieldType,
+    SnapshotRunningStatus,
     SnapShotStorageChoices,
+)
+from services.web.databus.management.commands.update_asset_etl import (
+    Command as UpdateAssetEtlCommand,
 )
 
 
@@ -175,12 +181,11 @@ def test_create_data_etl_calls_create_clean_when_no_table_id():
     assert handler.snapshot.bkbase_table_id == "table_new"
 
 
-def test_create_data_etl_calls_create_clean_with_update_when_table_id_exists():
-    """已有清洗链路时，调用 create_clean(update=True)"""
+def test_create_data_etl_skips_create_clean_when_table_id_exists():
+    """已有清洗链路时，不更新远端清洗配置"""
     handler = _make_asset_handler_instance(bkbase_table_id="existing_table")
 
     mock_etl_handler = _mock.MagicMock()
-    mock_etl_handler.create_clean.return_value = ("proc_old", "existing_table")
 
     with _mock.patch.object(
         AssetHandler,
@@ -189,8 +194,28 @@ def test_create_data_etl_calls_create_clean_with_update_when_table_id_exists():
     ):
         handler.create_data_etl()
 
-    mock_etl_handler.create_clean.assert_called_once_with(update=True)
+    mock_etl_handler.create_clean.assert_not_called()
     assert handler.snapshot.bkbase_table_id == "existing_table"
+
+
+def test_create_data_storage_skips_update_when_storage_running():
+    """已有运行中入库时，不更新远端入库配置"""
+    handler = _make_asset_handler_instance(bkbase_table_id="existing_table")
+    storage = _SN(status=SnapshotRunningStatus.RUNNING, save=_mock.MagicMock())
+    handler.snapshot.storages = _SN(
+        filter=_mock.MagicMock(return_value=_SN(first=_mock.MagicMock(return_value=storage)))
+    )
+    mock_etl_handler = _mock.MagicMock()
+
+    with _mock.patch.object(
+        AssetHandler,
+        "etl_storage_handler_cls",
+        new_callable=lambda: property(lambda self: _mock.MagicMock(return_value=mock_etl_handler)),
+    ):
+        handler.create_data_storage()
+
+    mock_etl_handler.create_storage.assert_not_called()
+    storage.save.assert_not_called()
 
 
 def test_create_clean_update_calls_put_and_restart():
@@ -251,3 +276,72 @@ def test_create_clean_create_calls_post_and_start():
     mock_start.assert_called_once_with("table_new", "proc_new")
     assert processing_id == "proc_new"
     assert table_id == "table_new"
+
+
+def test_update_asset_etl_command_updates_snapshot_custom_config():
+    """update_asset_etl 支持写入自定义配置后手动刷新清洗和入库"""
+    storage = _SN(storage_type=SnapShotStorageChoices.HDFS.value)
+    snapshot = _SN(
+        id=1,
+        bkbase_data_id=100,
+        bkbase_processing_id="proc_123",
+        custom_config={},
+        save=_mock.MagicMock(),
+        storages=_SN(all=_mock.MagicMock(return_value=[storage])),
+    )
+    mock_handler = _mock.MagicMock()
+    custom_config = {CLEAN_CONFIG_JSON_CONF_KEY: {"timestamp_len": 13}}
+
+    with (
+        _mock.patch(
+            "services.web.databus.management.commands.update_asset_etl.Snapshot.objects.get",
+            return_value=snapshot,
+        ),
+        _mock.patch(
+            "services.web.databus.management.commands.update_asset_etl.System.objects.get",
+            return_value=_SN(system_id="bk_system"),
+        ),
+        _mock.patch(
+            "services.web.databus.management.commands.update_asset_etl.ResourceType.objects.get",
+            return_value=_SN(resource_type_id="bk_resource_type"),
+        ),
+        _mock.patch(
+            "services.web.databus.management.commands.update_asset_etl.AssetEtlStorageHandler",
+            return_value=mock_handler,
+        ) as mock_handler_cls,
+    ):
+        UpdateAssetEtlCommand().handle(
+            system_id="bk_system",
+            resource_type_id="bk_resource_type",
+            custom_config=json.dumps(custom_config),
+        )
+
+    assert snapshot.custom_config == custom_config
+    snapshot.save.assert_called_once_with(update_fields=["custom_config"])
+    mock_handler_cls.assert_called_once_with(
+        data_id=100,
+        system=_mock.ANY,
+        resource_type=_mock.ANY,
+        storage_type=SnapShotStorageChoices.HDFS.value,
+        snapshot=snapshot,
+    )
+    mock_handler.create_clean.assert_called_once_with(update=True)
+    mock_handler.create_storage.assert_called_once_with(update=True)
+
+
+def test_update_asset_etl_command_rejects_invalid_custom_config():
+    """custom_config 必须是 JSON 对象"""
+    with _mock.patch(
+        "services.web.databus.management.commands.update_asset_etl.Snapshot.objects.get",
+        return_value=_SN(),
+    ):
+        try:
+            UpdateAssetEtlCommand().handle(
+                system_id="bk_system",
+                resource_type_id="bk_resource_type",
+                custom_config="[1, 2, 3]",
+            )
+        except CommandError as err:
+            assert "custom-config" in str(err)
+        else:
+            raise AssertionError("CommandError not raised")
