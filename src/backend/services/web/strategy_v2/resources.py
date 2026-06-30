@@ -65,6 +65,7 @@ from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from core.observability import submit_with_observation_context
 from core.utils.data import choices_to_dict, compare_dict_specific_keys
 from core.utils.page import paginate_queryset
 from services.web.analyze.constants import (
@@ -1270,9 +1271,13 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
         # 创建一个线程池来并发执行任务
         with ThreadPoolExecutor(max_workers=3) as executor:
-            futures.append(executor.submit(self.get_meta, result_table_id))
-            futures.append(executor.submit(self.get_data_manager, result_table_id))
-            futures.append(executor.submit(self.get_sensitivity_info, result_table_id))
+
+            def submit(callback):
+                return submit_with_observation_context(executor, callback, result_table_id)
+
+            futures.append(submit(self.get_meta))
+            futures.append(submit(self.get_data_manager))
+            futures.append(submit(self.get_sensitivity_info))
 
             # 获取并合并结果
             result = {}

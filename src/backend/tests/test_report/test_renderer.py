@@ -19,8 +19,18 @@ to the current version of the project delivered to anyone in the future.
 from unittest import mock
 
 from jinja2 import nodes
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from services.web.risk.report.providers import EventProvider
+from core.observability import start_observation_span
+from services.web.risk.report.providers import (
+    EventProvider,
+    Provider,
+    ProviderMatchResult,
+)
+from services.web.risk.report.renderer import _render_template
 from tests.base import TestCase
 
 from .constants import (
@@ -487,6 +497,42 @@ class TestRenderTemplate(TestCase):
 
         # 验证AI变量渲染
         self.assertIn("2025年12月17日", result)
+
+    def test_render_provider_thread_pool_preserves_otel_context(self):
+        """Provider 在线程池执行时应继承提交任务时的 OTel context。"""
+
+        captured_span_ids = []
+
+        class ContextProvider(Provider):
+            key = "ctx"
+
+            def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
+                if not isinstance(node, nodes.Getattr) or not isinstance(node.node, nodes.Name):
+                    return ProviderMatchResult(matched=False)
+                if node.node.name != self.key:
+                    return ProviderMatchResult(matched=False)
+                return ProviderMatchResult(
+                    matched=True,
+                    original_expr="ctx.value",
+                    provider=self,
+                    node_type=nodes.Getattr,
+                    call_args={"name": "ctx.value"},
+                )
+
+            def get(self, **kwargs):
+                captured_span_ids.append(trace.get_current_span().get_span_context().span_id)
+                return "context-ok"
+
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        with mock.patch("core.observability.trace.get_tracer_provider", return_value=provider):
+            with start_observation_span("risk.render.parent") as span:
+                parent_span_id = span.get_span_context().span_id
+                result = _render_template(template="{{ ctx.value }}", providers=[ContextProvider()], variables={})
+
+        self.assertIn("context-ok", result)
+        self.assertEqual(captured_span_ids, [parent_span_id])
 
     @mock.patch("services.web.risk.report.providers.api.bk_base.query_sync")
     def test_render_missing_provider(self, mock_query):

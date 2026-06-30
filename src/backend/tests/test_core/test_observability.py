@@ -1,7 +1,8 @@
 from unittest import mock
 
-from bk_resource import APIResource
+from bk_resource import APIResource, Resource
 from django.test import SimpleTestCase, override_settings
+from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -21,6 +22,16 @@ class DummyAPIResource(APIResource):
     method = "POST"
     base_url = "https://example.com/api"
     action = "/v1/do_something/"
+
+
+class LocalDummyAPIResource(DummyAPIResource):
+    def perform_request(self, validated_request_data):
+        return {"value": validated_request_data.get("foo", "")}
+
+
+class LocalOuterBulkResource(Resource):
+    def perform_request(self, validated_request_data):
+        return LocalDummyAPIResource().request({"foo": validated_request_data.get("foo", "")})
 
 
 class DummyEvent(Event):
@@ -214,7 +225,7 @@ class TestBKResourceAPIInstrumentor(SimpleTestCase):
         self.provider_patch.stop()
         self.exporter.clear()
 
-    def test_api_resource_perform_request_creates_client_span(self):
+    def test_api_resource_request_creates_client_span(self):
         response = mock.Mock()
         response.json.return_value = {"result": True, "code": 0, "data": {"ok": True}}
         response.raise_for_status.return_value = None
@@ -224,7 +235,7 @@ class TestBKResourceAPIInstrumentor(SimpleTestCase):
         resource.session = mock.Mock()
         resource.session.request.return_value = response
 
-        result = resource.perform_request({"foo": "bar"})
+        result = resource.request({"foo": "bar"})
 
         self.assertEqual(result, {"ok": True})
         spans = self.exporter.get_finished_spans()
@@ -239,13 +250,13 @@ class TestBKResourceAPIInstrumentor(SimpleTestCase):
         self.assertEqual(span.attributes["bk_audit.api.action"], "/v1/do_something/")
         self.assertEqual(span.attributes["bk_audit.api.status"], "success")
 
-    def test_api_resource_perform_request_marks_error_span(self):
+    def test_api_resource_request_marks_error_span(self):
         class FailedAPIResource(DummyAPIResource):
             def build_url(self, validated_request_data):
                 raise ValueError("failed")
 
         with self.assertRaises(ValueError):
-            FailedAPIResource().perform_request({})
+            FailedAPIResource().request({})
 
         spans = self.exporter.get_finished_spans()
         self.assertEqual(len(spans), 1)
@@ -254,6 +265,54 @@ class TestBKResourceAPIInstrumentor(SimpleTestCase):
         self.assertEqual(span.status.status_code, StatusCode.ERROR)
         self.assertEqual(span.attributes["bk_audit.api.status"], "error")
         self.assertEqual(span.attributes["bk_audit.api.error_type"], "ValueError")
+
+    def test_api_resource_call_keeps_request_log_inside_client_span(self):
+        class TraceCapturingLogHandler:
+            trace_id = 0
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def record(self):
+                self.__class__.trace_id = trace.get_current_span().get_span_context().trace_id
+
+        with mock.patch("bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER", TraceCapturingLogHandler):
+            result = LocalDummyAPIResource()({"foo": "bar"})
+
+        self.assertEqual(result, {"value": "bar"})
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].name, "api.bk_dummy.LocalDummyAPIResource")
+        self.assertEqual(TraceCapturingLogHandler.trace_id, spans[0].context.trace_id)
+
+    def test_api_resource_call_does_not_create_duplicate_request_span(self):
+        result = LocalDummyAPIResource()({"foo": "bar"})
+
+        self.assertEqual(result, {"value": "bar"})
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual([span.name for span in spans], ["api.bk_dummy.LocalDummyAPIResource"])
+
+    def test_api_resource_bulk_request_propagates_parent_context_to_child_threads(self):
+        with start_observation_span("risk.bulk.parent"):
+            result = LocalDummyAPIResource().bulk_request([{"foo": "one"}, {"foo": "two"}])
+
+        self.assertEqual(result, [{"value": "one"}, {"value": "two"}])
+        spans = self.exporter.get_finished_spans()
+        parent_span = next(span for span in spans if span.name == "risk.bulk.parent")
+        api_spans = [span for span in spans if span.name == "api.bk_dummy.LocalDummyAPIResource"]
+        self.assertEqual(len(api_spans), 2)
+        self.assertTrue(all(span.parent.span_id == parent_span.context.span_id for span in api_spans))
+
+    def test_local_resource_bulk_request_propagates_parent_context_to_inner_api(self):
+        with start_observation_span("risk.local_bulk.parent"):
+            result = LocalOuterBulkResource().bulk_request([{"foo": "one"}, {"foo": "two"}])
+
+        self.assertEqual(result, [{"value": "one"}, {"value": "two"}])
+        spans = self.exporter.get_finished_spans()
+        parent_span = next(span for span in spans if span.name == "risk.local_bulk.parent")
+        api_spans = [span for span in spans if span.name == "api.bk_dummy.LocalDummyAPIResource"]
+        self.assertEqual(len(api_spans), 2)
+        self.assertTrue(all(span.parent.span_id == parent_span.context.span_id for span in api_spans))
 
 
 class TestStartObservationSpan(SimpleTestCase):
