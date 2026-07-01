@@ -78,12 +78,16 @@
                 {{ t('关联游戏列表') }}
               </div>
               <div class="game-list-actions">
-                <bk-input
+                <bk-search-select
                   v-model="gameSearchKey"
                   class="game-search-input"
                   clearable
+                  :condition="[]"
+                  :data="gameSearchSelectData"
+                  :defaut-using-item="{ inputHtml: t('请选择') }"
                   :placeholder="t('搜索 游戏名称、账号、openid')"
-                  type="search" />
+                  unique-select
+                  @update:model-value="handleGameSearch" />
                 <bk-popover
                   ref="exportPopoverRef"
                   ext-cls="export-popover-wrapper"
@@ -219,8 +223,35 @@
   // 查询进行中标志：从点击查询起立即为 true，待 useRequest 的 loading 真正接管后自动置 false，
   // 避免请求发起前出现"用户信息块不渲染、loading 也未起来"的空白时间窗
   const isQuerying = ref(false);
-  const gameSearchKey = ref('');
   const showAccount = ref(false); // 账号列显隐控制，默认隐藏
+
+  interface GameSearchKey {
+    id: string;
+    name: string;
+    values?: Array<{ id: string; name: string }>;
+  }
+
+  const GAME_SEARCH_FIELD_IDS = ['gameName', 'platformAccount', 'openid'] as const;
+
+  const gameSearchSelectData = [
+    {
+      name: t('游戏名称'),
+      id: 'gameName',
+      placeholder: t('请输入'),
+    },
+    {
+      name: t('账号'),
+      id: 'platformAccount',
+      placeholder: t('请输入'),
+    },
+    {
+      name: 'openid',
+      id: 'openid',
+      placeholder: t('请输入'),
+    },
+  ];
+
+  const gameSearchKey = ref<GameSearchKey[]>([]);
 
   // ========== 状态持久化（sessionStorage）==========
   // key 按 toolUid 区分：
@@ -321,16 +352,67 @@
     type: 'desc',
   });
 
-  // 搜索过滤（main_openid_list 改用账号宽表后，旧的总支出字段不再返回，按接口返回顺序展示）
-  const filteredGameList = computed(() => {
-    let list = gameList.value;
-    if (gameSearchKey.value) {
-      const key = gameSearchKey.value.toLowerCase();
-      list = list.filter(item => (item.name || item[PROFILE_FIELDS.GAME_NAME] || '').toLowerCase().includes(key)
-        || (item.openid || '').toLowerCase().includes(key));
+  const matchGameRowByField = (
+    row: Record<string, any>,
+    fieldId: typeof GAME_SEARCH_FIELD_IDS[number],
+    keyword: string,
+  ) => {
+    const kw = keyword.toLowerCase();
+    if (fieldId === 'gameName') {
+      const value = String(row[PROFILE_FIELDS.GAME_NAME] || row.name || '').toLowerCase();
+      return value.includes(kw);
     }
-    return list;
+    if (fieldId === 'platformAccount') {
+      const value = String(row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '').toLowerCase();
+      return value.includes(kw);
+    }
+    const value = String(row.openid || '').toLowerCase();
+    return value.includes(kw);
+  };
+
+  const isGameSearchFieldId = (fieldId: string): fieldId is typeof GAME_SEARCH_FIELD_IDS[number] => (
+    GAME_SEARCH_FIELD_IDS.includes(fieldId as typeof GAME_SEARCH_FIELD_IDS[number])
+  );
+
+  // 搜索过滤：按 bk-search-select 选中的列精确匹配，避免账号/openid 同值时歧义
+  const filteredGameList = computed(() => {
+    const list = gameList.value;
+    if (!gameSearchKey.value.length) {
+      return list;
+    }
+
+    return list.filter(row => gameSearchKey.value.every((cond) => {
+      const hasValues = !!cond.values?.length;
+      const keyword = hasValues
+        ? cond.values!.map(v => v.id).join(',')
+        : cond.id;
+      if (!keyword?.trim()) {
+        return true;
+      }
+      const kw = keyword.trim();
+
+      if (hasValues && isGameSearchFieldId(cond.id)) {
+        return matchGameRowByField(row, cond.id, kw);
+      }
+
+      // 未选择列时的自由输入：匹配游戏名称、账号、openid 任意一列
+      return GAME_SEARCH_FIELD_IDS.some(fieldId => matchGameRowByField(row, fieldId, kw));
+    }));
   });
+
+  const handleGameSearch = (keyword: GameSearchKey[]) => {
+    keyword.forEach((item, index) => {
+      if (item.values?.length || !item.id || isGameSearchFieldId(item.id)) {
+        return;
+      }
+      gameSearchKey.value[index] = {
+        id: 'gameName',
+        name: t('游戏名称'),
+        values: [{ id: item.id, name: item.id }],
+      };
+    });
+    pagination.value.current = 1;
+  };
 
   // 排序后的列表
   const sortedGameList = computed(() => {
@@ -369,10 +451,9 @@
     `${row.openid || ''}__${row[PROFILE_FIELDS.GAME_NAME] || row.name || ''}`
   );
 
-  // 搜索关键词变化时重置分页到第一页
   watch(gameSearchKey, () => {
     pagination.value.current = 1;
-  });
+  }, { deep: true });
 
   // 用户信息是否为空
   const isUserInfoEmpty = computed(() => !userInfo.value.wecom
@@ -957,7 +1038,7 @@
     historyAccounts.value = [];
     // 重置游戏列表
     gameList.value = [];
-    gameSearchKey.value = '';
+    gameSearchKey.value = [];
     sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.count = 0;
     pagination.value.current = 1;
