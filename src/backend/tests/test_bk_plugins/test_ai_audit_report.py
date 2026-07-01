@@ -297,7 +297,7 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_returns_text_content_without_extra_normalization(self, mock_build_header, mock_build_url):
+    def test_stream_removes_thinking_placeholder_from_text_content(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
@@ -319,7 +319,7 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        self.assertEqual(result, "正在思考...\n\n ## Analysis Plan\n# 风险态势总结报告\n## 一、态势概览\n")
+        self.assertEqual(result, "\n\n ## Analysis Plan\n# 风险态势总结报告\n## 一、态势概览\n")
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -349,7 +349,7 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_returns_text_content_even_when_done_present(self, mock_build_header, mock_build_url):
+    def test_stream_fallbacks_to_done_when_cleaned_text_content_empty(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
@@ -372,7 +372,49 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        self.assertEqual(result, "正在思考...\n\n  ")
+        self.assertEqual(result, "完整最终报告")
+
+    @mock.patch("api.bk_plugins_ai_agent.default.logger.info")
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_logs_text_done_and_final_previews_without_short_truncation(
+        self, mock_build_header, mock_build_url, mock_logger_info
+    ):
+        long_text = "正在思考...\n\n" + ("x" * 260)
+        long_done = "done-" + ("y" * 260)
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [
+            f"data: {json.dumps({'event': 'text', 'content': long_text, 'cover': False})}",
+            f"data: {json.dumps({'event': 'done', 'content': long_done, 'cover': False})}",
+            "data: [DONE]",
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
+
+        result = self.resource.perform_request(
+            {
+                "user": "admin",
+                "input": "test",
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+        )
+
+        preview_calls = [
+            call
+            for call in mock_logger_info.call_args_list
+            if call.args and call.args[0] == "AI stream content preview: part=%s, size=%s, preview=%s"
+        ]
+        previews = {call.args[1]: call.args[3] for call in preview_calls}
+        self.assertEqual(set(previews), {"text", "done", "final"})
+        self.assertIn("x" * 260, previews["text"])
+        self.assertIn("y" * 260, previews["done"])
+        self.assertIn("x" * 260, previews["final"])
+        self.assertNotIn("正在思考...", result)
+        self.assertNotIn("正在思考...", previews["final"])
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})

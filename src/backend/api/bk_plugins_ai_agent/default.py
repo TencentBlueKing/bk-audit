@@ -28,6 +28,10 @@ from django.core.handlers.wsgi import WSGIRequest
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
+from api.bk_plugins_ai_agent.constants import (
+    AI_STREAM_PREVIEW_LIMIT,
+    AI_THINKING_PLACEHOLDERS,
+)
 from api.constants import AIAgentCode
 from api.utils import get_agent_base_url
 
@@ -146,8 +150,15 @@ class ChatCompletion(AIAgentBase):
             return False
 
     @staticmethod
-    def _content_preview(content: str, limit: int = 200) -> str:
+    def _content_preview(content: str, limit: int = AI_STREAM_PREVIEW_LIMIT) -> str:
         return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
+
+    @staticmethod
+    def _clean_final_content(content: str) -> str:
+        cleaned_content = content or ""
+        for placeholder in AI_THINKING_PLACEHOLDERS:
+            cleaned_content = cleaned_content.replace(placeholder, "")
+        return cleaned_content if cleaned_content.strip() else ""
 
     def _parse_stream_response(self, response) -> str:
         # text event 是前端增量渲染内容；done event 在部分 agent 实现中承载最终完整结果。
@@ -214,12 +225,14 @@ class ChatCompletion(AIAgentBase):
                     result=error_message,
                 )
         terminal_seen = stream_done or event_done or ag_ui_finished
-        final_content = text_content or done_content or ""
-        final_source = "text" if text_content else "done" if done_content else "empty"
+        clean_text_content = self._clean_final_content(text_content)
+        clean_done_content = self._clean_final_content(done_content or "")
+        final_content = clean_text_content or clean_done_content
+        final_source = "text" if clean_text_content else "done" if clean_done_content else "empty"
         logger.info(
             "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
             "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
-            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, text_preview=%s, done_preview=%s",
+            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, preview_limit=%s",
             getattr(response, "status_code", None),
             line_count,
             data_line_count,
@@ -233,9 +246,15 @@ class ChatCompletion(AIAgentBase):
             len(done_content or ""),
             len(final_content),
             final_source,
-            self._content_preview(text_content),
-            self._content_preview(done_content or ""),
+            AI_STREAM_PREVIEW_LIMIT,
         )
+        for part, content in (("text", text_content), ("done", done_content or ""), ("final", final_content)):
+            logger.info(
+                "AI stream content preview: part=%s, size=%s, preview=%s",
+                part,
+                len(content),
+                self._content_preview(content),
+            )
         if not terminal_seen:
             error_message = (
                 "智能体流式响应未完整结束，请稍后重试；"
