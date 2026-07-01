@@ -211,7 +211,7 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      width: 200,
+      minWidth: 200,
       ellipsis: true,
     },
     {
@@ -315,7 +315,7 @@
     {
       title: t('操作'),
       colKey: 'action',
-      width: 90,
+      width: 150,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isEnabled = row.status === 'published';
@@ -491,8 +491,10 @@
 
   .action-cell {
     display: flex;
-    gap: 16px;
+    flex-wrap: nowrap;
+    gap: 8px;
     align-items: center;
+    white-space: nowrap;
 
     .action-btn {
       margin-right: 8px;
@@ -511,6 +513,10 @@
   }
 
   .report-config-list {
+    :deep(.t-table) {
+      table-layout: fixed;
+    }
+
     :deep(.t-table__row--hover) {
       background-color: #fff !important;
     }
