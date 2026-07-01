@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <teleport to="#teleport-nav-step">
+  <teleport
+    v-if="isHeaderSlotActive"
+    to="#teleport-nav-step">
     <bk-steps
       v-model:cur-step="currentStep"
       class="strategy-upgrade-step"
@@ -40,6 +42,7 @@
   } from 'vue-router';
 
   import useRouterBack from '@hooks/use-router-back';
+  import usePageHeaderSlot from '@/hooks/use-page-header-slot';
 
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
@@ -54,6 +57,7 @@
   ];
   const router = useRouter();
   const route = useRoute();
+  const { isActive: isHeaderSlotActive } = usePageHeaderSlot();
   const currentStep = ref(1);
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 

@@ -16,7 +16,9 @@
 -->
 <template>
   <!-- 步进条 -->
-  <teleport to="#teleport-nav-step">
+  <teleport
+    v-if="isHeaderSlotActive"
+    to="#teleport-nav-step">
     <bk-steps
       v-model:cur-step="currentStep"
       class="strategy-upgrade-step"
@@ -101,6 +103,7 @@
   import Step3 from './components/step3/index.vue';
 
   import useMessage from '@/hooks/use-message';
+  import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
@@ -134,6 +137,7 @@
   const route = useRoute();
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
+  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
 
   const comMap = {
     1: Step1,
@@ -713,6 +717,15 @@
       ensureTagMapLoaded();
     }
   });
+
+  watch(
+    () => route.fullPath,
+    () => {
+      if (isPageActive.value) {
+        claimHeaderSlot();
+      }
+    },
+  );
 
 </script>
 <style scoped>

@@ -1,6 +1,13 @@
-import { computed, ref } from 'vue';
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+} from 'vue';
 
-const HEADER_SLOT_IDS = ['teleport-router-link', 'teleport-generate-report'];
+const HEADER_SLOT_IDS = ['teleport-router-link', 'teleport-generate-report', 'teleport-nav-step'];
 
 export const clearPageHeaderSlots = () => {
   HEADER_SLOT_IDS.forEach((id) => {
@@ -14,8 +21,7 @@ const activeOwnerId = ref(0);
 export default function usePageHeaderSlot() {
   ownerSeed += 1;
   const ownerId = ownerSeed;
-
-  const isActive = computed(() => activeOwnerId.value === ownerId);
+  const isPageActive = ref(false);
 
   const claim = () => {
     clearPageHeaderSlots();
@@ -30,8 +36,31 @@ export default function usePageHeaderSlot() {
     clearPageHeaderSlots();
   };
 
+  const isActive = computed(() => isPageActive.value && activeOwnerId.value === ownerId);
+
+  onMounted(() => {
+    isPageActive.value = true;
+    claim();
+  });
+
+  onActivated(() => {
+    isPageActive.value = true;
+    claim();
+  });
+
+  onDeactivated(() => {
+    isPageActive.value = false;
+    release();
+  });
+
+  onBeforeUnmount(() => {
+    isPageActive.value = false;
+    release();
+  });
+
   return {
     isActive,
+    isPageActive,
     claim,
     release,
   };

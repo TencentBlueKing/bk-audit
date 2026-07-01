@@ -101,7 +101,7 @@
     </bk-button>
   </teleport>
   <teleport
-    v-if="showGenerateReportButton"
+    v-if="isHeaderSlotActive && canGenerateReport"
     to="#teleport-generate-report">
     <bk-button
       :key="`risk-generate-report-${route.fullPath}`"
@@ -166,7 +166,7 @@
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
-  const { isActive: isHeaderSlotActive, claim: claimHeaderSlot, release: releaseHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
 
   let timeout: undefined | number = undefined;
   let reportGeneratingTimer: undefined | number = undefined;
@@ -289,9 +289,8 @@
     ...strategyInfoData.value,
   }));
 
-  const showGenerateReportButton = computed(() => (
-    isHeaderSlotActive.value
-    && !!detailData.value.permission?.edit_risk_v2
+  const canGenerateReport = computed(() => (
+    !!detailData.value.permission?.edit_risk_v2
     && !detailData.value.has_report
   ));
 
@@ -351,14 +350,13 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isHeaderSlotActive.value) {
+      if (isPageActive.value) {
         claimHeaderSlot();
       }
     },
   );
 
   onMounted(() => {
-    claimHeaderSlot();
     nextTick(() => {
       if (route.query.openEditReport === 'false') {
         handleGenerateReport();
@@ -380,7 +378,6 @@
   });
 
   onBeforeUnmount(() => {
-    releaseHeaderSlot();
     if (timeout) {
       clearTimeout(timeout);
     }
