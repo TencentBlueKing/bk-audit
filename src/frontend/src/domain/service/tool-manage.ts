@@ -24,7 +24,6 @@ export default  {
    */
   fetchToolsList(params: {
       keyword?: string,
-      tags?: string[],
       scope_type?: string,
       scope_id?: string,
       binding_type?: string,
@@ -145,6 +144,36 @@ export default  {
       scene_id: number,
     }) {
     return ToolManageSources.publishPlatformTool(params).then(({ data }) => data);
+  },
+  /**
+     * @desc 编辑平台级工具
+     * @param { Object } params - 工具数据（包含 uid）
+     */
+  updatePlatformTool(params: Record<string, any>) {
+    return ToolManageSources.updatePlatformTool(params).then(({ data }) => data);
+  },
+  /**
+     * @desc 创建平台级工具
+     * @param { Object } params - 工具数据
+     */
+  createPlatformTool(params: Record<string, any>) {
+    return ToolManageSources.createPlatformTool(params).then(({ data }) => data);
+  },
+  /**
+     * @desc 删除平台级工具
+     * @param { string } uid - 工具ID
+     */
+  deletePlatformTool(uid: string) {
+    return ToolManageSources.deletePlatformTool({ uid }).then(({ data }) => data);
+  },
+  /**
+     * @desc 上架/下架平台级工具
+     * @param { Object } params - { uid, status }
+     */
+  publishPlatformToolStatus(params: {
+     id: string,
+     status: 'published' | 'unpublished' }) {
+    return ToolManageSources.publishPlatformToolStatus(params).then(({ data }) => data);
   },
   /**
      * @desc 收藏/取消收藏工具
