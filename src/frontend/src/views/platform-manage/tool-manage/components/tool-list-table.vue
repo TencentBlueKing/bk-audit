@@ -20,7 +20,6 @@
     class="report-config-list"
     :columns="tableColumns"
     :data-source="dataSource"
-    is-need-scene-params
     need-empty-search-tip
     row-key="uid"
     :search-params="searchParams"
@@ -39,16 +38,15 @@
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-
   // 工具类型枚举
   type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
 
-  interface TagItem {
-    tag_id: string;
-    tag_name: string;
-    tool_count: number;
-    icon?: string;
+  // 可见范围接口定义
+  interface VisibilityInfo {
+    binding_type: string;
+    visibility_type: string;
+    scene_ids: string[];
+    system_ids: string[];
   }
 
   // 工具模型接口定义
@@ -62,9 +60,9 @@
     favorite: boolean;
     is_bkvision: boolean;
     namespace: string;
-    status: 'published' | '';
+    status: 'published' | 'unpublished' | '';
+    visibility: VisibilityInfo;
     strategies: number[];
-    tags: string[];
     created_at: string;
     created_by: string;
     updated_at: string;
@@ -73,20 +71,23 @@
 
   interface Props {
     searchParams: Record<string, any>;
-    tagsEnums: TagItem[];
-    strategyList: Array<{ label: string; value: number }>;
+    sceneNameMap?: Record<string, string>;
+    systemNameMap?: Record<string, string>;
   }
 
   interface Emits {
     (e: 'edit', row: ToolModel): void;
-    (e: 'preview', row: ToolModel): void;
     (e: 'delete', row: ToolModel): void;
     (e: 'toggle-status', row: ToolModel): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
+    (e: 'status-counts', counts: { all: number; published: number; unpublished: number }): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    sceneNameMap: () => ({}),
+    systemNameMap: () => ({}),
+  });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -99,6 +100,12 @@
     const pageSize = params?.page_size || 10;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
+    // 复用完整列表数据计算状态统计，通知父组件
+    emit('status-counts', {
+      all: list.length,
+      published: list.filter((item: any) => item.status === 'published').length,
+      unpublished: list.filter((item: any) => item.status === 'unpublished').length,
+    });
     return {
       results: list.slice(start, end),
       page,
@@ -113,48 +120,73 @@
     bk_vision: t('BKVision图标'),
   };
 
-  // 标签名称
-  const returnTagsName = (tagId: string) => {
-    let tagName = '';
-    props.tagsEnums.forEach((item: TagItem) => {
-      if (item.tag_id === tagId) {
-        tagName = item.tag_name;
-      }
-    });
-    return tagName;
-  };
-
-  // 获取标签完整内容（用于 tooltip）
-  const getTagsTooltipContent = (tags: string[]) => tags
-    .slice(3)
-    .map(tagId => returnTagsName(tagId))
-    .join('、');
-
-  // 根据策略ID获取策略名称
-  const getStrategyName = (strategyId: number) => {
-    const strategy = props.strategyList.find(item => item.value === strategyId);
-    return strategy ? strategy.label : `${strategyId}`;
-  };
-
-  // 策略跳转
-  const handleStrategyClick = (strategyId: number) => {
-    const sceneParams = getSceneSystemParams();
-    const query: Record<string, string> = {
-      strategy_id: String(strategyId),
-    };
-    // 携带场景信息
-    if (sceneParams.scope_id) {
-      query.scene_id = sceneParams.scope_id;
-      query.scope_id = sceneParams.scope_id;
-      query.scope_type = sceneParams.scope_type;
-    } else if (sceneParams.scope_type) {
-      query.scope_type = sceneParams.scope_type;
+  // 根据可见范围信息渲染内容（场景 + 平台/系统）
+  // 后端 visibility_type 枚举值：
+  //   all_visible=全部可见, all_scenes=全部场景, all_systems=全部系统,
+  //   specific_scenes=指定场景, specific_systems=指定系统, scenes_and_systems=场景和系统
+  const MAX_VISIBLE_TAGS = 2;
+  const renderVisibilityContent = (visibility: VisibilityInfo) => {
+    if (!visibility || !visibility.visibility_type) {
+      return <span>--</span>;
     }
-    const url = router.resolve({
-      name: 'strategyList',
-      query,
-    }).href;
-    window.open(url, '_blank');
+    const { visibility_type: visibilityType, scene_ids: sceneIds, system_ids: systemIds } = visibility;
+
+    // 全部可见
+    if (visibilityType === 'all_visible') {
+      return (
+        <bk-tag radius="4px" theme="default">{t('全部可见')}</bk-tag>
+      );
+    }
+
+    // 合并场景和系统标签
+    const allTags: Array<{ label: string }> = [];
+
+    // 全部场景
+    if (visibilityType === 'all_scenes') {
+      allTags.push({ label: t('全部场景') });
+    } else if (sceneIds && sceneIds.length > 0) {
+      // 指定场景 / 场景和系统：逐个展示场景
+      sceneIds.forEach((id: string) => {
+        allTags.push({ label: props.sceneNameMap[id] || `场景${id}` });
+      });
+    }
+
+    // 全部系统
+    if (visibilityType === 'all_systems') {
+      allTags.push({ label: t('全部系统') });
+    } else if (systemIds && systemIds.length > 0) {
+      // 指定系统 / 场景和系统：逐个展示系统
+      systemIds.forEach((id: string) => {
+        allTags.push({ label: props.systemNameMap[id] || `平台${id}` });
+      });
+    }
+
+    if (allTags.length === 0) {
+      return <span>--</span>;
+    }
+
+    const visibleTags = allTags.slice(0, MAX_VISIBLE_TAGS);
+    const overflowTags = allTags.slice(MAX_VISIBLE_TAGS);
+
+    return (
+      <div class="visibility-cell">
+        {visibleTags.map(tag => (
+          <bk-tag class="desc-tag ml8">
+            {tag.label}
+          </bk-tag>
+        ))}
+        {overflowTags.length > 0 && (
+          <bk-tag
+            class="desc-tag ml8"
+            v-bk-tooltips={{
+              content: overflowTags.map(t => t.label).join('、'),
+              placement: 'top',
+            }}>
+            + {overflowTags.length}
+          </bk-tag>
+        )}
+      </div>
+    );
   };
 
   // 跳转至工具广场并打开该工具
@@ -165,24 +197,6 @@
     }).href;
     window.open(url, '_blank');
   };
-
-  // 引用策略hover弹窗内容
-  const renderStrategiesTooltipContent = (strategies: number[]) => (
-    <div class="strategies-tooltip-content">
-      {strategies.map((strategyId: number) => (
-        <div
-          class="strategy-item"
-          onClick={() => handleStrategyClick(strategyId)}>
-          <span class="strategy-name">
-            {getStrategyName(strategyId)}（{strategyId}）
-          </span>
-          <audit-icon
-            class="strategy-link-icon"
-            type="jump-link" />
-        </div>
-      ))}
-    </div>
-  );
 
   const tableColumns = ref([
     {
@@ -224,61 +238,11 @@
         </span>,
     },
     {
-      title: t('标签'),
-      colKey: 'tags',
+      title: t('可见范围'),
+      colKey: 'visibility',
       width: 200,
       ellipsis: true,
-      cell: (h: any, { row }: { row: ToolModel }) => (
-        <div class="tags-cell">
-          {row.tags && row.tags.length > 0 ? (
-            <>
-              {row.tags.slice(0, 3).map((tagId: string) => (
-                <bk-tag class="desc-tag ml8">
-                  {returnTagsName(tagId)}
-                </bk-tag>
-              ))}
-              {row.tags.length > 3 && (
-                <bk-tag
-                  class="desc-tag ml8"
-                  v-bk-tooltips={{
-                    content: getTagsTooltipContent(row.tags),
-                    placement: 'top',
-                  }}>
-                  + {row.tags.length - 3}
-                </bk-tag>
-              )}
-            </>
-          ) : (
-            <span>--</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: t('引用策略'),
-      colKey: 'strategies',
-      width: 100,
-      ellipsis: true,
-      cell: (_h: any, { row }: { row: ToolModel }) => {
-        if (!row.strategies || row.strategies.length === 0) {
-          return <span>--</span>;
-        }
-        return (
-          <bk-popover
-            placement="bottom"
-            theme="dark"
-            trigger="hover">
-            {{
-              default: () => (
-                <span class="strategies-count">
-                  {row.strategies.length} {t('个')}
-                </span>
-              ),
-              content: () => renderStrategiesTooltipContent(row.strategies),
-            }}
-          </bk-popover>
-        );
-      },
+      cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility),
     },
     {
       title: t('状态'),
@@ -288,9 +252,9 @@
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
           {row.status === 'published' ? (
-            <bk-tag radius="4px" theme="success">{t('启用')}</bk-tag>
+            <bk-tag radius="4px" theme="success">{t('已上架')}</bk-tag>
           ) : (
-            <bk-tag radius="4px" theme="default">{t('停用')}</bk-tag>
+            <bk-tag radius="4px" theme="default">{t('未上架')}</bk-tag>
           )}
         </span>
       ),
@@ -315,20 +279,10 @@
     {
       title: t('操作'),
       colKey: 'action',
-      width: 90,
+      width: 140,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
-        const isEnabled = row.status === 'published';
-        const hasStrategies = row.strategies && row.strategies.length > 0;
-        // 删除按钮禁用条件：启用状态或被策略引用
-        const isDeleteDisabled = isEnabled || hasStrategies;
-        // 删除按钮提示文字
-        const getDeleteTooltip = () => {
-          if (isEnabled) return t('请先停用后再删除');
-          if (hasStrategies) return t('该工具已被策略引用，无法删除');
-          return '';
-        };
-        const deleteTooltip = getDeleteTooltip();
+        const isPublished = row.status === 'published';
 
         return (
           <div class="action-cell">
@@ -343,8 +297,8 @@
               text
               theme="primary"
               class="mr8"
-              onClick={() => emit('preview', row)}>
-              {t('预览')}
+              onClick={() => emit('toggle-status', row)}>
+              {isPublished ? t('下架') : t('上架')}
             </bk-button>
             <bk-popover
               extCls="tool-more-action-popover"
@@ -361,24 +315,13 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    <bk-button
-                      text
-                      class="mr8"
-                      onClick={() => emit('toggle-status', row)}>
-                      {isEnabled ? t('停用') : t('启用')}
-                    </bk-button>
-                    {isDeleteDisabled ? (
+                    {isPublished ? (
                       <span
                         v-bk-tooltips={{
-                          content: deleteTooltip,
+                          content: t('请先下架后再删除'),
                           placement: 'bottom',
                         }}>
-                        <bk-button
-                          text
-                          disabled
-                          class="mr8 mr8-disabled">
-                          {t('删除')}
-                        </bk-button>
+                        <span class="delete-disabled">{t('删除')}</span>
                       </span>
                     ) : (
                       <bk-button
@@ -466,7 +409,7 @@
 </script>
 
 <style lang="postcss" scoped>
-  .tags-cell {
+  .visibility-cell {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -565,30 +508,18 @@
         background-color: transparent;
       }
     }
-  }
 
-  .strategies-count {
-    color: #4d4f56;
-    cursor: pointer;
-    border-bottom: 1px dashed #c4c6cc;
-  }
+    .delete-disabled {
+      display: block;
+      width: 100%;
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #c4c6cc;
+      cursor: not-allowed;
 
-  .strategies-tooltip-content {
-    .strategy-item {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-      padding: 4px 0;
-      cursor: pointer;
-    }
-
-    .strategy-name {
-      color: #fff;
-    }
-
-    .strategy-link-icon {
-      font-size: 16px;
-      color: #699df4;
+      &:hover {
+        background-color: transparent;
+      }
     }
   }
 </style>
