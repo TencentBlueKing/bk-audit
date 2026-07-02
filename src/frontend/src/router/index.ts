@@ -39,6 +39,7 @@ import RiskManage from '@views/risk-manage/routes'; // 所有风险
 import RuleManage from '@views/rule-manage/routes'; // 处理规则
 import SceneResources from '@views/scene-config/routes'; // 场景配置
 import SceneRiskManage from '@views/scene-risk-manage/routes'; // 场景风险
+import SecChat from '@views/sec-chat/routes'; // SecChat
 import StatementManage from '@views/statement-manage/routes'; // 报表
 import StorageManage from '@views/storage-manage/routes'; // 数据存储
 import StrategyManage from '@views/strategy-manage/routes'; // 审计策略
@@ -125,6 +126,7 @@ export default (config: ConfigModel) => {
         PlatformManage,
         SceneResources,
         SceneRiskManage,
+        SecChat,
       ],
     },
     {
