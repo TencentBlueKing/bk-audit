@@ -24,14 +24,12 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-
   type ActionType = 'delete' | 'enable' | 'disable';
 
   interface ToolItem {
     uid: string;
     name: string;
-    status?: 'published' | '';
+    status?: 'published' | 'unpublished' | '';
   }
 
   interface Props {
@@ -57,11 +55,7 @@
     let deleteInfoInstance: any; // eslint-disable-line prefer-const
     const handleConfirm = () => {
       if (confirmName.value !== currentTarget.name) return;
-      const scopeParams = getSceneSystemParams();
-      ToolManageService.fetchDeleteSceneTool({
-        uid: currentTarget.uid,
-        scene_id: Number(scopeParams.scope_id) || 0,
-      }).then(() => {
+      ToolManageService.deletePlatformTool(currentTarget.uid).then(() => {
         messageSuccess(t('删除成功'));
         deleteInfoInstance?.hide();
         emit('success');
@@ -182,19 +176,18 @@
       footerAlign: 'center',
       confirmButtonTheme: isEnabling ? 'primary' : 'danger',
       onConfirm() {
-        const scopeParams = getSceneSystemParams();
-        return publishPlatformTool({
-          uid: currentTarget.uid,
-          scene_id: Number(scopeParams.scope_id) || 0,
+        return publishPlatformToolStatus({
+          id: currentTarget.uid,
+          status: isEnabling ? 'published' : 'unpublished',
         });
       },
     });
   };
 
-  // 启用/停用接口
+  // 启用/停用接口（平台级）
   const {
-    run: publishPlatformTool,
-  } = useRequest(ToolManageService.publishPlatformTool, {
+    run: publishPlatformToolStatus,
+  } = useRequest(ToolManageService.publishPlatformToolStatus, {
     defaultValue: null,
     onSuccess: () => {
       const isEnabling = props.actionType === 'enable';
