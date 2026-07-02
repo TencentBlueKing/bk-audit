@@ -34,7 +34,6 @@ class ToolManage extends ModuleBase {
   // 获取工具列表（不再分页，直接返回数组）
   getToolsList(params: {
     keyword?: string,
-    tags?: string[],
     scope_type?: string,
     scope_id?: string,
     binding_type?: string,
@@ -107,14 +106,10 @@ class ToolManage extends ModuleBase {
     scope_type?: string,
     scope_id?: string,
     status?: string[],
+    namespace?: string,
   }) {
-    const sceneParams = getSceneSystemParams();
-    const mergedParams = {
-      scope_type: sceneParams.scope_type,
-      scope_id: sceneParams.scope_id,
-      ...params,
-    };
-    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/?${processedParams(mergedParams).toString()}`);
+    const query = params ? `?${processedParams(params).toString()}` : '';
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
   // 工具执行
   getToolsExecute(params: {
@@ -147,6 +142,33 @@ class ToolManage extends ModuleBase {
       params: {
         uid: params.uid,
         scene_id: params.scene_id,
+      },
+    });
+  }
+  // 编辑平台级工具
+  updatePlatformTool(params: Record<string, any>) {
+    return Request.put(`${this.path}/tool/platform/${params.uid}/`, {
+      params: {
+        ...params,
+      },
+    });
+  }
+  // 创建平台级工具
+  createPlatformTool(params: Record<string, any>) {
+    return Request.post(`${this.path}/tool/platform/`, {
+      params,
+    });
+  }
+  // 删除平台级工具
+  deletePlatformTool(params: { uid: string }) {
+    return Request.delete(`${this.path}/tool/platform/${params.uid}/`);
+  }
+  // 上架/下架平台级工具
+  publishPlatformToolStatus(params: { id: string, status: 'published' | 'unpublished' }) {
+    return Request.post(`${this.path}/tool/platform/${params.id}/publish/`, {
+      params: {
+        id: params.id,
+        status: params.status,
       },
     });
   }

@@ -15,76 +15,144 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <!-- 步进条 -->
+  <teleport to="#teleport-nav-step">
+    <bk-steps
+      v-model:cur-step="currentStep"
+      class="tool-create-step"
+      :line-type="isEditMode ? 'solid' : 'dashed'"
+      :steps="steps" />
+  </teleport>
+
   <skeleton-loading
     v-if="!isCreating && !isFailed && !isSuccessful"
     fullscreen
     :loading="loading || isEditDataLoading"
     name="createTools">
-    <smart-action
-      class="create-tools-page"
-      :offset-target="getSmartActionOffsetTarget">
-      <div class="create-tools-main">
-        <audit-form
-          ref="formRef"
-          class="tools-form"
-          form-type="vertical"
-          :model="formData"
-          :rules="rules">
-          <!-- 基础信息 -->
-          <base-info
-            v-model:form-data="formData"
-            :all-tag-data="allTagData"
-            :tag-loading="tagLoading" />
+    <!-- 步骤1：工具配置 -->
+    <div
+      v-if="currentStep === 1"
+      class="step-content">
+      <smart-action
+        class="create-tools-page"
+        :offset-target="getSmartActionOffsetTarget">
+        <div class="create-tools-main">
+          <audit-form
+            ref="formRef"
+            class="tools-form"
+            form-type="vertical"
+            :model="formData"
+            :rules="rules">
+            <!-- 基础信息 -->
+            <base-info
+              v-model:form-data="formData"
+              :all-tag-data="allTagData"
+              :tag-loading="tagLoading" />
 
-          <!-- 工具类型 -->
-          <tool-type-section
-            ref="toolTypeSectionRef"
-            v-model:form-data="formData"
-            :com-ref="comRef"
-            :is-edit-mode="isEditMode"
-            @apply-permission="handleApplyPermission"
-            @update:bk-vision-update-time="(val: string) => bkVisionUpdateTime = val"
-            @update:is-first-edit="(val: boolean) => isFirstEdit = val"
-            @update:is-show-component="(val: boolean) => isShowComponent = val"
-            @update:is-update="(val: boolean) => isUpdate = val"
-            @update:report-lists-panels="(val: any) => reportListsPanels = val" />
+            <!-- 工具类型 -->
+            <tool-type-section
+              ref="toolTypeSectionRef"
+              v-model:form-data="formData"
+              :com-ref="comRef"
+              :is-edit-mode="isEditMode"
+              @apply-permission="handleApplyPermission"
+              @update:bk-vision-update-time="(val: string) => bkVisionUpdateTime = val"
+              @update:is-first-edit="(val: boolean) => isFirstEdit = val"
+              @update:is-show-component="(val: boolean) => isShowComponent = val"
+              @update:is-update="(val: boolean) => isUpdate = val"
+              @update:report-lists-panels="(val: any) => reportListsPanels = val" />
 
-          <component
-            :is="ToolTypeComMap[formData.tool_type]"
-            v-if="isShowComponent"
-            ref="comRef"
-            :data-search-config-type="formData.data_search_config_type"
-            :form-data-config="formData"
-            :is-edit-mode="isEditMode"
-            :is-first-edit="isFirstEdit"
-            :is-update="isUpdate"
-            :name="formData.name"
-            :report-lists-panels="reportListsPanels"
-            :uid="formData.uid"
-            @change-is-update-submit="changeIsUpdateSubmit"
-            @change-submit="changeSubmit"
-            @get-is-done-de-bug="getIsDoneDeBug" />
+            <component
+              :is="ToolTypeComMap[formData.tool_type]"
+              v-if="isShowComponent"
+              ref="comRef"
+              :data-search-config-type="formData.data_search_config_type"
+              :form-data-config="formData"
+              :is-edit-mode="isEditMode"
+              :is-first-edit="isFirstEdit"
+              :is-update="isUpdate"
+              :name="formData.name"
+              :report-lists-panels="reportListsPanels"
+              :uid="formData.uid"
+              @change-is-update-submit="changeIsUpdateSubmit"
+              @change-submit="changeSubmit"
+              @get-is-done-de-bug="getIsDoneDeBug" />
+          </audit-form>
+        </div>
+        <template #action>
+          <bk-button
+            class="w88"
+            theme="primary"
+            @click="handleNextStep">
+            {{ t('下一步') }}
+          </bk-button>
+          <bk-button
+            class="ml8"
+            @click="handleCancel">
+            {{ t('取消') }}
+          </bk-button>
+        </template>
+      </smart-action>
+    </div>
+
+    <!-- 步骤2：可见范围 -->
+    <div
+      v-if="currentStep === 2"
+      class="step-content step2-content">
+      <smart-action
+        class="create-tools-page"
+        :offset-target="getSmartActionOffsetTarget">
+        <audit-form :model="formData">
+          <card-part-vue
+            :is-open="false"
+            :show-icon="false"
+            :title="t('可见范围')">
+            <template #content>
+              <!-- 选择可见范围 -->
+              <div class="visible-range-select-row">
+                <label class="select-label">{{ t('选择可见范围') }}</label>
+                <div class="select-control">
+                  <visible-range-field
+                    :form-data="formData"
+                    @update:form-data="handleVisibleRangeChange" />
+                </div>
+              </div>
+
+              <!-- 各场景/系统参数配置 -->
+              <scene-param-config
+                :form-data="formData"
+                :input-variables="formData.config.input_variable"
+                :selected-scenes="selectedSceneItems"
+                :selected-systems="selectedSystemItems"
+                @update:param-overrides="handleParamOverridesChange" />
+            </template>
+          </card-part-vue>
         </audit-form>
-      </div>
-      <template #action>
-        <bk-button
-          v-bk-tooltips="{
-            disabled: !isApiDoneDeBug,
-            content: t('请完成接口成功调试后再试')
-          }"
-          class="w88"
-          :disabled="isApiDoneDeBug"
-          theme="primary"
-          @click="handleSubmit">
-          {{ isEditMode ? t('提交') : t('创建') }}
-        </bk-button>
-        <bk-button
-          class="ml8"
-          @click="handleCancel">
-          {{ t('取消') }}
-        </bk-button>
-      </template>
-    </smart-action>
+        <template #action>
+          <bk-button
+            class="w88"
+            @click="handlePreviousStep">
+            {{ t('上一步') }}
+          </bk-button>
+          <bk-button
+            v-bk-tooltips="{
+              disabled: !isApiDoneDeBug,
+              content: t('请完成接口成功调试后再试')
+            }"
+            class="w88 ml8"
+            :disabled="isApiDoneDeBug"
+            theme="primary"
+            @click="handleSubmit">
+            {{ isEditMode ? t('提交') : t('提交') }}
+          </bk-button>
+          <bk-button
+            class="w88 ml8"
+            @click="handleCancel">
+            {{ t('取消') }}
+          </bk-button>
+        </template>
+      </smart-action>
+    </div>
   </skeleton-loading>
   <creating
     v-if="isCreating"
@@ -102,12 +170,13 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
+  import { computed, nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import RootManageService from '@service/root-manage';
+  import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
 
   import ConfigModel from '@model/root/config';
@@ -123,6 +192,9 @@
   import Failed from './components/tool-status/failed.vue';
   import Successful from './components/tool-status/Successful.vue';
   import ToolTypeSection from './components/tool-type-section.vue';
+  import VisibleRangeField from './components/visible-range-field.vue';
+  import SceneParamConfig from './components/scene-param-config.vue';
+  import CardPartVue from './components/card-part.vue';
   import type { FormData } from './types';
 
   import useMessage from '@/hooks/use-message';
@@ -141,6 +213,13 @@
   const isEditMode = route.name === 'platformToolEdit';
   const backRouteName = 'platformToolConfig';
   const isShowComponent = ref(false);
+
+  // 步骤条配置
+  const steps = [
+    { title: t('工具配置') },
+    { title: t('可见范围') },
+  ];
+  const currentStep = ref<1 | 2>(1);
 
   const formRef = ref();
   const comRef = ref();
@@ -168,6 +247,10 @@
     updated_at: '',
     updated_by: '',
     updated_time: null,
+    // 可见范围（平铺字段，提交时组装为 visibility 对象）
+    visibility_type: 'scenes_and_systems' as FormData['visibility_type'],
+    scene_ids: [] as number[],
+    system_ids: [] as number[],
     config: {
       referenced_tables: [],
       input_variable: [{
@@ -203,6 +286,10 @@
     tag_id: string;
     tag_name: string;
   }>>([]);
+
+  // 场景/系统列表（用于参数配置区域显示名称）
+  const allSceneList = ref<Array<{ id: number; name: string }>>([]);
+  const allSystemList = ref<Array<{ id: number; name: string }>>([]);
 
   // 提供响应式的工具名称给子组件
   provide('newToolDataName', toRef(() => formData.value.name));
@@ -264,7 +351,9 @@
   // 获取所有标签列表
   const {
     loading: tagLoading,
-  } = useRequest(MetaManageService.fetchTags, {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    run: _fetchAllTags,
+  } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
@@ -302,6 +391,62 @@
 
   const handleApplyPermission = () => {
     window.open(`${configData.value.tool.vision_share_permission_url}`);
+  };
+
+  // 下一步：校验步骤1表单后进入步骤2
+  const handleNextStep = () => {
+    const tastQueue = [formRef.value.validate()];
+    if (comRef.value && formData.value.tool_type !== 'api') {
+      tastQueue.push(comRef.value.getValue());
+    }
+    // 创建时 api 判断是否调试成功
+    if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
+      const debugResult = comRef.value.getDebugResult();
+      if (!debugResult.isDoneDeBug) {
+        messageWarn(t('请先进行接口调试'));
+        return;
+      } if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+        messageWarn(t('接口调试失败'));
+        return;
+      }
+    }
+    // api 类型校验分页配置等
+    if (comRef.value && formData.value.tool_type === 'api' && comRef.value.validate) {
+      if (!comRef.value.validate()) {
+        return;
+      }
+    }
+    Promise.all(tastQueue).then(() => {
+      // 获取组件配置
+      if (comRef.value?.getFields) {
+        if (formData.value.tool_type === 'bk_vision') {
+          formData.value.config.input_variable = comRef.value.getFields();
+          if (!isUpdate.value) {
+            formData.value.updated_time = bkVisionUpdateTime.value || null;
+          }
+        } else {
+          formData.value.config = comRef.value.getFields();
+        }
+      }
+      currentStep.value = 2;
+    });
+  };
+
+  // 上一步
+  const handlePreviousStep = () => {
+    currentStep.value = 1;
+  };
+
+  // 可见范围数据变更
+  const handleVisibleRangeChange = (val: FormData) => {
+    formData.value.visibility_type = val.visibility_type;
+    formData.value.scene_ids = val.scene_ids;
+    formData.value.system_ids = val.system_ids;
+  };
+
+  // 参数覆盖配置变更
+  const handleParamOverridesChange = (value: Record<string, any>) => {
+    formData.value.scene_param_overrides = value;
   };
 
   const handleCancel = () => {
@@ -458,12 +603,72 @@
     immediate: true,
   });
 
+  // 监听步骤变化：从步骤2返回步骤1时，恢复子组件（数据查询、API接口）的内部状态
+  watch(currentStep, (val) => {
+    if (val === 1 && formData.value.tool_type !== 'bk_vision') {
+      // 等待 DOM 更新完成、子组件挂载好后，调用 setConfigs 恢复状态
+      nextTick(() => {
+        nextTick(() => {
+          if (comRef.value?.setConfigs && formData.value.config) {
+            comRef.value.setConfigs(_.cloneDeep(formData.value.config));
+          }
+        });
+      });
+    }
+  });
+
+  // 加载场景列表（用于参数配置区域）
+  const loadSceneListForParams = async () => {
+    try {
+      const data = await SceneManageService.fetchSceneAll({ status: 'enabled' });
+      allSceneList.value = (data || []).map((item: any) => ({
+        id: item.scene_id,
+        name: item.name,
+      }));
+    } catch {
+      allSceneList.value = [];
+    }
+  };
+
+  // 加载系统列表（用于参数配置区域）
+  const loadSystemListForParams = async () => {
+    try {
+      const data = await MetaManageService.fetchSystemWithAction({
+        audit_status__in: 'accessed',
+        namespace: 'default',
+      });
+      allSystemList.value = (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+      }));
+    } catch {
+      allSystemList.value = [];
+    }
+  };
+
+  // 选中的场景项列表（含名称）
+  const selectedSceneItems = computed(() => {
+    if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
+    if (formData.value.visibility_type === 'all_scenes') return allSceneList.value;
+    return allSceneList.value.filter(s => formData.value.scene_ids.includes(s.id));
+  });
+
+  // 选中的系统项列表（含名称）
+  const selectedSystemItems = computed(() => {
+    if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
+    if (formData.value.visibility_type === 'all_systems') return allSystemList.value;
+    return allSystemList.value.filter(s => formData.value.system_ids.includes(s.id));
+  });
+
   onMounted(() => {
     if (isEditMode) {
       fetchToolsDetail({
         uid: route.params.id,
       });
     }
+    // 步骤2需要的场景/系统列表
+    loadSceneListForParams();
+    loadSystemListForParams();
   });
 
   useRouterBack(() => {
@@ -474,6 +679,52 @@
 </script>
 
 <style lang="postcss" scoped>
+  .tool-create-step {
+    width: 450px;
+    margin: 0 auto;
+    transform: translateX(-86px);
+
+    :deep(.bk-step) {
+      display: flex;
+
+      .bk-step-content {
+        display: flex;
+      }
+    }
+  }
+
+  .step-content {
+    padding-top: 16px;
+  }
+
+  .step2-content {
+    padding-top: 16px;
+  }
+
+  .visible-range-select-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+
+    .select-label {
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 20px;
+      color: #63656e;
+      flex-shrink: 0;
+    }
+
+    .select-control {
+      max-width: 660px;
+      min-width: 360px;
+    }
+  }
+
+  /* 步骤2 操作按钮间距 */
+  :deep(.smart-action-action) {
+    gap: 8px !important;
+  }
+
   .create-tools-page {
     .flex-center {
       display: flex;
