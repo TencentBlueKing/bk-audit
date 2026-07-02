@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import tempfile
+import io
 
 import xlsxwriter
 from django.core.files import File
@@ -27,8 +27,10 @@ class BaseXlsxFileExporter(abc.ABC):
     """文件导出器基类"""
 
     def __init__(self, *args, **kwargs):
-        self.tmp_file = tempfile.NamedTemporaryFile(delete=True, suffix=self.suffix)
-        self.workbook = xlsxwriter.Workbook(self.tmp_file.name, {'constant_memory': True})
+        # 使用内存字节流, 规避 Windows 上 NamedTemporaryFile 句柄冲突
+        # BytesIO 同时也是 xlsxwriter 官方推荐的 file-like 输出方式 (无磁盘 IO)
+        self.tmp_file = io.BytesIO()
+        self.workbook = xlsxwriter.Workbook(self.tmp_file, {'constant_memory': True})
 
     @property
     @abc.abstractmethod
