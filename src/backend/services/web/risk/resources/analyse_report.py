@@ -20,6 +20,7 @@ import abc
 import io
 import logging
 import os
+import re
 import uuid
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -594,17 +595,22 @@ class ExportAnalyseReport(AnalyseReportMeta):
         if not uri:
             return cls._BLOCKED_PDF_RESOURCE_URI
 
-        parsed_uri = urlparse(uri)
-        if parsed_uri.scheme in {"http", "https", "data"}:
-            return uri
-        if parsed_uri.scheme == "file":
-            candidate_path = unquote(parsed_uri.path)
-        elif parsed_uri.scheme:
-            return cls._BLOCKED_PDF_RESOURCE_URI
-        elif os.path.isabs(uri):
+        # Windows 盘符路径 (如 C:\xxx.ttf): 跳过 urlparse, 避免 scheme="c" 误判
+        # 用正则模式统一处理, Linux 上永远不会命中 (没有盘符路径)
+        if re.match(r"^[a-zA-Z]:[\\/]", uri):
             candidate_path = uri
         else:
-            candidate_path = os.path.join(os.path.dirname(rel), uri) if rel else os.path.abspath(uri)
+            parsed_uri = urlparse(uri)
+            if parsed_uri.scheme in {"http", "https", "data"}:
+                return uri
+            if parsed_uri.scheme == "file":
+                candidate_path = unquote(parsed_uri.path)
+            elif parsed_uri.scheme:
+                return cls._BLOCKED_PDF_RESOURCE_URI
+            elif os.path.isabs(uri):
+                candidate_path = uri
+            else:
+                candidate_path = os.path.join(os.path.dirname(rel), uri) if rel else os.path.abspath(uri)
 
         builtin_font_path = os.path.realpath(cls._CJK_FONT_PATH)
         if os.path.realpath(candidate_path) == builtin_font_path:
