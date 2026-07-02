@@ -22,7 +22,8 @@
       :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
-      @parsing="handleParsing" />
+      @parsing="handleParsing"
+      @sync="handleSearchSync" />
     <ai-analyzes
       ref="aiAnalyzesRef"
       :condition-tags="conditionTags"
@@ -50,6 +51,7 @@
         :data-source="dataSource"
         enable-cross-page-select
         need-empty-search-tip
+        :persist-table-filters="false"
         :row-class-name="getRowClassName"
         row-key="risk_id"
         :search-params="searchModel"
@@ -57,6 +59,7 @@
         :settings="settings"
         table-filter-persist-key="risk-manage-list"
         @clear-search="handleClearSearch"
+        @filter-change="handleTableFilterChange"
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @selection-change="handleSelectionChange" />
@@ -615,6 +618,18 @@
     updateConditionTags();
   };
 
+  const handleSearchSync = (value: Record<string, any>, exValue: Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue,
+    };
+    updateConditionTags();
+  };
+
+  const handleTableFilterChange = (filters: Record<string, any>) => {
+    searchBoxRef.value?.syncTableFilterFields(filters);
+  };
+
   // 更新conditionTags
   const updateConditionTags = () => {
     if (searchBoxRef.value?.getConditionTags) {
@@ -754,6 +769,7 @@
 
 .risk-manage-list-page-wrap {
   position: relative;
+  padding-bottom: 44px;
   overflow-x: hidden;
 }
 

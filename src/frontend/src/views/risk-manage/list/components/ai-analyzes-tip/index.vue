@@ -247,7 +247,12 @@
     // 如果历史报告抽屉是打开的，刷新列表
     if (showHistoryDrawer.value && historyDrawerRef.value) {
       // 通过ref直接调用history-report-drawer组件的刷新方法
-      historyDrawerRef.value?.listRef?.fetchData({ keyword: undefined, sort: ['-created_at'] });
+      historyDrawerRef.value?.listRef?.fetchData({
+        keyword: undefined,
+        title: undefined,
+        analysis_scope: undefined,
+        sort: ['-created_at'],
+      });
     }
   };
 
@@ -319,7 +324,7 @@
   .list-panel {
     width: 100%;
     min-width: 0;
-    padding: 0 20px 16px;
+    padding: 0;
     overflow: visible;
     background-color: #fff;
     border: 1px solid #e2e6ed;
@@ -328,7 +333,7 @@
 
   .action-toolbar {
     display: flex;
-    padding: 8px 0 12px;
+    padding: 8px 16px 12px;
     align-items: center;
     justify-content: space-between;
 
@@ -406,11 +411,6 @@
       width: 100%;
       max-width: 100%;
       min-width: 0;
-    }
-
-    :deep(.tdesign-list-pagination) {
-      padding: 12px 0;
-      margin-top: 16px;
     }
   }
 }

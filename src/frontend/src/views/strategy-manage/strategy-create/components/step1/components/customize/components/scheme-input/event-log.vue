@@ -33,18 +33,9 @@
           <bk-option
             v-for="(system, systemIndex) in statusSystems"
             :key="systemIndex"
-            :disabled="system.status == 'unset'"
             :label="system.name"
             :value="system.id">
-            <span
-              v-bk-tooltips="{
-                disabled: system.status != 'unset',
-                content: t('该系统暂未接入审计中心'),
-                extCls:'event-log-unset-tooltips',
-              }"
-              style=" display: inline-block;width: 100%;">
-              {{ system.name }}
-            </span>
+            {{ system.name }}
           </bk-option>
         </bk-select>
       </span>
@@ -108,16 +99,13 @@
       if (!result) {
         return;
       }
-      statusSystems.value = systemList.value.map(item => ({
-        id: item.id,
-        name: item.name,
-        status: result[item.id].status,
-      }));
-      statusSystems.value.sort((a, b) => {
-        if (a.status !== 'unset') return -1;
-        if (b.status !== 'unset') return 1;
-        return 0;
-      });
+      statusSystems.value = systemList.value
+        .map(item => ({
+          id: item.id,
+          name: item.name,
+          status: result[item.id].status,
+        }))
+        .filter(item => item.status !== 'unset');
     },
   });
 
@@ -136,8 +124,3 @@
     },
   });
 </script>
-<style>
-.event-log-unset-tooltips {
-  z-index: 9999 !important;
-}
-</style>

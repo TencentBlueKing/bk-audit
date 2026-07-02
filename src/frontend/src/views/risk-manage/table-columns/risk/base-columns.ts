@@ -26,6 +26,8 @@ import Tooltips from '@components/show-tooltips-text/index.vue';
 import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
 import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
+import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+
 export interface RiskColumnDeps {
   levelData: Ref<Record<string, any>>;
   strategyTagMap: Ref<Record<string, string>>;
@@ -198,7 +200,7 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps) => {
           .find((item: any) => item.value === row.strategy_id)?.label;
         return strategyName
           ? h(RouterLink as any, { to, target: '_blank' }, () => [
-            h('span', `${strategyName}(${row.strategy_id})`),
+            h('span', formatStrategyNameWithId(strategyName, row.strategy_id)),
           ])
           : h('span', '--');
       },

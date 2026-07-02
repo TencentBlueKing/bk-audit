@@ -405,11 +405,22 @@ export default {
     page: number,
     page_size: number,
     keyword?: string,
+    title?: string,
+    analysis_scope?: string,
     report_type?: string,
     status?: string,
     sort?: any,
   }) {
     return RiskManageSource.getHistoryReportList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 重试AI分析报告
+   */
+  retryAiAnalyseReport(params: {
+    report_id: string | number,
+  }) {
+    return RiskManageSource.retryAiAnalyseReport(params)
       .then(({ data }) => data);
   },
   /**

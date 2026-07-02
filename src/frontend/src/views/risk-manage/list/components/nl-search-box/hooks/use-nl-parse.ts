@@ -19,10 +19,63 @@ import _ from 'lodash';
 import { ref } from 'vue';
 
 import RiskManageService from '@service/risk-manage';
+import StrategyManageService from '@service/strategy-manage';
 
 import useRequest from '@hooks/use-request';
 
+import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+
 import type { INL2RiskFilterResponse } from '../types';
+
+export interface INLParseOptions {
+  risk_view_type?: string;
+  start_time?: string;
+  end_time?: string;
+  scope_type?: string;
+  scope_id?: string;
+  scenes?: Array<{ id: number; name: string }>;
+}
+
+const mapStrategyOptions = (list: Array<Record<string, any>>) => list
+  .filter(item => item && (item.value ?? item.id))
+  .map((item) => {
+    const id = Number(item.value ?? item.id);
+    const label = String(item.label || item.name || '');
+    return {
+      id,
+      name: formatStrategyNameWithId(label, id),
+    };
+  });
+
+const mapTagOptions = (list: Array<Record<string, any>>) => list
+  .filter(item => item && item.id && item.name)
+  .map(item => ({
+    id: Number(item.id),
+    name: String(item.name),
+  }));
+
+const fetchScopedStrategies = async (options: INLParseOptions) => {
+  const list = await StrategyManageService.fetchScopedStrategyList({
+    risk_view_type: options.risk_view_type || 'all',
+    start_time: options.start_time,
+    end_time: options.end_time,
+    scope_type: options.scope_type,
+    scope_id: options.scope_id,
+  });
+  return mapStrategyOptions(list);
+};
+
+const fetchScopedTags = async (options: INLParseOptions) => {
+  const list = await RiskManageService.fetchRiskTags({
+    risk_view_type: options.risk_view_type || 'all',
+    start_time: options.start_time,
+    end_time: options.end_time,
+    noNeedSceneParams: true,
+    page: 1,
+    page_size: 200,
+  });
+  return mapTagOptions(list);
+};
 
 /**
  * 自然语言搜索解析 Hook
@@ -43,20 +96,11 @@ export default function useNLParse() {
   /**
    * 解析自然语言查询
    * @param query 用户输入的自然语言文本
-   * @param tags 当前用户有权限的标签列表
-   * @param strategies 当前用户有权限的策略列表
-   * @param scenes 当前用户有权限的场景列表
-   * @param scopeType 范围类型
-   * @param scopeId 范围ID
-   * @returns { filterConditions, message } 或 null
+   * @param options 当前风险列表上下文（时间范围、视图类型等），用于拉取策略/标签候选
    */
   const parse = async (
     query: string,
-    tags?: Array<{ id: number; name: string }>,
-    strategies?: Array<{ id: number; name: string }>,
-    scenes?: Array<{ id: number; name: string }>,
-    scopeType?: string,
-    scopeId?: string,
+    options: INLParseOptions = {},
   ): Promise<{
     filterConditions: Record<string, any>;
     message: string;
@@ -64,23 +108,28 @@ export default function useNLParse() {
     if (!query.trim()) return null;
 
     try {
+      const [tags, strategies] = await Promise.all([
+        fetchScopedTags(options),
+        fetchScopedStrategies(options),
+      ]);
+
       const params: Record<string, any> = {
         query,
       };
-      if (tags && tags.length > 0) {
+      if (tags.length > 0) {
         params.tags = tags;
       }
-      if (strategies && strategies.length > 0) {
+      if (strategies.length > 0) {
         params.strategies = strategies;
       }
-      if (scenes && scenes.length > 0) {
-        params.scenes = scenes;
+      if (options.scenes && options.scenes.length > 0) {
+        params.scenes = options.scenes;
       }
-      if (scopeType) {
-        params.scope_type = scopeType;
+      if (options.scope_type) {
+        params.scope_type = options.scope_type;
       }
-      if (scopeId) {
-        params.scope_id = scopeId;
+      if (options.scope_id) {
+        params.scope_id = options.scope_id;
       }
       const result = await runNl2RiskFilter(params);
 

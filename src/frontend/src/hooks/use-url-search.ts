@@ -98,6 +98,13 @@ export default function () {
     notifyUrlChange();
   };
 
+  const mergeAndReplaceSearchParams = (params: Record<string, any>) => {
+    replaceSearchParams({
+      ...getSearchParams(),
+      ...params,
+    });
+  };
+
   return {
     searchParams,
     getSearchParams,
@@ -105,5 +112,6 @@ export default function () {
     appendSearchParams,
     removeSearchParam,
     replaceSearchParams,
+    mergeAndReplaceSearchParams,
   };
 }

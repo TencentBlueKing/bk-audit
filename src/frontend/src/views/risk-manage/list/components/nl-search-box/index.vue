@@ -92,7 +92,6 @@
 
   import MetaManageService from '@service/meta-manage';
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -101,6 +100,13 @@
   import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
   import { isPageReload } from '@utils/assist';
+  import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
+  import {
+    applyDatetimeUrlParams,
+    ensureDatetimeSynced,
+    isRelativeDatetimeOrigin,
+    syncDatetimeFromOrigin,
+  } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import AddCondition from './components/add-condition.vue';
@@ -117,6 +123,7 @@
 
   interface Emits {
     (e: 'change', value: Record<string, any>, otherValue?: any, isClear?: boolean): void;
+    (e: 'sync', value: Record<string, any>, otherValue?: any): void;
     (e: 'export'): void;
     (e: 'batch'): void;
     (e: 'modelValueWatch', value: Record<string, any>): void;
@@ -136,6 +143,7 @@
   // URL 参数同步（与 search-box 保持一致）
   const {
     getSearchParamsPost,
+    mergeAndReplaceSearchParams,
     replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
@@ -160,7 +168,7 @@
     if (value === null || value === '') {
       return [];
     }
-    return value?.toString().split(',');
+    return value?.toString().split(',') ?? [];
   };
 
   if (shouldRestoreFromUrl) {
@@ -177,12 +185,7 @@
         searchModel.value[searchFieldName] = value === null ? '' : value.toString();
       }
     });
-    if (urlSearchParams.start_time && urlSearchParams.end_time) {
-      searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
-    }
-    if (urlSearchParams.datetime_origin) {
-      searchModel.value.datetime_origin = normalizeParamArray(urlSearchParams.datetime_origin);
-    }
+    applyDatetimeUrlParams(searchModel.value, urlSearchParams, normalizeParamArray);
   }
 
   // 事件字段相关（与 search-box 完全一致）
@@ -221,25 +224,6 @@
   });
   // 编辑开始前的快照
   let editSnapshot = '';
-
-  // 获取风险标签和策略列表（用于传给 nl2risk_filter 接口）
-  const {
-    data: riskTagsList,
-  } = useRequest(RiskManageService.fetchRiskTags, {
-    defaultParams: {
-      page: 1,
-      page_size: 200,
-    },
-    defaultValue: [],
-    manual: true,
-  });
-
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
 
   const {
     data: riskStatusCommon,
@@ -678,6 +662,20 @@
     }
   };
 
+  const getNlParseOptions = () => {
+    const [startTime, endTime] = searchModel.value.datetime || [];
+    return {
+      risk_view_type: urlSearchParams.risk_view_type || 'all',
+      start_time: startTime,
+      end_time: endTime,
+      scope_type: urlSearchParams.scope_type,
+      scope_id: urlSearchParams.scope_id,
+      scenes: props.scenes
+        ?.filter((item: any) => item && item.scene_id && item.name)
+        .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [],
+    };
+  };
+
   // 自然语言搜索提交
   const handleNLSubmit = async (query: string) => {
     // 进入智能搜索整体流程（input 按钮开始转动）
@@ -687,29 +685,7 @@
     // 通知父组件：NL 解析开始，列表进入 loading 状态
     emit('parsing', true);
 
-    // 构建 tags 参数
-    const tags = riskTagsList.value
-      .filter((item: any) => item && item.id && item.name)
-      .map((item: any) => ({ id: Number(item.id), name: item.name }));
-
-    // 构建 strategies 参数
-    const strategies = strategyList.value
-      .filter((item: any) => item && (item.value || item.id))
-      .map((item: any) => ({
-        id: Number(item.value || item.id),
-        name: item.label || item.name || '',
-      }));
-
-    // 构建 scenes 参数
-    const scenes = props.scenes
-      ?.filter((item: any) => item && item.scene_id && item.name)
-      .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [];
-
-    // 获取 scope_type 和 scope_id（从 URL 参数或默认值）
-    const { scope_type } = urlSearchParams;
-    const { scope_id } = urlSearchParams;
-
-    const result = await parse(query, tags, strategies, scenes, scope_type, scope_id);
+    const result = await parse(query, getNlParseOptions());
     if (!result) {
       // 解析失败，取消列表 loading 和 input 转动
       isNLSearching.value = false;
@@ -900,6 +876,9 @@
   );
 
   const getSearchParams = () => {
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
     const result = Object.keys(searchModel.value).reduce((res, key) => {
       const value = searchModel.value[key];
       if (key === 'datetime') {
@@ -953,6 +932,28 @@
   };
 
   // 提交搜索
+  const syncTableFilterFields = (filters: Record<string, any>) => {
+    searchModel.value = applyTableFiltersToSearchModel(
+      searchModel.value,
+      filters,
+      props.fieldConfig,
+    );
+
+    const searchParams = getSearchParams();
+    const replaceUrl: Record<string, any> = { ...searchParams };
+    if (searchModel.value.datetime_origin) {
+      const origin = searchModel.value.datetime_origin;
+      if (Array.isArray(origin) && origin.length > 0) {
+        replaceUrl.datetime_origin = origin.join(',');
+      }
+    }
+    if (eventFiltersParams.value.length > 0) {
+      replaceUrl.event_filters = eventFiltersParams.value;
+    }
+    mergeAndReplaceSearchParams(replaceUrl);
+    emit('sync', searchParams, eventFiltersParams.value);
+  };
+
   const handleSubmit = (isClear = false) => {
     // 将搜索参数同步到 URL（刷新后可恢复）
     const searchParams = getSearchParams();
@@ -968,7 +969,7 @@
     if (eventFiltersParams.value.length > 0) {
       replaceUrl.event_filters = eventFiltersParams.value;
     }
-    replaceSearchParams(replaceUrl);
+    mergeAndReplaceSearchParams(replaceUrl);
 
     emit('change', searchParams, eventFiltersParams.value, isClear);
   };
@@ -1065,12 +1066,7 @@
     if (!riskStatusCommon.value.length) {
       fetchRiskStatusCommon();
     }
-    if (isPageReload()) {
-      emit('modelValueWatch', searchModel.value);
-      handleSubmit(true);
-      return;
-    }
-    if (urlSearchParams?.event_filters) {
+    if (!isPageReload() && urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         id: item.id ? item.id : `${item.field}:${item.display_name}`,
         field_name: item.field,
@@ -1083,8 +1079,11 @@
         operator: item.operator,
       }));
     }
-    emit('modelValueWatch', searchModel.value);
-    handleSubmit();
+    ensureDatetimeSynced(searchModel.value);
+    nextTick(() => {
+      emit('modelValueWatch', searchModel.value);
+      handleSubmit(isPageReload());
+    });
   });
 
   // Expose（与 search-box 完全一致的对外接口）
@@ -1109,6 +1108,7 @@
     getConditionTags() {
       return getConditionTags();
     },
+    syncTableFilterFields,
   });
 </script>
 <style lang="postcss">

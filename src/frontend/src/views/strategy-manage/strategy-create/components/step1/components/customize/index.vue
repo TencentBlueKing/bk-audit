@@ -415,6 +415,11 @@
   const typeTableLoading = ref(false);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
   const availableSourceTypes = ref<Array<string>>([]);
+  // 编辑模式下保存原始风险发现规则，用于未改动时原样提交
+  const originalEditWhere = ref<Where | null>(null);
+  const originalEditHaving = ref<Where | undefined>(undefined);
+  const isWhereModified = ref(false);
+  const isWhereSettingUp = ref(false);
 
   const showStructure = ref(false);
   const currentViewRtId = ref<string | Array<string>>([]);
@@ -839,6 +844,9 @@
   // 更新风险规则
   const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
+    if (isEditMode && !isWhereSettingUp.value) {
+      isWhereModified.value = true;
+    }
   };
 
   const handleSourceTypeChange = () => {
@@ -883,11 +891,22 @@
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
     expectedResultsRef.value.setSelect(editData.configs.select);
-    const where = _.cloneDeep(editData.configs.where);
-    const having = editData.configs.having ? _.cloneDeep(editData.configs.having) : undefined;
-    normalizeWhereForDisplay(where);
-    normalizeWhereForDisplay(having);
+    if (isEditMode) {
+      originalEditWhere.value = _.cloneDeep(editData.configs.where);
+      originalEditHaving.value = editData.configs.having
+        ? _.cloneDeep(editData.configs.having)
+        : undefined;
+      isWhereModified.value = false;
+    }
+    const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
+    const having = editData.configs.having
+      ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
+      : undefined;
+    isWhereSettingUp.value = true;
     rulesComponentRef.value.setWhere(where, having);
+    nextTick(() => {
+      isWhereSettingUp.value = false;
+    });
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
@@ -972,8 +991,16 @@
         });
         expectedResultsRef.value.setSelect(params.configs.select);
       }
-      // 添加having参数
-      if (params.configs.where) {
+      // 编辑且风险发现规则未改动：直接沿用原始 where/having，避免 filter/filters 转换影响老数据
+      if (isEditMode && !isWhereModified.value) {
+        params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
+        if (originalEditHaving.value) {
+          params.configs.having = _.cloneDeep(originalEditHaving.value);
+        } else {
+          delete params.configs.having;
+        }
+      } else if (params.configs.where) {
+        // 添加having参数
         // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
         const having = {
           connector: params.configs.where.connector,
@@ -1026,11 +1053,13 @@
           });
         });
       };
-      if (params.configs.where) {
-        transferFilter(params.configs.where);
-      }
-      if (params.configs.having) {
-        transferFilter(params.configs.having);
+      if (!(isEditMode && !isWhereModified.value)) {
+        if (params.configs.where) {
+          transferFilter(params.configs.where);
+        }
+        if (params.configs.having) {
+          transferFilter(params.configs.having);
+        }
       }
       return params;
     },

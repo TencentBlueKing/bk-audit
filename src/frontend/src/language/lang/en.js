@@ -334,6 +334,7 @@ export default {
   已选: 'selected',
   '条，': ', ',
   '已选中{count}条数据，共有{total}条数据': 'Selected {count} items, {total} items in total',
+  清除所有勾选: 'Clear all selections',
   '正在全选...': 'Selecting all...',
   '正在取消选择...': 'Cancelling selection...',
   '选择所有 {total} 条': 'Select all {total} items',

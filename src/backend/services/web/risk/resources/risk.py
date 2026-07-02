@@ -870,7 +870,7 @@ class ListNoticingRisk(ListRisk):
     def load_risks(self, validated_request_data, username: str = None):
         username = username or get_request_username()
         q = self._build_filter_query(validated_request_data)
-        # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
+        # 我的关注以 TicketPermission(notice_user) 为事实表，notice_users 仅作为生成授权的来源数据。
         event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
@@ -879,7 +879,6 @@ class ListNoticingRisk(ListRisk):
                 username=username,
                 authorized_at_start=event_time_start,
             ),
-            notice_users__contains=username,
         ).distinct()
 
 

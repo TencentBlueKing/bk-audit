@@ -31,7 +31,7 @@
             :key="item.value"
             class="account-type-item"
             :class="{ active: selectedAccountType === item.value }"
-            @click="selectedAccountType = item.value">
+            @click="handleAccountTypeChange(item.value)">
             {{ item.label }}
           </div>
         </div>
@@ -117,6 +117,14 @@
   };
 
   const accountPlaceholder = computed(() => t(placeholderMap[selectedAccountType.value] || '请输入'));
+
+  const handleAccountTypeChange = (value: string) => {
+    if (selectedAccountType.value === value) {
+      return;
+    }
+    selectedAccountType.value = value;
+    accountId.value = '';
+  };
 
   // 查询
   const handleQuery = () => {
