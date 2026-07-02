@@ -1487,7 +1487,7 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertNotIn(self.risk_operator_permission_but_not_current.risk_id, risk_ids)
 
     def test_list_noticing_risk_no_perm_check(self):
-        """ListNoticingRisk 不依赖 load_authed_risks，按本地工单权限查询"""
+        """ListNoticingRisk 不依赖 load_authed_risks，以本地关注权限为事实表"""
         from services.web.risk.resources.risk import ListNoticingRisk
 
         request = self._make_request()
@@ -1496,9 +1496,9 @@ class TestListMineAndNoticingRisk(TestCase):
         results = response["results"]
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
+        self.assertIn(self.risk_notice_permission_but_not_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
         self.assertNotIn(self.risk_noticed_without_permission.risk_id, risk_ids)
-        self.assertNotIn(self.risk_notice_permission_but_not_noticed.risk_id, risk_ids)
 
     def test_list_noticing_risk_filters_permission_by_start_time(self):
         """关注风险按查询开始时间收敛本地权限范围。"""
@@ -1640,7 +1640,8 @@ class TestListMineAndNoticingRisk(TestCase):
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertEqual(ids[0], self.risk_noticed.risk_id)
+        self.assertEqual(ids[0], self.risk_notice_permission_but_not_noticed.risk_id)
+        self.assertIn(self.risk_noticed.risk_id, ids)
 
     def test_list_noticing_risk_multi_sort_event_time_desc_risk_id_desc(self):
         """我的关注: sort=['-event_time', '-risk_id']"""
@@ -1653,7 +1654,14 @@ class TestListMineAndNoticingRisk(TestCase):
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertEqual(ids, [risk_owned_low.risk_id, self.risk_noticed.risk_id])
+        self.assertEqual(
+            ids,
+            [
+                self.risk_notice_permission_but_not_noticed.risk_id,
+                risk_owned_low.risk_id,
+                self.risk_noticed.risk_id,
+            ],
+        )
 
     # ──── load_risks ────
 
