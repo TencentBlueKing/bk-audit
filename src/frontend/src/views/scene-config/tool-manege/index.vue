@@ -418,10 +418,11 @@
 
   // 获取全局状态统计（分别请求各状态数量）
   const fetchStatusCounts = () => {
+    const scopeParams = getSceneSystemParams();
     // 不传 status 即获取全部工具
-    const allPromise = ToolManageService.fetchAllTools();
-    const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'] });
-    const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'] });
+    const allPromise = ToolManageService.fetchAllTools(scopeParams);
+    const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'], ...scopeParams });
+    const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'], ...scopeParams });
     Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([all, published, unpublished]) => {
       statusCounts.all = all.length;
       statusCounts.published = published.length;
@@ -485,6 +486,7 @@
   const {
     run: fetchAllToolsData,
   } = useRequest(ToolManageService.fetchAllTools, {
+    manual: true,
     defaultValue: [],
     onSuccess: (data) => {
       allToolsData.value = data;
@@ -499,7 +501,7 @@
     const scopeParams = getSceneSystemParams();
     fetchToolsTagsList(scopeParams);
     fetchUserList();
-    fetchAllToolsData();
+    fetchAllToolsData(scopeParams);
     refreshList();
     // 场景切换时也需要刷新状态统计
     fetchStatusCounts();
@@ -510,7 +512,7 @@
     fetchToolsTagsList(scopeParams);
     fetchUserList();
     fetchStrategyList();
-    fetchAllToolsData();
+    fetchAllToolsData(scopeParams);
     // 初始化时获取一次状态统计
     fetchStatusCounts();
     // 仅「编辑返回」时恢复搜索，并消费掉缓存

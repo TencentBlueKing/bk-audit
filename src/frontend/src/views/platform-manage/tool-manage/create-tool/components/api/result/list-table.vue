@@ -527,13 +527,13 @@
     openFieldDown,
     handleOpenTool,
   } = useToolDialog();
-  // 获取所有工具
+  // 获取所有工具（使用平台接口 /tool/ 不传 scope_type）
   const {
     data: allToolsData,
     run: fetchAllTools,
-  } = useRequest(ToolManageService.fetchAllTools, {
+  } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: [],
-    defaultParams: { status: 'published' },
+    defaultParams: { status: ['published'] },
     onSuccess: (data) => {
       toolMaxVersionMap.value = data.reduce((res, item) => {
         res[item.uid] = item.version;

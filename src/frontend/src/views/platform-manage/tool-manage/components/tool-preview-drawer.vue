@@ -95,6 +95,7 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import ToolInfo from '@model/tool/tool-info';
   import ToolDetailModel from '@model/tool/tool-detail';
 
   import useRequest from '@hooks/use-request';
@@ -111,8 +112,9 @@
 
   interface Props {
     tagsEnums: TagItem[];
-    allToolsData: ToolDetailModel[];
+    allToolsData: ToolInfo[];
   }
+
   interface DrillDownConfig {
     source_field: string;
     target_value_type: string;

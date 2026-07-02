@@ -72,16 +72,28 @@
               </bk-tag>
             </bk-radio-button>
           </bk-radio-group>
+
           <bk-search-select
-            v-model="searchValue"
+            ref="searchSelectRef"
             class="search-input"
             clearable
             :data="searchSelectData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
             :get-menu-list="getMenuList"
+            :model-value="searchValue"
             :placeholder="t('搜索工具名称、工具说明、工具类型、标签、更新人')"
             unique-select
-            @update:model-value="handleSearch" />
+            @update:model-value="handleSearchValueUpdate">
+            <template #menu="{ id }">
+              <visibility-filter-panel
+                v-if="id === 'visibility'"
+                :model-value="visibilitySelection"
+                :scene-list="visibilitySceneOptions"
+                :system-list="visibilitySystemOptions"
+                @confirm="(val) => handleVisibilityConfirm(val)"
+                @update:model-value="visibilitySelection = $event" />
+            </template>
+          </bk-search-select>
         </div>
       </div>
 
@@ -118,20 +130,22 @@
 </template>
 
 <script setup lang='ts'>
-  import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+  import { watch, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
   import ToolManageService from '@service/tool-manage';
   import MetaManageService from '@service/meta-manage';
+  import SceneManageService from '@service/scene-manage';
 
-  import ToolDetailModel from '@model/tool/tool-detail';
+  import ToolInfo from '@model/tool/tool-info';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import ConfirmActionDialog from './components/confirm-action-dialog.vue';
+  import VisibilityFilterPanel from './components/visibility-filter-panel.vue';
   import ToolListTable from './components/tool-list-table.vue';
   import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
 
@@ -153,10 +167,23 @@
   }
 
   interface ToolItem {
+    id?: string;
     uid: string;
     name: string;
-    status: 'published' | '';
-    strategies: number[];
+    status: 'published' | '' | 'unpublished';
+    tool_type?: string;
+    version?: number;
+    visibility?: {
+      binding_type: string;
+      visibility_type: string;
+      scene_ids: number[] | string[];
+      system_ids: number[] | string[];
+    };
+    updated_at?: string;
+    created_at?: string;
+    description?: string;
+    area?: string;
+    strategies?: number[];
   }
 
   const { t } = useI18n();
@@ -166,10 +193,52 @@
   // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
 
+  // bk-search-select 组件实例引用（用于控制自定义菜单下拉的关闭）
+  const searchSelectRef = ref<any>(null);
+
   // bk-search-select 搜索条件配置（对应接口参数）
   const tagSelectOptions = ref<Array<{ id: string; name: string }>>([]);
 
+  // 可见范围筛选选项数据
+  const visibilitySceneOptions = ref<Array<{ id: number; name: string }>>([]);
+  const visibilitySystemOptions = ref<Array<{ id: number; name: string }>>([]);
+
+  // 可见范围当前选中状态
+  interface VisibilitySelection {
+    all_visible: boolean;
+    all_scenes: boolean;
+    all_systems: boolean;
+    scenes: number[];
+    systems: number[];
+  }
+  const visibilitySelection = ref<VisibilitySelection>({
+    all_visible: false,
+    all_scenes: false,
+    all_systems: false,
+    scenes: [],
+    systems: [],
+  });
+
+  // 构建可见范围选中的展示文本
+  const buildVisibilityDisplayText = (val: VisibilitySelection): string => {
+    if (val.all_visible) return t('全部可见');
+    if (val.all_scenes) return t('全部场景');
+    if (val.all_systems) return t('全部平台');
+    const sceneNames = val.scenes
+      .map(id => visibilitySceneOptions.value.find(s => s.id === id)?.name)
+      .filter(Boolean);
+    const systemNames = val.systems
+      .map(id => visibilitySystemOptions.value.find(s => s.id === id)?.name)
+      .filter(Boolean);
+    return [...sceneNames, ...systemNames].join(',') || '';
+  };
+
   const buildSearchSelectData = () => [
+    {
+      name: '可见范围',
+      id: 'visibility',
+      isCustomMenu: true,
+    },
     {
       name: '工具名称',
       id: 'name',
@@ -220,7 +289,7 @@
   // 策略列表（用于匹配策略名称）
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
   // 全部工具数据（用于下钻时获取工具名称）
-  const allToolsData = ref<Array<ToolDetailModel>>([]);
+  const allToolsData = ref<Array<ToolInfo>>([]);
 
   // 状态筛选
   const statusFilter = ref('all');
@@ -303,7 +372,7 @@
     toolListRef.value?.fetchData(params);
   };
 
-  // 搜索 - 参考 platform-manage/scene-manage 的 handleSearch 实现
+  // 搜索
   const handleSearch = (keyword: SearchKey[]) => {
     const search: Record<string, any> = {
       name: undefined,
@@ -329,10 +398,59 @@
         } else if (item.id === 'updated_by') {
           search.updated_by = value;
         }
+        // visibility 通过面板确认单独处理，不走此分支
       }
     });
 
+    // 合并可见范围筛选参数（从自定义面板状态读取）
+    const vis = visibilitySelection.value;
+    if (vis.all_visible) {
+      search.visibility_type = 'all_visible';
+    } else if (vis.all_scenes) {
+      search.visibility_type = 'all_scenes';
+    } else if (vis.all_systems) {
+      search.visibility_type = 'all_systems';
+    } else if (vis.scenes.length || vis.systems.length) {
+      if (vis.scenes.length && !vis.systems.length) {
+        search.visibility_type = 'specific_scenes';
+        search.visible_scene_ids = vis.scenes;
+      } else if (!vis.scenes.length && vis.systems.length) {
+        search.visibility_type = 'specific_systems';
+        search.visible_system_ids = vis.systems;
+      } else {
+        search.visibility_type = 'scenes_and_systems';
+        search.visible_scene_ids = vis.scenes;
+        search.visible_system_ids = vis.systems;
+      }
+    }
+
     refreshList(search);
+  };
+
+  // 搜索值更新拦截：完全过滤掉 bk-search-select 自动插入的所有可见范围条目
+  // （可见范围的tag由 handleVisibilityConfirm 统一管理，避免重复）
+  const handleSearchValueUpdate = (val: SearchKey[]) => {
+    const filtered = val.filter(item => item.id !== 'visibility');
+    searchValue.value = filtered;
+    handleSearch(filtered);
+  };
+
+  // 可见范围面板选择变化回调：更新状态 + 更新tag展示 + 触发搜索
+  const handleVisibilityConfirm = (val: VisibilitySelection) => {
+    visibilitySelection.value = val;
+    const displayText = buildVisibilityDisplayText(val);
+    // 移除已有的 visibility 项，再根据当前选择决定是否添加新 tag
+    const filtered = searchValue.value.filter(item => item.id !== 'visibility');
+    if (displayText) {
+      filtered.push({
+        id: 'visibility',
+        name: t('可见范围'),
+        values: [{ id: '_vis_', name: displayText }],
+      });
+    }
+    searchValue.value = filtered;
+    // 触发搜索（handleSearch 从 visibilitySelection 读取最新筛选参数）
+    handleSearch(filtered);
   };
 
   // 状态筛选变化
@@ -343,6 +461,14 @@
   const handleClearSearch = () => {
     searchValue.value = [];
     statusFilter.value = 'all';
+    // 重置可见范围筛选
+    visibilitySelection.value = {
+      all_visible: false,
+      all_scenes: false,
+      all_systems: false,
+      scenes: [],
+      systems: [],
+    };
     toolListRef.value?.fetchData({ sort: ['-created_at'] });
   };
 
@@ -350,16 +476,16 @@
     isLoading.value = false;
   };
 
-  // 获取全局状态统计（分别请求各状态数量）
+  // 获取全局状态统计（分别请求各状态数量，使用平台接口 /tool/ 不传 scope_type）
   const fetchStatusCounts = () => {
-    // 不传 status 即获取全部工具
-    const allPromise = ToolManageService.fetchAllTools();
-    const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'] });
-    const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'] });
-    Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([all, published, unpublished]) => {
-      statusCounts.all = all.length;
-      statusCounts.published = published.length;
-      statusCounts.unpublished = unpublished.length;
+    const allPromise = ToolManageService.fetchToolsList({});
+    const publishedPromise = ToolManageService.fetchToolsList({ status: ['published'] });
+    const unpublishedPromise = ToolManageService.fetchToolsList({ status: ['unpublished'] });
+    // eslint-disable-next-line max-len
+    Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([allList, publishedList, unpublishedList]) => {
+      statusCounts.all = allList.length;
+      statusCounts.published = publishedList.length;
+      statusCounts.unpublished = unpublishedList.length;
     });
   };
 
@@ -388,7 +514,7 @@
     defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
   });
 
-  // 远程搜索菜单列表（更新人输入时实时搜索）
+  // 远程搜索菜单列表（仅处理更新人远程搜索）
   const getMenuList = async (item: any, keyword: string) => {
     if (!item) return searchSelectData.value;
     const searchItem = searchSelectData.value.find(s => s.id === item?.id);
@@ -403,7 +529,31 @@
         searchItem.children = [];
       }
     }
-    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+    // 其他有 children 的项直接返回
+    if (searchItem?.children && searchItem.children.length > 0) {
+      return searchItem.children;
+    }
+    return [];
+  };
+
+  // 加载可见范围筛选面板的场景/系统选项
+  const loadVisibilityOptions = async () => {
+    try {
+      const scenes = await SceneManageService.fetchSceneAll({ status: 'enabled' });
+      // eslint-disable-next-line max-len
+      visibilitySceneOptions.value = (scenes || []).map((s: { scene_id: number; name: string }) => ({ id: s.scene_id, name: s.name }));
+    } catch {
+      visibilitySceneOptions.value = [];
+    }
+    try {
+      const systems = await MetaManageService.fetchSystemWithAction({
+        audit_status__in: 'accessed',
+        namespace: 'default',
+      });
+      visibilitySystemOptions.value = (systems || []).map((s: any) => ({ id: s.id, name: s.name }));
+    } catch {
+      visibilitySystemOptions.value = [];
+    }
   };
 
   const {
@@ -415,10 +565,10 @@
     },
   });
 
-  // 获取全部工具（用于下钻时获取工具名称）
+  // 获取全部工具（用于下钻时获取工具名称，使用平台接口 /tool/ 不传 scope_type）
   const {
     run: fetchAllToolsData,
-  } = useRequest(ToolManageService.fetchAllTools, {
+  } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: [],
     onSuccess: (data) => {
       allToolsData.value = data;
@@ -427,6 +577,24 @@
 
   // 监听场景切换事件
   const { on: onEvent, off } = useEventBus();
+
+  // 点击页面其他区域时关闭可见范围自定义菜单下拉
+  // 使用 mousedown 而非 click：更可靠，不受 focus 变化和 stopPropagation 影响
+  // （isCustomMenu 模式下 bk-search-select 不会自动关闭，需手动处理）
+  const handleDocumentMousedown = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // bk-search-select 的 popover 通过 teleport 渲染到 body，需要检查多个可能容器
+    const searchEl = searchSelectRef.value?.$el as HTMLElement | undefined;
+    // 检查点击是否在搜索框组件内
+    if (searchEl?.contains(target)) return;
+    // 检查是否在 popover 面板内（popover 通常有 .bk-popover 或 .tippy-box 类）
+    const popoverEl = target.closest('.bk-popover, .tippy-box, [data-popper-placement]');
+    if (popoverEl) return;
+    // 点击在外部，关闭下拉
+    if (searchSelectRef.value?.showPopover?.value) {
+      searchSelectRef.value.showPopover.value = false;
+    }
+  };
 
   // 刷新所有数据（场景切换时调用）
   const refreshAllData = () => {
@@ -447,14 +615,19 @@
     fetchAllToolsData();
     // 初始化时获取一次状态统计
     fetchStatusCounts();
+    // 加载可见范围筛选选项
+    loadVisibilityOptions();
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
     });
+    // 注册全局 mousedown 事件，用于关闭可见范围自定义菜单下拉
+    document.addEventListener('mousedown', handleDocumentMousedown);
   });
 
   onUnmounted(() => {
     off('scene:change');
+    document.removeEventListener('mousedown', handleDocumentMousedown);
   });
 </script>
 

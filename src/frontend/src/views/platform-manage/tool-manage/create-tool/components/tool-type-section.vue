@@ -137,7 +137,7 @@
 
 <script setup lang="ts">
   import _ from 'lodash';
-  import { nextTick, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RootManageService from '@service/root-manage';
@@ -437,6 +437,37 @@
   watch(() => formData.value.tool_type, (val) => {
     if (val === 'bk_vision') {
       fetchChartLists();
+    }
+  });
+
+  // 组件重新挂载时（从步骤2返回步骤1），恢复之前选择的 BKVision 报表状态
+  onMounted(async () => {
+    if (formData.value.tool_type === 'bk_vision' && formData.value.config.uid) {
+      try {
+        // 先获取图表列表，再从中恢复 cascader 的选中值
+        const data = await fetchChartLists();
+        // 忽略权限错误或无数据的情况
+        if (data === 'error' || !Array.isArray(data) || data.length === 0) return;
+        // 从图表列表中查找匹配的 uid 路径，恢复 configUid
+        for (const item of data) {
+          for (const sh of item.share) {
+            if (sh.uid === formData.value.config.uid) {
+              configUid.value = [item.uid, sh.uid];
+              break;
+            }
+          }
+          if (configUid.value.length > 0) break;
+        }
+        // 如果找到了 configUid，恢复报表详情和组件显示状态
+        if (configUid.value.length > 0) {
+          emit('update:is-show-component', true);
+          fetchReportLists({
+            share_uid: configUid.value[configUid.value.length - 1],
+          });
+        }
+      } catch {
+        // 获取图表列表失败，无需处理，用户需要重新选择
+      }
     }
   });
 
