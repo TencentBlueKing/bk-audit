@@ -63,14 +63,18 @@
       </div>
     </div>
     <!-- PrimaryTable 表格 -->
-    <primary-table
-      :columns="columns"
-      :data="pageData"
-      :max-height="maxHeight"
-      :resizable="resizable"
-      row-key="id"
-      :stripe="stripe"
-      :style="{ '--row-height': rowHeight + 'px' }" />
+    <bk-loading
+      class="scene-table-loading"
+      :loading="loading">
+      <primary-table
+        :columns="columns"
+        :data="pageData"
+        :max-height="maxHeight"
+        :resizable="resizable"
+        row-key="id"
+        :stripe="stripe"
+        :style="{ '--row-height': rowHeight + 'px' }" />
+    </bk-loading>
     <!-- 分页器 -->
     <div
       v-if="showPagination && (total !== undefined ? total : filteredData.length) > 0"
@@ -131,6 +135,8 @@
     searchData?: SearchDataItem[];
     searchPlaceholder?: string;
     searchLoading?: boolean;
+    /** 表格数据加载中 */
+    loading?: boolean;
     /** 数据总条数（用于分批加载时显示正确分页总数） */
     total?: number;
   }
@@ -149,6 +155,7 @@
     searchData: () => [],
     searchPlaceholder: '',
     searchLoading: false,
+    loading: false,
     total: undefined,
   });
 
@@ -262,6 +269,10 @@
 <style lang="postcss" scoped>
   .scene-table-wrapper {
     width: 100%;
+  }
+
+  .scene-table-loading {
+    min-height: 280px;
   }
 
   /* 作为独立区块时的样式（带标题） */
