@@ -61,12 +61,13 @@ interface WhereLike {
   }>;
 }
 
-export const normalizeWhereForDisplay = (whereData?: WhereLike) => {
+export const normalizeWhereForDisplay = (whereData?: WhereLike | Record<string, any>) => {
   if (!whereData?.conditions) return whereData;
 
+  const normalized = whereData as WhereLike;
   return {
-    ...whereData,
-    conditions: whereData.conditions.map(group => ({
+    ...normalized,
+    conditions: normalized.conditions.map(group => ({
       ...group,
       conditions: group.conditions?.map(item => ({
         ...item,
