@@ -654,7 +654,7 @@
     // 直接覆盖 formData.configs，确保校验数据和组件内部一致
     // （解决 audit-user-selector 等 bk-select 封装组件的值同步链路断裂问题）
     if (formData.value.strategy_type && comRef.value?.getFields) {
-      const fields = comRef.value.getFields();
+      const fields = comRef.value.getFields({ forValidate: true });
       formData.value.configs = fields.configs;
     }
     doValidate();
