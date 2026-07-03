@@ -261,6 +261,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onMounted,
     onUnmounted,
     ref,
@@ -1533,22 +1534,25 @@
   };
   const fetchData = () => {
     const hasKey = setSearchKey();
-    if (hasKey) {
-      fetchStrategyTags().then(() => {
+    // 标签与列表并行加载：列表不再依赖标签接口成功，避免标签失败时列表不渲染
+    void fetchStrategyTags();
+    nextTick(() => {
+      if (!listRef.value) {
+        return;
+      }
+      if (hasKey) {
         handleSearch(searchKey.value);
-      });
-    } else {
-      fetchStrategyTags().then(() => {
+      } else {
         listRef.value.fetchData();
-      });
-    }
+      }
+    });
   };
   const handlFetchData = () => {
     total.value = 0;
     groupList.value.results = [];
     isRequest = false;
     shouldHighlightNewRow.value = false; // 场景切换后不再高亮新建行
-    listRef.value.fetchData();
+    listRef.value?.fetchData();
   };
   // 页面刷新前标记，刷新后不再高亮
   const handleBeforeUnload = () => {
