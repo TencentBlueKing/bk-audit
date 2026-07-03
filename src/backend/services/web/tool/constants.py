@@ -92,6 +92,29 @@ class TargetValueTypeEnum(TextChoices):
     FIELD = "field", gettext_lazy("字段")
 
 
+class DefaultValueOverrides(BaseModel):
+    """参数默认值覆盖配置（位于 config 层级）
+
+    结构示例：
+    {
+        "scenes": {
+            "场景ID1": {"var_name1": "默认值1", "var_name2": "默认值2"},
+            "场景ID2": {"var_name1": "默认值3"}
+        },
+        "systems": {
+            "系统ID1": {"var_name1": "默认值4"}
+        }
+    }
+    """
+
+    scenes: Annotated[
+        Dict[str, Dict[str, Union[str, int, float, bool, dict, list, None]]], DictField()
+    ] = PydanticField(default_factory=dict, title=gettext_lazy("场景级别默认值覆盖"), description=gettext_lazy("工具配置中场景下的默认值"))
+    systems: Annotated[
+        Dict[str, Dict[str, Union[str, int, float, bool, dict, list, None]]], DictField()
+    ] = PydanticField(default_factory=dict, title=gettext_lazy("系统级别默认值覆盖"), description=gettext_lazy("工具配置中系统下的默认值"))
+
+
 class DataSearchBaseField(BaseModel, abc.ABC):
     """
     数据查询基本字段
@@ -211,6 +234,9 @@ class SQLDataSearchConfig(BaseModel):
     referenced_tables: List[Table]  # RT表
     input_variable: List[SQLDataSearchInputVariable]  # 输入变量
     output_fields: List[SQLDataSearchOutputField]  # 输出字段
+    default_value_overrides: DefaultValueOverrides = PydanticField(
+        default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
+    )
 
 
 # ==========================================
@@ -257,6 +283,9 @@ class BkVisionConfig(BaseModel):
 
     uid: str  # BK Vision 图表ID
     input_variable: List[BKVisionInputVariable] = PydanticField(default_factory=list)  # 输入变量
+    default_value_overrides: DefaultValueOverrides = PydanticField(
+        default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
+    )
 
 
 class ToolTagsEnum(TextChoices):
@@ -610,6 +639,9 @@ class ApiToolConfig(BaseModel):
         default_factory=list, title=gettext_lazy("输入变量")
     )
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
+    default_value_overrides: DefaultValueOverrides = PydanticField(
+        default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
+    )
 
     @field_validator("input_variable")
     @classmethod
@@ -749,6 +781,9 @@ class SmartPageToolConfig(BaseModel):
     data_sources: Annotated[List[SmartPageDataSourceConfigUnion], ListField(child=DictField())] = PydanticField(
         default_factory=list,
         title=gettext_lazy("数据源列表"),
+    )
+    default_value_overrides: DefaultValueOverrides = PydanticField(
+        default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
     )
 
     @field_validator("data_sources")
