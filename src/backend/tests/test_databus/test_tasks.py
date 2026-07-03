@@ -24,6 +24,7 @@ from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from django.utils import timezone
 
+from api.bk_base.constants import StorageType
 from apps.meta.models import ResourceType, System
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.databus.constants import (
@@ -327,32 +328,32 @@ class ReportAssetSyncStatusTests(TestCase):
             system_id="test_system",
             resource_type_id="rt_running",
             status=SnapshotRunningStatus.RUNNING.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
         self.snapshot_failed = Snapshot.objects.create(
             system_id="test_system",
             resource_type_id="rt_failed",
             status=SnapshotRunningStatus.FAILED.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
         self.snapshot_preparing = Snapshot.objects.create(
             system_id="test_system",
             resource_type_id="rt_preparing",
             status=SnapshotRunningStatus.PREPARING.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
         Snapshot.objects.create(
             system_id="test_system",
             resource_type_id="rt_closed",
             status=SnapshotRunningStatus.CLOSED.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
 
     @mock.patch("services.web.databus.tasks.Metric")
     @mock.patch("django.core.cache.cache.add")
     @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
     def test_metric_reports_sync_health_per_status(self, event_class_mock, cache_add_mock, metric_class_mock):
-        """不同状态资产应上报对应 sync_health，CLOSED 资产不上报。"""
+        """不同状态资产应上报对应 sync_health，CLOSED 资产不上报"""
         metric_class_mock.return_value = mock.Mock()
         event_class_mock.return_value = mock.Mock()
         cache_add_mock.return_value = True
@@ -367,6 +368,11 @@ class ReportAssetSyncStatusTests(TestCase):
         self.assertEqual(health["rt_preparing"], 0)
         self.assertEqual(health["rt_failed"], 1)
         self.assertNotIn("rt_closed", health)
+        # 仪表盘可按状态status分组聚合
+        status_dim = {r["dimension"]["resource_type_id"]: r["dimension"]["status"] for r in records}
+        self.assertEqual(status_dim["rt_running"], SnapshotRunningStatus.RUNNING.value)
+        self.assertEqual(status_dim["rt_preparing"], SnapshotRunningStatus.PREPARING.value)
+        self.assertEqual(status_dim["rt_failed"], SnapshotRunningStatus.FAILED.value)
 
     @mock.patch("services.web.databus.tasks.Metric")
     @mock.patch("django.core.cache.cache.add")
@@ -494,14 +500,14 @@ class ReportAssetSyncCountTests(TestCase):
             system_id="test_system",
             resource_type_id="rt_running",
             status=SnapshotRunningStatus.RUNNING.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
 
     def _create_stat(self, resource_type_id="rt_running", **kwargs):
         defaults = dict(
             system_id="test_system",
             resource_type_id=resource_type_id,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
             http_pull_count=100,
             doris_storage_count=100,
             hdfs_storage_count=100,
@@ -521,8 +527,8 @@ class ReportAssetSyncCountTests(TestCase):
         metric_class_mock.assert_called_once()
         records = metric_class_mock.call_args[1]["records"]
         self.assertEqual(len(records), 2)
-        doris = next(r for r in records if r["dimension"]["storage_type"] == "doris")
-        hdfs = next(r for r in records if r["dimension"]["storage_type"] == "hdfs")
+        doris = next(r for r in records if r["dimension"]["storage_type"] == StorageType.DORIS.value)
+        hdfs = next(r for r in records if r["dimension"]["storage_type"] == StorageType.HDFS.value)
         self.assertEqual(doris["metrics"]["diff_count"], 5)
         self.assertAlmostEqual(doris["metrics"]["diff_rate"], 0.05, places=4)
         self.assertEqual(hdfs["metrics"]["diff_count"], 10)
@@ -579,10 +585,12 @@ class ReportAssetSyncCountTests(TestCase):
     @mock.patch("services.web.databus.tasks.Metric")
     @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
     def test_event_source_pull_failed(self, event_class_mock, metric_class_mock):
-        """result=False 且源端量为 0 应上报 SOURCE_PULL_FAILED 事件。"""
+        """error_type=source 应上报 SOURCE_PULL_FAILED 事件。"""
         metric_class_mock.return_value = mock.Mock()
         event_class_mock.return_value = mock.Mock()
-        self._create_stat(http_pull_count=0, doris_storage_count=0, hdfs_storage_count=0, result=False)
+        self._create_stat(
+            http_pull_count=0, doris_storage_count=0, hdfs_storage_count=0, result=False, error_type="source"
+        )
 
         report_asset_sync_count()
 
@@ -594,10 +602,28 @@ class ReportAssetSyncCountTests(TestCase):
     @mock.patch("services.web.databus.tasks.Metric")
     @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
     def test_event_storage_query_failed(self, event_class_mock, metric_class_mock):
-        """result=False 且源端量>0 应上报 STORAGE_QUERY_FAILED 事件。"""
+        """error_type=storage 应上报 STORAGE_QUERY_FAILED 事件。"""
         metric_class_mock.return_value = mock.Mock()
         event_class_mock.return_value = mock.Mock()
-        self._create_stat(http_pull_count=100, doris_storage_count=50, hdfs_storage_count=50, result=False)
+        self._create_stat(
+            http_pull_count=100, doris_storage_count=50, hdfs_storage_count=50, result=False, error_type="storage"
+        )
+
+        report_asset_sync_count()
+
+        event_class_mock.assert_called_once()
+        context = event_class_mock.call_args[1]["context"]
+        self.assertEqual(context["reason"], AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value)
+
+    @mock.patch("services.web.databus.tasks.Metric")
+    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    def test_event_storage_failed_when_source_count_zero(self, event_class_mock, metric_class_mock):
+        """源端量=0 但 error_type=storage 时应上报 STORAGE_QUERY_FAILED"""
+        metric_class_mock.return_value = mock.Mock()
+        event_class_mock.return_value = mock.Mock()
+        self._create_stat(
+            http_pull_count=0, doris_storage_count=0, hdfs_storage_count=0, result=False, error_type="storage"
+        )
 
         report_asset_sync_count()
 
@@ -630,7 +656,7 @@ class ReportAssetSyncCountTests(TestCase):
             system_id="test_system",
             resource_type_id="rt_no_stat",
             status=SnapshotRunningStatus.RUNNING.value,
-            join_data_type="main",
+            join_data_type=JoinDataType.ASSET.value,
         )
 
         report_asset_sync_count()

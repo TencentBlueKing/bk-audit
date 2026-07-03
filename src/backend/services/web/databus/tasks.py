@@ -347,6 +347,7 @@ def check_join_data():
             "page": {"offset": 0, "limit": 1},
         }
 
+        error_type = None
         try:
             # 设置 HttpPullHandler
             pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
@@ -364,9 +365,10 @@ def check_join_data():
             http_pull_count = content.get("data", {}).get("count", 0)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             # 如果发生异常，将 storage_count 设置为 0，并且 result 设置为 False
-            logger.exception("[JoinDataCheckFailed] Error while querying storage: %s", e)
+            logger.exception("[JoinDataCheckFailed] Error while querying source: %s", e)
             http_pull_count = 0
             result = False
+            error_type = "source"
         # 请求存储中的数据总数
         count_sql = f"select count(*) as count from {snapshot.bkbase_table_id} limit 1"
         bulk_req_params = [
@@ -392,6 +394,7 @@ def check_join_data():
             doris_storage_count = 0
             hdfs_storage_count = 0
             result = False
+            error_type = "storage"
 
         # 将结果保存到 JoinDataCheckStatistic 表
         SnapshotCheckStatistic.objects.update_or_create(
@@ -403,6 +406,7 @@ def check_join_data():
                 "doris_storage_count": doris_storage_count,
                 "hdfs_storage_count": hdfs_storage_count,
                 "result": result,
+                "error_type": error_type,
             },
         )
 
@@ -519,7 +523,11 @@ def report_asset_sync_status():
     上报 sync_health 指标 + 状态类事件（STATUS_FAILED / PREPARING_TIMEOUT ）
     """
     metric_records = []
-    snapshots = list(Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value))
+    snapshots = list(
+        Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value).filter(
+            join_data_type=JoinDataType.ASSET.value
+        )
+    )
     for snap in snapshots:
         # 不健康口径与状态类事件保持一致：FAILED 或 卡在启动中超时
         sync_health = 1 if _detect_status_anomaly(snap) else 0
@@ -531,6 +539,7 @@ def report_asset_sync_status():
                     "system_id": snap.system_id,
                     "resource_type_id": snap.resource_type_id,
                     "join_data_type": snap.join_data_type,
+                    "status": snap.status,
                 },
             }
         )
@@ -583,13 +592,17 @@ def report_asset_sync_count():
     资产同步「数量差异」上报(复用check_join_data结果）
     上报数量差异指标 + 数据类事件（SOURCE_PULL_FAILED / STORAGE_QUERY_FAILED）
     """
-    # 仅上报未关闭资产，避免 CLOSED 资产残留记录产生噪声
+    # 仅上报未关闭的「资产(asset)」快照
     active_keys = set(
-        Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value).values_list("system_id", "resource_type_id")
+        Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value)
+        .filter(join_data_type=JoinDataType.ASSET.value)
+        .values_list("system_id", "resource_type_id")
     )
     metric_records = []
     stats = list(SnapshotCheckStatistic.objects.all())
     for stat in stats:
+        if stat.join_data_type != JoinDataType.ASSET.value:
+            continue
         if (stat.system_id, stat.resource_type_id) not in active_keys:
             continue
         for storage_type, storage_count in (
@@ -637,11 +650,10 @@ def report_asset_sync_count():
             if stat is None or stat.result:
                 continue
             # 区分源系统拉取失败 / 存储查询失败
-            reason = (
-                AssetSyncAnomalyReason.SOURCE_PULL_FAILED.value
-                if stat.http_pull_count == 0
-                else AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value
-            )
+            if stat.error_type == "source":
+                reason = AssetSyncAnomalyReason.SOURCE_PULL_FAILED.value
+            elif stat.error_type == "storage":
+                reason = AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value
             AssetSyncAnomalyEvent(
                 target=f"{snap.system_id}_{snap.resource_type_id}",
                 context={
