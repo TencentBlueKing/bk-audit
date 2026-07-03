@@ -95,14 +95,14 @@ class TargetValueTypeEnum(TextChoices):
 class DefaultValueOverrides(BaseModel):
     """参数默认值覆盖配置（位于 config 层级）
 
-    结构示例：
+    结构示例（覆盖配置以 raw_name 为键）：
     {
         "scenes": {
-            "场景ID1": {"var_name1": "默认值1", "var_name2": "默认值2"},
-            "场景ID2": {"var_name1": "默认值3"}
+            "场景ID1": {"raw_name1": "默认值1", "raw_name2": "默认值2"},
+            "场景ID2": {"raw_name1": "默认值3"}
         },
         "systems": {
-            "系统ID1": {"var_name1": "默认值4"}
+            "系统ID1": {"raw_name1": "默认值4"}
         }
     }
     """

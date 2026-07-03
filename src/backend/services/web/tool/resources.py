@@ -1007,16 +1007,6 @@ class ExecuteTool(ToolBase):
         # 获取用户输入的变量值
         tool_variables = params.get("tool_variables", [])
 
-        var_name_to_raw_name = {}
-        for var in input_variables_config:
-            raw_name = var.get("raw_name")
-            if not raw_name:
-                continue
-            var_name = var.get("var_name")
-            if var_name:
-                var_name_to_raw_name[var_name] = raw_name
-            var_name_to_raw_name[raw_name] = raw_name
-
         # 收集用户有权限的场景/系统允许的默认值
         allowed_defaults = {}
 
@@ -1024,8 +1014,7 @@ class ExecuteTool(ToolBase):
         scenes_overrides = default_value_overrides.get("scenes", {})
         for scene_id, overrides in scenes_overrides.items():
             if scene_id in user_allowed_scene_ids and isinstance(overrides, dict):
-                for override_var_name, default_value in overrides.items():
-                    raw_name = var_name_to_raw_name.get(override_var_name)
+                for raw_name, default_value in overrides.items():
                     if raw_name:
                         allowed_defaults.setdefault(raw_name, []).append(default_value)
 
@@ -1033,8 +1022,7 @@ class ExecuteTool(ToolBase):
         systems_overrides = default_value_overrides.get("systems", {})
         for system_id, overrides in systems_overrides.items():
             if system_id in user_allowed_system_ids and isinstance(overrides, dict):
-                for override_var_name, default_value in overrides.items():
-                    raw_name = var_name_to_raw_name.get(override_var_name)
+                for raw_name, default_value in overrides.items():
                     if raw_name:
                         allowed_defaults.setdefault(raw_name, []).append(default_value)
 
@@ -1370,10 +1358,10 @@ class GetToolDetail(ToolBase):
         default_value_overrides 位于 config 层级，结构：
         {
             "scenes": {
-                "场景ID1": {"var_name1": "默认值1", "var_name2": "默认值2"}
+                "场景ID1": {"raw_name1": "默认值1", "raw_name2": "默认值2"}
             },
             "systems": {
-                "系统ID1": {"var_name1": "默认值3"}
+                "系统ID1": {"raw_name1": "默认值3"}
             }
         }
         """
@@ -1397,7 +1385,7 @@ class GetToolDetail(ToolBase):
             return
 
         # 收集当前场景/系统的默认值覆盖映射
-        # 结构: {var_name: overridden_default_value}
+        # 结构: {raw_name: overridden_default_value}
         overridden_defaults = {}
 
         # 优先检查场景级别的参数覆盖
@@ -1405,7 +1393,7 @@ class GetToolDetail(ToolBase):
             scene_id_str = str(scene_id)
             scene_overrides = default_value_overrides.get("scenes", {})
             if scene_id_str in scene_overrides:
-                # scene_overrides[scene_id_str] 是 {var_name: default_value} 字典
+                # scene_overrides[scene_id_str] 是 {raw_name: default_value} 字典
                 scene_defaults = scene_overrides[scene_id_str]
                 if isinstance(scene_defaults, dict):
                     overridden_defaults.update(scene_defaults)
@@ -1414,19 +1402,19 @@ class GetToolDetail(ToolBase):
         if system_id:
             system_overrides = default_value_overrides.get("systems", {})
             if system_id in system_overrides:
-                # system_overrides[system_id] 是 {var_name: default_value} 字典
+                # system_overrides[system_id] 是 {raw_name: default_value} 字典
                 system_defaults = system_overrides[system_id]
                 if isinstance(system_defaults, dict):
                     overridden_defaults.update(system_defaults)
 
         # 根据收集到的映射，覆盖输入变量的默认值
         for var_config in input_variables:
-            var_name = var_config.get("var_name") or var_config.get("raw_name")
-            if not var_name:
+            raw_name = var_config.get("raw_name")
+            if not raw_name:
                 continue
 
-            if var_name in overridden_defaults:
-                var_config["default_value"] = overridden_defaults[var_name]
+            if raw_name in overridden_defaults:
+                var_config["default_value"] = overridden_defaults[raw_name]
 
 
 class SqlAnalyseResource(ToolBase, Resource):
