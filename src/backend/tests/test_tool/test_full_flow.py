@@ -65,6 +65,10 @@ class TestToolFullFlow(TestCase):
                 'perform_request',
                 return_value=[{"result": True, "user_id": "tester", "object_id": "users"}],
             ),
+            mock.patch.object(
+                self.resource.tool.execute_tool.__class__, "_get_user_allowed_scopes", return_value=([], [])
+            ),
+            mock.patch.object(Tool, "get_permission_owner", return_value="tester"),
         ):
             result = self.resource.tool.execute_tool(
                 {
@@ -121,7 +125,12 @@ class TestToolFullFlow(TestCase):
         self.assertTrue(Tool.objects.filter(uid=uid).exists())
 
         # 执行工具（CreateTool 已自动创建 VisionPanel 及 BkVisionToolConfig）
-        with mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True):
+        with (
+            mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True),
+            mock.patch.object(
+                self.resource.tool.execute_tool.__class__, "_get_user_allowed_scopes", return_value=([], [])
+            ),
+        ):
             result = self.resource.tool.execute_tool({"uid": uid, "params": {}})
         # 校验执行结果包含 panel_id 且工具类型正确
         panel_id = result["data"]["panel_id"]
@@ -217,7 +226,12 @@ class TestToolFullFlow(TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": True, "data": {"pageIndex": 2, "pageSize": 30}}
 
-        with mock.patch("requests.request", return_value=mock_response):
+        with (
+            mock.patch("requests.request", return_value=mock_response),
+            mock.patch.object(
+                self.resource.tool.execute_tool.__class__, "_get_user_allowed_scopes", return_value=([], [])
+            ),
+        ):
             result = self.resource.tool.execute_tool(
                 {
                     "uid": uid,

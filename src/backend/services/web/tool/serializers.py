@@ -221,6 +221,7 @@ class ToolRetrieveRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     # 场景隔离相关字段（场景级工具删除时使用）
     scene_id = serializers.IntegerField(required=False, allow_null=True, label=gettext_lazy("所属场景ID"))
+    system_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, label=gettext_lazy("所属系统ID"))
 
 
 class PlatformSceneToolCreateRequestSerializer(ToolCreateRequestSerializer):
