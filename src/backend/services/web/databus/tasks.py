@@ -30,6 +30,7 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger
 from celery.schedules import crontab
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 from django.utils.translation import gettext
 
@@ -39,6 +40,8 @@ from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.notice.handlers import ErrorMsgHandler
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
+from core.monitor import Metric
+from services.web.common.monitor import AssetSyncAnomalyEvent
 from services.web.databus.collector.check.handlers import ReportCheckHandler
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.handlers import TailLogHandler
@@ -61,6 +64,7 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     COLLECTOR_PLUGIN_ID,
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
+    AssetSyncAnomalyReason,
     EtlConfigEnum,
     JoinDataType,
     PluginSceneChoices,
@@ -486,3 +490,168 @@ def sync_asset_bkbase_rt_ids():
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=settings.DEFAULT_NAMESPACE,
         )
+
+
+# 资产可观测性上报
+def _detect_status_anomaly(snap: Snapshot) -> Optional[str]:
+    """判定单个资产快照的状态类异常原因，无异常返回 None。
+
+    FAILED 直接视为异常；PREPARING 且超过 ASSET_SYNC_PREPARING_TIMEOUT 视为
+    「卡在启动中超时」异常。该判定同时用于 sync_health 指标与状态类事件，
+    保证指标聚合与事件告警对「不健康」的口径一致。
+    """
+    if snap.status == SnapshotRunningStatus.FAILED.value:
+        return AssetSyncAnomalyReason.STATUS_FAILED.value
+    if (
+        snap.status == SnapshotRunningStatus.PREPARING.value
+        and snap.updated_at
+        and (timezone.now() - snap.updated_at).total_seconds() > settings.ASSET_SYNC_PREPARING_TIMEOUT
+    ):
+        return AssetSyncAnomalyReason.PREPARING_TIMEOUT.value
+    return None
+
+
+@periodic_task(run_every=crontab(minute="*/15"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:report_asset_sync_status")
+def report_asset_sync_status():
+    """
+    资产同步「状态」上报
+    上报 sync_health 指标 + 状态类事件（STATUS_FAILED / PREPARING_TIMEOUT ）
+    """
+    metric_records = []
+    snapshots = list(Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value))
+    for snap in snapshots:
+        # 不健康口径与状态类事件保持一致：FAILED 或 卡在启动中超时
+        sync_health = 1 if _detect_status_anomaly(snap) else 0
+        metric_records.append(
+            {
+                "target": f"{snap.system_id}_{snap.resource_type_id}",
+                "metrics": {"sync_health": sync_health},
+                "dimension": {
+                    "system_id": snap.system_id,
+                    "resource_type_id": snap.resource_type_id,
+                    "join_data_type": snap.join_data_type,
+                },
+            }
+        )
+
+    if not metric_records:
+        logger.info("[AssetSyncReport] no status records to report")
+        return
+
+    # 使用 Metric 封装类上报
+    metric = Metric(records=metric_records)
+    if not metric.is_configured:
+        logger.warning("[AssetSyncReport] status metric skipped, metric data_id unset")
+    else:
+        metric.report()
+        logger.info("[AssetSyncReport] status metric reported: %s records", len(metric_records))
+
+    # ---------- 事件----------
+    for snap in snapshots:
+        try:
+            # 判定状态类异常（与 sync_health 指标共用同一口径）
+            reason = _detect_status_anomaly(snap)
+            if not reason:
+                continue
+            # 去重：持续异常在,同一 (资产, reason) 在窗口内只报一次
+            dedup_ttl = settings.DEFAULT_CACHE_LOCK_TIMEOUT
+            dedup_key = f"asset_sync:alert:{snap.system_id}:{snap.resource_type_id}:{reason}"
+            if not cache.add(dedup_key, "1", dedup_ttl):
+                continue
+            AssetSyncAnomalyEvent(
+                target=f"{snap.system_id}_{snap.resource_type_id}",
+                context={
+                    "system_id": snap.system_id,
+                    "resource_type_id": snap.resource_type_id,
+                    "join_data_type": snap.join_data_type,
+                    "status": snap.status,
+                    "reason": reason,
+                },
+            ).report()
+        except Exception as err:
+            logger.exception(
+                "[AssetSyncReport] status anomaly %s/%s err=%s", snap.system_id, snap.resource_type_id, err
+            )
+    logger.info("[AssetSyncReport] status anomaly events reported")
+
+
+@periodic_task(run_every=crontab(minute="0", hour="6"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:report_asset_sync_count")
+def report_asset_sync_count():
+    """
+    资产同步「数量差异」上报(复用check_join_data结果）
+    上报数量差异指标 + 数据类事件（SOURCE_PULL_FAILED / STORAGE_QUERY_FAILED）
+    """
+    # 仅上报未关闭资产，避免 CLOSED 资产残留记录产生噪声
+    active_keys = set(
+        Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value).values_list("system_id", "resource_type_id")
+    )
+    metric_records = []
+    stats = list(SnapshotCheckStatistic.objects.all())
+    for stat in stats:
+        if (stat.system_id, stat.resource_type_id) not in active_keys:
+            continue
+        for storage_type, storage_count in (
+            (StorageType.DORIS.value, stat.doris_storage_count),
+            (StorageType.HDFS.value, stat.hdfs_storage_count),
+        ):
+            # 差异 = 源端量 - 存储量；存储量大于源端量（增量拉取、历史残留等）时差异为负，统一收敛为 0，避免仪表盘阈值告警因负值漏报。
+            diff_count = max(0, stat.http_pull_count - storage_count)
+            diff_rate = (diff_count / stat.http_pull_count) if stat.http_pull_count > 0 else 0
+            metric_records.append(
+                {
+                    "target": f"{stat.system_id}_{stat.resource_type_id}",
+                    "metrics": {
+                        "http_pull_count": stat.http_pull_count,
+                        "storage_count": storage_count,
+                        "diff_count": diff_count,
+                        "diff_rate": round(diff_rate, 4),
+                    },
+                    "dimension": {
+                        "system_id": stat.system_id,
+                        "resource_type_id": stat.resource_type_id,
+                        "join_data_type": stat.join_data_type,
+                        "storage_type": storage_type,
+                    },
+                }
+            )
+
+    if not metric_records:
+        logger.info("[AssetSyncReport] no metric records to report")
+        return
+
+    metric = Metric(records=metric_records)
+    if not metric.is_configured:
+        logger.warning("[AssetSyncReport] count metric skipped, metric data_id unset")
+    else:
+        metric.report()
+        logger.info("[AssetSyncReport] count metric reported: %s records", len(metric_records))
+
+    # ---------- 事件 ---------
+    stat_map = {(s.system_id, s.resource_type_id, s.join_data_type): s for s in stats}
+    # 仅针对 RUNNING 且存在检查记录的资产：result=False 才视为数据异常
+    for snap in Snapshot.objects.filter(status=SnapshotRunningStatus.RUNNING.value):
+        try:
+            stat = stat_map.get((snap.system_id, snap.resource_type_id, snap.join_data_type))
+            if stat is None or stat.result:
+                continue
+            # 区分源系统拉取失败 / 存储查询失败
+            reason = (
+                AssetSyncAnomalyReason.SOURCE_PULL_FAILED.value
+                if stat.http_pull_count == 0
+                else AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value
+            )
+            AssetSyncAnomalyEvent(
+                target=f"{snap.system_id}_{snap.resource_type_id}",
+                context={
+                    "system_id": snap.system_id,
+                    "resource_type_id": snap.resource_type_id,
+                    "join_data_type": snap.join_data_type,
+                    "status": snap.status,
+                    "reason": reason,
+                },
+            ).report()
+        except Exception as err:
+            logger.exception("[AssetSyncReport] count anomaly %s/%s err=%s", snap.system_id, snap.resource_type_id, err)
+    logger.info("[AssetSyncReport] count anomaly events reported")
