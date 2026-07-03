@@ -705,12 +705,11 @@ class ToolRetrieveRequestSerializerTest(TestCase):
         self.assertEqual(serializer.validated_data["system_id"], "sys001")
 
 
-class ApiToolVarNameMatchingTest(TestCase):
-    """测试 API 工具覆盖按 var_name 匹配
+class ApiToolRawNameMatchingTest(TestCase):
+    """测试 API 工具覆盖按 raw_name 匹配
 
-    前端传入的 default_value_overrides 以 var_name 为键；而工具执行时 tool_variables
-    仅携带 raw_name（无 var_name）。因此执行阶段需借助 input_variable 把覆盖配置的
-    var_name 转换成 raw_name，再与 tool_variables 按 raw_name 匹配。
+    前端传入的 default_value_overrides 以 raw_name 为键；工具执行时 tool_variables
+    也以 raw_name 标识，二者直接按 raw_name 匹配。
     """
 
     def setUp(self):
@@ -718,8 +717,8 @@ class ApiToolVarNameMatchingTest(TestCase):
         self.username = "test_user"
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_override_keyed_by_var_name(self, mock_get_scopes):
-        """覆盖配置按 var_name 匹配：用户传入 var_name 对应的允许值应通过"""
+    def test_override_keyed_by_raw_name(self, mock_get_scopes):
+        """覆盖配置按 raw_name 匹配：用户传入 raw_name 对应的允许值应通过"""
         mock_get_scopes.return_value = ([], ["sys001"])
 
         tool = MockTool(
@@ -733,19 +732,19 @@ class ApiToolVarNameMatchingTest(TestCase):
                     }
                 ],
                 "default_value_overrides": {
-                    "systems": {"sys001": {"q": "system_query"}},
+                    "systems": {"sys001": {"query": "system_query"}},
                 },
             }
         )
-        # tool_variables 以 raw_name 标识，值为 var_name 对应的允许值
+        # tool_variables 以 raw_name 标识，值为 raw_name 对应的允许值
         params = {"tool_variables": [{"raw_name": "query", "value": "system_query"}]}
 
-        # 不应抛出异常（覆盖按 var_name="q" 匹配）
+        # 不应抛出异常（覆盖按 raw_name="query" 匹配）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_override_not_matched_by_wrong_var_name(self, mock_get_scopes):
-        """覆盖配置按 var_name 匹配：var_name 无法对应到任何 raw_name 时不生效"""
+    def test_override_not_matched_by_wrong_raw_name(self, mock_get_scopes):
+        """覆盖配置按 raw_name 匹配：raw_name 无法对应到任何输入变量时不生效"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = ([], ["sys001"])
@@ -761,12 +760,12 @@ class ApiToolVarNameMatchingTest(TestCase):
                     }
                 ],
                 "default_value_overrides": {
-                    # var_name "wrong" 无法对应到任何 raw_name，覆盖不生效
+                    # raw_name "wrong" 无法对应到任何输入变量，覆盖不生效
                     "systems": {"sys001": {"wrong": "wrong_query"}},
                 },
             }
         )
-        # 用户传入非默认值，且覆盖不生效（var_name 无法映射到 raw_name）
+        # 用户传入非默认值，且覆盖不生效（raw_name 无法映射到输入变量）
         params = {"tool_variables": [{"raw_name": "query", "value": "wrong_query"}]}
 
         with self.assertRaises(PermissionException):
