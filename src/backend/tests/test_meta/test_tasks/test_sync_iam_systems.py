@@ -21,7 +21,7 @@ import pytest
 from blueapps.core.celery import celery_app
 
 from apps.meta.constants import SystemSourceTypeEnum
-from apps.meta.models import Action, ResourceType, System
+from apps.meta.models import Action, ResourceType, ResourceTypeActionRelation, System
 from apps.meta.tasks import sync_iam_systems, sync_system_paas_info
 from core.testing import assert_list_contains
 from tests.base import TestCase
@@ -127,3 +127,26 @@ class TestSyncIamSystems(TestCase):
         self.sync_system()
         system.refresh_from_db()
         self.assertEqual(system.managers, ["modify_manager"])
+
+    def test_sync_systems_deletes_related_resources_and_actions(self):
+        """同步删除下线系统时同步清理其资源、操作和关联关系"""
+        stale_system = System.objects.create(
+            namespace=self.namespace,
+            source_type=SystemSourceTypeEnum.IAM_V4.value,
+            instance_id="cmdb_inspection",
+            name="CMDB 巡检",
+        )
+        ResourceType.objects.create(system_id=stale_system.system_id, resource_type_id="biz", name="业务")
+        Action.objects.create(system_id=stale_system.system_id, action_id="view_biz", name="查看业务")
+        ResourceTypeActionRelation.objects.create(
+            system_id=stale_system.system_id,
+            resource_type_id="biz",
+            action_id="view_biz",
+        )
+
+        self.sync_system()
+
+        self.assertFalse(System.objects.filter(system_id=stale_system.system_id).exists())
+        self.assertFalse(ResourceType.objects.filter(system_id=stale_system.system_id).exists())
+        self.assertFalse(Action.objects.filter(system_id=stale_system.system_id).exists())
+        self.assertFalse(ResourceTypeActionRelation.objects.filter(system_id=stale_system.system_id).exists())
