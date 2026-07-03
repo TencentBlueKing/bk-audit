@@ -292,12 +292,24 @@ class System(OperateRecordModel):
             self.system_id = self.build_system_id(self.source_type, self.instance_id)
         super().save(*args, **kwargs)
 
+    def delete_related_resources(self):
+        """
+        清理通过 system_id 字符串关联的资源和操作。
+        """
+
+        for resource_type in ResourceType.objects.filter(system_id=self.system_id):
+            resource_type.delete()
+        for action in Action.objects.filter(system_id=self.system_id):
+            action.delete()
+        ResourceTypeActionRelation.objects.filter(system_id=self.system_id).delete()
+
     @transaction.atomic
     def delete(self, *args, **kwargs):
         """
         删除系统及其资源
         """
 
+        self.delete_related_resources()
         SystemRole.objects.filter(system_id=self.system_id).delete()
         SystemDiagnosisConfig.objects.filter(system_id=self.system_id).delete()
         SystemFavorite.objects.filter(system_id=self.system_id).delete()
