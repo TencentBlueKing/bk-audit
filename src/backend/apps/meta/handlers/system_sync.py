@@ -253,7 +253,8 @@ class IamSystemSyncer(abc.ABC):
 
         if to_delete:
             # 删除系统同时需要删除其下的资源
-            System.objects.filter(source_type=self.source_type, instance_id__in=to_delete).delete()
+            for system in System.objects.filter(source_type=self.source_type, instance_id__in=to_delete):
+                system.delete()
 
         logger.info(f"[{self.cls_name}] finished")
 
