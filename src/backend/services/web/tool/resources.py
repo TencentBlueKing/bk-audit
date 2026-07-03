@@ -418,6 +418,40 @@ class ListTool(ToolBase):
         queryset = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
         queryset = self.filter_queryset_by_scope(queryset, validated_request_data, current_user)
 
+        v_visibility_type = validated_request_data.get("visibility_type")
+        v_scene_ids = validated_request_data.get("scene_ids") or []
+        v_system_ids = validated_request_data.get("system_ids") or []
+        if v_visibility_type or v_scene_ids or v_system_ids:
+            v_binding_type = BindingType.PLATFORM_BINDING
+            matched_uids = None
+
+            # 1) 按 visibility_type 匹配（全部场景或系统没有具体场景/系统 ID）
+            if v_visibility_type:
+                binding_qs = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    visibility_type=v_visibility_type,
+                )
+                if v_binding_type:
+                    binding_qs = binding_qs.filter(binding_type=v_binding_type)
+                matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
+
+            # 2) 按具体 scene/system ID 可见范围
+            if v_scene_ids or v_system_ids:
+                scoped_uids = {
+                    str(uid)
+                    for uid in CompositeScopeFilter.filter_queryset(
+                        queryset=queryset,
+                        binding_type=v_binding_type,
+                        scene_id=v_scene_ids,
+                        system_id=v_system_ids,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        pk_field="uid",
+                    ).values_list("uid", flat=True)
+                }
+                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+
+            queryset = queryset.filter(uid__in=matched_uids or [])
+
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
             int(tag_id) in tags
