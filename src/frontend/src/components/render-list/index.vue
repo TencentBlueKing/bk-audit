@@ -277,6 +277,10 @@
       pagination.current = ~~pageValue;
       pagination.limit = (~~pageSize) < 10 ? 10 :  (~~pageSize);
       pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
+      // URL 中已有分页参数时保留，避免 calcTableHeight 覆盖为默认 10
+      isUserSelectedPageSize.value = true;
+    } else {
+      isUserSelectedPageSize.value = false;
     }
     // 优先使用新的 sort 数组格式，向后兼容旧的 order_field + order_type
     if (sort) {
@@ -300,8 +304,7 @@
       };
     }
     // 注意：默认排序应该在具体页面组件中设置，而不是在通用组件中
-    // 从URL参数初始化时重置用户选择标志
-    isUserSelectedPageSize.value = false;
+    // 从URL参数初始化时：有 page_size 则已在上方标记为用户分页状态
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
@@ -539,9 +542,12 @@
       if (recordParams) {
         pagination.current = Number(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
+        // 从详情/编辑返回时恢复离开前的分页大小，避免被 calcTableHeight 重置为 10
+        isUserSelectedPageSize.value = true;
+      } else {
+        // 重置用户选择标志，允许重新计算分页大小
+        isUserSelectedPageSize.value = false;
       }
-      // 重置用户选择标志，允许重新计算分页大小
-      isUserSelectedPageSize.value = false;
       isLoading.value = true;
       fetchListData();
     },
