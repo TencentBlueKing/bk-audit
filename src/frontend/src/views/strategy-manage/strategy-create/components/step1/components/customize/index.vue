@@ -363,7 +363,7 @@
     (e: 'updateFormData', value: IFormData): void
   }
   interface Expose {
-    getFields: () => IFormData;
+    getFields: (options?: { forValidate?: boolean }) => IFormData;
     typeTableLoading: boolean;
   }
   interface Props {
@@ -1230,7 +1230,7 @@
 
   defineExpose<Expose>({
     // 获取提交参数
-    getFields() {
+    getFields(options?: { forValidate?: boolean }) {
       const params = _.cloneDeep(formData.value);
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
@@ -1246,74 +1246,84 @@
         params.configs.select = buildDefaultSelectFromTableFields();
         expectedResultsRef.value.setSelect(params.configs.select);
       }
-      // 编辑且风险发现规则未改动：直接沿用原始 where/having，避免 filter/filters 转换影响老数据
-      if (isEditMode && !isWhereModified.value) {
-        params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
-        if (originalEditHaving.value) {
-          params.configs.having = _.cloneDeep(originalEditHaving.value);
-        } else {
-          delete params.configs.having;
+      // 同步display_name
+      params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1
+        ? params.configs.data_source.rt_id
+        : '') as string;
+      // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
+      // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
+      if (!options?.forValidate) {
+        if (isEditMode && !isWhereModified.value) {
+          params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
+          if (originalEditHaving.value) {
+            params.configs.having = _.cloneDeep(originalEditHaving.value);
+          } else {
+            delete params.configs.having;
+          }
+        } else if (params.configs.where) {
+          // 添加having参数
+          // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
+          const having = {
+            connector: params.configs.where.connector,
+            conditions: params.configs.where.conditions
+              .map(group => ({
+                connector: group.connector,
+                index: group.index,
+                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && item.condition.field?.aggregate),
+              }))
+              // 过滤掉没有聚合条件的组
+              .filter(group => group.conditions.length > 0),
+          };
+          if (having.conditions.length > 0) {
+            params.configs.having = having;
+            // 将where中符合having的条件删除
+            params.configs.where.conditions = params.configs.where.conditions
+              .map(group => ({
+                connector: group.connector,
+                index: group.index,
+                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
+              }))
+              // 过滤掉没有聚合条件的组
+              .filter(group => group.conditions.length > 0);
+          } else {
+            delete params.configs.having;
+          }
+        }
+        // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
+        const transferFilter = (whereData: Where) => {
+          whereData.conditions.forEach((group) => {
+            group.conditions.forEach((_condItem, condIndex) => {
+              const { condition } = group.conditions[condIndex];
+              if (condition.operator === 'eq') {
+                // 等于操作符：将 filters 转移到 filter
+                if (condition.filters?.length) {
+                  condition.filter = Array.isArray(condition.filters)
+                    ? condition.filters.join(',')
+                    : condition.filters;
+                  condition.filters = [];
+                }
+              } else {
+                // 非等于操作符：将 filter 转移到 filters
+                if (condition.filter && !condition.filters?.length) {
+                  condition.filters = [condition.filter];
+                  condition.filter = '';
+                }
+              }
+            });
+          });
+        };
+        if (!(isEditMode && !isWhereModified.value)) {
+          if (params.configs.where) {
+            transferFilter(params.configs.where);
+          }
+          if (params.configs.having) {
+            transferFilter(params.configs.having);
+          }
         }
       } else if (params.configs.where) {
-        // 添加having参数
-        // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
-        const having = {
-          connector: params.configs.where.connector,
-          conditions: params.configs.where.conditions
-            .map(group => ({
-              connector: group.connector,
-              index: group.index,
-              conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && item.condition.field?.aggregate),
-            }))
-            // 过滤掉没有聚合条件的组
-            .filter(group => group.conditions.length > 0),
-        };
-        if (having.conditions.length > 0) {
-          params.configs.having = having;
-          // 将where中符合having的条件删除
-          params.configs.where.conditions = params.configs.where.conditions
-            .map(group => ({
-              connector: group.connector,
-              index: group.index,
-              conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
-            }))
-            // 过滤掉没有聚合条件的组
-            .filter(group => group.conditions.length > 0);
-        } else {
-          delete params.configs.having;
-        }
-      }
-      // 同步display_name
-      params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1 ? params.configs.data_source.rt_id : '') as string;
-      // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
-      const transferFilter = (whereData: Where) => {
-        whereData.conditions.forEach((group) => {
-          group.conditions.forEach((_condItem, condIndex) => {
-            const { condition } = group.conditions[condIndex];
-            if (condition.operator === 'eq') {
-              // 等于操作符：将 filters 转移到 filter
-              if (condition.filters?.length) {
-                condition.filter = Array.isArray(condition.filters)
-                  ? condition.filters.join(',')
-                  : condition.filters;
-                condition.filters = [];
-              }
-            } else {
-              // 非等于操作符：将 filter 转移到 filters
-              if (condition.filter && !condition.filters?.length) {
-                condition.filters = [condition.filter];
-                condition.filter = '';
-              }
-            }
-          });
-        });
-      };
-      if (!(isEditMode && !isWhereModified.value)) {
-        if (params.configs.where) {
-          transferFilter(params.configs.where);
-        }
+        params.configs.where = normalizeWhereForDisplay(params.configs.where) as Where;
         if (params.configs.having) {
-          transferFilter(params.configs.having);
+          params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
         }
       }
       return params;
