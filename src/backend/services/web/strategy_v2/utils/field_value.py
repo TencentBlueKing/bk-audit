@@ -110,15 +110,27 @@ class FieldValueHandler:
     def _db_data_with_system_to_list(
         self, data: QuerySet, get_id: callable = lambda item: item.id, get_name: callable = lambda item: item.name
     ) -> List[dict]:
+        systems = list(System.objects.filter(namespace=self.namespace))
+        system_ids = [system.system_id for system in systems]
         data_map = {
             system.system_id: {
                 self.label_key: f"{system.name}({system.system_id})",
                 self.value_key: system.system_id,
                 "children": [],
             }
-            for system in System.objects.all()
+            for system in systems
         }
-        for instance in data:
+        missing_system_ids = list(
+            data.exclude(system_id__in=system_ids).values_list("system_id", flat=True).distinct().order_by("system_id")
+        )
+        if missing_system_ids:
+            logger.warning(
+                "[FieldValueHandlerMissingSystem] Field => %s; Namespace => %s; SystemIDs => %s",
+                self.field_name,
+                self.namespace,
+                missing_system_ids,
+            )
+        for instance in data.filter(system_id__in=system_ids):
             data_map[instance.system_id]["children"].append(
                 {self.value_key: get_id(instance), self.label_key: get_name(instance)}
             )
