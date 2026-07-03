@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import json
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Tuple
 
 from bk_resource import api
 from blueapps.utils.logger import logger
@@ -80,7 +80,7 @@ from services.web.strategy_v2.exceptions import (
     StrategyTypeNotSupport,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
-from services.web.tool.constants import DrillConfig
+from services.web.tool.constants import DrillConfig, TargetValueTypeEnum
 from services.web.tool.models import Tool
 
 # 从 Pydantic BaseModel 生成的 DRF 序列化器类
@@ -286,6 +286,112 @@ class StrategySerializer(serializers.Serializer):
         invalid_uids = expected_uids - visible_uids
         if invalid_uids:
             self._raise_scene_mismatch_error("tool", gettext("工具"), list(invalid_uids), scene_id)
+
+        # 默认值校验：与工具执行时 _validate_default_value_permissions 逻辑一致
+        self._validate_drill_tool_default_values(validated_request_data, scene_id)
+
+    def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
+        """
+        获取当前用户有权限的场景和系统 ID 列表
+        """
+        from apps.permission.handlers.actions import ActionEnum
+        from services.web.common.constants import ScopeType
+        from services.web.common.scope_permission import ScopeContext, ScopePermission
+
+        scope_permission = ScopePermission(username=username)
+        scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
+        system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
+        return [str(scene_id) for scene_id in scene_ids], list(system_ids)
+
+    def _validate_drill_tool_default_values(self, validated_request_data: dict, scene_id: int | None) -> None:
+        """
+        校验下钻配置中工具默认值校验
+        """
+        if scene_id is None:
+            return
+
+        expected_uids = {uid for uid, _ in self._iter_drill_tools(validated_request_data)}
+        if not expected_uids:
+            return
+
+        # 当前用户有权限的场景/系统列表
+        username = get_request_username()
+        if not username:
+            return
+        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
+
+        # 批量获取下钻工具的最新版本配置
+        tools = {str(tool.uid): tool for tool in Tool.all_latest_tools().filter(uid__in=expected_uids)}
+
+        for field_configs in (
+            validated_request_data.get("event_basic_field_configs", []),
+            validated_request_data.get("event_data_field_configs", []),
+            validated_request_data.get("event_evidence_field_configs", []),
+            validated_request_data.get("risk_meta_field_config", []),
+        ):
+            for field_config in field_configs:
+                for drill in field_config.get("drill_config") or []:
+                    tool = drill.get("tool") or {}
+                    tool_uid = tool.get("uid")
+                    if not tool_uid:
+                        continue
+                    tool_obj = tools.get(str(tool_uid))
+                    if not tool_obj or not tool_obj.config:
+                        continue
+
+                    config = tool_obj.config
+                    input_variables = config.get("input_variable") or []
+                    # source_field 即工具变量的 raw_name，var_config 为对应的变量配置对象
+                    var_config_map = {var.get("raw_name"): var for var in input_variables if var.get("raw_name")}
+
+                    # 收集当前用户有权限的场景/系统允许的默认值覆盖
+                    allowed_defaults: dict = {}
+                    default_value_overrides = config.get("default_value_overrides", {}) or {}
+                    for scene_id_key, overrides in (default_value_overrides.get("scenes", {}) or {}).items():
+                        if scene_id_key in user_allowed_scene_ids and isinstance(overrides, dict):
+                            for raw_name, default_value in overrides.items():
+                                if raw_name:
+                                    allowed_defaults.setdefault(raw_name, []).append(default_value)
+                    for system_id_key, overrides in (default_value_overrides.get("systems", {}) or {}).items():
+                        if system_id_key in user_allowed_system_ids and isinstance(overrides, dict):
+                            for raw_name, default_value in overrides.items():
+                                if raw_name:
+                                    allowed_defaults.setdefault(raw_name, []).append(default_value)
+
+                    for item in drill.get("config") or []:
+                        source_field = item.get("source_field")
+                        if not source_field:
+                            continue
+                        var_config = var_config_map.get(source_field)
+                        if var_config is None:
+                            continue
+
+                        # 校验用户不可见(is_show=False)
+                        if not var_config.get("is_show", True):
+                            if item.get("target_value_type") != TargetValueTypeEnum.FIXED_VALUE.value:
+                                continue
+                            target_value = item.get("target_value")
+                            original_default = var_config.get("default_value")
+                            # source_field 即工具变量的 raw_name
+                            if source_field in allowed_defaults:
+                                if (
+                                    target_value not in allowed_defaults[source_field]
+                                    and target_value != original_default
+                                ):
+                                    raise serializers.ValidationError(
+                                        {
+                                            "tool": gettext("下钻工具 %(tool)s 的 %(field)s 只能使用默认值" "或当前用户有权限的场景/系统允许的覆盖值")
+                                            % {"tool": tool_uid, "field": source_field}
+                                        }
+                                    )
+                            else:
+                                if target_value != original_default:
+                                    raise serializers.ValidationError(
+                                        {
+                                            "tool": gettext("下钻工具 %(tool)s 的 %(field)s 不可见，只能使用默认值")
+                                            % {"tool": tool_uid, "field": source_field}
+                                        }
+                                    )
 
     def _validate_link_table(self, validated_request_data: dict, scene_id: int | None) -> None:
         if scene_id is None or validated_request_data.get("strategy_type") != StrategyType.RULE.value:

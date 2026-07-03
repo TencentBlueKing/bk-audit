@@ -21,14 +21,14 @@ import datetime
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from typing import List
+from typing import List, Tuple
 
 from bk_resource import Resource, api, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
 from rest_framework import serializers as drf_serializers
 
@@ -41,6 +41,7 @@ from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -971,6 +972,97 @@ class ExecuteTool(ToolBase):
     RequestSerializer = ExecuteToolReqSerializer
     ResponseSerializer = ExecuteToolRespSerializer
 
+    def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
+        """
+        获取用户有权限的场景和系统列表。
+        """
+        scope_permission = ScopePermission(username=username)
+        scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
+        system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
+
+        return [str(scene_id) for scene_id in scene_ids], list(system_ids)
+
+    def _validate_default_value_permissions(self, tool, params, username):
+        """校验执行时默认值的权限
+
+        校验规则：
+        1. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
+           用户可自由修改，无需校验（用户可见场景）。
+        2. 允许用户使用其权限范围内场景/系统配置的默认值覆盖。
+        """
+        config = tool.config
+        if not config:
+            return
+
+        default_value_overrides = config.get("default_value_overrides", {})
+        if not default_value_overrides:
+            return
+
+        # 获取用户有权限的场景/系统列表
+        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
+
+        # 获取工具的输入变量配置
+        input_variables_config = config.get("input_variable", [])
+
+        # 获取用户输入的变量值
+        tool_variables = params.get("tool_variables", [])
+
+        # 收集用户有权限的场景/系统允许的默认值
+        allowed_defaults = {}
+
+        # 场景级别的默认值
+        scenes_overrides = default_value_overrides.get("scenes", {})
+        for scene_id, overrides in scenes_overrides.items():
+            if scene_id in user_allowed_scene_ids and isinstance(overrides, dict):
+                for raw_name, default_value in overrides.items():
+                    if raw_name:
+                        allowed_defaults.setdefault(raw_name, []).append(default_value)
+
+        # 系统级别的默认值
+        systems_overrides = default_value_overrides.get("systems", {})
+        for system_id, overrides in systems_overrides.items():
+            if system_id in user_allowed_system_ids and isinstance(overrides, dict):
+                for raw_name, default_value in overrides.items():
+                    if raw_name:
+                        allowed_defaults.setdefault(raw_name, []).append(default_value)
+
+        input_variable_map = {}
+        for var in tool_variables:
+            raw_name = var.get("raw_name")
+            if not raw_name:
+                continue
+            input_variable_map[raw_name] = var.get("value")
+        input_var_config_map = {}
+        for var in input_variables_config:
+            raw_name = var.get("raw_name")
+            if raw_name:
+                input_var_config_map[raw_name] = var
+
+        # 校验 is_show=False 的参数
+        for raw_name, value in input_variable_map.items():
+
+            input_var_config = input_var_config_map.get(raw_name, {})
+            # 仅校验 is_show=False 的参数
+            if not input_var_config.get("is_show", True):
+                # 获取工具的原始默认值
+                original_default = input_var_config.get("default_value")
+
+                # 如果用户在允许的场景/系统下有默认值覆盖，则允许使用覆盖值
+                # 如果用户传入的值不在允许的范围内，则提示越权
+                if raw_name in allowed_defaults:
+                    if value not in allowed_defaults[raw_name] and value != original_default:
+                        raise PermissionException(
+                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
+                            permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
+                        )
+
+                else:
+                    if value != original_default:
+                        raise PermissionException(
+                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
+                            permission=gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": raw_name},
+                        )
+
     def perform_request(self, validated_request_data):
         """
         1. 获取工具
@@ -990,6 +1082,9 @@ class ExecuteTool(ToolBase):
         check_request_data["current_object_id"] = uid
         check_request_data["tool_variables"] = params.get("tool_variables", [])
         should_skip_permission_from(check_request_data, get_request_username())
+        # 校验默认值的权限
+        self._validate_default_value_permissions(tool, params, get_request_username())
+
         current_user = get_request_username()
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
@@ -1238,6 +1333,14 @@ class GetToolDetail(ToolBase):
             # 将权限信息添加到每个表
             for table in tool.config["referenced_tables"]:
                 table["permission"] = auth_results.get(table["table_name"], {})
+
+        # 获取场景和系统信息
+        scene_id = validated_request_data.get("scene_id")
+        system_id = validated_request_data.get("system_id")
+        # 根据场景/系统ID动态覆盖默认值
+        if scene_id or system_id:
+            self._override_default_values(tool, scene_id, system_id)
+
         data = self.ResponseSerializer(instance=tool).data
 
         # 权限判定仅用于 API 配置脱敏：平台工具需平台管理员，场景工具需对应场景管理员
@@ -1248,6 +1351,70 @@ class GetToolDetail(ToolBase):
                 data["config"]["api_config"] = None
 
         return data
+
+    def _override_default_values(self, tool, scene_id, system_id):
+        """根据场景/系统ID动态覆盖默认值
+
+        default_value_overrides 位于 config 层级，结构：
+        {
+            "scenes": {
+                "场景ID1": {"raw_name1": "默认值1", "raw_name2": "默认值2"}
+            },
+            "systems": {
+                "系统ID1": {"raw_name1": "默认值3"}
+            }
+        }
+        """
+        # 如果没有场景或系统信息，直接返回
+        if not scene_id and not system_id:
+            return
+
+        # 获取工具配置
+        config = tool.config
+        if not config:
+            return
+
+        # 从 config 层级获取 default_value_overrides
+        default_value_overrides = config.get("default_value_overrides", {})
+        if not default_value_overrides:
+            return
+
+        # 获取输入变量配置
+        input_variables = config.get("input_variable", [])
+        if not input_variables:
+            return
+
+        # 收集当前场景/系统的默认值覆盖映射
+        # 结构: {raw_name: overridden_default_value}
+        overridden_defaults = {}
+
+        # 优先检查场景级别的参数覆盖
+        if scene_id:
+            scene_id_str = str(scene_id)
+            scene_overrides = default_value_overrides.get("scenes", {})
+            if scene_id_str in scene_overrides:
+                # scene_overrides[scene_id_str] 是 {raw_name: default_value} 字典
+                scene_defaults = scene_overrides[scene_id_str]
+                if isinstance(scene_defaults, dict):
+                    overridden_defaults.update(scene_defaults)
+
+        # 其次检查系统级别的参数覆盖（会覆盖场景级别的同名参数）
+        if system_id:
+            system_overrides = default_value_overrides.get("systems", {})
+            if system_id in system_overrides:
+                # system_overrides[system_id] 是 {raw_name: default_value} 字典
+                system_defaults = system_overrides[system_id]
+                if isinstance(system_defaults, dict):
+                    overridden_defaults.update(system_defaults)
+
+        # 根据收集到的映射，覆盖输入变量的默认值
+        for var_config in input_variables:
+            raw_name = var_config.get("raw_name")
+            if not raw_name:
+                continue
+
+            if raw_name in overridden_defaults:
+                var_config["default_value"] = overridden_defaults[raw_name]
 
 
 class SqlAnalyseResource(ToolBase, Resource):
