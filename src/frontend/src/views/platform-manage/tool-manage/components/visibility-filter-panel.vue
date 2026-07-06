@@ -49,8 +49,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible }"
-      @click="!localState.all_visible && handleToggle('all_scenes')">
+      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible || localState.all_systems }"
+      @click="!(localState.all_visible || localState.all_systems) && handleToggle('all_scenes')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_scenes }]">
@@ -76,7 +76,7 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.scenes.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_scenes,
+        'is-disabled': localState.all_visible || localState.all_scenes || localState.all_systems,
       }"
       @click="handleSceneItemClick(item.id)">
       <span
@@ -107,8 +107,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible }"
-      @click="!localState.all_visible && handleToggle('all_systems')">
+      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible || localState.all_scenes }"
+      @click="!(localState.all_visible || localState.all_scenes) && handleToggle('all_systems')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_systems }]">
@@ -134,7 +134,7 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.systems.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_systems,
+        'is-disabled': localState.all_visible || localState.all_systems || localState.all_scenes,
       }"
       @click="handleSystemItemClick(item.id)">
       <span

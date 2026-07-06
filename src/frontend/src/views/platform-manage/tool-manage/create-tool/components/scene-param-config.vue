@@ -305,6 +305,7 @@
       color: #63656e;
     }
 
+    /* 与下方表格参数名列同宽 */
     .form-control {
       width: 33.33%;
       max-width: 33.33%;
