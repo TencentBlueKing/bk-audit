@@ -15,10 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div
-    class="visibility-menu"
-    @click.stop
-    @mousedown.stop>
+  <div class="visibility-menu">
     <!-- 全部可见 -->
     <div
       class="menu-item"
@@ -52,8 +49,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible }"
-      @click="!localState.all_visible && handleToggle('all_scenes')">
+      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible || localState.all_systems }"
+      @click="!(localState.all_visible || localState.all_systems) && handleToggle('all_scenes')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_scenes }]">
@@ -79,9 +76,9 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.scenes.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_scenes,
+        'is-disabled': localState.all_visible || localState.all_scenes || localState.all_systems,
       }"
-      @click="!(localState.all_visible || localState.all_scenes) && handleToggleItem('scenes', item.id)">
+      @click="handleSceneItemClick(item.id)">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.scenes.includes(item.id) }]">
@@ -110,8 +107,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible }"
-      @click="!localState.all_visible && handleToggle('all_systems')">
+      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible || localState.all_scenes }"
+      @click="!(localState.all_visible || localState.all_scenes) && handleToggle('all_systems')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_systems }]">
@@ -125,10 +122,10 @@
         </svg>
       </span>
       <bk-tooltip
-        :content="t('全部平台')"
+        :content="t('全部系统')"
         placement="bottom"
         theme="dark">
-        <span class="item-label">{{ t('全部平台') }}</span>
+        <span class="item-label">{{ t('全部系统') }}</span>
       </bk-tooltip>
     </div>
     <div
@@ -137,9 +134,9 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.systems.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_systems,
+        'is-disabled': localState.all_visible || localState.all_systems || localState.all_scenes,
       }"
-      @click="!(localState.all_visible || localState.all_systems) && handleToggleItem('systems', item.id)">
+      @click="handleSystemItemClick(item.id)">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.systems.includes(item.id) }]">
@@ -158,17 +155,6 @@
         theme="dark">
         <span class="item-label">{{ item.name }}</span>
       </bk-tooltip>
-    </div>
-
-    <!-- 底部操作 -->
-    <div class="menu-footer">
-      <bk-button
-        size="small"
-        text
-        theme="primary"
-        @click.stop="handleReset">
-        {{ t('重置') }}
-      </bk-button>
     </div>
   </div>
 </template>
@@ -199,7 +185,7 @@
   // eslint-disable-next-line func-call-spacing
   const emit = defineEmits<{
     (e: 'update:modelValue', value: SelectionState): void;
-    (e: 'confirm', value: SelectionState): void;
+    (e: 'change', value: SelectionState): void;
   }>();
 
   const { t } = useI18n();
@@ -224,11 +210,11 @@
     };
   }, { deep: true, immediate: true });
 
-  // 同步到父组件 + 立即触发确认（选择即生效，无需确认按钮）
+  // 同步到父组件 + 更新搜索框编辑态展示 + 触发搜索
   const syncToParent = () => {
     const newVal = { ...localState.value };
     emit('update:modelValue', newVal);
-    emit('confirm', newVal);
+    emit('change', newVal);
   };
 
   const handleToggle = (type: keyof Pick<SelectionState, 'all_visible' | 'all_scenes' | 'all_systems'>) => {
@@ -259,6 +245,24 @@
     syncToParent();
   };
 
+  const isSceneSubItemDisabled = () => (
+    localState.value.all_visible || localState.value.all_scenes || localState.value.all_systems
+  );
+
+  const isSystemSubItemDisabled = () => (
+    localState.value.all_visible || localState.value.all_systems || localState.value.all_scenes
+  );
+
+  const handleSceneItemClick = (id: number) => {
+    if (isSceneSubItemDisabled()) return;
+    handleToggleItem('scenes', id);
+  };
+
+  const handleSystemItemClick = (id: number) => {
+    if (isSystemSubItemDisabled()) return;
+    handleToggleItem('systems', id);
+  };
+
   const handleToggleItem = (field: 'scenes' | 'systems', id: number) => {
     const current = localState.value;
     const idx = current[field].indexOf(id);
@@ -268,20 +272,6 @@
       current[field].push(id);
     }
     syncToParent();
-  };
-
-  const handleReset = () => {
-    localState.value = {
-      all_visible: false,
-      all_scenes: false,
-      all_systems: false,
-      scenes: [],
-      systems: [],
-    };
-    // syncToParent 会同时 emit update:modelValue 和 confirm
-    const newVal = { ...localState.value };
-    emit('update:modelValue', newVal);
-    emit('confirm', newVal);
   };
 </script>
 
@@ -331,6 +321,11 @@
       color: #c4c6cc;
       cursor: not-allowed;
 
+      .checkbox {
+        pointer-events: none;
+        opacity: 50%;
+      }
+
       &:hover {
         color: #c4c6cc;
         background-color: transparent;
@@ -376,13 +371,5 @@
     height: 1px;
     margin: 4px 0;
     background-color: #f0f1f5;
-  }
-
-  .menu-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 6px 12px 0;
-    border-top: 1px solid #f0f1f5;
   }
 </style>
