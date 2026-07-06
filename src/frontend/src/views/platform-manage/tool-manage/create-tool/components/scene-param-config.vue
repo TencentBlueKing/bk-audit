@@ -24,55 +24,65 @@
       :key="item.key"
       class="param-config-block">
       <!-- 区块标题 -->
-      <div class="block-title">
+      <div class="block-header">
         {{ item.name }}
       </div>
 
-      <!-- 覆盖参数默认值 -->
-      <div class="form-row">
-        <label class="form-label">{{ t('覆盖参数默认值') }}</label>
-        <div class="form-control">
-          <bk-select
-            :clearable="false"
-            :model-value="item.override_keys"
-            multiple
-            :placeholder="t('请选择需要覆盖的参数')"
-            @change="(val: string[]) => handleOverrideChange(item, val)">
-            <bk-option
-              v-for="param in inputVariableList"
-              :id="param.raw_name"
-              :key="param.raw_name"
-              :name="param.display_name || param.raw_name" />
-          </bk-select>
+      <div class="block-body">
+        <!-- 覆盖参数默认值：独立一行，宽度与参数名列对齐 -->
+        <div class="override-section">
+          <label class="form-label">{{ t('覆盖参数默认值') }}</label>
+          <div class="form-control">
+            <bk-select
+              :clearable="false"
+              :model-value="item.override_keys"
+              multiple
+              :placeholder="t('请选择需要覆盖的参数')"
+              @change="(val: string[]) => handleOverrideChange(item, val)">
+              <bk-option
+                v-for="param in inputVariableList"
+                :id="param.raw_name"
+                :key="param.raw_name"
+                :name="getParamName(param)" />
+            </bk-select>
+          </div>
+        </div>
+
+        <!-- 参数表格：参数名 + 默认值均分剩余宽度 -->
+        <div
+          v-if="getTableData(item).length > 0"
+          class="render-field">
+          <div class="field-header-row">
+            <div class="field-value col-name">
+              {{ t('参数名') }}
+            </div>
+            <div class="field-value col-default">
+              {{ t('默认值') }}
+            </div>
+            <div class="field-value field-operation col-action" />
+          </div>
+          <div
+            v-for="row in getTableData(item)"
+            :key="row.raw_name"
+            class="field-row">
+            <div class="field-value col-name">
+              <span class="param-name-text">{{ getParamName(row) }}</span>
+            </div>
+            <div class="field-value col-default">
+              <bk-input
+                :model-value="getOverrideValue(item, row.raw_name)"
+                :placeholder="t('请输入')"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+            </div>
+            <div class="field-value field-operation col-action">
+              <audit-icon
+                class="reduce-fill field-icon"
+                type="reduce-fill"
+                @click="handleRemoveParam(item, row.raw_name)" />
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- 参数表格：仅参数名 + 默认值 两列 -->
-      <bk-table
-        v-if="getTableData(item).length > 0"
-        class="param-table"
-        :data="getTableData(item)"
-        :header-border="false"
-        :outer-border="false">
-        <bk-table-column
-          :label="t('参数名')"
-          min-width="150"
-          prop="display_name">
-          <template #default="{ row }">
-            {{ row.display_name || row.raw_name }}
-          </template>
-        </bk-table-column>
-        <bk-table-column
-          :label="t('默认值')"
-          min-width="200">
-          <template #default="{ row }">
-            <bk-input
-              :model-value="getOverrideValue(item, row.raw_name)"
-              :placeholder="t('请输入默认值')"
-              @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
-          </template>
-        </bk-table-column>
-      </bk-table>
     </div>
   </div>
 </template>
@@ -85,7 +95,7 @@
 
   interface ConfigItem {
     key: string;             // scene-{id} 或 system-{id}
-    id: number;
+    id: number | string;
     name: string;
     type: 'scene' | 'system';
     override_keys: string[];
@@ -95,16 +105,18 @@
   interface InputVarItem {
     raw_name: string;
     display_name: string;
+    var_name?: string;
     description?: string;
     required?: boolean;
     field_category?: string;
     default_value?: any;
+    raw_default_value?: any;
   }
 
   const props = defineProps<{
     formData: FormData;
     selectedScenes: Array<{ id: number; name: string }>;
-    selectedSystems: Array<{ id: number; name: string }>;
+    selectedSystems: Array<{ id: string; name: string }>;
     inputVariables: InputVarItem[];
   }>();
 
@@ -116,6 +128,9 @@
   const { t } = useI18n();
 
   const inputVariableList = computed(() => props.inputVariables || []);
+
+  // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
+  const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
   const configList = computed<ConfigItem[]>(() => {
@@ -163,20 +178,41 @@
   // 获取某参数在某个区块中的覆盖值
   const getOverrideValue = (item: ConfigItem, rawName: string) => item.default_values[rawName] ?? '';
 
+  // 从第一步工具配置中读取参数原始默认值
+  const getParamOriginalDefault = (rawName: string) => {
+    const param = inputVariableList.value.find(v => v.raw_name === rawName);
+    if (!param) return '';
+    if (param.default_value !== undefined && param.default_value !== '') {
+      return param.default_value;
+    }
+    if (param.raw_default_value !== undefined && param.raw_default_value !== '') {
+      return param.raw_default_value;
+    }
+    return param.default_value ?? '';
+  };
+
   // 覆盖参数选择变更
   const handleOverrideChange = (item: ConfigItem, keys: string[]) => {
     /* eslint-disable no-param-reassign */
     item.override_keys = keys;
-    // 清理不再选中的参数的默认值
+    // 清理不再选中的参数；新选中的参数自动代入第一步配置的默认值
     const newValues: Record<string, any> = {};
     for (const k of keys) {
       if (item.default_values[k] !== undefined) {
         newValues[k] = item.default_values[k];
+      } else {
+        newValues[k] = getParamOriginalDefault(k);
       }
     }
     item.default_values = newValues;
     /* eslint-enable no-param-reassign */
     emitChange();
+  };
+
+  // 移除单个覆盖参数
+  const handleRemoveParam = (item: ConfigItem, rawName: string) => {
+    const keys = item.override_keys.filter(k => k !== rawName);
+    handleOverrideChange(item, keys);
   };
 
   // 默认值输入变更
@@ -205,48 +241,197 @@
 
 <style lang="postcss" scoped>
   .scene-param-config {
+    --param-action-col-width: 50px;
+    --param-data-col-width: calc((100% - var(--param-action-col-width)) / 2);
+
     margin-top: 16px;
   }
 
   .param-config-block {
-    padding: 16px 20px;
     margin-bottom: 16px;
+    overflow: hidden;
     background-color: #fafbfd;
+    border: 1px solid #dcdee5;
     border-radius: 2px;
 
-    .block-title {
-      margin-bottom: 12px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #313238;
+    &:last-child {
+      margin-bottom: 0;
     }
   }
 
-  .form-row {
-    display: flex;
-    flex-direction: column;
+  .block-header {
+    height: 42px;
+    padding: 0 16px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 42px;
+    color: #313238;
+    background-color: #f0f1f5;
+    box-shadow: 0 1px 0 0 #dcdee5;
+  }
+
+  .block-body {
+    padding: 16px;
+    background-color: #fafbfd;
+  }
+
+  .override-section {
     margin-bottom: 12px;
 
     .form-label {
+      display: block;
       margin-bottom: 8px;
       font-size: 12px;
       line-height: 20px;
       color: #63656e;
-      flex-shrink: 0;
     }
 
+    /* 与下方表格参数名列同宽 */
     .form-control {
-      max-width: 560px;
+      width: var(--param-data-col-width);
+      max-width: var(--param-data-col-width);
     }
   }
 
-  .param-config-block .param-table {
-    :deep(.bk-table-header th) {
-      background-color: #f5f7fa !important;
+  .render-field {
+    overflow: hidden;
+    border: 1px solid #dcdee5;
+    border-radius: 2px;
+    user-select: none;
+  }
+
+  .field-header-row,
+  .field-row {
+    display: flex;
+  }
+
+  .col-name,
+  .col-default {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .col-action {
+    flex: 0 0 var(--param-action-col-width);
+    width: var(--param-action-col-width);
+  }
+
+  .field-header-row {
+    height: 42px;
+    font-size: 12px;
+    line-height: 40px;
+    color: #313238;
+    background: #f0f1f5;
+
+    .col-name,
+    .col-default,
+    .col-action {
+      height: 42px;
+      padding-left: 8px;
     }
 
-    :deep(.bk-table-body tr:hover td) {
-      background-color: #fff;
+    .col-default,
+    .col-action {
+      border-left: 1px solid #dcdee5;
+    }
+
+    .col-action {
+      background: #f0f1f5;
+    }
+  }
+
+  .field-row {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 42px;
+    color: #63656e;
+    border-right: 1px solid #dcdee5;
+    border-bottom: 1px solid #dcdee5;
+    transition: background-color .2s;
+
+    &:hover {
+      color: #313238;
+      background: #eff5ff;
+    }
+
+    .col-name,
+    .col-default,
+    .col-action {
+      display: flex;
+      height: 42px;
+      overflow: hidden;
+      align-items: center;
+    }
+
+    .col-name {
+      background: #fafbfd;
+    }
+
+    .col-default {
+      background: #fff;
+      border-left: 1px solid #dcdee5;
+    }
+
+    .col-action {
+      background: #fafbfd;
+      border-left: 1px solid #dcdee5;
+    }
+  }
+
+  :deep(.field-row:hover .field-value) {
+    background: #eff5ff !important;
+  }
+
+  :deep(.field-row:hover .bk-input),
+  :deep(.field-row:hover .bk-input .bk-input--text),
+  :deep(.field-row:hover .bk-input input) {
+    color: #313238 !important;
+    background: #eff5ff !important;
+    border-color: transparent !important;
+    transition: none !important;
+  }
+
+  :deep(.field-value) {
+    .param-name-text {
+      width: 100%;
+      padding: 0 8px;
+      overflow: hidden;
+      font-size: 12px;
+      color: #4d4f56;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bk-input {
+      width: 100%;
+      height: 42px !important;
+      border: none;
+      border-radius: 0;
+    }
+
+    .bk-input.is-focused:not(.is-readonly) {
+      border: 1px solid #3a84ff;
+      outline: 0;
+      box-shadow: 0 0 3px #a3c5fd;
+    }
+  }
+
+  .field-operation {
+    justify-content: center;
+    background: #fafbfd;
+  }
+
+  .field-header-row .field-operation {
+    background: #f0f1f5;
+  }
+
+  .field-icon {
+    font-size: 14px;
+    color: #c4c6cc;
+    cursor: pointer;
+
+    &:hover {
+      color: #ea3636;
     }
   }
 </style>

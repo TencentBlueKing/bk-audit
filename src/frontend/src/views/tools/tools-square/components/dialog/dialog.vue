@@ -241,7 +241,8 @@
 
   import useRequest from '@/hooks/use-request';
   import userProfileIcon from '@/images/user.svg';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getSceneSystemParams, getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
+  import { getSearchItemDefaultValue } from '@/views/tools/tools-square/utils/search-item-default';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface TagItem {
@@ -382,6 +383,11 @@
   });
 
   // 获取工具详情
+  const buildFetchToolDetailParams = (toolUid: string) => ({
+    uid: toolUid,
+    ...getToolDetailScopeQuery(),
+  });
+
   const {
     run: fetchToolsDetail,
     data: toolDetails,
@@ -425,7 +431,7 @@
     drillDownItemConfig.value = drillDownItem.value?.drill_config
       .find(item => item.tool.uid === activeUid.value)?.config || [];
 
-    fetchToolsDetail({ uid: activeUid.value });
+    fetchToolsDetail(buildFetchToolDetailParams(activeUid.value));
   };
 
   // 策略跳转
@@ -540,16 +546,8 @@
     }
   };
 
-  // 获取表单项的默认值
-  const getSearchItemDefaultValue = (item: any) => {
-    if (item.default_value) {
-      return item.default_value;
-    }
-    if (item.field_category === 'person_select' || item.field_category === 'time_range_select') {
-      return [];
-    }
-    return null;
-  };
+  // 获取表单项的默认值（使用后端合并后的 default_value）
+  const getSearchItemDefaultValueFromItem = (item: any) => getSearchItemDefaultValue(item);
 
   // 根据 json_path 提取数据
   const extractDataByPath = (data: any, path: string): any => {
@@ -582,7 +580,7 @@
     // 构造form-item
     const createSearchItem = (item: any) => ({
       ...item,
-      value: getSearchItemDefaultValue(item),
+      value: getSearchItemDefaultValueFromItem(item),
       required: item.required,
       disabled: props.source === 'risk' && (toolDetails.value?.tool_type === 'data_search' || toolDetails.value?.tool_type === 'api'),
     });
@@ -745,7 +743,7 @@
     }
 
     // 获取工具详情
-    fetchToolsDetail({ uid: activeUid.value });
+    fetchToolsDetail(buildFetchToolDetailParams(activeUid.value));
   };
 
   // 关闭弹窗
