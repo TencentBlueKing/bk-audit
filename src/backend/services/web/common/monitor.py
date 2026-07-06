@@ -26,6 +26,7 @@ __all__ = [
     "NL2RiskFilterFailedEvent",
     "AnalyseReportGenerateFailedEvent",
     "AssetSyncAnomalyEvent",
+    "AssetSyncCheckAnomalyEvent",
 ]
 
 
@@ -86,16 +87,34 @@ class AnalyseReportGenerateFailedEvent(Event):
 
 
 class AssetSyncAnomalyEvent(Event):
-    """资产同步异常事件
+    """资产同步链路异常事件
 
+    由 report_asset_sync_status 上报，关注同步链路本身的健康度。
     维度字段:
     - system_id: 系统ID
     - resource_type_id: 资源类型ID
     - join_data_type: 关联数据类型
-    - status: 当前快照状态
-    - reason: 异常原因 (status_failed/preparing_timeout/source_pull_failed/storage_query_failed)
+    - reason: 异常原因 (status_failed/preparing_timeout)
+      注：status 与 reason 一一映射(failed↔status_failed, preparing↔preparing_timeout)，
+      故不单独保留 status 维度，避免冗余。
     """
 
-    name = "asset_sync_anomaly"
-    documentation = "资产同步异常"
-    labelnames = ["system_id", "resource_type_id", "join_data_type", "status", "reason"]
+    name = "asset_sync_status_anomaly"
+    documentation = "资产同步状态异常"
+    labelnames = ["system_id", "resource_type_id", "join_data_type", "reason"]
+
+
+class AssetSyncCheckAnomalyEvent(Event):
+    """资产同步Check异常事件
+
+    由 report_asset_sync_count 上报，关注源端量与存储量的数据一致性。
+    维度字段:
+    - system_id: 系统ID
+    - resource_type_id: 资源类型ID
+    - join_data_type: 关联数据类型
+    - reason: 异常原因 (source_pull_failed/storage_query_failed)
+    """
+
+    name = "asset_sync_data_anomaly"
+    documentation = "资产同步数据异常"
+    labelnames = ["system_id", "resource_type_id", "join_data_type", "reason"]

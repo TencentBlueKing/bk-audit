@@ -41,7 +41,10 @@ from apps.notice.handlers import ErrorMsgHandler
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
 from core.monitor import Metric
-from services.web.common.monitor import AssetSyncAnomalyEvent
+from services.web.common.monitor import (
+    AssetSyncAnomalyEvent,
+    AssetSyncCheckAnomalyEvent,
+)
 from services.web.databus.collector.check.handlers import ReportCheckHandler
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.handlers import TailLogHandler
@@ -501,7 +504,53 @@ def sync_asset_bkbase_rt_ids():
         )
 
 
+# =============================================================================
 # 资产可观测性上报
+#
+# 一、指标监控（仪表盘 + 阈值告警）
+#
+#   1. sync_health（资产同步健康度，每15min上报）
+#      - 含义：0=健康，1=异常(FAILED 或 卡在启动中超时)
+#      - 仪表盘：
+#        a) 整体健康率折线图
+#           横轴：时间(15min粒度)；纵轴：健康率% = (1 - avg(sync_health)) * 100%
+#           → 看整体资产同步健康趋势
+#        b) 异常资产明细表
+#           数据：查询 sync_health=1 的记录，每行 target = {system_id}_{resource_type_id}
+#           含义：当前查询窗口内处于异常状态的资产清单（资产恢复后下次上报即消失）
+#           → 定位具体异常资产
+#
+#   2. http_pull_count 与 storage_count（源端量 vs 存储量，每日上报）
+#      - 含义：http_pull_count = 源端量；storage_count = doris/hdfs存储量
+#      - 仪表盘：
+#        a) 源端量 vs 存储量对比折线图
+#           横轴：时间(日粒度)；纵轴：count
+#           双线：http_pull_count 与 storage_count
+#
+#   3. diff_count / diff_rate（资产数据量差异，每日上报）
+#      - 含义：diff_count = 源端量 - 存储量(收敛≥0)；diff_rate = diff_count/源端量
+#      - 仪表盘：
+#        a) diff_rate 趋势折线图
+#           横轴：时间(日粒度)；纵轴：diff_rate%
+#           分组：按 storage_type(doris/hdfs) 分多条线
+#           → 观察数据丢失率的变化趋势
+#      - 告警策略：
+#        · 策略：diff_rate > 10% (可调整)
+#
+# 二、事件告警（实时通知）
+#
+#   1. asset_sync_status_anomaly（状态类异常，15min 级）
+#      - reason=status_failed：同步链路失败，需立即排查
+#      - reason=preparing_timeout：卡在启动中超 6h，需检查 BkBase 任务
+#      - 注：事件已做去重(cache.add)，持续异常在窗口内只报一次
+#
+#   2. asset_sync_data_anomaly（数据类异常，日级）
+#      - reason=source_pull_failed：源系统拉取失败，检查 callback_url
+#      - reason=storage_query_failed：存储查询失败，检查 Doris/HDFS
+#
+# =============================================================================
+
+
 def _detect_status_anomaly(snap: Snapshot) -> Optional[str]:
     """判定单个资产快照的状态类异常原因，无异常返回 None。
 
@@ -578,7 +627,6 @@ def report_asset_sync_status():
                     "system_id": snap.system_id,
                     "resource_type_id": snap.resource_type_id,
                     "join_data_type": snap.join_data_type,
-                    "status": snap.status,
                     "reason": reason,
                 },
             ).report()
@@ -669,13 +717,12 @@ def report_asset_sync_count():
                     stat.error_type,
                 )
                 continue
-            AssetSyncAnomalyEvent(
+            AssetSyncCheckAnomalyEvent(
                 target=f"{snap.system_id}_{snap.resource_type_id}",
                 context={
                     "system_id": snap.system_id,
                     "resource_type_id": snap.resource_type_id,
                     "join_data_type": snap.join_data_type,
-                    "status": snap.status,
                     "reason": reason,
                 },
             ).report()
