@@ -118,8 +118,9 @@
                 </div>
               </div>
 
-              <!-- 各场景/系统参数配置 -->
+              <!-- 各场景/系统参数配置：未选可见范围、全部可见、全部场景、全部系统时不展示 -->
               <scene-param-config
+                v-if="showParamOverrideConfig"
                 :form-data="formData"
                 :input-variables="formData.config.input_variable"
                 :selected-scenes="selectedSceneItems"
@@ -196,6 +197,11 @@
   import SceneParamConfig from './components/scene-param-config.vue';
   import CardPartVue from './components/card-part.vue';
   import type { FormData } from './types';
+  import {
+    applyVisibilityToFormData,
+    buildPlatformToolSubmitPayload,
+    parseDefaultValueOverrides,
+  } from './submit-payload';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -250,7 +256,7 @@
     // 可见范围（平铺字段，提交时组装为 visibility 对象）
     visibility_type: 'scenes_and_systems' as FormData['visibility_type'],
     scene_ids: [] as number[],
-    system_ids: [] as number[],
+    system_ids: [] as string[],
     config: {
       referenced_tables: [],
       input_variable: [{
@@ -289,12 +295,23 @@
 
   // 场景/系统列表（用于参数配置区域显示名称）
   const allSceneList = ref<Array<{ id: number; name: string }>>([]);
-  const allSystemList = ref<Array<{ id: number; name: string }>>([]);
+  const allSystemList = ref<Array<{ id: string; name: string }>>([]);
 
   // 提供响应式的工具名称给子组件
   provide('newToolDataName', toRef(() => formData.value.name));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
+
+  // 等待工具类型子组件挂载后再回填配置（编辑时 tool_type 会从默认值切换为接口返回值）
+  const restoreToolComponentConfig = () => {
+    nextTick(() => {
+      nextTick(() => {
+        if (comRef.value?.setConfigs && formData.value.config) {
+          comRef.value.setConfigs(_.cloneDeep(formData.value.config));
+        }
+      });
+    });
+  };
 
   const rules = {
     name: [
@@ -348,12 +365,10 @@
     manual: true,
   });
 
-  // 获取所有标签列表
+  // 获取所有标签：GET /api/v1/meta/namespaces/{namespace}/tag/
   const {
     loading: tagLoading,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    run: _fetchAllTags,
-  } = useRequest(ToolManageService.fetchToolTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
@@ -381,11 +396,21 @@
     loading: isEditDataLoading,
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       formData.value = data as any;
-      nextTick(() => {
-        comRef.value.setConfigs(formData.value.config);
-      });
+      const visibilityFields = applyVisibilityToFormData((data as any).visibility);
+      if (visibilityFields) {
+        Object.assign(formData.value, visibilityFields);
+      }
+      formData.value.scene_param_overrides = parseDefaultValueOverrides(
+        formData.value.config?.default_value_overrides,
+        allSceneList.value,
+        allSystemList.value,
+      );
+      if (!(data as any).visibility) {
+        await loadEditVisibility(route.params.id as string);
+      }
+      restoreToolComponentConfig();
     },
   });
 
@@ -442,6 +467,14 @@
     formData.value.visibility_type = val.visibility_type;
     formData.value.scene_ids = val.scene_ids;
     formData.value.system_ids = val.system_ids;
+    // 未选可见范围、全部可见、全部场景、全部系统时无需配置覆盖参数，清空已有配置
+    const hasSpecificSelection = val.visibility_type !== 'all_visible'
+      && val.visibility_type !== 'all_scenes'
+      && val.visibility_type !== 'all_systems'
+      && ((val.scene_ids?.length ?? 0) > 0 || (val.system_ids?.length ?? 0) > 0);
+    if (!hasSpecificSelection) {
+      formData.value.scene_param_overrides = {};
+    }
   };
 
   // 参数覆盖配置变更
@@ -464,13 +497,89 @@
     isCreating.value = false;
     isFailed.value = false;
     isSuccessful.value = false;
-    nextTick(() => {
-      comRef.value.setConfigs(formData.value.config);
-    });
+    restoreToolComponentConfig();
+  };
+
+  // 执行提交（步骤2直接使用 formData，步骤1已在「下一步」时校验并写入配置）
+  const doSubmit = () => {
+    const data = _.cloneDeep(formData.value);
+    const groups = data.config.output_config?.groups || [];
+    const enableGrouping = data.config.output_config?.enable_grouping || false;
+    let hasEmptyOutputFields = false;
+    if (groups.length > 0) {
+      groups.forEach((item: any) => {
+        if (item.output_fields.length === 0) {
+          hasEmptyOutputFields = true;
+          if (enableGrouping) {
+            messageWarn(item.name + t(' 查询结果设置未设置'));
+          } else {
+            messageWarn(t('查询结果设置未设置'));
+          }
+        }
+      });
+
+      if (hasEmptyOutputFields) {
+        return;
+      }
+    }
+
+    const service = isEditMode ? ToolManageService.updatePlatformTool : ToolManageService.createPlatformTool;
+    const submitData = buildPlatformToolSubmitPayload(data, isEditMode);
+
+    if (submitData.tags) {
+      submitData.tags = submitData.tags.map((item: string) => (allTagMap.value[item] ? allTagMap.value[item] : item));
+    }
+
+    // DEBUG: 新建工具提交参数
+    if (!isEditMode) {
+      console.log('[新建工具] 提交传参:', submitData);
+      console.log('[新建工具] 提交传参 JSON:', JSON.stringify(submitData, null, 2));
+    }
+
+    isCreating.value = true;
+    service(submitData)
+      .then((res: any) => {
+        isFailed.value = false;
+        // 新建/编辑成功后不再由前端变更状态，状态以后端默认返回为准
+        if (!isEditMode) {
+          const toolUid = res?.uid || '';
+          if (toolUid) {
+            // 记录新建的工具 ID，用于列表页绿底高亮（刷新后消失）
+            try {
+              const raw = sessionStorage.getItem('tool_manage_new_uids');
+              const uids: string[] = raw ? JSON.parse(raw) : [];
+              uids.push(toolUid as string);
+              sessionStorage.setItem('tool_manage_new_uids', JSON.stringify(uids));
+            } catch { /* ignore */ }
+          }
+        }
+        window.changeConfirm = false;
+        router.push({
+          name: backRouteName,
+          query: {
+            scene_id: route.query?.scene_id,
+            scope_id: route.query?.scope_id,
+            scope_type: route.query?.scope_type,
+          },
+        });
+      })
+      .catch(() => {
+        isSuccessful.value = false;
+        isFailed.value = true;
+      })
+      .finally(() => {
+        isCreating.value = false;
+      });
   };
 
   // 提交
   const handleSubmit = () => {
+    // 步骤2：formRef/comRef 已卸载，直接提交 formData
+    if (currentStep.value === 2) {
+      doSubmit();
+      return;
+    }
+
     const tastQueue = [formRef.value.validate()];
     if (comRef.value && formData.value.tool_type !== 'api') {
       tastQueue.push(comRef.value.getValue());
@@ -506,67 +615,11 @@
           formData.value.config = comRef.value.getFields();
         }
       }
-      const data = _.cloneDeep(formData.value);
-      const groups = data.config.output_config?.groups || [];
-      const enableGrouping = data.config.output_config?.enable_grouping || false;
-      let hasEmptyOutputFields = false;
-      if (groups.length > 0) {
-        groups.forEach((item: any) => {
-          if (item.output_fields.length === 0) {
-            hasEmptyOutputFields = true;
-            if (enableGrouping) {
-              messageWarn(item.name + t(' 查询结果设置未设置'));
-            } else {
-              messageWarn(t('查询结果设置未设置'));
-            }
-          }
-        });
-
-        if (hasEmptyOutputFields) {
-          return;
-        }
-      }
-      isCreating.value = true;
-
-      const service = isEditMode ? ToolManageService.updateSceneTool : ToolManageService.createSceneTool;
-
-      if (data.tags) {
-        data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
-      }
-      service(data)
-        .then((res: any) => {
-          isFailed.value = false;
-          // 新建/编辑成功后不再由前端变更状态，状态以后端默认返回为准
-          if (!isEditMode) {
-            const toolUid = res?.uid || '';
-            if (toolUid) {
-              // 记录新建的工具 ID，用于列表页绿底高亮（刷新后消失）
-              try {
-                const raw = sessionStorage.getItem('tool_manage_new_uids');
-                const uids: string[] = raw ? JSON.parse(raw) : [];
-                uids.push(toolUid as string);
-                sessionStorage.setItem('tool_manage_new_uids', JSON.stringify(uids));
-              } catch { /* ignore */ }
-            }
-          }
-          window.changeConfirm = false;
-          router.push({
-            name: backRouteName,
-            query: {
-              scene_id: route.query?.scene_id,
-              scope_id: route.query?.scope_id,
-              scope_type: route.query?.scope_type,
-            },
-          });
-        })
-        .catch(() => {
-          isSuccessful.value = false;
-          isFailed.value = true;
-        })
-        .finally(() => {
-          isCreating.value = false;
-        });
-    });
+      doSubmit();
+    })
+      .catch((err) => {
+        console.error('[新建工具] 提交前校验失败:', err);
+      });
   };
 
   const isApiDoneDeBug = ref(false);
@@ -606,14 +659,14 @@
   // 监听步骤变化：从步骤2返回步骤1时，恢复子组件（数据查询、API接口）的内部状态
   watch(currentStep, (val) => {
     if (val === 1 && formData.value.tool_type !== 'bk_vision') {
-      // 等待 DOM 更新完成、子组件挂载好后，调用 setConfigs 恢复状态
-      nextTick(() => {
-        nextTick(() => {
-          if (comRef.value?.setConfigs && formData.value.config) {
-            comRef.value.setConfigs(_.cloneDeep(formData.value.config));
-          }
-        });
-      });
+      restoreToolComponentConfig();
+      return;
+    }
+
+    // 进入步骤2时，根据已缓存的调试结果同步提交按钮状态
+    if (val === 2 && formData.value.tool_type === 'api' && !isEditMode) {
+      const hasDebugSchema = !!formData.value.config?.output_config?.result_schema?.tree_data;
+      isApiDoneDeBug.value = !hasDebugSchema;
     }
   });
 
@@ -638,7 +691,7 @@
         namespace: 'default',
       });
       allSystemList.value = (data || []).map((item: any) => ({
-        id: item.id,
+        id: String(item.id),
         name: item.name,
       }));
     } catch {
@@ -646,29 +699,60 @@
     }
   };
 
+  // 编辑模式：从工具列表获取可见范围（详情接口不返回 visibility）
+  const loadEditVisibility = async (uid: string) => {
+    try {
+      const tools = await ToolManageService.fetchToolsList({});
+      const tool = tools.find(item => item.uid === uid);
+      if (tool?.visibility) {
+        const visibilityFields = applyVisibilityToFormData(tool.visibility);
+        if (visibilityFields) {
+          Object.assign(formData.value, visibilityFields);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // 是否已选择可见范围（未选择时不展示覆盖参数配置）
+  const hasVisibleRangeSelection = computed(() => {
+    const visibilityType = formData.value.visibility_type;
+    if (visibilityType === 'all_visible'
+      || visibilityType === 'all_scenes'
+      || visibilityType === 'all_systems') {
+      return false;
+    }
+    return (formData.value.scene_ids?.length ?? 0) > 0 || (formData.value.system_ids?.length ?? 0) > 0;
+  });
+
+  // 是否展示覆盖参数配置（全部可见、全部场景、全部系统、未选择可见范围时不展示）
+  const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value);
+
   // 选中的场景项列表（含名称）
   const selectedSceneItems = computed(() => {
     if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
-    if (formData.value.visibility_type === 'all_scenes') return allSceneList.value;
+    if (formData.value.visibility_type === 'all_scenes') return [];
     return allSceneList.value.filter(s => formData.value.scene_ids.includes(s.id));
   });
 
   // 选中的系统项列表（含名称）
   const selectedSystemItems = computed(() => {
     if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
-    if (formData.value.visibility_type === 'all_systems') return allSystemList.value;
+    if (formData.value.visibility_type === 'all_systems') return [];
     return allSystemList.value.filter(s => formData.value.system_ids.includes(s.id));
   });
 
-  onMounted(() => {
+  onMounted(async () => {
+    await Promise.all([
+      loadSceneListForParams(),
+      loadSystemListForParams(),
+    ]);
     if (isEditMode) {
       fetchToolsDetail({
         uid: route.params.id,
       });
     }
-    // 步骤2需要的场景/系统列表
-    loadSceneListForParams();
-    loadSystemListForParams();
   });
 
   useRouterBack(() => {
@@ -699,6 +783,10 @@
 
   .step2-content {
     padding-top: 16px;
+
+    :deep(.card-part-content) {
+      background-color: #fafbfd;
+    }
   }
 
   .visible-range-select-row {
@@ -715,8 +803,8 @@
     }
 
     .select-control {
+      width: 100%;
       max-width: 660px;
-      min-width: 360px;
     }
   }
 

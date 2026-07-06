@@ -45,8 +45,8 @@
   interface VisibilityInfo {
     binding_type: string;
     visibility_type: string;
-    scene_ids: string[];
-    system_ids: string[];
+    scene_ids: Array<number | string>;
+    system_ids: Array<number | string>;
   }
 
   // 工具模型接口定义
@@ -120,6 +120,13 @@
     bk_vision: t('BKVision图标'),
   };
 
+  const formatCellText = (value: unknown) => {
+    if (value === null || value === undefined || value === '') {
+      return '--';
+    }
+    return String(value);
+  };
+
   // 根据可见范围信息渲染内容（场景 + 平台/系统）
   // 后端 visibility_type 枚举值：
   //   all_visible=全部可见, all_scenes=全部场景, all_systems=全部系统,
@@ -134,7 +141,14 @@
     // 全部可见
     if (visibilityType === 'all_visible') {
       return (
-        <bk-tag radius="4px" theme="default">{t('全部可见')}</bk-tag>
+        <div class="tags-cell">
+          <bk-tag
+            class="desc-tag ml8"
+            radius="4px"
+            theme="default">
+            {t('全部可见')}
+          </bk-tag>
+        </div>
       );
     }
 
@@ -146,8 +160,9 @@
       allTags.push({ label: t('全部场景') });
     } else if (sceneIds && sceneIds.length > 0) {
       // 指定场景 / 场景和系统：逐个展示场景
-      sceneIds.forEach((id: string) => {
-        allTags.push({ label: props.sceneNameMap[id] || `场景${id}` });
+      sceneIds.forEach((id: number | string) => {
+        const key = String(id);
+        allTags.push({ label: props.sceneNameMap[key] || `场景${id}` });
       });
     }
 
@@ -156,8 +171,9 @@
       allTags.push({ label: t('全部系统') });
     } else if (systemIds && systemIds.length > 0) {
       // 指定系统 / 场景和系统：逐个展示系统
-      systemIds.forEach((id: string) => {
-        allTags.push({ label: props.systemNameMap[id] || `平台${id}` });
+      systemIds.forEach((id: number | string) => {
+        const key = String(id);
+        allTags.push({ label: props.systemNameMap[key] || `平台${id}` });
       });
     }
 
@@ -169,15 +185,20 @@
     const overflowTags = allTags.slice(MAX_VISIBLE_TAGS);
 
     return (
-      <div class="visibility-cell">
+      <div class="tags-cell">
         {visibleTags.map(tag => (
-          <bk-tag class="desc-tag ml8">
+          <bk-tag
+            class="desc-tag ml8"
+            radius="4px"
+            theme="default">
             {tag.label}
           </bk-tag>
         ))}
         {overflowTags.length > 0 && (
           <bk-tag
             class="desc-tag ml8"
+            radius="4px"
+            theme="default"
             v-bk-tooltips={{
               content: overflowTags.map(t => t.label).join('、'),
               placement: 'top',
@@ -207,7 +228,7 @@
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
           <span class="tool-name-text">
-            <Tooltips data={row.name} />
+            <Tooltips data={formatCellText(row.name)} />
           </span>
           {row.status === 'published' && (
             <audit-icon
@@ -227,21 +248,23 @@
       colKey: 'description',
       width: 200,
       ellipsis: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span>{formatCellText(row.description)}</span>
+      ),
     },
     {
       title: t('工具类型'),
       colKey: 'tool_type',
       width: 200,
       ellipsis: true,
-      cell: (h: any, { row }: { row: ToolModel }) => <span>
-        {toolType[row.tool_type]}
-        </span>,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span>{toolType[row.tool_type] || '--'}</span>
+      ),
     },
     {
       title: t('可见范围'),
       colKey: 'visibility',
       width: 200,
-      ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility),
     },
     {
@@ -264,6 +287,9 @@
       colKey: 'updated_by',
       width: 130,
       ellipsis: true,
+      cell: (_h: any, { row }: { row: ToolModel }) => (
+        <span>{formatCellText(row.updated_by)}</span>
+      ),
     },
     {
       title: t('更新时间'),
@@ -409,11 +435,25 @@
 </script>
 
 <style lang="postcss" scoped>
-  .visibility-cell {
-    display: flex;
+  .tags-cell {
+    display: inline-flex;
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  :deep(.tags-cell > *) {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  :deep(.tags-cell .desc-tag) {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 22px;
   }
 
   :deep(.tool-name-cell) {
@@ -456,6 +496,10 @@
   .report-config-list {
     :deep(.t-table__row--hover) {
       background-color: #fff !important;
+    }
+
+    :deep(.t-table td) {
+      vertical-align: middle;
     }
   }
 
