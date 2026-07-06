@@ -65,6 +65,7 @@ from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
     AssetSyncAnomalyReason,
+    CheckErrorType,
     EtlConfigEnum,
     JoinDataType,
     PluginSceneChoices,
@@ -363,12 +364,14 @@ def check_join_data():
             content = resp.json()
             result = content.get("result", True)
             http_pull_count = content.get("data", {}).get("count", 0)
+            if not result:
+                error_type = CheckErrorType.SOURCE.value
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             # 如果发生异常，将 storage_count 设置为 0，并且 result 设置为 False
             logger.exception("[JoinDataCheckFailed] Error while querying source: %s", e)
             http_pull_count = 0
             result = False
-            error_type = "source"
+            error_type = CheckErrorType.SOURCE.value
         # 请求存储中的数据总数
         count_sql = f"select count(*) as count from {snapshot.bkbase_table_id} limit 1"
         bulk_req_params = [
@@ -394,7 +397,9 @@ def check_join_data():
             doris_storage_count = 0
             hdfs_storage_count = 0
             result = False
-            error_type = "storage"
+            # 仅当源端未失败时才标记为存储失败，避免覆盖先发生的源端故障
+            if not error_type:
+                error_type = CheckErrorType.STORAGE.value
 
         # 将结果保存到 JoinDataCheckStatistic 表
         SnapshotCheckStatistic.objects.update_or_create(
@@ -500,9 +505,8 @@ def sync_asset_bkbase_rt_ids():
 def _detect_status_anomaly(snap: Snapshot) -> Optional[str]:
     """判定单个资产快照的状态类异常原因，无异常返回 None。
 
-    FAILED 直接视为异常；PREPARING 且超过 ASSET_SYNC_PREPARING_TIMEOUT 视为
-    「卡在启动中超时」异常。该判定同时用于 sync_health 指标与状态类事件，
-    保证指标聚合与事件告警对「不健康」的口径一致。
+    FAILED 直接视为异常；
+    PREPARING 且超过 ASSET_SYNC_PREPARING_TIMEOUT 视为「卡在启动中超时」异常。
     """
     if snap.status == SnapshotRunningStatus.FAILED.value:
         return AssetSyncAnomalyReason.STATUS_FAILED.value
@@ -556,7 +560,7 @@ def report_asset_sync_status():
         metric.report()
         logger.info("[AssetSyncReport] status metric reported: %s records", len(metric_records))
 
-    # ---------- 事件----------
+    # ---------- 事件 ----------
     for snap in snapshots:
         try:
             # 判定状态类异常（与 sync_health 指标共用同一口径）
@@ -644,16 +648,27 @@ def report_asset_sync_count():
     # ---------- 事件 ---------
     stat_map = {(s.system_id, s.resource_type_id, s.join_data_type): s for s in stats}
     # 仅针对 RUNNING 且存在检查记录的资产：result=False 才视为数据异常
-    for snap in Snapshot.objects.filter(status=SnapshotRunningStatus.RUNNING.value):
+    for snap in Snapshot.objects.filter(
+        status=SnapshotRunningStatus.RUNNING.value, join_data_type=JoinDataType.ASSET.value
+    ):
         try:
             stat = stat_map.get((snap.system_id, snap.resource_type_id, snap.join_data_type))
             if stat is None or stat.result:
                 continue
             # 区分源系统拉取失败 / 存储查询失败
-            if stat.error_type == "source":
+            if stat.error_type == CheckErrorType.SOURCE.value:
                 reason = AssetSyncAnomalyReason.SOURCE_PULL_FAILED.value
-            elif stat.error_type == "storage":
+            elif stat.error_type == CheckErrorType.STORAGE.value:
                 reason = AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value
+            else:
+                # error_type 为 None 或未知值，跳过事件上报
+                logger.warning(
+                    "[AssetSyncReport] count anomaly %s/%s has unexpected error_type=%s",
+                    snap.system_id,
+                    snap.resource_type_id,
+                    stat.error_type,
+                )
+                continue
             AssetSyncAnomalyEvent(
                 target=f"{snap.system_id}_{snap.resource_type_id}",
                 context={

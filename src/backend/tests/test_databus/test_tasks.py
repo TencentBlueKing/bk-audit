@@ -645,20 +645,32 @@ class ReportAssetSyncCountTests(TestCase):
 
     @mock.patch("services.web.databus.tasks.Metric")
     @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
-    def test_no_event_when_stat_missing(self, event_class_mock, metric_class_mock):
-        """RUNNING 但无检查记录时不触发数据类事件（不因 early-return 跳过）。"""
+    def test_no_event_for_basic_join_data_type(self, event_class_mock, metric_class_mock):
+        """basic 类型（存 Redis，查 doris/hdfs 必然失败）不应产生误报事件"""
         metric_class_mock.return_value = mock.Mock()
         event_class_mock.return_value = mock.Mock()
-        # 为 rt_running 创建通过检查的记录，使 metric_records 非空、不触发 early-return
-        self._create_stat(resource_type_id="rt_running", result=True)
-        # 另一个 RUNNING 快照无检查记录
+        # basic 快照 RUNNING
         Snapshot.objects.create(
             system_id="test_system",
-            resource_type_id="rt_no_stat",
+            resource_type_id="rt_basic",
             status=SnapshotRunningStatus.RUNNING.value,
-            join_data_type=JoinDataType.ASSET.value,
+            join_data_type=JoinDataType.BASIC.value,
         )
+        # basic 的错误统计记录（模拟 check_join_data 对 basic 的无效存储查询结果）
+        SnapshotCheckStatistic.objects.create(
+            system_id="test_system",
+            resource_type_id="rt_basic",
+            join_data_type=JoinDataType.BASIC.value,
+            http_pull_count=100,
+            doris_storage_count=0,
+            hdfs_storage_count=0,
+            result=False,
+            error_type="storage",
+        )
+        # asset 快照正常，确保 metric_records 非空、不触发 early-return
+        self._create_stat(resource_type_id="rt_running", result=True)
 
         report_asset_sync_count()
 
+        # basic 不应触发任何事件
         event_class_mock.assert_not_called()
