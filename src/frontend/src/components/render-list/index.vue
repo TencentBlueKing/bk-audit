@@ -264,6 +264,7 @@
   };
   // 解析 URL 上面的分页信息
   const parseURL = () => {
+    const recordParams = getRecordPageParams();
     const {
       page,
       page_size: pageSize,
@@ -272,15 +273,21 @@
       sort,
     } = getSearchParams();
 
-    const pageValue = isUnload.value ? 1 : page;
-    if (pageValue && pageSize) {
-      pagination.current = ~~pageValue;
-      pagination.limit = (~~pageSize) < 10 ? 10 :  (~~pageSize);
+    // 从详情/编辑返回：优先恢复 sessionStorage 中记录的分页
+    if (recordParams?.page_size) {
+      pagination.current = Number(recordParams.page) || 1;
+      pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
-      // URL 中已有分页参数时保留，避免 calcTableHeight 覆盖为默认 10
       isUserSelectedPageSize.value = true;
     } else {
-      isUserSelectedPageSize.value = false;
+      const pageValue = isUnload.value ? 1 : page;
+      if (pageValue && pageSize) {
+        pagination.current = ~~pageValue;
+        pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
+        pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
+      } else {
+        isUserSelectedPageSize.value = false;
+      }
     }
     // 优先使用新的 sort 数组格式，向后兼容旧的 order_field + order_type
     if (sort) {
@@ -385,8 +392,25 @@
     isUserSelectedPageSize.value = false;
     emits('clearSearch');
   };
+  const applyHeightBasedPageSize = () => {
+    if (isUserSelectedPageSize.value) {
+      return;
+    }
+    const { page_size: urlPageSize } = getSearchParams();
+    if (urlPageSize || getRecordPageParams()?.page_size) {
+      return;
+    }
+    const dimensions = calculateTableDimensions();
+    const nextLimit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+    pagination.limit = nextLimit;
+    if (nextLimit > 10) {
+      pagination.limitList = [...new Set([...pagination.limitList, nextLimit])].sort((a, b) => a - b);
+    }
+  };
+
   onMounted(() => {
     parseURL();
+    applyHeightBasedPageSize();
     calcTableHeight();
   });
 

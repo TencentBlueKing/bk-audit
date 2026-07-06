@@ -1233,6 +1233,7 @@
   // 详情
   const handleDetail = (data: StrategyModel) => {
     if (!data) return;
+    recordPageParams();
     strategyItem.value = data;
     showDetail.value = true;
   };
@@ -1536,8 +1537,11 @@
     const hasKey = setSearchKey();
     // 标签与列表并行加载：列表不再依赖标签接口成功，避免标签失败时列表不渲染
     void fetchStrategyTags();
-    nextTick(() => {
+    const tryFetch = (retry = 0) => {
       if (!listRef.value) {
+        if (retry < 5) {
+          nextTick(() => tryFetch(retry + 1));
+        }
         return;
       }
       if (hasKey) {
@@ -1545,7 +1549,8 @@
       } else {
         listRef.value.fetchData();
       }
-    });
+    };
+    nextTick(() => tryFetch());
   };
   const handlFetchData = () => {
     total.value = 0;
