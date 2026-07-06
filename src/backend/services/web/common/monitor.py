@@ -95,8 +95,6 @@ class AssetSyncAnomalyEvent(Event):
     - resource_type_id: 资源类型ID
     - join_data_type: 关联数据类型
     - reason: 异常原因 (status_failed/preparing_timeout)
-      注：status 与 reason 一一映射(failed↔status_failed, preparing↔preparing_timeout)，
-      故不单独保留 status 维度，避免冗余。
     """
 
     name = "asset_sync_status_anomaly"
