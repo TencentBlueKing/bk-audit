@@ -76,6 +76,8 @@ export default  {
    */
   fetchToolsDetail(params: {
       uid: string,
+      scene_id?: number,
+      system_id?: string,
     }) {
     return ToolManageSources.getToolsDetail(params).then(({ data }) =>  data);
   },

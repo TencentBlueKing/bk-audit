@@ -354,6 +354,7 @@
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
+  import MetaManageService from '@service/meta-manage';
   import ToolManageService from '@service/tool-manage';
 
   import resultDataModel from '@model/tool/api';
@@ -541,15 +542,12 @@
       }, {} as Record<string, number>);
     },
   });
-  // 获取标签列表
+  // 获取标签列表：GET /api/v1/meta/namespaces/{namespace}/tag/
   const {
     data: toolTagData,
-  } = useRequest(ToolManageService.fetchToolTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
-    onSuccess: () => {
-      fetchAllTools({});
-    },
   });
 
   const handleRefreshToolList = () => {

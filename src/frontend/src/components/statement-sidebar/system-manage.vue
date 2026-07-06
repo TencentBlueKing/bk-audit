@@ -53,7 +53,6 @@
 
   // 路由与分组的映射关系
   const routeGroupMap: Record<string, string> = {
-    platformReportConfig: 'resourceManage',
     platformToolConfig: 'resourceManage',
     storageManage: 'dataManage',
     storageList: 'dataManage',

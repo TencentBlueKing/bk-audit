@@ -18,6 +18,8 @@ import { computed, ref } from 'vue';
 
 import ToolInfo from '@model/tool/tool-info';
 
+import type { ToolDetailOverrideContext } from '@/utils/assist/scene-system-params';
+
 // 下钻参数接口
 export interface DrillDownParams {
   drillConfig: Array<{
@@ -66,6 +68,9 @@ const activeToolUid = ref(loadActiveToolUid());
 // 下钻参数存储（按工具 uid 索引，模块级别共享）
 const drillDownParamsMap = ref<Record<string, DrillDownParams>>({});
 
+// 跨场景/跨系统下工具详情默认值覆盖上下文（按 tab uid 索引）
+const toolOverrideContextMap = ref<Record<string, ToolDetailOverrideContext>>({});
+
 // 场景级别的工具状态缓存（按 sceneKey 索引）
 const STORAGE_KEY_SCENE_CACHE = 'tool_tabs_scene_cache';
 
@@ -100,10 +105,17 @@ export default function useToolTabs() {
   const hasOpenedTools = computed(() => openedTools.value.length > 0 && activeToolUid.value !== '');
 
   // 打开工具 - 堆叠到 tab 列表
-  const openTool = (tool: ToolInfo, switchToNew = true) => {
+  const openTool = (
+    tool: ToolInfo,
+    options: { switchToNew?: boolean; overrideContext?: ToolDetailOverrideContext } = {},
+  ) => {
+    const { switchToNew = true, overrideContext } = options;
     const exists = openedTools.value.some(t => t.uid === tool.uid);
     if (!exists) {
       openedTools.value.push(tool);
+    }
+    if (overrideContext && (overrideContext.scene_id !== undefined || overrideContext.system_id)) {
+      toolOverrideContextMap.value[tool.uid] = overrideContext;
     }
     if (switchToNew) {
       activeToolUid.value = tool.uid;
@@ -117,6 +129,7 @@ export default function useToolTabs() {
     if (index === -1) return;
 
     openedTools.value.splice(index, 1);
+    delete toolOverrideContextMap.value[uid];
 
     // 如果关闭的是当前激活的 tab
     if (activeToolUid.value === uid) {
@@ -148,6 +161,7 @@ export default function useToolTabs() {
   const clearAll = () => {
     openedTools.value = [];
     activeToolUid.value = '';
+    toolOverrideContextMap.value = {};
     syncToStorage(openedTools.value, activeToolUid.value);
   };
 
@@ -164,6 +178,12 @@ export default function useToolTabs() {
       drillDownParamsMap.value[uid] = params;
     },
     getDrillDownParams: (uid: string): DrillDownParams | undefined => drillDownParamsMap.value[uid],
+    getToolOverrideContext: (uid: string): ToolDetailOverrideContext | undefined => (
+      toolOverrideContextMap.value[uid]
+    ),
+    setToolOverrideContext: (uid: string, context: ToolDetailOverrideContext) => {
+      toolOverrideContextMap.value[uid] = context;
+    },
     clearDrillDownParams: (uid: string) => {
       delete drillDownParamsMap.value[uid];
     },
