@@ -583,7 +583,7 @@ class ReportAssetSyncCountTests(TestCase):
         metric_class_mock.assert_not_called()
 
     @mock.patch("services.web.databus.tasks.Metric")
-    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    @mock.patch("services.web.databus.tasks.AssetSyncCheckAnomalyEvent")
     def test_event_source_pull_failed(self, event_class_mock, metric_class_mock):
         """error_type=source 应上报 SOURCE_PULL_FAILED 事件。"""
         metric_class_mock.return_value = mock.Mock()
@@ -600,7 +600,7 @@ class ReportAssetSyncCountTests(TestCase):
         event_class_mock.return_value.report.assert_called_once()
 
     @mock.patch("services.web.databus.tasks.Metric")
-    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    @mock.patch("services.web.databus.tasks.AssetSyncCheckAnomalyEvent")
     def test_event_storage_query_failed(self, event_class_mock, metric_class_mock):
         """error_type=storage 应上报 STORAGE_QUERY_FAILED 事件。"""
         metric_class_mock.return_value = mock.Mock()
@@ -616,7 +616,7 @@ class ReportAssetSyncCountTests(TestCase):
         self.assertEqual(context["reason"], AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value)
 
     @mock.patch("services.web.databus.tasks.Metric")
-    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    @mock.patch("services.web.databus.tasks.AssetSyncCheckAnomalyEvent")
     def test_event_storage_failed_when_source_count_zero(self, event_class_mock, metric_class_mock):
         """源端量=0 但 error_type=storage 时应上报 STORAGE_QUERY_FAILED"""
         metric_class_mock.return_value = mock.Mock()
@@ -632,7 +632,7 @@ class ReportAssetSyncCountTests(TestCase):
         self.assertEqual(context["reason"], AssetSyncAnomalyReason.STORAGE_QUERY_FAILED.value)
 
     @mock.patch("services.web.databus.tasks.Metric")
-    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    @mock.patch("services.web.databus.tasks.AssetSyncCheckAnomalyEvent")
     def test_no_event_when_result_true(self, event_class_mock, metric_class_mock):
         """检查通过（result=True）时不应上报数据类事件。"""
         metric_class_mock.return_value = mock.Mock()
@@ -644,7 +644,7 @@ class ReportAssetSyncCountTests(TestCase):
         event_class_mock.assert_not_called()
 
     @mock.patch("services.web.databus.tasks.Metric")
-    @mock.patch("services.web.databus.tasks.AssetSyncAnomalyEvent")
+    @mock.patch("services.web.databus.tasks.AssetSyncCheckAnomalyEvent")
     def test_no_event_for_basic_join_data_type(self, event_class_mock, metric_class_mock):
         """basic 类型（存 Redis，查 doris/hdfs 必然失败）不应产生误报事件"""
         metric_class_mock.return_value = mock.Mock()
