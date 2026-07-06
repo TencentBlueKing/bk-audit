@@ -63,9 +63,10 @@
           v-if="toolList.length > 0"
           :scene-name-map="props.sceneNameMap"
           :scope-params="props.scopeParams"
+          :system-name-map="props.systemNameMap"
           :tags-enums="tagsEnums"
           :tool-list="toolList"
-          @add-tool="(tool) => emit('addTool', tool)"
+          @add-tool="(tool, ctx) => emit('addTool', tool, ctx)"
           @switch-tool="(tool) => emit('switchTab', tool.uid)" />
       </div>
     </div>
@@ -171,6 +172,18 @@
   import useRequest from '@/hooks/use-request';
   import useToolTabs from '@/hooks/use-tool-tabs';
   import userProfileIcon from '@/images/user.svg';
+  import {
+    getToolDetailScopeQuery,
+    isToolDetailScopeReady,
+    resolveToolDetailScopeParams,
+    resolveToolOverrideContextFromTool,
+    type ToolDetailOverrideContext,
+  } from '@/utils/assist/scene-system-params';
+  import {
+    buildSearchValuesCacheKey,
+    clearSearchValuesCacheByUid,
+    getSearchItemDefaultValue,
+  } from '@/views/tools/tools-square/utils/search-item-default';
 
   interface SearchItem {
     value: any;
@@ -205,6 +218,8 @@
     };
     // eslint-disable-next-line vue/no-unused-properties
     sceneNameMap?: Record<number, string>;
+    // eslint-disable-next-line vue/no-unused-properties
+    systemNameMap?: Record<string, string>;
   }
 
   const props = defineProps<Props>();
@@ -213,7 +228,7 @@
     goHome: [];
     closeTab: [uid: string];
     switchTab: [uid: string];
-    addTool: [tool: ToolInfo];
+    addTool: [tool: ToolInfo, overrideContext?: ToolDetailOverrideContext];
   }>();
 
   const router = useRouter();
@@ -222,6 +237,7 @@
   const {
     getDrillDownParams,
     clearDrillDownParams,
+    getToolOverrideContext,
   } = useToolTabs();
 
 
@@ -457,7 +473,7 @@
       list.forEach((item) => {
         valuesObj[item.raw_name] = item.value;
       });
-      searchValuesMap.value[uid] = valuesObj;
+      searchValuesMap.value[getSearchValuesCacheKey(uid)] = valuesObj;
     });
     syncSearchValuesToStorage();
   };
@@ -469,26 +485,75 @@
     defaultValue: [],
   });
 
-  // 监听场景切换，按当前场景拉取全量工具列表，避免缺少 scope_type/scope_id 导致的请求失败
-  watch(() => props.scopeParams, (val) => {
-    if (!val || !val.scope_type) return;
-    fetchAllToolsList({ ...val, status: 'published' });
-  }, { immediate: true, deep: true });
-
-  const setToolContentRef = (uid: string, el: any) => {
-    if (el) {
-      toolContentRefs.value[uid] = el;
-    }
-  };
-
-  const getSearchList = (uid: string): SearchItem[] => searchListMap.value[uid] || [];
-  const setSearchList = (uid: string, val: SearchItem[]) => {
-    searchListMap.value[uid] = val;
-    syncSearchListToStorage();
-  };
-
   // 记录当前正在请求详情的激活 uid（用于复制工具时区分原始uid和副本uid）
   const pendingActiveUid = ref<string>('');
+  const lastToolDetailFetchKey = ref('');
+
+  const resolveOverrideContextForUid = (tabUid: string): ToolDetailOverrideContext | undefined => {
+    const stored = getToolOverrideContext(tabUid);
+    if (stored && (stored.scene_id !== undefined || stored.system_id)) {
+      return stored;
+    }
+    const realUid = copyUidMap.value[tabUid] || tabUid;
+    const storedByReal = realUid !== tabUid ? getToolOverrideContext(realUid) : undefined;
+    if (storedByReal && (storedByReal.scene_id !== undefined || storedByReal.system_id)) {
+      return storedByReal;
+    }
+    const scope = resolveToolDetailScopeParams(props.scopeParams);
+    if (scope.scope_type !== 'cross_scene' && scope.scope_type !== 'cross_system') {
+      return undefined;
+    }
+    const tool = props.toolList.find(t => t.uid === tabUid || t.uid === realUid);
+    if (!tool) return undefined;
+    const fallback = resolveToolOverrideContextFromTool(tool, scope.scope_type);
+    return fallback.scene_id !== undefined || fallback.system_id ? fallback : undefined;
+  };
+
+  const buildFetchToolDetailParams = (realUid: string, tabUid: string) => ({
+    uid: realUid,
+    ...getToolDetailScopeQuery(
+      resolveToolDetailScopeParams(props.scopeParams),
+      resolveOverrideContextForUid(tabUid),
+    ),
+  });
+
+  const buildToolDetailFetchKey = (realUid: string, tabUid: string) => {
+    const scopeQuery = getToolDetailScopeQuery(
+      resolveToolDetailScopeParams(props.scopeParams),
+      resolveOverrideContextForUid(tabUid),
+    );
+    return `${realUid}:${scopeQuery.scene_id ?? ''}:${scopeQuery.system_id ?? ''}`;
+  };
+
+  const getSearchValuesCacheKey = (uid: string) => buildSearchValuesCacheKey(
+    uid,
+    getToolDetailScopeQuery(
+      resolveToolDetailScopeParams(props.scopeParams),
+      resolveOverrideContextForUid(uid),
+    ),
+  );
+
+  const tryFetchActiveToolDetail = () => {
+    const newUid = props.activeUid;
+    if (!newUid || newUid.startsWith('game_detail_')) return;
+    if (!isToolDetailScopeReady(props.scopeParams)) return;
+
+    const realUid = copyUidMap.value[newUid] || newUid;
+    const fetchKey = buildToolDetailFetchKey(realUid, newUid);
+    const drillParams = getDrillDownParams(newUid);
+    const fetchKeyChanged = lastToolDetailFetchKey.value !== fetchKey;
+
+    if (!fetchKeyChanged && toolDetailMap.value[newUid] && !drillParams) return;
+
+    if (fetchKeyChanged && toolDetailMap.value[newUid]) {
+      delete toolDetailMap.value[newUid];
+      delete searchListMap.value[newUid];
+    }
+
+    lastToolDetailFetchKey.value = fetchKey;
+    pendingActiveUid.value = newUid;
+    fetchToolDetail(buildFetchToolDetailParams(realUid, newUid));
+  };
 
   // 获取工具详情
   const {
@@ -521,6 +586,34 @@
       }
     },
   });
+
+  // 监听可见范围变化，拉取全量工具列表；与 activeUid 合并触发详情请求，避免重复调用
+  watch(
+    () => ({
+      uid: props.activeUid,
+      scope: props.scopeParams,
+      toolList: props.toolList,
+    }),
+    (val) => {
+      if (val.scope?.scope_type) {
+        fetchAllToolsList({ ...val.scope, status: 'published' });
+      }
+      tryFetchActiveToolDetail();
+    },
+    { immediate: true, deep: true },
+  );
+
+  const setToolContentRef = (uid: string, el: any) => {
+    if (el) {
+      toolContentRefs.value[uid] = el;
+    }
+  };
+
+  const getSearchList = (uid: string): SearchItem[] => searchListMap.value[uid] || [];
+  const setSearchList = (uid: string, val: SearchItem[]) => {
+    searchListMap.value[uid] = val;
+    syncSearchListToStorage();
+  };
 
   const extractDataByPath = (data: any, path: string): any => {
     if (!path || !data) return null;
@@ -565,7 +658,7 @@
     if (data.tool_type !== 'bk_vision') {
       const createSearchItem = (item: any) => ({
         ...item,
-        value: item.default_value || (item.field_category === 'person_select' || item.field_category === 'time_range_select' ? [] : null),
+        value: getSearchItemDefaultValue(item),
         required: item.required,
         disabled: false,
       });
@@ -606,7 +699,7 @@
         clearDrillDownParams(uid);
       } else if (!searchListMap.value[uid]) {
         // 非下钻：从工具配置构建完整 searchList，并尝试恢复缓存的用户输入值
-        const cachedValues = searchValuesMap.value[uid];
+        const cachedValues = searchValuesMap.value[getSearchValuesCacheKey(uid)];
         searchListMap.value[uid] = (data.config?.input_variable || []).map((item: any) => {
           const searchItem = createSearchItem(item);
           // 如果有缓存的用户输入值，优先使用缓存值
@@ -819,26 +912,6 @@
     window.open(routeData.href, '_blank');
   };
 
-  // 监听激活工具变化，仅在未加载过时请求详情
-  watch(
-    () => props.activeUid,
-    (newUid) => {
-      if (!newUid) return;
-      // 跳过游戏详情等固定工具
-      if (newUid.startsWith('game_detail_')) return;
-      const drillParams = getDrillDownParams(newUid);
-      // 如果该工具详情尚未加载，或者有下钻参数需要重新填充，则请求
-      if (!toolDetailMap.value[newUid] || drillParams) {
-        // 对于复制的工具，使用原始uid来获取详情
-        const realUid = copyUidMap.value[newUid] || newUid;
-        pendingActiveUid.value = newUid;
-        fetchToolDetail({ uid: realUid });
-      }
-      // 已加载的工具无需任何操作，v-show 会自动切换显示
-    },
-    { immediate: true },
-  );
-
   // smart_page（审计用户画像）查询状态在 sessionStorage 中按 toolUid 区分存储的 key 前缀
   // 关闭工具 tab 时清理对应 key，避免下次打开时仍恢复上次输入
   const STORAGE_KEY_PROFILE_QUERY_PREFIX = 'tool_audit_profile_query_';
@@ -853,7 +926,7 @@
         if (!activeUids.has(uid)) {
           delete toolDetailMap.value[uid];
           delete searchListMap.value[uid];
-          delete searchValuesMap.value[uid];
+          searchValuesMap.value = clearSearchValuesCacheByUid(searchValuesMap.value, uid);
           delete toolContentRefs.value[uid];
         }
       });

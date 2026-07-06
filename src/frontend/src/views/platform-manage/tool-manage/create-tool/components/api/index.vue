@@ -332,6 +332,9 @@
         },
       ],
       enable_grouping: true,
+      enable_pagination: false,
+      pagination_config: [] as Array<Record<string, unknown>>,
+      result_schema: undefined as { tree_data?: string | any[] | Record<string, unknown> } | undefined,
     },
   });
 
@@ -470,8 +473,37 @@
   };
 
   const initResultConfig = (data: any) => {
-    resultData.value = data.output_config.result_schema?.tree_data;
-    resultConfigRef.value.setConfigs(data.output_config);
+    if (!data.output_config?.result_schema?.tree_data) {
+      return;
+    }
+    resultData.value = data.output_config.result_schema.tree_data;
+    resultConfigRef.value?.setConfigs(data.output_config);
+  };
+
+  /** 从已保存的 config 恢复调试成功态（新建/编辑步骤切换回第一步） */
+  const restoreDebugStateFromConfig = (data: any) => {
+    const hasSchema = !!data.output_config?.result_schema?.tree_data;
+    if (!hasSchema) {
+      return false;
+    }
+    resultData.value = data.output_config.result_schema.tree_data;
+    hasInitResultConfig.value = true;
+    hasInitPagination.value = true;
+    isDoneDeBug.value = true;
+    isSuccess.value = true;
+    isSameInitParamsConfig.value = true;
+    editModeIseditInfo.value = false;
+    return true;
+  };
+
+  const restorePaginationConfig = (data: any) => {
+    if (!data.output_config) {
+      return;
+    }
+    paginationConfigRef.value?.setPaginationConfig({
+      enable_pagination: data.output_config.enable_pagination || false,
+      pagination_config: data.output_config.pagination_config || [],
+    });
   };
 
   // 检查是否为空
@@ -565,32 +597,55 @@
   defineExpose<Exposes>({
     // 提交获取字段
     getFields() {
-      formData.value.input_variable = paramsConfigRef.value?.getData();
-      // 处理resultData.value的类型转换
-      const resultDataString = typeof resultData.value === 'string'
-        ? resultData.value
-        : JSON.stringify(resultData.value);
+      if (paramsConfigRef.value?.getData) {
+        formData.value.input_variable = paramsConfigRef.value.getData();
+      }
 
-      // 获取分页配置
-      const paginationData = paginationConfigRef.value?.getPaginationConfig() || {
-        enable_pagination: false,
-        pagination_config: [],
-      };
+      const existingOutput = formData.value.output_config;
+      const resultConfigFromRef = resultConfigRef.value?.handleGetResultConfig?.();
+      const paginationData = paginationConfigRef.value?.getPaginationConfig?.();
+
+      // 步骤切换后子组件尚未挂载时，保留 formData 中已缓存的 output_config
+      if (!resultConfigFromRef && !paginationData && existingOutput?.result_schema?.tree_data) {
+        return formData.value;
+      }
+
+      let treeData = existingOutput?.result_schema?.tree_data;
+      if (resultData.value) {
+        const resultDataString = typeof resultData.value === 'string'
+          ? resultData.value
+          : JSON.stringify(resultData.value);
+        if (resultDataString) {
+          try {
+            const parsed = JSON.parse(resultDataString);
+            treeData = Array.isArray(parsed)
+              ? parsed
+              : JSON.stringify(buildTree(parsed));
+          } catch {
+            // 保留已有 tree_data
+          }
+        }
+      }
 
       formData.value.output_config = {
-        ...resultConfigRef.value?.handleGetResultConfig(),
-        ...paginationData,
+        ...(resultConfigFromRef || {}),
+        ...(paginationData || {
+          enable_pagination: existingOutput?.enable_pagination || false,
+          pagination_config: existingOutput?.pagination_config || [],
+        }),
         result_schema: {
-          tree_data: Array.isArray(JSON.parse(resultDataString))
-            ? resultDataString :  JSON.stringify(buildTree(JSON.parse(resultDataString))),
+          tree_data: treeData,
         },
       };
       return formData.value;
     },
     setConfigs(data: any) {
+      if (!data) return;
       isParams.value = false;
       nextTick(() => {
-        formData.value.api_config = data.api_config;
+        if (data.api_config) {
+          formData.value.api_config = data.api_config;
+        }
         isParams.value = data.input_variable?.length > 0;
         formData.value.input_variable = data.input_variable;
         formData.value.output_config = data.output_config;
@@ -613,28 +668,31 @@
             config[fieldKey] = '';
           }
         });
-        if (props.isEditMode) {
-          resultData.value = data.output_config?.result_schema?.tree_data || '';
-          const hasSchema = !!data.output_config?.result_schema?.tree_data;
-          hasInitResultConfig.value = hasSchema;
-          hasInitPagination.value = hasSchema;
-        }
+
+        // 新建/编辑：若已有调试结果 schema，恢复调试态与结果配置区块
+        const hasRestoredDebug = restoreDebugStateFromConfig(data);
+
         setTimeout(() => {
-          emits('getIsDoneDeBug', false, false, true,  isSameInitApiConfig.value && isSameInitParamsConfig.value);
+          emits(
+            'getIsDoneDeBug',
+            isDoneDeBug.value,
+            editModeIseditInfo.value,
+            isSuccess.value,
+            isSameInitApiConfig.value && isSameInitParamsConfig.value,
+          );
           initformData.value = JSON.parse(JSON.stringify(formData.value));
           isSetConfigsSuccess.value = true;
         }, 0);
-        // 等待 v-if 控制的 result-config / pagination-config 组件挂载后再回填
-        nextTick(() => {
-          initResultConfig(data);
-          // 恢复分页配置
-          if (data.output_config) {
-            paginationConfigRef.value?.setPaginationConfig({
-              enable_pagination: data.output_config.enable_pagination || false,
-              pagination_config: data.output_config.pagination_config || [],
+
+        // 等待 v-if 控制的 result-config / pagination-config 挂载后再回填
+        if (hasRestoredDebug) {
+          nextTick(() => {
+            nextTick(() => {
+              initResultConfig(data);
+              restorePaginationConfig(data);
             });
-          }
-        });
+          });
+        }
       });
     },
     getDebugResult() {

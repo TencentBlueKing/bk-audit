@@ -106,7 +106,7 @@
   interface TagItem {
     tag_id: string;
     tag_name: string;
-    tool_count: number;
+    tool_count?: number;
     icon?: string;
   }
 

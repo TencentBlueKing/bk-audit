@@ -44,25 +44,25 @@
             type="text">
         </div>
         <div class="add-tool-body">
-          <!-- 左侧：按场景分组（跨场景模式）或平铺列表 -->
+          <!-- 左侧：按场景/系统分组（跨场景/跨系统模式）或平铺列表 -->
           <div class="add-tool-left">
-            <template v-if="isCrossScene">
+            <template v-if="isGroupedMode">
               <template
-                v-for="group in filteredSceneGroupedTools"
-                :key="group.sceneId">
+                v-for="group in filteredGroupedTools"
+                :key="group.groupKey">
                 <div
                   v-if="group.tools.length > 0"
                   class="tool-group">
                   <div
                     class="tool-group-title"
-                    @click="toggleSceneCollapse(group.sceneId)">
+                    @click="toggleGroupCollapse(group.groupKey)">
                     <audit-icon
-                      :class="{ 'is-collapsed': collapsedScenes.has(group.sceneId) }"
+                      :class="{ 'is-collapsed': collapsedGroups.has(group.groupKey) }"
                       style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
                       type="angle-fill-down" />
-                    {{ group.sceneName }}({{ group.sceneId }})
+                    {{ group.groupName }}({{ group.groupId }})
                   </div>
-                  <template v-if="!collapsedScenes.has(group.sceneId)">
+                  <template v-if="!collapsedGroups.has(group.groupKey)">
                     <div
                       v-for="tool in group.tools"
                       :key="tool.uid"
@@ -74,7 +74,7 @@
                       }"
                       class="tool-group-item"
                       :class="{ 'is-added': isToolOpened(tool.uid) }"
-                      @click="handleAddTool(tool)">
+                      @click="handleAddTool(tool, group.groupKey)">
                       <img
                         v-if="tool.tool_type === 'smart_page'"
                         alt="smart_page"
@@ -98,7 +98,7 @@
                 </div>
               </template>
               <bk-exception
-                v-if="filteredSceneGroupedTools.every(g => g.tools.length === 0)"
+                v-if="filteredGroupedTools.every(g => g.tools.length === 0)"
                 class="no-data"
                 scene="part"
                 type="search-empty" />
@@ -162,23 +162,23 @@
             </div>
             <div class="right-tab-content">
               <template v-if="rightActiveTab === 'recent'">
-                <template v-if="isCrossScene">
+                <template v-if="isGroupedMode">
                   <template
-                    v-for="group in filteredRecentSceneGrouped"
-                    :key="group.sceneId">
+                    v-for="group in filteredRecentGrouped"
+                    :key="group.groupKey">
                     <div
                       v-if="group.tools.length > 0"
                       class="tool-group">
                       <div
                         class="tool-group-title"
-                        @click="toggleRightSceneCollapse(group.sceneId)">
+                        @click="toggleRightGroupCollapse(group.groupKey)">
                         <audit-icon
-                          :class="{ 'is-collapsed': collapsedRightScenes.has(group.sceneId) }"
+                          :class="{ 'is-collapsed': collapsedRightGroups.has(group.groupKey) }"
                           style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
                           type="angle-fill-down" />
-                        {{ group.sceneName }}({{ group.sceneId }})
+                        {{ group.groupName }}({{ group.groupId }})
                       </div>
-                      <template v-if="!collapsedRightScenes.has(group.sceneId)">
+                      <template v-if="!collapsedRightGroups.has(group.groupKey)">
                         <div
                           v-for="tool in group.tools"
                           :key="tool.uid"
@@ -190,7 +190,7 @@
                           }"
                           class="tool-group-item"
                           :class="{ 'is-added': isToolOpened(tool.uid) }"
-                          @click="handleAddTool(tool)">
+                          @click="handleAddTool(tool, group.groupKey)">
                           <img
                             v-if="tool.tool_type === 'smart_page'"
                             alt="smart_page"
@@ -248,31 +248,31 @@
                   </div>
                 </template>
                 <bk-exception
-                  v-if="isCrossScene
-                    ? filteredRecentSceneGrouped.every(g => g.tools.length === 0)
+                  v-if="isGroupedMode
+                    ? filteredRecentGrouped.every(g => g.tools.length === 0)
                     : filteredRecentTools.length === 0"
                   class="no-data"
                   scene="part"
                   type="empty" />
               </template>
               <template v-if="rightActiveTab === 'favorite'">
-                <template v-if="isCrossScene">
+                <template v-if="isGroupedMode">
                   <template
-                    v-for="group in filteredFavoriteSceneGrouped"
-                    :key="group.sceneId">
+                    v-for="group in filteredFavoriteGrouped"
+                    :key="group.groupKey">
                     <div
                       v-if="group.tools.length > 0"
                       class="tool-group">
                       <div
                         class="tool-group-title"
-                        @click="toggleRightSceneCollapse(group.sceneId)">
+                        @click="toggleRightGroupCollapse(group.groupKey)">
                         <audit-icon
-                          :class="{ 'is-collapsed': collapsedRightScenes.has(group.sceneId) }"
+                          :class="{ 'is-collapsed': collapsedRightGroups.has(group.groupKey) }"
                           style="margin-right: 4px; font-size: 12px; color: #979ba5; transition: transform .2s;"
                           type="angle-fill-down" />
-                        {{ group.sceneName }}({{ group.sceneId }})
+                        {{ group.groupName }}({{ group.groupId }})
                       </div>
-                      <template v-if="!collapsedRightScenes.has(group.sceneId)">
+                      <template v-if="!collapsedRightGroups.has(group.groupKey)">
                         <div
                           v-for="tool in group.tools"
                           :key="tool.uid"
@@ -284,7 +284,7 @@
                           }"
                           class="tool-group-item"
                           :class="{ 'is-added': isToolOpened(tool.uid) }"
-                          @click="handleAddTool(tool)">
+                          @click="handleAddTool(tool, group.groupKey)">
                           <img
                             v-if="tool.tool_type === 'smart_page'"
                             alt="smart_page"
@@ -342,8 +342,8 @@
                   </div>
                 </template>
                 <bk-exception
-                  v-if="isCrossScene
-                    ? filteredFavoriteSceneGrouped.every(g => g.tools.length === 0)
+                  v-if="isGroupedMode
+                    ? filteredFavoriteGrouped.every(g => g.tools.length === 0)
                     : filteredFavoriteTools.length === 0"
                   class="no-data"
                   scene="part"
@@ -365,6 +365,8 @@
   import ToolInfo from '@model/tool/tool-info';
   import { useI18n } from 'vue-i18n';
 
+  import type { ToolDetailOverrideContext } from '@/utils/assist/scene-system-params';
+
 
   import useRequest from '@/hooks/use-request';
   import userProfileIcon from '@/images/user.svg';
@@ -385,11 +387,12 @@
       scope_id?: string;
     };
     sceneNameMap?: Record<number, string>;
+    systemNameMap?: Record<string, string>;
   }
 
   const props = defineProps<Props>();
   const emit = defineEmits<{
-    addTool: [tool: ToolInfo];
+    addTool: [tool: ToolInfo, overrideContext?: ToolDetailOverrideContext];
     switchTool: [tool: ToolInfo];
   }>();
 
@@ -397,30 +400,34 @@
   const addPopoverRef = ref();
   const popoverSearchValue = ref('');
   const rightActiveTab = ref<'recent' | 'favorite'>('recent');
-  const collapsedScenes = ref<Set<number>>(new Set());
-  const collapsedRightScenes = ref<Set<number>>(new Set());
+  const collapsedGroups = ref<Set<string>>(new Set());
+  const collapsedRightGroups = ref<Set<string>>(new Set());
 
-  // 是否为跨场景模式
+  const UNCATEGORIZED_KEY = '__uncategorized__';
+
+  // 是否为跨场景/跨系统模式
   const isCrossScene = computed(() => props.scopeParams?.scope_type === 'cross_scene');
+  const isCrossSystem = computed(() => props.scopeParams?.scope_type === 'cross_system');
+  const isGroupedMode = computed(() => isCrossScene.value || isCrossSystem.value);
 
   // 已打开工具的 uid 集合
   const openedUidSet = computed(() => new Set(props.toolList.map(t => t.uid)));
   const isToolOpened = (uid: string) => openedUidSet.value.has(uid);
 
-  // 切换场景分组折叠/展开
-  const toggleSceneCollapse = (sceneId: number) => {
-    if (collapsedScenes.value.has(sceneId)) {
-      collapsedScenes.value.delete(sceneId);
+  // 切换分组折叠/展开
+  const toggleGroupCollapse = (groupKey: string) => {
+    if (collapsedGroups.value.has(groupKey)) {
+      collapsedGroups.value.delete(groupKey);
     } else {
-      collapsedScenes.value.add(sceneId);
+      collapsedGroups.value.add(groupKey);
     }
   };
 
-  const toggleRightSceneCollapse = (sceneId: number) => {
-    if (collapsedRightScenes.value.has(sceneId)) {
-      collapsedRightScenes.value.delete(sceneId);
+  const toggleRightGroupCollapse = (groupKey: string) => {
+    if (collapsedRightGroups.value.has(groupKey)) {
+      collapsedRightGroups.value.delete(groupKey);
     } else {
-      collapsedRightScenes.value.add(sceneId);
+      collapsedRightGroups.value.add(groupKey);
     }
   };
 
@@ -486,50 +493,95 @@
   // const toolTagGroups = computed(() =>
   //   props.tagsEnums.filter(tag => !tag.tag_id.startsWith('-') && tag.tag_id !== 'all'));
 
-  // 场景分组工具列表辅助函数
-  interface SceneGroup {
-    sceneId: number;
-    sceneName: string;
+  interface ToolGroup {
+    groupKey: string;
+    groupName: string;
+    groupId: string | number;
     tools: ToolInfo[];
   }
 
-  const buildSceneGroups = (tools: ToolInfo[]): SceneGroup[] => {
-    const groupMap = new Map<number, ToolInfo[]>();
-    const sceneOrder: number[] = [];
+  const buildSceneGroups = (tools: ToolInfo[]): ToolGroup[] => {
+    const groupMap = new Map<string, ToolInfo[]>();
+    const sceneOrder: string[] = [];
     tools.forEach((tool) => {
       const sceneIds = tool.visibility?.scene_ids || [];
       if (sceneIds.length === 0) {
-        if (!groupMap.has(0)) {
-          groupMap.set(0, []);
-          sceneOrder.push(0);
+        if (!groupMap.has('0')) {
+          groupMap.set('0', []);
+          sceneOrder.push('0');
         }
-        groupMap.get(0)!.push(tool);
+        groupMap.get('0')!.push(tool);
       } else {
         sceneIds.forEach((sid: number) => {
+          const key = String(sid);
+          if (!groupMap.has(key)) {
+            groupMap.set(key, []);
+            sceneOrder.push(key);
+          }
+          groupMap.get(key)!.push(tool);
+        });
+      }
+    });
+    const nameMap = props.sceneNameMap || {};
+    return sceneOrder.map((key) => {
+      const sid = Number(key);
+      return {
+        groupKey: key,
+        groupId: sid,
+        groupName: sid === 0 ? t('未分类') : (nameMap[sid] || `场景 ${sid}`),
+        tools: groupMap.get(key) || [],
+      };
+    }).sort((a, b) => Number(b.groupKey) - Number(a.groupKey));
+  };
+
+  const buildSystemGroups = (tools: ToolInfo[]): ToolGroup[] => {
+    const groupMap = new Map<string, ToolInfo[]>();
+    const systemOrder: string[] = [];
+    tools.forEach((tool) => {
+      const systemIds = (tool.visibility?.system_ids || []).map(id => String(id));
+      if (systemIds.length === 0) {
+        if (!groupMap.has(UNCATEGORIZED_KEY)) {
+          groupMap.set(UNCATEGORIZED_KEY, []);
+          systemOrder.push(UNCATEGORIZED_KEY);
+        }
+        groupMap.get(UNCATEGORIZED_KEY)!.push(tool);
+      } else {
+        systemIds.forEach((sid) => {
           if (!groupMap.has(sid)) {
             groupMap.set(sid, []);
-            sceneOrder.push(sid);
+            systemOrder.push(sid);
           }
           groupMap.get(sid)!.push(tool);
         });
       }
     });
-    const nameMap = props.sceneNameMap || {};
-    return sceneOrder.map(sid => ({
-      sceneId: sid,
-      sceneName: sid === 0 ? '未分类' : (nameMap[sid] || `场景 ${sid}`),
-      tools: groupMap.get(sid) || [],
-    })).sort((a, b) => b.sceneId - a.sceneId);
+    const nameMap = props.systemNameMap || {};
+    return systemOrder.map(key => ({
+      groupKey: key,
+      groupId: key === UNCATEGORIZED_KEY ? '-' : key,
+      groupName: key === UNCATEGORIZED_KEY ? t('未分类') : (nameMap[key] || `系统 ${key}`),
+      tools: groupMap.get(key) || [],
+    }));
   };
 
-  // 跨场景模式：按场景分组（左侧）
-  const filteredSceneGroupedTools = computed(() => {
+  const buildGroups = (tools: ToolInfo[]): ToolGroup[] => {
+    if (isCrossScene.value) {
+      return buildSceneGroups(tools);
+    }
+    if (isCrossSystem.value) {
+      return buildSystemGroups(tools);
+    }
+    return [];
+  };
+
+  // 跨场景/跨系统模式：按场景或系统分组（左侧）
+  const filteredGroupedTools = computed(() => {
     const keyword = popoverSearchValue.value.trim().toLowerCase();
     const filtered = allToolsList.value.filter((tool) => {
       if (keyword && !tool.name.toLowerCase().includes(keyword)) return false;
       return true;
     });
-    return buildSceneGroups(filtered);
+    return buildGroups(filtered);
   });
 
   // 非跨场景模式：平铺列表（左侧）
@@ -552,8 +604,8 @@
     });
   });
 
-  // 右侧最近使用（按场景分组）
-  const filteredRecentSceneGrouped = computed(() => buildSceneGroups(filteredRecentTools.value));
+  // 右侧最近使用（按场景/系统分组）
+  const filteredRecentGrouped = computed(() => buildGroups(filteredRecentTools.value));
 
   // 右侧我的收藏
   const filteredFavoriteTools = computed(() => {
@@ -564,15 +616,30 @@
     });
   });
 
-  // 右侧我的收藏（按场景分组）
-  const filteredFavoriteSceneGrouped = computed(() => buildSceneGroups(filteredFavoriteTools.value));
+  // 右侧我的收藏（按场景/系统分组）
+  const filteredFavoriteGrouped = computed(() => buildGroups(filteredFavoriteTools.value));
 
-  const handleAddTool = (tool: ToolInfo) => {
+  const buildOverrideContext = (groupKey?: string): ToolDetailOverrideContext | undefined => {
+    if (!groupKey || groupKey === '0' || groupKey === UNCATEGORIZED_KEY) {
+      return undefined;
+    }
+    if (isCrossScene.value) {
+      const sceneId = Number(groupKey);
+      if (!Number.isNaN(sceneId) && sceneId > 0) {
+        return { scene_id: sceneId };
+      }
+    }
+    if (isCrossSystem.value) {
+      return { system_id: groupKey };
+    }
+    return undefined;
+  };
+
+  const handleAddTool = (tool: ToolInfo, groupKey?: string) => {
     if (isToolOpened(tool.uid)) {
-      // 已打开的工具，点击后直接切换到该工具tab
       emit('switchTool', tool);
     } else {
-      emit('addTool', tool);
+      emit('addTool', tool, buildOverrideContext(groupKey));
     }
     // 关闭 popover
     nextTick(() => {

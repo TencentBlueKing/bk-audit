@@ -45,13 +45,6 @@
         v-show="expandedGroups.includes('resourceManage')"
         class="side-group-children">
         <audit-menu-item
-          :class="{ active: currentRoute === 'platformReportConfig' }"
-          index="platformReportConfig"
-          @click="handleMenuClick('platformReportConfig')">
-          <span class="side-child-dot" />
-          {{ t('报表管理') }}
-        </audit-menu-item>
-        <audit-menu-item
           :class="{ active: ['platformToolConfig', 'platformToolCreate', 'platformToolEdit'].includes(currentRoute) }"
           index="platformToolConfig"
           @click="handleMenuClick('platformToolConfig')">
@@ -124,7 +117,6 @@
 
   // 路由与分组的映射关系
   const routeGroupMap: Record<string, string> = {
-    platformReportConfig: 'resourceManage',
     platformToolConfig: 'resourceManage',
     platformToolCreate: 'resourceManage',
     platformToolEdit: 'resourceManage',
