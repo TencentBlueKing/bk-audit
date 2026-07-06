@@ -213,6 +213,18 @@ export const resolveToolDetailScopeParams = (scopeParams?: SceneSystemScopeParam
   return globalScope;
 };
 
+/** 工具列表/标签接口所需的可见范围参数（scope_type 为后端必填） */
+export const getToolListScopeParams = (extra?: {
+  status?: string | string[];
+}) => {
+  const { scope_type: scopeType, scope_id: scopeId } = getSceneSystemParams();
+  return {
+    scope_type: scopeType || 'cross_scene',
+    ...(scopeId ? { scope_id: scopeId } : {}),
+    ...extra,
+  };
+};
+
 /** 场景/系统维度需等 scope_id 就绪后再请求工具详情，避免先发无参请求 */
 export const isToolDetailScopeReady = (scopeParams?: SceneSystemScopeParams): boolean => {
   const scope = resolveToolDetailScopeParams(scopeParams);
