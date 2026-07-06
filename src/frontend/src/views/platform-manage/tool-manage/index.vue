@@ -33,7 +33,7 @@
             {{ t('新建工具') }}
           </bk-button>
         </div>
-        <div class="header-right">
+        <div class="header-right tool-manage-search-area">
           <bk-radio-group
             v-model="statusFilter"
             class="status-filter mr16"
@@ -74,26 +74,15 @@
           </bk-radio-group>
 
           <bk-search-select
-            ref="searchSelectRef"
+            v-model="searchValue"
             class="search-input"
             clearable
             :data="searchSelectData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :get-menu-list="getMenuList"
-            :model-value="searchValue"
-            :placeholder="t('搜索工具名称、工具说明、工具类型、标签、更新人')"
+            :placeholder="t('搜索工具名称、工具说明、工具类型、可见范围')"
             unique-select
-            @update:model-value="handleSearchValueUpdate">
-            <template #menu="{ id }">
-              <visibility-filter-panel
-                v-if="id === 'visibility'"
-                :model-value="visibilitySelection"
-                :scene-list="visibilitySceneOptions"
-                :system-list="visibilitySystemOptions"
-                @confirm="(val) => handleVisibilityConfirm(val)"
-                @update:model-value="visibilitySelection = $event" />
-            </template>
-          </bk-search-select>
+            value-split-code=","
+            @update:model-value="handleSearchValueUpdate" />
         </div>
       </div>
 
@@ -101,9 +90,10 @@
       <div class="report-config-content">
         <tool-list-table
           ref="toolListRef"
+          :scene-name-map="sceneNameMap"
           :search-params="searchModel"
           :strategy-list="strategyList"
-          :tags-enums="tagsEnums"
+          :system-name-map="systemNameMap"
           @clear-search="handleClearSearch"
           @delete="handleDelete"
           @edit="handleEdit"
@@ -130,9 +120,10 @@
 </template>
 
 <script setup lang='ts'>
-  import { watch, onMounted, onUnmounted, reactive, ref } from 'vue';
+  import { watch, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
+  import tippy, { type Instance } from 'tippy.js';
 
   import StrategyManageService from '@service/strategy-manage';
   import ToolManageService from '@service/tool-manage';
@@ -145,11 +136,9 @@
   import useRequest from '@hooks/use-request';
 
   import ConfirmActionDialog from './components/confirm-action-dialog.vue';
-  import VisibilityFilterPanel from './components/visibility-filter-panel.vue';
   import ToolListTable from './components/tool-list-table.vue';
   import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
-
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { buildVisibilitySearchParams } from './create-tool/submit-payload';
 
   type ActionType = 'delete' | 'enable' | 'disable';
 
@@ -159,11 +148,18 @@
     values: Array<{ id: string; name: string }>;
   }
 
+  interface SearchSelectItem {
+    id: string;
+    name: string;
+    placeholder?: string;
+    multiple?: boolean;
+    async?: boolean;
+    children?: Array<{ id: string; name: string; disabled?: boolean }>;
+  }
+
   interface TagItem {
     tag_id: string;
     tag_name: string;
-    tool_count: number;
-    icon?: string;
   }
 
   interface ToolItem {
@@ -176,8 +172,8 @@
     visibility?: {
       binding_type: string;
       visibility_type: string;
-      scene_ids: number[] | string[];
-      system_ids: number[] | string[];
+      scene_ids: Array<number | string>;
+      system_ids: Array<number | string>;
     };
     updated_at?: string;
     created_at?: string;
@@ -190,55 +186,94 @@
   const router = useRouter();
   const route = useRoute();
   const isLoading = ref(true);
-  // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
 
-  // bk-search-select 组件实例引用（用于控制自定义菜单下拉的关闭）
-  const searchSelectRef = ref<any>(null);
-
-  // bk-search-select 搜索条件配置（对应接口参数）
-  const tagSelectOptions = ref<Array<{ id: string; name: string }>>([]);
-
-  // 可见范围筛选选项数据
   const visibilitySceneOptions = ref<Array<{ id: number; name: string }>>([]);
-  const visibilitySystemOptions = ref<Array<{ id: number; name: string }>>([]);
+  const visibilitySystemOptions = ref<Array<{ id: number; system_id?: string; name: string }>>([]);
 
-  // 可见范围当前选中状态
-  interface VisibilitySelection {
-    all_visible: boolean;
-    all_scenes: boolean;
-    all_systems: boolean;
-    scenes: number[];
-    systems: number[];
-  }
-  const visibilitySelection = ref<VisibilitySelection>({
-    all_visible: false,
-    all_scenes: false,
-    all_systems: false,
-    scenes: [],
-    systems: [],
+  const sceneNameMap = computed(() => {
+    const map: Record<string, string> = {};
+    visibilitySceneOptions.value.forEach((scene) => {
+      map[String(scene.id)] = scene.name;
+    });
+    return map;
   });
 
-  // 构建可见范围选中的展示文本
-  const buildVisibilityDisplayText = (val: VisibilitySelection): string => {
-    if (val.all_visible) return t('全部可见');
-    if (val.all_scenes) return t('全部场景');
-    if (val.all_systems) return t('全部平台');
-    const sceneNames = val.scenes
-      .map(id => visibilitySceneOptions.value.find(s => s.id === id)?.name)
-      .filter(Boolean);
-    const systemNames = val.systems
-      .map(id => visibilitySystemOptions.value.find(s => s.id === id)?.name)
-      .filter(Boolean);
-    return [...sceneNames, ...systemNames].join(',') || '';
+  const systemNameMap = computed(() => {
+    const map: Record<string, string> = {};
+    visibilitySystemOptions.value.forEach((system) => {
+      map[String(system.id)] = system.name;
+      if (system.system_id) {
+        map[String(system.system_id)] = system.name;
+      }
+    });
+    return map;
+  });
+
+  const getVisibilityOptionName = (id: string): string => {
+    if (id === 'all_visible') return t('全部可见');
+    if (id === 'all_scenes') return t('全部场景');
+    if (id === 'all_systems') return t('全部系统');
+    if (id.startsWith('scene_')) {
+      const rawId = id.replace('scene_', '');
+      return sceneNameMap.value[rawId]
+        || visibilitySceneOptions.value.find(scene => String(scene.id) === rawId)?.name
+        || rawId;
+    }
+    if (id.startsWith('system_')) {
+      const rawId = id.replace('system_', '');
+      return systemNameMap.value[rawId]
+        || visibilitySystemOptions.value.find(system => String(system.id) === rawId || system.system_id === rawId)?.name
+        || rawId;
+    }
+    return id;
   };
 
-  const buildSearchSelectData = () => [
-    {
-      name: '可见范围',
-      id: 'visibility',
-      isCustomMenu: true,
-    },
+  const normalizeVisibilitySelectedIds = (selectedIds: string[], prevIds: string[] = []): string[] => {
+    if (selectedIds.includes('all_visible')) {
+      return ['all_visible'];
+    }
+
+    let ids = [...selectedIds].filter(id => !id.startsWith('__group_'));
+
+    if (ids.includes('all_scenes') && ids.includes('all_systems')) {
+      const addedScenes = !prevIds.includes('all_scenes');
+      const addedSystems = !prevIds.includes('all_systems');
+      if (addedSystems && !addedScenes) {
+        ids = ids.filter(id => id !== 'all_scenes' && !id.startsWith('scene_'));
+      } else {
+        ids = ids.filter(id => id !== 'all_systems' && !id.startsWith('system_'));
+      }
+    }
+
+    if (ids.includes('all_scenes')) {
+      ids = ids.filter(id => !id.startsWith('scene_') && id !== 'all_systems' && !id.startsWith('system_'));
+    }
+
+    if (ids.includes('all_systems')) {
+      ids = ids.filter(id => !id.startsWith('system_') && id !== 'all_scenes' && !id.startsWith('scene_'));
+    }
+
+    return ids;
+  };
+
+  const buildVisibilityChildren = () => [
+    { id: 'all_visible', name: t('全部可见') },
+    { id: '__group_scene__', name: t('场景'), disabled: true },
+    { id: 'all_scenes', name: t('全部场景') },
+    ...visibilitySceneOptions.value.map(scene => ({
+      id: `scene_${scene.id}`,
+      name: scene.name,
+    })),
+    { id: '__group_system__', name: t('平台'), disabled: true },
+    { id: 'all_systems', name: t('全部系统') },
+    ...visibilitySystemOptions.value.map(system => ({
+      id: `system_${system.id}`,
+      name: system.name,
+    })),
+  ];
+
+  const buildSearchSelectData = (): SearchSelectItem[] => [
     {
       name: '工具名称',
       id: 'name',
@@ -261,37 +296,126 @@
       ],
     },
     {
-      name: '标签',
-      id: 'tags',
-      placeholder: '请选择标签',
+      name: t('可见范围'),
+      id: 'visibility',
+      placeholder: t('请输入场景或平台名称'),
       multiple: true,
-      children: [...tagSelectOptions.value],
-    },
-    {
-      name: '更新人',
-      id: 'updated_by',
-      placeholder: '请输入更新人',
+      children: buildVisibilityChildren(),
     },
   ];
 
-  const searchSelectData = ref(buildSearchSelectData());
+  const searchSelectData = ref<SearchSelectItem[]>(buildSearchSelectData());
+  const menuItemTooltipMap = new WeakMap<HTMLElement, Instance>();
 
-  // 标签数据变化时重建搜索配置，确保下拉列表刷新
-  watch(tagSelectOptions, () => {
+  const visibilityOptionLabelMap = computed(() => {
+    const map: Record<string, string> = {};
+    buildVisibilityChildren().forEach((item) => {
+      if (!item.id.startsWith('__group_')) {
+        map[item.id] = item.name;
+      }
+    });
+    searchSelectData.value
+      .find(item => item.id === 'tool_type')
+      ?.children
+      ?.forEach((child) => {
+        map[child.id] = child.name;
+      });
+    return map;
+  });
+
+  const getMenuItemFullText = (itemEl: HTMLElement) => {
+    const mapped = visibilityOptionLabelMap.value[itemEl.id];
+    if (mapped) return mapped;
+    return itemEl.textContent?.replace(/\s+/g, ' ').trim() || '';
+  };
+
+  const shouldShowOverflowTooltip = (el: HTMLElement, fullText: string) => {
+    if (el.scrollWidth > el.clientWidth + 1) {
+      return true;
+    }
+
+    const checkboxWidth = el.querySelector('.is-selected')?.getBoundingClientRect().width ?? 0;
+    const availableWidth = el.clientWidth - checkboxWidth - 16;
+    if (availableWidth <= 0) {
+      return fullText.length > 15;
+    }
+
+    const { font } = window.getComputedStyle(el);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return fullText.length > 15;
+    }
+    ctx.font = font;
+    return ctx.measureText(fullText).width > availableWidth;
+  };
+
+  const syncTooltipTypography = (instance: Instance) => {
+    const ref = instance.reference as HTMLElement;
+    const { fontSize, lineHeight, fontFamily, fontWeight } = window.getComputedStyle(ref);
+    const content = instance.popper.querySelector('.tippy-content') as HTMLElement | null;
+    if (!content) return;
+
+    content.style.fontSize = fontSize;
+    content.style.lineHeight = lineHeight;
+    content.style.fontFamily = fontFamily;
+    content.style.fontWeight = fontWeight;
+  };
+
+  const bindOverflowTooltip = (targetEl: HTMLElement, fullText: string) => {
+    if (!fullText || !shouldShowOverflowTooltip(targetEl, fullText)) return;
+
+    let tooltip = menuItemTooltipMap.get(targetEl);
+    if (!tooltip) {
+      tooltip = tippy(targetEl, {
+        content: fullText,
+        theme: 'tool-manage-search-tooltip',
+        placement: 'top',
+        arrow: true,
+        appendTo: () => document.body,
+        delay: [200, 0],
+        zIndex: 99999,
+        onMount: syncTooltipTypography,
+        onShow: syncTooltipTypography,
+      });
+      menuItemTooltipMap.set(targetEl, tooltip);
+      return;
+    }
+
+    tooltip.setContent(fullText);
+  };
+
+  const handleSearchMenuMouseOver = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+
+    const menuItemEl = target.closest('.bk-search-select-popover .menu-content .menu-item') as HTMLElement | null;
+    if (menuItemEl?.querySelector('.is-selected')) {
+      bindOverflowTooltip(menuItemEl, getMenuItemFullText(menuItemEl));
+      return;
+    }
+
+    const valueEl = target.closest('.tool-manage-search-area [data-type="value"]') as HTMLElement | null;
+    if (!valueEl) return;
+
+    const optionId = valueEl.dataset.id;
+    const fullText = (optionId && visibilityOptionLabelMap.value[optionId])
+      || valueEl.dataset.key
+      || valueEl.textContent?.replace(/\s+/g, ' ').trim()
+      || '';
+    bindOverflowTooltip(valueEl, fullText);
+  };
+
+  watch([visibilitySceneOptions, visibilitySystemOptions], () => {
     searchSelectData.value = buildSearchSelectData();
   });
 
-  // 表格引用
   const toolListRef = ref();
   const previewDrawerRef = ref();
   const searchModel = ref<Record<string, any>>({});
   const tagsEnums = ref<Array<TagItem>>([]);
-  // 策略列表（用于匹配策略名称）
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
-  // 全部工具数据（用于下钻时获取工具名称）
   const allToolsData = ref<Array<ToolInfo>>([]);
 
-  // 状态筛选
   const statusFilter = ref('all');
   const statusCounts = reactive({
     all: 0,
@@ -299,14 +423,10 @@
     unpublished: 0,
   });
 
-  // 确认操作弹窗相关（删除/启用/停用）
   const confirmActionType = ref<ActionType>('delete');
   const confirmTarget = ref<ToolItem | null>(null);
-
-  // 预览抽屉相关
   const isPreviewShow = ref(false);
 
-  // 新建工具
   const handleCreateReport = () => {
     router.push({ name: 'platformToolCreate', query: {
       scene_id: route.query.scene_id,
@@ -315,7 +435,6 @@
     } });
   };
 
-  // 编辑工具
   const handleEdit = (row: ToolItem) => {
     router.push({
       name: 'platformToolEdit',
@@ -328,19 +447,16 @@
     });
   };
 
-  // 预览工具
   const handlePreview = (row: ToolItem) => {
     isPreviewShow.value = true;
     previewDrawerRef.value?.open(row.uid);
   };
 
-  // 显示删除确认弹窗
   const handleDelete = (row: ToolItem) => {
     confirmTarget.value = row;
     confirmDialogRef.value?.showDeleteInfoBox(row);
   };
 
-  // 显示启用/停用确认弹窗
   const confirmDialogRef = ref();
   const handleToggleStatus = (row: ToolItem) => {
     confirmTarget.value = row;
@@ -349,15 +465,12 @@
     confirmDialogRef.value?.showToggleStatusInfoBox(row, actionType);
   };
 
-  // 操作成功后刷新列表和状态统计
   const handleActionSuccess = () => {
     confirmTarget.value = null;
     refreshList();
-    // 操作（删除/启用/停用）成功后，重新获取状态统计
     fetchStatusCounts();
   };
 
-  // 刷新列表（统一入口）
   const refreshList = (searchParams?: Record<string, any>) => {
     const params: Record<string, any> = {
       ...searchParams,
@@ -366,94 +479,74 @@
     if (statusFilter.value !== 'all') {
       params.status = [statusFilter.value];
     } else {
-      // 全部状态时，显式清除 status 参数，避免 paramsMemo 中残留上次的 status 值
       params.status = undefined;
     }
     toolListRef.value?.fetchData(params);
   };
 
-  // 搜索
+  const buildVisibilitySearchFields = (selectedIds: string[]) => {
+    const payload = buildVisibilitySearchParams(selectedIds);
+    if (!payload) return {};
+
+    return {
+      visibility_type: payload.visibility_type,
+      scene_ids: payload.scene_ids.length ? payload.scene_ids : undefined,
+      system_ids: payload.system_ids.length ? payload.system_ids : undefined,
+    };
+  };
+
+  const handleSearchValueUpdate = (keyword: SearchKey[]) => {
+    const prevVisibilityIds = searchValue.value
+      .find(item => item.id === 'visibility')
+      ?.values?.map(value => value.id) ?? [];
+    const visibilityItem = keyword.find(item => item.id === 'visibility');
+
+    if (visibilityItem?.values?.length) {
+      const normalizedIds = normalizeVisibilitySelectedIds(
+        visibilityItem.values.map(value => value.id),
+        prevVisibilityIds,
+      );
+      visibilityItem.values = normalizedIds.map(id => ({
+        id,
+        name: getVisibilityOptionName(id),
+      }));
+    }
+
+    searchValue.value = keyword;
+    handleSearch(keyword);
+  };
+
   const handleSearch = (keyword: SearchKey[]) => {
     const search: Record<string, any> = {
       name: undefined,
       description: '',
       tool_type: undefined,
-      tags: [],
-      updated_by: '',
+      visibility_type: undefined,
+      scene_ids: undefined,
+      system_ids: undefined,
     };
 
     keyword.forEach((item) => {
-      if (item.values && item.values.length) {
-        const value = item.values.map(v => v.id).join(',');
-        if (item.id === 'name') {
-          search.name = value;
-        } else if (item.id === 'description') {
-          search.description = value;
-        } else if (item.id === 'tool_type') {
-          // tool_type 接口期望 array<string>
-          search.tool_type = value.split(',').map(v => v.trim());
-        } else if (item.id === 'tags') {
-          // tags 接口期望 array<string>
-          search.tags = value.split(',').map(v => v.trim());
-        } else if (item.id === 'updated_by') {
-          search.updated_by = value;
-        }
-        // visibility 通过面板确认单独处理，不走此分支
+      if (!item.values?.length) return;
+
+      if (item.id === 'visibility') {
+        Object.assign(search, buildVisibilitySearchFields(item.values.map(v => v.id)));
+        return;
+      }
+
+      const value = item.values.map(v => v.id).join(',');
+      if (item.id === 'name') {
+        search.name = value;
+      } else if (item.id === 'description') {
+        search.description = value;
+      } else if (item.id === 'tool_type') {
+        search.tool_type = value.split(',').map(v => v.trim());
       }
     });
-
-    // 合并可见范围筛选参数（从自定义面板状态读取）
-    const vis = visibilitySelection.value;
-    if (vis.all_visible) {
-      search.visibility_type = 'all_visible';
-    } else if (vis.all_scenes) {
-      search.visibility_type = 'all_scenes';
-    } else if (vis.all_systems) {
-      search.visibility_type = 'all_systems';
-    } else if (vis.scenes.length || vis.systems.length) {
-      if (vis.scenes.length && !vis.systems.length) {
-        search.visibility_type = 'specific_scenes';
-        search.visible_scene_ids = vis.scenes;
-      } else if (!vis.scenes.length && vis.systems.length) {
-        search.visibility_type = 'specific_systems';
-        search.visible_system_ids = vis.systems;
-      } else {
-        search.visibility_type = 'scenes_and_systems';
-        search.visible_scene_ids = vis.scenes;
-        search.visible_system_ids = vis.systems;
-      }
-    }
 
     refreshList(search);
   };
 
-  // 搜索值更新拦截：完全过滤掉 bk-search-select 自动插入的所有可见范围条目
-  // （可见范围的tag由 handleVisibilityConfirm 统一管理，避免重复）
-  const handleSearchValueUpdate = (val: SearchKey[]) => {
-    const filtered = val.filter(item => item.id !== 'visibility');
-    searchValue.value = filtered;
-    handleSearch(filtered);
-  };
-
-  // 可见范围面板选择变化回调：更新状态 + 更新tag展示 + 触发搜索
-  const handleVisibilityConfirm = (val: VisibilitySelection) => {
-    visibilitySelection.value = val;
-    const displayText = buildVisibilityDisplayText(val);
-    // 移除已有的 visibility 项，再根据当前选择决定是否添加新 tag
-    const filtered = searchValue.value.filter(item => item.id !== 'visibility');
-    if (displayText) {
-      filtered.push({
-        id: 'visibility',
-        name: t('可见范围'),
-        values: [{ id: '_vis_', name: displayText }],
-      });
-    }
-    searchValue.value = filtered;
-    // 触发搜索（handleSearch 从 visibilitySelection 读取最新筛选参数）
-    handleSearch(filtered);
-  };
-
-  // 状态筛选变化
   const handleStatusFilterChange = () => {
     handleSearch(searchValue.value);
   };
@@ -461,14 +554,6 @@
   const handleClearSearch = () => {
     searchValue.value = [];
     statusFilter.value = 'all';
-    // 重置可见范围筛选
-    visibilitySelection.value = {
-      all_visible: false,
-      all_scenes: false,
-      all_systems: false,
-      scenes: [],
-      systems: [],
-    };
     toolListRef.value?.fetchData({ sort: ['-created_at'] });
   };
 
@@ -476,7 +561,6 @@
     isLoading.value = false;
   };
 
-  // 获取全局状态统计（分别请求各状态数量，使用平台接口 /tool/ 不传 scope_type）
   const fetchStatusCounts = () => {
     const allPromise = ToolManageService.fetchToolsList({});
     const publishedPromise = ToolManageService.fetchToolsList({ status: ['published'] });
@@ -489,59 +573,24 @@
     });
   };
 
-  const {
-    run: fetchToolsTagsList,
-  } = useRequest(ToolManageService.fetchToolTags, {
+  useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
+    manual: true,
     onSuccess: (data) => {
-      tagsEnums.value = data;
-      // 过滤掉内置的快捷筛选标签（-3全部工具、-4我创建的、-5最近使用、-6我的收藏），保留无标签等
-      const excludeIds = ['-3', '-4', '-5', '-6'];
-      const realTags = data.filter((tag: TagItem) => !excludeIds.includes(String(tag.tag_id)));
-      // 同步标签下拉选项
-      tagSelectOptions.value = realTags.map((tag: TagItem) => ({
-        id: String(tag.tag_id),
-        name: tag.tag_name,
+      tagsEnums.value = data.map((tag: { tag_id: string; tag_name: string }) => ({
+        tag_id: tag.tag_id,
+        tag_name: tag.tag_name,
       }));
     },
   });
 
-  // 获取用户列表（用于更新人远程搜索）
-  const {
-    run: fetchUserList,
-  } = useRequest(MetaManageService.fetchUserList, {
-    defaultParams: { page: 1, page_size: 30 },
-    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
-  });
-
-  // 远程搜索菜单列表（仅处理更新人远程搜索）
-  const getMenuList = async (item: any, keyword: string) => {
-    if (!item) return searchSelectData.value;
-    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
-    if (searchItem && item.id === 'updated_by') {
-      if (keyword) {
-        const userList = await fetchUserList({ fuzzy_lookups: keyword });
-        searchItem.children = userList.results.map((u: any) => ({
-          id: u.username,
-          name: `${u.username}(${u.display_name})`,
-        }));
-      } else {
-        searchItem.children = [];
-      }
-    }
-    // 其他有 children 的项直接返回
-    if (searchItem?.children && searchItem.children.length > 0) {
-      return searchItem.children;
-    }
-    return [];
-  };
-
-  // 加载可见范围筛选面板的场景/系统选项
   const loadVisibilityOptions = async () => {
     try {
       const scenes = await SceneManageService.fetchSceneAll({ status: 'enabled' });
-      // eslint-disable-next-line max-len
-      visibilitySceneOptions.value = (scenes || []).map((s: { scene_id: number; name: string }) => ({ id: s.scene_id, name: s.name }));
+      visibilitySceneOptions.value = (scenes || []).map((s: { scene_id: number; name: string }) => ({
+        id: s.scene_id,
+        name: s.name,
+      }));
     } catch {
       visibilitySceneOptions.value = [];
     }
@@ -550,10 +599,15 @@
         audit_status__in: 'accessed',
         namespace: 'default',
       });
-      visibilitySystemOptions.value = (systems || []).map((s: any) => ({ id: s.id, name: s.name }));
+      visibilitySystemOptions.value = (systems || []).map((s: any) => ({
+        id: s.id,
+        system_id: s.system_id,
+        name: s.name,
+      }));
     } catch {
       visibilitySystemOptions.value = [];
     }
+    searchSelectData.value = buildSearchSelectData();
   };
 
   const {
@@ -565,7 +619,6 @@
     },
   });
 
-  // 获取全部工具（用于下钻时获取工具名称，使用平台接口 /tool/ 不传 scope_type）
   const {
     run: fetchAllToolsData,
   } = useRequest(ToolManageService.fetchToolsList, {
@@ -575,59 +628,28 @@
     },
   });
 
-  // 监听场景切换事件
   const { on: onEvent, off } = useEventBus();
 
-  // 点击页面其他区域时关闭可见范围自定义菜单下拉
-  // 使用 mousedown 而非 click：更可靠，不受 focus 变化和 stopPropagation 影响
-  // （isCustomMenu 模式下 bk-search-select 不会自动关闭，需手动处理）
-  const handleDocumentMousedown = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    // bk-search-select 的 popover 通过 teleport 渲染到 body，需要检查多个可能容器
-    const searchEl = searchSelectRef.value?.$el as HTMLElement | undefined;
-    // 检查点击是否在搜索框组件内
-    if (searchEl?.contains(target)) return;
-    // 检查是否在 popover 面板内（popover 通常有 .bk-popover 或 .tippy-box 类）
-    const popoverEl = target.closest('.bk-popover, .tippy-box, [data-popper-placement]');
-    if (popoverEl) return;
-    // 点击在外部，关闭下拉
-    if (searchSelectRef.value?.showPopover?.value) {
-      searchSelectRef.value.showPopover.value = false;
-    }
-  };
-
-  // 刷新所有数据（场景切换时调用）
   const refreshAllData = () => {
-    const scopeParams = getSceneSystemParams();
-    fetchToolsTagsList(scopeParams);
-    fetchUserList();
     fetchAllToolsData();
     refreshList();
-    // 场景切换时也需要刷新状态统计
     fetchStatusCounts();
   };
 
   onMounted(() => {
-    const scopeParams = getSceneSystemParams();
-    fetchToolsTagsList(scopeParams);
-    fetchUserList();
     fetchStrategyList();
     fetchAllToolsData();
-    // 初始化时获取一次状态统计
     fetchStatusCounts();
-    // 加载可见范围筛选选项
     loadVisibilityOptions();
-    // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();
     });
-    // 注册全局 mousedown 事件，用于关闭可见范围自定义菜单下拉
-    document.addEventListener('mousedown', handleDocumentMousedown);
+    document.addEventListener('mouseover', handleSearchMenuMouseOver, true);
   });
 
   onUnmounted(() => {
+    document.removeEventListener('mouseover', handleSearchMenuMouseOver, true);
     off('scene:change');
-    document.removeEventListener('mousedown', handleDocumentMousedown);
   });
 </script>
 
@@ -708,5 +730,60 @@
     :deep(.audit-tdesign-list) {
       border: none;
     }
+  }
+</style>
+
+<!-- 下拉层挂到 body，需全局样式覆盖 bkui 的 white-space: pre -->
+<style lang="postcss">
+  .bk-search-select-popover {
+    width: 280px !important;
+    max-width: 280px !important;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item {
+    display: flex !important;
+    align-items: center;
+    max-width: 100% !important;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item .is-selected {
+    flex-shrink: 0;
+  }
+
+  .tool-manage-search-area .bk-search-select [data-type='value'] {
+    display: inline-block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .tippy-box[data-theme~='tool-manage-search-tooltip'] {
+    color: #fff;
+    background-color: #000;
+    border-radius: 2px;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+  }
+
+  .tippy-box[data-theme~='tool-manage-search-tooltip'] .tippy-content {
+    padding: 4px 8px;
+  }
+
+  .tippy-box[data-theme~='tool-manage-search-tooltip'][data-placement^='top'] > .tippy-arrow::before {
+    border-top-color: #000;
+  }
+
+  .tippy-box[data-theme~='tool-manage-search-tooltip'][data-placement^='bottom'] > .tippy-arrow::before {
+    border-bottom-color: #000;
   }
 </style>

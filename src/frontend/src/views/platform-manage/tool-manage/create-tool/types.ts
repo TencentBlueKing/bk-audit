@@ -2,6 +2,19 @@
  * 工具创建/编辑 - 公共类型定义
  */
 
+/** 场景/系统级参数默认值覆盖（后端 config.default_value_overrides） */
+export interface DefaultValueOverrides {
+  scenes?: Record<string, Record<string, any>>;
+  systems?: Record<string, Record<string, any>>;
+}
+
+/** 可见范围（后端 visibility） */
+export interface VisibilityScopePayload {
+  visibility_type: FormData['visibility_type'];
+  scene_ids: number[];
+  system_ids: string[];
+}
+
 // 表单数据接口
 export interface FormData {
   uid?: string; // 工具uid
@@ -21,15 +34,11 @@ export interface FormData {
   // 可见范围（平铺字段，提交时组装为 visibility 对象）
   visibility_type: 'all_visible' | 'all_scenes' | 'all_systems' | 'specific_scenes' | 'specific_systems' | 'scenes_and_systems';
   scene_ids: number[]; // 审计场景 ID 列表
-  system_ids: number[]; // 接入系统 ID 列表
+  system_ids: string[]; // 接入系统 ID 列表（与 meta 接口 id / system_id 一致）
   // 各场景/系统的参数覆盖配置 key: `${type}-${id}` (scene-1 / system-5)
   scene_param_overrides?: Record<string, SceneParamOverride>;
   // 提交时的 visibility 字段（符合后端协议）
-  visibility?: {
-    visibility_type: string;
-    scene_ids: number[];
-    system_ids: string[];
-  };
+  visibility?: VisibilityScopePayload;
   // 提交时的 namespace 字段（后端协议字段名，对应表单的 source）
   namespace?: string;
   config: {
@@ -80,6 +89,7 @@ export interface FormData {
     }>;
     sql: string;
     uid: string;
+    default_value_overrides?: DefaultValueOverrides;
     output_config: {
       enable_grouping: boolean;
       groups: Array<{
@@ -102,6 +112,9 @@ export interface FormData {
         default_page_size: number;
         position: string;
       }>;
+      result_schema?: {
+        tree_data?: string | any[] | Record<string, any>;
+      };
     };
   };
 }
@@ -118,7 +131,7 @@ export interface ChartListModel {
 
 // 场景/系统级参数覆盖配置
 export interface SceneParamOverride {
-  target_id: number;       // 场景ID 或 系统ID
+  target_id: number | string; // 场景 scene_id（number）或系统 system_id（string）
   target_type: 'scene' | 'system';
   target_name: string;     // 显示名称
   override_param_keys: string[]; // 选中的参数 raw_name 列表

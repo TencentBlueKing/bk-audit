@@ -735,17 +735,12 @@
     },
   });
 
-  // 获取标签列表
+  // 获取标签列表：GET /api/v1/meta/namespaces/{namespace}/tag/
   const {
     data: toolTagData,
-  } = useRequest(ToolManageService.fetchToolTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
-    onSuccess: () => {
-      fetchAllTools({
-        status: ['published'],
-      });
-    },
   });
 
   const handleCopy = () => {

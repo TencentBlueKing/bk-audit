@@ -88,8 +88,14 @@ class ToolManage extends ModuleBase {
   // 获取工具详情
   getToolsDetail(params: {
     uid: string,
+    scene_id?: number,
+    system_id?: string,
   }) {
-    return Request.get<ToolDetailModel>(`${this.path}/tool/${params.uid}/`);
+    const { uid, ...queryParams } = params;
+    const query = Object.keys(queryParams).length > 0
+      ? `?${processedParams(queryParams).toString()}`
+      : '';
+    return Request.get<ToolDetailModel>(`${this.path}/tool/${uid}/${query}`);
   }
   // 编辑工具
   updateSceneTool(params: Record<string, any>) {
