@@ -340,3 +340,10 @@ class AssetSyncAnomalyReason(TextChoices):
     PREPARING_TIMEOUT = "preparing_timeout", gettext_lazy("卡在启动中超时")
     SOURCE_PULL_FAILED = "source_pull_failed", gettext_lazy("源系统拉取失败")
     STORAGE_QUERY_FAILED = "storage_query_failed", gettext_lazy("存储查询失败")
+
+
+class CheckErrorType(TextChoices):
+    """资产同步检查失败类型"""
+
+    SOURCE = "source", gettext_lazy("源系统拉取失败")
+    STORAGE = "storage", gettext_lazy("存储查询失败")
