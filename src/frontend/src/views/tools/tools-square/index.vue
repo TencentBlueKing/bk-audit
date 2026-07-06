@@ -60,7 +60,7 @@
           <div class="scene-selector-wrapper">
             <scene-system-selector
               v-model="selectedScene"
-              :list-scope="['scene']"
+              :list-scope="['scene','system']"
               :popover-width="228"
               scene-permission="view_scene"
               system-permission="view_system"
@@ -97,10 +97,12 @@
             <content-card
               ref="ContentCardRef"
               :is-cross-scene="scopeParams.scope_type === 'cross_scene'"
+              :is-cross-system="scopeParams.scope_type === 'cross_system'"
               :my-created="tagId === '-4'"
               :recent-used="tagId === '-5'"
               :scene-name-map="sceneNameMap"
               :scope-params="scopeParams"
+              :system-name-map="systemNameMap"
               :tag-id="tagId"
               :tags-enums="tagsEnums"
               @change="handleChange"
@@ -111,6 +113,7 @@
             :active-uid="activeToolUid"
             :scene-name-map="sceneNameMap"
             :scope-params="scopeParams"
+            :system-name-map="systemNameMap"
             :tags-enums="tagsEnums"
             :tool-list="openedTools"
             @add-tool="handleAddToolFromPopover"
@@ -130,6 +133,7 @@
   import type { LocationQueryRaw } from 'vue-router';
   import { useRoute, useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
 
@@ -146,6 +150,7 @@
   import useRequest from '@/hooks/use-request';
   import type { DrillDownParams } from '@/hooks/use-tool-tabs';
   import useToolTabs from '@/hooks/use-tool-tabs';
+  import type { ToolDetailOverrideContext } from '@/utils/assist/scene-system-params';
   import foldLeftIcon from '@/images/fold-left.svg';
   import foldRightIcon from '@/images/fold-right.svg';
   import infoBlueSvg from '@/images/info-blue.svg';
@@ -194,8 +199,26 @@
       sceneNameMap.value = map;
     },
   });
-  // 初始化获取场景列表
+  // 系统ID → 系统名称映射
+  const systemNameMap = ref<Record<string, string>>({});
+  const {
+    run: fetchSystemList,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      const map: Record<string, string> = {};
+      (data || []).forEach((item) => {
+        map[String(item.system_id)] = item.name;
+        if (item.id !== undefined && item.id !== null) {
+          map[String(item.id)] = item.name;
+        }
+      });
+      systemNameMap.value = map;
+    },
+  });
+  // 初始化获取场景/系统列表
   fetchSceneAll();
+  fetchSystemList({ audit_status__in: 'accessed', namespace: 'default' });
   const tagsEnums = ref<Array<TagItem>>([]);
   const tagId = ref(sessionStorage.getItem('tools_square_selected_tag') || '');
   // 监听 tagId 变化，保存到 sessionStorage（用于记忆选中的tab）
@@ -542,19 +565,17 @@
     }
   }
 
-  const handleOpenTool = (tool: ToolInfo) => {
-    openTool(tool);
+  const handleOpenTool = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid);
-    // 打开工具后刷新标签数量（如最近使用计数）
     refreshTagsList();
   };
 
-  const handleAddToolFromPopover = (tool: ToolInfo) => {
-    openTool(tool);
+  const handleAddToolFromPopover = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid);
-    // 打开工具后刷新标签数量（如最近使用计数）
     refreshTagsList();
   };
 

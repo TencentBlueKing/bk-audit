@@ -111,7 +111,7 @@
   import objectModel from './object-table.vue';
 
   interface Props {
-    resultData: Array<resultDataModel> | string,
+    resultData: Array<resultDataModel> | string | Record<string, any>,
     groupKey?: string,
     isEditMode: boolean,
     groupOutputFields?: any,
@@ -303,9 +303,14 @@
     },
   );
 
+  const normalizeResultData = (value: any) => {
+    const raw = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(raw) ? raw : buildTree(raw);
+  };
+
   watch(() => props.resultData, (newVal: any) => {
     if (newVal) {
-      initTreeDatas.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
+      initTreeDatas.value = normalizeResultData(newVal);
       treeData.value = initTreeDatas.value;
 
       // 分组模式：恢复选中状态

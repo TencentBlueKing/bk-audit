@@ -232,9 +232,14 @@
     name: string;
   }
 
+  interface SystemOptionItem {
+    id: string;
+    name: string;
+  }
+
   interface DisplayTag {
     key: string;
-    id: number;
+    id: number | string;
     name: string;
     type: 'scene' | 'system' | 'all-scene' | 'all-system';
   }
@@ -261,7 +266,7 @@
   const visibleCount = ref(999);
 
   const sceneList = ref<OptionItem[]>([]);
-  const systemList = ref<OptionItem[]>([]);
+  const systemList = ref<SystemOptionItem[]>([]);
 
   // 加载场景列表
   const loadSceneList = async () => {
@@ -283,8 +288,8 @@
         audit_status__in: 'accessed',
         namespace: 'default',
       });
-      systemList.value = (data || []).map((item: any) => ({
-        id: item.id,
+      systemList.value = (data || []).map(item => ({
+        id: item.system_id || item.id,
         name: item.name,
       }));
     } catch {
@@ -295,7 +300,7 @@
   // 根据场景/系统的选择状态计算正确的 visibility_type
   const computeVisibilityType = (
     sceneIds: number[],
-    systemIds: number[],
+    systemIds: string[],
   ): FormData['visibility_type'] => {
     const hasScenes = sceneIds.length > 0;
     const hasSystems = systemIds.length > 0;
@@ -441,16 +446,20 @@
       handleToggleAllSystems();
       break;
     case 'scene':
-      handleSceneToggle(tag.id);
+      if (typeof tag.id === 'number') {
+        handleSceneToggle(tag.id);
+      }
       break;
     case 'system':
-      handleSystemToggle(tag.id);
+      if (typeof tag.id === 'string') {
+        handleSystemToggle(tag.id);
+      }
       break;
     }
   };
 
   const isSceneChecked = (id: number) => (props.formData.scene_ids || []).includes(id);
-  const isSystemChecked = (id: number) => (props.formData.system_ids || []).includes(id);
+  const isSystemChecked = (id: string) => (props.formData.system_ids || []).includes(id);
 
   const updatePopoverPosition = () => {
     nextTick(() => {
@@ -521,7 +530,7 @@
   const handleToggleAllSystems = () => {
     if (isAllSystemChecked.value) {
       // 取消全选系统 → 清空 system_ids，重新计算类型
-      const newSystemIds: number[] = [];
+      const newSystemIds: string[] = [];
       const newType = computeVisibilityType(props.formData.scene_ids || [], newSystemIds);
       emit('update:formData', {
         ...props.formData,
@@ -554,7 +563,7 @@
     });
   };
 
-  const handleSystemToggle = (id: number) => {
+  const handleSystemToggle = (id: string) => {
     const currentSystems = [...(props.formData.system_ids || [])];
     const idx = currentSystems.indexOf(id);
     if (idx > -1) {
