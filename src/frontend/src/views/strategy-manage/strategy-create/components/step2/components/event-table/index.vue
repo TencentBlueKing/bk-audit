@@ -98,6 +98,7 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -198,32 +199,31 @@
   });
 
 
+  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
+
   // 获取所有工具
   const {
     data: allToolsData,
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    defaultParams: { status: 'published' },
+    defaultParams: buildToolListParams(),
+    manual: true,
   });
 
   // 获取标签列表
   const {
     data: tagData,
+    run: fetchToolTags,
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
+    defaultParams: buildToolListParams(),
     manual: true,
-    onSuccess: () => {
-      fetchAllTools({
-        status: 'published',
-      });
-    },
   });
 
   const handleRefreshToolList = () => {
-    fetchAllTools({
-      status: 'published',
-    });
+    fetchAllTools(buildToolListParams());
+    fetchToolTags(buildToolListParams());
   };
 
   const getHeaderClass = (valueKey: string | undefined) => ({
