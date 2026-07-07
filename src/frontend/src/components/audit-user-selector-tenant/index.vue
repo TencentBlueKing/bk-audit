@@ -24,6 +24,7 @@
     :auto-focus="autoFocus"
     :disabled="isDisabled"
     :multiple="multiple"
+    :render-list-item="renderListItem"
     :render-tag="renderTag"
     :tenant-id="tenantId"
     :user-group="userGroup"
@@ -112,15 +113,51 @@
       || id;
   };
 
+  const isResignedUser = (userInfo: Record<string, any> | string) => {
+    if (!userInfo || typeof userInfo !== 'object') {
+      return false;
+    }
+    if (userInfo.type === 'custom') {
+      return true;
+    }
+    const { status } = userInfo;
+    if (status && status !== '在职') {
+      return true;
+    }
+    const staffStatus = userInfo.staff_status;
+    if (staffStatus && String(staffStatus).includes('离职')) {
+      return true;
+    }
+    return false;
+  };
+
   // 自定义标签渲染（兼容用户组变量：无 display_name / logo）
   const renderTag = (createElement: any, userInfo: Record<string, any> | string) => {
     const displayText = getTagDisplayText(userInfo);
+    const resigned = isResignedUser(userInfo);
     const children: any[] = [];
     if (userInfo && typeof userInfo === 'object' && userInfo.logo) {
       children.push(createElement('img', { src: userInfo.logo, class: 'avatar' }));
     }
     children.push(displayText);
-    return createElement('span', { class: 'custom-tag' }, children);
+    return createElement('span', {
+      class: ['custom-tag', { 'is-resigned': resigned }],
+    }, children);
+  };
+
+  const renderListItem = (createElement: any, userInfo: Record<string, any>) => {
+    const resigned = isResignedUser(userInfo);
+    const displayText = userInfo.display_name
+      || userInfo.name
+      || userInfo.username
+      || userInfo.bk_username
+      || userInfo.id
+      || '';
+    return createElement('div', {
+      class: ['audit-user-render-item', { 'is-resigned': resigned }],
+    }, [
+      createElement('span', { class: 'audit-user-render-item__name' }, displayText),
+    ]);
   };
 
   // 从sessionStorage中获取配置
@@ -186,6 +223,44 @@
       color: #63656e;
       background-color: #f0f1f5;
       border-color: #f0f1f5;
+    }
+
+    .custom-tag.is-resigned {
+      color: #c4c6cc;
+      background-color: #f0f1f5;
+      border-color: #f0f1f5;
+    }
+
+    .user-tag.is-custom {
+      color: #c4c6cc !important;
+      background-color: #f0f1f5 !important;
+      border-color: #f0f1f5 !important;
+    }
+
+    .user-tag.is-custom:hover {
+      color: #c4c6cc !important;
+      background-color: #f0f1f5 !important;
+    }
+
+    .user-tag.is-custom .tag-content .user-name {
+      color: #c4c6cc !important;
+    }
+
+    &.nl-tag-user-selector .user-tag.is-custom,
+    &.nl-tag-user-selector .user-tag.is-custom .tag-content .user-name,
+    &.nl-tag-user-selector .custom-tag.is-resigned {
+      color: #c4c6cc !important;
+      background-color: #f0f1f5 !important;
+      border-color: #f0f1f5 !important;
+    }
+
+    &.nl-tag-user-selector .user-tag.is-custom:hover {
+      color: #c4c6cc !important;
+      background-color: #f0f1f5 !important;
+    }
+
+    .audit-user-render-item.is-resigned .audit-user-render-item__name {
+      color: #c4c6cc;
     }
 
     .avatar {
