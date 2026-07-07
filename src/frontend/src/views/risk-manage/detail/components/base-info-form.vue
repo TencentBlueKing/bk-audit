@@ -15,19 +15,26 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="base-info-form">
+  <div class="base-info-form info-field-rows">
     <template
-      v-for="(fieldGroup, groupIndex) in renderShowFieldNames"
-      :key="groupIndex">
-      <render-info-block
-        class="flex mt16"
-        :style="{ marginBottom: groupIndex === renderShowFieldNames.length - 1 ? '0px' : '12px' }">
+      v-for="(rowItem, rowIndex) in fieldRows"
+      :key="rowIndex">
+      <div
+        v-if="rowItem.type === 'divider'"
+        class="fields-section-divider" />
+      <div
+        v-else
+        class="info-field-row"
+        :class="{
+          'is-full-row': rowItem.group.length === 1
+            && rowItem.group[0]
+            && isFullRowField(rowItem.group[0].field_name),
+        }">
         <render-info-item
-          v-for="(fieldItem, itemIndex) in fieldGroup.filter(item => item)"
-          :key="itemIndex"
+          v-for="(fieldItem, itemIndex) in rowItem.group.filter(item => item)"
+          :key="`${rowIndex}-${itemIndex}-${fieldItem.field_name}`"
           :label="fieldItem.field_name === 'strategy_name' ? t('风险命中策略(ID)') : fieldItem.display_name"
-          :label-width="labelWidth"
-          :style="getFieldStyle(fieldItem.field_name)">
+          :label-width="labelWidth">
           <template v-if="fieldItem.field_name === 'risk_id'">
             {{ data.risk_id || '--' }}
           </template>
@@ -168,7 +175,7 @@
                 : data[fieldItem.field_name as keyof RiskManageModel]) }}
           </template>
         </render-info-item>
-      </render-info-block>
+      </div>
     </template>
   </div>
 </template>
@@ -186,7 +193,6 @@
   import EditTag from '@components/edit-box/tag.vue';
 
   import { RISK_STATUS_THEME_MAP } from '@views/risk-manage/constants';
-  import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import { formatStrategyNameWithId } from '@utils/format-strategy-name';
 
@@ -205,6 +211,8 @@
       name: string,
     }>,
     showFieldNames: Array<StrategyInfo['risk_meta_field_config'][0]>,
+    normalFieldNames?: Array<StrategyInfo['risk_meta_field_config'][0]>,
+    showNormalFields?: boolean,
     isAddRisk?: boolean
     editData?: Record<string, any>
     noticeGroups?: string[] // 关注人
@@ -222,10 +230,12 @@
     operatorsComfig: () => [],
     eventContentComfig: () => [],
     eventTypeComfig: () => [],
+    normalFieldNames: () => [],
+    showNormalFields: false,
   });
   const { t, locale } = useI18n();
 
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 100));
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
   const strategyTagMap = ref<Record<string, string>>({});
 
@@ -336,34 +346,49 @@
     return newArray;
   };
 
-  const renderShowFieldNames = computed(() => {
-    const fields = props.showFieldNames;
+  const buildFieldGroups = (fields: Props['showFieldNames']) => {
+    if (!fields.length) {
+      return [];
+    }
     // 在"风险命中策略"(strategy_name)前插入所属场景(scene_id)字段
     const strategyIndex = fields.findIndex(f => f.field_name === 'strategy_name');
+    let processedFields = fields;
     if (strategyIndex > 0) {
       const sceneField = {
         field_name: 'scene_id',
         display_name: t('所属场景'),
         is_priority: false,
       };
-      const newFields = [...fields];
-      newFields.splice(strategyIndex, 0, sceneField as any);
-      return group(newFields);
+      processedFields = [...fields];
+      processedFields.splice(strategyIndex, 0, sceneField as any);
     }
-    return group(fields);
+    return group(processedFields);
+  };
+
+  const priorityFieldGroups = computed(() => buildFieldGroups(props.showFieldNames));
+
+  const normalFieldGroups = computed(() => buildFieldGroups(props.normalFieldNames));
+
+  const fieldRows = computed(() => {
+    const rows: Array<{ type: 'divider' } | { type: 'row', group: Array<Props['showFieldNames'][0] | null> }> = [];
+    priorityFieldGroups.value.forEach((fieldGroup) => {
+      rows.push({ type: 'row', group: fieldGroup });
+    });
+    if (props.showNormalFields && normalFieldGroups.value.length) {
+      if (priorityFieldGroups.value.length) {
+        rows.push({ type: 'divider' });
+      }
+      normalFieldGroups.value.forEach((fieldGroup) => {
+        rows.push({ type: 'row', group: fieldGroup });
+      });
+    }
+    return rows;
   });
 
-  // 获取字段样式
-  const getFieldStyle = (fieldName: string) => {
-    if (fieldName === 'notice_users') {
-      return 'width: 100%;';
-    }
-    // risk_guidance 和 risk_hazard 单独占一行，宽度为100%
-    if (fieldName === 'risk_guidance' || fieldName === 'risk_hazard') {
-      return 'width: 100%;';
-    }
-    return '';
-  };
+  // 是否独占整行
+  const isFullRowField = (fieldName: string) => (
+    ['notice_users', 'risk_guidance', 'risk_hazard', 'event_content'].includes(fieldName)
+  );
 
   // 获取标签列表
   const {
@@ -407,13 +432,6 @@
 </script>
 <style lang="postcss" scoped>
 .base-info-form {
-  /* background-color: #f5f7fa; */
-  padding: 10px;
   margin-bottom: 10px;
-
-  .render-info-item {
-    min-width: 50%;
-    align-items: flex-start;
-  }
 }
 </style>

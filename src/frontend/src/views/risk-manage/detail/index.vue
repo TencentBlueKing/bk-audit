@@ -17,13 +17,7 @@
 <template>
   <bk-loading :loading="loading || strategyLoading || statusLoading">
     <div class="risk-manage-detail-wrap mb12">
-      <div
-        class="left"
-        :style="{
-          width: route.name === 'attentionManageDetail' ? '100%' : (
-            isShowSide ? 'calc(100% - 368px)' : '100%'
-          )
-        }">
+      <div class="left">
         <!-- {{ detailData }} -->
         <base-info
           :data="detailData"
@@ -62,28 +56,16 @@
           </bk-tab-panel>
         </bk-tab>
       </div>
-      <!-- 事件处理 -->
-      <scroll-faker
+      <risk-handle-dock
         v-if="route.name !== 'attentionManageDetail'"
-        :style="isShowSide ? 'width: 368px; height: auto; min-height: 85vh;' : 'width: 0px; height: 0px;' ">
-        <div class="right">
-          <div
-            class="open-right"
-            @click="handleOpenRight">
-            <audit-icon
-              class="angle-double-up"
-              :style="{ transform: isShowSide ? 'rotateZ(90deg)' : 'rotateZ(-90deg)' }"
-              type="angle-double-up" />
-            <span>{{ isShowSide ? t('收起工单处理') : t('展开工单处理') }}</span>
-          </div>
-          <risk-handle
-            v-if="isShowSide"
-            :data="riskData"
-            :event-data-list="eventDataList"
-            :risk-id="riskData.risk_id"
-            @update="handleUpdate" />
-        </div>
-      </scroll-faker>
+        :current-stage-name="currentStageName">
+        <risk-handle
+          :data="riskData"
+          embedded
+          :event-data-list="eventDataList"
+          :risk-id="riskData.risk_id"
+          @update="handleUpdate" />
+      </risk-handle-dock>
     </div>
   </bk-loading>
   <teleport
@@ -156,22 +138,26 @@
   import EditEventReport from './components/event-report/edit-event-report.vue';
   import EventReport from './components/event-report/index.vue';
   import LinkEvent from './components/link-event.vue';
+  import RiskHandleDock from './components/risk-handle-dock.vue';
   import RiskHandle from './components/risk-handle/index.vue';
 
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
   const eventDataList = ref();
-  const isShowSide = ref(true);
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
   const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
 
-  let timeout: undefined | number = undefined;
-  let reportGeneratingTimer: undefined | number = undefined;
-  const handleOpenRight = () => {
-    isShowSide.value = !isShowSide.value;
+  const stageNameMap: Record<string, string> = {
+    await_deal: t('人工处理'),
+    processing: t('人工处理'),
+    for_approve: t('执行处理套餐'),
+    auto_process: t('执行处理套餐'),
+    closed: t('风险单关闭'),
+    new: t('风险单产生'),
+    stand_by: t('风险创建中'),
   };
 
   const comMap: Record<string, any> = {
@@ -181,10 +167,13 @@
 
   const panels = [
     { name: 'eventReport', label: t('事件调查报告') },
-    { name: 'linkEvent', label: t('关联事件列表') },
+    { name: 'linkEvent', label: t('关联事件') },
   ];
 
   const active = ref<keyof typeof comMap>('eventReport');
+
+  let timeout: undefined | number = undefined;
+  let reportGeneratingTimer: undefined | number = undefined;
 
   const {
     loading: strategyLoading,
@@ -239,6 +228,8 @@
     manual: true,
   });
 
+  const currentStageName = computed(() => stageNameMap[riskData.value.status] || t('人工处理'));
+
   const handleUpdate = () => {
     fetchRiskList({
       id: route.params.riskId,
@@ -280,8 +271,6 @@
   const handleGenerateReport = () => {
     isShowEditEventReport.value = true;
   };
-
-  let layoutObserver: MutationObserver | null = null;
 
   // 合并数据（包含事件信息配置）
   const detailData = computed(() => ({
@@ -362,19 +351,6 @@
         handleGenerateReport();
       }
     });
-    layoutObserver = new MutationObserver(() => {
-      const left = document.querySelector('.left');
-      const right = document.querySelector('.right') as HTMLDivElement;
-      if (left && right) {
-        right.style.height = `${left.scrollHeight}px`;
-      }
-    });
-    layoutObserver.observe(document.querySelector('.left') as Node, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-    });
   });
 
   onBeforeUnmount(() => {
@@ -382,48 +358,24 @@
       clearTimeout(timeout);
     }
     stopReportGeneratingPolling();
-    layoutObserver?.disconnect();
-    layoutObserver = null;
   });
 </script>
 <style scoped lang="postcss">
 .risk-manage-detail-wrap {
-  display: flex;
-
   .left {
-    width: calc(100% - 368px);
-    padding-right: 16px;
+    width: 100%;
+    padding-right: 0;
 
     .link-event-wrap {
+      --link-event-wrap-padding-bottom: 10px;
+
+      position: relative;
       padding: 10px 16px;
       margin-top: 16px;
+      overflow: visible;
       background: #fff;
       border-radius: 2px;
       box-shadow: 0 2px 4px 0 #1919290d;
-    }
-  }
-
-  .right {
-    .open-right {
-      position: absolute;
-      top: 120px;
-      left: -10px;
-      z-index: 1000;
-      width: 30px;
-      padding: 10px;
-      color: #fff;
-      cursor: pointer;
-      background: #cbccd2;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px 0 #1919290d;
-
-      &:hover {
-        background: #c4c6cc;
-      }
-
-      .angle-double-up {
-        display: inline-block;
-      }
     }
   }
 }
