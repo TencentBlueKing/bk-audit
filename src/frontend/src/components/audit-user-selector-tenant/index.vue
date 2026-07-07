@@ -112,25 +112,30 @@
       || userInfo.bk_username
       || id;
   };
-
-  const isResignedUser = (userInfo: Record<string, any> | string) => {
-    if (!userInfo || typeof userInfo !== 'object') {
+  // 离职人员：用户中心未命中列表；命中列表（含搜索到的用户）用正常样式
+  const isUserInList = (userInfo: Record<string, any>) => {
+    if (userInfo.type === 'custom') {
       return false;
     }
-    if (userInfo.type === 'custom') {
+    if (userInfo.type === 'userGroup' || userInfo.type === 'virtual') {
       return true;
     }
-    const { status } = userInfo;
-    if (status && status !== '在职') {
+    if (userInfo.display_name || userInfo.data_source_type) {
       return true;
     }
-    const staffStatus = userInfo.staff_status;
-    if (staffStatus && String(staffStatus).includes('离职')) {
+    const loginName = userInfo.login_name || userInfo.bk_username || userInfo.username || '';
+    if (loginName && userInfo.name && userInfo.name !== loginName) {
       return true;
     }
     return false;
   };
 
+  const isResignedUser = (userInfo: Record<string, any> | string) => {
+    if (!userInfo || typeof userInfo !== 'object') {
+      return false;
+    }
+    return !isUserInList(userInfo);
+  };
   // 自定义标签渲染（兼容用户组变量：无 display_name / logo）
   const renderTag = (createElement: any, userInfo: Record<string, any> | string) => {
     const displayText = getTagDisplayText(userInfo);
@@ -146,7 +151,6 @@
   };
 
   const renderListItem = (createElement: any, userInfo: Record<string, any>) => {
-    const resigned = isResignedUser(userInfo);
     const displayText = userInfo.display_name
       || userInfo.name
       || userInfo.username
@@ -154,12 +158,11 @@
       || userInfo.id
       || '';
     return createElement('div', {
-      class: ['audit-user-render-item', { 'is-resigned': resigned }],
+      class: 'audit-user-render-item',
     }, [
       createElement('span', { class: 'audit-user-render-item__name' }, displayText),
     ]);
   };
-
   // 从sessionStorage中获取配置
   const getConfig = () => {
     try {
@@ -172,7 +175,6 @@
     }
     return null;
   };
-
   // 计算apiBaseUrl
   // apiBaseUrl 由后端配置中的 BK_API_URL_TMPL 与 BK_USER_WEB_APIGW_URL 以及网关环境拼接而成
   const apiBaseUrl = computed(() => {
@@ -182,7 +184,6 @@
     }
     return '';
   });
-
   // 获取租户ID
   const tenantId = computed(() => {
     const config = getConfig();
@@ -246,6 +247,21 @@
       color: #c4c6cc !important;
     }
 
+    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) {
+      color: #63656e !important;
+      background-color: #f0f1f5 !important;
+      border-color: #f0f1f5 !important;
+    }
+
+    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)):hover {
+      color: #63656e !important;
+      background-color: #f0f1f5 !important;
+    }
+
+    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) .tag-content .user-name {
+      color: #63656e !important;
+    }
+
     &.nl-tag-user-selector .user-tag.is-custom,
     &.nl-tag-user-selector .user-tag.is-custom .tag-content .user-name,
     &.nl-tag-user-selector .custom-tag.is-resigned {
@@ -259,8 +275,19 @@
       background-color: #f0f1f5 !important;
     }
 
-    .audit-user-render-item.is-resigned .audit-user-render-item__name {
-      color: #c4c6cc;
+    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) {
+      color: #63656e !important;
+      background-color: #f0f1f5 !important;
+      border-color: #f0f1f5 !important;
+    }
+
+    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)):hover {
+      color: #63656e !important;
+      background-color: #f0f1f5 !important;
+    }
+
+    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) .tag-content .user-name {
+      color: #63656e !important;
     }
 
     .avatar {
