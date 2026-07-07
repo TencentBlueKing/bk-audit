@@ -16,8 +16,10 @@
 -->
 <template>
   <div
+    ref="editorWrapRef"
     :active="!disabled"
-    class="editor-wrap">
+    class="editor-wrap"
+    :class="{ 'expanded-mode': isExpanded && fullscreenScope === 'parent' }">
     <bk-upload
       v-if="supportImage"
       id="editor-upload-image"
@@ -59,7 +61,7 @@
 
 <script setup lang="ts">
   import Cookie from 'js-cookie';
-  import { nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, inject, type Ref } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -78,6 +80,7 @@
   interface Emits {
     (e: 'update:content', value: string): void;
     (e: 'blur', value: string): void;
+    (e: 'expand-change', value: boolean): void;
   }
   interface Props {
     disabled?: boolean;
@@ -85,7 +88,10 @@
     maxLen?: number;
     placeholder?: string;
     supportImage?: boolean;
-    // typeAssess?: boolean;
+    /** viewport/main: 浮层全屏; parent: 原地增高编辑器 */
+    fullscreenScope?: 'viewport' | 'main' | 'parent';
+    /** parent 模式下放大后的编辑区高度 */
+    expandHeight?: number;
   }
   interface ResponseData {
     result: boolean;
@@ -107,6 +113,8 @@
     placeholder: '',
     disabled: false,
     supportImage: true,
+    fullscreenScope: 'main',
+    expandHeight: 360,
   });
 
   const emits = defineEmits<Emits>();
@@ -115,6 +123,7 @@
 
   const content = ref();
   const editorRef = ref();
+  const editorWrapRef = ref<HTMLElement>();
   const imageRef = ref();
   const { t } = useI18n();
   const TiLength = ref(0);
@@ -137,13 +146,225 @@
     container[2].splice(0, 0, 'image');
   }
   const isFullscreen = ref(false);
+  const isExpanded = computed(() => isFullscreen.value);
+
+  const PARENT_COLLAPSED_HEIGHT = 180;
+
+  const dockBoostState = inject<{
+    isEditorBoosted: Ref<boolean>;
+    panelHeight: Ref<number>;
+  } | null>('dockBoostState', null);
+
+  const getReservedBottomHeight = (editorWrap: HTMLElement) => {
+    const editorFormItem = editorWrap.closest('.bk-form-item');
+    const awaitDealForm = editorWrap.closest('.risk-await-deal-wrap');
+    let reserved = 24;
+    if (editorFormItem && awaitDealForm) {
+      let sibling = editorFormItem.nextElementSibling;
+      while (sibling) {
+        reserved += (sibling as HTMLElement).getBoundingClientRect().height + 8;
+        sibling = sibling.nextElementSibling;
+      }
+    }
+    return reserved;
+  };
+
+  const getParentExpandHeight = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) {
+      return props.expandHeight;
+    }
+    const dockBody = editorWrap.closest('.risk-handle-dock__body') as HTMLElement | null;
+    if (dockBody) {
+      const bodyRect = dockBody.getBoundingClientRect();
+      const editorRect = editorWrap.getBoundingClientRect();
+      const reservedBottom = getReservedBottomHeight(editorWrap);
+      const availableHeight = bodyRect.bottom - editorRect.top - reservedBottom;
+      return Math.max(280, availableHeight);
+    }
+    return props.expandHeight;
+  };
+
+  const applyParentExpandHeight = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) {
+      return;
+    }
+    const height = getParentExpandHeight();
+    editorWrap.style.setProperty('--editor-expanded-height', `${height}px`);
+    editorWrap.style.setProperty('--editor-collapsed-height', `${PARENT_COLLAPSED_HEIGHT}px`);
+  };
+
+  const scheduleApplyParentExpandHeight = () => {
+    applyParentExpandHeight();
+    requestAnimationFrame(() => {
+      applyParentExpandHeight();
+      requestAnimationFrame(applyParentExpandHeight);
+    });
+    setTimeout(applyParentExpandHeight, 220);
+  };
+
+  const clearParentExpandHeight = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) {
+      return;
+    }
+    editorWrap.style.removeProperty('--editor-expanded-height');
+    editorWrap.style.removeProperty('--editor-collapsed-height');
+  };
+
+  const toggleParentExpand = async () => {
+    if (!isFullscreen.value) {
+      emits('expand-change', true);
+      await nextTick();
+      scheduleApplyParentExpandHeight();
+      isFullscreen.value = true;
+    } else {
+      isFullscreen.value = false;
+      clearParentExpandHeight();
+      emits('expand-change', false);
+    }
+  };
+
+  if (dockBoostState) {
+    watch(
+      () => [dockBoostState.isEditorBoosted.value, dockBoostState.panelHeight.value],
+      () => {
+        if (isFullscreen.value) {
+          scheduleApplyParentExpandHeight();
+        }
+      },
+    );
+  }
+  interface FullscreenBounds {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  }
+
+  const getFullscreenContainer = (): HTMLElement | null => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) {
+      return null;
+    }
+    switch (props.fullscreenScope) {
+    case 'main':
+      return document.querySelector('.audit-navigation-main') as HTMLElement;
+    case 'viewport':
+    default:
+      return null;
+    }
+  };
+
+  const getFullscreenBounds = (): FullscreenBounds => {
+    if (props.fullscreenScope === 'viewport') {
+      return {
+        top: 0,
+        left: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+    }
+    const container = getFullscreenContainer();
+    if (!container) {
+      return {
+        top: 0,
+        left: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+    }
+    const rect = container.getBoundingClientRect();
+    return {
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    };
+  };
+
+  const applyFullscreenBounds = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap || !isFullscreen.value) {
+      return;
+    }
+    const bounds = getFullscreenBounds();
+    editorWrap.style.top = `${bounds.top}px`;
+    editorWrap.style.left = `${bounds.left}px`;
+    editorWrap.style.width = `${bounds.width}px`;
+    editorWrap.style.height = `${bounds.height}px`;
+  };
+
+  const clearFullscreenBounds = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) {
+      return;
+    }
+    editorWrap.style.top = '';
+    editorWrap.style.left = '';
+    editorWrap.style.width = '';
+    editorWrap.style.height = '';
+  };
+
+  const exitFullscreen = () => {
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap || !isFullscreen.value) {
+      return;
+    }
+    if (props.fullscreenScope === 'parent') {
+      clearParentExpandHeight();
+      isFullscreen.value = false;
+      emits('expand-change', false);
+      return;
+    }
+    editorWrap.classList.remove(
+      'fullscreen-mode',
+      'fullscreen-mode--main',
+      'fullscreen-mode--viewport',
+    );
+    clearFullscreenBounds();
+    if (props.fullscreenScope === 'viewport') {
+      document.body.style.overflow = '';
+    }
+    isFullscreen.value = false;
+    window.removeEventListener('resize', applyFullscreenBounds);
+    window.removeEventListener('scroll', applyFullscreenBounds, true);
+  };
+
+  // 全屏/放大切换
+  const toggleFullscreen = () => {
+    if (props.fullscreenScope === 'parent') {
+      toggleParentExpand();
+      return;
+    }
+    const editorWrap = editorWrapRef.value;
+    if (!editorWrap) return;
+
+    if (!isFullscreen.value) {
+      editorWrap.classList.add('fullscreen-mode');
+      if (props.fullscreenScope === 'viewport') {
+        editorWrap.classList.add('fullscreen-mode--viewport');
+        document.body.style.overflow = 'hidden';
+      } else {
+        editorWrap.classList.add('fullscreen-mode--main');
+      }
+      applyFullscreenBounds();
+      isFullscreen.value = true;
+      window.addEventListener('resize', applyFullscreenBounds);
+      window.addEventListener('scroll', applyFullscreenBounds, true);
+    } else {
+      exitFullscreen();
+    }
+  };
+
   const options = reactive({
     modules: {
       toolbar: {
         container,
         handlers: {
           image() {
-            const html = document.querySelector('.editor-wrap #editor-upload-image .bk-upload-trigger__draggable-upload-link') as HTMLElement;
+            const html = editorWrapRef.value?.querySelector('#editor-upload-image .bk-upload-trigger__draggable-upload-link') as HTMLElement;
             if (html) {
               html.click();
             }
@@ -161,28 +382,10 @@
     },
   });
 
-  // 全屏切换功能
-  const toggleFullscreen = () => {
-    const editorWrap = document.querySelector('.editor-wrap') as HTMLElement;
-    if (!editorWrap) return;
-
-    if (!isFullscreen.value) {
-      // 进入全屏
-      editorWrap.classList.add('fullscreen-mode');
-      document.body.style.overflow = 'hidden';
-      isFullscreen.value = true;
-    } else {
-      // 退出全屏
-      editorWrap.classList.remove('fullscreen-mode');
-      document.body.style.overflow = '';
-      isFullscreen.value = false;
-    }
-  };
-
   // 监听ESC键退出全屏
   const handleKeydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && isFullscreen.value) {
-      toggleFullscreen();
+      exitFullscreen();
     }
   };
 
@@ -420,6 +623,7 @@
   // 组件卸载时移除事件监听
   onUnmounted(() => {
     document.removeEventListener('keydown', handleKeydown);
+    exitFullscreen();
   });
 </script>
 
@@ -467,6 +671,30 @@
   padding-bottom: 10px;
 }
 
+/* parent 模式：原地增高，保持在文档流内 */
+.editor-wrap.expanded-mode {
+  display: flex;
+  flex-direction: column;
+  height: var(--editor-expanded-height, 360px);
+
+  .ql-container.ql-snow {
+    height: auto !important;
+    min-height: 0 !important;
+    transition: min-height .2s ease;
+    flex: 1;
+  }
+
+  .ql-editor {
+    flex: 1;
+    min-height: 0 !important;
+  }
+}
+
+.editor-wrap:not(.expanded-mode)[style*='--editor-collapsed-height'] .ql-container.ql-snow,
+.editor-wrap .ql-container.ql-snow {
+  transition: min-height .2s ease;
+}
+
 .ql-editor {
   color: black;
 }
@@ -474,14 +702,15 @@
 /* 全屏模式样式 */
 .editor-wrap.fullscreen-mode {
   position: fixed;
-  top: 0;
-  left: 0;
   z-index: 9999;
-  width: 100vw !important;
-  height: 100vh !important;
-  padding: 20px;
+  display: flex;
+  padding: 12px 16px;
   margin: 0;
+  overflow: hidden;
   background: #fff;
+  box-shadow: 0 0 16px 0 rgb(0 0 0 / 12%);
+  box-sizing: border-box;
+  flex-direction: column;
 
   .ql-editor {
     color: black;
@@ -489,29 +718,51 @@
   }
 
   .ql-toolbar {
-    padding: 10px 0 !important;
+    flex-shrink: 0;
+    padding: 8px 0 !important;
     background: #fff !important;
     border-bottom: 1px solid #ccc;
   }
 
   .ql-container.ql-snow {
-    height: calc(100vh - 300px) !important;
-    min-height: auto;
-    font-size: 16px;
+    height: auto !important;
+    min-height: 0;
+    font-size: 14px;
     line-height: 1.6;
     border: none;
+    flex: 1;
   }
 
   .editor-tip-len {
-    position: fixed;
-    right: 30px;
-    bottom: 30px;
-    padding: 5px 10px;
-    font-size: 14px;
-    color: #fff;
-    background: rgb(0 0 0 / 70%);
+    position: absolute;
+    right: 20px;
+    bottom: 16px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #63656e;
+    background: rgb(255 255 255 / 90%);
     border-radius: 4px;
   }
+}
+
+.editor-wrap.fullscreen-mode--main {
+  z-index: 2100;
+}
+
+.editor-wrap.expanded-mode .ql-toolbar .ql-fullscreen::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  margin-left: -10px;
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: top;
+  background-image: url('/static/images/field-type/zoom_out.svg');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  content: '';
 }
 
 /* 全屏图标样式 */
