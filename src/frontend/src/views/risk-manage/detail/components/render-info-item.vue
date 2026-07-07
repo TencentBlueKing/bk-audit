@@ -28,7 +28,7 @@
         {{ label }}
       </span>
     </div>
-    <span>
+    <span class="info-colon">
       :
     </span>
     <div class="info-value">
@@ -49,12 +49,24 @@
   }
 
   const props = defineProps<Props>();
-  const labelStyle = computed(() => ({
-    'min-width': `${props.labelWidth || 80}px`,
-    'max-width': props.labelWidthPercent ? `${props.labelWidthPercent}%` : `${props.labelWidth || 80}px`,
-    width: props.labelWidthPercent ? `${props.labelWidthPercent}%` : `${props.labelWidth || 80}px`,
-    flex: '0 0 auto',
-  }));
+  const labelStyle = computed(() => {
+    const fixedWidth = props.labelWidth || 80;
+    if (props.labelWidthPercent) {
+      const percentWidth = `${props.labelWidthPercent}%`;
+      return {
+        width: percentWidth,
+        minWidth: `${fixedWidth}px`,
+        maxWidth: percentWidth,
+        flex: `0 0 ${percentWidth}`,
+      };
+    }
+    return {
+      width: `${fixedWidth}px`,
+      minWidth: `${fixedWidth}px`,
+      maxWidth: `${fixedWidth}px`,
+      flex: `0 0 ${fixedWidth}px`,
+    };
+  });
 </script>
 <style lang="postcss" scoped>
 .render-info-item {
@@ -71,12 +83,55 @@
     word-wrap: break-word;
   }
 
+  .info-colon {
+    flex-shrink: 0;
+    color: #63656e;
+  }
+
   .info-value {
+    min-width: 0;
     padding-left: 14px;
     color: #313238;
     flex: 1;
     word-break: break-all;
     word-wrap: break-word;
   }
+}
+</style>
+<style lang="postcss">
+.info-field-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.info-field-row {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.info-field-row .render-info-item {
+  width: calc(50% - 12px);
+  max-width: calc(50% - 12px);
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 0 0 calc(50% - 12px);
+  align-items: flex-start;
+}
+
+.info-field-row.is-full-row .render-info-item {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
+.fields-section-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #dcdee5;
 }
 </style>
