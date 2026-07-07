@@ -366,6 +366,7 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
 
   interface Props {
@@ -528,12 +529,14 @@
     handleOpenTool,
   } = useToolDialog();
   // 获取所有工具
+  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
+
   const {
     data: allToolsData,
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
-    defaultParams: { status: 'published' },
+    defaultParams: buildToolListParams(),
     onSuccess: (data) => {
       toolMaxVersionMap.value = data.reduce((res, item) => {
         res[item.uid] = item.version;
@@ -548,12 +551,12 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      fetchAllTools({});
+      fetchAllTools(buildToolListParams());
     },
   });
 
   const handleRefreshToolList = () => {
-    fetchAllTools();
+    fetchAllTools(buildToolListParams());
   };
   // 提交字段下钻
   const handleFieldSubmit = (data: any) => {

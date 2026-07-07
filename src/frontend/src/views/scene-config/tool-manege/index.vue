@@ -486,7 +486,6 @@
   const {
     run: fetchAllToolsData,
   } = useRequest(ToolManageService.fetchAllTools, {
-    manual: true,
     defaultValue: [],
     onSuccess: (data) => {
       allToolsData.value = data;
