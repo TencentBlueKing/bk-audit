@@ -158,18 +158,18 @@
     cursor: 'pointer',
   };
 
-  // 启用/停用 — 使用全局 InfoBox
+  // 上架/下架 — 使用全局 InfoBox
   const showToggleStatusInfoBox = (target?: ToolItem | null, actionType?: ActionType) => {
     const currentTarget = target || props.target;
     const currentActionType = actionType || props.actionType;
     if (!currentTarget) return;
     const isEnabling = currentActionType === 'enable';
     InfoBox({
-      title: isEnabling ? t('确认启用该工具？') : t('确认停用该工具？'),
+      title: isEnabling ? t('确认上架该工具？') : t('确认下架该工具？'),
       subTitle: isEnabling
-        ? t('启用后，该工具将在「工具广场」中展示')
-        : t('停用后，该工具将从「工具广场」中隐藏'),
-      confirmText: isEnabling ? t('启用') : t('停用'),
+        ? t('上架后，该工具将在「工具广场」中展示')
+        : t('下架后，该工具将从「工具广场」中隐藏'),
+      confirmText: isEnabling ? t('上架') : t('下架'),
       cancelText: t('取消'),
       headerAlign: 'center',
       contentAlign: 'center',
@@ -184,14 +184,14 @@
     });
   };
 
-  // 启用/停用接口（平台级）
+  // 上架/下架接口（平台级）
   const {
     run: publishPlatformToolStatus,
   } = useRequest(ToolManageService.publishPlatformToolStatus, {
     defaultValue: null,
     onSuccess: () => {
       const isEnabling = props.actionType === 'enable';
-      messageSuccess(isEnabling ? t('启用成功') : t('停用成功'));
+      messageSuccess(isEnabling ? t('上架成功') : t('下架成功'));
       emit('success');
     },
   });
