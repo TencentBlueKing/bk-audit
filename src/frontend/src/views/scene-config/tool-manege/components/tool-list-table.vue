@@ -37,6 +37,7 @@
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
+  import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -124,41 +125,12 @@
     return tagName;
   };
 
-  const MAX_VISIBLE_TAGS = 2;
-
-  const renderTagsContent = (tags: string[]) => {
+  const renderTagsContent = (tags: string[], rowKey: string) => {
     if (!tags || tags.length === 0) {
       return <span>--</span>;
     }
-
-    const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
-    const overflowTags = tags.slice(MAX_VISIBLE_TAGS);
-
-    return (
-      <div class="tags-cell">
-        {visibleTags.map((tagId: string) => (
-          <bk-tag
-            class="desc-tag"
-            radius="4px"
-            theme="default">
-            {returnTagsName(tagId)}
-          </bk-tag>
-        ))}
-        {overflowTags.length > 0 && (
-          <bk-tag
-            class="desc-tag"
-            radius="4px"
-            theme="default"
-            v-bk-tooltips={{
-              content: overflowTags.map(tagId => returnTagsName(tagId)).join('、'),
-              placement: 'top',
-              theme: 'dark',
-            }}>
-            +{overflowTags.length}
-          </bk-tag>
-        )}
-      </div>
-    );
+    const labels = tags.map((tagId: string) => returnTagsName(tagId));
+    return <EditTag data={labels} key={rowKey} showCopy={false} />;
   };
 
   // 根据策略ID获取策略名称
@@ -258,7 +230,7 @@
       title: t('标签'),
       colKey: 'tags',
       width: 300,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags),
+      cell: (_h: any, { row }: { row: ToolModel }) => renderTagsContent(row.tags, row.uid),
     },
     {
       title: t('引用策略'),
@@ -472,33 +444,6 @@
 </script>
 
 <style lang="postcss" scoped>
-  .tags-cell {
-    display: inline-flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    overflow: hidden;
-    line-height: 1;
-    vertical-align: middle;
-  }
-
-  :deep(.tags-cell > *) {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  :deep(.tags-cell .bk-tag) {
-    margin-right: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 22px;
-    flex-shrink: 0;
-  }
-
-  :deep(.tags-cell .bk-tag:last-child) {
-    margin-right: 0;
-  }
-
   :deep(.tool-name-cell) {
     display: inline-flex;
     align-items: center;
