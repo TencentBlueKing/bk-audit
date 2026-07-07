@@ -184,30 +184,41 @@
         @change="handleChange" />
     </div>
     <div v-else>
-      <audit-user-selector-tenant
-        v-if="config.custom_type === 'bk_user_selector'"
-        v-model="userSelectorValue"
-        allow-create
-        class="consition-value"
-        @change="handlerUserChange" />
       <bk-select
-        v-else-if="config.type === 'field' && supportsFieldReference"
+        v-if="config.type === 'field'"
         v-model="selectValue"
         class="bk-select"
         filterable
-        :input-search="false"
         :placeholder="t('请选择已有选项')"
-        :search-placeholder="t('请输入关键字')"
         @change="handlerChange">
         <bk-option-group
-          v-if="displayRiskFieldList.length > 0"
+          v-if="riskFieldList.length > 0"
           collapsible
           :label="t('风险字段')">
           <bk-option
-            v-for="(item, index) in displayRiskFieldList"
+            v-for="(item, index) in riskFieldList"
             :id="item.id"
-            :key="`${item.id}-${index}`"
-            :name="item.name" />
+            :key="index"
+            :name="item.name">
+            <bk-popover
+              max-width="800px"
+              placement="left"
+              theme="light">
+              <div style="width: 100%;height: 100%;">
+                {{ item.name }}
+              </div>
+              <template #content>
+                <div v-if="isCurrentValue">
+                  <div style="font-size: 12px;font-weight: 700;">
+                    {{ t('参考值：') }}
+                  </div>
+                  <div class="current-value">
+                    {{ getCurrentValue(item.id) }}
+                  </div>
+                </div>
+              </template>
+            </bk-popover>
+          </bk-option>
         </bk-option-group>
 
         <bk-option-group
@@ -218,7 +229,25 @@
             v-for="(item, index) in eventDataList"
             :id="item.lable"
             :key="index"
-            :name="item.lable" />
+            :name="item.lable">
+            <bk-popover
+              placement="left"
+              theme="light">
+              <div style="width: 100%;height: 100%;">
+                {{ item.lable }}
+              </div>
+              <template #content>
+                <div v-if="isCurrentValue">
+                  <div style="font-size: 12px;font-weight: 700;">
+                    {{ t('参考值：') }}
+                  </div>
+                  <div class="current-value">
+                    {{ item.value }}
+                  </div>
+                </div>
+              </template>
+            </bk-popover>
+          </bk-option>
         </bk-option-group>
       </bk-select>
       <div v-else>
@@ -736,68 +765,26 @@
   watch(() => props.config.custom_type, () => {
     if (props.config.custom_type === 'bk_user_selector') {
       modelValue.value = {
-        field: '',
-        value: hasValue ? currentValue : (defaultValue ?? []),
+        field: props.config.default_value || [],
+        value: props.config.default_value || [],
       };
     } else if (props.config.custom_type === 'select') {
       const defaultVal = props.config.default_value;
       selectTypeValue.value = (defaultVal !== undefined && defaultVal !== null) ? defaultVal : '';
-      if (modelValue.value.value === '' && selectTypeValue.value !== '') {
-        modelValue.value = {
-          field: '',
-          value: selectTypeValue.value,
-        };
-      }
-      return;
+      modelValue.value = {
+        field: '',
+        value: selectTypeValue.value,
+      };
+    } else {
+      modelValue.value = {
+        field: props.config.default_value || '',
+        value: props.config.default_value || '',
+      };
     }
-
-    if (type === 'field' && supportsFieldReference.value) {
-      const fieldId = modelValue.value.field || defaultValue || '';
-      selectValue.value = fieldId;
-      if (fieldId) {
-        modelValue.value = {
-          field: fieldId,
-          value: '',
-        };
-      }
-      return;
-    }
-
-    const currentValue = modelValue.value.value;
-    const hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
-    modelValue.value = {
-      field: '',
-      value: hasValue ? currentValue : (defaultValue ?? ''),
-    };
-    selectValue.value = undefined;
-  };
-
-  watch(() => modelValue.value, (val) => {
-    const valueToFormat = val.value || val.field;
-    tipText.value = formatTooltipData(props.config.custom_type, valueToFormat);
-    syncFieldSelectValue();
   }, {
+    immediate: true,
     deep: true,
   });
-
-  watch(
-    () => [props.config.custom_type, props.config.type, props.config.default_value] as const,
-    () => {
-      syncModelFromConfig();
-    },
-    {
-      immediate: true,
-      deep: true,
-    },
-  );
-
-  watch(
-    () => props.riskFieldList,
-    () => {
-      syncFieldSelectValue();
-    },
-    { deep: true },
-  );
 
 </script>
 
