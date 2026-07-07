@@ -226,6 +226,12 @@ export default {
     未上架: 'Unpublished',
     上架: 'Publish',
     下架: 'Unpublish',
+    '确认上架该工具？': 'Confirm to publish this tool?',
+    '确认下架该工具？': 'Confirm to unpublish this tool?',
+    '上架后，该工具将在「工具广场」中展示': 'After publishing, this tool will be displayed in the Tool Plaza',
+    '下架后，该工具将从「工具广场」中隐藏': 'After unpublishing, this tool will be hidden from the Tool Plaza',
+    上架成功: 'Published successfully',
+    下架成功: 'Unpublished successfully',
     请先下架后再删除: 'Please unpublish before deleting',
   },
 };

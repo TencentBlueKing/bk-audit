@@ -111,7 +111,7 @@
     :all-tools-data="allToolsData"
     :tags-enums="tagsEnums" />
 
-  <!-- 确认操作弹窗（删除/启用/停用） -->
+  <!-- 确认操作弹窗（删除/上架/下架） -->
   <confirm-action-dialog
     ref="confirmDialogRef"
     :action-type="confirmActionType"
