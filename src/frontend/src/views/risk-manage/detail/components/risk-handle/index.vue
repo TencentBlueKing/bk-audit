@@ -85,6 +85,7 @@
     onMounted,
     ref,
     watch,
+    withDefaults,
   } from 'vue';
   import {
     useI18n,
