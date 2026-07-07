@@ -36,6 +36,7 @@
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
+  import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   // 工具类型枚举
@@ -127,87 +128,49 @@
     return String(value);
   };
 
-  // 根据可见范围信息渲染内容（场景 + 平台/系统）
+  // 根据可见范围信息组装标签文案（场景 + 平台/系统）
   // 后端 visibility_type 枚举值：
   //   all_visible=全部可见, all_scenes=全部场景, all_systems=全部系统,
   //   specific_scenes=指定场景, specific_systems=指定系统, scenes_and_systems=场景和系统
-  const MAX_VISIBLE_TAGS = 2;
-  const renderVisibilityContent = (visibility: VisibilityInfo) => {
+  const getVisibilityLabels = (visibility: VisibilityInfo) => {
     if (!visibility || !visibility.visibility_type) {
-      return <span>--</span>;
+      return [];
     }
     const { visibility_type: visibilityType, scene_ids: sceneIds, system_ids: systemIds } = visibility;
 
-    // 全部可见
     if (visibilityType === 'all_visible') {
-      return (
-        <div class="tags-cell">
-          <bk-tag
-            class="desc-tag ml8"
-            radius="4px"
-            theme="default">
-            {t('全部可见')}
-          </bk-tag>
-        </div>
-      );
+      return [t('全部可见')];
     }
 
-    // 合并场景和系统标签
-    const allTags: Array<{ label: string }> = [];
+    const labels: string[] = [];
 
-    // 全部场景
     if (visibilityType === 'all_scenes') {
-      allTags.push({ label: t('全部场景') });
+      labels.push(t('全部场景'));
     } else if (sceneIds && sceneIds.length > 0) {
-      // 指定场景 / 场景和系统：逐个展示场景
       sceneIds.forEach((id: number | string) => {
         const key = String(id);
-        allTags.push({ label: props.sceneNameMap[key] || `场景${id}` });
+        labels.push(props.sceneNameMap[key] || `场景${id}`);
       });
     }
 
-    // 全部系统
     if (visibilityType === 'all_systems') {
-      allTags.push({ label: t('全部系统') });
+      labels.push(t('全部系统'));
     } else if (systemIds && systemIds.length > 0) {
-      // 指定系统 / 场景和系统：逐个展示系统
       systemIds.forEach((id: number | string) => {
         const key = String(id);
-        allTags.push({ label: props.systemNameMap[key] || `平台${id}` });
+        labels.push(props.systemNameMap[key] || `平台${id}`);
       });
     }
 
-    if (allTags.length === 0) {
+    return labels;
+  };
+
+  const renderVisibilityContent = (visibility: VisibilityInfo, rowKey: string) => {
+    const labels = getVisibilityLabels(visibility);
+    if (!labels.length) {
       return <span>--</span>;
     }
-
-    const visibleTags = allTags.slice(0, MAX_VISIBLE_TAGS);
-    const overflowTags = allTags.slice(MAX_VISIBLE_TAGS);
-
-    return (
-      <div class="tags-cell">
-        {visibleTags.map(tag => (
-          <bk-tag
-            class="desc-tag ml8"
-            radius="4px"
-            theme="default">
-            {tag.label}
-          </bk-tag>
-        ))}
-        {overflowTags.length > 0 && (
-          <bk-tag
-            class="desc-tag ml8"
-            radius="4px"
-            theme="default"
-            v-bk-tooltips={{
-              content: overflowTags.map(t => t.label).join('、'),
-              placement: 'top',
-            }}>
-            + {overflowTags.length}
-          </bk-tag>
-        )}
-      </div>
-    );
+    return <EditTag data={labels} key={rowKey} showCopy={false} />;
   };
 
   // 跳转至工具广场并打开该工具
@@ -265,7 +228,7 @@
       title: t('可见范围'),
       colKey: 'visibility',
       width: 200,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility),
+      cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility, row.uid),
     },
     {
       title: t('状态'),
@@ -435,27 +398,6 @@
 </script>
 
 <style lang="postcss" scoped>
-  .tags-cell {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    align-items: center;
-    line-height: 1;
-    vertical-align: middle;
-  }
-
-  :deep(.tags-cell > *) {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  :deep(.tags-cell .desc-tag) {
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 22px;
-  }
-
   :deep(.tool-name-cell) {
     display: inline-flex;
     align-items: center;
