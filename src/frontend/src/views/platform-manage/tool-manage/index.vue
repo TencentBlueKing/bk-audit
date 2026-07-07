@@ -52,7 +52,7 @@
                 class="mr4"
                 svg
                 type="normal" />
-              {{ t('启用') }}
+              {{ t('已上架') }}
               <bk-tag
                 class="status-count"
                 theme="info">
@@ -64,7 +64,7 @@
                 class="mr4"
                 svg
                 type="unknown" />
-              {{ t('停用') }}
+              {{ t('未上架') }}
               <bk-tag
                 class="status-count"
                 theme="info">
