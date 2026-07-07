@@ -781,14 +781,21 @@
 
   // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(元) | 累计充值(元)
   // | 累计发放(¥) | 累计赠送次数(隐藏) | 累计交易次数(隐藏) | 登录次数/月(隐藏) | 责任单数(隐藏) | 操作）
-  // 代币字段已替换为元，null时醒目提示"未设汇率"
+  // 代币字段已替换为元，null时醒目提示"未设代币兑换比例"
+  const isEmptyCoinUnitValue = (val: unknown) => val === null || val === undefined || val === '';
+  const COIN_UNIT_EMPTY_TEXT = () => t('未设代币兑换比例');
+  const formatCoinUnitExportValue = (val: unknown): string | number => {
+    if (isEmptyCoinUnitValue(val)) return COIN_UNIT_EMPTY_TEXT();
+    const num = Number(val);
+    return Number.isFinite(num) ? num : val as string | number;
+  };
   const renderCoinField = (data: Record<string, any>, field: string) => {
     const val = data[field];
-    if (val === null || val === undefined || val === '') {
+    if (isEmptyCoinUnitValue(val)) {
       return h(
         'span',
         { style: 'color: #ea3636; cursor: default;' },
-        t('未设汇率'),
+        COIN_UNIT_EMPTY_TEXT(),
       );
     }
     return h('span', {}, val);
@@ -1087,7 +1094,13 @@
   // 默认全选
   const exportContentChecked = ref<string[]>(exportContentOptions.map(item => item.id));
 
-  // 设置列宽自适应 & 表头自动筛选
+  const getCellDisplayLength = (cell: XLSX.CellObject) => {
+    const text = cell.w !== null && cell.w !== undefined && cell.w !== '' ? String(cell.w) : String(cell.v ?? '');
+    const len = text.length;
+    const cnLen = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+    return len + cnLen;
+  };
+
   const applyExcelStyles = (wb: XLSX.WorkBook) => {
     wb.SheetNames.forEach((sheetName: string) => {
       const ws = wb.Sheets[sheetName];
@@ -1100,10 +1113,7 @@
         for (let { r } = range.s; r <= range.e.r; r++) {
           const cell = ws[XLSX.utils.encode_cell({ r, c })];
           if (cell && cell.v !== null && cell.v !== undefined) {
-            const len = String(cell.v).length;
-            // 中文字符按2倍宽度计算
-            const cnLen = (String(cell.v).match(/[\u4e00-\u9fa5]/g) || []).length;
-            const totalLen = len + cnLen;
+            const totalLen = getCellDisplayLength(cell);
             if (totalLen > maxLen) maxLen = totalLen;
           }
         }
@@ -1129,6 +1139,10 @@
       const exportData = filteredGameList.value.map((game) => {
         const row: Record<string, any> = {};
         selectedColumns.forEach((col) => {
+          if (col.id === 'coinBalance' || col.id === 'totalRecharge') {
+            row[col.name] = formatCoinUnitExportValue(game[col.field]);
+            return;
+          }
           row[col.name] = game[col.field] ?? (col.fallbackField ? game[col.fallbackField] : '') ?? '';
         });
         return row;
