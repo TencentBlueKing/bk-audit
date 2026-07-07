@@ -38,19 +38,13 @@
       </template>
     </div>
     <base-info-form
-      v-if="priorityFieldNames.length"
+      v-if="priorityFieldNames.length || normalFieldNames.length"
       :data="data"
+      :normal-field-names="normalFieldNames"
       :risk-status-common="riskStatusCommon"
       :show-field-names="priorityFieldNames"
-      :strategy-list="strategyList"
-      style="background-color: #f5f7fa;" />
-    <template v-if="(normalFieldNames.length && isShowMore) || !priorityFieldNames.length">
-      <base-info-form
-        :data="data"
-        :risk-status-common="riskStatusCommon"
-        :show-field-names="normalFieldNames"
-        :strategy-list="strategyList" />
-    </template>
+      :show-normal-fields="(normalFieldNames.length && isShowMore) || !priorityFieldNames.length"
+      :strategy-list="strategyList" />
     <div
       v-if="priorityFieldNames.length && normalFieldNames.length"
       class="show-more-condition-btn">
@@ -58,11 +52,11 @@
         class="show-more-btn"
         text
         @click="() => isShowMore = !isShowMore">
-        <audit-icon
-          :class="{ active: isShowMore }"
-          style=" margin-right: 5px;"
-          type="angle-double-down" />
         {{ isShowMore ? t('收起字段') : t('展开更多字段') }}
+        <audit-icon
+          class="show-more-icon"
+          :class="{ active: isShowMore }"
+          type="angle-double-down" />
       </bk-button>
     </div>
   </div>
@@ -203,18 +197,26 @@
     position: absolute;
     right: calc(50% - 52px);
     bottom: -11px;
-    box-shadow: 0 2px 4px 0 #1919290d;
 
     .show-more-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       width: 120px;
       height: 22px;
-      color: #fff;
-      background: #c4c6cc;;
+      color: #63656e;
+      background: #f0f1f5;
+      border: 1px solid #dcdee5;
       border-radius: 12px;
 
       &:hover {
-        background-color: #3a84ff;
+        color: #63656e;
+        background: #e1e3e9;
       }
+    }
+
+    .show-more-icon {
+      margin-left: 4px;
     }
 
     .active {
