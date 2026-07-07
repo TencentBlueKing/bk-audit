@@ -646,9 +646,9 @@ def report_asset_sync_count():
     """
     # 仅上报未关闭的「资产(asset)」快照
     active_keys = set(
-        Snapshot.objects.exclude(status=SnapshotRunningStatus.CLOSED.value)
-        .filter(join_data_type=JoinDataType.ASSET.value)
-        .values_list("system_id", "resource_type_id")
+        Snapshot.objects.filter(
+            status=SnapshotRunningStatus.RUNNING.value, join_data_type=JoinDataType.ASSET.value
+        ).values_list("system_id", "resource_type_id")
     )
     metric_records = []
     stats = list(SnapshotCheckStatistic.objects.all())
