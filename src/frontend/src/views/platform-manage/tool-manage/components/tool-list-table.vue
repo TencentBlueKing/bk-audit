@@ -62,6 +62,7 @@
     is_bkvision: boolean;
     namespace: string;
     status: 'published' | 'unpublished' | '';
+    tags: string[];
     visibility: VisibilityInfo;
     strategies: number[];
     created_at: string;
@@ -80,6 +81,7 @@
     (e: 'edit', row: ToolModel): void;
     (e: 'delete', row: ToolModel): void;
     (e: 'toggle-status', row: ToolModel): void;
+    (e: 'edit-visibility', row: ToolModel): void;
     (e: 'clear-search'): void;
     (e: 'request-success', data: any): void;
     (e: 'status-counts', counts: { all: number; published: number; unpublished: number }): void;
@@ -165,12 +167,38 @@
     return labels;
   };
 
-  const renderVisibilityContent = (visibility: VisibilityInfo, rowKey: string) => {
-    const labels = getVisibilityLabels(visibility);
-    if (!labels.length) {
-      return <span>--</span>;
-    }
-    return <EditTag data={labels} key={rowKey} showCopy={false} />;
+  const renderVisibilityContent = (row: ToolModel) => {
+    const labels = getVisibilityLabels(row.visibility);
+    const editIcon = (
+      <audit-icon
+        class="visibility-edit-icon"
+        type="edit-fill"
+        onClick={(e: Event) => {
+          e.stopPropagation();
+          emit('edit-visibility', row);
+        }} />
+    );
+
+    return (
+      <span class="visibility-cell">
+        {labels.length
+          ? (
+            <EditTag
+              data={labels}
+              key={row.uid}
+              showCopy={false}
+              v-slots={{
+                suffix: () => editIcon,
+              }} />
+          )
+          : (
+            <span class="visibility-empty">
+              <span>--</span>
+              {editIcon}
+            </span>
+          )}
+      </span>
+    );
   };
 
   // 跳转至工具广场并打开该工具
@@ -228,7 +256,7 @@
       title: t('可见范围'),
       colKey: 'visibility',
       width: 400,
-      cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility, row.uid),
+      cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row),
     },
     {
       title: t('状态'),
@@ -451,6 +479,36 @@
     font-size: 14px;
     color: #3a84ff;
     cursor: pointer;
+  }
+
+  :deep(.visibility-cell) {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+
+    .visibility-edit-icon {
+      flex-shrink: 0;
+      font-size: 14px;
+      color: #979ba5;
+      cursor: pointer;
+      visibility: hidden;
+
+      &:hover {
+        color: #3a84ff;
+      }
+    }
+
+    .visibility-empty {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    &:hover {
+      .visibility-edit-icon {
+        visibility: visible;
+      }
+    }
   }
 
   :deep(.hover-show-icon) {

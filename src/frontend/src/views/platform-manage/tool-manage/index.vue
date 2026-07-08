@@ -98,6 +98,7 @@
           @clear-search="handleClearSearch"
           @delete="handleDelete"
           @edit="handleEdit"
+          @edit-visibility="handleEditVisibility"
           @preview="handlePreview"
           @request-success="handleRequestSuccess"
           @toggle-status="handleToggleStatus" />
@@ -118,6 +119,13 @@
     :action-type="confirmActionType"
     :target="confirmTarget"
     @success="handleActionSuccess" />
+
+  <!-- 修改可见范围弹窗 -->
+  <edit-visibility-dialog
+    v-model:is-show="isEditVisibilityShow"
+    :tags-enums="tagsEnums"
+    :target="editVisibilityTarget"
+    @success="handleVisibilityEditSuccess" />
 </template>
 
 <script setup lang='ts'>
@@ -137,6 +145,7 @@
   import useRequest from '@hooks/use-request';
 
   import ConfirmActionDialog from './components/confirm-action-dialog.vue';
+  import EditVisibilityDialog from './components/edit-visibility-dialog.vue';
   import ToolListTable from './components/tool-list-table.vue';
   import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
   import { buildVisibilitySearchParams } from './create-tool/submit-payload';
@@ -170,6 +179,7 @@
     status: 'published' | '' | 'unpublished';
     tool_type?: string;
     version?: number;
+    tags?: string[];
     visibility?: {
       binding_type: string;
       visibility_type: string;
@@ -422,6 +432,8 @@
   const confirmActionType = ref<ActionType>('delete');
   const confirmTarget = ref<ToolItem | null>(null);
   const isPreviewShow = ref(false);
+  const isEditVisibilityShow = ref(false);
+  const editVisibilityTarget = ref<ToolItem | null>(null);
 
   const handleCreateReport = () => {
     router.push({ name: 'platformToolCreate', query: {
@@ -465,6 +477,16 @@
     confirmTarget.value = null;
     refreshList();
     fetchStatusCounts();
+  };
+
+  const handleEditVisibility = (row: ToolItem) => {
+    editVisibilityTarget.value = row;
+    isEditVisibilityShow.value = true;
+  };
+
+  const handleVisibilityEditSuccess = () => {
+    editVisibilityTarget.value = null;
+    refreshList();
   };
 
   const refreshList = (searchParams?: Record<string, any>) => {
