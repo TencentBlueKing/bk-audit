@@ -73,15 +73,33 @@
         <render-info-item :label="t('套餐参数')">
           <div
             v-if="Object.values(paramsDetailData).length"
-            style="padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+            class="pa-param-list">
             <render-info-item
-              v-for="item in Object.values(paramsDetailData)"
+              v-for="item in sortedParams"
               :key="item.key"
+              class="pa-param-item"
               :label="item.name">
-              {{ riskFieldMap[data.pa_params[item.key]?.field]
-                || data.pa_params[item.key]?.field
-                || data.pa_params[item.key]?.value
-                || '--' }}
+              <div
+                v-if="shouldShowUserTags(item)"
+                class="pa-param-user-tags">
+                <span
+                  v-for="(tag, tagIndex) in getUserTagValues(item.key)"
+                  :key="`${tag}-${tagIndex}`"
+                  class="pa-param-user-tag">
+                  {{ tag }}
+                </span>
+                <span
+                  v-if="!getUserTagValues(item.key).length"
+                  class="pa-param-empty">--</span>
+              </div>
+              <span
+                v-else-if="getFieldRefText(item.key)"
+                class="pa-param-user-tag">
+                {{ getFieldRefText(item.key) }}
+              </span>
+              <template v-else>
+                {{ getParamDisplayText(item.key) }}
+              </template>
             </render-info-item>
           </div>
           <span v-else>--</span>
@@ -117,6 +135,11 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
+  import {
+    isParamFieldReference,
+    resolveParamFieldReference,
+  } from '@/utils/assist/pa-param-field-ref';
+
   interface Props{
     data: RiskRuleManageModel
   }
@@ -136,6 +159,127 @@
     }
     return params?.name;
   });
+
+  const sortedParams = computed(() => (
+    Object.values(paramsDetailData.value || {})
+      .filter(item => item.show_type === 'show' && !item.is_hide)
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+  ));
+
+  const getParamValue = (key: string) => props.data.pa_params?.[key];
+
+  const getParamConfig = (key: string) => paramsDetailData.value?.[key];
+
+  interface SelectOption {
+    text: string;
+    value: string | number;
+  }
+
+  const isFieldRef = (field: unknown): field is string => (
+    typeof field === 'string' && field !== ''
+  );
+
+  const getKnownRiskFieldIds = () => Object.keys(riskFieldMap.value);
+
+  const isFieldReference = (key: string) => {
+    const param = getParamValue(key);
+    const config = getParamConfig(key);
+    if (!param || !config) {
+      return false;
+    }
+    return isParamFieldReference(param, config.custom_type || '', getKnownRiskFieldIds());
+  };
+
+  const resolveFieldReferenceId = (param: { field?: unknown; value?: unknown }, key: string) => (
+    resolveParamFieldReference(param, getParamConfig(key)?.custom_type || '', getKnownRiskFieldIds())
+  );
+
+  const getRiskFieldDisplayName = (fieldId: string) => (
+    riskFieldMap.value[fieldId] || fieldId
+  );
+
+  const parseSelectOptions = (configItem: Record<string, any> | undefined): SelectOption[] => {
+    if (!configItem) {
+      return [];
+    }
+    try {
+      const itemsText = configItem.value?.items_text
+        || configItem.enum?.[0]?.items_text
+        || configItem.form_schema?.items_text
+        || (typeof configItem.value === 'string' && configItem.custom_type === 'select'
+          ? configItem.value
+          : '');
+      if (!itemsText) {
+        return [];
+      }
+      const parsed = typeof itemsText === 'string' ? JSON.parse(itemsText) : itemsText;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const getSelectOptionText = (key: string, val: unknown) => {
+    if (val === undefined || val === null || val === '') {
+      return '';
+    }
+    const options = parseSelectOptions(getParamConfig(key));
+    const matched = options.find(item => item.value?.toString() === String(val));
+    return matched?.text ?? String(val);
+  };
+
+  const formatDisplayValue = (key: string, val: unknown) => {
+    if (getParamConfig(key)?.custom_type === 'select') {
+      return getSelectOptionText(key, val);
+    }
+    return String(val);
+  };
+
+  const normalizeToTagValues = (val: unknown): string[] => {
+    if (Array.isArray(val)) {
+      return val.map(item => String(item)).filter(Boolean);
+    }
+    if (val !== undefined && val !== null && val !== '') {
+      return [String(val)];
+    }
+    return [];
+  };
+
+  const shouldShowUserTags = (item: { custom_type?: string; key: string }) => (
+    item.custom_type === 'bk_user_selector' && !isFieldReference(item.key)
+  );
+
+  const getUserTagValues = (key: string): string[] => (
+    normalizeToTagValues(getParamValue(key)?.value)
+  );
+
+  const getFieldRefText = (key: string) => {
+    const param = getParamValue(key);
+    if (!param || !isFieldReference(key)) {
+      return '';
+    }
+    const fieldId = resolveFieldReferenceId(param, key)
+      || (isFieldRef(param.field) ? param.field : '');
+    return fieldId ? getRiskFieldDisplayName(fieldId) : '';
+  };
+
+  const getParamDisplayText = (key: string) => {
+    const param = getParamValue(key);
+    if (!param) {
+      return '--';
+    }
+    if (isFieldReference(key)) {
+      return getFieldRefText(key) || '--';
+    }
+    const { value } = param;
+    if (value === undefined || value === null || value === '') {
+      return '--';
+    }
+    if (Array.isArray(value)) {
+      return value.map(val => formatDisplayValue(key, val)).join(', ');
+    }
+    return formatDisplayValue(key, value);
+  };
 
   // 获取所有策略列表
   const {
@@ -157,6 +301,7 @@
   //  获取风险可用字段
   const {
     loading: fieldLoading,
+    run: fetchFields,
   } = useRequest(RiskManageService.fetchFields, {
     defaultValue: [],
     manual: true,
@@ -176,6 +321,7 @@
     defaultValue: {},
   });
   watch(() => props.data, () => {
+    fetchFields();
     if (props.data && props.data.scope) {
       props.data.scope.forEach(({ field }:{field: string}) => {
         if (field === 'strategy_id') {
@@ -243,6 +389,52 @@
       background: #f0f1f5;
       border-radius: 2px;
     }
+  }
+
+  .pa-param-list {
+    padding: 16px 12px;
+    background: rgb(245 247 250 / 100%);
+
+    :deep(.pa-param-item) {
+      align-items: flex-start;
+      margin-bottom: 12px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .info-label {
+        min-width: 180px;
+        flex: 0 0 180px;
+        line-height: 20px;
+      }
+
+      .info-value {
+        overflow: visible;
+        line-height: 20px;
+        text-overflow: unset;
+      }
+    }
+  }
+
+  .pa-param-user-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .pa-param-user-tag {
+    display: inline-flex;
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #63656e;
+    background: #f0f1f5;
+    border-radius: 2px;
+  }
+
+  .pa-param-empty {
+    color: #63656e;
   }
 
 }
