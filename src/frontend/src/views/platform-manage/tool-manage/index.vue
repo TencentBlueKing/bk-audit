@@ -92,9 +92,11 @@
         <tool-list-table
           ref="toolListRef"
           :scene-name-map="sceneNameMap"
+          :scene-options="visibilitySceneOptions"
           :search-params="searchModel"
           :strategy-list="strategyList"
           :system-name-map="systemNameMap"
+          :system-options="visibilitySystemOptions"
           @clear-search="handleClearSearch"
           @delete="handleDelete"
           @edit="handleEdit"
@@ -274,6 +276,49 @@
     })),
   ];
 
+  const filterVisibilityChildren = (keyword: string) => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) {
+      return buildVisibilityChildren();
+    }
+
+    const result: Array<{ id: string; name: string; disabled?: boolean }> = [];
+    const matchName = (name: string) => name.toLowerCase()
+      .includes(normalizedKeyword);
+
+    if (matchName(t('全部可见'))) {
+      result.push({ id: 'all_visible', name: t('全部可见') });
+    }
+
+    const matchingScenes = visibilitySceneOptions.value.filter(scene => matchName(scene.name));
+    const showAllScenes = matchName(t('全部场景'));
+
+    if (showAllScenes || matchingScenes.length > 0) {
+      result.push({ id: '__group_scene__', name: t('场景列表'), disabled: true });
+      if (showAllScenes) {
+        result.push({ id: 'all_scenes', name: t('全部场景') });
+      }
+      matchingScenes.forEach((scene) => {
+        result.push({ id: `scene_${scene.id}`, name: scene.name });
+      });
+    }
+
+    const matchingSystems = visibilitySystemOptions.value.filter(system => matchName(system.name));
+    const showAllSystems = matchName(t('全部系统'));
+
+    if (showAllSystems || matchingSystems.length > 0) {
+      result.push({ id: '__group_system__', name: t('系统列表'), disabled: true });
+      if (showAllSystems) {
+        result.push({ id: 'all_systems', name: t('全部系统') });
+      }
+      matchingSystems.forEach((system) => {
+        result.push({ id: `system_${system.id}`, name: system.name });
+      });
+    }
+
+    return result;
+  };
+
   const buildSearchSelectData = (): SearchSelectItem[] => [
     {
       name: '工具名称',
@@ -301,12 +346,14 @@
       id: 'visibility',
       placeholder: t('请输入场景或系统名称'),
       multiple: true,
+      async: true,
       children: buildVisibilityChildren(),
     },
     {
       name: '更新人',
       id: 'updated_by',
       placeholder: '请输入更新人',
+      async: true,
     },
   ];
 
@@ -635,7 +682,9 @@
   const getMenuList = async (item: any, keyword: string) => {
     if (!item) return searchSelectData.value;
     const searchItem = searchSelectData.value.find(s => s.id === item?.id);
-    if (searchItem && item.id === 'updated_by') {
+    if (!searchItem) return [];
+
+    if (item.id === 'updated_by') {
       if (keyword) {
         const userList = await fetchUserList({ fuzzy_lookups: keyword });
         searchItem.children = userList.results.map((u: any) => ({
@@ -645,8 +694,16 @@
       } else {
         searchItem.children = [];
       }
+      return searchItem.children;
     }
-    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+
+    if (item.id === 'visibility') {
+      // 仅按展示名称过滤，避免内部 id / system_id 误匹配无关选项
+      searchItem.children = filterVisibilityChildren(keyword);
+      return searchItem.children;
+    }
+
+    return searchItem.children || [];
   };
 
   const {
@@ -786,6 +843,60 @@
     max-width: 100%;
   }
 
+  /* 可见范围下拉：细滚动条并隐藏上下箭头（对齐工具跳转） */
+  .bk-search-select-popover .bk-search-select-menu .menu-content {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c6cc transparent;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar {
+    width: 4px;
+    appearance: none;
+    appearance: none;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-thumb {
+    background-color: #c4c6cc;
+    border-radius: 2px;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-thumb:hover {
+    background-color: #979ba5;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-button,
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-button:single-button,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:vertical:start:decrement,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:vertical:start:increment,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:vertical:end:decrement,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:vertical:end:increment,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:single-button:vertical:decrement,
+  .bk-search-select-popover
+  .bk-search-select-menu
+  .menu-content::-webkit-scrollbar-button:single-button:vertical:increment,
+  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-corner {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    appearance: none !important;
+    appearance: none !important;
+  }
+
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item {
     display: flex !important;
     align-items: center;
@@ -805,19 +916,17 @@
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__ {
     height: auto;
     min-height: 24px;
-    padding-top: 6px;
-    padding-bottom: 2px;
     font-size: 12px;
     font-weight: 500;
     line-height: 20px;
-    color: #313238;
+    color: #979ba5;
     pointer-events: none;
     cursor: default;
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_scene__:hover,
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__:hover {
-    color: #313238;
+    color: #979ba5;
     background-color: transparent;
   }
 
