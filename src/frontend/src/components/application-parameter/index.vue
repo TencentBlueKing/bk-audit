@@ -59,41 +59,30 @@
         @change="handleChange" />
     </div>
     <div v-else>
+      <audit-user-selector-tenant
+        v-if="config.custom_type === 'bk_user_selector'"
+        v-model="userSelectorValue"
+        allow-create
+        class="consition-value"
+        @change="handlerUserChange" />
       <bk-select
-        v-if="config.type === 'field'"
+        v-else-if="config.type === 'field' && supportsFieldReference"
         v-model="selectValue"
         class="bk-select"
         filterable
+        :input-search="false"
         :placeholder="t('请选择已有选项')"
+        :search-placeholder="t('请输入关键字')"
         @change="handlerChange">
         <bk-option-group
-          v-if="riskFieldList.length > 0"
+          v-if="displayRiskFieldList.length > 0"
           collapsible
           :label="t('风险字段')">
           <bk-option
-            v-for="(item, index) in riskFieldList"
+            v-for="(item, index) in displayRiskFieldList"
             :id="item.id"
-            :key="index"
-            :name="item.name">
-            <bk-popover
-              max-width="800px"
-              placement="left"
-              theme="light">
-              <div style="width: 100%;height: 100%;">
-                {{ item.name }}
-              </div>
-              <template #content>
-                <div v-if="isCurrentValue">
-                  <div style="font-size: 12px;font-weight: 700;">
-                    {{ t('参考值：') }}
-                  </div>
-                  <div class="current-value">
-                    {{ getCurrentValue(item.id) }}
-                  </div>
-                </div>
-              </template>
-            </bk-popover>
-          </bk-option>
+            :key="`${item.id}-${index}`"
+            :name="item.name" />
         </bk-option-group>
 
         <bk-option-group
@@ -104,45 +93,19 @@
             v-for="(item, index) in eventDataList"
             :id="item.lable"
             :key="index"
-            :name="item.lable">
-            <bk-popover
-              placement="left"
-              theme="light">
-              <div style="width: 100%;height: 100%;">
-                {{ item.lable }}
-              </div>
-              <template #content>
-                <div v-if="isCurrentValue">
-                  <div style="font-size: 12px;font-weight: 700;">
-                    {{ t('参考值：') }}
-                  </div>
-                  <div class="current-value">
-                    {{ item.value }}
-                  </div>
-                </div>
-              </template>
-            </bk-popover>
-          </bk-option>
+            :name="item.lable" />
         </bk-option-group>
       </bk-select>
-      <div v-else>
-        <audit-user-selector-tenant
-          v-if="config.custom_type === 'bk_user_selector'"
-          v-model="userSelectorValue"
-          allow-create
-          class="consition-value"
-          @change="handlerUserChange" />
-
-        <bk-input
-          v-else
-          v-model="generalValue"
-          clearableshow-word-limit
-          :resize="false"
-          :rows="4"
-          show-overflow-tooltips
-          :type="config.custom_type === 'textarea' ? 'textarea': 'text'"
-          @change="handlerChange" />
-      </div>
+      <bk-input
+        v-else
+        v-model="generalValue"
+        clearable
+        :resize="false"
+        :rows="4"
+        show-overflow-tooltips
+        show-word-limit
+        :type="config.custom_type === 'textarea' ? 'textarea': 'text'"
+        @change="handlerChange" />
     </div>
   </div>
 
@@ -190,6 +153,36 @@
   // 专门用于 select 类型的下拉框值（支持数字类型如 0, 1）
   const selectTypeValue = ref<string | number>('');
 
+  const supportsFieldReference = computed(() => {
+    const customType = props.config?.custom_type;
+    return customType === 'datetime'
+      || customType === 'textarea'
+      || customType === 'input'
+      || customType === 'bk_date_picker'
+      || customType === '';
+  });
+
+  const getRiskFieldName = (fieldId: string) => (
+    props.riskFieldList.find(item => item.id === fieldId)?.name || fieldId
+  );
+
+  const currentFieldRefId = computed(() => {
+    const fieldId = modelValue.value.field || props.config?.default_value || selectValue.value;
+    return fieldId ? String(fieldId) : '';
+  });
+
+  const displayRiskFieldList = computed(() => {
+    const list = [...props.riskFieldList];
+    const fieldId = currentFieldRefId.value;
+    if (fieldId && !list.some(item => item.id === fieldId)) {
+      list.unshift({
+        id: fieldId,
+        name: getRiskFieldName(fieldId),
+      });
+    }
+    return list;
+  });
+
   const datePickerValue = computed(() => {
     if (props.config.custom_type === 'datetime' && props.config.type === 'self') {
       const value = modelValue.value.value || modelValue.value.field;
@@ -198,11 +191,26 @@
     return undefined;
   });
 
-  const userSelectorValue = computed<string | string[] | number>(() => {
-    if (props.config.custom_type === 'bk_user_selector') {
-      return modelValue.value.value || [];
-    }
-    return [];
+  const userSelectorValue = computed<string | string[]>({
+    get() {
+      if (props.config.custom_type !== 'bk_user_selector') {
+        return [];
+      }
+      const val = modelValue.value.value;
+      if (Array.isArray(val)) {
+        return val.map(item => String(item));
+      }
+      if (val !== undefined && val !== null && val !== '') {
+        return String(val);
+      }
+      return [];
+    },
+    set(val: string | string[]) {
+      modelValue.value = {
+        field: '',
+        value: val,
+      };
+    },
   });
 
   const generalValue = computed<string | number>(() => {
@@ -323,40 +331,88 @@
     return value;
   };
 
-  const getCurrentValue = (id: string) => props.detailData[id];
+  const syncFieldSelectValue = () => {
+    if (props.config.type !== 'field' || !supportsFieldReference.value) {
+      return;
+    }
+    const fieldId = modelValue.value.field || props.config.default_value || '';
+    selectValue.value = fieldId;
+  };
+
+  const syncModelFromConfig = () => {
+    const { custom_type: customType, type, default_value: defaultValue } = props.config;
+
+    if (customType === 'bk_user_selector') {
+      const currentValue = modelValue.value.value;
+      const hasValue = Array.isArray(currentValue)
+        ? currentValue.length > 0
+        : currentValue !== undefined && currentValue !== null && currentValue !== '';
+      modelValue.value = {
+        field: '',
+        value: hasValue ? currentValue : (defaultValue ?? []),
+      };
+      return;
+    }
+
+    if (customType === 'select') {
+      const defaultVal = defaultValue;
+      selectTypeValue.value = (defaultVal !== undefined && defaultVal !== null) ? defaultVal : '';
+      if (modelValue.value.value === '' && selectTypeValue.value !== '') {
+        modelValue.value = {
+          field: '',
+          value: selectTypeValue.value,
+        };
+      }
+      return;
+    }
+
+    if (type === 'field' && supportsFieldReference.value) {
+      const fieldId = modelValue.value.field || defaultValue || '';
+      selectValue.value = fieldId;
+      if (fieldId) {
+        modelValue.value = {
+          field: fieldId,
+          value: '',
+        };
+      }
+      return;
+    }
+
+    const currentValue = modelValue.value.value;
+    const hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
+    modelValue.value = {
+      field: '',
+      value: hasValue ? currentValue : (defaultValue ?? ''),
+    };
+    selectValue.value = undefined;
+  };
 
   watch(() => modelValue.value, (val) => {
     const valueToFormat = val.value || val.field;
-    // eslint-disable-next-line max-len
     tipText.value = formatTooltipData(props.config.custom_type, valueToFormat);
+    syncFieldSelectValue();
   }, {
     deep: true,
   });
 
-  watch(() => props.config.custom_type, () => {
-    if (props.config.custom_type === 'bk_user_selector') {
-      modelValue.value = {
-        field: props.config.default_value || [],
-        value: props.config.default_value || [],
-      };
-    } else if (props.config.custom_type === 'select') {
-      // 对于 select 类型，需要同步初始化 selectTypeValue
-      const defaultVal = props.config.default_value;
-      selectTypeValue.value = (defaultVal !== undefined && defaultVal !== null) ? defaultVal : '';
-      modelValue.value = {
-        field: '',
-        value: selectTypeValue.value,
-      };
-    } else {
-      modelValue.value = {
-        field: props.config.default_value || '',
-        value: props.config.default_value || '',
-      };
-    }
-  }, {
-    immediate: true,
-    deep: true,
-  });
+  watch(
+    () => [props.config.custom_type, props.config.type, props.config.default_value] as const,
+    () => {
+      syncModelFromConfig();
+    },
+    {
+      immediate: true,
+      deep: true,
+    },
+  );
+
+  watch(
+    () => props.riskFieldList,
+    () => {
+      syncFieldSelectValue();
+    },
+    { deep: true },
+  );
 
 </script>
 
