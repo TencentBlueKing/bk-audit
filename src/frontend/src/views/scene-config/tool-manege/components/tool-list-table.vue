@@ -52,6 +52,13 @@
     icon?: string;
   }
 
+  interface VisibilityInfo {
+    binding_type: string;
+    visibility_type: string;
+    scene_ids: Array<number | string>;
+    system_ids: Array<number | string>;
+  }
+
   // 工具模型接口定义
   interface ToolModel {
     id: string;
@@ -66,6 +73,7 @@
     status: 'published' | '';
     strategies: number[];
     tags: string[];
+    visibility?: VisibilityInfo;
     created_at: string;
     created_by: string;
     updated_at: string;
@@ -113,6 +121,10 @@
     data_search: t('数据查询'),
     bk_vision: t('BKVision图标'),
   };
+
+  const isPlatformTool = (row: ToolModel) => row.visibility?.binding_type === 'platform_binding';
+
+  const platformToolTooltip = t('平台工具不支持进行任何操作');
 
   // 标签名称
   const returnTagsName = (tagId: string) => {
@@ -198,6 +210,13 @@
           <span class="tool-name-text">
             <Tooltips data={row.name} />
           </span>
+          {isPlatformTool(row) && (
+            <bk-tag
+              class="platform-binding-tag"
+              radius="2px">
+              {t('平台')}
+            </bk-tag>
+          )}
           {row.status === 'published' && (
             <audit-icon
               v-bk-tooltips={t('点击查看工具')}
@@ -296,12 +315,14 @@
       width: 150,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
+        const isPlatform = isPlatformTool(row);
         const isEnabled = row.status === 'published';
         const hasStrategies = row.strategies && row.strategies.length > 0;
-        // 删除按钮禁用条件：启用状态或被策略引用
-        const isDeleteDisabled = isEnabled || hasStrategies;
+        // 删除按钮禁用条件：平台工具、启用状态或被策略引用
+        const isDeleteDisabled = isPlatform || isEnabled || hasStrategies;
         // 删除按钮提示文字
         const getDeleteTooltip = () => {
+          if (isPlatform) return platformToolTooltip;
           if (isEnabled) return t('请先停用后再删除');
           if (hasStrategies) return t('该工具已被策略引用，无法删除');
           return '';
@@ -311,10 +332,16 @@
         return (
           <div class="action-cell">
             <bk-button
+              v-bk-tooltips={{
+                content: platformToolTooltip,
+                disabled: !isPlatform,
+                placement: 'top',
+              }}
               text
               theme="primary"
-              class="mr8"
-              onClick={() => emit('edit', row)}>
+              class={['mr8', isPlatform ? 'action-btn-disabled' : '']}
+              disabled={isPlatform}
+              onClick={() => !isPlatform && emit('edit', row)}>
               {t('编辑')}
             </bk-button>
             <bk-button
@@ -340,16 +367,22 @@
                 content: () => (
                   <div class="more-action-menu">
                     <bk-button
+                      v-bk-tooltips={{
+                        content: platformToolTooltip,
+                        disabled: !isPlatform,
+                        placement: 'top',
+                      }}
                       text
-                      class="mr8"
-                      onClick={() => emit('toggle-status', row)}>
+                      disabled={isPlatform}
+                      class={['mr8', isPlatform ? 'mr8-disabled' : '']}
+                      onClick={() => !isPlatform && emit('toggle-status', row)}>
                       {isEnabled ? t('停用') : t('启用')}
                     </bk-button>
                     {isDeleteDisabled ? (
                       <span
                         v-bk-tooltips={{
                           content: deleteTooltip,
-                          placement: 'bottom',
+                          placement: 'top',
                         }}>
                         <bk-button
                           text
@@ -446,6 +479,7 @@
 <style lang="postcss" scoped>
   :deep(.tool-name-cell) {
     display: inline-flex;
+    gap: 7px;
     align-items: center;
     max-width: 100%;
   }
@@ -457,6 +491,23 @@
 
     .show-tooltips-text {
       display: block;
+    }
+  }
+
+  :deep(.platform-binding-tag.bk-tag) {
+    flex-shrink: 0;
+    height: 18px;
+    padding: 0 8px;
+    font-size: 12px;
+    line-height: 18px;
+    color: #63656e;
+    background-color: #f0f1f5;
+    border: none;
+    border-radius: 2px;
+
+    &:hover {
+      color: #63656e;
+      background-color: #f0f1f5;
     }
   }
 
@@ -513,6 +564,34 @@
 </style>
 
 <style lang="postcss">
+  .report-config-list .platform-binding-tag.bk-tag {
+    flex-shrink: 0;
+    height: 18px;
+    padding: 0 8px;
+    font-size: 12px;
+    line-height: 18px;
+    color: #4d4f56;
+    background-color: #f0f1f5;
+    border: none;
+    border-radius: 2px;
+  }
+
+  .report-config-list .platform-binding-tag.bk-tag:hover {
+    color: #4d4f56;
+    background-color: #f0f1f5;
+  }
+
+  .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text,
+  .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text.is-disabled {
+    color: #c4c6cc !important;
+    cursor: not-allowed;
+  }
+
+  .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text:hover,
+  .report-config-list .action-cell .action-btn-disabled.bk-button.bk-button-primary.is-text.is-disabled:hover {
+    color: #c4c6cc !important;
+  }
+
   .tool-more-action-popover.bk-popover.bk-pop2-content {
     padding: 0;
   }
