@@ -346,6 +346,9 @@
   import BatchDialog from './components/dialog.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    resolveParamFieldReference,
+  } from '@/utils/assist/pa-param-field-ref';
 
   interface ParamItem {
     custom_type: string;
@@ -406,7 +409,52 @@
   const route = useRoute();
   const { messageSuccess } = useMessage();
 
-  const typeText = (val: string | undefined) => (val === 'self' ?  t('自定义输入') : t('字段值引用'));
+  const typeText = (val: string | undefined) => (
+    val === 'field' ? t('字段值引用') : t('自定义输入')
+  );
+
+  const getKnownRiskFieldIds = () => riskFieldList.value.map(item => item.id);
+
+  const applyEditParamConfig = (data: Record<string, ParamItem>) => {
+    const knownFieldIds = getKnownRiskFieldIds();
+    Object.keys(data).forEach((key) => {
+      const param = formData.value.pa_params?.[key];
+      const customType = data[key].custom_type;
+      if (customType === 'bk_user_selector') {
+        // eslint-disable-next-line no-param-reassign
+        data[key].type = 'self';
+        // eslint-disable-next-line no-param-reassign
+        data[key].dropdownShow = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].is_hide = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].default_value = param?.value ?? [];
+        if (param?.field) {
+          formData.value.pa_params[key] = {
+            field: '',
+            value: param.value ?? [],
+          };
+        }
+        return;
+      }
+      const fieldRefId = resolveParamFieldReference(param, customType, knownFieldIds);
+      const hasFieldRef = !!fieldRefId;
+      // eslint-disable-next-line no-param-reassign
+      data[key].type = hasFieldRef ? 'field' : 'self';
+      // eslint-disable-next-line no-param-reassign
+      data[key].dropdownShow = false;
+      // eslint-disable-next-line no-param-reassign
+      data[key].is_hide = false;
+      // eslint-disable-next-line no-param-reassign
+      data[key].default_value = hasFieldRef ? fieldRefId : (param?.value ?? '');
+      if (hasFieldRef) {
+        formData.value.pa_params[key] = {
+          field: fieldRefId,
+          value: '',
+        };
+      }
+    });
+  };
 
   const dropdownList = ref([
     {
@@ -523,9 +571,13 @@
 
   const handleClick = (label: Record<string, any>, item: ParamItem) => {
     Object.keys(paramsDetailData.value).forEach((obj) => {
-      if (obj  === item.key) {
+      if (obj === item.key) {
         paramsDetailData.value[obj].type = label.id;
         paramsDetailData.value[obj].dropdownShow = false;
+        formData.value.pa_params[item.key] = {
+          field: '',
+          value: '',
+        };
       }
     });
   };
@@ -580,16 +632,7 @@
         });
         if (!isPaIdChange.value) {
           paramsDetailData.value = {};
-          Object.keys(data).forEach((key) => {
-            // eslint-disable-next-line no-param-reassign
-            data[key].type =  formData.value.pa_params[key].field === '' ? 'self' : 'field';
-            // eslint-disable-next-line no-param-reassign
-            data[key].dropdownShow = false;
-            // eslint-disable-next-line no-param-reassign
-            data[key].is_hide = false;
-            // eslint-disable-next-line no-param-reassign
-            data[key].default_value = formData.value.pa_params[key].value || formData.value.pa_params[key].field;
-          });
+          applyEditParamConfig(data);
         }
 
         paramsDetailData.value = data;
@@ -615,12 +658,18 @@
       }
     },
   });
-  //  获取风险可用字段
+  //  获取风险可用字段（本项目 useRequest：manual: true 表示挂载时自动请求）
   const {
     data: riskFieldList,
   } = useRequest(RiskManageService.fetchFields, {
     defaultValue: [],
     manual: true,
+  });
+
+  watch(riskFieldList, () => {
+    if ((isEditMode || isCloneMode) && Object.keys(paramsDetailData.value).length) {
+      applyEditParamConfig(paramsDetailData.value);
+    }
   });
 
 
