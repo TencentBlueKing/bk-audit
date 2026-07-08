@@ -48,13 +48,16 @@
           </div>
         </div>
 
-        <!-- 参数表格：参数名 + 默认值均分剩余宽度 -->
+        <!-- 参数表格：参数名 + 显示名 + 默认值均分剩余宽度 -->
         <div
           v-if="getTableData(item).length > 0"
           class="render-field">
           <div class="field-header-row">
             <div class="field-value col-name">
               {{ t('参数名') }}
+            </div>
+            <div class="field-value col-display">
+              {{ t('显示名') }}
             </div>
             <div class="field-value col-default">
               {{ t('默认值') }}
@@ -67,6 +70,9 @@
             class="field-row">
             <div class="field-value col-name">
               <span class="param-name-text">{{ getParamName(row) }}</span>
+            </div>
+            <div class="field-value col-display">
+              <span class="param-name-text">{{ getParamDisplayName(row) }}</span>
             </div>
             <div class="field-value col-default">
               <bk-input
@@ -131,6 +137,9 @@
 
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
+
+  // 展示第一步「显示名」
+  const getParamDisplayName = (param: Pick<InputVarItem, 'display_name'>) => param.display_name || '';
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
   const configList = computed<ConfigItem[]>(() => {
@@ -242,7 +251,7 @@
 <style lang="postcss" scoped>
   .scene-param-config {
     --param-action-col-width: 50px;
-    --param-data-col-width: calc((100% - var(--param-action-col-width)) / 2);
+    --param-data-col-width: calc((100% - var(--param-action-col-width)) / 3);
 
     margin-top: 16px;
   }
@@ -306,6 +315,7 @@
   }
 
   .col-name,
+  .col-display,
   .col-default {
     flex: 1 1 0;
     min-width: 0;
@@ -324,12 +334,14 @@
     background: #f0f1f5;
 
     .col-name,
+    .col-display,
     .col-default,
     .col-action {
       height: 42px;
       padding-left: 8px;
     }
 
+    .col-display,
     .col-default,
     .col-action {
       border-left: 1px solid #dcdee5;
@@ -355,6 +367,7 @@
     }
 
     .col-name,
+    .col-display,
     .col-default,
     .col-action {
       display: flex;
@@ -365,6 +378,11 @@
 
     .col-name {
       background: #fafbfd;
+    }
+
+    .col-display {
+      background: #fafbfd;
+      border-left: 1px solid #dcdee5;
     }
 
     .col-default {
