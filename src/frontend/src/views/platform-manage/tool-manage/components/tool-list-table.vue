@@ -186,7 +186,7 @@
     {
       title: t('工具名称'),
       colKey: 'name',
-      width: 120,
+      width: 250,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span class="tool-name-cell">
@@ -209,7 +209,7 @@
     {
       title: t('工具说明'),
       colKey: 'description',
-      width: 200,
+      width: 450,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{formatCellText(row.description)}</span>
@@ -218,7 +218,7 @@
     {
       title: t('工具类型'),
       colKey: 'tool_type',
-      width: 200,
+      width: 150,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{toolType[row.tool_type] || '--'}</span>
@@ -227,13 +227,13 @@
     {
       title: t('可见范围'),
       colKey: 'visibility',
-      width: 200,
+      width: 400,
       cell: (_h: any, { row }: { row: ToolModel }) => renderVisibilityContent(row.visibility, row.uid),
     },
     {
       title: t('状态'),
       colKey: 'status',
-      width: 80,
+      width: 120,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
@@ -248,7 +248,7 @@
     {
       title: t('更新人'),
       colKey: 'updated_by',
-      width: 130,
+      width: 120,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>{formatCellText(row.updated_by)}</span>
@@ -257,7 +257,7 @@
     {
       title: t('更新时间'),
       colKey: 'updated_at',
-      width: 180,
+      width: 150,
       ellipsis: true,
       sortType: 'all',
       sorter: true,
@@ -268,7 +268,7 @@
     {
       title: t('操作'),
       colKey: 'action',
-      width: 140,
+      width: 120,
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPublished = row.status === 'published';
