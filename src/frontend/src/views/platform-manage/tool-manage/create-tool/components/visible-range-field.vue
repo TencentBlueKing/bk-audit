@@ -77,8 +77,25 @@
         class="visible-range-popover"
         :style="popoverStyle"
         @mousedown.prevent>
+        <!-- 搜索 -->
+        <div
+          class="range-search"
+          @mousedown.stop>
+          <span class="search-prefix-wrap">
+            <audit-icon
+              class="search-prefix"
+              type="search1" />
+          </span>
+          <bk-input
+            v-model="searchKeyword"
+            behavior="simplicity"
+            clearable
+            :placeholder="t('搜索')" />
+        </div>
+
         <!-- 全部可见 -->
         <div
+          v-show="showAllVisibleOption"
           class="all-visible-row"
           :class="{ 'is-active': formData.visibility_type === 'all_visible' && viaAllVisibleButton }"
           @click.stop="handleSelectAll">
@@ -102,6 +119,7 @@
             </div>
             <div class="column-list">
               <div
+                v-show="showAllSceneOption"
                 class="checkbox-item"
                 :class="{
                   'is-checked': isAllSceneChecked,
@@ -119,7 +137,7 @@
                   type="check-line" />
               </div>
               <div
-                v-for="scene in sceneList"
+                v-for="scene in filteredSceneList"
                 :key="scene.id"
                 class="checkbox-item"
                 :class="{
@@ -161,6 +179,7 @@
             </div>
             <div class="column-list">
               <div
+                v-show="showAllSystemOption"
                 class="checkbox-item"
                 :class="{
                   'is-checked': isAllSystemChecked,
@@ -178,7 +197,7 @@
                   type="check-line" />
               </div>
               <div
-                v-for="system in systemList"
+                v-for="system in filteredSystemList"
                 :key="system.id"
                 class="checkbox-item"
                 :class="{
@@ -269,6 +288,47 @@
 
   const sceneList = ref<OptionItem[]>([]);
   const systemList = ref<SystemOptionItem[]>([]);
+  const searchKeyword = ref('');
+
+  const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase());
+
+  // 过滤后的场景列表（按名称/ID 匹配）
+  const filteredSceneList = computed(() => {
+    const keyword = normalizedSearchKeyword.value;
+    if (!keyword) return sceneList.value;
+    return sceneList.value.filter(item => item.name.toLowerCase().includes(keyword)
+      || String(item.id).includes(keyword));
+  });
+
+  // 过滤后的系统列表（按名称/ID 匹配）
+  const filteredSystemList = computed(() => {
+    const keyword = normalizedSearchKeyword.value;
+    if (!keyword) return systemList.value;
+    return systemList.value.filter(item => item.name.toLowerCase().includes(keyword)
+      || String(item.id).toLowerCase()
+        .includes(keyword));
+  });
+
+  const showAllVisibleOption = computed(() => {
+    const keyword = normalizedSearchKeyword.value;
+    if (!keyword) return true;
+    return t('全部可见').toLowerCase()
+      .includes(keyword);
+  });
+
+  const showAllSceneOption = computed(() => {
+    const keyword = normalizedSearchKeyword.value;
+    if (!keyword) return true;
+    return t('全部场景').toLowerCase()
+      .includes(keyword);
+  });
+
+  const showAllSystemOption = computed(() => {
+    const keyword = normalizedSearchKeyword.value;
+    if (!keyword) return true;
+    return t('全部系统').toLowerCase()
+      .includes(keyword);
+  });
 
   // 加载场景列表
   const loadSceneList = async () => {
@@ -499,6 +559,8 @@
     popoverVisible.value = !popoverVisible.value;
     if (popoverVisible.value) {
       updatePopoverPosition();
+    } else {
+      searchKeyword.value = '';
     }
   };
 
@@ -667,6 +729,7 @@
       && popoverRef.value && !popoverRef.value.contains(target)
     ) {
       popoverVisible.value = false;
+      searchKeyword.value = '';
     }
   };
 
@@ -681,6 +744,14 @@
   watch(popoverVisible, (val) => {
     if (val) {
       nextTick(() => updatePopoverPosition());
+    } else {
+      searchKeyword.value = '';
+    }
+  });
+
+  watch(normalizedSearchKeyword, () => {
+    if (popoverVisible.value) {
+      nextTick(() => checkLabelOverflow());
     }
   });
 
@@ -798,6 +869,46 @@
     box-sizing: border-box;
   }
 
+  /* 顶部搜索 */
+  .visible-range-popover .range-search {
+    display: flex;
+    padding: 4px 0 0;
+    margin: 0 12px;
+    background: #fff;
+    border-bottom: 1px solid #dcdee5;
+    align-items: center;
+
+    .bk-input {
+      background: #fff !important;
+      border: none !important;
+      box-shadow: none !important;
+      flex: 1;
+    }
+
+    .bk-input--text,
+    .bk-input--default,
+    .bk-input-text,
+    input {
+      background: #fff !important;
+      background-color: #fff !important;
+    }
+  }
+
+  .visible-range-popover .search-prefix-wrap {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    background: transparent;
+
+    .search-prefix {
+      font-size: 18px;
+      line-height: 1;
+      color: #979ba5;
+    }
+  }
+
   /* ALL 全部可见 */
   .all-visible-row {
     display: flex;
@@ -805,7 +916,7 @@
     align-items: center;
     padding: 13px 15px;
     cursor: pointer;
-    border-bottom: 1px solid #f0f1f5;
+    border-bottom: 1px solid #dcdee5;
 
     &:hover {
       color: #3a84ff;
@@ -853,7 +964,7 @@
 
     & + & {
       padding-left: 12px;
-      border-left: 1px solid #f0f1f5;
+      border-left: 1px solid #dcdee5;
     }
   }
 
