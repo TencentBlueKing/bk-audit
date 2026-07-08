@@ -308,6 +308,8 @@ class SnapshotCheckStatistic(models.Model):
     doris_storage_count = models.IntegerField(default=0)
     hdfs_storage_count = models.IntegerField(default=0)
     result = models.BooleanField(default=False)
+    # 失败类型：None=成功，source=源系统拉取失败，storage=存储查询失败
+    error_type = models.CharField(max_length=16, null=True, blank=True, default=None)
 
     class Meta:
         unique_together = [["system_id", "resource_type_id", "join_data_type"]]
