@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import List
 
+from django.db import models
 from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
@@ -783,8 +784,14 @@ class EventFilterOperator(TextChoices):
     LESS_THAN = "<", gettext_lazy("<")
 
 
+class RiskPersonRelationType(models.TextChoices):
+    OPERATOR = "operator", gettext_lazy("责任人")
+    CURRENT_OPERATOR = "current_operator", gettext_lazy("当前处理人")
+    NOTICE_USER = "notice_user", gettext_lazy("关注人")
+
+
 # 风险等级排序字段
-RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+RISK_LEVEL_ORDER_FIELD = "risk_level_order"
 
 
 @register_choices("risk_report_status")

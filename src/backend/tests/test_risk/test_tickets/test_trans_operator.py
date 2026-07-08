@@ -21,6 +21,7 @@ from unittest import mock
 
 from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.handlers.ticket import NewRisk, TransOperator
+from services.web.risk.models import RiskPersonIndex
 from tests.test_risk.test_tickets.base import RiskContext, TicketTest
 
 
@@ -49,3 +50,23 @@ class TransOperatorTest(TicketTest):
             # TransOperator 使用默认映射：AWAIT_PROCESS → PROCESSING（处理中）
             self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
             self.assertEquals(risk.current_operator, new_operators)
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_trans_operator_syncs_current_operator_index(self):
+        with RiskContext() as risk:
+            operator = uuid.uuid1().hex
+            NewRisk(risk_id=risk.risk_id, operator=operator).run()
+            TransOperator(risk_id=risk.risk_id, operator=operator).run(new_operators=["new_user"])
+
+            self.assertTrue(
+                RiskPersonIndex.objects.filter(
+                    risk_id=risk.risk_id,
+                    relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
+                    user="new_user",
+                ).exists()
+            )

@@ -39,6 +39,7 @@ from services.web.risk.models import (
     Risk,
     RiskEventSubscription,
     RiskExperience,
+    RiskPersonIndex,
     RiskReport,
     RiskRule,
     TicketNode,
@@ -104,6 +105,7 @@ class RiskAdmin(admin.ModelAdmin):
     # 支持基于命中策略过滤
     list_filter = ["status", "display_status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
     list_per_page = 50  # 减少每页数量以提升性能
+    actions = ["rebuild_person_index"]
 
     def get_queryset(self, request):
         """
@@ -153,6 +155,27 @@ class RiskAdmin(admin.ModelAdmin):
         return self._truncate_json_field(obj.notice_users)
 
     notice_users_short.short_description = _("关注人")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        person_fields = {
+            "operator": RiskPersonIndex.RelationType.OPERATOR,
+            "current_operator": RiskPersonIndex.RelationType.CURRENT_OPERATOR,
+            "notice_users": RiskPersonIndex.RelationType.NOTICE_USER,
+        }
+        if change:
+            relation_types = [
+                relation_type for field, relation_type in person_fields.items() if field in form.changed_data
+            ]
+        else:
+            relation_types = list(person_fields.values())
+        if relation_types:
+            RiskPersonIndex.sync_risk(obj, relation_types=relation_types)
+
+    @admin.action(description=_("重建人员检索索引"))
+    def rebuild_person_index(self, request, queryset):
+        for risk in queryset.iterator():
+            RiskPersonIndex.sync_risk(risk)
 
 
 @admin.register(ProcessApplication)
@@ -205,6 +228,14 @@ class TicketPermissionAdmin(admin.ModelAdmin):
     list_display = ["id", "risk_id", "action", "user"]
     search_fields = ["risk_id", "user"]
     list_filter = ["action"]
+
+
+@admin.register(RiskPersonIndex)
+class RiskPersonIndexAdmin(admin.ModelAdmin):
+    list_display = ["id", "risk_id", "relation_type", "user", "is_deleted", "updated_at"]
+    search_fields = ["risk_id", "user"]
+    list_filter = ["relation_type", "is_deleted"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
 
 
 class RiskEventSubscriptionAdminForm(forms.ModelForm):

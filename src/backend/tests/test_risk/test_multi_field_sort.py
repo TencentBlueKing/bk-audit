@@ -29,7 +29,7 @@ class TestListRiskRequestSerializerSort(TestCase):
         self.assertTrue(s.is_valid(), s.errors)
         self.assertEqual(
             s.validated_data["order_fields"],
-            ["-strategy__risk_level", "-event_time"],
+            ["-risk_level_order", "-event_time"],
         )
 
     def test_no_sort_defaults_to_empty(self):
@@ -104,21 +104,21 @@ class TestBkBaseFieldResolverMultiSort(TestCase):
         self.assertNotIn("event_data.amount", fields)
         self.assertNotIn("amount", fields)
 
-    def test_resolve_value_fields_risk_level_adds_event_time(self):
+    def test_resolve_value_fields_risk_level_order_uses_snapshot_field_only(self):
         resolver = BkBaseFieldResolver(
-            order_fields=["-strategy__risk_level"],
+            order_fields=["-risk_level_order"],
             event_filters=[],
             duplicate_field_map={},
         )
         fields = resolver.resolve_value_fields(["risk_id", "strategy_id"])
-        self.assertIn("strategy__risk_level", fields)
-        self.assertIn("event_time", fields)
+        self.assertIn("risk_level_order", fields)
+        self.assertNotIn("event_time", fields)
 
 
 class TestFinalSelectAssemblerMultiSort(TestCase):
     def test_build_order_expressions_multi_fields(self):
         resolver = BkBaseFieldResolver(
-            order_fields=["-strategy__risk_level", "-event_time", "-risk_id"],
+            order_fields=["-risk_level_order", "-event_time", "-risk_id"],
             event_filters=[],
             duplicate_field_map={},
         )
@@ -126,6 +126,9 @@ class TestFinalSelectAssemblerMultiSort(TestCase):
         expressions = assembler._build_order_expressions(resolver.order_fields, has_event_join=False)
         self.assertEqual(len(expressions), 3)
         self.assertTrue(all(isinstance(e, exp.Ordered) for e in expressions))
+        order_sql = " ".join(expression.sql() for expression in expressions)
+        self.assertIn("base_query.risk_level_order DESC", order_sql)
+        self.assertNotIn("CASE", order_sql)
 
     def test_build_order_expressions_single_field_backward_compat(self):
         resolver = BkBaseFieldResolver(

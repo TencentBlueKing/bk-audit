@@ -41,6 +41,7 @@ from services.web.risk.constants import (
     EventMappingFields,
     NL2RiskFilterLogStatus,
     RiskLabel,
+    RiskPersonRelationType,
     RiskRuleOperator,
     RiskStatus,
     RiskViewType,
@@ -53,6 +54,7 @@ from services.web.risk.models import (
     ProcessApplication,
     Risk,
     RiskExperience,
+    RiskPersonIndex,
     RiskReport,
     RiskRule,
     TicketNode,
@@ -354,6 +356,12 @@ class ManualEventProviderSerializer(serializers.ModelSerializer):
         exclude = ["strategy"]
 
 
+class RiskPersonIndexProviderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RiskPersonIndex
+        fields = ["risk_id", "relation_type", "user", "is_deleted", "updated_at"]
+
+
 class ManualEventSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
@@ -586,7 +594,7 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
-        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → risk_level_order）。"""
         order_fields = []
         for item in sort_list:
             bare = item.lstrip("-")
@@ -624,14 +632,20 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
         if data.get("end_time"):
             data["event_time__lt"] = [data.pop("end_time")]
         # 字段转换
-        if data.get("operator"):
-            data["operator__contains"] = data.pop("operator")
+        person_filters = []
+        person_field_map = {
+            "operator": RiskPersonRelationType.OPERATOR,
+            "current_operator": RiskPersonRelationType.CURRENT_OPERATOR,
+            "notice_users": RiskPersonRelationType.NOTICE_USER,
+        }
+        for field, relation_type in person_field_map.items():
+            users = data.pop(field, None)
+            if users:
+                person_filters.append({"relation_type": relation_type, "users": users})
+        if person_filters:
+            data["person_filters"] = person_filters
         if data.get("event_type"):
             data["event_type__contains"] = data.pop("event_type")
-        if data.get("current_operator"):
-            data["current_operator__contains"] = data.pop("current_operator")
-        if data.get("notice_users"):
-            data["notice_users__contains"] = data.pop("notice_users")
         if data.get("tags"):
             data["tag_objs__in"] = data.pop("tags")
         if data.get("event_content"):
@@ -655,6 +669,10 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
                 "event_filters",
                 "order_fields",
                 "has_report",
+                "person_filters",
+                "operator",
+                "current_operator",
+                "notice_users",
             ]:
                 continue
             if key in ["tag_objs__in"]:
@@ -1974,7 +1992,7 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
             instance = {
                 "risk_id": instance.risk_id,
                 "title": instance.title,
-                "risk_level": getattr(instance.strategy, "risk_level", None),
+                "risk_level": instance.risk_level,
                 "status": instance.status,
                 "event_time": instance.event_time,
                 "event_end_time": instance.event_end_time,

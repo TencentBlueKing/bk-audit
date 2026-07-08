@@ -105,13 +105,13 @@ class ReportRiskVariableSerializer(serializers.ModelSerializer):
         help_text=gettext_lazy("风险单更新时间"),
     )
 
-    # 来自关联的 Strategy 模型的字段
+    # 风险创建时从策略快照下来的字段
     risk_level = ChoiceDisplayField(
         choices=RiskLevel,
         label=gettext_lazy("风险等级"),
         help_text=gettext_lazy("风险等级标签（高/中/低）"),
-        source="strategy.risk_level",
     )
+    # 来自关联的 Strategy 模型的字段
     risk_hazard = serializers.CharField(
         label=gettext_lazy("风险危害"),
         help_text=gettext_lazy("来自策略配置"),

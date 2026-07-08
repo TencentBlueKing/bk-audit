@@ -29,6 +29,7 @@ from apps.permission.handlers.resource_types.panel import Panel
 from apps.permission.handlers.resource_types.risk import (
     ManualEvent,
     Risk,
+    RiskPersonIndex,
     TicketNode,
     TicketPermission,
 )
@@ -64,6 +65,7 @@ class ResourceEnum:
     NOTICE_GROUP = NoticeGroup
     RISK = Risk
     MANUAL_EVENT = ManualEvent
+    RISK_PERSON_INDEX = RiskPersonIndex
     TICKET_PERMISSION = TicketPermission
     TICKET_NODE = TicketNode
     PANEL = Panel

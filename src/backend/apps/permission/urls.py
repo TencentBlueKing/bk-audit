@@ -47,12 +47,14 @@ except (RuntimeError, ImportError):
 try:
     from services.web.risk.provider import (
         ManualEventResourceProvider,
+        RiskPersonIndexResourceProvider,
         RiskResourceProvider,
         TicketNodeResourceProvider,
         TicketPermissionResourceProvider,
     )
 except (RuntimeError, ImportError):
     RiskResourceProvider = None
+    RiskPersonIndexResourceProvider = None
     TicketPermissionResourceProvider = None
     TicketNodeResourceProvider = None
     ManualEventResourceProvider = None
@@ -91,6 +93,8 @@ if RiskResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.RISK.id, RiskResourceProvider())
 if ManualEventResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.MANUAL_EVENT.id, ManualEventResourceProvider())
+if RiskPersonIndexResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.RISK_PERSON_INDEX.id, RiskPersonIndexResourceProvider())
 if TicketPermissionResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.TICKET_PERMISSION.id, TicketPermissionResourceProvider())
 if TicketNodeResourceProvider is not None:
