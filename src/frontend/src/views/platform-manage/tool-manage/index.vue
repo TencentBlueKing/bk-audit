@@ -79,7 +79,8 @@
             clearable
             :data="searchSelectData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('搜索工具名称、工具说明、工具类型、可见范围')"
+            :get-menu-list="getMenuList"
+            :placeholder="t('搜索工具名称、工具说明、工具类型、可见范围、更新人')"
             unique-select
             value-split-code=","
             @update:model-value="handleSearchValueUpdate" />
@@ -291,6 +292,11 @@
       placeholder: t('请输入场景或系统名称'),
       multiple: true,
       children: buildVisibilityChildren(),
+    },
+    {
+      name: '更新人',
+      id: 'updated_by',
+      placeholder: '请输入更新人',
     },
   ];
 
@@ -508,6 +514,7 @@
       visibility_type: undefined,
       scene_ids: undefined,
       system_ids: undefined,
+      updated_by: '',
     };
 
     keyword.forEach((item) => {
@@ -525,6 +532,8 @@
         search.description = value;
       } else if (item.id === 'tool_type') {
         search.tool_type = value.split(',').map(v => v.trim());
+      } else if (item.id === 'updated_by') {
+        search.updated_by = value;
       }
     });
 
@@ -595,6 +604,30 @@
   };
 
   const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchSelectData.value;
+    const searchItem = searchSelectData.value.find(s => s.id === item?.id);
+    if (searchItem && item.id === 'updated_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+    }
+    return (searchSelectData.value.find(s => s.id === item?.id)?.children) || [];
+  };
+
+  const {
     run: fetchStrategyList,
   } = useRequest(StrategyManageService.fetchAllStrategyList, {
     defaultValue: [],
@@ -616,6 +649,7 @@
 
   const refreshAllData = () => {
     fetchAllToolsData();
+    fetchUserList();
     refreshList();
     fetchStatusCounts();
   };
@@ -623,6 +657,7 @@
   onMounted(() => {
     fetchStrategyList();
     fetchAllToolsData();
+    fetchUserList();
     fetchStatusCounts();
     loadVisibilityOptions();
     onEvent('scene:change', () => {
