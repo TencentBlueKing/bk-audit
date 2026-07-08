@@ -75,6 +75,7 @@
         v-show="popoverVisible"
         ref="popoverRef"
         class="visible-range-popover"
+        :class="popoverClass"
         :style="popoverStyle"
         @mousedown.prevent>
         <!-- 搜索 -->
@@ -267,9 +268,16 @@
   //   all_visible=全部可见, all_scenes=全部场景, all_systems=全系统,
   //   specific_scenes=指定场景, specific_systems=指定系统, scenes_and_systems=场景和系统
 
-  const props = defineProps<{
+  const props = withDefaults(defineProps<{
     formData: FormData;
-  }>();
+    /** 下拉面板额外 class（如弹窗内使用的紧凑样式） */
+    popoverClass?: string;
+    /** 下拉宽度是否跟随选择器（默认固定 640px） */
+    matchSelectorWidth?: boolean;
+  }>(), {
+    popoverClass: '',
+    matchSelectorWidth: false,
+  });
 
   const emit = defineEmits<{(e: 'update:formData', value: FormData): void}>();
 
@@ -279,7 +287,11 @@
   const selectorRef = ref<HTMLElement | null>(null);
   const tagsWrapperRef = ref<HTMLElement | null>(null);
   const popoverRef = ref<HTMLElement | null>(null);
-  const popoverStyle = reactive({ top: '0px', left: '0px' });
+  const popoverStyle = reactive({
+    top: '0px',
+    left: '0px',
+    width: '',
+  });
 
   // 动态计算可显示的 tag 数量
   const visibleCount = ref(999);
@@ -552,6 +564,7 @@
       const rect = el.getBoundingClientRect();
       popoverStyle.top = `${rect.bottom + 4}px`;
       popoverStyle.left = `${rect.left}px`;
+      popoverStyle.width = props.matchSelectorWidth ? `${rect.width}px` : '';
     });
   };
 
@@ -867,6 +880,24 @@
     border-radius: 2px;
     box-shadow: 0 4px 16px 0 rgb(25 25 41 / 10%);
     box-sizing: border-box;
+  }
+
+  /* 弹窗内紧凑下拉：跟随选择器宽度，降低列表高度 */
+  .visible-range-popover.is-compact {
+    width: auto;
+    min-width: 0;
+
+    .column-list {
+      max-height: 200px;
+    }
+
+    .all-visible-row {
+      padding: 10px 12px;
+    }
+
+    .range-columns {
+      padding: 8px 0 8px 8px;
+    }
   }
 
   /* 顶部搜索 */
