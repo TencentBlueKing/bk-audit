@@ -45,7 +45,7 @@
 
     <!-- 场景组 -->
     <div class="group-header">
-      {{ t('场景') }}
+      {{ t('场景列表') }}
     </div>
     <div
       class="menu-item group-option"
@@ -101,9 +101,9 @@
 
     <div class="menu-divider" />
 
-    <!-- 系统组（平台） -->
+    <!-- 系统组 -->
     <div class="group-header">
-      {{ t('平台') }}
+      {{ t('系统列表') }}
     </div>
     <div
       class="menu-item group-option"
@@ -295,8 +295,9 @@
   .group-header {
     padding: 6px 12px 2px;
     font-size: 12px;
+    font-weight: 500;
     line-height: 20px;
-    color: #979ba5;
+    color: #313238;
   }
 
   .menu-item {
