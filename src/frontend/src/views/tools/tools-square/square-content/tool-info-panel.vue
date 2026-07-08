@@ -488,6 +488,7 @@
   // 记录当前正在请求详情的激活 uid（用于复制工具时区分原始uid和副本uid）
   const pendingActiveUid = ref<string>('');
   const lastToolDetailFetchKey = ref('');
+  const pendingToolDetailFetchKey = ref('');
 
   const resolveOverrideContextForUid = (tabUid: string): ToolDetailOverrideContext | undefined => {
     const stored = getToolOverrideContext(tabUid);
@@ -544,6 +545,7 @@
     const fetchKeyChanged = lastToolDetailFetchKey.value !== fetchKey;
 
     if (!fetchKeyChanged && toolDetailMap.value[newUid] && !drillParams) return;
+    if (pendingToolDetailFetchKey.value === fetchKey) return;
 
     if (fetchKeyChanged && toolDetailMap.value[newUid]) {
       delete toolDetailMap.value[newUid];
@@ -552,6 +554,7 @@
 
     lastToolDetailFetchKey.value = fetchKey;
     pendingActiveUid.value = newUid;
+    pendingToolDetailFetchKey.value = fetchKey;
     fetchToolDetail(buildFetchToolDetailParams(realUid, newUid));
   };
 
@@ -560,8 +563,16 @@
     run: fetchToolDetail,
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
+    onFinally: () => {
+      pendingToolDetailFetchKey.value = '';
+    },
     onSuccess: (data) => {
+      const currentActiveUid = pendingActiveUid.value;
       toolDetailMap.value[data.uid] = data;
+      // 复制工具场景：先写入 tab uid 映射，避免 toolList 变更触发 watch 时重复拉取详情
+      if (currentActiveUid && copyUidMap.value[currentActiveUid]) {
+        toolDetailMap.value[currentActiveUid] = data;
+      }
       // 对于复制的工具，也将详情映射到 copy uid 下
       Object.entries(copyUidMap.value).forEach(([copyUid, originalUid]) => {
         if (originalUid === data.uid && !toolDetailMap.value[copyUid]) {
@@ -577,9 +588,7 @@
         toolInList.strategies = data.strategies || [];
       }
       // 如果是复制工具触发的请求，用 copyUid 作为 key 来初始化
-      const currentActiveUid = pendingActiveUid.value;
       if (currentActiveUid && copyUidMap.value[currentActiveUid]) {
-        toolDetailMap.value[currentActiveUid] = data;
         applyToolDetail(data, currentActiveUid);
       } else {
         applyToolDetail(data);

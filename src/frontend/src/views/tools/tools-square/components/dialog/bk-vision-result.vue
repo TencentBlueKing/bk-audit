@@ -86,6 +86,7 @@
 
   const panelRef = ref<HTMLElement | null>(null);
   const panelId = ref('');
+  const isExecuting = ref(false);
   const { messageError } = useMessage();
   const emitBus = useEventBus().emit;
 
@@ -100,10 +101,15 @@
         initBK(panelId.value);
       }
     },
+    onFinally: () => {
+      isExecuting.value = false;
+    },
   });
 
   // 执行工具（使用 toolDetails.uid 作为真实工具uid来调用后端API）
   const executeTool = () => {
+    if (isExecuting.value) return;
+    isExecuting.value = true;
     fetchToolsExecute({
       uid: props.toolDetails?.uid || props.uid,
       params: {
@@ -146,6 +152,14 @@
 
   // 初始化 BKVision
   const initBK = async (id: string) => {
+    if (app) {
+      app.unmount();
+      app = null;
+    }
+    if (panelRef.value) {
+      panelRef.value.innerHTML = '';
+    }
+
     const filters: Record<string, any> = {};
     const drillDownFilters: Record<string, any> = {};
     const constants: Record<string, any> = {};
@@ -216,7 +230,9 @@
     }
 
     try {
-      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      if (!window.BkVisionSDK) {
+        await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      }
       app = await window.BkVisionSDK.init(
         `#panel-${props.uid}`,
         id,
