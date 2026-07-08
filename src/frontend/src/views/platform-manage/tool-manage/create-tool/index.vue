@@ -199,8 +199,10 @@
   import type { FormData } from './types';
   import {
     applyVisibilityToFormData,
+    buildInputDefaultSnapshot,
     buildPlatformToolSubmitPayload,
     parseDefaultValueOverrides,
+    reconcileSceneParamOverrides,
   } from './submit-payload';
 
   import useMessage from '@/hooks/use-message';
@@ -226,6 +228,8 @@
     { title: t('可见范围') },
   ];
   const currentStep = ref<1 | 2>(1);
+  const isEditDataReady = ref(!isEditMode);
+  const isSkippingStepValidation = ref(false);
 
   const formRef = ref();
   const comRef = ref();
@@ -411,6 +415,7 @@
         await loadEditVisibility(route.params.id as string);
       }
       restoreToolComponentConfig();
+      isEditDataReady.value = true;
     },
   });
 
@@ -418,43 +423,85 @@
     window.open(`${configData.value.tool.vision_share_permission_url}`);
   };
 
-  // 下一步：校验步骤1表单后进入步骤2
-  const handleNextStep = () => {
-    const tastQueue = [formRef.value.validate()];
-    if (comRef.value && formData.value.tool_type !== 'api') {
-      tastQueue.push(comRef.value.getValue());
-    }
-    // 创建时 api 判断是否调试成功
-    if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
-      const debugResult = comRef.value.getDebugResult();
-      if (!debugResult.isDoneDeBug) {
-        messageWarn(t('请先进行接口调试'));
-        return;
-      } if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
-        messageWarn(t('接口调试失败'));
-        return;
+  const validateStep1 = async (): Promise<boolean> => {
+    try {
+      const tastQueue = [formRef.value.validate()];
+      if (comRef.value && formData.value.tool_type !== 'api') {
+        tastQueue.push(comRef.value.getValue());
       }
-    }
-    // api 类型校验分页配置等
-    if (comRef.value && formData.value.tool_type === 'api' && comRef.value.validate) {
-      if (!comRef.value.validate()) {
-        return;
-      }
-    }
-    Promise.all(tastQueue).then(() => {
-      // 获取组件配置
-      if (comRef.value?.getFields) {
-        if (formData.value.tool_type === 'bk_vision') {
-          formData.value.config.input_variable = comRef.value.getFields();
-          if (!isUpdate.value) {
-            formData.value.updated_time = bkVisionUpdateTime.value || null;
-          }
-        } else {
-          formData.value.config = comRef.value.getFields();
+      if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
+        const debugResult = comRef.value.getDebugResult();
+        if (!debugResult.isDoneDeBug) {
+          messageWarn(t('请先进行接口调试'));
+          return false;
+        }
+        if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+          messageWarn(t('接口调试失败'));
+          return false;
         }
       }
-      currentStep.value = 2;
-    });
+      if (comRef.value && formData.value.tool_type === 'api' && comRef.value.validate) {
+        if (!comRef.value.validate()) {
+          return false;
+        }
+      }
+      await Promise.all(tastQueue);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const syncStep1Config = () => {
+    if (!comRef.value?.getFields) {
+      return;
+    }
+    if (formData.value.tool_type === 'bk_vision') {
+      formData.value.config.input_variable = comRef.value.getFields();
+      if (!isUpdate.value) {
+        formData.value.updated_time = bkVisionUpdateTime.value || null;
+      }
+    } else {
+      formData.value.config = comRef.value.getFields();
+    }
+  };
+
+  const reconcileStep2ParamOverrides = (previousInputDefaults?: Record<string, any>) => {
+    formData.value.scene_param_overrides = reconcileSceneParamOverrides(
+      formData.value.scene_param_overrides,
+      formData.value.config?.input_variable || [],
+      formData.value.visibility_type,
+      formData.value.scene_ids || [],
+      formData.value.system_ids || [],
+      allSceneList.value,
+      allSystemList.value,
+      previousInputDefaults,
+    );
+  };
+
+  const syncApiDebugSubmitState = () => {
+    if (formData.value.tool_type === 'api' && !isEditMode) {
+      const hasDebugSchema = !!formData.value.config?.output_config?.result_schema?.tree_data;
+      isApiDoneDeBug.value = !hasDebugSchema;
+    }
+  };
+
+  const applyStep2EntrySync = () => {
+    const previousInputDefaults = buildInputDefaultSnapshot(formData.value.config?.input_variable || []);
+    syncStep1Config();
+    reconcileStep2ParamOverrides(previousInputDefaults);
+    syncApiDebugSubmitState();
+  };
+
+  // 下一步：校验步骤1表单后进入步骤2
+  const handleNextStep = async () => {
+    const isValid = await validateStep1();
+    if (!isValid) {
+      return;
+    }
+    applyStep2EntrySync();
+    isSkippingStepValidation.value = true;
+    currentStep.value = 2;
   };
 
   // 上一步
@@ -467,14 +514,7 @@
     formData.value.visibility_type = val.visibility_type;
     formData.value.scene_ids = val.scene_ids;
     formData.value.system_ids = val.system_ids;
-    // 未选可见范围、全部可见、全部场景、全部系统时无需配置覆盖参数，清空已有配置
-    const hasSpecificSelection = val.visibility_type !== 'all_visible'
-      && val.visibility_type !== 'all_scenes'
-      && val.visibility_type !== 'all_systems'
-      && ((val.scene_ids?.length ?? 0) > 0 || (val.system_ids?.length ?? 0) > 0);
-    if (!hasSpecificSelection) {
-      formData.value.scene_param_overrides = {};
-    }
+    reconcileStep2ParamOverrides();
   };
 
   // 参数覆盖配置变更
@@ -573,53 +613,19 @@
   };
 
   // 提交
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // 步骤2：formRef/comRef 已卸载，直接提交 formData
     if (currentStep.value === 2) {
       doSubmit();
       return;
     }
 
-    const tastQueue = [formRef.value.validate()];
-    if (comRef.value && formData.value.tool_type !== 'api') {
-      tastQueue.push(comRef.value.getValue());
+    const isValid = await validateStep1();
+    if (!isValid) {
+      return;
     }
-    // 创建时 api 判断是否调试成功
-    if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
-      const debugResult = comRef.value.getDebugResult();
-      if (!debugResult.isDoneDeBug) {
-        messageWarn(t('请先进行接口调试'));
-        return;
-      } if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
-        messageWarn(t('接口调试失败'));
-        return;
-      }
-    }
-
-    // api 类型校验分页配置等
-    if (comRef.value && formData.value.tool_type === 'api' && comRef.value.validate) {
-      if (!comRef.value.validate()) {
-        return;
-      }
-    }
-
-    Promise.all(tastQueue).then(() => {
-      // 获取组件配置
-      if (comRef.value?.getFields) {
-        if (formData.value.tool_type === 'bk_vision') {
-          formData.value.config.input_variable = comRef.value.getFields();
-          if (!isUpdate.value) {
-            formData.value.updated_time = bkVisionUpdateTime.value || null;
-          }
-        } else {
-          formData.value.config = comRef.value.getFields();
-        }
-      }
-      doSubmit();
-    })
-      .catch((err) => {
-        console.error('[新建工具] 提交前校验失败:', err);
-      });
+    syncStep1Config();
+    doSubmit();
   };
 
   const isApiDoneDeBug = ref(false);
@@ -640,7 +646,10 @@
     }
   };
 
-  watch(() => formData.value.tool_type, (val) => {
+  watch(() => formData.value.tool_type, (val, oldVal) => {
+    if (isEditDataReady.value && oldVal && val !== oldVal) {
+      formData.value.scene_param_overrides = {};
+    }
     if (val === 'bk_vision') {
       isApiDoneDeBug.value = false;
     }
@@ -656,17 +665,25 @@
     immediate: true,
   });
 
-  // 监听步骤变化：从步骤2返回步骤1时，恢复子组件（数据查询、API接口）的内部状态
-  watch(currentStep, (val) => {
-    if (val === 1 && formData.value.tool_type !== 'bk_vision') {
-      restoreToolComponentConfig();
+  // 监听步骤变化：步骤条点击也走校验与同步；返回步骤1时恢复子组件状态
+  watch(currentStep, async (val, oldVal) => {
+    if (isSkippingStepValidation.value) {
+      isSkippingStepValidation.value = false;
       return;
     }
 
-    // 进入步骤2时，根据已缓存的调试结果同步提交按钮状态
-    if (val === 2 && formData.value.tool_type === 'api' && !isEditMode) {
-      const hasDebugSchema = !!formData.value.config?.output_config?.result_schema?.tree_data;
-      isApiDoneDeBug.value = !hasDebugSchema;
+    if (val === 2 && oldVal === 1) {
+      const isValid = await validateStep1();
+      if (!isValid) {
+        currentStep.value = 1;
+        return;
+      }
+      applyStep2EntrySync();
+      return;
+    }
+
+    if (val === 1 && oldVal === 2 && formData.value.tool_type !== 'bk_vision') {
+      restoreToolComponentConfig();
     }
   });
 
