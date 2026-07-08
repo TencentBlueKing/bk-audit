@@ -249,13 +249,13 @@
 
   const buildVisibilityChildren = () => [
     { id: 'all_visible', name: t('全部可见') },
-    { id: '__group_scene__', name: t('场景'), disabled: true },
+    { id: '__group_scene__', name: t('场景列表'), disabled: true },
     { id: 'all_scenes', name: t('全部场景') },
     ...visibilitySceneOptions.value.map(scene => ({
       id: `scene_${scene.id}`,
       name: scene.name,
     })),
-    { id: '__group_system__', name: t('平台'), disabled: true },
+    { id: '__group_system__', name: t('系统列表'), disabled: true },
     { id: 'all_systems', name: t('全部系统') },
     ...visibilitySystemOptions.value.map(system => ({
       id: `system_${system.id}`,
@@ -288,7 +288,7 @@
     {
       name: t('可见范围'),
       id: 'visibility',
-      placeholder: t('请输入场景或平台名称'),
+      placeholder: t('请输入场景或系统名称'),
       multiple: true,
       children: buildVisibilityChildren(),
     },
@@ -741,6 +741,32 @@
 
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item .is-selected {
     flex-shrink: 0;
+  }
+
+  /* 可见范围分组标题：无勾选框，深色加粗与选项区分 */
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_scene__,
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__ {
+    height: auto;
+    min-height: 24px;
+    padding-top: 6px;
+    padding-bottom: 2px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 20px;
+    color: #313238;
+    pointer-events: none;
+    cursor: default;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_scene__:hover,
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__:hover {
+    color: #313238;
+    background-color: transparent;
+  }
+
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_scene__ .is-selected,
+  .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item#__group_system__ .is-selected {
+    display: none !important;
   }
 
   .tool-manage-search-area .bk-search-select [data-type='value'] {
