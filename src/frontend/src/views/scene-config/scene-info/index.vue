@@ -301,7 +301,7 @@
     activeRiskCount: sceneInfoData.value.risk_count || 0,
   }));
 
-  const DETAIL_BATCH_SIZE = 20;
+  const DETAIL_BATCH_SIZE = 10;
 
   // 关联系统表格数据（通过新接口获取有权限的系统列表，再分批获取详情）
   const systemDetailList = ref<Array<Record<string, any>>>([]);
