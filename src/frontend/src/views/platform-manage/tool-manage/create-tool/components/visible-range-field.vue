@@ -25,7 +25,7 @@
       <div
         ref="tagsWrapperRef"
         class="selected-tags-wrapper">
-        <template v-if="formData.visibility_type === 'all_visible'">
+        <template v-if="formData.visibility_type === 'all_visible' && viaAllVisibleButton">
           <bk-tag
             class="selected-tag"
             closable
@@ -80,7 +80,7 @@
         <!-- 全部可见 -->
         <div
           class="all-visible-row"
-          :class="{ 'is-active': formData.visibility_type === 'all_visible' }"
+          :class="{ 'is-active': formData.visibility_type === 'all_visible' && viaAllVisibleButton }"
           @click.stop="handleSelectAll">
           <img
             alt=""
@@ -88,7 +88,7 @@
             src="@images/all.svg">
           <span class="all-text">{{ t('全部可见') }}</span>
           <audit-icon
-            v-if="formData.visibility_type === 'all_visible'"
+            v-if="formData.visibility_type === 'all_visible' && viaAllVisibleButton"
             class="check-icon"
             type="check-line" />
         </div>
@@ -105,9 +105,9 @@
                 class="checkbox-item"
                 :class="{
                   'is-checked': isAllSceneChecked,
-                  'is-disabled': formData.visibility_type === 'all_visible',
+                  'is-disabled': viaAllVisibleButton,
                 }"
-                @click.stop="formData.visibility_type !== 'all_visible' && handleToggleAllScenes()">
+                @click.stop="!viaAllVisibleButton && handleToggleAllScenes()">
                 <img
                   alt=""
                   class="item-icon scene-icon"
@@ -124,11 +124,11 @@
                 class="checkbox-item"
                 :class="{
                   'is-checked': isSceneChecked(scene.id),
-                  'is-disabled': isAllSceneChecked || formData.visibility_type === 'all_visible',
+                  'is-disabled': isAllSceneChecked || viaAllVisibleButton,
                 }"
                 @click.stop="
                   !isAllSceneChecked
-                    && formData.visibility_type !== 'all_visible'
+                    && !viaAllVisibleButton
                     && handleSceneToggle(scene.id)">
                 <img
                   alt=""
@@ -164,9 +164,9 @@
                 class="checkbox-item"
                 :class="{
                   'is-checked': isAllSystemChecked,
-                  'is-disabled': formData.visibility_type === 'all_visible',
+                  'is-disabled': viaAllVisibleButton,
                 }"
-                @click.stop="formData.visibility_type !== 'all_visible' && handleToggleAllSystems()">
+                @click.stop="!viaAllVisibleButton && handleToggleAllSystems()">
                 <img
                   alt=""
                   class="item-icon system-icon"
@@ -183,11 +183,11 @@
                 class="checkbox-item"
                 :class="{
                   'is-checked': isSystemChecked(system.id),
-                  'is-disabled': isAllSystemChecked || formData.visibility_type === 'all_visible',
+                  'is-disabled': isAllSystemChecked || viaAllVisibleButton,
                 }"
                 @click.stop="
                   !isAllSystemChecked
-                    && formData.visibility_type !== 'all_visible'
+                    && !viaAllVisibleButton
                     && handleSystemToggle(system.id)">
                 <img
                   alt=""
@@ -264,6 +264,8 @@
 
   // 动态计算可显示的 tag 数量
   const visibleCount = ref(999);
+  // 区分顶部「全部可见」与两列同时勾选「全部场景 + 全部系统」
+  const viaAllVisibleButton = ref(false);
 
   const sceneList = ref<OptionItem[]>([]);
   const systemList = ref<SystemOptionItem[]>([]);
@@ -301,55 +303,77 @@
   const computeVisibilityType = (
     sceneIds: number[],
     systemIds: string[],
+    flags: { allScenes?: boolean; allSystems?: boolean } = {},
   ): FormData['visibility_type'] => {
-    const hasScenes = sceneIds.length > 0;
-    const hasSystems = systemIds.length > 0;
-    const isAllScenes = sceneList.value.length > 0 && sceneIds.length === sceneList.value.length;
-    const isAllSystems = systemList.value.length > 0 && systemIds.length === systemList.value.length;
+    const allScenes = flags.allScenes
+      ?? (sceneList.value.length > 0 && sceneIds.length === sceneList.value.length);
+    const allSystems = flags.allSystems
+      ?? (systemList.value.length > 0 && systemIds.length === systemList.value.length);
+    const hasSpecificScenes = sceneIds.length > 0;
+    const hasSpecificSystems = systemIds.length > 0;
 
-    if (isAllScenes && isAllSystems) {
+    if (allScenes && allSystems) {
       return 'all_visible';
     }
-    if (isAllScenes && !hasSystems) {
+    if (allScenes && !hasSpecificSystems && !allSystems) {
       return 'all_scenes';
     }
-    if (!hasScenes && isAllSystems) {
+    if (allSystems && !hasSpecificScenes && !allScenes) {
       return 'all_systems';
     }
-    if (hasScenes && hasSystems) {
+    if ((allScenes || hasSpecificScenes) && (allSystems || hasSpecificSystems)) {
       return 'scenes_and_systems';
     }
-    if (hasScenes && !hasSystems) {
-      // 场景全选时用 all_scenes，否则用 specific_scenes
-      return isAllScenes ? 'all_scenes' : 'specific_scenes';
+    if (allScenes || hasSpecificScenes) {
+      return allScenes ? 'all_scenes' : 'specific_scenes';
     }
-    if (!hasScenes && hasSystems) {
-      // 系统全选时用 all_systems，否则用 specific_systems
-      return isAllSystems ? 'all_systems' : 'specific_systems';
+    if (allSystems || hasSpecificSystems) {
+      return allSystems ? 'all_systems' : 'specific_systems';
     }
-    // 都没选，默认 scenes_and_systems
     return 'scenes_and_systems';
   };
 
   // 是否选中了全部场景
   const isAllSceneChecked = computed(() => {
-    if (props.formData.visibility_type === 'all_visible') return false;
+    if (props.formData.visibility_type === 'all_visible') {
+      return !viaAllVisibleButton.value;
+    }
     if (props.formData.visibility_type === 'all_scenes') return true;
+    if (props.formData.visibility_type === 'scenes_and_systems') {
+      const hasScenes = (props.formData.scene_ids?.length ?? 0) > 0;
+      const hasSystems = (props.formData.system_ids?.length ?? 0) > 0;
+      // 全部场景 + 指定系统：scene_ids 为空、system_ids 非空
+      if (hasSystems && !hasScenes) return true;
+    }
     if (sceneList.value.length === 0) return false;
     return props.formData.scene_ids?.length === sceneList.value.length;
   });
 
   // 是否选中了全部系统
   const isAllSystemChecked = computed(() => {
-    if (props.formData.visibility_type === 'all_visible') return false;
+    if (props.formData.visibility_type === 'all_visible') {
+      return !viaAllVisibleButton.value;
+    }
     if (props.formData.visibility_type === 'all_systems') return true;
+    if (props.formData.visibility_type === 'scenes_and_systems') {
+      const hasScenes = (props.formData.scene_ids?.length ?? 0) > 0;
+      const hasSystems = (props.formData.system_ids?.length ?? 0) > 0;
+      // 指定场景 + 全部系统：system_ids 为空、scene_ids 非空
+      if (hasScenes && !hasSystems) return true;
+    }
     if (systemList.value.length === 0) return false;
     return props.formData.system_ids?.length === systemList.value.length;
   });
 
   // 所有 tag 统一列表
   const allDisplayTags = computed<DisplayTag[]>(() => {
-    if (props.formData.visibility_type === 'all_visible') return [];
+    if (props.formData.visibility_type === 'all_visible' && viaAllVisibleButton.value) return [];
+    if (props.formData.visibility_type === 'all_visible' && !viaAllVisibleButton.value) {
+      return [
+        { key: 'all-scene', id: -1, name: t('全部场景'), type: 'all-scene' },
+        { key: 'all-system', id: -2, name: t('全部系统'), type: 'all-system' },
+      ];
+    }
     const tags: DisplayTag[] = [];
 
     if (isAllSceneChecked.value) {
@@ -479,8 +503,9 @@
   };
 
   const handleSelectAll = () => {
-    if (props.formData.visibility_type === 'all_visible') {
+    if (props.formData.visibility_type === 'all_visible' && viaAllVisibleButton.value) {
       // 已选中 → 取消，清空选择
+      viaAllVisibleButton.value = false;
       emit('update:formData', {
         ...props.formData,
         visibility_type: 'scenes_and_systems',
@@ -489,6 +514,7 @@
       });
     } else {
       // 未选中 → 设为全部可见
+      viaAllVisibleButton.value = true;
       emit('update:formData', {
         ...props.formData,
         visibility_type: 'all_visible',
@@ -499,6 +525,7 @@
   };
 
   const handleClearAll = () => {
+    viaAllVisibleButton.value = false;
     emit('update:formData', {
       ...props.formData,
       visibility_type: 'scenes_and_systems',
@@ -508,43 +535,91 @@
   };
 
   const handleToggleAllScenes = () => {
+    viaAllVisibleButton.value = false;
+    const currentSystems = props.formData.system_ids || [];
+    const allSystems = isAllSystemChecked.value;
+
     if (isAllSceneChecked.value) {
-      // 取消全选场景 → 清空 scene_ids，重新计算类型
-      const newSceneIds: number[] = [];
-      const newType = computeVisibilityType(newSceneIds, props.formData.system_ids || []);
-      emit('update:formData', {
-        ...props.formData,
-        visibility_type: newType,
-        scene_ids: newSceneIds,
-      });
-    } else {
-      // 全选场景 → 直接设为 all_scenes 类型，后端根据类型判定全部场景可见
-      emit('update:formData', {
-        ...props.formData,
-        visibility_type: 'all_scenes',
-        scene_ids: [],
-      });
+      if (allSystems) {
+        emit('update:formData', {
+          ...props.formData,
+          visibility_type: 'all_systems',
+          scene_ids: [],
+          system_ids: [],
+        });
+      } else {
+        const newType = computeVisibilityType([], currentSystems);
+        emit('update:formData', {
+          ...props.formData,
+          visibility_type: newType,
+          scene_ids: [],
+          system_ids: currentSystems,
+        });
+      }
+      return;
     }
+
+    if (allSystems) {
+      emit('update:formData', {
+        ...props.formData,
+        visibility_type: 'all_visible',
+        scene_ids: [],
+        system_ids: [],
+      });
+      return;
+    }
+
+    const newType = computeVisibilityType([], currentSystems, { allScenes: true });
+    emit('update:formData', {
+      ...props.formData,
+      visibility_type: newType,
+      scene_ids: [],
+      system_ids: currentSystems,
+    });
   };
 
   const handleToggleAllSystems = () => {
+    viaAllVisibleButton.value = false;
+    const currentScenes = props.formData.scene_ids || [];
+    const allScenes = isAllSceneChecked.value;
+
     if (isAllSystemChecked.value) {
-      // 取消全选系统 → 清空 system_ids，重新计算类型
-      const newSystemIds: string[] = [];
-      const newType = computeVisibilityType(props.formData.scene_ids || [], newSystemIds);
+      if (allScenes) {
+        emit('update:formData', {
+          ...props.formData,
+          visibility_type: 'all_scenes',
+          scene_ids: [],
+          system_ids: [],
+        });
+      } else {
+        const newType = computeVisibilityType(currentScenes, []);
+        emit('update:formData', {
+          ...props.formData,
+          visibility_type: newType,
+          scene_ids: currentScenes,
+          system_ids: [],
+        });
+      }
+      return;
+    }
+
+    if (allScenes) {
       emit('update:formData', {
         ...props.formData,
-        visibility_type: newType,
-        system_ids: newSystemIds,
-      });
-    } else {
-      // 全选系统 → 直接设为 all_systems 类型，后端根据类型判定全部系统可见
-      emit('update:formData', {
-        ...props.formData,
-        visibility_type: 'all_systems',
+        visibility_type: 'all_visible',
+        scene_ids: [],
         system_ids: [],
       });
+      return;
     }
+
+    const newType = computeVisibilityType(currentScenes, [], { allSystems: true });
+    emit('update:formData', {
+      ...props.formData,
+      visibility_type: newType,
+      scene_ids: currentScenes,
+      system_ids: [],
+    });
   };
 
   const handleSceneToggle = (id: number) => {
@@ -555,7 +630,9 @@
     } else {
       currentScenes.push(id);
     }
-    const newType = computeVisibilityType(currentScenes, props.formData.system_ids || []);
+    const newType = computeVisibilityType(currentScenes, props.formData.system_ids || [], {
+      allSystems: isAllSystemChecked.value,
+    });
     emit('update:formData', {
       ...props.formData,
       visibility_type: newType,
@@ -571,7 +648,9 @@
     } else {
       currentSystems.push(id);
     }
-    const newType = computeVisibilityType(props.formData.scene_ids || [], currentSystems);
+    const newType = computeVisibilityType(props.formData.scene_ids || [], currentSystems, {
+      allScenes: isAllSceneChecked.value,
+    });
     emit('update:formData', {
       ...props.formData,
       visibility_type: newType,
@@ -611,7 +690,16 @@
     window.removeEventListener('resize', handleScrollOrResize);
   });
 
+  watch(() => props.formData.visibility_type, (type) => {
+    if (type !== 'all_visible') {
+      viaAllVisibleButton.value = false;
+    }
+  });
+
   onMounted(() => {
+    if (props.formData.visibility_type === 'all_visible') {
+      viaAllVisibleButton.value = true;
+    }
     document.addEventListener('click', handleClickOutside, true);
     window.addEventListener('scroll', handleScrollOrResize, true);
     window.addEventListener('resize', handleScrollOrResize);
