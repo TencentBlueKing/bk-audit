@@ -15,6 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <span
+    v-show="false"
+    aria-hidden="true">{{ activeJumpPopoverUid }}</span>
   <tdesign-list
     ref="listRef"
     class="report-config-list"
@@ -38,6 +41,9 @@
 
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
+
+  import sceneIconUrl from '@images/scene.svg';
+  import systemIconUrl from '@images/system.svg';
 
   // 工具类型枚举
   type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
@@ -71,10 +77,23 @@
     updated_by: string;
   }
 
+  interface SceneOption {
+    id: number;
+    name: string;
+  }
+
+  interface SystemOption {
+    id: number;
+    system_id?: string;
+    name: string;
+  }
+
   interface Props {
     searchParams: Record<string, any>;
     sceneNameMap?: Record<string, string>;
     systemNameMap?: Record<string, string>;
+    sceneOptions?: SceneOption[];
+    systemOptions?: SystemOption[];
   }
 
   interface Emits {
@@ -90,6 +109,8 @@
   const props = withDefaults(defineProps<Props>(), {
     sceneNameMap: () => ({}),
     systemNameMap: () => ({}),
+    sceneOptions: () => [],
+    systemOptions: () => [],
   });
   const emit = defineEmits<Emits>();
 
@@ -97,6 +118,7 @@
   const router = useRouter();
 
   const listRef = ref();
+  const activeJumpPopoverUid = ref<string | null>(null);
   // 适配器：将 fetchToolsList 返回的数组包装为 tdesign-list 期望的分页结构
   const dataSource = (params: any) => ToolManageService.fetchToolsList(params).then((list) => {
     const page = params?.page || 1;
@@ -145,8 +167,14 @@
     }
 
     const labels: string[] = [];
+    const isImplicitAllScenes = visibilityType === 'scenes_and_systems'
+      && !(sceneIds?.length)
+      && !!(systemIds?.length);
+    const isImplicitAllSystems = visibilityType === 'scenes_and_systems'
+      && !!(sceneIds?.length)
+      && !(systemIds?.length);
 
-    if (visibilityType === 'all_scenes') {
+    if (visibilityType === 'all_scenes' || isImplicitAllScenes) {
       labels.push(t('全部场景'));
     } else if (sceneIds && sceneIds.length > 0) {
       sceneIds.forEach((id: number | string) => {
@@ -155,7 +183,7 @@
       });
     }
 
-    if (visibilityType === 'all_systems') {
+    if (visibilityType === 'all_systems' || isImplicitAllSystems) {
       labels.push(t('全部系统'));
     } else if (systemIds && systemIds.length > 0) {
       systemIds.forEach((id: number | string) => {
@@ -201,13 +229,252 @@
     );
   };
 
+  interface VisibilityScopeItem {
+    type: 'scene' | 'system';
+    id: number | string;
+    name: string;
+  }
+
+  const buildAllSceneScopes = (): VisibilityScopeItem[] => (
+    props.sceneOptions.map(scene => ({
+      type: 'scene' as const,
+      id: scene.id,
+      name: scene.name,
+    }))
+  );
+
+  const buildAllSystemScopes = (): VisibilityScopeItem[] => (
+    props.systemOptions.map(system => ({
+      type: 'system' as const,
+      id: system.system_id || String(system.id),
+      name: system.name,
+    }))
+  );
+
+  const buildSpecificSceneScopes = (sceneIds: Array<number | string>): VisibilityScopeItem[] => (
+    sceneIds.map((id) => {
+      const key = String(id);
+      return {
+        type: 'scene' as const,
+        id,
+        name: props.sceneNameMap[key] || `场景${id}`,
+      };
+    })
+  );
+
+  const buildSpecificSystemScopes = (systemIds: Array<number | string>): VisibilityScopeItem[] => (
+    systemIds.map((id) => {
+      const key = String(id);
+      return {
+        type: 'system' as const,
+        id,
+        name: props.systemNameMap[key] || `平台${id}`,
+      };
+    })
+  );
+
+  const isAllScenesVisibility = (visibility: VisibilityInfo): boolean => {
+    const { visibility_type: type, scene_ids: sceneIds, system_ids: systemIds } = visibility;
+    if (type === 'all_systems') return false;
+    if (type === 'all_visible' || type === 'all_scenes') return true;
+    if (type === 'scenes_and_systems') {
+      const hasScenes = (sceneIds?.length ?? 0) > 0;
+      const hasSystems = (systemIds?.length ?? 0) > 0;
+      // 全部场景 + 指定系统：scene_ids 为空、system_ids 非空
+      if (!hasScenes && hasSystems) return true;
+    }
+    if (props.sceneOptions.length > 0 && sceneIds?.length === props.sceneOptions.length) {
+      return true;
+    }
+    return false;
+  };
+
+  const isAllSystemsVisibility = (visibility: VisibilityInfo): boolean => {
+    const { visibility_type: type, scene_ids: sceneIds, system_ids: systemIds } = visibility;
+    if (type === 'all_scenes') return false;
+    if (type === 'all_visible' || type === 'all_systems') return true;
+    if (type === 'scenes_and_systems') {
+      const hasScenes = (sceneIds?.length ?? 0) > 0;
+      const hasSystems = (systemIds?.length ?? 0) > 0;
+      // 指定场景 + 全部系统：scene_ids 非空、system_ids 为空
+      if (hasScenes && !hasSystems) return true;
+    }
+    if (props.systemOptions.length > 0 && systemIds?.length === props.systemOptions.length) {
+      return true;
+    }
+    return false;
+  };
+
+  // 解析可见范围为场景/系统列表，用于跳转交互
+  // 全部场景/全部系统/全部可见会展开为完整列表，与工具广场跨场景/跨系统分组逻辑一致
+  const getVisibilityScopeGroups = (visibility: VisibilityInfo) => {
+    const scenes: VisibilityScopeItem[] = [];
+    const systems: VisibilityScopeItem[] = [];
+
+    if (!visibility?.visibility_type) {
+      return { scenes, systems, totalCount: 0 };
+    }
+
+    const { scene_ids: sceneIds, system_ids: systemIds } = visibility;
+
+    if (isAllScenesVisibility(visibility)) {
+      scenes.push(...buildAllSceneScopes());
+    } else if (sceneIds?.length) {
+      scenes.push(...buildSpecificSceneScopes(sceneIds));
+    }
+
+    if (isAllSystemsVisibility(visibility)) {
+      systems.push(...buildAllSystemScopes());
+    } else if (systemIds?.length) {
+      systems.push(...buildSpecificSystemScopes(systemIds));
+    }
+
+    return { scenes, systems, totalCount: scenes.length + systems.length };
+  };
+
+  const buildToolOpenQuery = (scope?: VisibilityScopeItem) => {
+    if (!scope) return {};
+    if (scope.type === 'scene') {
+      const id = String(scope.id);
+      return {
+        scene_id: id,
+        scope_id: id,
+        scope_type: 'scene',
+      };
+    }
+    const id = String(scope.id);
+    return {
+      scope_id: id,
+      scope_type: 'system',
+    };
+  };
+
   // 跳转至工具广场并打开该工具
-  const handleOpenToolInSquare = (uid: string) => {
+  const handleOpenToolInSquare = (uid: string, scope?: VisibilityScopeItem) => {
     const url = router.resolve({
       name: 'toolDetail',
       params: { uid },
+      query: buildToolOpenQuery(scope),
     }).href;
     window.open(url, '_blank');
+  };
+
+  const renderJumpScopeMenu = (row: ToolModel, scenes: VisibilityScopeItem[], systems: VisibilityScopeItem[]) => (
+    <div class="tool-jump-scope-menu-outer">
+      <div class="tool-jump-scope-menu">
+      {scenes.length > 0 && (
+        <div class="jump-scope-section">
+          <div class="jump-scope-section-title">{t('所属场景')}</div>
+          {scenes.map(scene => (
+            <div
+              class="jump-scope-item"
+              key={`scene-${scene.id}`}
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                handleOpenToolInSquare(row.uid, scene);
+              }}>
+              <img
+                alt=""
+                class="jump-scope-item-icon scene-icon"
+                src={sceneIconUrl} />
+              <span class="jump-scope-item-content">
+                <span class="jump-scope-item-name">
+                  <Tooltips data={scene.name} />
+                </span>
+                <audit-icon
+                  class="jump-scope-link-icon"
+                  type="jump-link" />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {systems.length > 0 && (
+        <div class="jump-scope-section">
+          <div class="jump-scope-section-title">{t('所属系统')}</div>
+          {systems.map(system => (
+            <div
+              class="jump-scope-item"
+              key={`system-${system.id}`}
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                handleOpenToolInSquare(row.uid, system);
+              }}>
+              <img
+                alt=""
+                class="jump-scope-item-icon system-icon"
+                src={systemIconUrl} />
+              <span class="jump-scope-item-content">
+                <span class="jump-scope-item-name">
+                  <Tooltips data={system.name} />
+                </span>
+                <audit-icon
+                  class="jump-scope-link-icon"
+                  type="jump-link" />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+
+  const renderJumpLink = (row: ToolModel) => {
+    if (row.status !== 'published') return null;
+
+    const { scenes, systems, totalCount } = getVisibilityScopeGroups(row.visibility);
+    const singleScope = totalCount === 1 ? (scenes[0] || systems[0]) : undefined;
+    const isPopoverActive = activeJumpPopoverUid.value === row.uid;
+    const jumpIcon = (
+      <audit-icon
+        v-bk-tooltips={t('点击查看工具')}
+        class="jump-link"
+        type="jump-link"
+        onClick={totalCount <= 1 ? (e: Event) => {
+          e.stopPropagation();
+          handleOpenToolInSquare(row.uid, singleScope);
+        } : undefined} />
+    );
+
+    if (totalCount <= 1) {
+      return (
+        <span class="hover-show-icon">
+          {jumpIcon}
+        </span>
+      );
+    }
+
+    return (
+      <bk-popover
+        extCls="tool-jump-scope-popover"
+        placement="bottom-start"
+        theme="light"
+        trigger="click"
+        width="240"
+        onAfterShow={() => {
+          activeJumpPopoverUid.value = row.uid;
+        }}
+        onAfterHidden={() => {
+          if (activeJumpPopoverUid.value === row.uid) {
+            activeJumpPopoverUid.value = null;
+          }
+        }}>
+        {{
+          default: () => (
+            <span
+              class={[
+                'tool-jump-trigger',
+                'hover-show-icon',
+                { 'is-popover-active': isPopoverActive },
+              ]}>
+              {jumpIcon}
+            </span>
+          ),
+          content: () => renderJumpScopeMenu(row, scenes, systems),
+        }}
+      </bk-popover>
+    );
   };
 
   const tableColumns = ref([
@@ -221,16 +488,7 @@
           <span class="tool-name-text">
             <Tooltips data={formatCellText(row.name)} />
           </span>
-          {row.status === 'published' && (
-            <audit-icon
-              v-bk-tooltips={t('点击查看工具')}
-              class="jump-link hover-show-icon"
-              type="jump-link"
-              onClick={(e: Event) => {
-                e.stopPropagation();
-                handleOpenToolInSquare(row.uid);
-              }} />
-          )}
+          {renderJumpLink(row)}
         </span>
       ),
     },
@@ -515,6 +773,11 @@
     visibility: hidden;
   }
 
+  :deep(.hover-show-icon.is-popover-active),
+  :deep(.tool-jump-trigger[aria-expanded='true']) {
+    visibility: visible;
+  }
+
   :deep(tr:hover) {
     .hover-show-icon {
       visibility: visible;
@@ -523,6 +786,129 @@
 </style>
 
 <style lang="postcss">
+  .tool-jump-scope-popover.bk-popover.bk-pop2-content {
+    width: 240px !important;
+    max-width: 240px !important;
+    min-width: 240px !important;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .tool-jump-scope-popover.bk-popover.bk-pop2-content .bk-popover-content {
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  .tool-jump-scope-menu-outer {
+    width: 240px;
+    max-height: 320px;
+    overflow: hidden;
+  }
+
+  .tool-jump-scope-menu {
+    width: 240px;
+    max-height: 344px;
+    padding: 12px 0 4px;
+    margin: -12px 0;
+    overflow: hidden auto;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: #c4c6cc transparent;
+  }
+
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar {
+    width: 4px;
+    appearance: none;
+    appearance: none;
+  }
+
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-thumb {
+    background-color: #c4c6cc;
+    border-radius: 2px;
+  }
+
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-thumb:hover {
+    background-color: #979ba5;
+  }
+
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:start:decrement,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:start:increment,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:end:decrement,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:end:increment,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button:vertical:decrement,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button:vertical:increment,
+  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-corner {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    appearance: none !important;
+    appearance: none !important;
+  }
+
+  .jump-scope-section-title {
+    padding: 8px 12px 4px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+  }
+
+  .jump-scope-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #f5f7fa;
+
+      .jump-scope-link-icon {
+        visibility: visible;
+      }
+    }
+  }
+
+  .jump-scope-item-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+  }
+
+  .jump-scope-item-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
+    color: #313238;
+
+    .show-tooltips-text {
+      display: block;
+    }
+  }
+
+  .jump-scope-item-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .jump-scope-link-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    color: #3a84ff;
+    visibility: hidden;
+  }
+
   .tool-more-action-popover.bk-popover.bk-pop2-content {
     padding: 0;
   }

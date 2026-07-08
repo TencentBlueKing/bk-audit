@@ -236,20 +236,51 @@ export function buildVisibilityPayload(formData: Pick<FormData, 'visibility_type
   const systemIds = (formData.system_ids || []).map(id => String(id));
   const visibilityType = formData.visibility_type;
 
-  let resolvedSceneIds: number[] = [];
-  let resolvedSystemIds: string[] = [];
-
-  if (visibilityType === 'specific_scenes' || visibilityType === 'scenes_and_systems') {
-    resolvedSceneIds = sceneIds;
-  }
-  if (visibilityType === 'specific_systems' || visibilityType === 'scenes_and_systems') {
-    resolvedSystemIds = systemIds;
+  if (visibilityType === 'all_visible') {
+    return {
+      visibility_type: 'all_visible',
+      scene_ids: [],
+      system_ids: [],
+    };
   }
 
+  if (visibilityType === 'all_scenes') {
+    return {
+      visibility_type: 'all_scenes',
+      scene_ids: [],
+      system_ids: systemIds,
+    };
+  }
+
+  if (visibilityType === 'all_systems') {
+    return {
+      visibility_type: 'all_systems',
+      scene_ids: sceneIds,
+      system_ids: [],
+    };
+  }
+
+  if (visibilityType === 'specific_scenes') {
+    return {
+      visibility_type: 'specific_scenes',
+      scene_ids: sceneIds,
+      system_ids: [],
+    };
+  }
+
+  if (visibilityType === 'specific_systems') {
+    return {
+      visibility_type: 'specific_systems',
+      scene_ids: [],
+      system_ids: systemIds,
+    };
+  }
+
+  // scenes_and_systems：某一维 ids 为空表示该维度为「全部」
   return {
-    visibility_type: visibilityType,
-    scene_ids: resolvedSceneIds,
-    system_ids: resolvedSystemIds,
+    visibility_type: 'scenes_and_systems',
+    scene_ids: sceneIds,
+    system_ids: systemIds,
   };
 }
 
