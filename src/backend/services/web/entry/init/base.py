@@ -295,6 +295,7 @@ class SystemInitHandler:
             ResourceEnum.RISK: {},
             ResourceEnum.STRATEGY: {},
             ResourceEnum.STRATEGY_TAG: {},
+            ResourceEnum.RISK_PERSON_INDEX: {},
             ResourceEnum.TICKET_PERMISSION: {},
             ResourceEnum.TICKET_NODE: {},
             ResourceEnum.MANUAL_EVENT: {

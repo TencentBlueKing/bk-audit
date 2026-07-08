@@ -518,6 +518,26 @@ class TestRiskExport(TestCase):
         self.assertIn("[RiskExportService] build export file finished", logs)
 
     @mock.patch.object(ListEvent, "bulk_request")
+    def test_risk_export_service_uses_risk_level_snapshot(self, mock_get_event_list):
+        self.risk_1.risk_level = RiskLevel.LOW.value
+        self.risk_1.risk_level_order = RiskLevel.order_value(RiskLevel.LOW.value)
+        self.risk_1.save(update_fields=["risk_level", "risk_level_order"])
+        self.strategy_1.risk_level = RiskLevel.HIGH.value
+        self.strategy_1.save(update_fields=["risk_level"])
+        mock_get_event_list.return_value = [{"results": []}]
+
+        export_file = RiskExportService(
+            username="admin",
+            risk_ids=[self.risk_1.risk_id],
+            risk_view_type=RiskViewType.ALL.value,
+        ).build_export_file()
+
+        workbook = openpyxl.load_workbook(io.BytesIO(export_file.file.read()))
+        sheet = workbook[self.strategy_1.build_sheet_name()]
+        header_map = {cell.value: index for index, cell in enumerate(sheet[1], start=1)}
+        self.assertEqual(sheet.cell(row=2, column=header_map[str(RiskExportField.RISK_LEVEL.label)]).value, "低")
+
+    @mock.patch.object(ListEvent, "bulk_request")
     def test_risk_export_service_allows_empty_event_end_time(self, mock_get_event_list):
         self.risk_1.event_end_time = None
         self.risk_1.save(update_fields=["event_end_time"])

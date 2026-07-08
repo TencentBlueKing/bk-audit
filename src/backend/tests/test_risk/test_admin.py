@@ -16,12 +16,16 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
 from unittest import mock
 
 import pytest
+from django.test import TestCase
 
 from services.web.risk.admin import RiskAdmin
-from services.web.risk.models import Risk
+from services.web.risk.constants import RiskStatus
+from services.web.risk.models import Risk, RiskPersonIndex
+from services.web.strategy_v2.models import Strategy
 
 
 class TestRiskAdminTruncateMethods:
@@ -144,3 +148,55 @@ class TestRiskAdminQuerySet:
 
         # 检查 select_related 包含 strategy
         assert "strategy" in qs.query.select_related
+
+
+class RiskAdminActionTests(TestCase):
+    def test_risk_admin_save_model_syncs_changed_person_fields(self):
+        risk_admin = RiskAdmin(model=Risk, admin_site=None)
+        strategy = Strategy.objects.create(strategy_id=99100, strategy_name="admin-save-strategy")
+        obj = Risk.objects.create(
+            risk_id="risk-admin-save-index",
+            raw_event_id="raw-admin-save-index",
+            strategy=strategy,
+            status=RiskStatus.NEW,
+            title="admin save",
+            operator=["operator-a"],
+            current_operator=["current-a"],
+            notice_users=["notice-a"],
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        obj.operator = ["operator-b"]
+        obj.notice_users = ["notice-b"]
+        form = mock.Mock(changed_data=["operator", "notice_users"])
+
+        with mock.patch.object(RiskPersonIndex, "sync_risk") as sync_risk:
+            risk_admin.save_model(mock.Mock(), obj, form, change=True)
+
+        sync_risk.assert_called_once_with(
+            obj,
+            relation_types=[
+                RiskPersonIndex.RelationType.OPERATOR,
+                RiskPersonIndex.RelationType.NOTICE_USER,
+            ],
+        )
+
+    def test_risk_admin_rebuilds_person_index(self):
+        risk_admin = RiskAdmin(model=Risk, admin_site=None)
+        strategy = Strategy.objects.create(strategy_id=99101, strategy_name="admin-rebuild-strategy")
+        obj = Risk.objects.create(
+            risk_id="risk-admin-rebuild-index",
+            raw_event_id="raw-admin-rebuild-index",
+            strategy=strategy,
+            status=RiskStatus.NEW,
+            title="admin rebuild",
+            operator=["operator-a"],
+            current_operator=["current-a"],
+            notice_users=["notice-a"],
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+        )
+        request = mock.Mock()
+
+        with mock.patch.object(RiskPersonIndex, "sync_risk") as sync_risk:
+            risk_admin.rebuild_person_index(request, Risk.objects.filter(risk_id=obj.risk_id))
+
+        sync_risk.assert_called_once_with(obj)

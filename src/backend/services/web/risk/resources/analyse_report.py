@@ -642,7 +642,7 @@ class AnalyseReportRiskListBase(AnalyseReportMeta):
 
         risk_levels = params.get("risk_level", [])
         if risk_levels:
-            queryset = queryset.filter(strategy__risk_level__in=risk_levels)
+            queryset = queryset.filter(risk_level__in=risk_levels)
 
         statuses = params.get("status", [])
         if statuses:

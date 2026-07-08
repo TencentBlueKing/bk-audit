@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import hashlib
 from functools import cached_property
-from typing import Any, List, Optional, Union
+from typing import Any, Iterable, List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -27,7 +27,7 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Exists, Field, Max, OuterRef, Q, QuerySet
 from django.db.models.functions import Substr
 from django.db.models.signals import post_save  # noqa: E402
@@ -51,11 +51,17 @@ from services.web.risk.constants import (
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskLabel,
+    RiskPersonRelationType,
     RiskReportStatus,
     RiskStatus,
     TicketNodeStatus,
 )
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
+from services.web.strategy_v2.constants import (
+    DEFAULT_RISK_LEVEL_ORDER,
+    RiskLevel,
+    RiskLevelOrder,
+)
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
@@ -127,6 +133,10 @@ class StrategyTagMixin:
         )
 
 
+class RiskLeveOrder:
+    pass
+
+
 class Risk(StrategyTagMixin, OperateRecordModel):
     """
     Risk
@@ -172,6 +182,20 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
     )
     notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        choices=RiskLevel.choices,
+        max_length=16,
+        null=True,
+        blank=True,
+        default=None,
+        db_index=True,
+    )
+    risk_level_order = models.IntegerField(
+        gettext_lazy("Risk Level Order"),
+        choices=RiskLevelOrder.choices,
+        default=DEFAULT_RISK_LEVEL_ORDER,
+    )
     risk_label = models.CharField(
         gettext_lazy("Risk Label"),
         max_length=32,
@@ -216,7 +240,10 @@ class Risk(StrategyTagMixin, OperateRecordModel):
             ["risk_id", "last_operate_time"],
         ]
         indexes = [
+            # 场景风险列表：scope/scene 会先收敛到 strategy_id，再叠加 display_status 与 event_time 窗口。
             models.Index(fields=["strategy", "display_status", "event_time"], name="idx_risk_strategy_status_time"),
+            # 风险等级排序：前端 sort=risk_level 会映射到 risk_level_order，并用 event_time/risk_id 稳定分页。
+            models.Index(fields=["risk_level_order", "event_time", "risk_id"], name="risk_level_time_id_idx"),
         ]
 
     # ──── 单一权限 ────
@@ -301,6 +328,18 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         """
         return cls.objects.filter(cls.authed_risk_filter(action, username=username))
 
+    @classmethod
+    def person_index_filter(cls, relation_type: str, users: Union[str, Iterable[str], None]) -> Q:
+        normalized_users = RiskPersonIndex.normalize_users(users)
+        if not normalized_users:
+            return Q(risk_id__in=[])
+        return Q(
+            risk_id__in=RiskPersonIndex.objects.filter(
+                relation_type=relation_type,
+                user__in=normalized_users,
+            ).values("risk_id")
+        )
+
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
         from services.web.risk.handlers.ticket import MisReport, ReOpenMisReport
@@ -329,6 +368,107 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         """
 
         return cls._meta.fields
+
+
+class RiskPersonIndex(SoftDeleteModel):
+    """
+    风险人员检索索引。
+
+    JSON 字段仍用于展示；该表只维护 operator/current_operator/notice_users 的检索关系。
+    使用软删除保留 tombstone，供 BKBase 反向拉取人员关系删除事件。
+    """
+
+    RelationType = RiskPersonRelationType
+
+    risk_id = models.CharField(gettext_lazy("Risk ID"), max_length=255)
+    relation_type = models.CharField(
+        gettext_lazy("Relation Type"),
+        choices=RelationType.choices,
+        max_length=32,
+    )
+    user = models.CharField(gettext_lazy("User"), max_length=255)
+
+    class Meta:
+        verbose_name = gettext_lazy("Risk Person Index")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+        # 同一风险同一关系类型同一用户只能有一条记录；该唯一约束同时服务人员筛选子查询。
+        unique_together = [["relation_type", "user", "risk_id"]]
+        indexes = [
+            # 按 risk_id 反查用于 sync_relation 对单风险做索引 diff，并用于回填/审计命令校验一致性。
+            models.Index(fields=["risk_id", "relation_type", "user"], name="risk_person_rid_type_user_idx"),
+            # BKBase 反向拉取按更新时间分页，需要同时拉取软删除 tombstone。
+            models.Index(fields=["updated_at", "id"], name="risk_person_updated_id_idx"),
+        ]
+
+    @staticmethod
+    def normalize_users(users: Union[str, Iterable[str], None]) -> List[str]:
+        """兼容历史字符串形态，统一拆分逗号/分号并去重。"""
+        if not users:
+            return []
+        values = [users] if isinstance(users, str) else users
+        normalized = []
+        for user in values:
+            if user is None:
+                continue
+            for comma_part in str(user).split(","):
+                normalized.extend(comma_part.split(";"))
+        return list(dict.fromkeys(user.strip() for user in normalized if user.strip()))
+
+    @classmethod
+    def risk_relation_users(cls, risk: Risk) -> dict[str, List[str]]:
+        return {
+            cls.RelationType.OPERATOR: cls.normalize_users(risk.operator),
+            cls.RelationType.CURRENT_OPERATOR: cls.normalize_users(risk.current_operator),
+            cls.RelationType.NOTICE_USER: cls.normalize_users(risk.notice_users),
+        }
+
+    @classmethod
+    def sync_risk(cls, risk: Risk, relation_types: Optional[Union[str, Iterable[str]]] = None) -> None:
+        with transaction.atomic():
+            # 锁 Risk 父行，确保同一风险并发更新人员字段时，索引 diff 串行执行。
+            locked_risk = Risk.objects.select_for_update().get(risk_id=risk.risk_id)
+            relation_user_map = cls.risk_relation_users(locked_risk)
+            if relation_types is None:
+                target_relation_types = relation_user_map.keys()
+            elif isinstance(relation_types, str):
+                target_relation_types = [relation_types]
+            else:
+                target_relation_types = relation_types
+            for relation_type in target_relation_types:
+                cls._sync_relation_rows(risk.risk_id, relation_type, relation_user_map.get(relation_type, []))
+
+    @classmethod
+    def sync_relation(cls, risk_id: str, relation_type: str, users: Union[str, Iterable[str], None]) -> None:
+        with transaction.atomic():
+            # 只锁父风险行，不锁索引行；避免空索引范围上的 next-key/gap lock 放大死锁概率。
+            Risk.objects.select_for_update().only("risk_id").get(risk_id=risk_id)
+            cls._sync_relation_rows(risk_id, relation_type, users)
+
+    @classmethod
+    def _sync_relation_rows(cls, risk_id: str, relation_type: str, users: Union[str, Iterable[str], None]) -> None:
+        target_users = set(cls.normalize_users(users))
+        existing_rows = list(cls._objects.filter(risk_id=risk_id, relation_type=relation_type))
+        existing_users = {row.user for row in existing_rows}
+
+        # 用软删除表达关系移除，保留 tombstone 供 BKBase 增量同步删除事件。
+        create_objs = [
+            cls(risk_id=risk_id, relation_type=relation_type, user=user) for user in target_users - existing_users
+        ]
+        update_objs = []
+        for row in existing_rows:
+            if row.user in target_users and row.is_deleted:
+                row.is_deleted = False
+            elif row.user not in target_users and not row.is_deleted:
+                row.is_deleted = True
+            else:
+                continue
+            update_objs.append(row)
+
+        if update_objs:
+            cls.objects.bulk_update(update_objs, fields=["is_deleted"])
+        if create_objs:
+            cls.objects.bulk_create(create_objs, ignore_conflicts=True)
 
 
 class ManualEvent(OperateRecordModel):

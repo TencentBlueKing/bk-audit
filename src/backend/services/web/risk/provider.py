@@ -29,9 +29,16 @@ from iam.resource.utils import Page
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import IAMResourceProvider
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
-from services.web.risk.models import ManualEvent, Risk, TicketNode, TicketPermission
+from services.web.risk.models import (
+    ManualEvent,
+    Risk,
+    RiskPersonIndex,
+    TicketNode,
+    TicketPermission,
+)
 from services.web.risk.serializers import (
     ManualEventProviderSerializer,
+    RiskPersonIndexProviderSerializer,
     RiskProviderSerializer,
     TicketNodeProviderSerializer,
     TicketPermissionProviderSerializer,
@@ -262,6 +269,84 @@ class ManualEventResourceProvider(IAMResourceProvider):
                 "data": self.resource_provider_serializer(instance=item).data,
             }
             for item in queryset
+        ]
+        return ListResult(results=results, count=base_qs.count())
+
+
+class RiskPersonIndexResourceProvider(IAMResourceProvider):
+    resource_type = ResourceEnum.RISK_PERSON_INDEX.id
+    resource_provider_serializer = RiskPersonIndexProviderSerializer
+    resource_type_index_fields = ["risk_id", "relation_type", "user", "is_deleted"]
+
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
+
+    def _filter_queryset(self, parent_id: Optional[str], resource_type: Optional[str]) -> QuerySet[RiskPersonIndex]:
+        queryset = RiskPersonIndex._objects.all()
+        if parent_id and resource_type == ResourceEnum.RISK.id:
+            return queryset.filter(risk_id=str(parent_id))
+        return queryset
+
+    def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
+        queryset = self._filter_queryset(parent_id, resource_type)
+        page_qs = queryset[page.slice_from : page.slice_to]
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in page_qs]
+        return results, queryset.count()
+
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
+        queryset = RiskPersonIndex._objects.filter(pk__in=ids)
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in queryset]
+        return results, queryset.count()
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple[List[dict], int]:
+        queryset = self._filter_queryset(parent_id, resource_type)
+        if keyword:
+            queryset = queryset.filter(
+                models.Q(risk_id__icontains=keyword)
+                | models.Q(relation_type__icontains=keyword)
+                | models.Q(user__icontains=keyword)
+            )
+        page_qs = queryset[page.slice_from : page.slice_to]
+        results = [{"id": str(item.pk), "display_name": str(item.pk)} for item in page_qs]
+        return results, queryset.count()
+
+    def list_instance_by_policy(self, filters, page, **options):
+        expression = filters.expression
+        if not expression:
+            return ListResult(results=[], count=0)
+
+        key_mapping = {f"{self.resource_type}.id": "id"}
+        converter = PathEqDjangoQuerySetConverter(key_mapping)
+        django_filters = converter.convert(expression)
+        queryset = RiskPersonIndex._objects.filter(django_filters)
+        results = [
+            {"id": str(item.pk), "display_name": str(item.pk)} for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_instance_list(self, filter, page, **options):
+        start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000.0, tz=datetime.timezone.utc)
+        end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000.0, tz=datetime.timezone.utc)
+        base_qs = RiskPersonIndex._objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+
+        pk_list = list(
+            base_qs.order_by("updated_at", "id").values_list("id", flat=True)[page.slice_from : page.slice_to]
+        )
+        page_queryset = RiskPersonIndex._objects.filter(id__in=pk_list).order_by("updated_at", "id")
+
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": str(item.pk),
+                "creator": None,
+                "created_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
+                "updater": None,
+                "updated_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
+                "data": self.resource_provider_serializer(item).data,
+            }
+            for item in page_queryset
         ]
         return ListResult(results=results, count=base_qs.count())
 

@@ -46,6 +46,7 @@ from services.web.risk.models import (
     AnalyseReportRisk,
     AnalyseReportScenario,
     Risk,
+    RiskPersonIndex,
     RiskReport,
     TicketPermission,
     UserType,
@@ -95,6 +96,8 @@ class AnalyseReportTestBase(TestCase):
             strategy=self.strategy,
             status="new",
             title="Test Risk 1",
+            risk_level=RiskLevel.HIGH.value,
+            risk_level_order=RiskLevel.order_value(RiskLevel.HIGH.value),
             event_time=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc),
         )
         self.risk2 = Risk.objects.create(
@@ -103,8 +106,12 @@ class AnalyseReportTestBase(TestCase):
             strategy=self.strategy,
             status="new",
             title="Test Risk 2",
+            risk_level=RiskLevel.HIGH.value,
+            risk_level_order=RiskLevel.order_value(RiskLevel.HIGH.value),
             event_time=datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc),
         )
+        RiskPersonIndex.sync_risk(self.risk1)
+        RiskPersonIndex.sync_risk(self.risk2)
         # 创建内置场景
         self.scenario_person, _ = AnalyseReportScenario.objects.update_or_create(
             scenario_key="person_investigation",
@@ -1411,7 +1418,7 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
         self.assertIn("Test Risk 2", titles)
 
     def test_list_report_risks_contains_risk_level(self):
-        """测试返回结果包含风险等级（来自关联策略）"""
+        """测试返回结果包含风险等级快照"""
         result = self.resource.risk.list_analyse_report_risk(
             {
                 "report_id": self.report.report_id,
@@ -1494,13 +1501,9 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
 
     def test_list_report_risks_filters_by_risk_level(self):
         """测试报告关联风险列表支持按风险等级过滤"""
-        low_strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="test-low-strategy",
-            risk_level=RiskLevel.LOW.value,
-        )
-        self.risk2.strategy = low_strategy
-        self.risk2.save(update_fields=["strategy"])
+        self.risk2.risk_level = RiskLevel.LOW.value
+        self.risk2.risk_level_order = RiskLevel.order_value(RiskLevel.LOW.value)
+        self.risk2.save(update_fields=["risk_level", "risk_level_order"])
 
         result = self.resource.risk.list_analyse_report_risk.request(
             {"report_id": self.report.report_id, "risk_level": RiskLevel.HIGH.value}
@@ -1684,9 +1687,11 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
         self.assertEqual(serializer.validated_data["total"], 2)
 
     def test_apigw_list_report_risks_allows_empty_risk_level(self):
-        """APIGW响应兼容旧策略风险等级为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        """APIGW响应兼容旧风险快照等级为空的数据"""
+        Risk.objects.filter(risk_id__in=[self.risk1.risk_id, self.risk2.risk_id]).update(
+            risk_level=None,
+            risk_level_order=RiskLevel.order_value(None),
+        )
 
         result = self.request_apigw_resource()
 
@@ -1695,14 +1700,24 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
 
     def test_apigw_list_report_risks_allows_nullable_base_fields(self):
         """APIGW响应兼容旧风险基础字段为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        self.risk1.risk_level = None
+        self.risk1.risk_level_order = RiskLevel.order_value(None)
         self.risk1.title = None
         self.risk1.event_end_time = None
         self.risk1.operator = None
         self.risk1.current_operator = None
         self.risk1.risk_label = None
-        self.risk1.save(update_fields=["title", "event_end_time", "operator", "current_operator", "risk_label"])
+        self.risk1.save(
+            update_fields=[
+                "risk_level",
+                "risk_level_order",
+                "title",
+                "event_end_time",
+                "operator",
+                "current_operator",
+                "risk_label",
+            ]
+        )
 
         result = self.request_apigw_resource({"risk_id": self.risk1.risk_id, "with_detail": True})
 
@@ -2404,6 +2419,8 @@ class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
         self.risk1.save(update_fields=["operator"])
         self.risk2.operator = ["wangwu"]
         self.risk2.save(update_fields=["operator"])
+        RiskPersonIndex.sync_risk(self.risk1, RiskPersonIndex.RelationType.OPERATOR)
+        RiskPersonIndex.sync_risk(self.risk2, RiskPersonIndex.RelationType.OPERATOR)
 
         q = self._call({"operator": "zhangsan"})
         risk_ids = list(Risk.objects.filter(q).values_list("risk_id", flat=True))
@@ -2447,6 +2464,7 @@ class TestBuildRiskQueryFromPromptParams(AnalyseReportTestBase):
         """测试组合多个过滤条件"""
         self.risk1.operator = ["zhangsan"]
         self.risk1.save(update_fields=["operator"])
+        RiskPersonIndex.sync_risk(self.risk1, RiskPersonIndex.RelationType.OPERATOR)
 
         q = self._call(
             {
@@ -2506,6 +2524,8 @@ class TestLinkRisksToReport(AnalyseReportTestBase):
         self.risk1.save(update_fields=["operator"])
         self.risk2.operator = ["lisi"]
         self.risk2.save(update_fields=["operator"])
+        RiskPersonIndex.sync_risk(self.risk1, RiskPersonIndex.RelationType.OPERATOR)
+        RiskPersonIndex.sync_risk(self.risk2, RiskPersonIndex.RelationType.OPERATOR)
 
         report = AnalyseReport.objects.create(
             title="关联测试",
@@ -2729,6 +2749,8 @@ class TestGenerateAnalyseReportTaskLinkRisks(AnalyseReportTestBase):
         self.risk1.save(update_fields=["operator"])
         self.risk2.operator = ["lisi"]
         self.risk2.save(update_fields=["operator"])
+        RiskPersonIndex.sync_risk(self.risk1, RiskPersonIndex.RelationType.OPERATOR)
+        RiskPersonIndex.sync_risk(self.risk2, RiskPersonIndex.RelationType.OPERATOR)
 
         self.report = AnalyseReport.objects.create(
             title="集成测试-关联风险",
