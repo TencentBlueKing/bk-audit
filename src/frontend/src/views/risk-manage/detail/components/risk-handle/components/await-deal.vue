@@ -64,6 +64,8 @@
           required>
           <audit-user-selector-tenant
             v-model="formData.new_operators"
+            allow-create
+            class="transfer-user-selector"
             :placeholder="t('请输入人员')" />
         </bk-form-item>
         <bk-form-item
@@ -634,8 +636,21 @@
 }
 
 .risk-await-deal-wrap :deep(.bk-select),
-.risk-await-deal-wrap :deep(.bk-input) {
+.risk-await-deal-wrap :deep(.bk-input),
+.risk-await-deal-wrap :deep(.transfer-user-selector),
+.risk-await-deal-wrap :deep(.pa-params-grid .bk-user-selector) {
   width: 100%;
+}
+
+.risk-await-deal-wrap :deep(.bk-user-selector) {
+  min-width: 0;
+
+  .custom-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 :deep(.await-deal-rich-editor),

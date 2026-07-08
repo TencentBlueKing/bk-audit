@@ -25,7 +25,7 @@
     <div class="mis-content">
       <render-info-item
         :label="t('处理方法')"
-        :label-width="50">
+        :label-width="labelWidth">
         <span v-if="data.custom_action === 'CloseRisk'">{{ t('人工关单') }}</span>
         <span v-else-if="data.custom_action === 'TransOperator'">
           {{ t('转单给') }} {{ data.new_operators?.join(',') }}
@@ -33,39 +33,26 @@
         <span v-else>{{ t('处理套餐') }} </span>
       </render-info-item>
       <template v-if="data.custom_action === 'AutoProcess'">
-        <render-info-item
-          class="mt8"
-          :label="t('选择套餐')">
-          {{ processApplicationList
-            .find(item=>item.id === data.pa_id)?.name || data.pa_id || '--' }}
-        </render-info-item>
-        <template v-if="data.pa_params && Object.keys(processPackageDetail).length > 0">
-          <!-- 只显示需要显示的字段 -->
-          <template
-            v-for="(key,index) in Object.keys(data.pa_params)"
-            :key="index">
-            <render-info-item
-              v-if="processPackageDetail[key]?.show_type === 'show'"
-              class="mt8"
-              :label="processPackageDetail[key]?.name || key">
-              {{ riskFieldMap[data.pa_params[key].field]
-                || formatValue(data.pa_params[key].field)
-                || formatValue(data.pa_params[key].value)
-                || '--' }}
-            </render-info-item>
-          </template>
-        </template>
-        <render-info-item
-          class="mt8"
-          :label="t('套餐执行成功后自动关单')">
-          {{ data.auto_close_risk ? t('是') : t('否') }}
-        </render-info-item>
+        <div class="mis-pa-params">
+          <render-info-item
+            v-for="field in paParamDisplayFields"
+            :key="field.key"
+            :label="field.label"
+            :label-width="labelWidth">
+            <edit-tag
+              v-if="field.displayType === 'tag'"
+              :data="field.displayValue"
+              :show-copy="false"
+              style="display: inline-block;" />
+            <span v-else>{{ field.displayValue || '--' }}</span>
+          </render-info-item>
+        </div>
       </template>
       <render-info-item
         v-else
         class="mt8"
         :label="t('处理说明')"
-        :label-width="50">
+        :label-width="labelWidth">
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="ql-editor"
@@ -89,6 +76,8 @@
 
   import type RiskManageModel from '@model/risk/risk';
 
+  import EditTag from '@components/edit-box/tag.vue';
+
   import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
 
   import editorImagePreview from '@/components/editor-image-preview/index.vue';
@@ -106,7 +95,8 @@
     processDetail: Record<string, any>
   }
   const props = defineProps<Props>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 200 : 168));
   const editorImages = computed(() => {
     const htmlContent = props.data.description;
 
@@ -132,12 +122,136 @@
     }
     return {};
   });
-  const formatValue = (value: any) => {
+
+  const sortedPaParamKeys = computed(() => {
+    if (!props.data.pa_params) {
+      return [];
+    }
+    return Object.keys(props.data.pa_params)
+      .filter(key => processPackageDetail.value[key]?.show_type === 'show')
+      .sort((a, b) => {
+        const indexA = processPackageDetail.value[a]?.index ?? 0;
+        const indexB = processPackageDetail.value[b]?.index ?? 0;
+        return indexA - indexB;
+      });
+  });
+
+  interface PaParamDisplayField {
+    key: string,
+    label: string,
+    displayType: 'text' | 'tag',
+    displayValue: string | string[],
+  }
+
+  const getSelectDisplayText = (config: Record<string, any>, rawValue: any) => {
+    if (rawValue === '' || rawValue === null || rawValue === undefined) {
+      return '';
+    }
+    try {
+      const valueConfig = typeof config.value === 'string'
+        ? JSON.parse(config.value)
+        : config.value;
+      const itemsText = valueConfig?.items_text;
+      if (!itemsText) {
+        return String(rawValue);
+      }
+      const items = typeof itemsText === 'string'
+        ? JSON.parse(itemsText)
+        : itemsText;
+      if (!Array.isArray(items)) {
+        return String(rawValue);
+      }
+      const matched = items.find((item: { value: string | number, text: string }) => (
+        String(item.value) === String(rawValue)
+      ));
+      return matched?.text ?? String(rawValue);
+    } catch {
+      return String(rawValue);
+    }
+  };
+
+  const isFieldRef = (param: { field?: string | number, value?: any }) => {
+    const field = param?.field;
+    return field !== '' && field !== null && field !== undefined;
+  };
+
+  const normalizeTagValue = (value: any) => {
     if (Array.isArray(value)) {
-      return value.join(', ');
+      return value.filter(item => item !== '' && item !== null && item !== undefined);
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value.split(',').map(item => item.trim())
+        .filter(Boolean);
     }
     return value;
   };
+
+  const getPaParamDisplayField = (key: string): PaParamDisplayField => {
+    const config = processPackageDetail.value[key] || {};
+    const param = props.data.pa_params?.[key] || { field: '', value: '' };
+    const label = config.name || key;
+    const isUserSelector = config.custom_type === 'bk_user_selector';
+    const isSelect = config.custom_type === 'select';
+
+    if (isFieldRef(param)) {
+      const fieldKey = String(param.field);
+      return {
+        key,
+        label,
+        displayType: 'text',
+        displayValue: props.riskFieldMap[fieldKey] || fieldKey,
+      };
+    }
+
+    if (isUserSelector) {
+      const tagValue = normalizeTagValue(param.value);
+      return {
+        key,
+        label,
+        displayType: 'tag',
+        displayValue: tagValue,
+      };
+    }
+
+    if (isSelect) {
+      return {
+        key,
+        label,
+        displayType: 'text',
+        displayValue: getSelectDisplayText(config, param.value),
+      };
+    }
+
+    const textValue = Array.isArray(param.value)
+      ? param.value.join(', ')
+      : (param.value ?? '');
+
+    return {
+      key,
+      label,
+      displayType: 'text',
+      displayValue: String(textValue),
+    };
+  };
+
+  const paParamDisplayFields = computed(() => [
+    {
+      key: '__pa_id__',
+      label: t('选择套餐'),
+      displayType: 'text' as const,
+      displayValue: props.processApplicationList
+        .find(item => item.id === props.data.pa_id)?.name
+        || props.data.pa_id
+        || '',
+    },
+    ...sortedPaParamKeys.value.map(key => getPaParamDisplayField(key)),
+    {
+      key: '__auto_close__',
+      label: t('套餐执行成功后自动关单'),
+      displayType: 'text' as const,
+      displayValue: props.data.auto_close_risk ? t('是') : t('否'),
+    },
+  ]);
   const htmlText = (value: string) => value.replace(/<img[^>]*>/g, '');
 </script>
 <style scoped lang="postcss">
@@ -153,13 +267,38 @@
   }
 
   >.mis-content {
-    padding: 5px 0;
+    padding: 12px 16px;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;
 
     .render-info-item {
       align-items: flex-start;
+
+      :deep(.info-label) {
+        line-height: 20px;
+        word-break: keep-all;
+        white-space: nowrap;
+
+        .tips {
+          border-bottom: none;
+        }
+      }
+
+      :deep(.info-value) {
+        line-height: 20px;
+      }
+    }
+
+    .mis-pa-params {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+
+      .render-info-item {
+        width: 100%;
+      }
     }
   }
 }
