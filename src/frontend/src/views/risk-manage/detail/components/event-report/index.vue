@@ -29,27 +29,52 @@
     <div
       v-else
       class="event-report">
-      <render-info-block
-        v-if="data.permission?.edit_risk_v2"
-        class="flex mt16">
-        <render-info-item label="状态">
-          {{ (data.report?.status === 'auto' ? t('模板生成') : t('人工编辑') ) || '--' }}
-        </render-info-item>
-        <render-info-item label="更新人">
-          {{ data.report?.updated_by || '--' }}
-        </render-info-item>
-      </render-info-block>
-      <render-info-block
-        v-if="data.permission?.edit_risk_v2"
-        class="flex mt16">
-        <render-info-item label="状态说明">
-          {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
-            t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
-        </render-info-item>
-        <render-info-item label="更新时间">
-          {{ data.report?.updated_at || '--' }}
-        </render-info-item>
-      </render-info-block>
+      <template v-if="data.permission?.edit_risk_v2">
+        <div class="event-report-section-title">
+          {{ t('基本信息') }}
+        </div>
+        <div class="event-report-basic-info info-field-rows">
+          <div class="info-field-row">
+            <render-info-item
+              :label="t('状态')"
+              :label-width="labelWidth">
+              {{ (data.report?.status === 'auto' ? t('模板生成') : t('人工编辑') ) || '--' }}
+            </render-info-item>
+            <render-info-item
+              :label="t('更新人')"
+              :label-width="labelWidth">
+              {{ data.report?.updated_by || '--' }}
+            </render-info-item>
+          </div>
+          <div class="info-field-row">
+            <render-info-item
+              :label="t('状态说明')"
+              :label-width="labelWidth">
+              {{ data.report?.status === 'auto' ? t('此报告由审计策略自动生成，并会在风险单出现新关联事件时自动更新') :
+                t('此报告由审计策略自动生成并经过人工编辑或完全由人工创建，后续有新事件触发，系统不会自动覆盖您编辑的内容，需要您手动更新报告') || '--' }}
+            </render-info-item>
+            <render-info-item
+              :label="t('更新时间')"
+              :label-width="labelWidth">
+              {{ data.report?.updated_at || '--' }}
+            </render-info-item>
+          </div>
+        </div>
+      </template>
+
+      <div
+        class="event-report-content-header"
+        :class="{ 'is-first-section': !data.permission?.edit_risk_v2 }">
+        <span class="event-report-section-title">{{ t('报告内容') }}</span>
+        <span
+          v-if="data.permission?.edit_risk_v2"
+          class="event-report-edit-button"
+          @click="handleEditReport">
+          <audit-icon type="edit-fill" />
+          {{ t('编辑') }}
+        </span>
+      </div>
+
       <!-- eslint-disable vue/no-v-html -- 内容经 DOMPurify 消毒 -->
       <div
         v-if="useHtmlRenderer"
@@ -66,14 +91,6 @@
         :options="options"
         theme="snow"
         @ready="handleEditorReady" />
-      <bk-button
-        v-if="data.permission?.edit_risk_v2"
-        class="event-report-edit-button"
-        outline
-        theme="primary"
-        @click="handleEditReport">
-        {{ t('编辑') }}
-      </bk-button>
       <edit-event-report
         :key="editReportKey"
         v-model:isShowEditEventReport="isShowEditEventReport"
@@ -92,8 +109,6 @@
 
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
-
-  import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import { QuillEditor } from '@vueup/vue-quill';
 
@@ -132,7 +147,8 @@
   const emits = defineEmits<{
     'updated-data': [];
   }>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
   const loading =  computed(() => props.data.report_generating);
   const isShowEditEventReport = ref(false);
@@ -354,19 +370,51 @@
 }
 
 .event-report {
-  position: relative;
   padding: 10px;
   margin-bottom: 10px;
 
-  .event-report-edit-button {
-    position: absolute;
-    top: 0;
-    right: 0;
+  .event-report-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 20px;
+    letter-spacing: 0;
+    color: #4d4f56;
   }
 
-  .render-info-item {
-    min-width: 50%;
-    align-items: flex-start;
+  .event-report-basic-info {
+    padding-bottom: 24px;
+    margin-top: 12px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #dcdee5;
+
+    .render-info-item {
+      align-items: flex-start;
+    }
+  }
+
+  .event-report-content-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+
+    &.is-first-section {
+      margin-top: 0;
+    }
+  }
+
+  .event-report-edit-button {
+    display: inline-flex;
+    margin-left: 10px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #3a84ff;
+    cursor: pointer;
+    align-items: center;
+    gap: 2px;
+
+    &:hover {
+      color: #699df4;
+    }
   }
 
   .event-report-content,

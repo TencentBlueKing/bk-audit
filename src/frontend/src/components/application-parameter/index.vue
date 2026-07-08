@@ -87,6 +87,7 @@
         width="320"
         @after-hidden="handleFieldInsertHidden">
         <div
+          ref="fieldInsertSuffixRef"
           v-bk-tooltips="t('点击插入字段值')"
           class="field-insert-wrapper__suffix"
           :class="{ 'is-active': isFieldInsertOpen }"
@@ -97,13 +98,20 @@
             :src="jumpIntoIcon">
         </div>
         <template #content>
-          <div class="field-insert-panel">
-            <bk-input
-              v-model="fieldSearchKeyword"
-              class="field-insert-panel__search"
-              clearable
-              :placeholder="t('搜索')"
-              type="search" />
+          <div
+            class="field-insert-panel"
+            @click.stop
+            @mousedown.stop>
+            <div class="field-insert-panel__search">
+              <audit-icon
+                class="field-insert-panel__search-icon"
+                type="search1" />
+              <input
+                v-model="fieldSearchKeyword"
+                class="field-insert-panel__search-input"
+                :placeholder="t('搜索')"
+                type="text">
+            </div>
             <div class="field-insert-panel__list">
               <div
                 v-if="filteredRiskFields.length"
@@ -114,15 +122,14 @@
                 <div
                   v-for="item in filteredRiskFields"
                   :key="item.id"
+                  v-bk-tooltips="getEmptyFieldTooltip(getCurrentValue(item.id))"
                   class="field-insert-item"
-                  @click="handleInsertFieldValue(getCurrentValue(item.id))">
+                  :class="{ 'is-disabled': isFieldValueEmpty(getCurrentValue(item.id)) }"
+                  @click="handleInsertFieldItem(getCurrentValue(item.id))">
                   <span class="field-insert-item__name">{{ item.name }}</span>
                   <span class="field-insert-item__sep"> : </span>
                   <span
-                    v-bk-tooltips="{
-                      content: formatFieldDisplayValue(getCurrentValue(item.id)),
-                      disabled: !isValueOverflow(getCurrentValue(item.id)),
-                    }"
+                    v-bk-tooltips="getFieldValueTooltip(getCurrentValue(item.id))"
                     class="field-insert-item__value">
                     {{ formatFieldDisplayValue(getCurrentValue(item.id)) }}
                   </span>
@@ -137,15 +144,14 @@
                 <div
                   v-for="(item, index) in filteredEventFields"
                   :key="`${item.lable}-${index}`"
+                  v-bk-tooltips="getEmptyFieldTooltip(item.value)"
                   class="field-insert-item"
-                  @click="handleInsertFieldValue(item.value)">
+                  :class="{ 'is-disabled': isFieldValueEmpty(item.value) }"
+                  @click="handleInsertFieldItem(item.value)">
                   <span class="field-insert-item__name">{{ item.lable }}</span>
                   <span class="field-insert-item__sep"> : </span>
                   <span
-                    v-bk-tooltips="{
-                      content: formatFieldDisplayValue(item.value),
-                      disabled: !isValueOverflow(item.value),
-                    }"
+                    v-bk-tooltips="getFieldValueTooltip(item.value)"
                     class="field-insert-item__value">
                     {{ formatFieldDisplayValue(item.value) }}
                   </span>
@@ -243,10 +249,11 @@
       <div v-else>
         <audit-user-selector-tenant
           v-if="config.custom_type === 'bk_user_selector'"
-          v-model="userSelectorValue"
           allow-create
-          class="consition-value"
-          @change="handlerUserChange" />
+          class="consition-value pa-user-selector"
+          :model-value="userSelectorValue"
+          :placeholder="t('请输入人员进行搜索')"
+          @update:model-value="handlerUserChange" />
 
         <div
           v-else
@@ -291,6 +298,7 @@
   import {
     computed,
     nextTick,
+    onBeforeUnmount,
     onMounted,
     ref,
     watch,
@@ -326,6 +334,8 @@
   const selectTypeValue = ref<string | number>('');
   const fieldSearchKeyword = ref('');
   const isFieldInsertOpen = ref(false);
+  const fieldInsertSuffixRef = ref<HTMLElement>();
+  let fieldInsertIgnoreCloseBefore = 0;
   const textareaInputRef = ref<{ $el: HTMLElement }>();
   const generalTextareaRef = ref<{ $el: HTMLElement }>();
   const isTextareaMultiline = ref(false);
@@ -384,6 +394,33 @@
   const isValueOverflow = (value: unknown) => (
     formatFieldDisplayValue(value).length > VALUE_OVERFLOW_LENGTH
   );
+
+  const isFieldValueEmpty = (value: unknown) => {
+    if (value === undefined || value === null || value === '') {
+      return true;
+    }
+    if (Array.isArray(value)) {
+      return value.length === 0;
+    }
+    return false;
+  };
+
+  const fieldInsertTooltipMaxWidth = '30vw';
+  const fieldInsertTooltipExtCls = 'field-insert-item-tooltips';
+
+  const getEmptyFieldTooltip = (value: unknown) => ({
+    content: t('当前值为空'),
+    maxWidth: fieldInsertTooltipMaxWidth,
+    extCls: fieldInsertTooltipExtCls,
+    disabled: !isFieldValueEmpty(value),
+  });
+
+  const getFieldValueTooltip = (value: unknown) => ({
+    content: formatFieldDisplayValue(value),
+    maxWidth: fieldInsertTooltipMaxWidth,
+    extCls: fieldInsertTooltipExtCls,
+    disabled: isFieldValueEmpty(value) || !isValueOverflow(value),
+  });
 
   const getCurrentValue = (id: string) => props.detailData[id];
 
@@ -498,11 +535,51 @@
   });
 
   const toggleFieldInsert = () => {
-    isFieldInsertOpen.value = !isFieldInsertOpen.value;
-    if (!isFieldInsertOpen.value) {
-      fieldSearchKeyword.value = '';
+    if (isFieldInsertOpen.value) {
+      handleFieldInsertHidden();
+      return;
     }
+    fieldInsertIgnoreCloseBefore = Date.now() + 500;
+    isFieldInsertOpen.value = true;
   };
+
+  const isInFieldInsertPopoverLayer = (target: Node) => {
+    const el = target as HTMLElement;
+    if (!el?.closest) return false;
+    return !!el.closest('.field-insert-panel, .field-insert-wrapper__suffix, .bk-popover.bk-pop2-content, .tippy-box');
+  };
+
+  const unbindFieldInsertDocumentMousedown = () => {
+    document.removeEventListener('mousedown', handleFieldInsertDocumentMousedown, true);
+  };
+
+  const bindFieldInsertDocumentMousedown = () => {
+    setTimeout(() => {
+      document.addEventListener('mousedown', handleFieldInsertDocumentMousedown, true);
+    });
+  };
+
+  const handleFieldInsertDocumentMousedown = (e: Event) => {
+    if (!isFieldInsertOpen.value) return;
+    if (Date.now() < fieldInsertIgnoreCloseBefore) return;
+    const target = e.target as HTMLElement;
+    if (fieldInsertSuffixRef.value?.contains(target)) return;
+    if (isInFieldInsertPopoverLayer(target)) return;
+    handleFieldInsertHidden();
+  };
+
+  watch(isFieldInsertOpen, (open) => {
+    if (open) {
+      unbindFieldInsertDocumentMousedown();
+      bindFieldInsertDocumentMousedown();
+      return;
+    }
+    unbindFieldInsertDocumentMousedown();
+  });
+
+  onBeforeUnmount(() => {
+    unbindFieldInsertDocumentMousedown();
+  });
 
   const handleFieldInsertHidden = () => {
     isFieldInsertOpen.value = false;
@@ -516,6 +593,13 @@
       value: display === '--' ? '' : display,
     };
     handleFieldInsertHidden();
+  };
+
+  const handleInsertFieldItem = (value: unknown) => {
+    if (isFieldValueEmpty(value)) {
+      return;
+    }
+    handleInsertFieldValue(value);
   };
 
   const handleChange = (val: any) => {
@@ -724,6 +808,18 @@
   }
 }
 
+:deep(.pa-user-selector.bk-user-selector) {
+  width: 100%;
+  min-width: 0;
+
+  .custom-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .field-insert-wrapper__suffix {
   display: flex;
   width: 32px;
@@ -752,11 +848,38 @@
 
 .field-insert-panel {
   width: 300px;
-  padding: 8px 0 4px;
+  padding: 0 0 4px;
 }
 
 .field-insert-panel__search {
-  padding: 0 12px 8px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #dcdee5;
+}
+
+.field-insert-panel__search-icon {
+  margin-right: 6px;
+  font-size: 15px;
+  color: #979ba5;
+  flex-shrink: 0;
+}
+
+.field-insert-panel__search-input {
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+  color: #63656e;
+  background: transparent;
+  border: none;
+  outline: none;
+  flex: 1;
+
+  &::placeholder {
+    color: #c4c6cc;
+  }
 }
 
 .field-insert-panel__list {
@@ -784,6 +907,20 @@
   &:hover {
     background: #f0f5ff;
   }
+
+  &.is-disabled {
+    color: #c4c6cc;
+    cursor: not-allowed;
+
+    &:hover {
+      background: transparent;
+    }
+
+    .field-insert-item__name,
+    .field-insert-item__value {
+      color: #c4c6cc;
+    }
+  }
 }
 
 .field-insert-item__name {
@@ -793,7 +930,7 @@
 
 .field-insert-item__sep {
   flex-shrink: 0;
-  color: #c4c6cc;
+  margin: 0 4px;
 }
 
 .field-insert-item__value {
@@ -834,5 +971,13 @@
   line-height: 16px;
   word-break: break-all;
   background: #fff;
+}
+</style>
+
+<style lang="postcss">
+.field-insert-item-tooltips {
+  max-width: 30vw !important;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 </style>
