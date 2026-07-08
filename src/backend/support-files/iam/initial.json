@@ -49,6 +49,21 @@
     {
       "operation": "upsert_resource_type",
       "data": {
+        "id": "risk_person_index",
+        "name": "风险人员索引",
+        "name_en": "Risk Person Index",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
         "id": "system",
         "name": "接入系统",
         "name_en": "Systems",
