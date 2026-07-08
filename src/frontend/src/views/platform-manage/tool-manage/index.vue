@@ -229,29 +229,19 @@
     return id;
   };
 
-  const normalizeVisibilitySelectedIds = (selectedIds: string[], prevIds: string[] = []): string[] => {
+  const normalizeVisibilitySelectedIds = (selectedIds: string[]): string[] => {
     if (selectedIds.includes('all_visible')) {
       return ['all_visible'];
     }
 
     let ids = [...selectedIds].filter(id => !id.startsWith('__group_'));
 
-    if (ids.includes('all_scenes') && ids.includes('all_systems')) {
-      const addedScenes = !prevIds.includes('all_scenes');
-      const addedSystems = !prevIds.includes('all_systems');
-      if (addedSystems && !addedScenes) {
-        ids = ids.filter(id => id !== 'all_scenes' && !id.startsWith('scene_'));
-      } else {
-        ids = ids.filter(id => id !== 'all_systems' && !id.startsWith('system_'));
-      }
-    }
-
     if (ids.includes('all_scenes')) {
-      ids = ids.filter(id => !id.startsWith('scene_') && id !== 'all_systems' && !id.startsWith('system_'));
+      ids = ids.filter(id => !id.startsWith('scene_'));
     }
 
     if (ids.includes('all_systems')) {
-      ids = ids.filter(id => !id.startsWith('system_') && id !== 'all_scenes' && !id.startsWith('scene_'));
+      ids = ids.filter(id => !id.startsWith('system_'));
     }
 
     return ids;
@@ -496,16 +486,10 @@
   };
 
   const handleSearchValueUpdate = (keyword: SearchKey[]) => {
-    const prevVisibilityIds = searchValue.value
-      .find(item => item.id === 'visibility')
-      ?.values?.map(value => value.id) ?? [];
     const visibilityItem = keyword.find(item => item.id === 'visibility');
 
     if (visibilityItem?.values?.length) {
-      const normalizedIds = normalizeVisibilitySelectedIds(
-        visibilityItem.values.map(value => value.id),
-        prevVisibilityIds,
-      );
+      const normalizedIds = normalizeVisibilitySelectedIds(visibilityItem.values.map(value => value.id));
       visibilityItem.values = normalizedIds.map(id => ({
         id,
         name: getVisibilityOptionName(id),

@@ -158,7 +158,9 @@ export function buildVisibilitySearchParams(selectedIds: string[]): VisibilitySc
   const hasAllSystems = selectedIds.includes('all_systems');
 
   let visibilityType: FormData['visibility_type'];
-  if (hasAllScenes) {
+  if (hasAllScenes && hasAllSystems) {
+    visibilityType = 'all_visible';
+  } else if (hasAllScenes) {
     visibilityType = 'all_scenes';
   } else if (hasAllSystems) {
     visibilityType = 'all_systems';

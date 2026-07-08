@@ -49,8 +49,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible || localState.all_systems }"
-      @click="!(localState.all_visible || localState.all_systems) && handleToggle('all_scenes')">
+      :class="{ 'is-checked': localState.all_scenes, 'is-disabled': localState.all_visible }"
+      @click="!localState.all_visible && handleToggle('all_scenes')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_scenes }]">
@@ -76,7 +76,7 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.scenes.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_scenes || localState.all_systems,
+        'is-disabled': localState.all_visible || localState.all_scenes,
       }"
       @click="handleSceneItemClick(item.id)">
       <span
@@ -107,8 +107,8 @@
     </div>
     <div
       class="menu-item group-option"
-      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible || localState.all_scenes }"
-      @click="!(localState.all_visible || localState.all_scenes) && handleToggle('all_systems')">
+      :class="{ 'is-checked': localState.all_systems, 'is-disabled': localState.all_visible }"
+      @click="!localState.all_visible && handleToggle('all_systems')">
       <span
         class="checkbox"
         :class="[{ 'is-checked': localState.all_systems }]">
@@ -134,7 +134,7 @@
       class="menu-item sub-item"
       :class="{
         'is-checked': localState.systems.includes(item.id),
-        'is-disabled': localState.all_visible || localState.all_systems || localState.all_scenes,
+        'is-disabled': localState.all_visible || localState.all_systems,
       }"
       @click="handleSystemItemClick(item.id)">
       <span
@@ -231,26 +231,22 @@
       current.all_scenes = !current.all_scenes;
       if (current.all_scenes) {
         current.scenes = [];
-        current.all_systems = false;
-        current.systems = [];
       }
     } else if (type === 'all_systems') {
       current.all_systems = !current.all_systems;
       if (current.all_systems) {
         current.systems = [];
-        current.all_scenes = false;
-        current.scenes = [];
       }
     }
     syncToParent();
   };
 
   const isSceneSubItemDisabled = () => (
-    localState.value.all_visible || localState.value.all_scenes || localState.value.all_systems
+    localState.value.all_visible || localState.value.all_scenes
   );
 
   const isSystemSubItemDisabled = () => (
-    localState.value.all_visible || localState.value.all_systems || localState.value.all_scenes
+    localState.value.all_visible || localState.value.all_systems
   );
 
   const handleSceneItemClick = (id: number) => {
