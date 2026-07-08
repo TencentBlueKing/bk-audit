@@ -1147,14 +1147,10 @@ class GetStrategyCommon(StrategyV2Base):
             "risk_level": choices_to_dict(RiskLevel, val="value", name="label"),
             "strategy_type": choices_to_dict(StrategyType, val="value", name="label"),
             "link_table_join_type": choices_to_dict(LinkTableJoinType, val="value", name="label"),
-            "link_table_table_type": choices_to_dict(
-                LinkTableTableType, val="value", name="label", exclude_vals=["MineBizRt"]
-            ),
+            "link_table_table_type": choices_to_dict(LinkTableTableType, val="value", name="label"),
             "rule_audit_aggregate_type": choices_to_dict(RuleAuditAggregateType, val="value", name="label"),
             "rule_audit_field_type": choices_to_dict(RuleAuditFieldType, val="value", name="label"),
-            "rule_audit_config_type": choices_to_dict(
-                RuleAuditConfigType, val="value", name="label", exclude_vals=["MineBizRt"]
-            ),
+            "rule_audit_config_type": choices_to_dict(RuleAuditConfigType, val="value", name="label"),
             "rule_audit_source_type": choices_to_dict(RuleAuditSourceType, val="value", name="label"),
             "rule_audit_condition_operator": choices_to_dict(RuleAuditConditionOperator, val="value", name="label"),
             "rule_audit_where_connector": choices_to_dict(RuleAuditWhereConnector, val="value", name="label"),
