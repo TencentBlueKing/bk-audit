@@ -253,6 +253,8 @@ class MineBizRtTableHandler(TableHandler):
     def list_tables(self) -> List[dict]:
         """
         获取列表数据
+        - 不传 bk_biz_id: 只返回业务列表
+        - 传 bk_biz_id: 返回该业务下的结果表
         """
         try:
             # 获取所有业务列表
@@ -260,58 +262,42 @@ class MineBizRtTableHandler(TableHandler):
             if not isinstance(biz_list_result, list):
                 return []
 
-            # 构建批量请求参数
-            request_params = []
-            for biz in biz_list_result:
-                biz_id = biz.get("bk_biz_id")
-                request_params.append(
-                    {
-                        "bk_username": self.bk_username,
-                        "action_id": UserAuthActionEnum.RT_QUERY.value,
-                        "bk_biz_id": biz_id,
-                    }
+            # 如果指定了业务 ID，只返回该业务下的结果表
+            if self.bk_biz_id:
+                request_params = {
+                    "bk_username": self.bk_username,
+                    "action_id": UserAuthActionEnum.RT_QUERY.value,
+                    "bk_biz_id": self.bk_biz_id,
+                }
+                result_tables = api.bk_base.get_mine_result_tables.request(request_params)
+                result_tables = (
+                    result_tables
+                    if isinstance(result_tables, list)
+                    else result_tables.get("data", [])
+                    if isinstance(result_tables, dict)
+                    else []
                 )
 
-            # 批量获取所有业务的结果表
-            batch_results = api.bk_base.get_mine_result_tables.bulk_request(request_params)
+                # 返回结果表列表
+                return [
+                    {
+                        "label": rt.get("result_table_name", ""),
+                        "value": rt.get("result_table_id", ""),
+                    }
+                    for rt in result_tables
+                    if rt.get("result_table_id")
+                ]
 
+            # 不传 bk_biz_id，只返回业务列表
             biz_trees = []
-            for i, result in enumerate(batch_results):
-                biz = biz_list_result[i]
+            for biz in biz_list_result:
                 biz_id = biz.get("bk_biz_id")
                 biz_name = biz.get("bk_biz_name", "")
+                biz_node = {"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id)}
+                biz_trees.append(biz_node)
 
-                try:
-                    result_tables = (
-                        result
-                        if isinstance(result, list)
-                        else result.get("data", [])
-                        if isinstance(result, dict)
-                        else []
-                    )
-
-                    children = []
-                    if result_tables:
-                        children = [
-                            {
-                                "label": rt.get("result_table_name", ""),
-                                "value": rt.get("result_table_id", ""),
-                            }
-                            for rt in result_tables
-                            if rt.get("result_table_id")
-                        ]
-
-                    # 构建业务节点
-                    biz_node = {"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": children}
-                    biz_trees.append(biz_node)
-
-                except Exception as e:
-                    logger.error("[ListTables] 获取业务 %s 的结果表失败: %s", biz_id, e)
-                    # 即使获取失败，也添加业务节点（children 为空）
-                    biz_trees.append({"label": "{}({})".format(biz_name, biz_id), "value": str(biz_id), "children": []})
-
-            # 按是否有子项和业务 ID 排序（与其他 TableHandler 保持一致）
-            biz_trees.sort(key=lambda x: (not bool(x["children"]), int(x["value"]) if x["value"].isdigit() else 0))
+            # 按业务 ID 排序
+            biz_trees.sort(key=lambda x: int(x["value"]) if x["value"].isdigit() else 0)
             return biz_trees
 
         except Exception as e:

@@ -1349,6 +1349,7 @@ class ListTablesRequestSerializer(serializers.Serializer):
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
     scene_id = serializers.CharField(label=gettext_lazy("Scene ID"), required=False)
+    bk_biz_id = serializers.CharField(label=gettext_lazy("业务 ID"), required=False)
 
     def validate(self, attrs):
         """
