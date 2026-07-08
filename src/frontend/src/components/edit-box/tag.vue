@@ -48,8 +48,20 @@
         @click.stop="handleCopy">
         <audit-icon type="copy" />
       </div>
+      <span
+        v-if="$slots.suffix"
+        class="edit-tag-suffix">
+        <slot name="suffix" />
+      </span>
     </template>
-    <span v-else>--</span>
+    <template v-else>
+      <span>--</span>
+      <span
+        v-if="$slots.suffix"
+        class="edit-tag-suffix">
+        <slot name="suffix" />
+      </span>
+    </template>
     <teleport to="body">
       <div
         v-if="isCalcRenderTagNum"
@@ -76,6 +88,7 @@
     onBeforeUnmount,
     onMounted,
     ref,
+    useSlots,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -98,6 +111,7 @@
     showCopy: true,
   });
   const emits = defineEmits<Emits>();
+  const slots = useSlots();
   const { t } = useI18n();
   const rootRef = ref();
   const moreRef = ref();
@@ -161,7 +175,9 @@
 
             // 检查是否还能放下当前标签和"+N"按钮
             const needNumBtn = i < tagElsRef.value.length - 1;
-            const requiredWidth = totalTagWidth + (needNumBtn ? numTagWidth + copyBtnWidth : copyBtnWidth);
+            const trailingWidth = (props.showCopy ? copyBtnWidth : 0)
+              + (slots.suffix ? 22 : 0);
+            const requiredWidth = totalTagWidth + (needNumBtn ? numTagWidth : 0) + trailingWidth;
 
             if (requiredWidth <= boxWidth) {
               renderTagNum.value = i + 1;
@@ -315,6 +331,13 @@
       &:hover {
         color: #3a84ff;
       }
+    }
+
+    .edit-tag-suffix {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      vertical-align: middle;
     }
   }
 
