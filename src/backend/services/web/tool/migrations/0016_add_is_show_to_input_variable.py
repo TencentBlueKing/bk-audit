@@ -17,6 +17,8 @@ def add_is_show_to_input_variable(apps, _):
                 var['is_show'] = True
                 changed = True
         if changed:
+            config['input_variable'] = input_variable
+            tool.config = config
             tool.save()
 
 
