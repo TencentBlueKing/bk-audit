@@ -31,7 +31,7 @@
             && isFullRowField(rowItem.group[0].field_name),
         }">
         <render-info-item
-          v-for="(fieldItem, itemIndex) in rowItem.group.filter(item => item)"
+          v-for="(fieldItem, itemIndex) in rowItem.group.filter(isValidFieldItem)"
           :key="`${rowIndex}-${itemIndex}-${fieldItem.field_name}`"
           :label="fieldItem.field_name === 'strategy_name' ? t('风险命中策略(ID)') : fieldItem.display_name"
           :label-width="labelWidth">
@@ -236,6 +236,10 @@
   const { t, locale } = useI18n();
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
+
+  type FieldItem = Props['showFieldNames'][0];
+
+  const isValidFieldItem = (item: FieldItem | null | undefined): item is FieldItem => item != null;
 
   const strategyTagMap = ref<Record<string, string>>({});
 
