@@ -17,6 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import sys
+import unittest
 from pathlib import Path
 from unittest import mock
 
@@ -717,13 +719,13 @@ class TestAIAuditReportAPIGWConfig(TestCase):
     """测试 AI 审计报告 APIGW/MCP 配置"""
 
     def test_audit_report_mcp_uses_report_risk_resource(self):
-        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text()
+        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text(encoding="utf-8")
 
         self.assertIn("list_analyse_report_risk_apigw", definition)
         self.assertNotIn("list_risk_apigw", definition)
 
     def test_report_risk_apigw_resource_defined(self):
-        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text())
+        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text(encoding="utf-8"))
         resource = resources["paths"]["/analyse_report_apigw/{report_id}/risks/"]["post"]
 
         self.assertEqual(resource["operationId"], "list_analyse_report_risk_apigw")
@@ -738,3 +740,29 @@ class TestAIAuditReportAPIGWConfig(TestCase):
         self.assertIn("event_data", detail_properties)
         self.assertIn("has_report", detail_properties)
         self.assertNotIn("report", detail_properties)
+
+    def test_yaml_read_with_utf8_encoding_succeeds(self):
+        """L1: 验证 read_text(encoding="utf-8") 修复 - 显式传 encoding 后能正确解析 yaml
+
+        修复前: read_text() 走系统默认编码, Windows 上 GBK 解析 UTF-8 YAML 失败
+        修复后: 显式传 encoding="utf-8", 任何平台都能正确解析
+        """
+        yaml_path = BACKEND_DIR / "support-files/apigw/definition.yaml"
+        # 模拟修复后代码的调用方式: 显式传 encoding
+        content = yaml_path.read_text(encoding="utf-8")
+        # 验证读到非空字符串, 包含 list_analyse_report_risk_apigw (说明 UTF-8 解析成功)
+        self.assertIsInstance(content, str)
+        self.assertGreater(len(content), 0)
+        self.assertIn("list_analyse_report_risk_apigw", content)
+
+    @unittest.skipUnless(sys.platform == "win32", "仅在 Windows 真实环境验证 GBK 默认编码修复")
+    def test_yaml_default_encoding_raises_on_windows(self):
+        """L2a: 反例验证 - Windows 上不传 encoding 走系统默认 GBK, 解析 UTF-8 YAML 会 UnicodeDecodeError
+
+        修复前: read_text() 走系统默认编码 (Windows=GBK), 解析 UTF-8 YAML 失败
+        修复后: 显式传 encoding="utf-8", 修复代码不会再现此问题
+        本测试: 故意不传 encoding, 验证 Windows 上确实会失败 (作为修复基线)
+        """
+        yaml_path = BACKEND_DIR / "support-files/apigw/definition.yaml"
+        with self.assertRaises(UnicodeDecodeError):
+            yaml_path.read_text()  # 不传 encoding, Windows 默认 GBK
