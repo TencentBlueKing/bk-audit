@@ -14,12 +14,8 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
-from services.web.risk.models import ManualEvent, Risk, RiskPersonIndex
-from services.web.risk.provider import (
-    ManualEventResourceProvider,
-    RiskPersonIndexResourceProvider,
-    RiskResourceProvider,
-)
+from services.web.risk.models import ManualEvent, Risk
+from services.web.risk.provider import ManualEventResourceProvider, RiskResourceProvider
 from services.web.scene.constants import (
     BindingType,
     ResourceVisibilityType,
@@ -261,31 +257,6 @@ class ManualEventProviderAPITest(TestCase):
         payload = item["data"]
         self.assertEqual(payload["event_time_timestamp"], _ms(event.event_time))
         self.assertEqual(payload["last_operate_time_timestamp"], _ms(event.last_operate_time))
-
-
-class RiskPersonIndexResourceProviderAPITest(TestCase):
-    def test_fetch_instance_list_returns_snapshot_data(self):
-        item = RiskPersonIndex.objects.create(
-            risk_id="risk-provider-index",
-            relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-            user="user-a",
-        )
-        item.refresh_from_db()
-
-        provider = RiskPersonIndexResourceProvider()
-        result = provider.fetch_instance_list(
-            FancyDict(
-                start_time=int((item.updated_at - datetime.timedelta(seconds=1)).timestamp() * 1000),
-                end_time=int((item.updated_at + datetime.timedelta(seconds=1)).timestamp() * 1000),
-            ),
-            Page(10, 0),
-        )
-
-        self.assertEqual(result.count, 1)
-        self.assertEqual(result.results[0]["id"], str(item.pk))
-        self.assertEqual(result.results[0]["data"]["risk_id"], "risk-provider-index")
-        self.assertEqual(result.results[0]["data"]["relation_type"], RiskPersonIndex.RelationType.CURRENT_OPERATOR)
-        self.assertEqual(result.results[0]["data"]["user"], "user-a")
 
 
 def _bind_strategy_to_scene(strategy_id, scene):

@@ -27,7 +27,6 @@ from bk_resource import resource
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
@@ -50,10 +49,10 @@ from services.web.risk.constants import (
     RiskStatus,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.risk.models import Risk, RiskPersonIndex
+from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
-from services.web.strategy_v2.constants import RiskLevel, StrategyStatusChoices
+from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 
@@ -138,13 +137,13 @@ class RiskHandler:
         return data
 
     @classmethod
-    def render_risk_title(cls, create_params: dict, strategy: Optional[Strategy] = None) -> Optional[str]:
+    def render_risk_title(cls, create_params: dict) -> Optional[str]:
         """
         生成风险标题
         自动处理变量中的 list 类型，渲染为逗号拼接的字符串
         """
         create_params = create_params.copy()
-        strategy = strategy or Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
+        strategy: Strategy = Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
         if not strategy or not strategy.risk_title:
             return None
 
@@ -185,13 +184,7 @@ class RiskHandler:
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
         }
-        strategy = (
-            Strategy.objects.filter(strategy_id=create_params["strategy_id"]).only("risk_level", "risk_title").first()
-        )
-        risk_level = strategy.risk_level if strategy else None
-        create_params["risk_level"] = risk_level
-        create_params["risk_level_order"] = RiskLevel.order_value(risk_level)
-        create_params["title"] = self.render_risk_title(create_params, strategy=strategy)
+        create_params["title"] = self.render_risk_title(create_params)
         return create_params
 
     def create_risk(
@@ -242,7 +235,22 @@ class RiskHandler:
 
         # 存在则更新结束时间, 风险事件描述
         if risk:
-            risk = self.update_existing_risk(risk.risk_id, event)
+            last_end_time = event["event_time"] / 1000
+            logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
+            # 只在事件的时间更新的时候存储
+            if risk.event_end_time.timestamp() < last_end_time:
+                risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
+                risk.event_data = event.get("event_data")
+                risk.save(update_fields=["event_end_time", "event_data"])
+            if event.get("event_content") and risk.event_content != event["event_content"]:
+                risk.event_content = event["event_content"]
+                risk.save(update_fields=["event_content"])
+            if event.get("event_type") and risk.event_type != event["event_type"]:
+                risk.event_type = self.parse_event_type(event.get("event_type"))
+                risk.save(update_fields=["event_type"])
+            if event.get("operator") and risk.operator != event["operator"]:
+                risk.operator = self.parse_operator(event.get("operator"))
+                risk.save(update_fields=["operator"])
             return False, risk
 
         # 不存在则创建
@@ -251,41 +259,8 @@ class RiskHandler:
             create_params["manual_synced"] = False
             create_params["display_status"] = RiskDisplayStatus.STAND_BY
         risk: Risk = Risk.objects.create(**create_params)
-        RiskPersonIndex.sync_risk(risk)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
         return True, risk
-
-    @transaction.atomic()
-    def update_existing_risk(self, risk_id: str, event: dict) -> Risk:
-        risk = Risk.objects.select_for_update().get(risk_id=risk_id)
-        last_end_time = event["event_time"] / 1000
-        logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
-
-        update_fields = []
-        if risk.event_end_time.timestamp() < last_end_time:
-            risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
-            risk.event_data = event.get("event_data")
-            update_fields.extend(["event_end_time", "event_data"])
-        if event.get("event_content") and risk.event_content != event["event_content"]:
-            risk.event_content = event["event_content"]
-            update_fields.append("event_content")
-        if event.get("event_type") and risk.event_type != event["event_type"]:
-            risk.event_type = self.parse_event_type(event.get("event_type"))
-            update_fields.append("event_type")
-
-        operator_changed = False
-        if event.get("operator"):
-            operator = self.parse_operator(event.get("operator"))
-            if risk.operator != operator:
-                risk.operator = operator
-                update_fields.append("operator")
-                operator_changed = True
-
-        if update_fields:
-            risk.save(update_fields=list(dict.fromkeys(update_fields)))
-        if operator_changed:
-            RiskPersonIndex.sync_risk(risk, relation_types=[RiskPersonIndex.RelationType.OPERATOR])
-        return risk
 
     def trigger_render_task(self, risk: Risk):
         """
@@ -354,10 +329,8 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        with transaction.atomic():
-            risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
-            risk.save(update_fields=["notice_users"])
-            RiskPersonIndex.sync_risk(risk, relation_types=[RiskPersonIndex.RelationType.NOTICE_USER])
+        risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
+        risk.save(update_fields=["notice_users"])
 
     @classmethod
     def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], is_todo: bool) -> None:

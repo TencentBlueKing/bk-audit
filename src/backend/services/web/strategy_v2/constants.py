@@ -19,7 +19,7 @@ from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import IntegerChoices, TextChoices, register_choices
+from core.choices import TextChoices, register_choices
 from core.sql.constants import (
     AggregateType,
     FieldType,
@@ -166,19 +166,6 @@ class MappingType(TextChoices):
     ACTION = "action", gettext_lazy("Extend Field")
 
 
-class RiskLevelOrder(IntegerChoices):
-    """
-    风险等级排序值。
-
-    RiskLevel 仍是数据库展示语义中的字符串等级；排序快照字段使用该整数枚举。
-    """
-
-    UNKNOWN = -1, gettext_lazy("未知")
-    LOW = 0, gettext_lazy("低")
-    MIDDLE = 1, gettext_lazy("中")
-    HIGH = 2, gettext_lazy("高")
-
-
 class RiskLevel(TextChoices):
     """
     风险等级
@@ -187,17 +174,6 @@ class RiskLevel(TextChoices):
     HIGH = "HIGH", gettext_lazy("高")
     MIDDLE = "MIDDLE", gettext_lazy("中")
     LOW = "LOW", gettext_lazy("低")
-
-    @classmethod
-    def order_value(cls, risk_level: str | None) -> int:
-        return {
-            cls.LOW.value: RiskLevelOrder.LOW.value,
-            cls.MIDDLE.value: RiskLevelOrder.MIDDLE.value,
-            cls.HIGH.value: RiskLevelOrder.HIGH.value,
-        }.get(risk_level, RiskLevelOrder.UNKNOWN.value)
-
-
-DEFAULT_RISK_LEVEL_ORDER = RiskLevelOrder.UNKNOWN.value
 
 
 class EventInfoField(TypedDict):

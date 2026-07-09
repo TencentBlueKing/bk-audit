@@ -21,6 +21,8 @@ from django.utils.dateparse import parse_datetime
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
+from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD
+
 logger = logging.getLogger(__name__)
 
 
@@ -338,7 +340,7 @@ class BkBaseFieldResolver:
         合并 base_fields 与排序字段，返回 BKBase SELECT 需要的所有字段名。
 
         - event_data.xxx 字段通过 JSON_EXTRACT 获取，不加入 value_fields
-        - risk_level_order 是风险表快照字段，按普通数值字段排序
+        - strategy__risk_level 排序需要 event_time 参与 CASE/WHEN 排名，自动补充
         """
         fields = list(base_fields)
         for order_field in self.order_fields:
@@ -347,6 +349,8 @@ class BkBaseFieldResolver:
                 continue
             if name not in fields:
                 fields.append(name)
+        if any(f.lstrip("-") == RISK_LEVEL_ORDER_FIELD for f in self.order_fields) and "event_time" not in fields:
+            fields.append("event_time")
         return fields
 
     def event_order_field(self) -> Optional[str]:
@@ -863,7 +867,7 @@ class FinalSelectAssembler(SQLHelper):
 
         每个字段按类型分三种处理方式：
         1. event_data.xxx  → __order_event_field + dteventtimestamp DESC（只取第一个，相同值按时间倒序）
-        2. risk_level_order    → 直接引用 base_query.risk_level_order 数值快照
+        2. strategy__risk_level → CASE/WHEN 将 LOW/MIDDLE/HIGH 映射为 0/1/2 排名
         3. 其他普通字段      → 直接引用 base_query.field_name
         """
         if not order_fields:
@@ -886,7 +890,11 @@ class FinalSelectAssembler(SQLHelper):
             bare = field.lstrip("-")
             descending = field.startswith("-")
 
-            expressions.append(exp.Ordered(this=self._base_query_column(bare), desc=descending))
+            if bare == RISK_LEVEL_ORDER_FIELD:
+                rank_expr = self._build_risk_level_rank_expression(self._base_query_column(bare))
+                expressions.append(exp.Ordered(this=rank_expr, desc=descending))
+            else:
+                expressions.append(exp.Ordered(this=self._base_query_column(bare), desc=descending))
         return expressions
 
     def _build_join_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
@@ -897,6 +905,17 @@ class FinalSelectAssembler(SQLHelper):
             exp.GTE(this=event_timestamp.copy(), expression=start_ms),
             exp.LT(this=event_timestamp.copy(), expression=end_ms),
         ]
+
+    def _build_risk_level_rank_expression(self, field_expr: exp.Expression) -> exp.Expression:
+        from services.web.strategy_v2.constants import RiskLevel  # noqa
+
+        case_expr = exp.Case()
+        for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
+            case_expr = case_expr.when(
+                exp.EQ(this=field_expr.copy(), expression=self.literal(level)),
+                exp.Literal.number(str(index)),
+            )
+        return case_expr.else_(exp.Literal.number("-1"))
 
     def _base_query_column(self, field_name: str) -> exp.Column:
         normalized = field_name.split("__")[-1] if "__" in field_name else field_name

@@ -23,7 +23,6 @@ from unittest.mock import MagicMock
 
 from services.web.risk.models import Risk
 from services.web.risk.report.serializers import ReportRiskVariableSerializer
-from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -50,8 +49,6 @@ class TestReportRiskVariableSerializer(TestCase):
             current_operator=["user1"],
             notice_users=["user3"],
             event_type=["login", "access"],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevel.order_value(RiskLevel.HIGH.value),
         )
 
     def test_serialize_risk_contains_all_fields(self):
@@ -81,11 +78,11 @@ class TestReportRiskVariableSerializer(TestCase):
         for field in expected_fields:
             self.assertIn(field, data, f"缺少字段: {field}")
 
-    def test_serialize_snapshot_and_strategy_derived_fields(self):
-        """测试风险等级快照和 Strategy 字段正确序列化"""
+    def test_serialize_strategy_derived_fields(self):
+        """测试来自 Strategy 的字段正确序列化"""
         data = ReportRiskVariableSerializer(self.risk).data
 
-        self.assertEqual(data["risk_level"], "高")
+        self.assertEqual(data["risk_level"], "high")
         self.assertEqual(data["risk_hazard"], "测试风险危害")
         self.assertEqual(data["risk_guidance"], "测试处理指引")
 
@@ -149,7 +146,6 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
         risk.risk_id = "20250119210000123456"
         risk.title = "测试风险"
         risk.status = "new"
-        risk.risk_level = RiskLevel.HIGH.value
         risk.risk_label = "normal"
         risk.event_time = datetime.datetime(2025, 1, 19, 13, 0, 0, tzinfo=dt_timezone.utc)
         risk.created_at = datetime.datetime(2025, 1, 19, 12, 0, 0, tzinfo=dt_timezone.utc)
@@ -198,8 +194,8 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
             event_end_time=datetime.datetime(2025, 1, 19, 14, 30, 0, tzinfo=dt_timezone.utc),
             last_operate_time=datetime.datetime(2025, 1, 19, 15, 0, 0, tzinfo=dt_timezone.utc),
             updated_at=datetime.datetime(2025, 1, 19, 16, 0, 0, tzinfo=dt_timezone.utc),
-            risk_level=RiskLevel.MIDDLE.value,
         )
+        risk.strategy.risk_level = "MIDDLE"
 
         serializer = ReportRiskVariableSerializer(risk)
         data = serializer.data
@@ -239,10 +235,10 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
             current_operator=None,
             notice_users=None,
             last_operate_time=None,
-            risk_level=None,
         )
         # strategy 关联字段设置为 None
         risk.strategy.strategy_id = None
+        risk.strategy.risk_level = None
         risk.strategy.risk_hazard = None
         risk.strategy.risk_guidance = None
 

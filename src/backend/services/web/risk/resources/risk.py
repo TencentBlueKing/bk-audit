@@ -73,13 +73,12 @@ from core.observability import (
     set_span_attributes,
     start_observation_span,
 )
-from core.utils.data import choices_to_dict
+from core.utils.data import build_preserved_order_queryset, choices_to_dict
 from services.web.common.constants import ScopeQueryField
 from services.web.common.monitor import NL2RiskFilterFailedEvent
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
-    ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
     ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
@@ -87,6 +86,7 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
+    RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
     NL2RiskFilterLogStatus,
@@ -140,9 +140,9 @@ from services.web.risk.models import (
     Risk,
     RiskAuditInstance,
     RiskExperience,
-    RiskPersonIndex,
     TicketNode,
     TicketPermission,
+    UserType,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -192,7 +192,7 @@ from services.web.risk.tasks import (
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 from services.web.scene.models import ResourceBindingScene, Scene
-from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 logger = logging.getLogger(__name__)
@@ -629,7 +629,20 @@ class ListRisk(RiskMeta):
         if not order_fields:
             return queryset
 
-        return queryset.order_by(*order_fields)
+        orm_order_args = []
+        for field in order_fields:
+            if field.lstrip("-") == RISK_LEVEL_ORDER_FIELD:
+                queryset, sort_key = build_preserved_order_queryset(
+                    queryset,
+                    field,
+                    [RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
+                    annotate_name="_risk_level_order",
+                )
+                orm_order_args.append(sort_key)
+            else:
+                orm_order_args.append(field)
+
+        return queryset.order_by(*orm_order_args)
 
     def _build_filter_query(self, validated_request_data: dict) -> Q:
         """通用筛选条件构造：从请求参数中提取风险等级、标签等筛选条件并构造 Q 表达式，供所有 ListRisk 子类共享。"""
@@ -637,11 +650,7 @@ class ListRisk(RiskMeta):
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
         if risk_level:
-            q &= Q(risk_level__in=risk_level)
-
-        person_filters = validated_request_data.pop("person_filters", None) or []
-        for person_filter in person_filters:
-            q &= Risk.person_index_filter(person_filter["relation_type"], person_filter["users"])
+            q &= Q(strategy__risk_level__in=risk_level)
 
         # 标签筛选条件
         if tag_filter := validated_request_data.pop("tag_objs__in", None):
@@ -749,10 +758,6 @@ class ListRisk(RiskMeta):
                 Risk._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_RISK_BKBASE_RT_ID_KEY, fallback=Risk._meta.db_table
                 ),
-                RiskPersonIndex._meta.db_table: self._get_configured_table_name(
-                    config_key=ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY,
-                    fallback=RiskPersonIndex._meta.db_table,
-                ),
                 Strategy._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_STRATEGY_BKBASE_RT_ID_KEY, fallback=Strategy._meta.db_table
                 ),
@@ -845,12 +850,17 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data, username: str = None):
         username = username or get_request_username()
-        if not username:
-            return Risk.objects.none()
         q = self._build_filter_query(validated_request_data)
+        # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
+        event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.person_index_filter(RiskPersonIndex.RelationType.CURRENT_OPERATOR, username),
+            Risk.local_risk_filter(
+                user_types=[UserType.OPERATOR],
+                username=username,
+                authorized_at_start=event_time_start,
+            ),
+            current_operator__contains=username,
         ).distinct()
 
 
@@ -859,12 +869,17 @@ class ListNoticingRisk(ListRisk):
 
     def load_risks(self, validated_request_data, username: str = None):
         username = username or get_request_username()
-        if not username:
-            return Risk.objects.none()
         q = self._build_filter_query(validated_request_data)
+        # 个人视图只需查询窗口内新授权的工单权限，减少历史权限扫描量。
+        event_time_start = next(iter(validated_request_data.get("event_time__gte") or []), None)
         return Risk.objects.filter(
             q,
-            Risk.person_index_filter(RiskPersonIndex.RelationType.NOTICE_USER, username),
+            Risk.local_risk_filter(
+                user_types=[UserType.NOTICE_USER],
+                username=username,
+                authorized_at_start=event_time_start,
+            ),
+            notice_users__contains=username,
         ).distinct()
 
 
@@ -878,15 +893,11 @@ class ListProcessedRisk(ListRisk):
     def load_risks(self, validated_request_data, username: str = None):
         q = self._build_filter_query(validated_request_data)
         username = username or get_request_username()
-        if not username:
-            return Risk.objects.none()
         # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
         ).values("risk_id")
-        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(
-            Risk.person_index_filter(RiskPersonIndex.RelationType.CURRENT_OPERATOR, username)
-        )
+        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
 
 
 class ListRiskFields(RiskMeta):
@@ -1245,10 +1256,6 @@ class RetryAutoProcess(RiskMeta):
                 risk.status = RiskStatus.AUTO_PROCESS
                 risk.current_operator = []
                 risk.save(update_fields=["status", "current_operator"])
-                RiskPersonIndex.sync_risk(
-                    risk,
-                    relation_types=[RiskPersonIndex.RelationType.CURRENT_OPERATOR],
-                )
         # 更新节点信息
         sync_auto_result.apply_async(countdown=60, kwargs={"node_id": node.id})
 

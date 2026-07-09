@@ -87,7 +87,6 @@ from services.web.risk.models import (
     AnalyseReportExtraInfo,
     ManualEvent,
     Risk,
-    RiskPersonIndex,
     TicketNode,
 )
 from services.web.risk.report import AIProvider
@@ -705,9 +704,9 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     if prompt_params.get("end_time"):
         q &= Q(event_time__lt=prompt_params["end_time"])
 
-    # operator
+    # operator 模糊匹配
     if prompt_params.get("operator"):
-        q &= Risk.person_index_filter(RiskPersonIndex.RelationType.OPERATOR, prompt_params["operator"])
+        q &= Q(operator__contains=prompt_params["operator"])
 
     # strategy_id
     if prompt_params.get("strategy_id"):
@@ -721,12 +720,9 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
         if statuses:
             q &= Q(display_status__in=statuses)
 
-    # current_operator
+    # current_operator 模糊匹配
     if prompt_params.get("current_operator"):
-        q &= Risk.person_index_filter(
-            RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-            prompt_params["current_operator"],
-        )
+        q &= Q(current_operator__contains=prompt_params["current_operator"])
 
     # event_type 模糊匹配
     if prompt_params.get("event_type"):
@@ -736,7 +732,7 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     if prompt_params.get("risk_level"):
         levels = [i.strip() for i in str(prompt_params["risk_level"]).split(",") if i.strip()]
         if levels:
-            q &= Q(risk_level__in=levels)
+            q &= Q(strategy__risk_level__in=levels)
 
     return q
 

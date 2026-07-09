@@ -83,14 +83,6 @@ class TicketPermission(ResourceTypeMeta):
     related_instance_selections = [{"system_id": system_id, "id": id}]
 
 
-class RiskPersonIndex(ResourceTypeMeta):
-    system_id = settings.BK_IAM_SYSTEM_ID
-    id = "risk_person_index"
-    name = gettext("风险人员索引")
-    selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": id}]
-
-
 class TicketNode(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
     id = "ticket_node"

@@ -16,14 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from unittest import TestCase
 from uuid import uuid4
 
 import pytest
 from bk_resource import resource
-from django.test import TestCase
 
-from apps.meta.models import GlobalMetaConfig
-from services.web.risk.constants import SECURITY_PERSON_KEY
 from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.scene.models import Scene
 from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
@@ -31,9 +29,7 @@ from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
 
 @pytest.mark.django_db
 class TicketTest(TestCase):
-    def setUp(self):
-        super().setUp()
-        GlobalMetaConfig.set(config_key=SECURITY_PERSON_KEY, config_value=["security_user"])
+    ...
 
 
 class RiskContext:

@@ -51,7 +51,6 @@ from services.web.risk.handlers.rule import RiskRuleHandler
 from services.web.risk.models import (
     ProcessApplication,
     Risk,
-    RiskPersonIndex,
     RiskRule,
     TicketNode,
     UserType,
@@ -155,7 +154,6 @@ class RiskFlowBaseHandler:
         self.pre_check(*args, **kwargs)
         process_result = self.process(*args, **kwargs)
         self.update_operator(process_result=process_result, *args, **kwargs)
-        self.sync_current_operator_index()
         self.update_status(process_result=process_result, *args, **kwargs)
         self.sync_display_status()
         self.record_history(process_result=process_result, *args, **kwargs)
@@ -211,12 +209,6 @@ class RiskFlowBaseHandler:
         """
 
         raise NotImplementedError()
-
-    def sync_current_operator_index(self) -> None:
-        RiskPersonIndex.sync_risk(
-            self.risk,
-            relation_types=[RiskPersonIndex.RelationType.CURRENT_OPERATOR],
-        )
 
     def record_history(self, process_result: dict, *args, **kwargs) -> None:
         """

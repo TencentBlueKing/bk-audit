@@ -131,7 +131,6 @@ DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY = "doris_event_physical_table_name"
 
 # Asset BKBase 结果表配置
 ASSET_RISK_BKBASE_RT_ID_KEY = "asset_risk_bkbase_rt_id"
-ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY = "asset_risk_person_index_bkbase_rt_id"
 ASSET_STRATEGY_BKBASE_RT_ID_KEY = "asset_strategy_bkbase_rt_id"
 ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY = "asset_strategy_tag_bkbase_rt_id"
 ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY = "asset_ticket_permission_bkbase_rt_id"

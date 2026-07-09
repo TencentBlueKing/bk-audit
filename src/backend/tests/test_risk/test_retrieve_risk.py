@@ -1,7 +1,5 @@
 import datetime
-import io
 import json
-import threading
 from types import SimpleNamespace
 from typing import List
 from unittest import mock
@@ -9,10 +7,8 @@ from unittest import mock
 import sqlglot
 from blueapps.utils.local import request_local
 from django.conf import settings
-from django.core.management import call_command
-from django.db import connection, connections, transaction
+from django.db import connection
 from django.db.models import Q
-from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.request import Request
@@ -22,12 +18,10 @@ from sqlglot import errors as sqlglot_errors
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
-from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
 from services.web.common.constants import ScopeType
 from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
-    ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
     ASSET_TICKET_NODE_BKBASE_RT_ID_KEY,
@@ -37,14 +31,11 @@ from services.web.databus.constants import (
 from services.web.risk.constants import (
     EventFilterOperator,
     RiskDisplayStatus,
-    RiskPersonRelationType,
     RiskStatus,
 )
-from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import (
     ManualEvent,
     Risk,
-    RiskPersonIndex,
     TicketNode,
     TicketPermission,
     UserType,
@@ -54,7 +45,7 @@ from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
-from services.web.strategy_v2.constants import RiskLevel, RiskLevelOrder
+from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -108,7 +99,6 @@ class TestListRiskResource(TestCase):
 
         self.bkbase_table_config = {
             ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
-            ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY: "bkdata.risk_person_index_rt",
             ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
             ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
             ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY: "bkdata.ticket_permission_rt",
@@ -140,8 +130,6 @@ class TestListRiskResource(TestCase):
             strategy=self.strategy,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -150,46 +138,6 @@ class TestListRiskResource(TestCase):
             user=self.username,
             user_type=UserType.OPERATOR,
         )
-
-    def test_backfill_risk_person_index_soft_deletes_extra_active_row(self):
-        RiskPersonIndex._objects.create(
-            risk_id=self.risk.risk_id,
-            relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-            user="stale-operator",
-        )
-
-        call_command("backfill_risk_person_index", "--batch-size", "1", "--fix")
-
-        self.assertFalse(
-            RiskPersonIndex.objects.filter(
-                risk_id=self.risk.risk_id,
-                relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                user="stale-operator",
-            ).exists()
-        )
-        self.assertTrue(
-            RiskPersonIndex._objects.filter(
-                risk_id=self.risk.risk_id,
-                relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                user="stale-operator",
-                is_deleted=True,
-            ).exists()
-        )
-
-    def test_backfill_risk_level_fix_keeps_existing_snapshot_by_default(self):
-        Risk.objects.filter(risk_id=self.risk.risk_id).update(
-            risk_level=RiskLevel.LOW.value,
-            risk_level_order=RiskLevel.order_value(RiskLevel.LOW.value),
-        )
-        output = io.StringIO()
-
-        call_command("backfill_risk_person_index", "--batch-size", "1", "--fix", stdout=output)
-
-        self.risk.refresh_from_db()
-        self.assertEqual(self.risk.risk_level, RiskLevel.LOW.value)
-        self.assertEqual(self.risk.risk_level_order, RiskLevel.order_value(RiskLevel.LOW.value))
-        self.assertIn("risk_level_mismatches=0", output.getvalue())
-        self.assertIn("risk_level_strategy_drifts=1", output.getvalue())
 
     def _format_expected_table(self, table_id: str) -> str:
         parts = [part for part in table_id.split(".") if part]
@@ -751,36 +699,13 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
         strategy_table = f"{self.bkbase_table_config[ASSET_STRATEGY_BKBASE_RT_ID_KEY]}.doris"
-        self.assertFalse(any(strategy_table in sql for sql in sql_log))
+        self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
-        self.assertIn("base_query.risk_level_order DESC", data_sql_normalized)
-        self.assertNotIn("CASE WHEN base_query.risk_level", data_sql_normalized)
+        self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
+        self.assertIn("ELSE -1 END DESC", data_sql_normalized)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
-
-    def test_send_risk_notice_syncs_notice_user_index(self):
-        notice_group = NoticeGroup.objects.create(
-            group_name="notice-sync",
-            group_member=["notice-raw"],
-            notice_config=[],
-        )
-        self.strategy.notice_groups = [notice_group.group_id]
-        self.strategy.save(update_fields=["notice_groups"])
-
-        with mock.patch(
-            "services.web.risk.handlers.risk.RiskNoticeParser.parse_groups",
-            return_value=["notice-a", "notice-b"],
-        ), mock.patch("services.web.risk.handlers.risk.RiskHandler.send_notice"):
-            RiskHandler().send_risk_notice(self.risk)
-
-        users = set(
-            RiskPersonIndex.objects.filter(
-                risk_id=self.risk.risk_id,
-                relation_type=RiskPersonIndex.RelationType.NOTICE_USER,
-            ).values_list("user", flat=True)
-        )
-        self.assertEqual(users, {"notice-a", "notice-b"})
 
     def test_list_risk_event_filters_without_matching_strategy_field(self):
         Strategy.objects.create(
@@ -1084,8 +1009,6 @@ class TestListRiskResource(TestCase):
             strategy=strategy_mid,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
-            risk_level=RiskLevel.MIDDLE.value,
-            risk_level_order=RiskLevelOrder.MIDDLE.value,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
         )
         Risk.objects.create(
@@ -1094,8 +1017,6 @@ class TestListRiskResource(TestCase):
             strategy=strategy_low,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
-            risk_level=RiskLevel.LOW.value,
-            risk_level_order=RiskLevelOrder.LOW.value,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
         )
 
@@ -1114,36 +1035,6 @@ class TestListRiskResource(TestCase):
         data = self.resource.risk.list_risk(self._payload(sort=["risk_level", "-event_time"]), _request=request)
         ids = [r["risk_id"] for r in data["results"]]
         self.assertEqual(ids, ["risk-low", "risk-mid", self.risk.risk_id])
-
-    def test_list_risk_sort_by_risk_level_order_snapshot_desc(self):
-        """风险排序应直接使用 risk_level_order 快照值，而不是旧的枚举 CASE 排序"""
-        Risk.objects.filter(pk=self.risk.pk).update(
-            risk_level=RiskLevel.LOW.value,
-            risk_level_order=RiskLevelOrder.LOW.value,
-            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
-        )
-
-        strategy_other = Strategy.objects.create(
-            strategy_id=204,
-            strategy_name="S-OTHER",
-            risk_level=RiskLevel.HIGH,
-        )
-        bind_strategy_to_scene(strategy_other.strategy_id, self.scene_id)
-        Risk.objects.create(
-            risk_id="risk-order-high",
-            raw_event_id="raw-order-high",
-            strategy=strategy_other,
-            status=RiskStatus.NEW,
-            display_status=RiskDisplayStatus.NEW,
-            risk_level=RiskLevel.MIDDLE.value,
-            risk_level_order=RiskLevelOrder.MIDDLE.value,
-            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
-        )
-
-        request = self._make_request()
-        data = self.resource.risk.list_risk(self._payload(sort=["-risk_level", "-event_time"]), _request=request)
-        ids = [r["risk_id"] for r in data["results"]]
-        self.assertEqual(ids[:2], ["risk-order-high", self.risk.risk_id])
 
     def test_list_risk_multi_sort_risk_level_desc_event_time_desc(self):
         """多字段排序: sort=['-risk_level', '-event_time']"""
@@ -1315,7 +1206,6 @@ class TestListRiskResource(TestCase):
         self._make_request()
         self.risk.current_operator = [self.username]
         self.risk.save(update_fields=["current_operator"])
-        RiskPersonIndex.sync_risk(self.risk, RiskPersonIndex.RelationType.CURRENT_OPERATOR)
 
         for risk_view_type in ("all", "todo"):
             with self.subTest(risk_view_type=risk_view_type), CaptureQueriesContext(connection) as queries:
@@ -1393,8 +1283,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
         )
         self.risk_noticed = Risk.objects.create(
@@ -1405,8 +1293,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
         )
         self.risk_owned_without_permission = Risk.objects.create(
@@ -1417,8 +1303,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
         )
         self.risk_noticed_without_permission = Risk.objects.create(
@@ -1429,8 +1313,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
         )
         self.risk_operator_permission_but_not_current = Risk.objects.create(
@@ -1441,8 +1323,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=["other_user"],
             notice_users=[],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
         )
         self.risk_notice_permission_but_not_noticed = Risk.objects.create(
@@ -1453,8 +1333,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[],
             notice_users=["other_user"],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
             event_time=datetime.datetime(2024, 1, 6, tzinfo=datetime.timezone.utc),
         )
 
@@ -1486,15 +1364,6 @@ class TestListMineAndNoticingRisk(TestCase):
                 ),
             ]
         )
-        for risk in [
-            self.risk_owned,
-            self.risk_noticed,
-            self.risk_owned_without_permission,
-            self.risk_noticed_without_permission,
-            self.risk_operator_permission_but_not_current,
-            self.risk_notice_permission_but_not_noticed,
-        ]:
-            RiskPersonIndex.sync_risk(risk)
 
     def _make_request(self, path: str = "/risks/", query=None):
         query = query or {"page": 1, "page_size": 10}
@@ -1508,106 +1377,6 @@ class TestListMineAndNoticingRisk(TestCase):
     def _payload(self, **kwargs):
         return {"scope_type": ScopeType.SCENE, "scope_id": str(self.scene_id), **kwargs}
 
-    def test_risk_person_index_normalize_users(self):
-        self.assertEqual(
-            RiskPersonIndex.normalize_users(["user_a,user_b", "user_b; user_c", "", None]),
-            ["user_a", "user_b", "user_c"],
-        )
-
-    def test_person_index_filter_with_empty_users_returns_empty(self):
-        queryset = Risk.objects.filter(Risk.person_index_filter(RiskPersonRelationType.CURRENT_OPERATOR, []))
-        self.assertFalse(queryset.exists())
-
-    def test_risk_person_index_sync_locks_risk_before_reading_index(self):
-        calls = []
-        original_select_for_update = Risk.objects.select_for_update
-        original_filter = RiskPersonIndex._objects.filter
-
-        def record_risk_lock(*args, **kwargs):
-            calls.append("risk_lock")
-            return original_select_for_update(*args, **kwargs)
-
-        def record_index_read(*args, **kwargs):
-            calls.append("index_read")
-            return original_filter(*args, **kwargs)
-
-        with (
-            mock.patch.object(Risk.objects, "select_for_update", side_effect=record_risk_lock),
-            mock.patch.object(RiskPersonIndex._objects, "filter", side_effect=record_index_read),
-        ):
-            RiskPersonIndex.sync_relation(
-                self.risk_owned.risk_id,
-                RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                ["replacement"],
-            )
-
-        self.assertLess(calls.index("risk_lock"), calls.index("index_read"))
-
-    def test_risk_person_index_sync_does_not_lock_index_rows(self):
-        with mock.patch.object(
-            RiskPersonIndex._objects,
-            "select_for_update",
-            side_effect=AssertionError("should not lock index rows"),
-        ):
-            RiskPersonIndex.sync_relation(
-                self.risk_owned.risk_id,
-                RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                ["replacement"],
-            )
-
-    def test_person_filters_use_person_index_without_json_contains(self):
-        request = self._make_request()
-        with CaptureQueriesContext(connection) as queries:
-            response = ListMineRisk().request(
-                self._payload(page=1, page_size=10, sort=["-risk_level", "-event_time", "-risk_id"]),
-                _request=request,
-            )
-        self.assertTrue(response["results"])
-        sql_text = "\n".join(query["sql"].lower() for query in queries.captured_queries)
-        self.assertIn(RiskPersonIndex._meta.db_table, sql_text)
-        self.assertNotIn("json_contains", sql_text)
-
-    def test_personal_views_with_empty_username_fallback_to_request_user(self):
-        from services.web.risk.resources.risk import ListNoticingRisk, ListProcessedRisk
-
-        self._make_request()
-        self.assertTrue(
-            ListMineRisk()
-            .load_risks({}, username="")
-            .filter(risk_id__in=[self.risk_owned.risk_id, self.risk_owned_without_permission.risk_id])
-            .exists()
-        )
-        self.assertTrue(
-            ListNoticingRisk()
-            .load_risks({}, username="")
-            .filter(risk_id__in=[self.risk_noticed.risk_id, self.risk_noticed_without_permission.risk_id])
-            .exists()
-        )
-
-        with mock.patch("services.web.risk.resources.risk.get_request_username", return_value=""):
-            self.assertFalse(ListMineRisk().load_risks({}, username="").exists())
-            self.assertFalse(ListNoticingRisk().load_risks({}, username="").exists())
-            self.assertFalse(ListProcessedRisk().load_risks({}, username="").exists())
-
-    def test_processed_view_with_empty_username_fallback_to_request_user(self):
-        from services.web.risk.resources.risk import ListProcessedRisk
-
-        self._make_request()
-        TicketNode.objects.create(
-            risk_id=self.risk_noticed.risk_id,
-            operator=self.username,
-            action="CloseRisk",
-            timestamp=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).timestamp(),
-            time="2024-01-01 00:00:00",
-        )
-
-        self.assertTrue(
-            ListProcessedRisk().load_risks({}, username="").filter(risk_id=self.risk_noticed.risk_id).exists()
-        )
-
-        with mock.patch("services.web.risk.resources.risk.get_request_username", return_value=""):
-            self.assertFalse(ListProcessedRisk().load_risks({}, username="").exists())
-
     def test_list_mine_risk(self):
         request = self._make_request()
         response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
@@ -1618,8 +1387,8 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
         self.assertEqual(response["sql"], [])
 
-    def test_list_mine_risk_filters_by_event_time_not_permission_time(self):
-        """待办风险走人员索引，授权时间不再参与个人视图筛选。"""
+    def test_list_mine_risk_filters_permission_by_start_time(self):
+        """待办风险按查询开始时间收敛本地权限范围。"""
         fresh_permission_risk = Risk.objects.create(
             risk_id="risk-fresh-permission",
             raw_event_id="raw-fresh-permission",
@@ -1659,8 +1428,6 @@ class TestListMineAndNoticingRisk(TestCase):
         TicketPermission.objects.filter(pk=old_permission.pk).update(
             authorized_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
         )
-        RiskPersonIndex.sync_risk(fresh_permission_risk)
-        RiskPersonIndex.sync_risk(old_permission_risk)
 
         request = self._make_request()
         response = ListMineRisk().request(
@@ -1675,20 +1442,11 @@ class TestListMineAndNoticingRisk(TestCase):
 
         risk_ids = {item["risk_id"] for item in response["results"]}
         self.assertIn(fresh_permission_risk.risk_id, risk_ids)
-        self.assertIn(old_permission_risk.risk_id, risk_ids)
+        self.assertNotIn(old_permission_risk.risk_id, risk_ids)
 
     def test_list_mine_risk_via_bkbase(self):
         request = self._make_request()
         sql_log: List[str] = []
-        GlobalMetaConfig.set(
-            config_key=ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY,
-            config_value="bkdata.risk_person_index_rt",
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=settings.DEFAULT_NAMESPACE,
-        )
-        self.addCleanup(
-            lambda: GlobalMetaConfig.objects.filter(config_key=ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY).delete()
-        )
 
         def fake_query_sync(sql):
             sql_log.append(sql)
@@ -1713,59 +1471,11 @@ class TestListMineAndNoticingRisk(TestCase):
         results = response["results"]
         self.assertEqual([item["risk_id"] for item in results], [self.risk_owned.risk_id])
         self.assertEqual(len(sql_log), 2)
-        person_index_table = "bkdata.risk_person_index_rt.doris"
-        self.assertTrue(any(person_index_table in sql for sql in sql_log), sql_log)
-        self.assertTrue(any("is_deleted" in sql.lower() for sql in sql_log), sql_log)
-        self.assertFalse(any("json_contains" in sql.lower() for sql in sql_log), sql_log)
-        self.assertEqual(response["sql"], sql_log)
-        assert_hive_sql(self, sql_log)
-
-    def test_list_noticing_risk_via_bkbase_uses_person_index(self):
-        from services.web.risk.resources.risk import ListNoticingRisk
-
-        request = self._make_request()
-        sql_log: List[str] = []
-        GlobalMetaConfig.set(
-            config_key=ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY,
-            config_value="bkdata.risk_person_index_rt",
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=settings.DEFAULT_NAMESPACE,
-        )
-        self.addCleanup(
-            lambda: GlobalMetaConfig.objects.filter(config_key=ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY).delete()
-        )
-
-        def fake_query_sync(sql):
-            sql_log.append(sql)
-            if "COUNT" in sql.upper():
-                return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk_noticed.risk_id, "strategy_id": self.strategy.strategy_id}]}
-
-        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-            response = ListNoticingRisk().request(
-                self._payload(
-                    page=1,
-                    page_size=10,
-                    title="bkbase-title",
-                    start_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
-                    end_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).isoformat(),
-                    event_filters=[{"field": "ip", "display_name": "Source IP", "operator": "CONTAINS", "value": ""}],
-                ),
-                _request=request,
-            )
-
-        results = response["results"]
-        self.assertEqual([item["risk_id"] for item in results], [self.risk_noticed.risk_id])
-        self.assertEqual(len(sql_log), 2)
-        person_index_table = "bkdata.risk_person_index_rt.doris"
-        self.assertTrue(any(person_index_table in sql for sql in sql_log), sql_log)
-        self.assertTrue(any("is_deleted" in sql.lower() for sql in sql_log), sql_log)
-        self.assertFalse(any("json_contains" in sql.lower() for sql in sql_log), sql_log)
         self.assertEqual(response["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_mine_risk_no_perm_check(self):
-        """ListMineRisk 不依赖权限表，按人员索引查询"""
+        """ListMineRisk 不依赖 load_authed_risks，按本地工单权限查询"""
         request = self._make_request()
         with mock.patch.object(Risk, "load_authed_risks", side_effect=AssertionError("should not check IAM")):
             response = ListMineRisk().request(self._payload(page=1, page_size=10), _request=request)
@@ -1773,11 +1483,11 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_owned.risk_id, risk_ids)
         self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
-        self.assertIn(self.risk_owned_without_permission.risk_id, risk_ids)
+        self.assertNotIn(self.risk_owned_without_permission.risk_id, risk_ids)
         self.assertNotIn(self.risk_operator_permission_but_not_current.risk_id, risk_ids)
 
     def test_list_noticing_risk_no_perm_check(self):
-        """ListNoticingRisk 不依赖权限表，按人员索引查询"""
+        """ListNoticingRisk 不依赖 load_authed_risks，按本地工单权限查询"""
         from services.web.risk.resources.risk import ListNoticingRisk
 
         request = self._make_request()
@@ -1787,11 +1497,11 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
-        self.assertIn(self.risk_noticed_without_permission.risk_id, risk_ids)
+        self.assertNotIn(self.risk_noticed_without_permission.risk_id, risk_ids)
         self.assertNotIn(self.risk_notice_permission_but_not_noticed.risk_id, risk_ids)
 
-    def test_list_noticing_risk_filters_by_event_time_not_permission_time(self):
-        """关注风险走人员索引，授权时间不再参与个人视图筛选。"""
+    def test_list_noticing_risk_filters_permission_by_start_time(self):
+        """关注风险按查询开始时间收敛本地权限范围。"""
         from services.web.risk.resources.risk import ListNoticingRisk
 
         fresh_permission_risk = Risk.objects.create(
@@ -1833,8 +1543,6 @@ class TestListMineAndNoticingRisk(TestCase):
         TicketPermission.objects.filter(pk=old_permission.pk).update(
             authorized_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
         )
-        RiskPersonIndex.sync_risk(fresh_permission_risk)
-        RiskPersonIndex.sync_risk(old_permission_risk)
 
         request = self._make_request()
         response = ListNoticingRisk().request(
@@ -1849,7 +1557,7 @@ class TestListMineAndNoticingRisk(TestCase):
 
         risk_ids = {item["risk_id"] for item in response["results"]}
         self.assertIn(fresh_permission_risk.risk_id, risk_ids)
-        self.assertIn(old_permission_risk.risk_id, risk_ids)
+        self.assertNotIn(old_permission_risk.risk_id, risk_ids)
 
     def test_list_mine_risk_without_scope(self):
         """个人视图不传 scope 时也应可查询。"""
@@ -1882,8 +1590,6 @@ class TestListMineAndNoticingRisk(TestCase):
             title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[self.username],
-            risk_level=RiskLevel.LOW.value,
-            risk_level_order=RiskLevelOrder.LOW.value,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -1898,7 +1604,6 @@ class TestListMineAndNoticingRisk(TestCase):
             user=self.username,
             user_type=UserType.NOTICE_USER,
         )
-        RiskPersonIndex.sync_risk(risk_owned_low)
         return risk_owned_low
 
     def test_list_mine_risk_sort_by_strategy_level_desc(self):
@@ -1910,8 +1615,7 @@ class TestListMineAndNoticingRisk(TestCase):
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertLess(ids.index(self.risk_owned_without_permission.risk_id), ids.index(self.risk_owned.risk_id))
-        self.assertLess(ids.index(self.risk_owned.risk_id), ids.index(risk_owned_low.risk_id))
+        self.assertEqual(ids, [self.risk_owned.risk_id, risk_owned_low.risk_id])
 
     def test_list_mine_risk_multi_sort_risk_level_desc_event_time_desc_risk_id_desc(self):
         """待我处理: sort=['-risk_level', '-event_time', '-risk_id']"""
@@ -1922,22 +1626,21 @@ class TestListMineAndNoticingRisk(TestCase):
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertEqual(ids[0], self.risk_owned_without_permission.risk_id)
-        self.assertLess(ids.index(self.risk_owned.risk_id), ids.index(risk_owned_low.risk_id))
+        self.assertEqual(ids[0], self.risk_owned.risk_id)
+        self.assertEqual(ids[-1], risk_owned_low.risk_id)
 
     def test_list_noticing_risk_sort_by_strategy_level_desc(self):
         """我的关注: 按风险等级逆序"""
         from services.web.risk.resources.risk import ListNoticingRisk
 
-        risk_owned_low = self._create_sort_data()
+        self._create_sort_data()
         request = self._make_request()
         response = ListNoticingRisk().request(
             self._payload(page=1, page_size=10, sort=["-risk_level", "-event_time", "-risk_id"]),
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertEqual(ids[0], self.risk_noticed_without_permission.risk_id)
-        self.assertLess(ids.index(self.risk_noticed.risk_id), ids.index(risk_owned_low.risk_id))
+        self.assertEqual(ids[0], self.risk_noticed.risk_id)
 
     def test_list_noticing_risk_multi_sort_event_time_desc_risk_id_desc(self):
         """我的关注: sort=['-event_time', '-risk_id']"""
@@ -1950,10 +1653,7 @@ class TestListMineAndNoticingRisk(TestCase):
             _request=request,
         )
         ids = [r["risk_id"] for r in response["results"]]
-        self.assertEqual(
-            ids,
-            [self.risk_noticed_without_permission.risk_id, risk_owned_low.risk_id, self.risk_noticed.risk_id],
-        )
+        self.assertEqual(ids, [risk_owned_low.risk_id, self.risk_noticed.risk_id])
 
     # ──── load_risks ────
 
@@ -2461,8 +2161,6 @@ class TestListProcessedRisk(TestCase):
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             current_operator=[],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
         )
         TicketNode.objects.create(
             risk_id="R-PAST",
@@ -2479,8 +2177,6 @@ class TestListProcessedRisk(TestCase):
             display_status=RiskDisplayStatus.AWAIT_PROCESS,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
             current_operator=[self.username],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
         )
         TicketNode.objects.create(
             risk_id="R-CURRENT",
@@ -2497,8 +2193,6 @@ class TestListProcessedRisk(TestCase):
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             notice_users=[self.username],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
         )
         self.risk_open = Risk.objects.create(
             risk_id="R-OPEN",
@@ -2508,8 +2202,6 @@ class TestListProcessedRisk(TestCase):
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
             current_operator=["someone_else"],
-            risk_level=RiskLevel.HIGH.value,
-            risk_level_order=RiskLevelOrder.HIGH.value,
         )
         TicketNode.objects.create(
             risk_id="R-OPEN",
@@ -2532,8 +2224,6 @@ class TestListProcessedRisk(TestCase):
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
             current_operator=[],
-            risk_level=RiskLevel.LOW.value,
-            risk_level_order=RiskLevelOrder.LOW.value,
         )
         TicketNode.objects.create(
             risk_id="R-PAST-LOW",
@@ -2542,14 +2232,6 @@ class TestListProcessedRisk(TestCase):
             timestamp=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc).timestamp(),
             time="2024-01-05 00:00:00",
         )
-        for risk in [
-            self.risk_past,
-            self.risk_current,
-            self.risk_noticed,
-            self.risk_open,
-            self.risk_past_low,
-        ]:
-            RiskPersonIndex.sync_risk(risk)
 
     def _make_request(self):
         django_request = self.factory.get("/risks/processed/", data={"page": 1, "page_size": 10})
@@ -2651,7 +2333,6 @@ class TestListProcessedRisk(TestCase):
 
         bkbase_table_config = {
             ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
-            ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY: "bkdata.risk_person_index_rt",
             ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
             ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
             ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY: "bkdata.ticket_permission_rt",
@@ -2694,79 +2375,5 @@ class TestListProcessedRisk(TestCase):
         )
         risk_table = f"{bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
         self.assertTrue(any(risk_table in sql for sql in sql_log))
-        person_index_table = f"{bkbase_table_config[ASSET_RISK_PERSON_INDEX_BKBASE_RT_ID_KEY]}.doris"
-        self.assertTrue(any(person_index_table in sql for sql in sql_log))
         self.assertEqual(resp["sql"], sql_log)
         assert_hive_sql(self, sql_log)
-
-
-@skipUnlessDBFeature("has_select_for_update")
-class RiskPersonIndexConcurrencyTest(TransactionTestCase):
-    reset_sequences = True
-
-    def test_concurrent_sync_relation_serializes_by_risk_row(self):
-        risk = Risk.objects.create(
-            risk_id="risk-concurrent-index",
-            raw_event_id="raw-concurrent-index",
-            strategy=Strategy.objects.create(strategy_id=99001, strategy_name="concurrent-strategy"),
-            status=RiskStatus.NEW,
-            title="concurrent",
-            current_operator=["old-user"],
-            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
-        )
-        RiskPersonIndex.sync_risk(risk)
-
-        first_started = threading.Event()
-        first_can_commit = threading.Event()
-        results = []
-
-        def sync_users(users, hold=False):
-            connections.close_all()
-            try:
-                with transaction.atomic():
-                    if hold:
-                        Risk.objects.select_for_update().get(risk_id=risk.risk_id)
-                        first_started.set()
-                        Risk.objects.filter(risk_id=risk.risk_id).update(current_operator=users)
-                        first_can_commit.wait(timeout=5)
-                    else:
-                        first_started.wait(timeout=5)
-                        Risk.objects.filter(risk_id=risk.risk_id).update(current_operator=users)
-                    RiskPersonIndex.sync_relation(
-                        risk.risk_id,
-                        RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                        users,
-                    )
-                results.append(users)
-            finally:
-                connections.close_all()
-
-        t1 = threading.Thread(target=sync_users, args=(["first-user"], True))
-        t2 = threading.Thread(target=sync_users, args=(["second-user"], False))
-        t1.start()
-        t2.start()
-        first_started.wait(timeout=5)
-        first_can_commit.set()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
-
-        self.assertFalse(t1.is_alive())
-        self.assertFalse(t2.is_alive())
-        self.assertEqual(len(results), 2)
-
-        risk.refresh_from_db()
-        active_users = set(
-            RiskPersonIndex.objects.filter(
-                risk_id=risk.risk_id,
-                relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-            ).values_list("user", flat=True)
-        )
-        self.assertEqual(active_users, set(risk.current_operator))
-        self.assertTrue(
-            RiskPersonIndex._objects.filter(
-                risk_id=risk.risk_id,
-                relation_type=RiskPersonIndex.RelationType.CURRENT_OPERATOR,
-                user="old-user",
-                is_deleted=True,
-            ).exists()
-        )

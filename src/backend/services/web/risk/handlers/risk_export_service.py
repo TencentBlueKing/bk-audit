@@ -222,7 +222,7 @@ class RiskExportService:
             RiskExportField.EVENT_CONTENT: risk.event_content,
             RiskExportField.RISK_TAGS: data2string([tag_rel.tag.tag_name for tag_rel in risk.strategy.prefetched_tags]),
             RiskExportField.EVENT_TYPE: data2string(risk.event_type),
-            RiskExportField.RISK_LEVEL: str(RiskLevel.get_label(risk.risk_level)),
+            RiskExportField.RISK_LEVEL: str(RiskLevel.get_label(risk.strategy.risk_level)),
             RiskExportField.STRATEGY_NAME: risk.strategy.strategy_name,
             RiskExportField.STRATEGY_ID: risk.strategy.strategy_id,
             RiskExportField.RAW_EVENT_ID: risk.raw_event_id,

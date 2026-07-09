@@ -62,7 +62,6 @@ class SystemInitAssetTests(TestCase):
             ResourceEnum.RISK,
             ResourceEnum.STRATEGY,
             ResourceEnum.STRATEGY_TAG,
-            ResourceEnum.RISK_PERSON_INDEX,
             ResourceEnum.TICKET_NODE,
         ]:
             expected_calls.append(
@@ -88,7 +87,6 @@ class SystemInitAssetTests(TestCase):
             ResourceEnum.RISK,
             ResourceEnum.STRATEGY,
             ResourceEnum.STRATEGY_TAG,
-            ResourceEnum.RISK_PERSON_INDEX,
             ResourceEnum.TICKET_NODE,
         ]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
@@ -157,18 +155,6 @@ class SystemInitAssetTests(TestCase):
                 ],
             }
         )
-        mock_toggle.assert_any_call(
-            {
-                "system_id": ResourceEnum.RISK_PERSON_INDEX.system_id,
-                "resource_type_id": ResourceEnum.RISK_PERSON_INDEX.id,
-                "is_enabled": True,
-                "join_data_type": JoinDataType.ASSET.value,
-                "storage_type": [
-                    SnapShotStorageChoices.HDFS.value,
-                    SnapShotStorageChoices.DORIS.value,
-                ],
-            }
-        )
         # ensure risk was skipped
         skipped_call = mock.call(
             {
@@ -199,7 +185,6 @@ class SystemInitAssetTests(TestCase):
             ResourceEnum.RISK,
             ResourceEnum.STRATEGY,
             ResourceEnum.STRATEGY_TAG,
-            ResourceEnum.RISK_PERSON_INDEX,
             ResourceEnum.TICKET_NODE,
         ]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
