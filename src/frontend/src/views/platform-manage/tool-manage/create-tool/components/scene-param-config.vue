@@ -29,8 +29,10 @@
       </div>
 
       <div class="block-body">
-        <!-- 覆盖参数默认值：与下方表格同宽 -->
-        <div class="override-section">
+        <!-- 覆盖参数默认值：弹窗内占满，编辑/新建页占 1/3 宽度 -->
+        <div
+          class="override-section"
+          :class="{ 'is-full-width': overrideSelectFullWidth }">
           <label class="form-label">{{ t('覆盖参数默认值') }}</label>
           <div class="form-control">
             <bk-select
@@ -123,12 +125,16 @@
     raw_default_value?: any;
   }
 
-  const props = defineProps<{
+  const props = withDefaults(defineProps<{
     formData: FormData;
     selectedScenes: Array<{ id: number; name: string }>;
     selectedSystems: Array<{ id: string; name: string }>;
     inputVariables: InputVarItem[];
-  }>();
+    /** 覆盖参数下拉是否占满容器（弹窗内为 true，编辑/新建页为 false） */
+    overrideSelectFullWidth?: boolean;
+  }>(), {
+    overrideSelectFullWidth: false,
+  });
 
   // eslint-disable-next-line func-call-spacing
   const emit = defineEmits<{
@@ -142,8 +148,8 @@
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
 
-  // 展示第一步「显示名」
-  const getParamDisplayName = (param: Pick<InputVarItem, 'display_name'>) => param.display_name || '';
+  // 展示第一步「显示名」，无值时显示 --
+  const getParamDisplayName = (param: Pick<InputVarItem, 'display_name'>) => param.display_name || '--';
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
   const configList = computed<ConfigItem[]>(() => {
@@ -299,8 +305,12 @@
       color: #63656e;
     }
 
-    /* 与下方表格同宽 */
     .form-control {
+      width: 33.33%;
+      max-width: 33.33%;
+    }
+
+    &.is-full-width .form-control {
       width: 100%;
       max-width: 100%;
     }
