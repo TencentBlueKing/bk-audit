@@ -53,6 +53,7 @@
       display_name: string;
       description: string;
       required: boolean;
+      is_show?: boolean;
       field_category: string;
       default_value: string | Array<string>;
       choices: Array<{

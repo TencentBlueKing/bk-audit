@@ -31,6 +31,7 @@ export interface FormData {
       display_name: string;
       description: string;
       required: boolean;
+      is_show?: boolean;
       field_category: string;
       default_value: any;
       raw_default_value?: any;
