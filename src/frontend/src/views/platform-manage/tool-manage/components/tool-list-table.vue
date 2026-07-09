@@ -31,7 +31,16 @@
 </template>
 
 <script setup lang="tsx">
-  import { nextTick, onMounted, ref } from 'vue';
+  import {
+    computed,
+    defineComponent,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+    type PropType,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -359,66 +368,163 @@
     window.open(url, '_blank');
   };
 
-  const renderJumpScopeMenu = (row: ToolModel, scenes: VisibilityScopeItem[], systems: VisibilityScopeItem[]) => (
-    <div class="tool-jump-scope-menu-outer">
-      <div class="tool-jump-scope-menu">
-      {scenes.length > 0 && (
-        <div class="jump-scope-section">
-          <div class="jump-scope-section-title">{t('所属场景')}</div>
-          {scenes.map(scene => (
-            <div
-              class="jump-scope-item"
-              key={`scene-${scene.id}`}
-              onClick={(e: Event) => {
-                e.stopPropagation();
-                handleOpenToolInSquare(row.uid, scene);
-              }}>
-              <img
-                alt=""
-                class="jump-scope-item-icon scene-icon"
-                src={sceneIconUrl} />
-              <span class="jump-scope-item-content">
-                <span class="jump-scope-item-name">
-                  <Tooltips data={scene.name} />
-                </span>
-                <audit-icon
-                  class="jump-scope-link-icon"
-                  type="jump-link" />
-              </span>
-            </div>
-          ))}
+  const JumpScopeMenu = defineComponent({
+    name: 'JumpScopeMenu',
+    props: {
+      row: {
+        type: Object as PropType<ToolModel>,
+        required: true,
+      },
+      scenes: {
+        type: Array as PropType<VisibilityScopeItem[]>,
+        default: () => [],
+      },
+      systems: {
+        type: Array as PropType<VisibilityScopeItem[]>,
+        default: () => [],
+      },
+    },
+    setup(props) {
+      const { t } = useI18n();
+      const searchKeyword = ref('');
+      const menuRef = ref<HTMLElement | null>(null);
+      const showScrollbar = ref(false);
+      const thumbHeight = ref(0);
+      const thumbTop = ref(0);
+      let menuResizeObserver: ResizeObserver | null = null;
+
+      const normalizedKeyword = computed(() => searchKeyword.value.trim().toLowerCase());
+
+      const filterItems = (items: VisibilityScopeItem[]) => {
+        const keyword = normalizedKeyword.value;
+        if (!keyword) return items;
+        return items.filter(item => item.name.toLowerCase().includes(keyword));
+      };
+
+      const filteredScenes = computed(() => filterItems(props.scenes));
+      const filteredSystems = computed(() => filterItems(props.systems));
+      const isEmpty = computed(() => !filteredScenes.value.length && !filteredSystems.value.length);
+
+      const updateScrollbar = () => {
+        const el = menuRef.value;
+        if (!el) {
+          showScrollbar.value = false;
+          return;
+        }
+        const { scrollHeight, clientHeight, scrollTop } = el;
+        if (scrollHeight <= clientHeight + 1) {
+          showScrollbar.value = false;
+          return;
+        }
+        showScrollbar.value = true;
+        const minThumbHeight = 24;
+        thumbHeight.value = Math.max(clientHeight * (clientHeight / scrollHeight), minThumbHeight);
+        const maxThumbTop = clientHeight - thumbHeight.value;
+        const scrollRatio = scrollTop / (scrollHeight - clientHeight);
+        thumbTop.value = maxThumbTop * scrollRatio;
+      };
+
+      watch([filteredScenes, filteredSystems, normalizedKeyword], () => {
+        nextTick(updateScrollbar);
+      });
+
+      onMounted(() => {
+        nextTick(() => {
+          updateScrollbar();
+          if (menuRef.value) {
+            menuResizeObserver = new ResizeObserver(() => updateScrollbar());
+            menuResizeObserver.observe(menuRef.value);
+          }
+        });
+      });
+
+      onBeforeUnmount(() => {
+        menuResizeObserver?.disconnect();
+      });
+
+      const renderScopeItem = (scope: VisibilityScopeItem) => (
+        <div
+          class="jump-scope-item"
+          key={`${scope.type}-${scope.id}`}
+          onClick={(e: Event) => {
+            e.stopPropagation();
+            handleOpenToolInSquare(props.row.uid, scope);
+          }}>
+          <img
+            alt=""
+            class={[
+              'jump-scope-item-icon',
+              scope.type === 'scene' ? 'scene-icon' : 'system-icon',
+            ]}
+            src={scope.type === 'scene' ? sceneIconUrl : systemIconUrl} />
+          <span class="jump-scope-item-content">
+            <span class="jump-scope-item-name">
+              <Tooltips data={scope.name} />
+            </span>
+            <audit-icon
+              class="jump-scope-link-icon"
+              type="jump-link" />
+          </span>
         </div>
-      )}
-      {systems.length > 0 && (
-        <div class="jump-scope-section">
-          <div class="jump-scope-section-title">{t('所属系统')}</div>
-          {systems.map(system => (
+      );
+
+      return () => (
+        <div class="tool-jump-scope-menu-outer">
+          <div
+            class="jump-scope-search"
+            onMousedown={(e: Event) => e.stopPropagation()}>
+            <span class="search-prefix-wrap">
+              <audit-icon
+                class="search-prefix"
+                type="search1" />
+            </span>
+            <bk-input
+              behavior="simplicity"
+              clearable
+              modelValue={searchKeyword.value}
+              placeholder={t('搜索')}
+              onUpdate:modelValue={(val: string) => {
+                searchKeyword.value = val;
+              }} />
+          </div>
+          <div class="tool-jump-scope-menu-wrap">
             <div
-              class="jump-scope-item"
-              key={`system-${system.id}`}
-              onClick={(e: Event) => {
-                e.stopPropagation();
-                handleOpenToolInSquare(row.uid, system);
-              }}>
-              <img
-                alt=""
-                class="jump-scope-item-icon system-icon"
-                src={systemIconUrl} />
-              <span class="jump-scope-item-content">
-                <span class="jump-scope-item-name">
-                  <Tooltips data={system.name} />
-                </span>
-                <audit-icon
-                  class="jump-scope-link-icon"
-                  type="jump-link" />
-              </span>
+              ref={menuRef}
+              class="tool-jump-scope-menu"
+              onScroll={updateScrollbar}>
+              {filteredScenes.value.length > 0 && (
+                <div class="jump-scope-section">
+                  <div class="jump-scope-section-title">{t('所属场景')}</div>
+                  {filteredScenes.value.map(scene => renderScopeItem(scene))}
+                </div>
+              )}
+              {filteredSystems.value.length > 0 && (
+                <div class="jump-scope-section">
+                  <div class="jump-scope-section-title">{t('所属系统')}</div>
+                  {filteredSystems.value.map(system => renderScopeItem(system))}
+                </div>
+              )}
+              {isEmpty.value && (
+                <div class="jump-scope-empty">{t('无匹配数据')}</div>
+              )}
             </div>
-          ))}
+            {showScrollbar.value && (
+              <div
+                aria-hidden="true"
+                class="jump-scope-scrollbar-track">
+                <div
+                  class="jump-scope-scrollbar-thumb"
+                  style={{
+                    height: `${thumbHeight.value}px`,
+                    transform: `translateY(${thumbTop.value}px)`,
+                  }} />
+              </div>
+            )}
+          </div>
         </div>
-      )}
-      </div>
-    </div>
-  );
+      );
+    },
+  });
 
   const renderJumpLink = (row: ToolModel) => {
     if (row.status !== 'published') return null;
@@ -471,7 +577,12 @@
               {jumpIcon}
             </span>
           ),
-          content: () => renderJumpScopeMenu(row, scenes, systems),
+          content: () => (
+            <JumpScopeMenu
+              row={row}
+              scenes={scenes}
+              systems={systems} />
+          ),
         }}
       </bk-popover>
     );
@@ -800,56 +911,129 @@
   }
 
   .tool-jump-scope-menu-outer {
+    display: flex;
+    flex-direction: column;
     width: 240px;
     max-height: 320px;
     overflow: hidden;
   }
 
+  .tool-jump-scope-popover .jump-scope-search {
+    display: flex;
+    flex-shrink: 0;
+    padding: 4px 0 0;
+    margin: 0 12px;
+    background: #fff;
+    border-bottom: 1px solid #dcdee5;
+    align-items: center;
+
+    .bk-input {
+      background: #fff !important;
+      border: none !important;
+      box-shadow: none !important;
+      flex: 1;
+    }
+
+    .bk-input--text,
+    .bk-input--default,
+    .bk-input-text,
+    input {
+      background: #fff !important;
+      background-color: #fff !important;
+    }
+
+    .bk-input--suffix-icon {
+      background-color: #fff !important;
+    }
+
+    .bk-input.is-simplicity:hover:not(.is-disabled) {
+      background-color: #fff !important;
+      border-color: transparent !important;
+      border-bottom-color: #dcdee5 !important;
+      box-shadow: none !important;
+    }
+
+    .bk-input.is-simplicity:hover:not(.is-disabled) .bk-input--text,
+    .bk-input.is-simplicity:hover:not(.is-disabled) .bk-input--suffix-icon {
+      background-color: #fff !important;
+    }
+
+    .bk-input.is-focused:not(.is-readonly).is-simplicity .bk-input--text,
+    .bk-input.is-focused:not(.is-readonly).is-simplicity .bk-input--suffix-icon {
+      background-color: #fff !important;
+    }
+
+    .bk-input--suffix-icon:hover {
+      color: #979ba5 !important;
+      background-color: #fff !important;
+    }
+  }
+
+  .tool-jump-scope-popover .search-prefix-wrap {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    background: transparent;
+
+    .search-prefix {
+      font-size: 18px;
+      line-height: 1;
+      color: #979ba5;
+    }
+  }
+
+  .tool-jump-scope-menu-wrap {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+  }
+
   .tool-jump-scope-menu {
-    width: 240px;
-    max-height: 344px;
-    padding: 12px 0 4px;
-    margin: -12px 0;
+    width: 100%;
+    max-height: 272px;
+    min-height: 0;
+    padding: 4px 0;
     overflow: hidden auto;
     box-sizing: border-box;
-    scrollbar-width: thin;
-    scrollbar-color: #c4c6cc transparent;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar {
+  .tool-jump-scope-menu::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .jump-scope-scrollbar-track {
+    position: absolute;
+    top: 0;
+    right: 2px;
     width: 4px;
-    appearance: none;
-    appearance: none;
+    height: 100%;
+    pointer-events: none;
   }
 
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-thumb {
+  .jump-scope-scrollbar-thumb {
+    width: 4px;
     background-color: #c4c6cc;
     border-radius: 2px;
+    transition: background-color .2s;
   }
 
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-thumb:hover {
+  .tool-jump-scope-menu-wrap:hover .jump-scope-scrollbar-thumb {
     background-color: #979ba5;
   }
 
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:start:decrement,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:start:increment,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:end:decrement,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:vertical:end:increment,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button:vertical:decrement,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-button:single-button:vertical:increment,
-  .tool-jump-scope-popover .tool-jump-scope-menu::-webkit-scrollbar-corner {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    background: transparent !important;
-    appearance: none !important;
-    appearance: none !important;
+  .jump-scope-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    text-align: center;
   }
 
   .jump-scope-section-title {
