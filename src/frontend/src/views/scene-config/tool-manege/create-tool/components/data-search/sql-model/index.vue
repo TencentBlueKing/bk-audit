@@ -110,8 +110,6 @@
           {{ t('是否必填') }}
           <bk-popover
             ref="requiredListRef"
-            allow-html
-            content="#hidden_pop_content"
             ext-cls="field-required-pop"
             placement="top"
             theme="light"
@@ -120,9 +118,7 @@
             <audit-icon
               style="margin-left: 4px; font-size: 16px;color: #3a84ff; cursor: pointer;"
               type="piliangbianji" />
-          </bk-popover>
-          <div style="display: none">
-            <div id="hidden_pop_content">
+            <template #content>
               <div
                 v-for="(item, index) in requiredList"
                 :key="index"
@@ -130,8 +126,8 @@
                 @click="handleRequiredClick(item.id)">
                 {{ item.label }}
               </div>
-            </div>
-          </div>
+            </template>
+          </bk-popover>
         </div>
         <div
           class="field-value is-required"
@@ -140,6 +136,34 @@
         </div>
         <div class="field-value">
           {{ t('默认值') }}
+        </div>
+        <div
+          class="field-value"
+          style="flex: 0 0 120px;">
+          <span
+            v-bk-tooltips="{ content: t(`可见：用户打开工具后，可以查看和输入该参数值
+              不可见：参数将作为后台参数传递给查询，建议设置默认值`) }"
+            class="underline-dashed">{{ t('是否可见') }}</span>
+          <bk-popover
+            ref="isShowListRef"
+            ext-cls="field-required-pop"
+            placement="top"
+            theme="light"
+            trigger="click"
+            width="100">
+            <audit-icon
+              style="margin-left: 4px; font-size: 16px;color: #3a84ff; cursor: pointer;"
+              type="piliangbianji" />
+            <template #content>
+              <div
+                v-for="(item, index) in isViewsList"
+                :key="index"
+                class="field-required-item"
+                @click="handleViewsClick(item.value)">
+                {{ item.label }}
+              </div>
+            </template>
+          </bk-popover>
         </div>
       </div>
       <audit-form
@@ -268,6 +292,28 @@
                     :target-value="item.default_value"
                     @change="(val: any) => handleFormItemChange(val, item)" />
                 </template>
+              </bk-form-item>
+            </div>
+            <div
+              class="field-value"
+              style="flex: 0 0 120px;">
+              <bk-form-item
+                error-display-type="tooltips"
+                label=""
+                label-width="0">
+                <bk-select
+                  v-model="item.is_show"
+                  :allow-empty-values="[false, 'false']"
+                  class="bk-select"
+                  :clearable="false"
+                  :disabled="!formData.config.sql"
+                  size="small">
+                  <bk-option
+                    v-for="(isViewItem, isViewItemIndex) in isViewsList"
+                    :id="isViewItem.value"
+                    :key="isViewItemIndex"
+                    :name="isViewItem.label" />
+                </bk-select>
               </bk-form-item>
             </div>
           </div>
@@ -563,6 +609,7 @@
         display_name: string;
         description: string;
         required: boolean;
+        is_show: boolean | string;
         field_category: string;
         default_value: string | Array<string>;
         choices: Array<{
@@ -612,6 +659,7 @@
   const viewRootRef = ref();
   const editSqlRef = ref();
   const requiredListRef = ref();
+  const isShowListRef = ref();
   const addEnumRefs = ref();
   const fieldReferenceRef = ref();
   const tableInputFormRef = ref();
@@ -645,6 +693,7 @@
         display_name: '',
         description: '',
         required: false,
+        is_show: 'true',
         field_category: '',
         default_value: '',
         choices: [],
@@ -671,6 +720,28 @@
     id: false,
     label: t('否'),
   }]);
+
+  const isViewsList = ref([{
+    value: 'true',
+    label: t('可见'),
+  }, {
+    value: 'false',
+    label: t('不可见'),
+  }]);
+
+  const normalizeIsShowForUi = (value: boolean | string | undefined) => {
+    if (value === false || value === 'false') {
+      return 'false';
+    }
+    return 'true';
+  };
+
+  const normalizeIsShowForSubmit = (value: boolean | string | undefined) => {
+    if (value === false || value === 'false') {
+      return false;
+    }
+    return true;
+  };
 
   const frontendTypeList = ref<Array<{
     id: string;
@@ -789,6 +860,17 @@
       required: value,
     }));
     requiredListRef.value?.hide();
+  };
+
+  const handleViewsClick = (value: string) => {
+    if (formData.value.config.input_variable.length === 0) {
+      return;
+    }
+    formData.value.config.input_variable = formData.value.config.input_variable.map(item => ({
+      ...item,
+      is_show: value,
+    }));
+    isShowListRef.value?.hide();
   };
 
   const handleFieldCategoryChange = (value: string, index: number) => {
@@ -928,13 +1010,17 @@
     formData.value.config.input_variable = sqlData.sql_variables.map((newItem) => {
       const existing = oldInputMap.get(newItem.raw_name);
       if (existing) {
-        return existing;
+        return {
+          ...existing,
+          is_show: normalizeIsShowForUi(existing.is_show),
+        };
       }
       return {
         ...newItem,
         field_category: '',
         default_value: '',
         choices: [],
+        is_show: 'true',
       };
     });
 
@@ -1011,12 +1097,24 @@
       return tableInputFormRef.value.validate();
     },
     setConfigs(configs: FormData['config']) {
-      formData.value.config = configs;
+      formData.value.config = {
+        ...configs,
+        input_variable: (configs.input_variable || []).map(item => ({
+          ...item,
+          is_show: normalizeIsShowForUi(item.is_show),
+        })),
+      };
       // 设置sql编辑器
       editor.setValue(configs.sql);
     },
     getFields() {
-      return formData.value.config;
+      return {
+        ...formData.value.config,
+        input_variable: formData.value.config.input_variable.map(item => ({
+          ...item,
+          is_show: normalizeIsShowForSubmit(item.is_show),
+        })),
+      };
     },
   });
 </script>
@@ -1229,6 +1327,14 @@
     color: #63656e;
     border-top: 1px solid #dcdee5;
   }
+}
+
+.underline-dashed {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: #c4c6cc;
+  text-underline-offset: 5px;
+  cursor: pointer;
 }
 </style>
 <style lang="postcss">
