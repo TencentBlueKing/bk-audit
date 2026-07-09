@@ -177,6 +177,7 @@
         display_name: '',
         description: '',
         required: false,
+        is_show: true,
         field_category: '',
         default_value: '',
         raw_default_value: '',
