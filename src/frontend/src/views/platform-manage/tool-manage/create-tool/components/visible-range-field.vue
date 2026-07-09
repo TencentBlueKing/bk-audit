@@ -235,6 +235,28 @@
         </div>
       </div>
     </teleport>
+
+    <!-- 隐藏测量区：用于精确计算 tag 与 +n 宽度 -->
+    <teleport to="body">
+      <div
+        ref="measureContainerRef"
+        aria-hidden="true"
+        class="visible-range-tag-measure">
+        <bk-tag
+          v-for="tag in allDisplayTags"
+          :key="tag.key"
+          class="selected-tag"
+          closable
+          theme="default">
+          {{ tag.name }}
+        </bk-tag>
+        <span
+          ref="measureOverflowRef"
+          class="overflow-count">
+          +0
+        </span>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -287,6 +309,8 @@
   const selectorRef = ref<HTMLElement | null>(null);
   const tagsWrapperRef = ref<HTMLElement | null>(null);
   const popoverRef = ref<HTMLElement | null>(null);
+  const measureContainerRef = ref<HTMLElement | null>(null);
+  const measureOverflowRef = ref<HTMLElement | null>(null);
   const popoverStyle = reactive({
     top: '0px',
     left: '0px',
@@ -500,36 +524,57 @@
   // 判断指定 label 是否溢出
   const isLabelOverflowing = (key: string) => !!labelOverflowMap[key];
 
-  // 根据 wrapper 宽度动态计算能放几个 tag
+  // 测量 +n 占位宽度
+  const measureOverflowWidth = (count: number) => {
+    const el = measureOverflowRef.value;
+    if (!el) {
+      return 12 + (String(count).length + 1) * 8;
+    }
+    el.textContent = `+${count}`;
+    return el.offsetWidth + 4;
+  };
+
+  // 根据 wrapper 宽度动态计算能放几个 tag（基于隐藏测量区实际宽度）
   const calcVisibleCount = () => {
     const wrapper = tagsWrapperRef.value;
-    if (!wrapper) return;
+    const measureContainer = measureContainerRef.value;
+    if (!wrapper || !measureContainer) return;
 
-    const availableWidth = wrapper.clientWidth; // 减去 padding 和箭头预留
-    let totalWidth = 8; // 左右 padding
-    const overflowExtra = 36; // "+n" 预留宽度
+    const tags = allDisplayTags.value;
+    if (tags.length === 0) {
+      visibleCount.value = 0;
+      return;
+    }
 
-    for (let i = 0; i < allDisplayTags.value.length; i++) {
-      // 估算每个 tag 宽度：文字宽度约 12px/字符 + tag 内边距 ~32px + 关闭按钮 ~20px
-      const textLen = allDisplayTags.value[i].name.length;
-      const tagEstimateWidth = textLen * 12 + 52;
-      totalWidth += tagEstimateWidth + 4; // gap
+    const availableWidth = wrapper.clientWidth;
+    const tagEls = measureContainer.querySelectorAll<HTMLElement>('.selected-tag');
+    if (tagEls.length !== tags.length) return;
 
-      if (totalWidth > availableWidth - overflowExtra) {
-        // 至少显示 1 个
+    const gap = 4;
+    let totalWidth = 0;
+
+    for (let i = 0; i < tagEls.length; i++) {
+      totalWidth += tagEls[i].offsetWidth + (i > 0 ? gap : 0);
+
+      const remaining = tagEls.length - i - 1;
+      const overflowWidth = remaining > 0 ? measureOverflowWidth(remaining) : 0;
+
+      if (totalWidth + overflowWidth > availableWidth) {
         visibleCount.value = Math.max(1, i);
         return;
       }
     }
 
-    visibleCount.value = allDisplayTags.value.length;
+    visibleCount.value = tags.length;
   };
 
   // 监听变化重新计算和检测
   watch([allDisplayTags, () => popoverVisible.value], () => {
     nextTick(() => {
-      calcVisibleCount();
-      checkLabelOverflow();
+      nextTick(() => {
+        calcVisibleCount();
+        checkLabelOverflow();
+      });
     });
   });
 
@@ -768,10 +813,13 @@
     }
   });
 
+  let tagsResizeObserver: ResizeObserver | null = null;
+
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside, true);
     window.removeEventListener('scroll', handleScrollOrResize, true);
     window.removeEventListener('resize', handleScrollOrResize);
+    tagsResizeObserver?.disconnect();
   });
 
   watch(() => props.formData.visibility_type, (type) => {
@@ -789,6 +837,15 @@
     window.addEventListener('resize', handleScrollOrResize);
     loadSceneList();
     loadSystemList();
+    nextTick(() => {
+      calcVisibleCount();
+      if (tagsWrapperRef.value) {
+        tagsResizeObserver = new ResizeObserver(() => {
+          calcVisibleCount();
+        });
+        tagsResizeObserver.observe(tagsWrapperRef.value);
+      }
+    });
   });
 </script>
 
@@ -825,6 +882,7 @@
     flex-wrap: nowrap;
     gap: 4px;
     align-items: center;
+    min-width: 0;
     overflow: hidden;
   }
 
@@ -866,6 +924,20 @@
     &.is-open {
       transform: rotate(180deg);
     }
+  }
+</style>
+
+<style lang="postcss">
+  .visible-range-tag-measure {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+    display: flex;
+    white-space: nowrap;
+    pointer-events: none;
+    visibility: hidden;
+    gap: 4px;
+    align-items: center;
   }
 </style>
 
