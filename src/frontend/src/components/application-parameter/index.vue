@@ -53,10 +53,8 @@
       class="field-insert-wrapper"
       :class="{
         'is-textarea': config.custom_type === 'textarea',
-        'is-textarea-multiline': isTextareaMultiline,
         'has-suffix': canInsertField,
-      }"
-      @mouseenter="checkTextareaOverflow">
+      }">
       <div class="field-insert-wrapper__main">
         <bk-date-picker
           v-if="config.custom_type === 'datetime'"
@@ -71,101 +69,107 @@
           ref="textareaInputRef"
           v-model="unifiedInputValue"
           class="field-insert-wrapper__control"
+          :class="{ 'auto-grow-textarea-input': config.custom_type === 'textarea' }"
           clearable
           :placeholder="canInsertField ? t('请输入或选择字段插入') : t('请输入')"
           :resize="false"
           :rows="config.custom_type === 'textarea' ? 1 : undefined"
-          show-overflow-tooltips
-          :type="config.custom_type === 'textarea' ? 'textarea' : 'text'" />
+          :show-overflow-tooltips="config.custom_type !== 'textarea'"
+          :type="config.custom_type === 'textarea' ? 'textarea' : 'text'"
+          @change="handleTextareaChange"
+          @input="adjustTextareaHeight" />
       </div>
-      <bk-popover
+      <div
         v-if="canInsertField"
-        :is-show="isFieldInsertOpen"
-        placement="bottom-end"
-        theme="light"
-        trigger="manual"
-        width="320"
-        @after-hidden="handleFieldInsertHidden">
-        <div
-          ref="fieldInsertSuffixRef"
-          v-bk-tooltips="t('点击插入字段值')"
-          class="field-insert-wrapper__suffix"
-          :class="{ 'is-active': isFieldInsertOpen }"
-          @click.stop="toggleFieldInsert">
-          <img
-            alt=""
-            class="field-insert-wrapper__icon"
-            :src="jumpIntoIcon">
-        </div>
-        <template #content>
+        class="field-insert-wrapper__suffix-host">
+        <bk-popover
+          :is-show="isFieldInsertOpen"
+          placement="bottom-end"
+          theme="light"
+          trigger="manual"
+          width="320"
+          @after-hidden="handleFieldInsertHidden">
           <div
-            class="field-insert-panel"
-            @click.stop
-            @mousedown.stop>
-            <div class="field-insert-panel__search">
-              <audit-icon
-                class="field-insert-panel__search-icon"
-                type="search1" />
-              <input
-                v-model="fieldSearchKeyword"
-                class="field-insert-panel__search-input"
-                :placeholder="t('搜索')"
-                type="text">
-            </div>
-            <div class="field-insert-panel__list">
-              <div
-                v-if="filteredRiskFields.length"
-                class="field-insert-group">
-                <div class="field-insert-group__title">
-                  {{ t('风险字段') }} ({{ filteredRiskFields.length }})
-                </div>
-                <div
-                  v-for="item in filteredRiskFields"
-                  :key="item.id"
-                  v-bk-tooltips="getEmptyFieldTooltip(getCurrentValue(item.id))"
-                  class="field-insert-item"
-                  :class="{ 'is-disabled': isFieldValueEmpty(getCurrentValue(item.id)) }"
-                  @click="handleInsertFieldItem(getCurrentValue(item.id))">
-                  <span class="field-insert-item__name">{{ item.name }}</span>
-                  <span class="field-insert-item__sep"> : </span>
-                  <span
-                    v-bk-tooltips="getFieldValueTooltip(getCurrentValue(item.id))"
-                    class="field-insert-item__value">
-                    {{ formatFieldDisplayValue(getCurrentValue(item.id)) }}
-                  </span>
-                </div>
-              </div>
-              <div
-                v-if="filteredEventFields.length"
-                class="field-insert-group">
-                <div class="field-insert-group__title">
-                  {{ t('事件字段') }} ({{ filteredEventFields.length }})
-                </div>
-                <div
-                  v-for="(item, index) in filteredEventFields"
-                  :key="`${item.lable}-${index}`"
-                  v-bk-tooltips="getEmptyFieldTooltip(item.value)"
-                  class="field-insert-item"
-                  :class="{ 'is-disabled': isFieldValueEmpty(item.value) }"
-                  @click="handleInsertFieldItem(item.value)">
-                  <span class="field-insert-item__name">{{ item.lable }}</span>
-                  <span class="field-insert-item__sep"> : </span>
-                  <span
-                    v-bk-tooltips="getFieldValueTooltip(item.value)"
-                    class="field-insert-item__value">
-                    {{ formatFieldDisplayValue(item.value) }}
-                  </span>
-                </div>
-              </div>
-              <div
-                v-if="!filteredRiskFields.length && !filteredEventFields.length"
-                class="field-insert-panel__empty">
-                {{ t('暂无数据') }}
-              </div>
-            </div>
+            ref="fieldInsertSuffixRef"
+            v-bk-tooltips="t('点击插入字段值')"
+            class="field-insert-wrapper__suffix"
+            :class="{ 'is-active': isFieldInsertOpen }"
+            @click.stop="toggleFieldInsert">
+            <img
+              alt=""
+              class="field-insert-wrapper__icon"
+              :src="jumpIntoIcon">
           </div>
-        </template>
-      </bk-popover>
+          <template #content>
+            <div
+              class="field-insert-panel"
+              @click.stop
+              @mousedown.stop>
+              <div class="field-insert-panel__search">
+                <audit-icon
+                  class="field-insert-panel__search-icon"
+                  type="search1" />
+                <input
+                  v-model="fieldSearchKeyword"
+                  class="field-insert-panel__search-input"
+                  :placeholder="t('搜索')"
+                  type="text">
+              </div>
+              <div class="field-insert-panel__list">
+                <div
+                  v-if="filteredRiskFields.length"
+                  class="field-insert-group">
+                  <div class="field-insert-group__title">
+                    {{ t('风险字段') }} ({{ filteredRiskFields.length }})
+                  </div>
+                  <div
+                    v-for="item in filteredRiskFields"
+                    :key="item.id"
+                    v-bk-tooltips="getEmptyFieldTooltip(getCurrentValue(item.id))"
+                    class="field-insert-item"
+                    :class="{ 'is-disabled': isFieldValueEmpty(getCurrentValue(item.id)) }"
+                    @click="handleInsertFieldItem(getCurrentValue(item.id))">
+                    <span class="field-insert-item__name">{{ item.name }}</span>
+                    <span class="field-insert-item__sep"> : </span>
+                    <span
+                      v-bk-tooltips="getFieldValueTooltip(getCurrentValue(item.id))"
+                      class="field-insert-item__value">
+                      {{ formatFieldDisplayValue(getCurrentValue(item.id)) }}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  v-if="filteredEventFields.length"
+                  class="field-insert-group">
+                  <div class="field-insert-group__title">
+                    {{ t('事件字段') }} ({{ filteredEventFields.length }})
+                  </div>
+                  <div
+                    v-for="(item, index) in filteredEventFields"
+                    :key="`${item.lable}-${index}`"
+                    v-bk-tooltips="getEmptyFieldTooltip(item.value)"
+                    class="field-insert-item"
+                    :class="{ 'is-disabled': isFieldValueEmpty(item.value) }"
+                    @click="handleInsertFieldItem(item.value)">
+                    <span class="field-insert-item__name">{{ item.lable }}</span>
+                    <span class="field-insert-item__sep"> : </span>
+                    <span
+                      v-bk-tooltips="getFieldValueTooltip(item.value)"
+                      class="field-insert-item__value">
+                      {{ formatFieldDisplayValue(item.value) }}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  v-if="!filteredRiskFields.length && !filteredEventFields.length"
+                  class="field-insert-panel__empty">
+                  {{ t('暂无数据') }}
+                </div>
+              </div>
+            </div>
+          </template>
+        </bk-popover>
+      </div>
     </div>
   </template>
 
@@ -257,19 +261,19 @@
 
         <div
           v-else
-          class="collapsible-textarea"
-          :class="{ 'is-multiline': isTextareaMultiline }"
-          @mouseenter="checkTextareaOverflow">
+          class="auto-grow-textarea">
           <bk-input
             ref="generalTextareaRef"
             v-model="generalValue"
+            class="auto-grow-textarea-input"
             clearable
             :resize="false"
             :rows="config.custom_type === 'textarea' ? 1 : undefined"
             show-overflow-tooltips
             show-word-limit
             :type="config.custom_type === 'textarea' ? 'textarea': 'text'"
-            @change="handlerChange" />
+            @change="handleTextareaChange"
+            @input="adjustTextareaHeight" />
         </div>
       </div>
     </div>
@@ -338,7 +342,9 @@
   let fieldInsertIgnoreCloseBefore = 0;
   const textareaInputRef = ref<{ $el: HTMLElement }>();
   const generalTextareaRef = ref<{ $el: HTMLElement }>();
-  const isTextareaMultiline = ref(false);
+  const TEXTAREA_MIN_HEIGHT = 32;
+  const TEXTAREA_MAX_HEIGHT = 200;
+  const TEXTAREA_CLEAR_PADDING = 30;
   const VALUE_OVERFLOW_LENGTH = 24;
 
   const isTextareaType = computed(() => props.config?.custom_type === 'textarea');
@@ -350,18 +356,57 @@
     return componentRef?.$el?.querySelector('textarea') as HTMLTextAreaElement | null;
   };
 
-  const checkTextareaOverflow = () => {
-    if (!isTextareaType.value) {
-      isTextareaMultiline.value = false;
+  let textareaResizeObserver: ResizeObserver | null = null;
+  let adjustingTextareaHeight = false;
+
+  const adjustTextareaHeight = () => {
+    if (!isTextareaType.value || adjustingTextareaHeight) {
       return;
     }
+    adjustingTextareaHeight = true;
     nextTick(() => {
       const textarea = getTextareaElement();
       if (!textarea) {
-        isTextareaMultiline.value = false;
+        adjustingTextareaHeight = false;
         return;
       }
-      isTextareaMultiline.value = textarea.scrollHeight > textarea.clientHeight + 1;
+      textarea.style.paddingRight = `${TEXTAREA_CLEAR_PADDING}px`;
+      if (!textarea.value) {
+        textarea.style.height = `${TEXTAREA_MIN_HEIGHT}px`;
+        textarea.style.overflowY = 'hidden';
+        adjustingTextareaHeight = false;
+        return;
+      }
+      textarea.style.height = `${TEXTAREA_MIN_HEIGHT}px`;
+      const { scrollHeight } = textarea;
+      const nextHeight = Math.min(
+        Math.max(scrollHeight, TEXTAREA_MIN_HEIGHT),
+        TEXTAREA_MAX_HEIGHT,
+      );
+      textarea.style.height = `${nextHeight}px`;
+      textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+      adjustingTextareaHeight = false;
+    });
+  };
+
+  const setupTextareaResizeObserver = () => {
+    textareaResizeObserver?.disconnect();
+    textareaResizeObserver = null;
+
+    if (!isTextareaType.value) {
+      return;
+    }
+
+    nextTick(() => {
+      const textarea = getTextareaElement();
+      if (!textarea) {
+        return;
+      }
+      textareaResizeObserver = new ResizeObserver(() => {
+        adjustTextareaHeight();
+      });
+      textareaResizeObserver.observe(textarea);
+      adjustTextareaHeight();
     });
   };
 
@@ -579,6 +624,8 @@
 
   onBeforeUnmount(() => {
     unbindFieldInsertDocumentMousedown();
+    textareaResizeObserver?.disconnect();
+    textareaResizeObserver = null;
   });
 
   const handleFieldInsertHidden = () => {
@@ -593,6 +640,7 @@
       value: display === '--' ? '' : display,
     };
     handleFieldInsertHidden();
+    adjustTextareaHeight();
   };
 
   const handleInsertFieldItem = (value: unknown) => {
@@ -607,6 +655,15 @@
       field: '',
       value: val ? String(val) : '',
     };
+  };
+
+  const handleTextareaChange = (val: string) => {
+    if (props.useFieldInsert) {
+      handleChange(val);
+    } else {
+      handlerChange(val);
+    }
+    adjustTextareaHeight();
   };
 
   const handlerSelectChange = (val: string | number) => {
@@ -683,17 +740,26 @@
   watch(() => modelValue.value, (val) => {
     const valueToFormat = val.value || val.field;
     tipText.value = formatTooltipData(props.config.custom_type, valueToFormat);
-    checkTextareaOverflow();
+    adjustTextareaHeight();
   }, {
     deep: true,
   });
 
   watch(() => props.config.custom_type, () => {
-    checkTextareaOverflow();
+    setupTextareaResizeObserver();
   });
 
   onMounted(() => {
-    checkTextareaOverflow();
+    setupTextareaResizeObserver();
+    nextTick(() => {
+      adjustTextareaHeight();
+    });
+  });
+
+  watch(canInsertField, () => {
+    nextTick(() => {
+      adjustTextareaHeight();
+    });
   });
 
   watch(() => props.config.custom_type, () => {
@@ -729,17 +795,18 @@
   align-items: stretch;
 }
 
-.field-insert-wrapper__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.field-insert-wrapper__control {
-  width: 100%;
-}
-
 .field-insert-wrapper.has-suffix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: stretch;
+
   :deep(.field-insert-wrapper__control .bk-input--text) {
+    border-right: none;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  :deep(.field-insert-wrapper__control .bk-textarea textarea) {
     border-right: none;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
@@ -752,77 +819,89 @@
   }
 }
 
-.field-insert-wrapper.is-textarea {
-  align-items: flex-start;
+.field-insert-wrapper.is-textarea.has-suffix {
+  align-items: start;
+}
 
-  .field-insert-wrapper__suffix {
+.field-insert-wrapper__suffix-host {
+  display: flex;
+  width: 32px;
+  height: 100%;
+  min-width: 32px;
+  flex-direction: column;
+  align-self: stretch;
+
+  :deep(> *) {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    flex: 1;
+    flex-direction: column;
+  }
+}
+
+.field-insert-wrapper.is-textarea.has-suffix .field-insert-wrapper__suffix-host {
+  height: 32px;
+  align-self: start;
+
+  :deep(> *) {
     height: 32px;
-  }
-
-  :deep(.bk-textarea textarea) {
-    max-height: 32px;
     min-height: 32px;
-    overflow: hidden;
-    transition: max-height .2s ease;
-    resize: none;
-  }
-
-  &.is-textarea-multiline:hover,
-  &.is-textarea-multiline:focus-within {
-    position: relative;
-    z-index: 5;
-  }
-
-  &.is-textarea-multiline:hover :deep(.bk-textarea textarea),
-  &.is-textarea-multiline:focus-within :deep(.bk-textarea textarea) {
-    max-height: 200px;
-    overflow-y: auto;
-    background: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+    flex: none;
   }
 }
 
-.collapsible-textarea {
-  width: 100%;
-
-  :deep(.bk-textarea textarea) {
-    max-height: 32px;
-    min-height: 32px;
-    overflow: hidden;
-    transition: max-height .2s ease;
-    resize: none;
-  }
-
-  &.is-multiline:hover,
-  &.is-multiline:focus-within {
-    position: relative;
-    z-index: 5;
-  }
-
-  &.is-multiline:hover :deep(.bk-textarea textarea),
-  &.is-multiline:focus-within :deep(.bk-textarea textarea) {
-    max-height: 200px;
-    overflow-y: auto;
-    background: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
-  }
-}
-
-:deep(.pa-user-selector.bk-user-selector) {
-  width: 100%;
+.field-insert-wrapper__main {
+  flex: 1;
   min-width: 0;
+}
 
-  .custom-tag {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.field-insert-wrapper__control {
+  width: 100%;
+}
+
+.field-insert-wrapper.is-textarea {
+  :deep(.field-insert-wrapper__control.bk-input) {
+    height: auto;
+    min-height: 32px;
   }
 }
 
+.auto-grow-textarea-input,
+.field-insert-wrapper.is-textarea .auto-grow-textarea-input {
+  :deep(.bk-textarea textarea) {
+    height: 32px;
+    max-height: 200px;
+    min-height: 32px;
+    padding-right: 30px !important;
+    overflow: hidden hidden;
+    line-height: 20px;
+    box-sizing: border-box;
+    resize: none;
+  }
+}
+
+.auto-grow-textarea {
+  width: 100%;
+
+  :deep(.auto-grow-textarea-input .bk-textarea textarea) {
+    height: 32px;
+    max-height: 200px;
+    min-height: 32px;
+    padding-right: 30px !important;
+    overflow: hidden hidden;
+    box-sizing: border-box;
+    resize: none;
+  }
+}
+
+.field-insert-wrapper.is-textarea.has-suffix .field-insert-wrapper__suffix,
 .field-insert-wrapper__suffix {
   display: flex;
   width: 32px;
+  height: 32px;
+  min-height: 32px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -837,6 +916,18 @@
   &:hover,
   &.is-active {
     color: #3a84ff;
+  }
+}
+
+:deep(.pa-user-selector.bk-user-selector) {
+  width: 100%;
+  min-width: 0;
+
+  .custom-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
