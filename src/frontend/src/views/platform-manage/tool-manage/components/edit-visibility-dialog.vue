@@ -47,6 +47,7 @@
             v-if="showParamOverrideConfig"
             :form-data="formData"
             :input-variables="formData.config.input_variable"
+            override-select-full-width
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
             @update:param-overrides="handleParamOverridesChange" />
