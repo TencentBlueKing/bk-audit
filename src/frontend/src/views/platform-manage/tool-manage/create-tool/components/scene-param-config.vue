@@ -29,14 +29,18 @@
       </div>
 
       <div class="block-body">
-        <!-- 覆盖参数默认值：独立一行，宽度与参数名列对齐 -->
+        <!-- 覆盖参数默认值：与下方表格同宽 -->
         <div class="override-section">
           <label class="form-label">{{ t('覆盖参数默认值') }}</label>
           <div class="form-control">
             <bk-select
+              :auto-height="false"
+              class="override-param-select"
               :clearable="false"
+              collapse-tags
               :model-value="item.override_keys"
               multiple
+              multiple-mode="tag"
               :placeholder="t('请选择需要覆盖的参数')"
               @change="(val: string[]) => handleOverrideChange(item, val)">
               <bk-option
@@ -295,10 +299,51 @@
       color: #63656e;
     }
 
-    /* 与下方表格参数名列同宽 */
+    /* 与下方表格同宽 */
     .form-control {
-      width: var(--param-data-col-width);
-      max-width: var(--param-data-col-width);
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+
+  :deep(.override-param-select) {
+    width: 100%;
+
+    .bk-select-trigger {
+      width: 100%;
+    }
+
+    /* 边框与背景应在 .bk-select-tag 上，勿重复设置 trigger */
+    .bk-select-tag {
+      width: 100%;
+      min-height: 32px;
+      background-color: #fff;
+      border-color: #c4c6cc;
+      box-sizing: border-box;
+    }
+
+    .bk-select-tag-wrapper {
+      flex-wrap: wrap;
+      gap: 4px;
+      overflow: hidden;
+    }
+
+    .bk-tag {
+      flex-shrink: 0;
+      margin: 0;
+      color: #63656e;
+      background-color: #f0f1f5;
+      border: 1px solid #dcdee5;
+      border-radius: 2px;
+    }
+
+    .bk-select-overflow-tag {
+      flex-shrink: 0;
+      margin: 0;
+      color: #63656e;
+      background-color: #f0f1f5;
+      border: 1px solid #dcdee5;
+      border-radius: 2px;
     }
   }
 

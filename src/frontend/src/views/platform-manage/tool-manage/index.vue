@@ -125,6 +125,8 @@
   <!-- 修改可见范围弹窗 -->
   <edit-visibility-dialog
     v-model:is-show="isEditVisibilityShow"
+    :scene-options="visibilitySceneOptions"
+    :system-options="visibilitySystemOptions"
     :tags-enums="tagsEnums"
     :target="editVisibilityTarget"
     @success="handleVisibilityEditSuccess" />
@@ -698,8 +700,17 @@
     }
 
     if (item.id === 'visibility') {
-      // 仅按展示名称过滤，避免内部 id / system_id 误匹配无关选项
-      searchItem.children = filterVisibilityChildren(keyword);
+      const normalizedKeyword = keyword.trim();
+      const selectedNames = (searchValue.value.find(s => s.id === 'visibility')?.values || [])
+        .map(value => value.name);
+      const isEditingExistingSelection = normalizedKeyword && (
+        selectedNames.includes(normalizedKeyword)
+        || selectedNames.join(',') === normalizedKeyword
+      );
+      // 点击已选标签进入编辑时，组件会将已选展示名回填为 keyword，此时应展示全部选项（与工具类型一致）
+      searchItem.children = (!normalizedKeyword || isEditingExistingSelection)
+        ? buildVisibilityChildren()
+        : filterVisibilityChildren(keyword);
       return searchItem.children;
     }
 
@@ -852,7 +863,6 @@
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar {
     width: 4px;
     appearance: none;
-    appearance: none;
   }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-track {
@@ -893,7 +903,6 @@
     width: 0 !important;
     height: 0 !important;
     background: transparent !important;
-    appearance: none !important;
     appearance: none !important;
   }
 
