@@ -21,6 +21,7 @@ import io
 import json
 import sys
 import types
+import unittest
 from pathlib import Path
 from unittest import mock
 
@@ -1370,6 +1371,66 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
                     "export_format": "markdown",
                 }
             )
+
+    def test_resolve_pdf_resource_handles_windows_drive_backslash(self):
+        """L1: 验证 Windows 盘符路径 (C:\\xxx) 走内置字体判断, 不被 urlparse 误判 scheme='c'"""
+        from urllib.parse import urlparse
+
+        export_resource = self.resource.risk.export_analyse_report
+        windows_path = "C:\\Windows\\Fonts\\arial.ttf"
+
+        # 前置条件: urlparse 确实会把 C:\\xxx 误判为 scheme='c', 这正是要修复的 bug
+        self.assertEqual(urlparse(windows_path).scheme, "c")
+
+        # 验证修复后: 走盘符路径判断逻辑, 不抛 Invalid URL
+        resolved = export_resource._resolve_pdf_resource(windows_path, None)
+        # 返回值要么是路径本身 (如果命中内置字体), 要么是 BLOCKED 占位
+        self.assertIn(
+            resolved,
+            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
+            f"盘符路径应被识别为本地文件, 不应被 urlparse 当作 URL 解析. resolved={resolved!r}",
+        )
+
+    def test_resolve_pdf_resource_handles_windows_drive_forward_slash(self):
+        """L1: 验证 Windows 盘符路径 (D:/xxx) 同样被识别, 不被 urlparse 误判 scheme='d'"""
+        from urllib.parse import urlparse
+
+        export_resource = self.resource.risk.export_analyse_report
+        windows_path = "D:/fonts/simhei.ttf"
+
+        self.assertEqual(urlparse(windows_path).scheme, "d")
+
+        resolved = export_resource._resolve_pdf_resource(windows_path, None)
+        self.assertIn(
+            resolved,
+            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
+        )
+
+    def test_resolve_pdf_resource_linux_absolute_path_blocked(self):
+        """L1: 反例验证 - Linux 绝对路径 /etc/passwd 仍然被拒, 防止正则回退"""
+        callback = self.resource.risk.export_analyse_report._resolve_pdf_resource
+        resolved = callback("/etc/passwd", None)
+        self.assertEqual(resolved, "data:image/gif;base64,R0lGODlhAQABAAAAACw=")
+
+    @unittest.skipUnless(sys.platform == "win32", "仅在 Windows 真实环境验证盘符拦截修复")
+    def test_resolve_pdf_resource_real_windows_path(self):
+        """L2a: 真实 Windows 环境 - 用 os.path.normpath 构造真实盘符路径, 验证不抛 Invalid URL 异常
+
+        修复前: urlparse(r"C:\\xxx") 在 Windows 上同样报错 scheme='c' → Invalid URL
+        修复后: 前置正则拦截, 走内置字体判断逻辑
+        """
+        import os
+
+        export_resource = self.resource.risk.export_analyse_report
+        # Windows 上 normpath(C:/Windows/Fonts) 不会带盘符, 用反斜杠构造真实盘符路径
+        windows_path = os.path.normpath("C:/Windows/Fonts/arial.ttf")
+
+        # 关键: 在 Windows 上真实调用不抛 ValueError: Invalid URL: 'c'
+        resolved = export_resource._resolve_pdf_resource(windows_path, None)
+        self.assertIn(
+            resolved,
+            [windows_path, export_resource._BLOCKED_PDF_RESOURCE_URI],
+        )
 
 
 class TestListAnalyseReportRisk(AnalyseReportTestBase):
