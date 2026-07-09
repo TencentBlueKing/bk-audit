@@ -696,6 +696,8 @@
   }
 
   :deep(.bk-form-content) {
+    max-width: 100%;
+    min-width: 0;
     margin-left: 0 !important;
   }
 }
