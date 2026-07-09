@@ -717,13 +717,13 @@ class TestAIAuditReportAPIGWConfig(TestCase):
     """测试 AI 审计报告 APIGW/MCP 配置"""
 
     def test_audit_report_mcp_uses_report_risk_resource(self):
-        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text()
+        definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text(encoding="utf-8")
 
         self.assertIn("list_analyse_report_risk_apigw", definition)
         self.assertNotIn("list_risk_apigw", definition)
 
     def test_report_risk_apigw_resource_defined(self):
-        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text())
+        resources = yaml.safe_load((BACKEND_DIR / "support-files/apigw/resources.yaml").read_text(encoding="utf-8"))
         resource = resources["paths"]["/analyse_report_apigw/{report_id}/risks/"]["post"]
 
         self.assertEqual(resource["operationId"], "list_analyse_report_risk_apigw")
