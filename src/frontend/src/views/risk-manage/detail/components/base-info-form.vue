@@ -239,7 +239,7 @@
 
   type FieldItem = Props['showFieldNames'][0];
 
-  const isValidFieldItem = (item: FieldItem | null | undefined): item is FieldItem => item != null;
+  const isValidFieldItem = (item: FieldItem | null | undefined): item is FieldItem => item !== null;
 
   const strategyTagMap = ref<Record<string, string>>({});
 
