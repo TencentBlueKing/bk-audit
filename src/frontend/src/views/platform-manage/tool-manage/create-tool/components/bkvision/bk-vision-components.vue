@@ -24,11 +24,11 @@
             content: tooltipsText
           }">{{ config?.display_name }}({{ config?.raw_name }})</span>
         <bk-checkbox
-          v-model="isDefaultValue"
           class="title-right"
           :disabled="disabled"
+          :model-value="config.is_default_value"
           size="small"
-          @change="getDefaultValue">
+          @change="handleDefaultValueToggle">
           {{ t('使用默认值') }}
         </bk-checkbox>
       </div>
@@ -43,7 +43,7 @@
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
           append-to-body
-          :disabled="disabled || isDefaultValue"
+          :disabled="disabled || config.is_default_value"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -56,11 +56,11 @@
           @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
-            :disabled="disabled || isDefaultValue"
+            :disabled="disabled || config.is_default_value"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
-            v-if="showDeleteIcon && !disabled && !isDefaultValue"
+            v-if="showDeleteIcon && !disabled && !config.is_default_value"
             class="delete"
             type="delete-fill"
             @click="initPickerValue" />
@@ -68,14 +68,14 @@
         <bk-input
           v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
-          :disabled="disabled || isDefaultValue"
+          :disabled="disabled || config.is_default_value"
           @change="handleInputChange" />
         <bk-tag-input
           v-else
           v-model="selectorValue"
           allow-create
           collapse-tags
-          :disabled="disabled || isDefaultValue"
+          :disabled="disabled || config.is_default_value"
           has-delete-icon
           :list="[]"
           @change="handleSelectorChange" />
@@ -114,7 +114,6 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const now = new Date();
-  const isDefaultValue = ref(false);
   const dateValue = ref<string | Date>(props.config.default_value instanceof Date ? props.config.default_value : '');
   const pickerValue = ref<Array<string>>(Array.isArray(props.config.default_value) ? props.config.default_value : []);
   const inputVal = ref(typeof props.config.default_value === 'string' ? props.config.default_value : '');
@@ -182,19 +181,19 @@
     selectorValue.value = val;
     emits('change', val);
   };
-  const getDefaultValue = () => {
-    if (isDefaultValue.value) {
+  const handleDefaultValueToggle = (checked: boolean | string | number) => {
+    if (checked === true) {
       InfoBox({
         title: t('提示'),
         closeIcon: false,
         content: t('当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示'),
         onConfirm() {
-          emits('changeIsDefaultValue', isDefaultValue.value);
-        },
-        onCancel() {
+          emits('changeIsDefaultValue', true);
         },
       });
+      return;
     }
+    emits('changeIsDefaultValue', false);
   };
   // 监听 props.config.default_value 的变化
   watch(() => props.config?.default_value, (newValue) => {
@@ -202,12 +201,6 @@
     pickerValue.value = Array.isArray(newValue) ? newValue : [];
     inputVal.value = typeof newValue === 'string' ? newValue : '';
     selectorValue.value = Array.isArray(newValue) ? newValue : [];
-  }, {
-    immediate: true,
-    deep: true,
-  });
-  watch(() => props.config.is_default_value, (newValue) => {
-    isDefaultValue.value = newValue;
   }, {
     immediate: true,
     deep: true,
