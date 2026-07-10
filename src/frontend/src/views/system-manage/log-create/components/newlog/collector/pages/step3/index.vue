@@ -56,6 +56,7 @@
         <bk-button
           class="w88"
           :disabled="!isFinished"
+          :loading="isNextLoading"
           theme="primary"
           @click="handleNext">
           {{ t('下一步') }}
@@ -189,6 +190,8 @@
   // 下发任务是否为空
   const isEmpty = computed(() => collectorTaskStatus.value.task_ready
     && collectorTaskStatus.value.allList.length < 1);
+  // 等待任务状态接口 / 轮询结果时，下一步按钮展示 loading
+  const isNextLoading = computed(() => !isFinished.value && !isEmpty.value);
 
   const {
     getSearchParams,
