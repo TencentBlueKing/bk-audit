@@ -34,7 +34,7 @@
         <div class="field-key">
           <img
             class="field-type-icon"
-            :src="getAssetsFile(`field-type/${fieldItem.field_type}.png`)">
+            :src="getFieldTypeIcon(fieldItem.field_type)">
           <span style="line-height: 20px;">
             {{ fieldItem.field_name }}（{{ fieldItem.description }}）
           </span>
@@ -78,7 +78,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import getAssetsFile from '@utils/getAssetsFile';
+  import getFieldTypeIcon from '@utils/getFieldTypeIcon';
 
   import SelectMapValue from '../select-map-value.vue';
 
