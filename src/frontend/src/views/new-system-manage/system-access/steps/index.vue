@@ -351,7 +351,7 @@
     });
   };
 
-  // 取消 - 从引导页来的返回引导页，其他保持原逻辑
+  // 取消 - 从引导页返回引导页，从列表进入返回列表，其他返回 systemAccess
   const handlerCancel = () => {
     window.changeConfirm = false;
     InfoBox({
@@ -361,15 +361,17 @@
       confirmText: t('确认取消'),
       onConfirm() {
         if (route.query.fromLanding === 'true') {
-          // 从引导页跳转过来的，返回引导页
           router.push({
             name: 'systemLandingPage',
             params: withSidebar.value ? { isShowSideBar: 'true', ...(route.params.id ? { id: route.params.id } : { id: sessionStorage.getItem('systemProjectId') }) } : {
               id: route.params.id || sessionStorage.getItem('systemProjectId'),
             },
           });
+        } else if (route.query.fromList === 'true') {
+          router.push({
+            name: 'systemList',
+          });
         } else {
-          // 其他来源返回 systemAccess 页面
           router.push({
             name: 'systemAccess',
             params: withSidebar.value ? { isShowSideBar: 'true' } : undefined,
