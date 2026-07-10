@@ -433,6 +433,37 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
         }
         self.assertDictEqual(expected, result)
 
+    def test_sql_input_variable_is_show_default(self):
+        """测试 is_show 默认值为 True（用户可见）"""
+        var = SQLDataSearchInputVariable(
+            raw_name="a", display_name="变量A", required=True, field_category=FieldCategory.INPUT, choices=[]
+        )
+        self.assertTrue(var.is_show)
+
+    def test_sql_input_variable_is_show_false(self):
+        """测试 is_show 可设为 False（用户不可见），且不影响执行"""
+        config = SQLDataSearchConfig(
+            sql="SELECT a FROM table WHERE a = :a",
+            referenced_tables=[{"table_name": "table"}],
+            input_variable=[
+                SQLDataSearchInputVariable(
+                    raw_name="a",
+                    display_name="隐藏变量",
+                    required=True,
+                    field_category=FieldCategory.INPUT,
+                    choices=[],
+                    is_show=False,
+                )
+            ],
+            output_fields=[],
+        )
+        self.assertFalse(config.input_variable[0].is_show)
+        # is_show=False 不影响执行，传入变量值仍能正常渲染
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
+        params = DataSearchToolExecuteParams(tool_variables=[{"raw_name": "a", "value": "test"}], page=1, page_size=10)
+        result = executor.execute(params).model_dump()
+        self.assertIn("'test'", result["query_sql"])
+
 
 class TestBkVisionExecutor(DjangoTestCase):
     def setUp(self):
