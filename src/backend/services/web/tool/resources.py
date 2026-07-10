@@ -1078,6 +1078,10 @@ class ExecuteTool(ToolBase):
             input_var_config = input_var_config_map.get(raw_name, {})
             # 仅校验 is_show=False 的参数
             if not input_var_config.get("is_show", True):
+                # 豁免时间范围选择器的权限校验（支持相对时间表达式）
+                if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
+                    continue
+
                 # 获取工具的原始默认值
                 original_default = input_var_config.get("default_value")
 
