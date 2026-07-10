@@ -241,6 +241,7 @@
   };
 
   const handleLastStep = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'logCreate',
       params: {
@@ -249,8 +250,13 @@
       query: {
         type: 'logCreate',
       },
-    });
-    setLogCreateComponentType?.('logCreate');
+    })
+      .then(() => {
+        setLogCreateComponentType?.('logCreate');
+      })
+      .catch(() => {
+        window.changeConfirm = true;
+      });
   };
 
   const handleCancel = () => {
