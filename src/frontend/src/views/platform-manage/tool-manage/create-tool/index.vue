@@ -16,7 +16,9 @@
 -->
 <template>
   <!-- 步进条 -->
-  <teleport to="#teleport-nav-step">
+  <teleport
+    v-if="isHeaderSlotActive"
+    to="#teleport-nav-step">
     <bk-steps
       v-model:cur-step="currentStep"
       class="tool-create-step"
@@ -206,6 +208,7 @@
   } from './submit-payload';
 
   import useMessage from '@/hooks/use-message';
+  import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
 
   const ToolTypeComMap: Record<string, any> = {
@@ -217,6 +220,7 @@
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
+  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
 
   const isEditMode = route.name === 'platformToolEdit';
   const backRouteName = 'platformToolConfig';
@@ -772,6 +776,15 @@
       });
     }
   });
+
+  watch(
+    () => route.fullPath,
+    () => {
+      if (isPageActive.value) {
+        claimHeaderSlot();
+      }
+    },
+  );
 
   useRouterBack(() => {
     router.push({
