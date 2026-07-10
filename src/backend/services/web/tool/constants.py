@@ -161,6 +161,7 @@ class SQLDataSearchInputVariable(DataSearchBaseField):
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
     ] = PydanticField(None, description="字段默认值")
+    is_show: bool = PydanticField(True, title=gettext_lazy("用户是否可见"))
 
     @field_validator('choices')
     @classmethod
