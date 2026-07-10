@@ -21,15 +21,7 @@
     name="systemList">
     <div class="system-list-page">
       <div class="mb16 action-header">
-        <bk-button
-          class="mr8"
-          theme="primary"
-          @click="handleCreate">
-          <audit-icon
-            style="margin-right: 8px;font-size: 14px;"
-            type="add" />
-          {{ t('接入新系统') }}
-        </bk-button>
+        <system-access-dropdown />
         <bk-input
           v-model="searckKey"
           :placeholder="t('请输入 系统名称、系统ID 进行搜索')"
@@ -66,6 +58,8 @@
   import type SyetemModel from '@model/meta/system';
 
   import EditTag from '@components/edit-box/tag.vue';
+
+  import SystemAccessDropdown from './components/system-access-dropdown.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -453,15 +447,6 @@
     const value = checkedObj.checked.join(',');
     listRef.value.fetchData({
       [checkField]: value,
-    });
-  };
-
-  const handleCreate = () => {
-    router.push({
-      name: 'systemAccess',
-      params: {
-        isShowSideBar: 'true',
-      },
     });
   };
 
