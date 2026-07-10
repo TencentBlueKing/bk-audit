@@ -105,11 +105,12 @@
                     content: variables.display_name
                   }"> {{ variables.raw_name }}</span>
                 <bk-checkbox
-                  v-model="variables.is_default_value"
                   class="title-right"
                   :disabled="isUpdateSubmit"
+                  :model-value="variables.is_default_value"
                   size="small"
-                  @change="getVariablesDefaultValue(variables.is_default_value, variableIndex)">
+                  @change="(checked: boolean | string | number) =>
+                    handleVariableDefaultValueToggle(checked === true, variableIndex)">
                   {{ t('使用默认值') }}
                 </bk-checkbox>
               </div>
@@ -224,49 +225,60 @@
 
   // bk_vision 组件值改动
   const handleVisionChange = (value: any, rawName: string) => {
-    inputVariable.value = inputVariable.value.map((item: any) => {
-      const reItem = item;
+    comList.value = comList.value.map((item: any) => {
       if (item.raw_name === rawName) {
-        reItem.default_value = value;
+        return {
+          ...item,
+          default_value: value,
+        };
       }
-      return reItem;
+      return item;
     });
   };
 
   // bk_vision 组件是否使用默认值
-  const handleIsDefaultValue = (value: any, description: string) => {
-    if (!value) {
-      return;
-    }
-    nextTick(() => {
-      comList.value = comList.value.map((item: any) => {
-        const reItem = item;
-        if (item.description === description) {
-          const findCom = bkVisionComList.value.find((item: any) => item.description === description);
-          return {
-            ...reItem,
-            default_value: findCom?.default_value,
-            is_default_value: value,
-          };
-        }
-        return reItem;
-      });
+  const handleIsDefaultValue = (value: boolean, description: string) => {
+    comList.value = comList.value.map((item: any) => {
+      if (item.description !== description) {
+        return item;
+      }
+      if (value) {
+        const findCom = bkVisionComList.value.find((com: any) => com.description === description);
+        return {
+          ...item,
+          is_default_value: true,
+          default_value: findCom?.default_value ?? item.default_value,
+        };
+      }
+      return {
+        ...item,
+        is_default_value: false,
+      };
     });
   };
-  // 获取变量默认值
-  const getVariablesDefaultValue = (isDefault: boolean | undefined, index: number) => {
-    if (isDefault) {
+  // 变量是否使用默认值
+  const handleVariableDefaultValueToggle = (checked: boolean, index: number) => {
+    if (checked) {
       InfoBox({
         title: t('提示'),
         closeIcon: false,
         content: t('当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示'),
         onConfirm() {
-          toolInfoVariable.value[index].default_value = toolInfoVariable.value[index].raw_default_value || '';
-        },
-        onCancel() {
+          const variable = toolInfoVariable.value[index];
+          toolInfoVariable.value[index] = {
+            ...variable,
+            is_default_value: true,
+            default_value: variable.raw_default_value || '',
+          };
         },
       });
+      return;
     }
+    const variable = toolInfoVariable.value[index];
+    toolInfoVariable.value[index] = {
+      ...variable,
+      is_default_value: false,
+    };
   };
 
   // 更新变量
@@ -289,7 +301,12 @@
       const index = updated.findIndex(item => item.raw_name === itemToUpdate.raw_name
         && item.description === itemToUpdate.description);
       if (index !== -1) {
-        updated[index] = { ...updated[index], ...itemToUpdate };
+        const { is_default_value: preservedIsDefaultValue } = updated[index];
+        updated[index] = {
+          ...updated[index],
+          ...itemToUpdate,
+          is_default_value: preservedIsDefaultValue,
+        };
       }
     });
 
@@ -298,9 +315,10 @@
       updated = updated.filter(item => !(item.raw_name === itemToDelete.raw_name
         && item.description === itemToDelete.description));
     });
-    // 删除每个数组项的 type 属性
+    // 删除每个数组项的 type、old_default_value 属性
     updated = updated.map((item: any) => {
       const { type, ...rest } = item;
+      delete rest.old_default_value;
       if (type === 'add') {
         addClass.value.push(`${item.raw_name}-${item.display_name}-${item.description}`);
       }
