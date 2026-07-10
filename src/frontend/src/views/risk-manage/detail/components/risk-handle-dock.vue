@@ -238,9 +238,18 @@
   const updateContentPadding = (height: number) => {
     const scrollContent = getScrollContent();
 
-    if (scrollContent) {
-      scrollContent.style.paddingBottom = `${height}px`;
+    if (!scrollContent) {
+      return;
     }
+
+    const applyPadding = () => {
+      const { scrollHeight, clientHeight } = scrollContent;
+      // 内容未溢出时不增加底部内边距，避免页面初始出现多余滚动条
+      scrollContent.style.paddingBottom = scrollHeight > clientHeight ? `${height}px` : '';
+    };
+
+    applyPadding();
+    requestAnimationFrame(applyPadding);
   };
 
 
@@ -341,6 +350,7 @@
         panelHeight.value = maxHeight;
       }
     }
+    updateContentPadding(isExpanded.value ? panelHeight.value : COLLAPSED_HEIGHT);
   }, 50);
 
 
