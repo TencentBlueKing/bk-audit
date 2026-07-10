@@ -180,7 +180,8 @@
   const apiBaseUrl = computed(() => {
     const config = getConfig();
     if (config?.tenant_config?.BK_USER_WEB_APIGW_URL) {
-      return config?.tenant_config?.BK_USER_WEB_APIGW_URL;
+      // return config?.tenant_config?.BK_USER_WEB_APIGW_URL;
+      return 'api/bk-user-web/prod';
     }
     return '';
   });
