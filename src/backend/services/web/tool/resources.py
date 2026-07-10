@@ -417,6 +417,40 @@ class ListTool(ToolBase):
         queryset = Tool.all_latest_tools().annotate(favorite=Exists(favorite_subquery))
         queryset = self.filter_queryset_by_scope(queryset, validated_request_data, current_user)
 
+        v_visibility_type = validated_request_data.get("visibility_type")
+        v_scene_ids = validated_request_data.get("scene_ids") or []
+        v_system_ids = validated_request_data.get("system_ids") or []
+        if v_visibility_type or v_scene_ids or v_system_ids:
+            v_binding_type = BindingType.PLATFORM_BINDING
+            matched_uids = None
+
+            # 1) 按 visibility_type 匹配（全部场景或系统没有具体场景/系统 ID）
+            if v_visibility_type:
+                binding_qs = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    visibility_type=v_visibility_type,
+                )
+                if v_binding_type:
+                    binding_qs = binding_qs.filter(binding_type=v_binding_type)
+                matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
+
+            # 2) 按具体 scene/system ID 可见范围
+            if v_scene_ids or v_system_ids:
+                scoped_uids = {
+                    str(uid)
+                    for uid in CompositeScopeFilter.filter_queryset(
+                        queryset=queryset,
+                        binding_type=v_binding_type,
+                        scene_id=v_scene_ids,
+                        system_id=v_system_ids,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        pk_field="uid",
+                    ).values_list("uid", flat=True)
+                }
+                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+
+            queryset = queryset.filter(uid__in=matched_uids or [])
+
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
         if any(
             int(tag_id) in tags
@@ -1119,29 +1153,29 @@ class ListToolAll(ToolBase):
         if status:
             tool_qs = tool_qs.filter(status=status)
 
-        name = validated_request_data.get("name", [])
-        description = validated_request_data.get("description", [])
-        tool_type = validated_request_data.get("tool_type", [])
-        created_by = validated_request_data.get("created_by", [])
-        updated_by = validated_request_data.get("updated_by", [])
+        name_list = validated_request_data.get("name", [])
+        description_list = validated_request_data.get("description", [])
+        tool_type_list = validated_request_data.get("tool_type", [])
+        created_by_list = validated_request_data.get("created_by", [])
+        updated_by_list = validated_request_data.get("updated_by", [])
 
-        def apply_multi_value_filter(field_name, values, lookup='icontains'):
+        def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
             q_filter = Q()
             for value in values:
                 if value:
                     q_filter |= Q(**{f"{field_name}__{lookup}": value})
-            return tool_qs.filter(q_filter)
+            return qs.filter(q_filter) if q_filter else qs
 
-        if name:
-            tool_qs = apply_multi_value_filter("name", name)
-        if description:
-            tool_qs = apply_multi_value_filter("description", description)
-        if tool_type:
-            tool_qs = tool_qs.filter(tool_type__in=tool_type)
-        if created_by:
-            tool_qs = tool_qs.filter(created_by__in=created_by)
-        if updated_by:
-            tool_qs = tool_qs.filter(updated_by__in=updated_by)
+        if name_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "name", name_list)
+        if description_list:
+            tool_qs = apply_multi_value_filter(tool_qs, "description", description_list)
+        if tool_type_list:
+            tool_qs = tool_qs.filter(tool_type__in=tool_type_list)
+        if created_by_list:
+            tool_qs = tool_qs.filter(created_by__in=created_by_list)
+        if updated_by_list:
+            tool_qs = tool_qs.filter(updated_by__in=updated_by_list)
 
         tools = list(tool_qs)
 
