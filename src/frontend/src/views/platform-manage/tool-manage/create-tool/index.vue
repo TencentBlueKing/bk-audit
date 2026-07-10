@@ -184,6 +184,7 @@
 
   import ConfigModel from '@model/root/config';
   import ToolDetailModel from '@model/tool/tool-detail';
+  import type { CreatePlatformToolPayload, UpdatePlatformToolPayload } from '@model/tool/tool-manage-types';
 
   import useRouterBack from '@hooks/use-router-back';
 
@@ -567,7 +568,6 @@
       }
     }
 
-    const service = isEditMode ? ToolManageService.updatePlatformTool : ToolManageService.createPlatformTool;
     const submitData = buildPlatformToolSubmitPayload(data, isEditMode);
 
     if (submitData.tags) {
@@ -581,7 +581,10 @@
     }
 
     isCreating.value = true;
-    service(submitData)
+    const submitRequest = isEditMode
+      ? ToolManageService.updatePlatformTool(submitData as UpdatePlatformToolPayload)
+      : ToolManageService.createPlatformTool(submitData as CreatePlatformToolPayload);
+    submitRequest
       .then((res: any) => {
         isFailed.value = false;
         // 新建/编辑成功后不再由前端变更状态，状态以后端默认返回为准

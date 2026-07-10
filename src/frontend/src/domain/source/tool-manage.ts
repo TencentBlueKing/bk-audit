@@ -17,6 +17,16 @@
 import type ParseSqlModel from '@model/tool/parse-sql';
 import type ToolDetailModel from '@model/tool/tool-detail';
 import type ToolInfoModel from '@model/tool/tool-info';
+import type {
+  CreatePlatformToolPayload,
+  EditModelParseSqlParams,
+  ParseSqlParams,
+  SceneToolWritePayload,
+  ToolDebugPayload,
+  ToolExecutePayload,
+  UpdatePlatformToolPayload,
+  UpdateSceneToolPayload,
+} from '@model/tool/tool-manage-types';
 
 import Request from '@utils/request';
 import { processedParams } from '@utils/request/lib/utils';
@@ -64,7 +74,7 @@ class ToolManage extends ModuleBase {
     }>>(`${this.path}/tool/tags/${query}`);
   }
   // 创建场景级工具
-  createSceneTool(params: Record<string, any>) {
+  createSceneTool(params: SceneToolWritePayload) {
     const sceneId = getSceneSystemParams().scope_id;
     return Request.post(`${this.path}/tool/scene/?scene_id=${sceneId}`, {
       params: {
@@ -74,13 +84,13 @@ class ToolManage extends ModuleBase {
     });
   }
   // 解析sql
-  parseSql(params: Record<string, any>) {
+  parseSql(params: ParseSqlParams) {
     return Request.post<ParseSqlModel>(`${this.path}/tool/sql_analyse/`, {
       params,
     });
   }
   // 编辑模式解析sql
-  editModelParseSql(params: Record<string, any>) {
+  editModelParseSql(params: EditModelParseSqlParams) {
     return Request.post<ParseSqlModel>(`${this.path}/tool/${params.uid}/sql_analyse_with_tool/`, {
       params,
     });
@@ -98,7 +108,7 @@ class ToolManage extends ModuleBase {
     return Request.get<ToolDetailModel>(`${this.path}/tool/${uid}/${query}`);
   }
   // 编辑工具
-  updateSceneTool(params: Record<string, any>) {
+  updateSceneTool(params: UpdateSceneToolPayload) {
     const sceneId = getSceneSystemParams().scope_id;
     return Request.put(`${this.path}/tool/scene/${params.uid}/?scene_id=${sceneId}`, {
       params: {
@@ -118,18 +128,11 @@ class ToolManage extends ModuleBase {
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
   // 工具执行
-  getToolsExecute(params: {
-    uid: string,
-    params: Record<string, any>,
-  }) {
+  getToolsExecute(params: ToolExecutePayload) {
     return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
   }
   // 工具调试
-  getToolsDebug(params: {
-    tool_type: string,
-    config: Record<string, any>,
-    params: Record<string, any>,
-  }) {
+  getToolsDebug(params: ToolDebugPayload) {
     return Request.post(`${this.path}/tool/tool_execute_debug/`, { params });
   }
   // 删除场景级工具
@@ -152,7 +155,7 @@ class ToolManage extends ModuleBase {
     });
   }
   // 编辑平台级工具
-  updatePlatformTool(params: Record<string, any>) {
+  updatePlatformTool(params: UpdatePlatformToolPayload) {
     return Request.put(`${this.path}/tool/platform/${params.uid}/`, {
       params: {
         ...params,
@@ -160,7 +163,7 @@ class ToolManage extends ModuleBase {
     });
   }
   // 创建平台级工具
-  createPlatformTool(params: Record<string, any>) {
+  createPlatformTool(params: CreatePlatformToolPayload) {
     return Request.post(`${this.path}/tool/platform/`, {
       params,
     });
