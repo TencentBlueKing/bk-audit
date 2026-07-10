@@ -17,6 +17,7 @@
 <template>
   <div
     class="detail-base-info"
+    :class="{ 'has-expand-btn': priorityFieldNames.length && normalFieldNames.length }"
     :style="borderStyle">
     <div class="title">
       <template v-if="isEditingTitle">
@@ -172,6 +173,10 @@
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
 
+  &.has-expand-btn {
+    margin-bottom: 12px;
+  }
+
   .title {
     margin-bottom: 10px;
     font-size: 14px;
@@ -197,6 +202,7 @@
     position: absolute;
     right: calc(50% - 52px);
     bottom: -11px;
+    z-index: 2;
 
     .show-more-btn {
       display: inline-flex;
