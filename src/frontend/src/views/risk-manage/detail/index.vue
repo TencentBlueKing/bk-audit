@@ -37,22 +37,20 @@
         <bk-tab
           v-else
           v-model:active="active"
-          style="margin-top: 16px;"
+          class="risk-detail-tab"
           type="card-grid">
           <bk-tab-panel
             v-for="item in panels"
             :key="item.name"
             :label="item.label"
             :name="item.name">
-            <scroll-faker>
-              <component
-                :is="comMap[item.name]"
-                ref="renderComRef"
-                :data="detailData"
-                :strategy-list="strategyList"
-                @get-event-data="handleGetEventData"
-                @updated-data="handleUpdatedData" />
-            </scroll-faker>
+            <component
+              :is="comMap[item.name]"
+              ref="renderComRef"
+              :data="detailData"
+              :strategy-list="strategyList"
+              @get-event-data="handleGetEventData"
+              @updated-data="handleUpdatedData" />
           </bk-tab-panel>
         </bk-tab>
       </div>
@@ -365,6 +363,17 @@
   .left {
     width: 100%;
     padding-right: 0;
+
+    .risk-detail-tab {
+      margin-top: 16px;
+      overflow: visible;
+
+      :deep(.bk-tab-content) {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+      }
+    }
 
     .link-event-wrap {
       --link-event-wrap-padding-bottom: 10px;
