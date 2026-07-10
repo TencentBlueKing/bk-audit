@@ -51,12 +51,13 @@ class BaseVariableParser(abc.ABC):
         格式化时间范围选择器
         """
         if not isinstance(value, list) or len(value) != 2:
-            raise InvalidVariableStructureError(var_type=self.field_type, expected_structure="一个包含2个元素的列表", value=value)
-        start_time = self._format_time_select(value[0])
-        end_time = self._format_time_select(value[1])
+            raise InvalidVariableStructureError(
+                var_type=self.field_type, expected_structure="一个包含 2 个元素的列表", value=value
+            )
+        # 豁免时间验证，直接返回原值（支持 "now-24h", "now" 等相对时间表达式）
         return RangeVariableData(
-            start=start_time,
-            end=end_time,
+            start=value[0],
+            end=value[1],
         )
 
     def _format_time_select(self, value: Any) -> int:
