@@ -62,8 +62,8 @@ from apps.meta.utils.fields import (
 from apps.meta.utils.format import preprocess_data
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.service import PermissionService
 from core.exceptions import PermissionException
 from core.observability import submit_with_observation_context
 from core.utils.data import choices_to_dict, compare_dict_specific_keys
@@ -433,7 +433,7 @@ class CreateStrategy(StrategyV2Base):
         username = get_request_username()
         if username:
             resource_instance = ResourceEnum.STRATEGY.create_instance(strategy.strategy_id)
-            Permission(username).grant_creator_action(resource_instance)
+            PermissionService(username=username).grant_creator_action(resource_instance)
         # audit
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         # response
@@ -1594,7 +1594,7 @@ class CreateLinkTable(LinkTableBase):
         username = get_request_username()
         if username:
             resource_instance = ResourceEnum.LINK_TABLE.create_instance(link_table.uid)
-            Permission(username).grant_creator_action(resource_instance)
+            PermissionService(username=username).grant_creator_action(resource_instance)
 
     def _compensate_create_failure(self, link_table):
         with transaction.atomic():

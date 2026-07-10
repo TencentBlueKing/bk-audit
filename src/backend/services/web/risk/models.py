@@ -38,8 +38,8 @@ from pydantic import Field as PydanticField
 from pydantic import ValidationError as PydanticValidationError
 
 from apps.meta.models import Tag
-from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
-from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.actions import ActionEnum, ActionMeta
+from apps.permission.handlers.service import PermissionService
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from core.sql.constants import FieldType
 from core.sql.model import WhereCondition
@@ -55,7 +55,6 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
@@ -227,12 +226,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         IAM 策略权限：仅返回用户在权限中心申请过的风险
         """
 
-        permission = Permission(username or get_request_username())
-        request = permission.make_request(action=get_action_by_id(action), resources=[])
-        policies = permission.iam_client._do_policy_query(request)
-        if policies:
-            return RiskPathEqDjangoQuerySetConverter().convert(policies)
-        return Q(pk__in=[])
+        return PermissionService(username=username or get_request_username()).get_risk_filter(action)
 
     @classmethod
     def local_risk_filter(

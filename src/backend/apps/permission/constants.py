@@ -19,6 +19,8 @@ to the current version of the project delivered to anyone in the future.
 from enum import Enum
 
 from django.conf import settings
+from django.db.models import TextChoices
+from django.utils.translation import gettext_lazy
 
 PERMISSION_CACHE_EXPIRE = 5 * 60
 FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
@@ -28,3 +30,8 @@ class IAMSystems(Enum):
     BK_AUDIT = settings.BK_IAM_SYSTEM_ID
     BK_LOG = "bk_log"
     BK_VISION = "bkvision"
+
+
+class IAMV4Role(TextChoices):
+    SCENE_ADMIN = "scene_admin", gettext_lazy("场景管理员")
+    SCENE_USER = "scene_user", gettext_lazy("场景使用者")
