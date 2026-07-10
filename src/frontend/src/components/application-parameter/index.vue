@@ -820,7 +820,14 @@
 }
 
 .field-insert-wrapper.is-textarea.has-suffix {
-  align-items: start;
+  align-items: stretch;
+
+  .field-insert-wrapper__suffix {
+    height: 100%;
+    max-height: 34px;
+    min-height: 34px;
+    margin-top: 1px;
+  }
 }
 
 .field-insert-wrapper__suffix-host {
@@ -838,17 +845,6 @@
     min-height: 100%;
     flex: 1;
     flex-direction: column;
-  }
-}
-
-.field-insert-wrapper.is-textarea.has-suffix .field-insert-wrapper__suffix-host {
-  height: 32px;
-  align-self: start;
-
-  :deep(> *) {
-    height: 32px;
-    min-height: 32px;
-    flex: none;
   }
 }
 
@@ -896,11 +892,10 @@
   }
 }
 
-.field-insert-wrapper.is-textarea.has-suffix .field-insert-wrapper__suffix,
 .field-insert-wrapper__suffix {
   display: flex;
   width: 32px;
-  height: 32px;
+  height: 100%;
   min-height: 32px;
   flex-shrink: 0;
   align-items: center;
