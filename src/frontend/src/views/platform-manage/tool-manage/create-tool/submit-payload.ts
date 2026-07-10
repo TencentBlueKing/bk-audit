@@ -3,6 +3,8 @@
  */
 import _ from 'lodash';
 
+import type { PlatformToolSubmitPayload } from '@model/tool/tool-manage-types';
+
 import type { DefaultValueOverrides, FormData, SceneParamOverride, VisibilityScopePayload } from './types';
 
 /** 将表单中的场景/系统参数覆盖配置转为后端 config.default_value_overrides 结构 */
@@ -361,7 +363,7 @@ export function applyVisibilityToFormData(visibility?: VisibilityLike) {
 }
 
 /** 构建平台工具创建/更新请求体 */
-export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: boolean) {
+export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: boolean): PlatformToolSubmitPayload {
   const data = _.cloneDeep(formData) as Record<string, any>;
   const hasVisibilitySelection = shouldSubmitVisibilityPayload(data as FormData);
   const defaultValueOverrides = hasVisibilitySelection
@@ -398,5 +400,5 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
   delete data.scope_id;
   delete data.scene_id;
 
-  return data;
+  return data as PlatformToolSubmitPayload;
 }
