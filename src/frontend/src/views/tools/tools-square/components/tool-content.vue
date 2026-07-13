@@ -115,7 +115,8 @@
       :risk-tool-params="riskToolParams"
       :search-list="localSearchList"
       :tool-details="toolDetails"
-      :uid="uid" />
+      :uid="uid"
+      @executed="emit('query')" />
   </div>
 </template>
 
@@ -171,6 +172,7 @@
   interface Emits {
     (e: 'openFieldDown', drillDownItem: any, drillDownItemRowData: Record<string, any>, activeUid?: string): void;
     (e: 'update:searchList', val: SearchItem[]): void;
+    (e: 'query'): void;
   }
 
   interface Exposes {
@@ -251,6 +253,7 @@
       } else if (props.toolDetails?.tool_type === 'api' && apiSearchResultRef.value) {
         apiSearchResultRef.value.executeTool();
       }
+      emit('query');
     });
   };
 

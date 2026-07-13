@@ -82,6 +82,10 @@
     riskToolParams: () => ({}),
   });
 
+  const emit = defineEmits<{
+    executed: [];
+  }>();
+
   let app: any;
 
   const panelRef = ref<HTMLElement | null>(null);
@@ -100,6 +104,7 @@
         panelId.value = data.data.panel_id;
         initBK(panelId.value);
       }
+      emit('executed');
     },
     onFinally: () => {
       isExecuting.value = false;
@@ -172,10 +177,20 @@
         } else {
           filters[item.raw_name] = item.default_value;
         }
+      } else if (item.field_category === 'variable') {
+        constants[item.raw_name] = '';
+      }
+    });
+
+    // URL 传参 / 用户输入优先覆盖默认值
+    props.searchList?.forEach((item) => {
+      const hasValue = item.value !== null && item.value !== undefined && item.value !== ''
+        && (!Array.isArray(item.value) || item.value.length > 0);
+      if (!hasValue) return;
+      if (item.field_category === 'variable') {
+        constants[item.raw_name] = item.value;
       } else {
-        if (item.field_category === 'variable') {
-          constants[item.raw_name] = '';
-        }
+        filters[item.raw_name] = item.value;
       }
     });
 
