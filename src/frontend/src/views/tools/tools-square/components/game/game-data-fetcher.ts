@@ -19,9 +19,59 @@ import { type Ref, ref } from 'vue';
 
 import ToolManageService from '@service/tool-manage';
 
-import { ROLE_FIELDS } from './game-field-keys';
+import { PROFILE_FIELDS, ROLE_FIELDS } from './game-field-keys';
 
 // ========== 通用工具函数 ==========
+
+export const extractToolExecuteResults = (data: any): Array<Record<string, any>> => {
+  const results = data?.data?.result?.results;
+  return Array.isArray(results) ? results : [];
+};
+
+export const getOneDayAgoYmd = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+};
+
+/** 外链打开时 name 未从 URL 带入，需补查列表 */
+type GameDetailNameInput = { name?: string; gameid?: string | number; openid?: string };
+
+export const needsResolveGameDetailName = (gameData?: GameDetailNameInput): boolean => {
+  if (!gameData?.openid || gameData.gameid === undefined || gameData.gameid === null || gameData.gameid === '') {
+    return false;
+  }
+  const gameId = String(gameData.gameid);
+  return !gameData.name || gameData.name === gameId;
+};
+
+/** 通过 openid + game_id 从 main_openid_list 补查中文游戏名 */
+export const fetchGameDetailNameByOpenid = async (
+  toolUid: string,
+  openid: string,
+  gameid: string | number,
+): Promise<string | null> => {
+  if (!toolUid || !openid || gameid === undefined || gameid === null || gameid === '') {
+    return null;
+  }
+  const data = await ToolManageService.fetchToolsExecute({
+    uid: toolUid,
+    params: {
+      data_source_name: 'main_openid_list',
+      params: {
+        one_day_ago_Ymd: getOneDayAgoYmd(),
+        form_openid: openid,
+      },
+    },
+  });
+  const targetId = String(gameid);
+  const row = extractToolExecuteResults(data).find(item => String(item.gameid ?? item.game_id ?? '') === targetId);
+  if (!row) return null;
+  return row[PROFILE_FIELDS.GAME_NAME] || row.name || null;
+};
 
 // 提取接口返回的 results 数组（兼容多种嵌套形式）
 export const extractResults = (data: any): any[] => {

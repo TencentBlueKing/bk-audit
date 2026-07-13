@@ -175,7 +175,7 @@
 <script setup lang="ts">
   import { computed, h, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
   import * as XLSX from 'xlsx';
 
   import ToolManageService from '@service/tool-manage';
@@ -190,6 +190,10 @@
   import ProfileUserInfo from './profile-user-info.vue';
 
   import useRequest from '@/hooks/use-request';
+  import {
+    parseSmartPageGameDetailIntent,
+    parseSmartPageUrlParams,
+  } from '@/views/tools/tools-square/utils/tool-url-params';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -208,6 +212,7 @@
 
   interface Emits {
     (e: 'openGameDetail', gameData: Record<string, any>, initialTab?: string): void;
+    (e: 'urlParamsSync', params: { accountType: string; accountId: string }): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -217,9 +222,27 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const router = useRouter();
+  const route = useRoute();
 
   const queryInputRef = ref();
   const hasQueried = ref(false);
+  const hasAppliedUrlQuery = ref(false);
+  const pendingGameDetailIntent = ref<{ gameid: string; initialTab: string } | null>(null);
+  const smartPageIntentSnapshot = ref('');
+
+  const getSmartPageIntentKey = () => {
+    const parsed = parseSmartPageUrlParams(route.query as Record<string, unknown>, props.toolConfig);
+    const intent = parseSmartPageGameDetailIntent(route.query as Record<string, unknown>);
+    return JSON.stringify({
+      account: parsed ? `${parsed.accountType}:${parsed.accountId}` : '',
+      gameid: intent?.gameid || '',
+      initialTab: intent?.initialTab || '',
+    });
+  };
+
+  const markSmartPageIntentApplied = () => {
+    smartPageIntentSnapshot.value = getSmartPageIntentKey();
+  };
   // 查询进行中标志：从点击查询起立即为 true，待 useRequest 的 loading 真正接管后自动置 false，
   // 避免请求发起前出现"用户信息块不渲染、loading 也未起来"的空白时间窗
   const isQuerying = ref(false);
@@ -672,6 +695,8 @@
             executeUserInfoByCtx(openidListFirstCtx.value);
           }
         }
+
+        tryOpenGameDetailFromUrlIntent();
       }
     },
   });
@@ -686,6 +711,25 @@
       }
     },
   );
+
+  const matchGameByRouteGameId = (gameid: string) => {
+    const targetId = String(gameid);
+    return gameList.value.find((row) => {
+      const rowGameId = row.gameid ?? row.game_id;
+      return rowGameId !== undefined && rowGameId !== null && String(rowGameId) === targetId;
+    });
+  };
+
+  const tryOpenGameDetailFromUrlIntent = () => {
+    const intent = pendingGameDetailIntent.value;
+    if (!intent || !gameList.value.length) return;
+
+    const matchedGame = matchGameByRouteGameId(intent.gameid);
+    if (!matchedGame) return;
+
+    pendingGameDetailIntent.value = null;
+    emit('openGameDetail', mapGameData(matchedGame), intent.initialTab);
+  };
 
   // 映射游戏数据字段
   const mapGameData = (row: Record<string, any>) => ({
@@ -969,6 +1013,7 @@
     lastAccountType.value = accountType;
     // 保存查询状态到 sessionStorage
     saveQueryState(accountType, accountId);
+    emit('urlParamsSync', { accountType, accountId });
 
     // 重置中间变量
     openidListFirstCtx.value = '';
@@ -1029,12 +1074,14 @@
   const handleReset = () => {
     hasQueried.value = false;
     isQuerying.value = false;
+    pendingGameDetailIntent.value = null;
     lastQueryParams.value = null;
     lastAccountType.value = '';
     openidListFirstCtx.value = '';
     hideGameList.value = false;
     // 清除保存的查询状态
     clearQueryState();
+    emit('urlParamsSync', { accountType: '', accountId: '' });
     // 重置用户信息
     userInfo.value = {
       avatar: '', wecom: '', username: '', wechat: '', qq: '',
@@ -1171,18 +1218,45 @@
   };
 
   // ========== 组件挂载时恢复查询状态 ==========
+  const applyUrlQueryIfPresent = () => {
+    if (!props.toolUid || hasAppliedUrlQuery.value) return false;
+    const parsed = parseSmartPageUrlParams(route.query as Record<string, unknown>, props.toolConfig);
+    const gameDetailIntent = parseSmartPageGameDetailIntent(route.query as Record<string, unknown>);
+    if (!parsed && !gameDetailIntent) return false;
+    hasAppliedUrlQuery.value = true;
+    if (gameDetailIntent) {
+      pendingGameDetailIntent.value = gameDetailIntent;
+    }
+    markSmartPageIntentApplied();
+    if (!parsed) return true;
+    nextTick(() => {
+      queryInputRef.value?.setForm(parsed.accountType, parsed.accountId);
+      handleQuery(parsed.accountType, parsed.accountId);
+    });
+    return true;
+  };
+
   onMounted(() => {
+    if (applyUrlQueryIfPresent()) {
+      return;
+    }
     const savedState = loadQueryState();
-    // 仅当保存的 toolUid 与当前一致时才恢复（避免不同工具实例间串数据）
     if (savedState && savedState.toolUid === props.toolUid && savedState.accountId) {
       nextTick(() => {
-        // 恢复表单输入
         queryInputRef.value?.setForm(savedState.accountType, savedState.accountId);
-        // 重新执行查询
         handleQuery(savedState.accountType, savedState.accountId);
       });
     }
   });
+
+  watch(
+    () => [props.toolUid, props.toolConfig, getSmartPageIntentKey()] as const,
+    ([, , intentKey]) => {
+      if (intentKey === smartPageIntentSnapshot.value) return;
+      hasAppliedUrlQuery.value = false;
+      applyUrlQueryIfPresent();
+    },
+  );
 </script>
 
 <style scoped lang="postcss">
