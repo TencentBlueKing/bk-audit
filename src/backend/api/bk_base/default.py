@@ -29,6 +29,7 @@ from django.utils.translation import gettext_lazy
 from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
     DataflowBatchStatusListReqSerializer,
+    GetBizsListReqSerializer,
     GetMineResultTablesReqSerializer,
     ProjectDataBatchAddReqSerializer,
     ProjectDataBatchAddRespSerializer,
@@ -467,8 +468,16 @@ class UserAuthBatchCheck(BkBaseResource):
 
 
 class GetBizsList(BkBaseResource):
-    """获取业务信息元数据"""
+    """获取有权限的表的业务"""
 
-    name = gettext_lazy("获取业务列表")
-    action = "/v3/meta/bizs/"
+    name = gettext_lazy("获取有权限的表的业务列表")
+    action = "/v3/auth/users/scope_dimensions/"
     method = "GET"
+    platform_authorization = False
+    RequestSerializer = GetBizsListReqSerializer
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        bk_username = validated_request_data["bk_username"]
+        data = super().build_request_data(validated_request_data)
+        data["bk_username"] = bk_username
+        return data
