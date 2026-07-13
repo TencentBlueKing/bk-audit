@@ -19,7 +19,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
-from api.bk_base.constants import AuthType, UserAuthActionEnum
+from api.bk_base.constants import AUTH_DIMENSION_BIZ, AuthType, UserAuthActionEnum
 
 
 def get_default_bkbase_project_id():
@@ -104,3 +104,14 @@ class GetMineResultTablesReqSerializer(serializers.Serializer):
         label=gettext_lazy("动作ID"), choices=UserAuthActionEnum.choices, default=UserAuthActionEnum.RT_QUERY
     )
     bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), default=settings.DEFAULT_BK_BIZ_ID)
+
+
+class GetBizsListReqSerializer(serializers.Serializer):
+    action_id = serializers.ChoiceField(
+        label=gettext_lazy("动作 ID"), choices=UserAuthActionEnum.choices, default=UserAuthActionEnum.RT_QUERY
+    )
+    dimension = serializers.CharField(
+        label=gettext_lazy("维度"),
+        default=AUTH_DIMENSION_BIZ,
+    )
+    bk_username = serializers.CharField(label=gettext_lazy("用户名"))

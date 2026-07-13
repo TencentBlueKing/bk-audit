@@ -5,11 +5,7 @@ from django.test import TestCase
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.strategy_v2.constants import ListTableType
 from services.web.strategy_v2.resources import GetScenePermissionTables
-from services.web.strategy_v2.utils.table import (
-    BizRtTableHandler,
-    BuildInTableHandler,
-    MineBizRtTableHandler,
-)
+from services.web.strategy_v2.utils.table import BizRtTableHandler, BuildInTableHandler
 
 
 class TestGetScenePermissionTables(TestCase):
@@ -59,46 +55,6 @@ class TestGetScenePermissionTables(TestCase):
         mock_bizrt_list_tables.assert_not_called()
 
     @patch.object(SceneDataFilter, 'get_table_ids')
-    @patch.object(MineBizRtTableHandler, 'list_tables')
-    def test_perform_request_mine_biz_rt_tables(self, mock_minebizrt_list_tables, mock_get_table_ids):
-        """测试 MINE_BIZ_RT 类型的数据表"""
-        mock_get_table_ids.return_value = ['table5', 'table6']
-        # Mock MineBizRtTableHandler.list_tables() 返回包含业务和结果表的树形结构
-        mock_minebizrt_list_tables.return_value = [
-            {
-                'label': '业务A(11)',
-                'value': '11',
-                'children': [{'value': 'table5', 'label': '表5'}, {'value': 'table7', 'label': '表7'}],
-            },
-            {
-                'label': '业务B(47)',
-                'value': '47',
-                'children': [{'value': 'table6', 'label': '表6'}, {'value': 'table8', 'label': '表8'}],
-            },
-        ]
-
-        result = self.resource.perform_request({'scene_id': 1, 'table_type': ListTableType.MINE_BIZ_RT})
-
-        # 验证返回过滤后的业务和结果表结构
-        self.assertEqual(
-            result,
-            [
-                {
-                    'label': '业务A(11)',
-                    'value': '11',
-                    'children': [{'value': 'table5', 'label': '表5'}],
-                },
-                {
-                    'label': '业务B(47)',
-                    'value': '47',
-                    'children': [{'value': 'table6', 'label': '表6'}],
-                },
-            ],
-        )
-        mock_get_table_ids.assert_called_once_with(1)
-        mock_minebizrt_list_tables.assert_called_once()
-
-    @patch.object(SceneDataFilter, 'get_table_ids')
     @patch.object(BuildInTableHandler, 'list_tables')
     @patch.object(BizRtTableHandler, 'list_tables')
     def test_perform_request_no_tables(self, mock_bizrt_list_tables, mock_buildin_list_tables, mock_get_table_ids):
@@ -122,9 +78,6 @@ class TestGetScenePermissionTables(TestCase):
         self.assertTrue(serializer.is_valid())
 
         serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.BIZ_RT})
-        self.assertTrue(serializer.is_valid())
-
-        serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.MINE_BIZ_RT})
         self.assertTrue(serializer.is_valid())
 
         serializer = self.resource.RequestSerializer(data={'scene_id': 1, 'table_type': ListTableType.EVENT_LOG})
