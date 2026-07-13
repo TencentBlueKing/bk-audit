@@ -110,6 +110,7 @@
           </div>
           <tool-info-panel
             v-show="hasOpenedTools"
+            ref="toolInfoPanelRef"
             :active-uid="activeToolUid"
             :scene-name-map="sceneNameMap"
             :scope-params="scopeParams"
@@ -130,7 +131,6 @@
 <script setup lang='ts'>
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import type { LocationQueryRaw } from 'vue-router';
   import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
@@ -154,6 +154,11 @@
   import foldLeftIcon from '@/images/fold-left.svg';
   import foldRightIcon from '@/images/fold-right.svg';
   import infoBlueSvg from '@/images/info-blue.svg';
+  import {
+    buildGameDetailTabLabel,
+    getRouteQueryValue,
+    getRouteScopeQuery,
+  } from '@/views/tools/tools-square/utils/tool-url-params';
 
   interface TagItem {
     tag_id: string;
@@ -168,22 +173,9 @@
     type: 'aggregate' | 'scene' | 'system';
   }
 
-  interface GameDetailRouteQuery {
-    game_id?: string;
-    game_name?: string;
-    openid?: string;
-    tool_uid?: string;
-    initial_tab?: string;
-    ctx?: string;
-    plat_type?: string;
-    plat_account?: string;
-    coin_balance?: string;
-    total_recharge?: string;
-    total_issue?: string;
-  }
-
   const renderLabelRef = ref();
   const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
+  const toolInfoPanelRef = ref<InstanceType<typeof ToolInfoPanel>>();
 
   // 场景ID → 场景名称映射
   const sceneNameMap = ref<Record<number, string>>({});
@@ -304,7 +296,8 @@
     const lastTool = openedTools.value[openedTools.value.length - 1];
     if (lastTool) {
       switchTab(lastTool.uid);
-      handleOpenTool(lastTool);
+      isSidebarCollapsed.value = true;
+      syncToolRouteToUrl(lastTool.uid);
     }
   };
 
@@ -313,70 +306,20 @@
   const isRefreshRestore = !!(routeUid && !route.query.drillKey && !route.query.drillConfig);
   const isProgrammaticReset = ref(false);
 
-  const GAME_DETAIL_STORAGE_KEY = 'tool_tabs_game_detail_map';
+  const getFirstQueryValue = getRouteQueryValue;
 
-  const getFirstQueryValue = (value: unknown) => {
-    if (Array.isArray(value)) {
-      return value[0] ? String(value[0]) : '';
-    }
-    if (value === undefined || value === null) {
-      return '';
-    }
-    return String(value);
-  };
-
-  const loadGameDetailRouteCache = (): {
-    data: Record<string, any>;
-    tab: Record<string, string>;
-    toolUid: Record<string, string>;
-  } => {
-    try {
-      const raw = sessionStorage.getItem(GAME_DETAIL_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : { data: {}, tab: {}, toolUid: {} };
-    } catch {
-      return { data: {}, tab: {}, toolUid: {} };
-    }
-  };
-
-  const buildGameDetailQuery = (uid: string): LocationQueryRaw => {
-    const cache = loadGameDetailRouteCache();
-    const gameData = cache.data?.[uid] || {};
-    const query: GameDetailRouteQuery = {
-      game_id: gameData.gameid ? String(gameData.gameid) : '',
-      game_name: gameData.name || '',
-      openid: gameData.openid || '',
-      tool_uid: cache.toolUid?.[uid] || '',
-      initial_tab: cache.tab?.[uid] || 'overview',
-      ctx: gameData.ctx || '',
-      plat_type: gameData.platType || '',
-      plat_account: gameData.platAccount || '',
-      coin_balance: gameData.coinBalance !== undefined ? String(gameData.coinBalance) : '',
-      total_recharge: gameData.totalRecharge !== undefined ? String(gameData.totalRecharge) : '',
-      total_issue: gameData.totalIssue !== undefined ? String(gameData.totalIssue) : '',
-    };
-
-    return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== ''));
-  };
-
-  const getGameDetailTabName = (uid: string) => {
+  const getGameDetailTabName = () => {
     const query = route.query as Record<string, unknown>;
-    const gameName = getFirstQueryValue(query.game_name);
-    const ctx = getFirstQueryValue(query.ctx);
-    if (routeUid === uid && gameName) {
-      return ctx ? `${ctx} - ${gameName}` : gameName;
-    }
-    return uid;
+    return buildGameDetailTabLabel({
+      ctx: getFirstQueryValue(query.ctx),
+      gameid: getFirstQueryValue(query.game_id),
+      name: '',
+    }, { resolving: true });
   };
 
   // 从其他页面回到工具广场时，恢复之前打开的工具 tab 状态
   // 条件：URL 无 uid 参数（非下钻/刷新恢复），但内存中有打开的工具
-  if (!routeUid && openedTools.value.length > 0) {
-    if (activeToolUid.value) {
-      // activeToolUid 有值说明离开前在工具详情，恢复 URL 到对应的工具详情路由
-      syncRouteToUrl(activeToolUid.value);
-    }
-    // activeToolUid 为空说明离开前在工具列表（首页），保持在工具列表页面，不自动打开工具详情
-  }
+  // URL 同步在 onMounted 中执行（需等待 tool-info-panel 挂载）
 
   // 场景切换
   const getSceneKey = (item: SceneItem | null) => (item ? `${item.type}:${item.id}` : '');
@@ -390,7 +333,6 @@
       saveSceneState(lastSceneKey.value!);
       try {
         sessionStorage.removeItem('tool_tabs_search_list_map');
-        sessionStorage.removeItem('tool_tabs_game_detail_map');
       } catch {
         // 静默处理
       }
@@ -403,7 +345,11 @@
     if (isActualChange) {
       restoreSceneState(newKey);
       isSidebarCollapsed.value = hasOpenedTools.value;
-      syncRouteToUrl(activeToolUid.value || undefined);
+      if (activeToolUid.value) {
+        syncToolRouteToUrl(activeToolUid.value);
+      } else {
+        syncRouteToUrl();
+      }
     }
     // 无论是初始化还是切换，都重新拉取标签和工具列表
     // 切换场景时，重置选中的标签为"全部工具"
@@ -460,7 +406,7 @@
     if (!alreadyInList) {
       const tempTool = new ToolInfo({
         uid: routeUid,
-        name: routeUid.startsWith('game_detail_') ? getGameDetailTabName(routeUid) : routeUid,
+        name: routeUid.startsWith('game_detail_') ? getGameDetailTabName() : routeUid,
       } as ToolInfo);
       openTool(tempTool);
     } else if (activeToolUid.value !== routeUid) {
@@ -556,26 +502,42 @@
     fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
   };
 
-  function syncRouteToUrl(uid?: string) {
+  const syncToolRouteToUrl = (uid: string) => {
+    nextTick(() => {
+      toolInfoPanelRef.value?.syncRouteForTool(uid);
+    });
+  };
+
+  function syncRouteToUrl(uid?: string, options?: { scopeOnly?: boolean }) {
+    const scopeQuery = getRouteScopeQuery(route.query as Record<string, unknown>);
     if (uid) {
-      const query = uid.startsWith('game_detail_') ? buildGameDetailQuery(uid) : {};
-      router.replace({ name: 'toolDetail', params: { uid }, query });
-    } else if (!uid && route.name !== 'toolsSquare') {
-      router.replace({ name: 'toolsSquare' });
+      if (uid.startsWith('game_detail_')) {
+        syncToolRouteToUrl(uid);
+        return;
+      }
+      if (options?.scopeOnly) {
+        router.replace({ name: 'toolDetail', params: { uid }, query: scopeQuery });
+        return;
+      }
+      syncToolRouteToUrl(uid);
+      return;
+    }
+    if (!uid && route.name !== 'toolsSquare') {
+      router.replace({ name: 'toolsSquare', query: scopeQuery });
     }
   }
 
   const handleOpenTool = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
-    syncRouteToUrl(tool.uid);
+    syncRouteToUrl(tool.uid, { scopeOnly: true });
     refreshTagsList();
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
-    syncRouteToUrl(tool.uid);
+    syncRouteToUrl(tool.uid, { scopeOnly: true });
     refreshTagsList();
   };
 
@@ -604,8 +566,6 @@
       syncRouteToUrl();
       await nextTick();
       ContentCardRef.value?.getToolsList(tagId.value);
-    } else {
-      syncRouteToUrl(activeToolUid.value);
     }
   };
 
@@ -636,10 +596,9 @@
     });
   });
 
-  // 切换 tab 时同步 URL
+  // 切换 tab 时同步 URL（业务参数由 tool-info-panel 根据 activeUid 恢复）
   const handleSwitchTab = (uid: string) => {
     switchTab(uid);
-    syncRouteToUrl(uid);
   };
 
   // 监听场景切换事件
@@ -657,8 +616,10 @@
     onEvent('scene:change', () => {
       refreshAllData();
     });
-    if (hasOpenedTools.value && !isDrillDownRoute && !isRefreshRestore) {
-      syncRouteToUrl(activeToolUid.value);
+    if (activeToolUid.value && hasOpenedTools.value) {
+      if (!routeUid || (!isDrillDownRoute && !isRefreshRestore)) {
+        syncToolRouteToUrl(activeToolUid.value);
+      }
     }
   });
 

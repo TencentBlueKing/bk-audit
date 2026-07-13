@@ -21,7 +21,12 @@
       <div class="game-info-row">
         <div class="info-item">
           <span class="info-label">{{ t('游戏名称') }}</span>
-          <span class="info-value">{{ gameData.name }}</span>
+          <span class="info-value game-name-value">
+            <span
+              v-if="gameNameResolving"
+              class="game-name-skeleton" />
+            <template v-else>{{ displayGameName }}</template>
+          </span>
         </div>
         <div class="info-item">
           <span class="info-label">openid</span>
@@ -328,6 +333,7 @@
     gameData?: GameData;
     initialTab?: string;
     toolUid?: string;
+    gameNameResolving?: boolean;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -347,10 +353,22 @@
     }),
     initialTab: '',
     toolUid: '',
+    gameNameResolving: false,
   });
+
+  const emit = defineEmits<{
+    tabChange: [tab: string];
+  }>();
 
   const { t } = useI18n();
   const activeTab = ref(props.initialTab || 'overview');
+
+  const displayGameName = computed(() => {
+    const { name, gameid } = props.gameData;
+    const gameId = gameid !== undefined && gameid !== null && gameid !== '' ? String(gameid) : '';
+    if (name && name !== gameId) return name;
+    return '--';
+  });
 
   // 当 initialTab 变化时同步切换 tab
   watch(() => props.initialTab, (newTab) => {
@@ -675,8 +693,9 @@
     tabSearchConditions.value[tabKey] = conditions;
   };
 
-  // 监听 tab 切换：按需加载明细数据
+  // 监听 tab 切换：按需加载明细数据，并同步 URL
   watch(activeTab, (newTab) => {
+    emit('tabChange', newTab);
     if (newTab !== 'overview') {
       loadTabData(newTab);
     }
@@ -692,7 +711,7 @@
 
   // 初始化：加载概览数据
   watch(
-    () => [props.toolUid, props.gameData.openid],
+    () => [props.toolUid, props.gameData.openid, props.gameData.gameid],
     ([uid, openid]) => {
       if (uid && openid) {
         // 重置已加载标记
@@ -1043,6 +1062,26 @@
 
     .info-unit {
       font-weight: 700;
+    }
+
+    .game-name-skeleton {
+      display: inline-block;
+      width: 96px;
+      height: 14px;
+      background: linear-gradient(90deg, #e1e8f4 25%, #f0f5ff 50%, #e1e8f4 75%);
+      background-size: 200% 100%;
+      border-radius: 2px;
+      animation: game-name-skeleton-shimmer 1.2s ease-in-out infinite;
+    }
+  }
+
+  @keyframes game-name-skeleton-shimmer {
+    0% {
+      background-position: 100% 0;
+    }
+
+    100% {
+      background-position: -100% 0;
     }
   }
 
