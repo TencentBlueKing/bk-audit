@@ -48,6 +48,10 @@ class UserAuthActionEnum(TextChoices):
     RT_QUERY = "result_table.query_data", gettext_lazy("结果表查询")
 
 
+# 用户有权限的业务常量
+AUTH_DIMENSION_BIZ = "bk_biz_id"
+
+
 class BkBaseFieldType(TextChoices):
     """
     BKBase 字段类型枚举
