@@ -26,7 +26,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils.module_loading import import_string
 
-from api.bk_base.constants import UserAuthActionEnum
+from api.bk_base.constants import AUTH_DIMENSION_BIZ, UserAuthActionEnum
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.resources import SystemListAllResource
@@ -258,7 +258,9 @@ class MineBizRtTableHandler(TableHandler):
         """
         try:
             # 获取所有业务列表
-            biz_list_result = api.bk_base.get_bizs_list()
+            biz_list_result = api.bk_base.get_bizs_list(
+                bk_username=self.bk_username, action_id=UserAuthActionEnum.RT_QUERY, dimension=AUTH_DIMENSION_BIZ
+            )
             if not isinstance(biz_list_result, list):
                 return []
 
