@@ -152,7 +152,7 @@
   const router = useRouter();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
-  const { replaceSearchParams } = useUrlSearch();
+  const { replaceSearchParams, getSearchParams } = useUrlSearch();
 
   const isLoading = ref(false);
   // 状态筛选
@@ -263,7 +263,7 @@
     {
       title: t('场景ID'),
       colKey: 'scene_id',
-      width: 180,
+      width: 100,
       ellipsis: true,
     },
     {
@@ -273,16 +273,15 @@
       </span>
     ),
       colKey: 'name',
-      width: 180,
+      width: 220,
       align: 'left',
       className: 'scene-name-column',
       cell: (_: any, { row }: { row: SceneModel }) => (
       <div class="scene-name-cell" style="color: #3A84FF;">
         <span
           class="scene-name-text"
-          title={row.name || '--'}
           onClick={() => handleShowSceneDetail(row)}>
-          {row.name}
+          <Tooltips data={row.name || '--'} />
         </span>
         {row.status !== 'disabled' && (
           <span
@@ -301,7 +300,7 @@
     {
       title: t('场景描述'),
       colKey: 'description',
-      minWidth: 120,
+      minWidth: 150,
       ellipsis: true,
       cell: (_: any, { row }: { row: SceneModel }) => (
       <Tooltips data={row.description || '--'} />
@@ -325,7 +324,7 @@
           ? <div class="tag-list">
               {row.managers.slice(0, 2).map((manager: string) => <bk-tag class="mr8" key={manager}>{manager}</bk-tag>)}
               {row.managers.length > 2 && (
-                <bk-popover placement="top" theme="light">
+                <bk-popover placement="top" theme="dark">
                   {{
                     default: () => <bk-tag>+{row.managers.length - 2}</bk-tag>,
                     content: () => <div class="tag-popover-content">{row.managers.join('、')}</div>,
@@ -345,7 +344,7 @@
           ? <div class="tag-list">
               {row.users.slice(0, 2).map((user: string) => <bk-tag class="mr8" key={user}>{user}</bk-tag>)}
               {row.users.length > 2 && (
-                <bk-popover placement="top" theme="light">
+                <bk-popover placement="top" theme="dark">
                   {{
                     default: () => <bk-tag>+{row.users.length - 2}</bk-tag>,
                     content: () => <div class="tag-popover-content">{row.users.join('、')}</div>,
@@ -485,10 +484,45 @@
     ),
     },
   ];
-  // 模拟数据源 - 实际应替换为真实API
+
+  const SCENE_LIST_SORT_FIELDS = new Set(['scene_id', 'strategy_count', 'risk_count', 'updated_at']);
+
+  const normalizeSceneListSort = (sort?: string | string[]): string[] => {
+    let sortList: string[];
+    if (Array.isArray(sort)) {
+      sortList = sort;
+    } else if (sort) {
+      sortList = [sort];
+    } else {
+      sortList = [];
+    }
+    if (!sortList.length) {
+      return ['-scene_id'];
+    }
+
+    const normalized = sortList
+      .map((field) => {
+        const isDesc = field.startsWith('-');
+        const fieldName = isDesc ? field.slice(1) : field;
+        const prefix = isDesc ? '-' : '';
+
+        // 兼容其他列表页 URL 残留的 created_at 排序字段
+        if (fieldName === 'created_at') {
+          return '-updated_at';
+        }
+        if (SCENE_LIST_SORT_FIELDS.has(fieldName)) {
+          return `${prefix}${fieldName}`;
+        }
+        return null;
+      })
+      .filter((field): field is string => Boolean(field));
+
+    return normalized.length ? normalized : ['-scene_id'];
+  };
+
   const dataSource = (params: any) => SceneManageService.fetchSceneList({
     ...params,
-    sort: params?.sort || ['-scene_id'],
+    sort: normalizeSceneListSort(params?.sort),
   });
 
   const dataSourceRender = (row: SceneModel) => `${row.system_count} ${t('个系统')}，${row.table_count} ${t('个数据表')}` || '--';
@@ -845,7 +879,10 @@
   };
 
   onMounted(() => {
-    listRef.value?.fetchData({});
+    const { sort } = getSearchParams();
+    listRef.value?.fetchData({
+      sort: normalizeSceneListSort(sort),
+    });
   });
 </script>
 
