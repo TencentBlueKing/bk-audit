@@ -65,6 +65,7 @@
   import { useI18n } from 'vue-i18n';
 
   import type CollectorTaskStatusModel from '@model/collector/task-status';
+  import type { BcsContent } from '@model/collector/bcs-task-status';
 
   defineProps<Props>();
 
@@ -74,7 +75,7 @@
 
   interface Props {
     modelValue: string,
-    data: CollectorTaskStatusModel
+    data: CollectorTaskStatusModel | BcsContent
   }
   interface Emits {
     (e: 'update:modelValue', value: string): void

@@ -288,6 +288,7 @@
   } = useUrlSearch();
   const collectorConfigId = searchParams.get('collector_config_id');
   const environment = searchParams.get('environment');
+  const isContainerEnv = ref(environment === 'container');
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
   const rules = {
     'etl_params.regexp': [
@@ -330,6 +331,9 @@
         formData.etl_params.regexp = data.etl_params.regexp;
         formData.etl_params.delimiter = data.etl_params.delimiter;
         formData.etl_config = data.environment === 'container' ? data.etl_config || 'bk_log_json' : data.etl_config;
+        if (data.environment === 'container') {
+          isContainerEnv.value = true;
+        }
       },
     });
   }
@@ -434,30 +438,19 @@
   };
   // 上一步
   const handleLast = () => {
-    Promise.resolve()
-      .then(() => {
-        // 容器类型编辑状态——回退到第一步
-        if (environment) {
-          if (isEditMode) {
-            emits('previous', 2);
-            removeSearchParam([
-              'collector_config_id',
-              'task_id_list',
-            ]);
-            return;
-          }
-          // 新建状态——跳转到采集编辑页
-          router.push({
-            name: 'collectorEdit',
-            params: {
-              systemId: route.params.systemId,
-              collectorConfigId,
-            },
-          });
-        } else {
-          emits('previous', 3);
-        }
-      });
+    // 容器跳过了第 3 步，应回到第 2 步采集配置（勿再跳不存在的 collectorEdit 路由）
+    if (isContainerEnv.value) {
+      emits('previous', 2);
+      if (isEditMode) {
+        removeSearchParam([
+          'collector_config_id',
+          'task_id_list',
+        ]);
+      }
+      return;
+    }
+    // 物理机：回到第 3 步采集下发
+    emits('previous', 3);
   };
 
   // 取消
