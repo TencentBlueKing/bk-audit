@@ -306,6 +306,7 @@
         task_id_list: data.task_id_list ? data.task_id_list.join(',') : '',
         environment: 'container',
       });
+      // 容器无物理机式 task 下发，跳过第 3 步，直接进入字段清洗
       emit('next', 4);
     },
   });
@@ -361,8 +362,9 @@
     formRef.value.validate()
       .then(() => {
         const params = { ...localFormData.value };
-        // BCS
+        // BCS（容器环境）
         if (renderCom.value !== 'physics') {
+          // 编辑且数据未变更：跳过采集下发，直接进入字段清洗
           if (isEditMode && editCollectorFormDataClone && compareEditData(editCollectorFormDataClone, params)) {
             window.changeConfirm = false;
             appendSearchParams({
