@@ -278,7 +278,7 @@
     onSuccess: () => {
       messageSuccess(t('保存成功'));
       // 刷新场景信息
-      fetchSceneInfo(sceneId.value);
+      fetchSceneInfo(sceneId.value as any);
     },
   });
 
@@ -542,7 +542,7 @@
     lastLoadedSceneId = sceneId.value;
     try {
       // 先加载场景基础信息，完成后立即展示统计卡片与基础信息
-      await fetchSceneInfo(sceneId.value).catch(() => null);
+      await fetchSceneInfo(sceneId.value as any).catch(() => null);
       isSkeletonLoading.value = false;
 
       // 关联系统、关联数据表异步加载，表格区域各自展示 loading

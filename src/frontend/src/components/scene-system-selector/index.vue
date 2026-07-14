@@ -261,15 +261,68 @@
     hasSystemAccess: userRole.includes('system_admin') || userRole.includes('saas_admin'),
   });
 
+  /** 从当前路由或首屏缓存中读取场景 ID（深链优先） */
+  const getUrlMatchId = () => {
+    const q = route.query;
+    const liveId = (q.scene_id || q.scope_id) as string | undefined;
+    if (liveId) return liveId;
+    // 仅首屏未初始化前，用首屏缓存抵御列表 replaceSearchParams 冲掉参数
+    if (!hasInitializedSelection) {
+      return initialRouteSceneId || initialRouteScopeId || '';
+    }
+    return '';
+  };
+
+  /**
+   * 在可见列表中按 ID 查找选中项
+   */
+  const findItemById = (
+    matchId: string,
+    sceneItemsForMatch: SelectorItem[],
+    systemItemsForMatch: SelectorItem[],
+    showScene: boolean,
+    showSystem: boolean,
+  ): SelectorItem | null => {
+    if (!matchId) return null;
+    if (showScene && !showSystem) {
+      return sceneItemsForMatch.find(item => item.id === matchId) || null;
+    }
+    if (!showScene && showSystem) {
+      return systemItemsForMatch.find(item => item.id === matchId) || null;
+    }
+    if (showScene && showSystem) {
+      return sceneItemsForMatch.find(item => item.id === matchId)
+        || systemItemsForMatch.find(item => item.id === matchId)
+        || null;
+    }
+    return null;
+  };
+
+  /**
+   * 应用选中项：同步 URL + localStorage，并通知外部
+   */
+  const applySelectedItem = (targetItem: SelectorItem, options?: { emitChange?: boolean }) => {
+    const emitChange = options?.emitChange !== false;
+    const isSame = selectedItem.value?.id === targetItem.id && selectedItem.value?.type === targetItem.type;
+    hasInitializedSelection = true;
+    selectedItem.value = targetItem;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
+    syncSceneIdToRoute(targetItem);
+    if (!isSame) {
+      emits('update:modelValue', targetItem);
+      if (emitChange) {
+        emits('change', targetItem);
+      }
+    }
+  };
+
   /**
    * 基于角色的默认选中逻辑：
    * 1. 角色决定可见列表：scene_admin/scene_user→场景; system_admin→系统; saas_admin→两者
-   * 2. URL有ID时在对应列表中匹配，找不到则默认选第一个非聚合项
-   * 3. URL无ID时直接选对应列表第一个非聚合项
+   * 2. URL有ID时优先匹配（深链临时切换），并回写 localStorage
+   * 3. URL无ID时恢复 localStorage / 兜底选第一项
    */
   const trySelectFromRoute = () => {
-    if (hasInitializedSelection || selectedItem.value) return;
-
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     // 基于当前页面的 listScope 决定实际可用的匹配范围
     const showScene = props.listScope.includes('scene') && hasSceneAccess;
@@ -280,25 +333,32 @@
     // 兜底选中只选具体项（不默认选聚合项）
     const sceneItems = sceneItemsForMatch.filter(item => item.type !== 'aggregate');
     const systemItems = systemItemsForMatch.filter(item => item.type !== 'aggregate');
-    const urlMatchId = initialRouteSceneId || initialRouteScopeId;
+    const urlMatchId = getUrlMatchId();
 
     // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
     if (showScene && sceneItems.length === 0) return;
     if (showSystem && systemItems.length === 0) return;
 
+    // 已初始化且当前选中与 URL 一致 → 无需重复处理
+    if (
+      hasInitializedSelection
+      && selectedItem.value
+      && (!urlMatchId || selectedItem.value.id === urlMatchId)
+    ) {
+      return;
+    }
+
     let targetItem: SelectorItem | null = null;
 
     // ── 阶段2：URL中有ID时尝试精确匹配（包括聚合项 allSystem/allSecen）──
     if (urlMatchId) {
-      if (showScene && !showSystem) {
-        targetItem = sceneItemsForMatch.find(item => item.id === urlMatchId) || null;
-      } else if (!showScene && showSystem) {
-        targetItem = systemItemsForMatch.find(item => item.id === urlMatchId) || null;
-      } else if (showScene && showSystem) {
-        targetItem = sceneItemsForMatch.find(item => item.id === urlMatchId)
-          || systemItemsForMatch.find(item => item.id === urlMatchId)
-          || null;
-      }
+      targetItem = findItemById(
+        urlMatchId,
+        sceneItemsForMatch,
+        systemItemsForMatch,
+        showScene,
+        showSystem,
+      );
       if (!targetItem) {
         // URL中有scene_id但用户无权访问该场景 → 跳转到权限申请页
         router.replace({
@@ -342,13 +402,7 @@
       }
     }
 
-    // 设置选中项
-    hasInitializedSelection = true;
-    selectedItem.value = targetItem;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
-    emits('update:modelValue', targetItem);
-    emits('change', targetItem);
-    syncSceneIdToRoute(targetItem);
+    applySelectedItem(targetItem);
   };
 
   // 选择项目
@@ -514,10 +568,13 @@
 
   // ⚡ 持续守护：确保 URL 中始终包含正确的场景参数
   // （防止其他组件的路由跳转丢失 query 参数）
+  // 若 URL 已明确指向其他场景，不回写（优先走 URL 临时切换）
   watch(selectedItem, (newVal) => {
     if (!newVal || !newVal.id) return;
     const checkAndFixUrl = () => {
       const q = route.query;
+      const urlId = (q.scene_id || q.scope_id) as string | undefined;
+      if (urlId && urlId !== newVal.id) return;
       const needsFix = (
         (q.scene_id !== newVal.id)
         || (newVal.type === 'aggregate' && newVal.id === 'allSecen' && q.scope_type !== 'cross_scene')
@@ -530,20 +587,24 @@
     setTimeout(checkAndFixUrl, 100);
   });
 
-  // ⚡ 路由级守护：当路由变化但丢失场景参数时自动恢复
-  // （覆盖 router.replace/push 等操作丢失 query 的情况）
+  // ⚡ 路由级守护：
+  // - URL 有场景参数且与当前选中不一致 → 按 URL 临时切换（并回写 localStorage）
+  // - URL 丢失场景参数 → 用当前选中项补回 query
   watch(() => route.query, () => {
+    const urlMatchId = (route.query.scene_id || route.query.scope_id) as string | undefined;
     const item = selectedItem.value;
-    if (!item || !item.id) return;
-    const q = route.query;
-    const needsFix = (
-      (q.scene_id !== item.id)
-      || (item.type === 'aggregate' && item.id === 'allSecen' && q.scope_type !== 'cross_scene')
-      || (item.type === 'aggregate' && item.id === 'allSystem' && q.scope_type !== 'cross_system')
-    );
-    if (needsFix) {
-      setTimeout(() => syncSceneIdToRoute(item), 50);
+
+    if (urlMatchId) {
+      if (item?.id === urlMatchId) return;
+      // 列表未就绪时交由 trySelectFromRoute；已就绪则立即按 URL 切换
+      if (sceneList.value.length > 0 || systemList.value.length > 0) {
+        trySelectFromRoute();
+      }
+      return;
     }
+
+    if (!item || !item.id) return;
+    setTimeout(() => syncSceneIdToRoute(item), 50);
   });
 
   // 获取数据的方法（按角色按需请求）
