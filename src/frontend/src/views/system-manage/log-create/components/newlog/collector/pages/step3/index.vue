@@ -17,7 +17,7 @@
 <template>
   <skeleton-loading
     fullscreen
-    :loading="!collectorTaskStatus.task_ready"
+    :loading="!isPageReady"
     name="createCollectorStep2">
     <smart-action :offset-target="getSmartActionOffsetTarget">
       <div class="collection-delivery-page">
@@ -55,7 +55,7 @@
       <template #action>
         <bk-button
           class="w88"
-          :disabled="!isFinished"
+          :disabled="!isFinished && !isEmpty"
           :loading="isNextLoading"
           theme="primary"
           @click="handleNext">
@@ -91,6 +91,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -102,6 +103,8 @@
 
   import CollectorManageService from '@service/collector-manage';
 
+  import { BcsContent, BcsContentChild } from '@model/collector/bcs-task-status';
+  import CollectorDetailModel from '@model/collector/collector-detail';
   import CollectorTaskStatusModel, { ContentChild } from '@model/collector/task-status';
 
   import useRequest from '@hooks/use-request';
@@ -118,7 +121,8 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const tableColumn = [
+
+  const physicsColumns = [
     {
       label: () => t('目标'),
       field: () => 'ip',
@@ -153,15 +157,96 @@
     },
   ] as Column[];
 
+  const bcsColumns = [
+    {
+      label: 'ID',
+      field: () => 'container_collector_config_id',
+    },
+    {
+      label: () => t('名称'),
+      field: () => 'name',
+    },
+    {
+      label: () => t('状态'),
+      render: ({ data }: {data: BcsContentChild}) => (
+          <>
+            <audit-icon
+              class="rotate-loading"
+              svg
+              type={data.statusIconType} />
+            <span>{ data.statusText }</span>
+          </>
+        ),
+    },
+  ] as Column[];
+
   const route = useRoute();
   const router = useRouter();
 
   const isEditMode = route.name === 'logCollectorEdit';
 
-
   const listType = ref(String(route.query.status || 'all'));
   const isShowDetail = ref(false);
   const logInstanceId = ref('');
+  const isPageReady = ref(false);
+
+  const {
+    getSearchParams,
+    appendSearchParams,
+    removeSearchParam,
+  } = useUrlSearch();
+
+  const searchParams = getSearchParams();
+  const taskIdList = searchParams.task_id_list || '';
+  const collectorConfigId = ~~(searchParams.collector_config_id
+    || route.params.collectorConfigId
+    || 0);
+  // 以 URL 为准，缺失时再查采集详情，避免误走物理机列导致目标/时间为空
+  const isContainer = ref(searchParams.environment === 'container');
+  const tableColumn = computed(() => (isContainer.value ? bcsColumns : physicsColumns));
+
+  // 轮询取消函数
+  let cancelLoop: (() => void) | null = null;
+  let statusWatchStop: (() => void) | null = null;
+
+  const {
+    data: physicsTaskStatus,
+    loop: loopPhysicsTaskStatus,
+    run: fetchPhysicsTaskStatus,
+  } = useRequest(CollectorManageService.fetchCollectorTaskStatus, {
+    defaultParams: {
+      collector_config_id: collectorConfigId,
+      task_id_list: taskIdList,
+    },
+    defaultValue: new CollectorTaskStatusModel(),
+    manual: false,
+    loopOnError: true,
+  });
+
+  const {
+    data: bcsTaskStatus,
+    loop: loopBcsTaskStatus,
+    run: fetchBcsTaskStatus,
+  } = useRequest(CollectorManageService.fetchBcsTaskStatus, {
+    defaultParams: {
+      collector_config_id: collectorConfigId,
+      task_id_list: [],
+    },
+    defaultValue: new BcsContent(),
+    manual: false,
+    loopOnError: true,
+  });
+
+  const {
+    run: fetchCollectorDetail,
+  } = useRequest(CollectorManageService.fetchCollectorsById, {
+    defaultValue: new CollectorDetailModel(),
+    manual: false,
+  });
+
+  const collectorTaskStatus = computed(() => (
+    isContainer.value ? bcsTaskStatus.value : physicsTaskStatus.value
+  ));
 
   // table 数据
   const renderList = computed(() => {
@@ -174,49 +259,49 @@
     }
     return collectorTaskStatus.value.allList;
   });
+
   // 下发任务是否结束
   const isFinished = computed(() => {
+    if (!isPageReady.value) {
+      return false;
+    }
+    if (isContainer.value) {
+      // 容器：加载完成后，无执行中任务即可进入下一步
+      return collectorTaskStatus.value.runningList.length < 1;
+    }
     const {
       allList,
       runningList,
-    } = collectorTaskStatus.value;
-    if (!collectorTaskStatus.value.task_ready) {
+    } = physicsTaskStatus.value;
+    if (!physicsTaskStatus.value.task_ready) {
       return false;
     }
-    // 只有在有任务数据且没有运行中的任务时，才认为任务完成
-    // child = [] 时继续轮询，等待任务数据
+    // 物理机：有任务数据且没有运行中的任务
     return allList.length > 0 && runningList.length < 1;
   });
+
   // 下发任务是否为空
-  const isEmpty = computed(() => collectorTaskStatus.value.task_ready
-    && collectorTaskStatus.value.allList.length < 1);
+  const isEmpty = computed(() => {
+    if (!isPageReady.value) {
+      return false;
+    }
+    if (isContainer.value) {
+      return collectorTaskStatus.value.allList.length < 1;
+    }
+    return physicsTaskStatus.value.task_ready
+      && physicsTaskStatus.value.allList.length < 1;
+  });
+
   // 等待任务状态接口 / 轮询结果时，下一步按钮展示 loading
   const isNextLoading = computed(() => !isFinished.value && !isEmpty.value);
 
-  const {
-    getSearchParams,
-    removeSearchParam,
-  } = useUrlSearch();
-
-  const searchParams = getSearchParams();
-
-  const taskIdList = searchParams.task_id_list;
-  const collectorConfigId = ~~searchParams.collector_config_id;
-
-  // 轮询取消函数
-  let cancelLoop: (() => void) | null = null;
-  let statusWatchStop: (() => void) | null = null;
-
   // 开启轮询并监听任务状态
-  const startLoopAndWatch = () => {
+  const startLoopAndWatch = (loopFn: () => () => void) => {
     if (!cancelLoop) {
-      cancelLoop = loopCollectorTaskStatus();
-      // 只创建一次 watch
+      cancelLoop = loopFn();
       if (!statusWatchStop) {
         statusWatchStop = watch(collectorTaskStatus, () => {
-          // setTimeout 保证轮询判断在 isFinished 计算完成之后
           setTimeout(() => {
-            // 没有执行中的任务，关闭轮询
             if (isFinished.value && cancelLoop) {
               cancelLoop();
               cancelLoop = null;
@@ -229,24 +314,6 @@
     }
   };
 
-  // 获取任务状态
-  const {
-    data: collectorTaskStatus,
-    loop: loopCollectorTaskStatus,
-  } = useRequest(CollectorManageService.fetchCollectorTaskStatus, {
-    defaultParams: {
-      collector_config_id: collectorConfigId,
-      task_id_list: taskIdList,
-    },
-    defaultValue: new CollectorTaskStatusModel(),
-    manual: true,
-    loopOnError: true, // 轮询时错误也继续轮询
-    onFinally() {
-      // 请求完成时（无论成功还是失败）开启轮询
-      startLoopAndWatch();
-    },
-  });
-
   // 失败重试
   const {
     loading: isRetryTaskLoading,
@@ -257,7 +324,15 @@
 
   // 失败批量重试
   const handleRetryFaildTask = () => {
-    const targetNodes = collectorTaskStatus.value.failedList.map(item => ({
+    if (isContainer.value) {
+      const instanceIdList = bcsTaskStatus.value.failedList.map(item => item.container_collector_config_id);
+      retryStask({
+        id: collectorConfigId,
+        instance_id_list: instanceIdList,
+      });
+      return;
+    }
+    const targetNodes = physicsTaskStatus.value.failedList.map(item => ({
       bk_cloud_id: item.bk_cloud_id,
       bk_supplier_id: item.bk_supplier_id,
       ip: item.ip,
@@ -286,6 +361,7 @@
         removeSearchParam([
           'collector_config_id',
           'task_id_list',
+          'environment',
         ]);
         return;
       }
@@ -310,6 +386,47 @@
       },
     });
   };
+
+  const startStatusPolling = () => {
+    if (isContainer.value) {
+      fetchBcsTaskStatus({
+        collector_config_id: collectorConfigId,
+        task_id_list: [],
+      }).finally(() => {
+        isPageReady.value = true;
+        startLoopAndWatch(loopBcsTaskStatus);
+      });
+      return;
+    }
+    fetchPhysicsTaskStatus({
+      collector_config_id: collectorConfigId,
+      task_id_list: taskIdList,
+    }).finally(() => {
+      isPageReady.value = true;
+      startLoopAndWatch(loopPhysicsTaskStatus);
+    });
+  };
+
+  onMounted(async () => {
+    // URL 未带 environment 时，用采集详情兜底识别容器
+    if (!isContainer.value && collectorConfigId) {
+      try {
+        const detail = await fetchCollectorDetail({
+          id: String(collectorConfigId),
+        });
+        if (detail.environment === 'container') {
+          isContainer.value = true;
+          appendSearchParams({
+            environment: 'container',
+            collector_config_id: collectorConfigId,
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    startStatusPolling();
+  });
 </script>
 <style lang="postcss">
   .collection-delivery-page {
