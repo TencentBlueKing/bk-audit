@@ -77,6 +77,7 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import _ from 'lodash';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
@@ -189,21 +190,26 @@
   };
 
   const handleUpdateFieldItemList = (conditionsIndex: number, value: Where['conditions'][0]) => {
-    where.value.conditions[conditionsIndex] = value;
+    where.value.conditions[conditionsIndex] = _.cloneDeep(value);
   };
 
   // eslint-disable-next-line max-len
   const handleUpdateFieldItem = (value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter') => {
+    const target = where.value.conditions[conditionsIndex]?.conditions[childConditionsIndex]?.condition;
+    if (!target) return;
     if (type === 'field') {
-      // eslint-disable-next-line max-len
-      where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.field = value as DatabaseTableFieldModel;
+      target.field = value as DatabaseTableFieldModel;
     } else if (type === 'filter') {
-      Array.isArray(value)
-        // eslint-disable-next-line max-len
-        ? where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.filters = value as Array<string>
-        : where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.filter = value as string;
+      if (Array.isArray(value)) {
+        // 拷贝数组，避免与 localConditions 共享引用导致多条表达式互相覆盖
+        target.filters = [...value];
+        target.filter = '';
+      } else {
+        target.filter = value as string;
+        target.filters = [];
+      }
     } else {
-      where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.operator = value as string;
+      target.operator = value as string;
     }
   };
 
@@ -211,8 +217,9 @@
     where.value.conditions[conditionsIndex].connector = value;
   };
 
-  const handleUpdateLocalConditions = (value: any) => {
-    where.value.conditions[value.index] = value;
+  // 必须以数组下标 conditionsIndex 写入，不能用 group.index（合并 having / 排序后二者可能不一致）
+  const handleUpdateLocalConditions = (conditionsIndex: number, value: Where['conditions'][0]) => {
+    where.value.conditions[conditionsIndex] = _.cloneDeep(value);
   };
 
   watch(() => where.value, (data) => {

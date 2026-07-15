@@ -17,7 +17,7 @@
 <template>
   <div
     v-for="(condition, index) in localConditions.conditions"
-    :key="index"
+    :key="`${conditionsIndex}-${index}`"
     class="rule-item-field"
     :style="{ marginBottom: index === conditions.conditions.length -1 ? '0px' : '8px' }">
     <!-- 一级横线 -->
@@ -206,7 +206,7 @@
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
-    (e: 'handleUpdateLocalConditions', value: any): void;
+    (e: 'handleUpdateLocalConditions', conditionsIndex: number, value: any): void;
   }
   interface DataType{
     label: string;
@@ -249,7 +249,7 @@
     } else {
       emits('updateFieldItem', filters, props.conditionsIndex, index, 'filter');
     }
-    emits('handleUpdateLocalConditions', localConditions.value);
+    emits('handleUpdateLocalConditions', props.conditionsIndex, localConditions.value);
   };
 
   const clearConditionFieldValidate = (index: number) => {
@@ -502,7 +502,7 @@
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.keys = node.fieldTypeValueAr;
     }
-    emits('handleUpdateLocalConditions', localConditions.value);
+    emits('handleUpdateLocalConditions', props.conditionsIndex, localConditions.value);
   };
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
@@ -514,9 +514,10 @@
 
   watch(() => props.conditions, (data) => {
     localConditions.value = JSON.parse(JSON.stringify(data));
-    localConditions.value.conditions.forEach((cond: any) => {
-      normalizeConditionValueForDisplay(cond.condition);
-    });
+    localConditions.value.conditions = localConditions.value.conditions.map((cond: any) => ({
+      ...cond,
+      condition: normalizeConditionValueForDisplay(cond.condition),
+    }));
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();
