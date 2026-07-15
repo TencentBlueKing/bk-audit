@@ -252,9 +252,15 @@ export const isSearchFieldValueFilled = (field: SearchListField): boolean => {
   return true;
 };
 
+/** 是否存在可见的查询参数（未设置 is_show 或 is_show !== false） */
+export function hasVisibleSearchParams(searchList: SearchListField[] = []): boolean {
+  return searchList.some(item => item.is_show !== false);
+}
+
 /** 必填查询字段是否均已填写 */
 export const areRequiredSearchFieldsFilled = (searchList: SearchListField[] = []): boolean => {
-  if (!searchList.length) return false;
+  // 无参数或无可选自填的必填项时，视为已满足（可自动查询）
+  if (!searchList.length) return true;
   const requiredFields = searchList.filter(item => item.required !== false && item.is_show !== false);
   if (!requiredFields.length) return true;
   return requiredFields.every(isSearchFieldValueFilled);
@@ -267,7 +273,7 @@ export const toolTypeHasQueryButton = (toolType?: string): boolean => (
 /**
  * 加载时是否自动执行查询：
  * - 无查询按钮（如 bk_vision）：进入页面自动查询
- * - 有查询按钮（data_search / api）：必填项均有值时自动查询（URL / 缓存 / 默认值）
+ * - 有查询按钮（data_search / api）：无可见必填项或必填项均有值时自动查询（URL / 缓存 / 默认值）
  * - 下钻场景：自动查询
  */
 export const shouldAutoExecuteToolOnLoad = (

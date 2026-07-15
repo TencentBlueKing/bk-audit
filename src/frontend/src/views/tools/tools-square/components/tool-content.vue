@@ -21,7 +21,9 @@
     <template
       v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
       <div>
-        <div class="top-search">
+        <div
+          v-if="showQueryInput"
+          class="top-search">
           <div class="top-search-title">
             {{ t('查询输入') }}
           </div>
@@ -132,6 +134,7 @@
   import DataSearchResult from './dialog/data-search-result.vue';
 
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
+  import { hasVisibleSearchParams } from '@/views/tools/tools-square/utils/tool-url-params';
 
   interface SearchItem {
     value: any;
@@ -219,6 +222,9 @@
     return formData;
   });
 
+  // API / SQL 工具在无参数或参数均不可见时，隐藏查询输入区域
+  const showQueryInput = computed(() => hasVisibleSearchParams(localSearchList.value));
+
   const isLoading = computed(() => {
     if (dataSearchResultRef.value) {
       return dataSearchResultRef.value.isLoading;
@@ -242,18 +248,27 @@
     }
   };
 
+  const executeQuery = () => {
+    formItemRef.value && formItemRef.value.forEach((item: any) => {
+      item?.getData();
+    });
+    // 调用子组件的执行方法
+    if (props.toolDetails?.tool_type === 'data_search' && dataSearchResultRef.value) {
+      dataSearchResultRef.value.executeTool();
+    } else if (props.toolDetails?.tool_type === 'api' && apiSearchResultRef.value) {
+      apiSearchResultRef.value.executeTool();
+    }
+    emit('query');
+  };
+
   const submit = () => {
+    // 查询输入隐藏时无表单，直接执行查询
+    if (!formRef.value) {
+      executeQuery();
+      return;
+    }
     formRef.value.validate().then(() => {
-      formItemRef.value && formItemRef.value.forEach((item: any) => {
-        item?.getData();
-      });
-      // 调用子组件的执行方法
-      if (props.toolDetails?.tool_type === 'data_search' && dataSearchResultRef.value) {
-        dataSearchResultRef.value.executeTool();
-      } else if (props.toolDetails?.tool_type === 'api' && apiSearchResultRef.value) {
-        apiSearchResultRef.value.executeTool();
-      }
-      emit('query');
+      executeQuery();
     });
   };
 
