@@ -14,6 +14,15 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+export type PanelVisibilityType = 'all_visible' | 'all_scenes' | 'all_systems'
+  | 'specific_scenes' | 'specific_systems' | 'scenes_and_systems';
+
+export interface PanelVisibilityPayload {
+  visibility_type: PanelVisibilityType;
+  scene_ids: number[];
+  system_ids: string[];
+}
+
 export default class PanelModel {
   id: string;
   name: string;
@@ -30,6 +39,9 @@ export default class PanelModel {
   category: string;
   status: 'published' | 'unpublished';
   is_enabled?: boolean;
+  visibility_type?: PanelVisibilityType;
+  scene_ids?: number[];
+  system_ids?: string[];
 
   constructor(payload: PanelModel) {
     this.id = payload.id;
@@ -47,5 +59,8 @@ export default class PanelModel {
     this.category = payload.category;
     this.status = payload.status;
     this.is_enabled = payload.is_enabled;
+    this.visibility_type = payload.visibility_type;
+    this.scene_ids = payload.scene_ids;
+    this.system_ids = payload.system_ids;
   }
 }

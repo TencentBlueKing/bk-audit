@@ -93,35 +93,16 @@
               @change="handleNameChange" />
           </bk-form-item>
 
-          <!-- 所属分组 -->
+          <!-- 可见范围 -->
           <bk-form-item
-            :label="t('所属分组')"
-            property="groupId"
+            :label="t('可见范围')"
+            property="visibility_type"
             required>
-            <bk-select
-              v-model="formData.groupId"
-              :clearable="false"
-              :placeholder="t('请选择')"
-              :popover-options="{
-                boundary: 'parent',
-                zIndex: 9999
-              }"
-              style="flex: 1;"
-              @change="handleGroupChange">
-              <bk-option
-                v-for="group in groupList"
-                :key="group.id"
-                :label="group.name"
-                :value="group.id" />
-              <template #extension>
-                <div
-                  class="create-group-btn"
-                  @click="handleCreateGroup">
-                  <audit-icon type="plus-circle" />
-                  {{ t('新建分组') }}
-                </div>
-              </template>
-            </bk-select>
+            <visible-range-field
+              :form-data="visibilityFormData"
+              match-selector-width
+              popover-class="is-compact"
+              @update:form-data="handleVisibleRangeChange" />
           </bk-form-item>
 
           <!-- 描述 -->
@@ -176,24 +157,28 @@
   import ToolManageService from '@service/tool-manage';
 
   import ConfigModel from '@model/root/config';
+  import type { PanelVisibilityType } from '@model/report-config/panel';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-
-  export interface ReportGroup {
-    id: number;
-    name: string;
-  }
+  import VisibleRangeField from '@views/platform-manage/tool-manage/create-tool/components/visible-range-field.vue';
+  import {
+    applyVisibilityToFormData,
+    buildVisibilityPayload,
+    shouldSubmitVisibilityPayload,
+  } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
+  import type { FormData as ToolFormData } from '@views/platform-manage/tool-manage/create-tool/types';
 
   export interface ReportFormData {
     id?: string;
     bkvisionReport: string;
     name: string;
-    groupId: number | null;
     description: string;
     status?: 'published' | 'unpublished';
     enabled: boolean;
+    visibility_type: PanelVisibilityType;
+    scene_ids: number[];
+    system_ids: string[];
   }
 
   interface ChartListModel {
@@ -207,9 +192,6 @@
 
   interface Props {
     isShow: boolean;
-    groupList?: ReportGroup[];
-    defaultGroupId?: number | null;
-    defaultGroupName?: string | null;
     editData?: ReportFormData | null;
     chartLists?: ChartListModel[];
   }
@@ -219,14 +201,10 @@
     (e: 'submit', data: ReportFormData): void;
     (e: 'cancel'): void;
     (e: 'success', panelId?: string): void;
-    (e: 'create-group'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     isShow: false,
-    groupList: () => [],
-    defaultGroupId: null,
-    defaultGroupName: null,
     editData: null,
     chartLists: () => [],
   });
@@ -234,31 +212,48 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-
-  // 是否编辑模式
   const isEditMode = computed(() => !!props.editData);
-
-  // 图表列表数据（从 props 获取）
   const chartLists = computed(() => props.chartLists || []);
-
-  // 分组后的图表列表（用于下拉框展示）
   const chartGroupedLists = computed(() => chartLists.value);
-
   const { messageSuccess } = useMessage();
-
-  // 表单引用
   const formRef = ref();
 
-  // 表单数据
   const formData = ref<ReportFormData>({
     bkvisionReport: '',
     name: '',
-    groupId: null,
     description: '',
     enabled: false,
+    visibility_type: 'all_visible',
+    scene_ids: [],
+    system_ids: [],
   });
 
-  // 新建模式，重置表单
+  const visibilityFormData = computed(() => ({
+    name: formData.value.name,
+    tags: [],
+    description: formData.value.description,
+    tool_type: '',
+    updated_at: '',
+    updated_by: '',
+    is_bkvision: true,
+    updated_time: null,
+    data_search_config_type: '',
+    visibility_type: formData.value.visibility_type,
+    scene_ids: formData.value.scene_ids,
+    system_ids: formData.value.system_ids,
+    config: {
+      referenced_tables: [],
+      input_variable: [],
+      output_fields: [],
+      sql: '',
+      uid: '',
+      output_config: {
+        enable_grouping: false,
+        groups: [],
+      },
+    },
+  } as ToolFormData));
+
   const formRules = {
     bkvisionReport: [
       {
@@ -274,57 +269,64 @@
         trigger: 'blur',
       },
     ],
-    groupId: [
+    visibility_type: [
       {
-        required: true,
-        message: t('请选择所属分组'),
-        trigger: 'blur',
+        validator: () => shouldSubmitVisibilityPayload(formData.value),
+        message: t('请选择可见范围'),
+        trigger: 'change',
       },
     ],
   };
+
   const handleNameChange = () => {
     formRef.value?.validate('name');
   };
-  const handleGroupChange = () => {
-    formRef.value?.validate('groupId');
+
+  const handleVisibleRangeChange = (value: ToolFormData) => {
+    formData.value = {
+      ...formData.value,
+      visibility_type: value.visibility_type,
+      scene_ids: value.scene_ids || [],
+      system_ids: value.system_ids || [],
+    };
+    formRef.value?.validate('visibility_type');
   };
 
-  // 新建分组
-  const handleCreateGroup = () => {
-    emit('create-group');
-  };
-  // 填充编辑数据的通用逻辑
   const fillEditFormData = (data: ReportFormData) => {
+    const visibilityData = applyVisibilityToFormData({
+      visibility_type: data.visibility_type,
+      scene_ids: data.scene_ids,
+      system_ids: data.system_ids,
+    }) || {
+      visibility_type: 'all_visible' as PanelVisibilityType,
+      scene_ids: [],
+      system_ids: [],
+    };
     formData.value = {
       id: data.id,
       bkvisionReport: data.bkvisionReport || '',
       name: data.name,
-      groupId: data.groupId ?? null,
-      description: data.description || '--',
+      description: data.description === '--' ? '' : (data.description || ''),
       status: data.status || 'unpublished',
       enabled: (data.status ?? 'unpublished') === 'published',
+      visibility_type: visibilityData.visibility_type,
+      scene_ids: visibilityData.scene_ids,
+      system_ids: visibilityData.system_ids,
     };
   };
 
-  // 重置新建模式表单
   const resetCreateFormData = () => {
-    let defaultGroupIdValue = props.defaultGroupId ?? null;
-    if (props.defaultGroupName) {
-      const matchedGroup = props.groupList.find(g => g.name === props.defaultGroupName);
-      if (matchedGroup) {
-        defaultGroupIdValue = matchedGroup.id;
-      }
-    }
     formData.value = {
       bkvisionReport: '',
       name: '',
-      groupId: defaultGroupIdValue,
       description: '',
       enabled: false,
+      visibility_type: 'all_visible',
+      scene_ids: [],
+      system_ids: [],
     };
   };
 
-  // 监听显示状态，重置/填充表单
   watch(() => props.isShow, (val) => {
     if (val) {
       if (props.editData) {
@@ -332,10 +334,8 @@
       } else {
         resetCreateFormData();
       }
-      // 打开时清除校验状态，避免立即显示错误提示
       nextTick(() => {
         formRef.value?.clearValidate();
-        // 再次确保清除（解决某些情况下 clearValidate 不生效的问题）
         setTimeout(() => {
           formRef.value?.clearValidate();
         }, 100);
@@ -343,7 +343,6 @@
     }
   });
 
-  // 监听 editData 变化（双重保障，解决 isShow 与 editData 更新时序竞态问题）
   watch(() => props.editData, (data) => {
     if (props.isShow && data) {
       fillEditFormData(data);
@@ -352,21 +351,9 @@
     }
   });
 
-  // 监听 defaultGroupId 变化（新建分组成功后自动选中新建的分组）
-  watch(() => props.defaultGroupId, (newId) => {
-    if (props.isShow && newId !== null && !props.editData) {
-      formData.value.groupId = newId;
-    }
-  });
-
-  // 监听 chartLists 加载完成，编辑模式下设置选择器的值
-  // bkvisionReport 直接存储 uid，无需额外处理
-
-  // 报表选择变化处理
   const handleReportChange = (value: string) => {
     if (value) {
       formData.value.bkvisionReport = value;
-      // 从 chartLists 中查找报表名称并自动填充
       for (const group of chartLists.value) {
         if (group.share) {
           const report = group.share.find(item => item.uid === value);
@@ -384,7 +371,6 @@
     formRef.value?.validate('name');
   };
 
-  // 预览报表（点击选项右侧图标）
   const handlePreviewReport = async (item: { uid: string; name: string }) => {
     const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
     if (!baseUrl) return;
@@ -408,7 +394,6 @@
     }
   };
 
-  // 获取配置数据（用于获取 BKVision URL）
   const {
     data: configData,
   } = useRequest(RootManageService.config, {
@@ -416,26 +401,22 @@
     manual: true,
   });
 
-  // 获取报表详情（用于获取 dashboard_uid）
   const {
     run: fetchReportDetail,
   } = useRequest(ToolManageService.fetchReportLists, {
     defaultValue: null,
   });
 
-  // 预览报表
   const handlePreview = async () => {
     if (!formData.value.bkvisionReport) return;
     const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
     if (!baseUrl) return;
 
     try {
-      // 先调用接口获取 dashboard_uid
       const res = await fetchReportDetail({
         share_uid: formData.value.bkvisionReport,
       });
       if (res && res.data?.dashboard_uid) {
-        // 从 chartLists 中查找空间 uid
         let spaceUid = '';
         for (const group of chartLists.value) {
           const report = group.share?.find(item => item.uid === formData.value.bkvisionReport);
@@ -444,7 +425,6 @@
             break;
           }
         }
-        // 构建跳转链接：baseUrl#/spaceUid/dashboards/detail/root/dashboardUid
         window.open(`${baseUrl}#/${spaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
       }
     } catch (e) {
@@ -452,76 +432,66 @@
     }
   };
 
-  // 创建 Panel
   const {
-    run: createPanel,
+    run: createPlatformPanel,
     loading: createLoading,
-  } = useRequest(ReportConfigService.createPanel, {
+  } = useRequest(ReportConfigService.createPlatformPanel, {
     defaultValue: null,
     onSuccess: (res: any) => {
       messageSuccess(t('创建成功'));
-      emit('success', res?.id); // 通知父组件刷新列表，并传递新建报表ID用于高亮
+      emit('success', res?.id);
       handleClose();
     },
   });
 
-  // 更新 Panel
   const {
-    run: updatePanel,
+    run: updatePlatformPanel,
     loading: updateLoading,
-  } = useRequest(ReportConfigService.updatePanel, {
+  } = useRequest(ReportConfigService.updatePlatformPanel, {
     defaultValue: null,
     onSuccess: () => {
       messageSuccess(t('更新成功'));
-      emit('success'); // 通知父组件刷新列表
+      emit('success');
       handleClose();
     },
   });
 
-  // 提交 loading
   const submitLoading = computed(() => createLoading.value || updateLoading.value);
 
-  // 提交
+  const buildSubmitPayload = () => {
+    const payload: Record<string, any> = {
+      vision_id: formData.value.bkvisionReport,
+      name: formData.value.name,
+      status: formData.value.enabled ? 'published' : 'unpublished',
+      description: formData.value.description || undefined,
+    };
+
+    if (shouldSubmitVisibilityPayload(formData.value)) {
+      payload.visibility = buildVisibilityPayload(formData.value);
+    }
+
+    return payload;
+  };
+
   const handleSubmit = async () => {
     formRef.value?.validate().then(() => {
-      // 从 groupList 中查找选中分组的名称
-      const selectedGroup = props.groupList.find(g => g.id === formData.value.groupId);
-      const groupId = selectedGroup?.id || '';
-      // 直接使用 bkvisionReport 作为 vision_id
-      const visionId = formData.value.bkvisionReport;
+      const payload = buildSubmitPayload();
 
       if (isEditMode.value && formData.value.id) {
-        // 编辑模式，调用 updatePanel API
-        updatePanel({
-          id: formData.value.id,
-          scene_id: getSceneSystemParams().scope_id,
-          group_id: typeof groupId === 'number' ? groupId : Number(groupId),
+        updatePlatformPanel({
           panel_id: formData.value.id,
-          vision_id: visionId,
-          name: formData.value.name,
-          status: formData.value.enabled ? 'published' : 'unpublished',
-          description: formData.value.description || undefined,
+          ...payload,
         });
       } else {
-        // 创建模式，调用 createPanel API
-        createPanel({
-          vision_id: visionId,
-          name: formData.value.name,
-          group_id: groupId,
-          status: formData.value.enabled ? 'published' : 'unpublished',
-          description: formData.value.description,
-          scene_id: getSceneSystemParams().scope_id,
-        });
+        createPlatformPanel(payload);
       }
     });
   };
 
-  // 侧边栏关闭（箭头/遮罩点击），仅关闭弹窗
   const handleSliderClosed = () => {
     emit('update:isShow', false);
   };
 
-  // 取消按钮关闭，同时通知父组件
   const handleClose = () => {
     emit('update:isShow', false);
     emit('cancel');
@@ -535,10 +505,6 @@
 
 .ml4 {
   margin-left: 4px;
-}
-
-.mr4 {
-  margin-right: 4px;
 }
 
 .mr8 {
@@ -593,34 +559,10 @@
   align-items: center;
   margin-bottom: 8px;
 
-  .status-tip {
-    display: flex;
-    align-items: center;
-    margin-right: 16px;
-    font-size: 12px;
-    color: #979ba5;
-  }
-
   .status-label {
     margin-left: 8px;
     font-size: 12px;
     color: #63656e;
-  }
-}
-
-.create-group-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 40px;
-  font-size: 12px;
-  color: #3a84ff;
-  cursor: pointer;
-  border-top: 1px solid #dcdee5;
-
-  &:hover {
-    background-color: #f5f7fa;
   }
 }
 

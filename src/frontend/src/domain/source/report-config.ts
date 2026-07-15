@@ -16,9 +16,9 @@
 */
 
 
-import Request from '@utils/request';
+import Request, { type IRequestResponsePaginationData } from '@utils/request';
 
-import PanelModel from './../model/report-config/panel';
+import PanelModel, { type PanelVisibilityPayload } from './../model/report-config/panel';
 import ModuleBase from './module-base';
 
 class PanelManage extends ModuleBase {
@@ -156,6 +156,73 @@ class PanelManage extends ModuleBase {
   // 删除场景级报表分组
   deleteGroup(params: { id: number | string, scene_id: number | string}) {
     return Request.delete(`bkvision${this.module}/panel/scene/group/${params.id}/`, {
+      params,
+    });
+  }
+  // 获取平台级报表列表
+  fetchPlatformPanels(params: {
+    enable_paginate?: boolean,
+    page?: number,
+    page_size?: number,
+    status?: 'published' | 'unpublished',
+    name?: string,
+    description?: string,
+    updated_by?: string,
+    scenario?: string,
+  }) {
+    return Request.get<IRequestResponsePaginationData<PanelModel>>(
+      `bkvision${this.module}/panel/platform/`,
+      {
+        params: {
+          enable_paginate: true,
+          ...params,
+        },
+      },
+    );
+  }
+  // 创建平台级报表
+  createPlatformPanel(params: {
+    vision_id?: string,
+    name: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+  }) {
+    return Request.post(`bkvision${this.module}/panel/platform/`, {
+      params,
+    });
+  }
+  // 更新平台级报表
+  updatePlatformPanel(params: {
+    panel_id: string,
+    vision_id?: string,
+    name?: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+  }) {
+    const { panel_id: panelId, ...rest } = params;
+    return Request.put(`bkvision${this.module}/panel/platform/${panelId}/`, {
+      params: {
+        panel_id: panelId,
+        ...rest,
+      },
+    });
+  }
+  // 删除平台级报表
+  deletePlatformPanel(params: { panel_id: string }) {
+    return Request.delete(`bkvision${this.module}/panel/platform/${params.panel_id}/`, {
+      params,
+    });
+  }
+  // 上架/下架平台级报表
+  publishPlatformPanel(params: {
+    panel_id: string,
+    status?: 'published' | 'unpublished',
+  }) {
+    return Request.post(`bkvision${this.module}/panel/platform/${params.panel_id}/publish/`, {
       params,
     });
   }
