@@ -231,6 +231,8 @@
   import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
+  import { formatTimeRangeSelectValue } from '@views/tools/tools-square/utils/time-range-value';
+
   interface Exposes {
     executeTool: () => void;
     toolExecuteData: any;
@@ -378,6 +380,10 @@
     // 非必填且值为空，返回 null
     if (!item.required && isEmptyValue(item.value)) {
       return null;
+    }
+    // 时间范围选择器统一转换为绝对时间（后端不支持 now-7d 等相对时间表达式）
+    if (item.field_category === 'time_range_select') {
+      return formatTimeRangeSelectValue(item.value);
     }
     return item.value;
   };
