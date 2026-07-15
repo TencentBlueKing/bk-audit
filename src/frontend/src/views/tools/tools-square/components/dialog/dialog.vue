@@ -106,7 +106,9 @@
           <template
             v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
             <div>
-              <div class="top-search">
+              <div
+                v-if="showQueryInput"
+                class="top-search">
                 <div class="top-search-title">
                   {{ t('查询输入') }}
                 </div>
@@ -243,6 +245,7 @@
   import userProfileIcon from '@/images/user.svg';
   import { getSceneSystemParams, getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
   import { getSearchItemDefaultValue } from '@/views/tools/tools-square/utils/search-item-default';
+  import { hasVisibleSearchParams } from '@/views/tools/tools-square/utils/tool-url-params';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface TagItem {
@@ -372,6 +375,9 @@
     return formData;
   });
 
+  // API / SQL 工具在无参数或参数均不可见时，隐藏查询输入区域
+  const showQueryInput = computed(() => hasVisibleSearchParams(searchList.value));
+
   const isLoading = computed(() => {
     if (dataSearchResultRef.value) {
       return dataSearchResultRef.value.isLoading;
@@ -495,17 +501,26 @@
     });
   };
 
+  const executeQuery = () => {
+    formItemRef.value && formItemRef.value.forEach((item: any) => {
+      item?.getData();
+    });
+    // 调用子组件的执行方法
+    if (toolDetails.value?.tool_type === 'data_search' && dataSearchResultRef.value) {
+      dataSearchResultRef.value.executeTool();
+    } else if (toolDetails.value?.tool_type === 'api' && apiSearchResultRef.value) {
+      apiSearchResultRef.value.executeTool();
+    }
+  };
+
   const submit = () => {
+    // 查询输入隐藏时无表单，直接执行查询
+    if (!formRef.value) {
+      executeQuery();
+      return;
+    }
     formRef.value.validate().then(() => {
-      formItemRef.value && formItemRef.value.forEach((item: any) => {
-        item?.getData();
-      });
-      // 调用子组件的执行方法
-      if (toolDetails.value?.tool_type === 'data_search' && dataSearchResultRef.value) {
-        dataSearchResultRef.value.executeTool();
-      } else if (toolDetails.value?.tool_type === 'api' && apiSearchResultRef.value) {
-        apiSearchResultRef.value.executeTool();
-      }
+      executeQuery();
     });
   };
 
@@ -632,38 +647,43 @@
     }
 
     nextTick(() => {
+      // 判断每个字段是否有值（不可见参数视为已满足）
+      const validateField = (field: any) => {
+        if (field.is_show === false) {
+          return true;
+        }
+        if (!field.required) {
+          return true;
+        }
+        if (field.field_category === 'time_range_select') {
+          return Array.isArray(field.value) && field.value.length > 0;
+        }
+        if (field.field_category === 'person_select') {
+          if (Array.isArray(field.value)) {
+            return field.value.length > 0;
+          }
+          return field.value !== '';
+        }
+        return field.value !== null && field.value !== '';
+      };
+
+      const isValid = props.source
+        ? searchList.value.map(e => (e.required ? validateField(e) : true)).every(e => e)
+        : searchList.value.every(validateField);
+
       if (formItemRef.value) {
         // form-item赋值
         formItemRef.value.forEach((item: any, index: number) => {
           item?.setData(searchList.value[index].value);
         });
         nextTick(() => {
-          formRef.value.clearValidate();
+          formRef.value?.clearValidate();
         });
-        // 判断每个字段是否有值
-        const validateField = (field: any) => {
-          if (!field.required) {
-            return true;
-          }
-          if (field.field_category === 'time_range_select') {
-            return Array.isArray(field.value) && field.value.length > 0;
-          }
-          if (field.field_category === 'person_select') {
-            if (Array.isArray(field.value)) {
-              return field.value.length > 0;
-            }
-            return field.value !== '';
-          }
-          return field.value !== null && field.value !== '';
-        };
+      }
 
-        const isValid = props.source
-          ? searchList.value.map(e => (e.required ? validateField(e) : true)).every(e => e)
-          : searchList.value.every(validateField);
-
-        if (isValid) {
-          submit();
-        }
+      // 无可见查询参数，或校验通过时自动查询
+      if (!showQueryInput.value || isValid) {
+        submit();
       }
     });
   };
