@@ -572,7 +572,7 @@
       label: () => t('策略ID'),
       field: () => 'strategy_id',
       fixed: 'left',
-      width: 120,
+      width: 90,
       sort: 'custom',
     },
     {
@@ -580,6 +580,7 @@
       fixed: 'left',
       sort: 'custom',
       field: () => 'strategy_name',
+      minWidth: 220,
       render: ({ data }: { data: StrategyModel}) => {
         const isNew = isNewData(data);
         return isNew
@@ -622,7 +623,7 @@
     {
       label: () => t('标签'),
       field: () => 'tags',
-      minWidth: 230,
+      width: 120,
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
         return <EditTag data={tags} key={data.strategy_id} />;
@@ -631,7 +632,7 @@
     {
       label: () => t('状态'),
       field: () => 'status',
-      width: '170px',
+      width: 110,
       filter: {
         list: initStatusFilterList,
         filterScope: SortScope.CURRENT,
@@ -677,7 +678,7 @@
               style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
               onClick={() => handleRecord(data)}
               type='yunxingjilu' />
-          </p>;
+            </p>;
         }
         // failed
         if (data.status_msg) {
@@ -741,6 +742,7 @@
       label: () => t('产生风险单'),
       field: () => 'risk_count',
       sort: 'custom',
+      width: 120,
       render: ({ data }: { data: StrategyModel }) => {
         const to = {
           name: 'sceneRiskManageList',
@@ -761,6 +763,7 @@
     {
       label: () => t('事件调查报告'),
       field: () => 'report_status',
+      width: 140,
       filter: {
         list: initReportStatusFilterList,
         filterScope: SortScope.CURRENT,
@@ -775,7 +778,7 @@
     {
       label: () => t('启停'),
       field: () => 'status',
-      width: 110,
+      width: 90,
       filter: {
         list: initEnableFilterList,
         filterScope: SortScope.ALL,
@@ -818,7 +821,7 @@
     {
       label: () => t('最近更新人'),
       field: () => 'updated_by',
-      width: 140,
+      width: 120,
       sort: 'custom',
     },
     {
