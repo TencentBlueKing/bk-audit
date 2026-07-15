@@ -202,7 +202,6 @@
     buildGameDetailTabLabel,
     buildGameDetailUid,
     getFlatToolParamsFromRoute,
-    getRouteScopeQuery,
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
@@ -660,21 +659,6 @@
     toolRouteQuerySnapshot.value[uid] !== JSON.stringify(route.query)
   );
 
-  const syncRouteWithScopeOnly = (uid: string) => {
-    const scopeQuery = getRouteScopeQuery(route.query as Record<string, unknown>);
-    isSyncingToolRoute.value = true;
-    router.replace({
-      name: 'toolDetail',
-      params: { uid },
-      query: scopeQuery,
-    }).finally(() => {
-      nextTick(() => {
-        isSyncingToolRoute.value = false;
-        markRouteQueryApplied(uid);
-      });
-    });
-  };
-
   const syncGameDetailToRoute = (uid: string) => {
     if (isSyncingToolRoute.value || !uid.startsWith('game_detail_')) return;
     const gameData = gameDetailDataMap.value[uid];
@@ -812,29 +796,43 @@
   const reapplyUrlParamsForUid = (uid: string) => {
     const detail = toolDetailMap.value[uid];
     if (!detail || detail.tool_type === 'smart_page') return;
+    if (!searchListMap.value[uid]?.length) return;
 
     const inputRawNames = getToolInputRawNames(detail);
     const urlParams = getFlatToolParamsFromRoute(route.query as Record<string, unknown>, {
       inputRawNames,
     });
-    if (!Object.keys(urlParams).length) return;
+    if (!Object.keys(urlParams).length) {
+      markRouteQueryApplied(uid);
+      return;
+    }
 
     const urlApplied = applyUrlParamsToSearchList(searchListMap.value[uid], urlParams);
-    if (!urlApplied.hasApplied) return;
+    if (!urlApplied.hasApplied) {
+      markRouteQueryApplied(uid);
+      return;
+    }
 
     searchListMap.value[uid] = urlApplied.list;
     syncSearchListToStorage();
+    markRouteQueryApplied(uid);
 
     nextTick(() => {
       const ref = toolContentRefs.value[uid];
       if (!ref) return;
       ref.setFormItemData(searchListMap.value[uid]);
       syncToolParamsToRoute(uid);
-      runToolAutoExecute(uid, detail);
+      // 等表单 setData 完成后再自动查询，避免 UI 与请求参数不一致
+      nextTick(() => {
+        runToolAutoExecute(uid, detail);
+      });
     });
-    markRouteQueryApplied(uid);
   };
 
+  /**
+   * 将当前工具业务参数同步到 URL。
+   * 详情 / searchList 未就绪时绝不改写 query，避免把深链参数（如 operator）清成仅 scope。
+   */
   const syncRouteForTool = (uid: string) => {
     if (!uid) return;
     if (uid.startsWith('game_detail_')) {
@@ -847,26 +845,20 @@
     }
 
     const detail = toolDetailMap.value[uid];
-    if (!detail) {
-      syncRouteWithScopeOnly(uid);
-      return;
-    }
+    // 详情未就绪：保留现有 URL（含深链业务参数），等 applyToolDetail 完成后再同步
+    if (!detail) return;
 
     if (detail.tool_type === 'smart_page') {
       if (smartPageUrlParamsMap.value[uid]?.accountId) {
         syncToolParamsToRoute(uid);
-      } else {
-        syncRouteWithScopeOnly(uid);
       }
+      // 尚无账号参数时保留 URL 中的 openid 等深链参数
       return;
     }
 
     if (searchListMap.value[uid]?.length) {
       syncToolParamsToRoute(uid);
-      return;
     }
-
-    syncRouteWithScopeOnly(uid);
   };
 
   const applyToolDetail = (data: ToolDetailModel, overrideUid?: string) => {
