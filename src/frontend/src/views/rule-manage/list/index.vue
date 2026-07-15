@@ -236,6 +236,7 @@
 
   import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
+  import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
@@ -458,6 +459,12 @@
   const { on: onEvent, off } = useEventBus();
 
   const { getSearchParams, removeSearchParam, replaceSearchParams } = useUrlSearch();
+  const {
+    recordPageParams,
+    getRecordPageParams,
+    removePageParams,
+  } = useRecordPage;
+  const LIST_PAGE_KEY = 'ruleManageList';
   let isInit = false;
   const searchData: SearchData[] = [
     {
@@ -645,6 +652,7 @@
     batchPrioritySliderRef.value.show(tableData.value);
   };
   const handleClone = (data: RiskRuleManageModel) => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'riskRuleClone',
       params: {
@@ -739,6 +747,7 @@
   };
 
   const handleEdit = (data: RiskRuleManageModel) => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'riskRuleEdit',
       params: {
@@ -762,9 +771,34 @@
     showDetail.value = true;
   };
   const handleCreate = () => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'riskRuleCreate',
     });
+  };
+
+  const setSearchKey = () => {
+    let hasKey = false;
+    searchKey.value = [];
+    // 仅从「编辑离开」时写入的缓存恢复，不读当前 URL 里残留搜索，避免跨页/反复进入一直记住
+    const recordParams = getRecordPageParams(LIST_PAGE_KEY);
+    if (!recordParams) return false;
+    searchData.forEach((item) => {
+      const { id, name } = item;
+      if (!recordParams[id]) return;
+      const content = recordParams[id];
+      const nameList = content.split(',') as string[];
+      searchKey.value.push({
+        id,
+        name,
+        values: [{
+          id: content,
+          name: nameList.map(nameItem => item.children?.find(cItem => cItem.id === nameItem)?.name || nameItem).join(','),
+        }],
+      });
+      hasKey = true;
+    });
+    return hasKey;
   };
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-rule-manage-list-setting', JSON.stringify(setting));
@@ -791,9 +825,19 @@
       removeSearchParam('batchPriorityIndex');
     }
     isInit = true;
-    if (params.rule_id) {
+    const hasKey = setSearchKey();
+    // 消费一次：仅「编辑返回」恢复，避免下次进列表仍记住
+    removePageParams(LIST_PAGE_KEY);
+    if (hasKey) {
+      handleSearch(searchKey.value);
+    } else if (params.rule_id) {
+      // 深链打开详情（非编辑返回）
       isNeedShowDetail.value = true;
-      searchKey.value.push({ id: 'rule_id', name: t('规则ID'), values: [{ id: params.rule_id, name: params.rule_id }] });
+      searchKey.value.push({
+        id: 'rule_id',
+        name: t('规则ID'),
+        values: [{ id: params.rule_id, name: params.rule_id }],
+      });
       fetchList(params);
     } else {
       fetchList();
