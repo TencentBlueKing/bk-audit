@@ -197,6 +197,7 @@
   import {
     useRoute,
     useRouter,
+    onBeforeRouteLeave,
   } from 'vue-router';
 
   import ItsmManageService from '@service/itsm-manage';
@@ -207,6 +208,7 @@
   import type ServiceField from '@model/itsm/service-field';
 
   import useMessage from '@hooks/use-message';
+  import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
@@ -214,6 +216,7 @@
 
   const route = useRoute();
   const router = useRouter();
+  const { removePageParams } = useRecordPage;
 
   const isEditMode = route.name === 'processApplicationEdit';
   const isCloneMode = route.name === 'processApplicationClone';
@@ -417,6 +420,12 @@
   };
   useRouterBack(() => {
     retToList();
+  });
+
+  onBeforeRouteLeave((to) => {
+    if (to.name !== 'applicationManageList') {
+      removePageParams('applicationManageList');
+    }
   });
 </script>
 

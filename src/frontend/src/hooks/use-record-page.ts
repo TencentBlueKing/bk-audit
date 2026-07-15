@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
+    software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -17,14 +17,20 @@
 import useUrlSearch from './use-url-search';
 
 const AUDIT_PAGE_PARAMS = 'audit-page-params';
-const getRecordPageParams = () => {
-  const tempPagination = sessionStorage.getItem('audit-page-params');
+
+/** 按页面隔离，避免不同列表间串用搜索条件 */
+const getStorageKey = (pageKey?: string) => (
+  pageKey ? `${AUDIT_PAGE_PARAMS}:${pageKey}` : AUDIT_PAGE_PARAMS
+);
+
+const getRecordPageParams = (pageKey?: string) => {
+  const tempPagination = sessionStorage.getItem(getStorageKey(pageKey));
   if (tempPagination) {
     return JSON.parse(tempPagination);
   }
   return null;
 };
-const recordPageParams = () => {
+const recordPageParams = (pageKey?: string) => {
   const { getSearchParams } = useUrlSearch();
   const params = getSearchParams();
   const filterParams: Record<string, any> = {};
@@ -33,10 +39,10 @@ const recordPageParams = () => {
       filterParams[key] = params[key];
     }
   });
-  sessionStorage.setItem(AUDIT_PAGE_PARAMS, JSON.stringify(filterParams));
+  sessionStorage.setItem(getStorageKey(pageKey), JSON.stringify(filterParams));
 };
-const removePageParams = () => {
-  sessionStorage.removeItem('audit-page-params');
+const removePageParams = (pageKey?: string) => {
+  sessionStorage.removeItem(getStorageKey(pageKey));
 };
 export default {
   removePageParams,

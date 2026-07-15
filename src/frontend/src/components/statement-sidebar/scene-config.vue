@@ -198,9 +198,14 @@
     }
   };
 
-  // 菜单点击处理
+  // 菜单点击处理：仅保留场景上下文参数，避免各列表页搜索条件互相污染
   const handleMenuClick = (routeName: string) => {
-    router.push({ name: routeName, query: route.query });
+    const { scene_id: sceneId, scope_id: scopeId, scope_type: scopeType } = route.query;
+    const query: Record<string, string> = {};
+    if (sceneId) query.scene_id = String(sceneId);
+    if (scopeId) query.scope_id = String(scopeId);
+    if (scopeType) query.scope_type = String(scopeType);
+    router.push({ name: routeName, query });
   };
 
   // 监听路由变化，自动展开对应分组
