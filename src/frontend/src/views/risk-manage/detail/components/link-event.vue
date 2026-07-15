@@ -694,6 +694,8 @@
   const showMoreFieldsBtn = computed(() => (
     hasLoadedData.value
     && linkEventList.value.length > 0
+    // 有重点字段时非重点字段才会被收起；两者都有才需要展开组件
+    && eventDataKeyArr.value.length > 0
     && eventDataKeyArrNormal.value.length > 0
     && !(activeStatus.value === 'new' && newIndex.value.includes(active.value))
   ));
@@ -812,16 +814,56 @@
       type: '',
     };
   };
+  const getLinkEventKey = (item: EventModel & { manual_event_id?: string | number }) => {
+    if (item.event_id) {
+      return `event:${item.event_id}`;
+    }
+    if (item.manual_event_id !== undefined && item.manual_event_id !== null && item.manual_event_id !== '') {
+      return `manual:${item.manual_event_id}`;
+    }
+    return `raw:${item.raw_event_id || ''}_${item.event_time || ''}`;
+  };
+
   const mergeLinkEvents = (existing: EventModel[], incoming: EventModel[]) => {
-    const seen = new Set(existing.map(item => item.event_id));
+    const seen = new Set(existing.map(item => getLinkEventKey(item)));
     const merged = [...existing];
     incoming.forEach((item) => {
-      if (!seen.has(item.event_id)) {
+      const key = getLinkEventKey(item);
+      if (!seen.has(key)) {
         merged.push(item);
-        seen.add(item.event_id);
+        seen.add(key);
       }
     });
     return merged;
+  };
+
+  // 未同步事件前置合并（按 event_id / manual_event_id 去重，避免轮询重复堆叠）
+  const mergeUnsyncedEvents = (unsynced: EventModel[], existing: EventModel[]) => {
+    const seen = new Set(existing.map(item => getLinkEventKey(item)));
+    const uniqueUnsynced = unsynced.filter((item) => {
+      const key = getLinkEventKey(item);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    return uniqueUnsynced.concat(existing);
+  };
+
+  const clearRefreshTimeout = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+  };
+
+  const scheduleNewEventPoll = () => {
+    clearRefreshTimeout();
+    timeout = window.setTimeout(() => {
+      timeout = undefined;
+      timeoutRefresh();
+    }, 5000);
   };
 
   const {
@@ -859,16 +901,17 @@
         }
 
         nextTick(() => {
+          const wasPollingNewEvents = Boolean(timeout) || activeStatus.value === 'new';
+
           if (linkEventData.value.results.length) {
             activeStatus.value = '';
             // 触底加载时追加数据，首次加载时替换数据
-            const allEvents = currentPage.value === 1
+            let allEvents = currentPage.value === 1
               ? linkEventData.value.results
               : mergeLinkEvents(linkEventList.value, linkEventData.value.results);
-            linkEventList.value = allEvents;
             if (distinctEventDataKeyArr.value.length) {
               // 根据指定字段组合进行去重（包含关系）
-              linkEventList.value =  allEvents.filter((event, index, self) => {
+              allEvents = allEvents.filter((event, index, self) => {
                 // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
                 const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
 
@@ -888,9 +931,13 @@
                 return index === firstIndex;
               });
             }
+            linkEventList.value = allEvents;
           }
-          if (addEventData.value.unsynced_events.length > 0) {
-            linkEventList.value = addEventData.value.unsynced_events.concat(linkEventList.value);
+          if (addEventData.value.unsynced_events?.length > 0) {
+            linkEventList.value = mergeUnsyncedEvents(
+              addEventData.value.unsynced_events,
+              linkEventList.value,
+            );
             activeStatus.value = linkEventList.value[0]?.status || '';
           }
 
@@ -902,22 +949,15 @@
           }).filter(item => item !== -1);
 
           if (linkEventList.value.some(item => item.status === 'new')) {
-            // 执行定时器刷新列表
+            // 仍有未同步事件，继续轮询（先清旧定时器，避免叠加）
             activeStatus.value = 'new';
-            timeout = setTimeout(() => {
-              timeoutRefresh();
-            }, 5000);
+            scheduleNewEventPoll();
           } else {
-            // 消除定时器 慢5秒确保最新数据
-            if (timeout) {
-              activeStatus.value = 'new';
-              setTimeout(() => {
-                activeStatus.value = '';
-                emits('updatedData');
-                timeoutRefresh();
-                clearTimeout(timeout);
-                timeout = undefined;
-              }, 5000);
+            // 同步完成，停止轮询；仅在此前处于轮询态时通知父组件刷新一次
+            clearRefreshTimeout();
+            activeStatus.value = '';
+            if (wasPollingNewEvents) {
+              emits('updatedData');
             }
           }
           // 默认获取第一个
@@ -1077,8 +1117,11 @@
       id: props.data.risk_id,
     }).then(() => {
       // 如果有未同步的事件，立即显示在列表中
-      if (addEventData.value.unsynced_events.length > 0) {
-        linkEventList.value = addEventData.value.unsynced_events;
+      if (addEventData.value.unsynced_events?.length > 0) {
+        linkEventList.value = mergeUnsyncedEvents(
+          addEventData.value.unsynced_events,
+          linkEventList.value,
+        );
         activeStatus.value = linkEventList.value[0]?.status || '';
         [eventItem.value] = linkEventList.value;
         hasLoadedData.value = true;
@@ -1089,12 +1132,10 @@
           }
           return -1;
         }).filter(item => item !== -1);
-        // 如果有新事件，启动定时器刷新
+        // 如果有新事件，启动定时器刷新（避免重复叠加定时器）
         if (linkEventList.value.some(item => item.status === 'new')) {
           activeStatus.value = 'new';
-          timeout = setTimeout(() => {
-            timeoutRefresh();
-          }, 5000);
+          scheduleNewEventPoll();
         }
       }
       // 然后刷新完整的事件列表
@@ -1165,9 +1206,7 @@
     if (fetchTimeout) {
       clearTimeout(fetchTimeout);
     }
-    if (timeout) {
-      clearTimeout(timeout);
-    }
+    clearRefreshTimeout();
   });
 </script>
 <style lang="postcss" scoped>

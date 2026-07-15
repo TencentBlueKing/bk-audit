@@ -24,23 +24,13 @@
           :risk-status-common="riskStatusCommon"
           :strategy-list="strategyList"
           @updated-data="handleUpdatedData" />
-        <!-- 关联事件 -->
-        <div
-          v-if="!detailData.has_report"
-          class="link-event-wrap">
-          <link-event
-            :data="detailData"
-            :strategy-list="strategyList"
-            @get-event-data="handleGetEventData"
-            @updated-data="handleUpdatedData" />
-        </div>
+        <!-- 关联事件 / 事件调查报告 -->
         <bk-tab
-          v-else
           v-model:active="active"
           class="risk-detail-tab"
           type="card-grid">
           <bk-tab-panel
-            v-for="item in panels"
+            v-for="item in visiblePanels"
             :key="item.name"
             :label="item.label"
             :name="item.name">
@@ -168,7 +158,7 @@
     { name: 'linkEvent', label: t('关联事件') },
   ];
 
-  const active = ref<keyof typeof comMap>('eventReport');
+  const active = ref<keyof typeof comMap>('linkEvent');
 
   let timeout: undefined | number = undefined;
   let reportGeneratingTimer: undefined | number = undefined;
@@ -276,6 +266,24 @@
     ...strategyInfoData.value,
   }));
 
+  // 无调查报告时只展示「关联事件」页签，保证标题可见
+  const visiblePanels = computed(() => (
+    detailData.value.has_report
+      ? panels
+      : panels.filter(item => item.name === 'linkEvent')
+  ));
+
+  // 有无调查报告时，保证当前页签始终有效；有报告时默认落在报告页签
+  watch(
+    () => detailData.value.has_report,
+    (hasReport) => {
+      active.value = hasReport ? 'eventReport' : 'linkEvent';
+    },
+    {
+      immediate: true,
+    },
+  );
+
   const canGenerateReport = computed(() => (
     !!detailData.value.permission?.edit_risk_v2
     && !detailData.value.has_report
@@ -373,18 +381,6 @@
         min-height: 0;
         overflow: visible;
       }
-    }
-
-    .link-event-wrap {
-      --link-event-wrap-padding-bottom: 10px;
-
-      position: relative;
-      padding: 10px 16px;
-      margin-top: 16px;
-      overflow: visible;
-      background: #fff;
-      border-radius: 2px;
-      box-shadow: 0 2px 4px 0 #1919290d;
     }
   }
 }
