@@ -104,7 +104,7 @@
   import _ from 'lodash';
   import { nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
+  import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import RootManageService from '@service/root-manage';
@@ -113,6 +113,7 @@
   import ConfigModel from '@model/root/config';
   import ToolDetailModel from '@model/tool/tool-detail';
 
+  import useRecordPage from '@hooks/use-record-page';
   import useRouterBack from '@hooks/use-router-back';
 
   import {
@@ -143,6 +144,7 @@
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
+  const { removePageParams } = useRecordPage;
 
   const isEditMode = route.name === 'sceneToolEdit';
   const backRouteName = 'sceneToolManege';
@@ -479,6 +481,12 @@
     router.push({
       name: backRouteName,
     });
+  });
+
+  onBeforeRouteLeave((to) => {
+    if (to.name !== backRouteName) {
+      removePageParams(backRouteName);
+    }
   });
 </script>
 

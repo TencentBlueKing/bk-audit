@@ -129,7 +129,9 @@
   import ToolDetailModel from '@model/tool/tool-detail';
 
   import useEventBus from '@hooks/use-event-bus';
+  import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
+  import useUrlSearch from '@hooks/use-url-search';
 
   import {
     createSceneToolManageContext,
@@ -165,9 +167,18 @@
     strategies: number[];
   }
 
+  const SCENE_QUERY_KEYS = ['scene_id', 'scope_id', 'scope_type'] as const;
+
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const { getSearchParams, replaceSearchParams } = useUrlSearch();
+  const {
+    recordPageParams,
+    getRecordPageParams,
+    removePageParams,
+  } = useRecordPage;
+  const LIST_PAGE_KEY = 'sceneToolManege';
   const isLoading = ref(true);
   // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
@@ -245,6 +256,7 @@
 
   // 新建工具
   const handleCreateReport = () => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({ name: 'sceneToolCreate', query: {
       scene_id: route.query.scene_id,
       scope_id: route.query.scope_id,
@@ -254,6 +266,7 @@
 
   // 编辑工具
   const handleEdit = (row: ToolItem) => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'sceneToolEdit',
       params: { id: row.uid },
@@ -309,6 +322,27 @@
     toolListRef.value?.fetchData(params);
   };
 
+  /** 同步搜索条件到 URL（保留场景参数） */
+  const syncSearchToUrl = (search: Record<string, any>) => {
+    const current = getSearchParams();
+    const nextParams: Record<string, any> = {};
+    SCENE_QUERY_KEYS.forEach((key) => {
+      if (current[key]) nextParams[key] = current[key];
+    });
+    Object.keys(search).forEach((key) => {
+      const value = search[key];
+      if (value === undefined || value === null || value === ''
+        || (Array.isArray(value) && value.length === 0)) {
+        return;
+      }
+      nextParams[key] = Array.isArray(value) ? value.join(',') : value;
+    });
+    if (statusFilter.value && statusFilter.value !== 'all') {
+      nextParams.status = statusFilter.value;
+    }
+    replaceSearchParams(nextParams);
+  };
+
   // 搜索 - 参考 platform-manage/scene-manage 的 handleSearch 实现
   const handleSearch = (keyword: SearchKey[]) => {
     const search: Record<string, any> = {
@@ -338,6 +372,7 @@
       }
     });
 
+    syncSearchToUrl(search);
     refreshList(search);
   };
 
@@ -349,7 +384,38 @@
   const handleClearSearch = () => {
     searchValue.value = [];
     statusFilter.value = 'all';
+    syncSearchToUrl({});
     toolListRef.value?.fetchData({ sort: ['-created_at'] });
+  };
+
+  const setSearchKey = () => {
+    let hasKey = false;
+    searchValue.value = [];
+    // 仅从「编辑离开」时写入的缓存恢复
+    const recordParams = getRecordPageParams(LIST_PAGE_KEY);
+    if (!recordParams) return false;
+
+    if (recordParams.status && recordParams.status !== 'all') {
+      statusFilter.value = recordParams.status;
+      hasKey = true;
+    }
+
+    searchSelectData.value.forEach((item) => {
+      const { id, name } = item;
+      if (!recordParams[id]) return;
+      const content = String(recordParams[id]);
+      const nameList = content.split(',') as string[];
+      searchValue.value.push({
+        id,
+        name,
+        values: [{
+          id: content,
+          name: nameList.map(nameItem => item.children?.find(cItem => cItem.id === nameItem)?.name || nameItem).join(','),
+        }],
+      });
+      hasKey = true;
+    });
+    return hasKey;
   };
 
   const handleRequestSuccess = () => {
@@ -454,6 +520,12 @@
     fetchAllToolsData(scopeParams);
     // 初始化时获取一次状态统计
     fetchStatusCounts();
+    // 仅「编辑返回」时恢复搜索，并消费掉缓存
+    const hasKey = setSearchKey();
+    removePageParams(LIST_PAGE_KEY);
+    if (hasKey) {
+      handleSearch(searchValue.value);
+    }
     // 监听场景切换事件
     onEvent('scene:change', () => {
       refreshAllData();

@@ -327,6 +327,7 @@
   import {
     useRoute,
     useRouter,
+    onBeforeRouteLeave,
   } from 'vue-router';
 
   import ProcessApplicationManageService from '@service/process-application-manage';
@@ -338,6 +339,7 @@
   import RiskRuleManageModel from '@model/risk-rule/rule-create';
 
   import useMessage from '@hooks/use-message';
+  import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
@@ -408,6 +410,7 @@
   const router = useRouter();
   const route = useRoute();
   const { messageSuccess } = useMessage();
+  const { removePageParams } = useRecordPage;
 
   const typeText = (val: string | undefined) => (
     val === 'field' ? t('字段值引用') : t('自定义输入')
@@ -814,6 +817,12 @@
     router.push({
       name: 'ruleManageList',
     });
+  });
+
+  onBeforeRouteLeave((to) => {
+    if (to.name !== 'ruleManageList') {
+      removePageParams('ruleManageList');
+    }
   });
 </script>
 <style scoped  lang="postcss">

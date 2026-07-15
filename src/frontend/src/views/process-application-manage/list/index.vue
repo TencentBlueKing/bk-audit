@@ -195,6 +195,7 @@
 
   import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
+  import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
@@ -233,6 +234,12 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { getSearchParams, replaceSearchParams } = useUrlSearch();
+  const {
+    recordPageParams,
+    getRecordPageParams,
+    removePageParams,
+  } = useRecordPage;
+  const LIST_PAGE_KEY = 'applicationManageList';
   const { on: onEvent, off } = useEventBus();
   const router = useRouter();
   const dataSource = ProcessApplicationManageService.fetchList;
@@ -588,6 +595,7 @@
     showDetail.value = true;
   };
   const handleClone = (item: ProcessApplicationManageModel) => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'processApplicationClone',
       params: {
@@ -596,6 +604,7 @@
     });
   };
   const handleEdit = (item: ProcessApplicationManageModel) => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'processApplicationEdit',
       params: {
@@ -604,9 +613,34 @@
     });
   };
   const handleCreate = () => {
+    recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'processApplicationCreate',
     });
+  };
+
+  const setSearchKey = () => {
+    let hasKey = false;
+    searchKey.value = [];
+    // 仅从「编辑离开」时写入的缓存恢复
+    const recordParams = getRecordPageParams(LIST_PAGE_KEY);
+    if (!recordParams) return false;
+    searchData.forEach((item) => {
+      const { id, name } = item;
+      if (!recordParams[id]) return;
+      const content = recordParams[id];
+      const nameList = content.split(',') as string[];
+      searchKey.value.push({
+        id,
+        name,
+        values: [{
+          id: content,
+          name: nameList.map(nameItem => item.children?.find(cItem => cItem.id === nameItem)?.name || nameItem).join(','),
+        }],
+      });
+      hasKey = true;
+    });
+    return hasKey;
   };
 
   const handleSceneChange = () => {
@@ -615,13 +649,23 @@
 
   onMounted(() => {
     const params = getSearchParams();
-    if (params.id) {
+    const hasKey = setSearchKey();
+    // 消费一次：仅「编辑返回」恢复，避免下次进列表仍记住
+    removePageParams(LIST_PAGE_KEY);
+    if (hasKey) {
+      handleSearch(searchKey.value);
+    } else if (params.id) {
+      // 深链打开详情（非编辑返回）
       isNeedShowDetail.value = true;
-      searchKey.value.push({ id: 'id', name: t('套餐ID'), values: [{ id: params.id, name: params.id }] });
+      searchKey.value.push({
+        id: 'id',
+        name: t('套餐ID'),
+        values: [{ id: params.id, name: params.id }],
+      });
+      fetchList({ id: params.id });
+    } else {
+      fetchList();
     }
-    fetchList({
-      id: params.id,
-    });
     setTimeout(() => {
       onEvent('scene:change', handleSceneChange);
     }, 1000);
