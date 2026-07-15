@@ -4,7 +4,6 @@
     class="report-config-list"
     :columns="tableColumns"
     :data-source="dataSource"
-    is-need-scene-params
     need-empty-search-tip
     :row-class-name="rowClassName"
     row-key="id"
