@@ -14,34 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
-<template>
-  <bk-form-item
-    label-width="160">
-    <template #label>
-      <span
-        v-bk-tooltips="t('配置工具中，用户可输入的变量及其前端组件类型等')"
-        style="cursor: pointer;border-bottom: 1px dashed #979ba5;">{{ t('查询输入设置')
-        }}</span>
-    </template>
-    <simple-model />
-  </bk-form-item>
-
-  <bk-form-item
-    label-width="160">
-    <template #label>
-      <span
-        v-bk-tooltips="t('配置工具中，可查询结果字段的展示与字段下钻')"
-        style="cursor: pointer;border-bottom: 1px dashed #979ba5;">{{ t('查询结果设置')
-        }}</span>
-    </template>
-    <output-com />
-  </bk-form-item>
-</template>
-<script setup lang='tsx'>
-  import { useI18n } from 'vue-i18n';
-
-  import SimpleModel from '../components/simple-model/index.vue';
-  import OutputCom from '../components/simple-model/output.vue';
-
-  const { t } = useI18n();
+<!-- re-export: shared implementation -->
+<script lang="ts">
+  export { default } from '@views/tool-manage-shared/create-tool/components/data-search/simple-model/index.vue';
 </script>

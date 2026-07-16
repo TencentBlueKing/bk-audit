@@ -148,11 +148,18 @@
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
-  import ConfirmActionDialog from './components/confirm-action-dialog.vue';
+  import {
+    createPlatformToolManageContext,
+    provideToolManageContext,
+  } from '@views/tool-manage-shared/context';
+  import ConfirmActionDialog from '@views/tool-manage-shared/components/confirm-action-dialog.vue';
+  import ToolPreviewDrawer from '@views/tool-manage-shared/components/tool-preview-drawer.vue';
+
   import EditVisibilityDialog from './components/edit-visibility-dialog.vue';
   import ToolListTable from './components/tool-list-table.vue';
-  import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
   import { buildVisibilitySearchParams } from './create-tool/submit-payload';
+
+  provideToolManageContext(createPlatformToolManageContext());
 
   type ActionType = 'delete' | 'enable' | 'disable';
 
