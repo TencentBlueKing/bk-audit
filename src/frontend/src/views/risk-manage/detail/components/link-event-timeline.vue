@@ -369,7 +369,8 @@
 .link-event-timeline {
   position: relative;
   width: 100%;
-  padding: 8px 0 16px;
+  padding: 8px 24px 16px;
+  box-sizing: border-box;
 }
 
 .timeline-tabs {

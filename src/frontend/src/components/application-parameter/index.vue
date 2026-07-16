@@ -824,9 +824,9 @@
 
   .field-insert-wrapper__suffix {
     height: 100%;
-    max-height: 34px;
-    min-height: 34px;
-    margin-top: 1px;
+    max-height: 32.5px;
+    min-height: 32.5px;
+    margin-top: 1.5px;
   }
 }
 
