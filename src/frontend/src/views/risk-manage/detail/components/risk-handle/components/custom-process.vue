@@ -24,8 +24,7 @@
     </div>
     <div class="mis-content">
       <render-info-item
-        :label="t('处理方法')"
-        :label-width="labelWidth">
+        :label="t('处理方法')">
         <span v-if="data.custom_action === 'CloseRisk'">{{ t('人工关单') }}</span>
         <span v-else-if="data.custom_action === 'TransOperator'">
           {{ t('转单给') }} {{ data.new_operators?.join(',') }}
@@ -37,8 +36,7 @@
           <render-info-item
             v-for="field in paParamDisplayFields"
             :key="field.key"
-            :label="field.label"
-            :label-width="labelWidth">
+            :label="field.label">
             <edit-tag
               v-if="field.displayType === 'tag'"
               :data="field.displayValue"
@@ -51,8 +49,7 @@
       <render-info-item
         v-else
         class="mt8"
-        :label="t('处理说明')"
-        :label-width="labelWidth">
+        :label="t('处理说明')">
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="ql-editor"
@@ -95,8 +92,7 @@
     processDetail: Record<string, any>
   }
   const props = defineProps<Props>();
-  const { t, locale } = useI18n();
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 200 : 168));
+  const { t } = useI18n();
   const editorImages = computed(() => {
     const htmlContent = props.data.description;
 
@@ -267,7 +263,7 @@
   }
 
   >.mis-content {
-    padding: 12px 16px;
+    padding: 12px 0;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;
@@ -276,9 +272,14 @@
       align-items: flex-start;
 
       :deep(.info-label) {
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
         line-height: 20px;
+        text-align: left;
         word-break: keep-all;
         white-space: nowrap;
+        flex: 0 0 auto !important;
 
         .tips {
           border-bottom: none;
@@ -286,6 +287,7 @@
       }
 
       :deep(.info-value) {
+        padding-left: 4px;
         line-height: 20px;
       }
     }
