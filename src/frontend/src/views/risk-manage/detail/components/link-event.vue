@@ -99,6 +99,7 @@
                         </bk-button>
                         <span v-else> -- </span>
                         <audit-icon
+                          v-if="getStrategyDisplayText(eventItem?.strategy_id)"
                           v-bk-tooltips="t('复制')"
                           class="copy-btn"
                           type="copy"
@@ -129,7 +130,7 @@
                               <edit-tag
                                 :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                                 :max="99"
-                                :show-copy="false"
+                                :show-copy="hasCopyableValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                                 style="display: inline-block;"
                                 @click="handleUseTool(
                                   drillMap.get(basicItem.field_name),
@@ -178,11 +179,14 @@
                             v-if="basicItem.field_name === 'operator'"
                             :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                             :max="99"
+                            :show-copy="hasCopyableValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                             style="display: inline-block;" />
                           <span v-else>
                             {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) || '--' }}
                           </span>
                           <audit-icon
+                            v-if="basicItem.field_name !== 'operator'
+                              && hasCopyableValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
                             v-bk-tooltips="t('复制')"
                             class="copy-btn"
                             type="copy"
@@ -213,11 +217,6 @@
                               {{ drillMap.get(basicItem.field_name).drill_config.length }}
                             </span>
                           </bk-button>
-                          <audit-icon
-                            v-bk-tooltips="t('复制')"
-                            class="copy-btn"
-                            type="copy"
-                            @click.stop="handleCopyValue(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)" />
                           <template #content>
                             <div>
                               <div
@@ -242,6 +241,11 @@
                             </div>
                           </template>
                         </bk-popover>
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="copy-btn"
+                          type="copy"
+                          @click.stop="handleCopyDrillTitles(basicItem.field_name)" />
                       </template>
                     </render-info-item>
                   </div>
@@ -253,7 +257,7 @@
                 class="section-divider" />
 
               <!-- 事件详情 -->
-              <div class="title mt16">
+              <div class="title">
                 {{ t('事件详情') }}
               </div>
               <template v-if="eventDataKeyArr.length || eventDataKeyArrNormal.length">
@@ -291,6 +295,7 @@
                           )">
                           {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                           <audit-icon
+                            v-if="hasCopyableValue(displayValueDict.eventData[key]?.value)"
                             v-bk-tooltips="t('复制')"
                             class="copy-btn"
                             type="copy"
@@ -324,6 +329,7 @@
                         class="space">
                         {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                         <audit-icon
+                          v-if="hasCopyableValue(displayValueDict.eventData[key]?.value)"
                           v-bk-tooltips="t('复制')"
                           class="copy-btn"
                           type="copy"
@@ -353,11 +359,6 @@
                               {{ drillMap.get(key).drill_config.length }}
                             </span>
                           </bk-button>
-                          <audit-icon
-                            v-bk-tooltips="t('复制')"
-                            class="copy-btn"
-                            type="copy"
-                            @click.stop="handleCopyValue(displayValueDict.eventData[key]?.value)" />
                           <template #content>
                             <div>
                               <div
@@ -381,6 +382,11 @@
                             </div>
                           </template>
                         </bk-popover>
+                        <audit-icon
+                          v-bk-tooltips="t('复制')"
+                          class="copy-btn"
+                          type="copy"
+                          @click.stop="handleCopyDrillTitles(key)" />
                       </template>
                     </render-info-item>
                   </div>
@@ -735,12 +741,28 @@
     return value;
   };
 
-  const handleCopyValue = (value: any) => {
+  const hasCopyableValue = (value: any) => {
     const text = handleShowText(value);
-    if (text === undefined || text === null || text === '' || text === '--') {
+    return text !== undefined && text !== null && text !== '' && text !== '--';
+  };
+
+  const handleCopyValue = (value: any) => {
+    if (!hasCopyableValue(value)) {
       return;
     }
-    execCopy(String(text), t('复制成功'));
+    execCopy(String(handleShowText(value)), t('复制成功'));
+  };
+
+  // 复制证据下探的全部标题
+  const handleCopyDrillTitles = (fieldName: string) => {
+    const drillItem = drillMap.value.get(fieldName);
+    const titles = (drillItem?.drill_config || [])
+      .map((config: any) => config.drill_name || getToolNameAndType(config.tool.uid).name)
+      .filter((name: string) => !!name);
+    if (!titles.length) {
+      return;
+    }
+    execCopy(titles.join('\n'), t('复制成功'));
   };
 
   // 将各种类型转换为字符串，模拟 Vue 模板的显示效果
@@ -1250,7 +1272,7 @@
   .timeline-empty-action {
     display: flex;
     justify-content: flex-end;
-    padding: 8px 0 16px;
+    padding: 8px 24px 16px;
   }
 
   .add-event {
@@ -1272,8 +1294,11 @@
 
   .list-item-detail {
     width: 100%;
+    padding: 0 24px;
+    box-sizing: border-box;
 
     .title {
+      margin-bottom: 16px;
       font-size: 14px;
       font-weight: 700;
       line-height: 22px;
@@ -1287,7 +1312,7 @@
 
     .section-divider {
       height: 1px;
-      margin: 24px 0 0;
+      margin: 24px 0;
       background: #dcdee5;
     }
 

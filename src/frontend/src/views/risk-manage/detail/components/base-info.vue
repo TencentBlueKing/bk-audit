@@ -178,7 +178,7 @@
   }
 
   .title {
-    margin-bottom: 10px;
+    margin-bottom: 16px;
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;
