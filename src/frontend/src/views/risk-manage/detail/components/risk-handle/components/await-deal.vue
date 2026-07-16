@@ -413,10 +413,12 @@
     formRef.value?.clearValidate?.();
   };
 
-  const handleSubmitSuccess = (message: string) => {
+  const handleSubmitSuccess = (message: string, shouldCollapse = true) => {
     handleEditorExpandChange(false);
     resetForm();
-    dockCollapse?.();
+    if (shouldCollapse) {
+      dockCollapse?.();
+    }
     emits('update');
     messageSuccess(message);
   };
@@ -448,7 +450,7 @@
   } = useRequest(RiskManageService.close, {
     defaultValue: null,
     onSuccess() {
-      handleSubmitSuccess(t('人工关单成功'));
+      handleSubmitSuccess(t('人工关单成功'), false);
     },
   });
   // 人工转单
@@ -635,6 +637,20 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px 24px;
+}
+
+.risk-await-deal-method__group :deep(.bk-radio) {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #4d4f56;
+}
+
+.risk-await-deal-method__group :deep(.bk-radio .bk-radio-label) {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #4d4f56;
 }
 
 .risk-await-deal-wrap :deep(.bk-select),

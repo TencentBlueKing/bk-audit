@@ -82,11 +82,9 @@
   import {
     computed,
     nextTick,
-    // computed,
     onMounted,
     ref,
     watch,
-    withDefaults,
   } from 'vue';
   import {
     useI18n,
@@ -129,8 +127,13 @@
   const emits = defineEmits<Emits>();
 
   const showHeaderMisreportBtn = computed(() => {
+    // 已标记误报时展示「解除误报」
     if (props.data.risk_label === 'misreport') {
       return true;
+    }
+    // 单据关闭后不展示「标记误报」
+    if (props.data.status === 'closed') {
+      return false;
     }
     if (props.data.risk_label !== 'normal') {
       return false;
@@ -583,20 +586,38 @@
 
   :deep(.bk-timeline-content .reopen-mis-report-wrap),
   :deep(.bk-timeline-content .approve-wrap) {
-    padding: 16px;
+    padding: 0;
     font-size: 12px;
     color: #63656e;
-    background: #f5f7fa;
-    border: 1px solid #eaebf0;
-    border-radius: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     box-shadow: none;
   }
 
-  :deep(.bk-timeline-content .approve-wrap > .mis-content) {
-    padding: 12px 16px;
+  :deep(.bk-timeline-content .approve-wrap > .mis-content),
+  :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content) {
+    padding: 12px 8px 12px 12px;
     margin-top: 8px;
-    background: #eef0f3;
+    background: #f5f7fa;
     border-radius: 2px;
+
+    .render-info-item .info-label {
+      width: auto !important;
+      max-width: none !important;
+      min-width: 0 !important;
+      text-align: left;
+      flex: 0 0 auto !important;
+    }
+
+    .render-info-item .info-value {
+      padding-left: 4px;
+    }
+  }
+
+  :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-title),
+  :deep(.bk-timeline-content .approve-wrap > .mis-title) {
+    padding: 0;
   }
 }
 </style>
