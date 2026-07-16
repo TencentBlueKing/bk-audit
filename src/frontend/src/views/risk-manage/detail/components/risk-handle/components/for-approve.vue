@@ -324,7 +324,7 @@
   }
 
   >.mis-content {
-    padding: 12px 16px;
+    padding: 12px 0;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;

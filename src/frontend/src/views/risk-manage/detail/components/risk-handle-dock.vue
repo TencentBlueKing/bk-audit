@@ -59,9 +59,6 @@
         <span class="risk-handle-dock__title">{{ t('工单处理') }}</span>
 
         <audit-icon
-
-          v-bk-tooltips="t('展示风险单处理流程与当前可操作环节')"
-
           class="risk-handle-dock__info"
 
           type="info-fill" />
