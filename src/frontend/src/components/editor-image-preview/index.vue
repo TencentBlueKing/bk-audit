@@ -16,100 +16,109 @@
           :src="image.url"
           @click="openModal(index)"
           @error="handleImageError(index)">
-      </div>
-    </div>
-
-    <!-- 自定义图片放大遮罩 -->
-    <div
-      v-if="showModal"
-      class="image-modal-overlay"
-      @click="closeModal">
-      <div class="image-modal-container">
-        <!-- 关闭按钮 - 右上角 -->
         <div
-          class="modal-close"
-          @click="closeModal">
-          <audit-icon type="close-line" />
+          aria-hidden="true"
+          class="preview-hover-overlay">
+          <audit-icon
+            class="preview-hover-icon"
+            type="search1" />
         </div>
+      </div>
+    </div>
 
-        <!-- 图片容器 -->
-        <div class="modal-image-wrapper">
-          <img
-            v-if="currentImage && currentImage.url"
-            :alt="t('图片') + `${currentIndex + 1}`"
-            class="modal-image"
-            :src="currentImage.url"
-            :style="{
-              transform: `rotate(${imageRotation}deg) scale(${imageScale})`
-            }"
-            @click.stop
-            @error="handleModalImageError">
-        </div>
-
-        <!-- 底部控制栏 -->
-        <div class="bottom-controls">
-          <!-- 图片信息 -->
-          <div class="image-info">
-            <span>{{ title }} {{ currentIndex + 1 }}</span>
-            <span
-              v-if="images.length > 1"
-              class="image-counter">
-              {{ currentIndex + 1 }} / {{ images.length }}
-            </span>
+    <!-- 挂载到 body，避免被底部 Dock 等 fixed 层遮挡 -->
+    <teleport to="body">
+      <div
+        v-if="showModal"
+        class="image-modal-overlay"
+        @click="closeModal">
+        <div class="image-modal-container">
+          <!-- 关闭按钮 - 右上角 -->
+          <div
+            class="modal-close"
+            @click="closeModal">
+            <audit-icon type="close-line" />
           </div>
 
-          <!-- 控制按钮组 -->
-          <div class="control-buttons">
-            <!-- 左右导航 -->
-            <div
-              v-if="images.length > 1 && currentIndex > 0"
-              class="control-button"
-              @click.stop="prevImage">
-              <audit-icon type="back" />
-            </div>
-            <div
-              v-else
-              class="control-button disabled">
-              <audit-icon type="back" />
+          <!-- 图片容器 -->
+          <div class="modal-image-wrapper">
+            <img
+              v-if="currentImage && currentImage.url"
+              :alt="t('图片') + `${currentIndex + 1}`"
+              class="modal-image"
+              :src="currentImage.url"
+              :style="{
+                transform: `rotate(${imageRotation}deg) scale(${imageScale})`
+              }"
+              @click.stop
+              @error="handleModalImageError">
+          </div>
+
+          <!-- 底部控制栏 -->
+          <div class="bottom-controls">
+            <!-- 图片信息 -->
+            <div class="image-info">
+              <span>{{ title }} {{ currentIndex + 1 }}</span>
+              <span
+                v-if="images.length > 1"
+                class="image-counter">
+                {{ currentIndex + 1 }} / {{ images.length }}
+              </span>
             </div>
 
-            <!-- 旋转按钮 -->
-            <div
-              class="control-button"
-              @click.stop="rotateLeft">
-              <audit-icon type="redo" />
-            </div>
+            <!-- 控制按钮组 -->
+            <div class="control-buttons">
+              <!-- 左右导航 -->
+              <div
+                v-if="images.length > 1 && currentIndex > 0"
+                class="control-button"
+                @click.stop="prevImage">
+                <audit-icon type="back" />
+              </div>
+              <div
+                v-else
+                class="control-button disabled">
+                <audit-icon type="back" />
+              </div>
 
-            <!-- 放大按钮 -->
-            <div
-              class="control-button"
-              @click.stop="zoomIn">
-              <audit-icon type="add-fill" />
-            </div>
+              <!-- 旋转按钮 -->
+              <div
+                class="control-button"
+                @click.stop="rotateLeft">
+                <audit-icon type="redo" />
+              </div>
 
-            <!-- 缩小按钮 -->
-            <div
-              class="control-button"
-              @click.stop="zoomOut">
-              <audit-icon type="reduce-fill" />
-            </div>
+              <!-- 放大按钮 -->
+              <div
+                class="control-button"
+                @click.stop="zoomIn">
+                <audit-icon type="add-fill" />
+              </div>
 
-            <!-- 右导航 -->
-            <div
-              v-if="images.length > 1 && currentIndex < images.length - 1"
-              class="control-button"
-              @click.stop="nextImage">
-              <audit-icon type="right" />
-            </div>
-            <div
-              v-else
-              class="control-button disabled">
-              <audit-icon type="right" />
+              <!-- 缩小按钮 -->
+              <div
+                class="control-button"
+                @click.stop="zoomOut">
+                <audit-icon type="reduce-fill" />
+              </div>
+
+              <!-- 右导航 -->
+              <div
+                v-if="images.length > 1 && currentIndex < images.length - 1"
+                class="control-button"
+                @click.stop="nextImage">
+                <audit-icon type="right" />
+              </div>
+              <div
+                v-else
+                class="control-button disabled">
+                <audit-icon type="right" />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -224,6 +233,12 @@
   onUnmounted(() => {
     document.removeEventListener('keydown', handleKeydown);
   });
+
+  // 供父组件在点击正文图片时打开预览弹窗
+  // eslint-disable-next-line no-undef
+  defineExpose({
+    openAt: openModal,
+  });
 </script>
 
 <style scoped lang="postcss">
@@ -252,10 +267,12 @@
 }
 
 .preview-item {
+  position: relative;
   display: inline-block;
 }
 
 .preview-thumbnail {
+  display: block;
   width: 60px;
   height: 60px;
   cursor: pointer;
@@ -270,11 +287,34 @@
   box-shadow: 0 2px 4px rgb(58 132 255 / 20%);
 }
 
+.preview-hover-overlay {
+  position: absolute;
+  display: flex;
+  pointer-events: none; /* 防止遮罩影响点击图片打开预览 */
+  background-color: rgb(0 0 0 / 20%);
+  border-radius: 4px;
+  opacity: 0%;
+  transition: opacity .2s ease, background-color .2s ease;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-item:hover .preview-hover-overlay {
+  background-color: rgb(0 0 0 / 28%);
+  opacity: 100%;
+}
+
+.preview-hover-icon {
+  font-size: 22px;
+  color: #fff;
+}
+
 /* 自定义图片放大遮罩样式 */
 .image-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 10000;
   display: flex;
   cursor: pointer;
   background-color: rgb(0 0 0 / 80%);

@@ -66,7 +66,8 @@
             v-model="formData.new_operators"
             allow-create
             class="transfer-user-selector"
-            :placeholder="t('请输入人员')" />
+            :placeholder="t('请输入人员')"
+            @change="handleTransferOperatorsChange" />
         </bk-form-item>
         <bk-form-item
           :label="t('处理说明')"
@@ -94,12 +95,14 @@
           :label="t('误报说明')"
           property="misreport_description"
           required>
-          <bk-input
-            v-model.trim="formData.misreport_description"
-            :maxlength="100"
-            :placeholder="t('请输入')"
-            show-word-limit
-            type="textarea" />
+          <rich-editor
+            ref="misreportRichEditor"
+            v-model:content="formData.misreport_description"
+            class="await-deal-rich-editor"
+            :default="formData.misreport_description"
+            fullscreen-scope="parent"
+            :max-len="1000"
+            @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
 
@@ -202,6 +205,7 @@
   import {
     computed,
     inject,
+    nextTick,
     ref,
     watch,
     type Ref,
@@ -275,20 +279,42 @@
   };
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+
+  // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
+  const isRichTextNotEmpty = (html: string) => {
+    if (!html) return false;
+    const text = DOMPurify.sanitize(html, { ALLOWED_TAGS: [] }).trim();
+    return text.length > 0;
+  };
+
+  const hasTransferOperators = (value: string | string[] | undefined) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return !!value;
+  };
+
+  const clearFieldValidateIfValid = (field: string, isValid: boolean) => {
+    if (!isValid) return;
+    nextTick(() => {
+      formRef.value?.clearValidate?.(field);
+    });
+  };
+
   const rules = {
     new_operators: [{
-      validator: (value: string) => !!value && value.length > 0,
+      validator: (value: string | string[]) => hasTransferOperators(value),
       trigger: 'change',
       message: t('转单人不能为空'),
     }],
     description: [{
-      validator: (value: string) => !!value,
+      validator: (value: string) => isRichTextNotEmpty(value),
       trigger: 'change',
       message: t('说明不能为空'),
     }],
     misreport_description: [{
-      validator: (value: string) => !!value,
-      trigger: 'blur',
+      validator: (value: string) => isRichTextNotEmpty(value),
+      trigger: 'change',
       message: t('说明不能为空'),
     }],
     pa_id: [{
@@ -353,6 +379,13 @@
     return !(isFieldEmpty && isValueEmpty);
   };
 
+  const handleTransferOperatorsChange = () => {
+    clearFieldValidateIfValid(
+      'new_operators',
+      hasTransferOperators(formData.value.new_operators),
+    );
+  };
+
 
   //  获取风险可用字段
   const {
@@ -413,7 +446,7 @@
     formRef.value?.clearValidate?.();
   };
 
-  const handleSubmitSuccess = (message: string, shouldCollapse = true) => {
+  const handleSubmitSuccess = (message: string, shouldCollapse = false) => {
     handleEditorExpandChange(false);
     resetForm();
     if (shouldCollapse) {
@@ -450,7 +483,7 @@
   } = useRequest(RiskManageService.close, {
     defaultValue: null,
     onSuccess() {
-      handleSubmitSuccess(t('人工关单成功'), false);
+      handleSubmitSuccess(t('人工关单成功'));
     },
   });
   // 人工转单
@@ -524,14 +557,6 @@
     });
   };
 
-  // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）
-  const isRichTextNotEmpty = (html: string) => {
-    if (!html) return false;
-    // 使用 DOMPurify 安全地去除所有HTML标签，只保留纯文本内容
-    const text = DOMPurify.sanitize(html, { ALLOWED_TAGS: [] }).trim();
-    return text.length > 0;
-  };
-
   // 判断当前表单是否有实质性用户输入
   const hasSubstantialInput = () => {
     const { method, description, new_operators: newOperators, pa_id: paId,
@@ -540,11 +565,11 @@
     case 'closeOrder':
       return isRichTextNotEmpty(description);
     case 'transfer':
-      return isRichTextNotEmpty(description) || (newOperators && newOperators.length > 0);
+      return isRichTextNotEmpty(description) || hasTransferOperators(newOperators);
     case 'ProcessPackage':
       return !!paId;
     case 'misreport':
-      return !!misreportDescription;
+      return isRichTextNotEmpty(misreportDescription);
     default:
       return false;
     }
@@ -565,6 +590,28 @@
       window.changeConfirm = false;
     }
   });
+
+  watch(
+    () => formData.value.new_operators,
+    (operators) => {
+      clearFieldValidateIfValid('new_operators', hasTransferOperators(operators));
+    },
+    { deep: true },
+  );
+
+  watch(
+    () => formData.value.description,
+    (description) => {
+      clearFieldValidateIfValid('description', isRichTextNotEmpty(description));
+    },
+  );
+
+  watch(
+    () => formData.value.misreport_description,
+    (description) => {
+      clearFieldValidateIfValid('misreport_description', isRichTextNotEmpty(description));
+    },
+  );
 
   watch(
     () => formData.value, (val) => {
