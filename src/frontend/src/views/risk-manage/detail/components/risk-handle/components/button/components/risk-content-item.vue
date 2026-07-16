@@ -14,7 +14,6 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
-<!-- eslint-disable vue/no-v-html -->
 <template>
   <div class="risk-content-item">
     <div class="risk-content-title">
@@ -26,20 +25,30 @@
         type="edit-fill"
         @click="handleEdit" />
     </div>
+    <!-- eslint-disable vue/no-v-html -->
     <div
-      class="rich-html"
-      style="padding: 8px;margin-top: 8px;background: #f5f7fa;border-radius: 4px;"
-      v-html="getSafeContent(data.content)" />
+      class="description-html"
+      @click="handleDescriptionImageClick"
+      v-html="htmlText(data.content) || '--'" />
+
+    <editor-image-preview
+      v-if="contentImages.length > 0"
+      ref="imagePreviewRef"
+      class="inline-image-preview-hidden"
+      :images="contentImages"
+      :title="t('图片')" />
   </div>
 </template>
 
 <script setup lang='ts'>
   import DOMPurify from 'dompurify';
-  import {
-    useI18n,
-  } from 'vue-i18n';
+  import { computed, ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import type RiskExperienceManageModel from '@model/risk-experience/experience';
+
+  import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
+  import editorImagePreview from '@/components/editor-image-preview/index.vue';
 
   interface Emits{
     (e:'edit'):void,
@@ -49,34 +58,83 @@
     data: RiskExperienceManageModel,
     showEditBtn: boolean,
   }
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const handleEdit = () => {
     emits('edit');
   };
 
-  const getSafeContent = (content: string) => DOMPurify.sanitize(content);
+  const DISPLAY_HTML_OPTIONS = {
+    ALLOWED_TAGS: [
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'p', 'br', 'strong', 'em', 'u', 's', 'strike', 'code', 'hr', 'pre', 'blockquote',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+      'ul', 'ol', 'li', 'span', 'div', 'a', 'img', 'sub', 'sup', 'iframe',
+    ],
+    ALLOWED_ATTR: [
+      'class', 'colspan', 'rowspan', 'href', 'target', 'rel',
+      'src', 'alt', 'width', 'height', 'style',
+      'frameborder', 'allowfullscreen',
+    ],
+  };
+
+  const htmlText = (value: string) => {
+    if (!value) return '';
+    const sanitized = sanitizeEditorHtml(value);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${sanitized}</div>`, 'text/html');
+    const container = doc.body.firstElementChild;
+    const imageNodes = container?.querySelectorAll('img');
+    if (imageNodes) {
+      for (let index = 0; index < imageNodes.length; index += 1) {
+        const imageElement = imageNodes[index] as HTMLImageElement;
+        imageElement.removeAttribute('width');
+        imageElement.removeAttribute('height');
+        imageElement.style.maxWidth = '100%';
+        imageElement.style.height = 'auto';
+        imageElement.style.verticalAlign = 'bottom';
+      }
+    }
+    const normalizedHtml = container?.innerHTML || sanitized;
+    return DOMPurify.sanitize(normalizedHtml, DISPLAY_HTML_OPTIONS);
+  };
+
+  const contentImages = computed(() => {
+    const html = props.data.content;
+    if (!html) return [];
+
+    const sanitized = sanitizeEditorHtml(html);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${sanitized}</div>`, 'text/html');
+    const imgElements = doc.querySelectorAll('img') as NodeListOf<HTMLImageElement>;
+
+    return Array.from(imgElements)
+      .map(img => ({ url: img.src }))
+      .filter(item => item.url);
+  });
+
+  const imagePreviewRef = ref<InstanceType<typeof editorImagePreview> | null>(null);
+
+  const handleDescriptionImageClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const imgEl = target.closest('img') as HTMLImageElement | null;
+    if (!imgEl) return;
+
+    const src = imgEl.getAttribute('src');
+    if (!src) return;
+
+    const index = contentImages.value.findIndex(item => (
+      item.url === src || item.url === imgEl.src
+    ));
+    if (index < 0) return;
+
+    imagePreviewRef.value?.openAt(index);
+  };
 </script>
-<style lang="postcss">
-.rich-html {
-  ul {
-    padding-left: 15px;
-
-    li {
-      list-style: disc !important;
-    }
-  }
-
-  ol {
-    padding-left: 13px;
-
-    li {
-      list-style: decimal;
-    }
-  }
-}
-
+<style scoped lang="postcss">
 .risk-content-item {
   padding: 10px 16px;
   background: #fff;
@@ -88,6 +146,89 @@
     display: flex;
     font-size: 12px;
     align-items: center;
+  }
+}
+
+.description-html {
+  padding: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+  background: #f5f7fa;
+  border-radius: 4px;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(.ql-report-table) {
+    margin: 0 0 12px;
+  }
+
+  :deep(table),
+  :deep(.report-table) {
+    width: 100%;
+    margin: 0 0 12px;
+    font-size: 12px;
+    background: #fff;
+    border-collapse: collapse;
+    table-layout: auto;
+  }
+
+  :deep(th),
+  :deep(td) {
+    padding: 8px 10px;
+    color: #313238;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid #dcdee5;
+  }
+
+  :deep(thead th) {
+    font-weight: 600;
+    color: #313238;
+    background: #f5f7fa;
+  }
+
+  :deep(ul) {
+    padding-left: 15px;
+
+    li {
+      list-style: disc !important;
+    }
+  }
+
+  :deep(ol) {
+    padding-left: 13px;
+
+    li {
+      list-style: decimal;
+    }
+  }
+
+  :deep(img) {
+    display: inline;
+    height: auto;
+    max-width: 100%;
+    vertical-align: bottom;
+    cursor: zoom-in;
+  }
+}
+
+.inline-image-preview-hidden {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+
+  :deep(.preview-header) {
+    display: none;
+  }
+
+  :deep(.preview-grid) {
+    display: none;
   }
 }
 </style>

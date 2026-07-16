@@ -52,11 +52,14 @@
         :label="t('处理说明')">
         <!-- eslint-disable vue/no-v-html -->
         <div
-          class="ql-editor"
+          class="description-html"
+          @click="handleDescriptionImageClick"
           v-html="htmlText(data.description) || '--'" />
         <editor-image-preview
-          v-if="editorImages.length > 0"
-          :images="editorImages"
+          v-if="descriptionImages.length > 0"
+          ref="imagePreviewRef"
+          class="inline-image-preview-hidden"
+          :images="descriptionImages"
           :title="t('图片')" />
       </render-info-item>
     </div>
@@ -64,8 +67,10 @@
 </template>
 
 <script setup lang='ts'>
+  import DOMPurify from 'dompurify';
   import {
     computed,
+    ref,
   } from 'vue';
   import {
     useI18n,
@@ -76,7 +81,7 @@
   import EditTag from '@components/edit-box/tag.vue';
 
   import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
-
+  import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
   import editorImagePreview from '@/components/editor-image-preview/index.vue';
 
 
@@ -93,23 +98,76 @@
   }
   const props = defineProps<Props>();
   const { t } = useI18n();
-  const editorImages = computed(() => {
-    const htmlContent = props.data.description;
 
-    if (!htmlContent) {
-      return [];
-    }
+  // 与编辑器内容一致展示（含图片、表格等），只做安全过滤
+  const DISPLAY_HTML_OPTIONS = {
+    ALLOWED_TAGS: [
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'p', 'br', 'strong', 'em', 'u', 's', 'strike', 'code', 'hr', 'pre', 'blockquote',
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+      'ul', 'ol', 'li', 'span', 'div', 'a', 'img', 'sub', 'sup', 'iframe',
+    ],
+    ALLOWED_ATTR: [
+      'class', 'colspan', 'rowspan', 'href', 'target', 'rel',
+      'src', 'alt', 'width', 'height', 'style',
+      'frameborder', 'allowfullscreen',
+    ],
+  };
 
+  const htmlText = (value: string) => {
+    if (!value) return '';
+    const sanitized = sanitizeEditorHtml(value);
     const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlContent, 'text/html');
-    const imgElements = doc.querySelectorAll('img');
+    const doc = parser.parseFromString(`<div>${sanitized}</div>`, 'text/html');
+    const container = doc.body.firstElementChild;
+    const imageNodes = container?.querySelectorAll('img');
+    if (imageNodes) {
+      for (let index = 0; index < imageNodes.length; index += 1) {
+        const imageElement = imageNodes[index] as HTMLImageElement;
+        imageElement.removeAttribute('width');
+        imageElement.removeAttribute('height');
+        imageElement.style.maxWidth = '100%';
+        imageElement.style.height = 'auto';
+        imageElement.style.verticalAlign = 'bottom';
+      }
+    }
+    const normalizedHtml = container?.innerHTML || sanitized;
+    return DOMPurify.sanitize(normalizedHtml, DISPLAY_HTML_OPTIONS);
+  };
 
-    const images = Array.from(imgElements).map(img => ({
-      url: img.src,
-    }));
+  const descriptionImages = computed(() => {
+    const html = props.data.description;
+    if (!html) return [];
 
-    return images;
+    const sanitized = sanitizeEditorHtml(html);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${sanitized}</div>`, 'text/html');
+    const imgElements = doc.querySelectorAll('img') as NodeListOf<HTMLImageElement>;
+
+    return Array.from(imgElements)
+      .map(img => ({ url: img.src }))
+      .filter(item => item.url);
   });
+
+  const imagePreviewRef = ref<InstanceType<typeof editorImagePreview> | null>(null);
+
+  const handleDescriptionImageClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const imgEl = target.closest('img') as HTMLImageElement | null;
+    if (!imgEl) return;
+
+    const src = imgEl.getAttribute('src');
+    if (!src) return;
+
+    const index = descriptionImages.value.findIndex(item => (
+      item.url === src || item.url === imgEl.src
+    ));
+    if (index < 0) return;
+
+    imagePreviewRef.value?.openAt(index);
+  };
 
   const processPackageDetail = computed(() => {
     if (props.data && props.processDetail) {
@@ -248,7 +306,6 @@
       displayValue: props.data.auto_close_risk ? t('是') : t('否'),
     },
   ]);
-  const htmlText = (value: string) => value.replace(/<img[^>]*>/g, '');
 </script>
 <style scoped lang="postcss">
 .reopen-mis-report-wrap {
@@ -287,8 +344,10 @@
       }
 
       :deep(.info-value) {
+        min-width: 0;
         padding-left: 4px;
         line-height: 20px;
+        flex: 1;
       }
     }
 
@@ -305,9 +364,100 @@
   }
 }
 
-.ql-editor {
-  max-width: 160px;
+.description-html {
+  width: 100%;
+  max-width: 100%;
   padding: 0;
-  white-space: pre-wrap;
+  overflow-x: auto;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(.ql-report-table) {
+    margin: 0 0 12px;
+  }
+
+  :deep(table),
+  :deep(.report-table) {
+    width: 100%;
+    margin: 0 0 12px;
+    font-size: 12px;
+    background: #fff;
+    border-collapse: collapse;
+    table-layout: auto;
+  }
+
+  :deep(th),
+  :deep(td) {
+    padding: 8px 10px;
+    color: #313238;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid #dcdee5;
+  }
+
+  :deep(thead th) {
+    font-weight: 600;
+    color: #313238;
+    background: #f5f7fa;
+  }
+
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(h4),
+  :deep(h5),
+  :deep(h6) {
+    margin: 8px 0;
+    font-weight: 600;
+    color: #313238;
+  }
+
+  :deep(ul),
+  :deep(ol) {
+    padding-left: 20px;
+    margin: 0 0 8px;
+  }
+
+  :deep(blockquote),
+  :deep(.report-blockquote) {
+    padding: 6px 10px;
+    margin: 0 0 8px;
+    color: #63656e;
+    background: #f0f1f5;
+    border-left: 4px solid #dcdee5;
+  }
+
+  :deep(img) {
+    display: inline;
+    height: auto;
+    max-width: 100%;
+    vertical-align: bottom;
+    cursor: zoom-in;
+  }
+
+  :deep(iframe) {
+    max-width: 100%;
+    margin: 8px 0;
+  }
+}
+
+.inline-image-preview-hidden {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+
+  :deep(.preview-header) {
+    display: none;
+  }
+
+  :deep(.preview-grid) {
+    display: none;
+  }
 }
 </style>
