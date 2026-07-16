@@ -555,8 +555,9 @@
   }
 
   :deep(.risk-handle-timeline-tag__title) {
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
     color: #313238;
   }
 

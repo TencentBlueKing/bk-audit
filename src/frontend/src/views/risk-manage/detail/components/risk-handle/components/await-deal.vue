@@ -106,7 +106,7 @@
       <!-- 处理套餐 -->
       <template v-else-if="formData.method === 'ProcessPackage'">
         <bk-form-item
-          class="is-required"
+          class="is-required process-package-select-item"
           :label="t('处理套餐')"
           property="pa_id">
           <bk-select
@@ -167,14 +167,16 @@
           </bk-form-item>
         </bk-loading>
         <bk-form-item
-          class="mr16"
+          class="auto-close-risk-form-item"
           label="">
           <bk-checkbox v-model="formData.auto_close_risk">
             <span style="font-size: 12px;">{{ t('套餐执行成功后自动关单') }}</span>
           </bk-checkbox>
         </bk-form-item>
       </template>
-      <bk-form-item label="">
+      <bk-form-item
+        class="submit-actions-form-item"
+        label="">
         <auth-button
           action-id="process_risk"
           :loading="loading"
@@ -666,19 +668,64 @@
 }
 
 .pa-params-form-item {
+  margin-top: 24px !important;
+  margin-bottom: 0 !important;
+
   :deep(.bk-form-content) {
     max-width: 100%;
   }
 }
 
+.process-package-select-item {
+  margin-bottom: 0 !important;
+}
+
+.auto-close-risk-form-item {
+  margin-top: 24px !important;
+  margin-bottom: 24px !important;
+}
+
+.submit-actions-form-item {
+  margin-bottom: 0 !important;
+}
+
 .pa-params-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px 24px;
+  gap: 16px;
   padding: 16px 12px;
-  background: #f5f7fa;
+  background: #f0f1f5;
   border: 1px solid #dcdee5;
   border-radius: 2px;
+
+  /* 套餐参数组件统一高度 32px */
+  :deep(.bk-select),
+  :deep(.bk-input:not(textarea, .bk-textarea)),
+  :deep(.bk-date-picker),
+  :deep(.bk-date-picker-rel),
+  :deep(.bk-date-picker-editor),
+  :deep(.pa-user-selector.bk-user-selector),
+  :deep(.pa-user-selector .user-selector-input) {
+    height: 32px;
+    max-height: 32px;
+    min-height: 32px;
+    box-sizing: border-box;
+  }
+
+  :deep(.field-insert-wrapper:not(.is-textarea).has-suffix) {
+    height: 32px;
+    align-items: center;
+  }
+
+  :deep(.field-insert-wrapper:not(.is-textarea) .field-insert-wrapper__main),
+  :deep(.field-insert-wrapper:not(.is-textarea) .field-insert-wrapper__control),
+  :deep(.field-insert-wrapper:not(.is-textarea) .field-insert-wrapper__suffix-host),
+  :deep(.field-insert-wrapper:not(.is-textarea) .field-insert-wrapper__suffix) {
+    height: 32px;
+    max-height: 32px;
+    min-height: 32px;
+    box-sizing: border-box;
+  }
 }
 
 .pa-params-field {
@@ -691,7 +738,7 @@
 
   :deep(.bk-form-label) {
     width: 100% !important;
-    padding-bottom: 4px;
+    padding-bottom: 0;
     text-align: left;
   }
 

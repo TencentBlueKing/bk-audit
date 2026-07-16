@@ -41,19 +41,7 @@
 
           class="risk-handle-dock__resize-handle"
 
-          :class="{ 'is-visible': showResizeBar || isResizing }">
-          <audit-icon
-
-            class="risk-handle-dock__resize-icon"
-
-            type="angle-double-up" />
-
-          <audit-icon
-
-            class="risk-handle-dock__resize-icon"
-
-            type="angle-double-down" />
-        </div>
+          :class="{ 'is-visible': showResizeBar || isResizing }" />
       </div>
 
 
@@ -76,13 +64,15 @@
 
           class="risk-handle-dock__info"
 
-          type="info" />
+          type="info-fill" />
 
-        <span class="risk-handle-dock__stage-text">{{ t('当前处于') }}</span>
+        <div class="risk-handle-dock__stage">
+          <span class="risk-handle-dock__stage-text">{{ t('当前处于') }}</span>
 
-        <span class="risk-handle-dock__stage-tag">{{ currentStageName }}</span>
+          <span class="risk-handle-dock__stage-tag">{{ currentStageName }}</span>
 
-        <span class="risk-handle-dock__stage-text">{{ t('环节') }}</span>
+          <span class="risk-handle-dock__stage-text">{{ t('环节') }}</span>
+        </div>
       </div>
 
 
@@ -113,6 +103,8 @@
 
   import { useI18n } from 'vue-i18n';
 
+  import stretchDragCursor from '@/images/stretch-drag-cursor.svg';
+
 
   interface Props {
 
@@ -132,10 +124,12 @@
 
   const { t } = useI18n();
 
+  const resizeCursor = `url("${stretchDragCursor}") 16 16, ns-resize`;
 
-  const HEADER_HEIGHT = 48;
 
-  const COLLAPSED_HEIGHT = 48;
+  const HEADER_HEIGHT = 52;
+
+  const COLLAPSED_HEIGHT = 52;
 
   const MIN_EXPANDED_HEIGHT = 96;
 
@@ -147,9 +141,9 @@
   const getDefaultExpandedHeight = () => {
     const maxHeight = Math.floor(window.innerHeight * MAX_HEIGHT_RATIO);
 
-    const preferred = Math.floor(window.innerHeight * 0.5);
+    const preferred = Math.floor(window.innerHeight * 0.68);
 
-    return Math.min(maxHeight, Math.max(440, preferred));
+    return Math.min(maxHeight, Math.max(560, preferred));
   };
 
 
@@ -262,6 +256,8 @@
 
       '--dock-content-padding': `${CONTENT_HORIZONTAL_PADDING}px`,
 
+      '--dock-resize-cursor': resizeCursor,
+
     };
 
     if (!isExpanded.value) {
@@ -273,7 +269,13 @@
 
 
   const toggleExpanded = () => {
+    const wasExpanded = isExpanded.value;
     isExpanded.value = !isExpanded.value;
+
+    if (!wasExpanded && isExpanded.value) {
+      panelHeight.value = getDefaultExpandedHeight();
+      return;
+    }
 
     if (isExpanded.value && panelHeight.value < MIN_EXPANDED_HEIGHT) {
       panelHeight.value = getDefaultExpandedHeight();
@@ -289,6 +291,9 @@
     isResizing.value = true;
 
     showResizeBar.value = true;
+
+    const prevBodyCursor = document.body.style.cursor;
+    document.body.style.cursor = resizeCursor;
 
     const startY = event.clientY;
 
@@ -306,6 +311,8 @@
       isResizing.value = false;
 
       showResizeBar.value = false;
+
+      document.body.style.cursor = prevBodyCursor;
 
       if (panelHeight.value < MIN_EXPANDED_HEIGHT) {
         isExpanded.value = false;
@@ -442,7 +449,7 @@
   left: 0;
   z-index: 3;
   height: 14px;
-  cursor: ns-resize;
+  cursor: var(--dock-resize-cursor, ns-resize);
 
 }
 
@@ -468,22 +475,15 @@
 
 .risk-handle-dock__resize-handle {
   position: absolute;
-  top: 0;
+  top: -2px;
   left: 50%;
-  display: flex;
-  width: 48px;
-  height: 10px;
-  line-height: 1;
-  color: #3a84ff;
-  background: #fff;
-  border: 1px solid #a3c5fd;
-  border-radius: 2px;
+  width: 40px;
+  height: 6px;
+  background: #3a84ff;
+  border-radius: 1px;
   opacity: 0%;
   transform: translateX(-50%);
   transition: opacity .15s;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
 
 
   &.is-visible {
@@ -494,16 +494,9 @@
 }
 
 
-.risk-handle-dock__resize-icon {
-  font-size: 8px;
-  line-height: 1;
-
-}
-
-
 .risk-handle-dock__header {
   display: flex;
-  height: 48px;
+  height: 52px;
   padding: 0 var(--dock-content-padding, 24px);
   cursor: pointer;
   background: #fff;
@@ -530,7 +523,7 @@
 
 
 .risk-handle-dock__title {
-  margin-right: 8px;
+  margin-right: 16px;
   font-size: 14px;
   font-weight: 700;
   line-height: 22px;
@@ -540,30 +533,35 @@
 
 
 .risk-handle-dock__info {
-  margin-right: 16px;
   font-size: 14px;
   color: #979ba5;
 
 }
 
 
+.risk-handle-dock__stage {
+  display: flex;
+  margin-left: 4px;
+  align-items: center;
+  gap: 2px;
+}
+
+
 .risk-handle-dock__stage-text {
   font-size: 12px;
   line-height: 20px;
-  color: #979ba5;
+  color: #4d4f56;
 
 }
 
 
 .risk-handle-dock__stage-tag {
-  padding: 0 8px;
-  margin: 0 4px;
+  padding: 0 6px;
   font-size: 12px;
   line-height: 20px;
   color: #3a84ff;
-  background: #f0f5ff;
+  background: #c9dcff;
   border-radius: 2px;
-
 }
 
 
