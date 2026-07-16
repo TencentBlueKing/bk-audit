@@ -131,12 +131,18 @@
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
-  import ConfirmActionDialog from './components/confirm-action-dialog.vue';
+  import {
+    createSceneToolManageContext,
+    provideToolManageContext,
+  } from '@views/tool-manage-shared/context';
+  import ConfirmActionDialog from '@views/tool-manage-shared/components/confirm-action-dialog.vue';
+  import ToolPreviewDrawer from '@views/tool-manage-shared/components/tool-preview-drawer.vue';
+
   import ToolListTable from './components/tool-list-table.vue';
-  import ToolPreviewDrawer from './components/tool-preview-drawer.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
+  provideToolManageContext(createSceneToolManageContext());
   type ActionType = 'delete' | 'enable' | 'disable';
 
   interface SearchKey {
