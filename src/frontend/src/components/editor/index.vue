@@ -18,24 +18,15 @@
   <div
     ref="editorWrapRef"
     :active="!disabled"
-    class="editor-wrap"
+    class="editor-wrap editor-wrap--report"
     :class="{ 'expanded-mode': isExpanded && fullscreenScope === 'parent' }">
-    <bk-upload
+    <input
       v-if="supportImage"
-      id="editor-upload-image"
-      ref="imageRef"
+      ref="imageInputRef"
       accept="image/png,image/jpeg,image/jpg"
-      :handle-res-code="handleRes"
-      :headers="headers"
-      method="post"
-      :multiple="false"
-      name="file"
       style="display: none"
-      tip="只允许上传JPG、PNG、JPEG的文件"
-      :url="`${attachmentUrl}`"
-      with-credentials
-      @error="onImageLoadError"
-      @success="onImageLoadSuccess" />
+      type="file"
+      @change="onImageFileChange">
     <quill-editor
       ref="editorRef"
       v-model:content="content"
@@ -53,14 +44,16 @@
     </div>
     <!-- 编辑器中的图片预览 -->
     <editor-image-preview
-      v-if="editorImages.length > 0"
+      v-if="showImagePreview && editorImages.length > 0"
       :images="editorImages"
       :title="t('编辑器中的图片预览')" />
+    <insert-table-dialog
+      ref="insertTableDialogRef"
+      @confirm="handleInsertTableConfirm" />
   </div>
 </template>
 
 <script setup lang="ts">
-  import Cookie from 'js-cookie';
   import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, inject, type Ref } from 'vue';
   import {
     useI18n,
@@ -71,6 +64,12 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
+  import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import ReportTableBlot, {
+    insertReportTable,
+    registerReportTableMatcher,
+  } from '@views/risk-manage/detail/components/event-report/report-table-blot';
   import { QuillEditor } from '@vueup/vue-quill';
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
@@ -88,6 +87,8 @@
     maxLen?: number;
     placeholder?: string;
     supportImage?: boolean;
+    supportFullscreen?: boolean;
+    showImagePreview?: boolean;
     /** viewport/main: 浮层全屏; parent: 原地增高编辑器 */
     fullscreenScope?: 'viewport' | 'main' | 'parent';
     /** parent 模式下放大后的编辑区高度 */
@@ -113,6 +114,8 @@
     placeholder: '',
     disabled: false,
     supportImage: true,
+    supportFullscreen: true,
+    showImagePreview: true,
     fullscreenScope: 'main',
     expandHeight: 360,
   });
@@ -124,27 +127,39 @@
   const content = ref();
   const editorRef = ref();
   const editorWrapRef = ref<HTMLElement>();
-  const imageRef = ref();
+  const imageInputRef = ref<HTMLInputElement>();
+  const insertTableDialogRef = ref<InstanceType<typeof InsertTableDialog>>();
   const { t } = useI18n();
   const TiLength = ref(0);
   const editorImages = ref<Array<{url: string}>>([]);
-  const CRRF_TOKEN_KEY = 'bk-wesec_csrftoken';
-  const CSRFToken = Cookie.get(CRRF_TOKEN_KEY);
-  const headers = new Headers({ 'X-CSRFToken': CSRFToken });
-  const attachmentUrl = ref(`${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/blob_storage/upload/`);
 
-  // 工具栏
-  const container = [
-    [{ header: 1 }, { header: 2 }, 'bold', 'italic', 'strike', 'underline', { color: [] },  { align: 'center' },  { align: 'right' }],
-    [
-      { list: 'ordered' }, // 有序
-      { list: 'bullet' }, // 无序列表的图标
-    ],
-    ['link', { background: [] }, 'code-block', 'fullscreen'],
-  ];
+  const openInsertTableDialog = () => {
+    insertTableDialogRef.value?.show();
+  };
+
+  // 与「编辑事件调查报告」一致的工具栏，额外保留全屏
+  const mediaTools: Array<string | Record<string, unknown>> = ['link'];
   if (props.supportImage) {
-    container[2].splice(0, 0, 'image');
+    mediaTools.push('image');
   }
+  mediaTools.push('video', 'table');
+  if (props.supportFullscreen) {
+    mediaTools.push('fullscreen');
+  }
+
+  const container = [
+    [{ header: [1, 2, 3, 4, 5, 6, false] }],
+    [{ font: [] }],
+    [{ size: [] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ color: [] }, { background: [] }],
+    [{ script: 'sub' }, { script: 'super' }],
+    [{ header: 1 }, { header: 2 }, 'blockquote', 'code-block'],
+    [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
+    [{ direction: 'rtl' }, { align: [] }],
+    mediaTools,
+    ['clean'],
+  ];
   const isFullscreen = ref(false);
   const isExpanded = computed(() => isFullscreen.value);
 
@@ -364,14 +379,17 @@
         container,
         handlers: {
           image() {
-            const html = editorWrapRef.value?.querySelector('#editor-upload-image .bk-upload-trigger__draggable-upload-link') as HTMLElement;
-            if (html) {
-              html.click();
+            if (!props.supportImage || props.disabled) return;
+            imageInputRef.value?.click();
+          },
+          table: openInsertTableDialog,
+          ...(props.supportFullscreen
+            ? {
+              fullscreen() {
+                toggleFullscreen();
+              },
             }
-          },
-          fullscreen() {
-            toggleFullscreen();
-          },
+            : {}),
         },
       },
       history: {
@@ -381,6 +399,27 @@
       },
     },
   });
+
+  const getQuill = () => editorRef.value?.getQuill?.();
+
+  const setupTableToolbarButton = () => {
+    const quill = getQuill();
+    if (!quill) return;
+    const toolbar = quill.getModule('toolbar') as { container?: HTMLElement } | undefined;
+    const tableButton = toolbar?.container?.querySelector('.ql-table') as HTMLElement | null;
+    if (tableButton) {
+      tableButton.innerHTML = t('插入表格');
+      tableButton.setAttribute('title', t('插入表格'));
+      tableButton.classList.add('editor-table-btn');
+    }
+  };
+
+  const handleInsertTableConfirm = ({ rows, cols }: { rows: number; cols: number }) => {
+    const quill = getQuill();
+    if (!quill) return;
+    insertReportTable(quill, rows, cols);
+    TiLength.value = quill.getLength() - 1;
+  };
 
   // 监听ESC键退出全屏
   const handleKeydown = (event: KeyboardEvent) => {
@@ -402,6 +441,7 @@
 
   // 提取编辑器内容中的图片
   const extractImagesFromContent = (htmlContent: string) => {
+    if (!props.showImagePreview) return;
     if (!htmlContent) {
       editorImages.value = [];
       return;
@@ -443,47 +483,80 @@
   };
 
   const onEditorReady = () => {
+    const quill = getQuill();
+    if (quill) {
+      registerReportTableMatcher(quill);
+    }
     nextTick(() => {
+      setupTableToolbarButton();
       if (props.default) {
         content.value = props.default;
         // 提取默认内容中的图片
         extractImagesFromContent(props.default);
       }
+      normalizeEditorImages();
       TiLength.value = editorRef.value?.getQuill().getLength() - 1;
     });
-  };
-  const handleRes = (response: any) => {
-    if (response.result) {
-      successData.value = response.data;
-      return true;
-    }
-    return false;
   };
   const onImageLoadSuccess = () => {
     insertImage();
   };
+
+  const normalizeEditorImages = (root?: ParentNode | null, target?: HTMLImageElement) => {
+    const container = root || editorRef.value?.getQuill()?.root;
+    const imageNodes = target
+      ? [target]
+      : Array.from(container?.querySelectorAll('img') ?? []) as HTMLImageElement[];
+    for (let index = 0; index < imageNodes.length; index += 1) {
+      const imageElement = imageNodes[index];
+      imageElement.removeAttribute('width');
+      imageElement.removeAttribute('height');
+      imageElement.style.maxWidth = '100%';
+      imageElement.style.height = 'auto';
+      imageElement.style.verticalAlign = 'bottom';
+    }
+  };
+
   const insertImage = () => {
     const quill = editorRef.value?.getQuill();
-    const length = quill.getSelection().index;
+    if (!quill || !successData.value?.length) return;
+    const range = quill.getSelection(true);
+    const length = range ? range.index : quill.getLength();
+    const imageUrl = successData.value[0].url;
 
-    // 插入图片
-    if (successData.value && successData.value.length) {
-      quill.insertEmbed(length, 'image', successData.value[0].url);
-    }
+    quill.insertEmbed(length, 'image', imageUrl);
 
-    // 设置插入图片的高度为 100%
-    const imageElement = quill.root.querySelector(`.ql-editor img[src="${successData.value?.[0]?.url || ''}"]`);
+    const imageElement = quill.root.querySelector(`img[src="${imageUrl}"]`) as HTMLImageElement | null;
     if (imageElement) {
-      imageElement.setAttribute('width', '30%');
-      imageElement.setAttribute('height', '30%');
+      normalizeEditorImages(undefined, imageElement);
     }
 
-    // 调整光标到最后
     quill.setSelection(length + 1);
     messageSuccess('上传图片成功');
   };
   const onImageLoadError = () => {
     messageError('上传图片失败');
+  };
+
+  const onImageFileChange = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const { files } = input;
+    if (!files?.length) return;
+
+    fetchUploadImage(files).then((data) => {
+      if (!data?.data?.length) {
+        onImageLoadError();
+        return;
+      }
+      successData.value = data.data as ResponseData['data'];
+      onImageLoadSuccess();
+    })
+      .catch(() => {
+        onImageLoadError();
+      })
+      .finally(() => {
+        input.value = '';
+      });
   };
 
   const extractUrls = (text: string) => {
@@ -567,6 +640,7 @@
     const quill = editorRef.value?.getQuill();
     editorRef.value?.setHTML(props.default);
     if (quill) {
+      nextTick(() => normalizeEditorImages(quill.root));
       quill.root.addEventListener(
         'paste',
         async (evt: any) => {
@@ -583,23 +657,27 @@
 
               // base64图片拦截处理
               if (imgTags.length > 0) {
-                imgTags.forEach((imgTag) => {
-                  imgTag.setAttribute('width', '100%');
-                  imgTag.setAttribute('height', '100%');
+                for (let index = 0; index < imgTags.length; index += 1) {
+                  const imgTag = imgTags[index] as HTMLImageElement;
+                  imgTag.removeAttribute('width');
+                  imgTag.removeAttribute('height');
+                  imgTag.style.maxWidth = '100%';
+                  imgTag.style.height = 'auto';
+                  imgTag.style.verticalAlign = 'bottom';
                   const base64Image = imgTag.src;
                   // base64
                   if (base64Image.startsWith('data:image/')) {
                     promises.push(uploadImage(base64Image).then((url) => {
-                      // eslint-disable-next-line no-param-reassign
                       imgTag.src = url; // 替换为上传后的 URL
                     }));
                   }
-                });
+                }
                 await Promise.all(promises);
               }
               quill.focus();
               if (quill.getSelection()) {
                 quill.clipboard.dangerouslyPasteHTML(quill.getSelection().index, doc.body.innerHTML);
+                nextTick(() => normalizeEditorImages(quill.root));
               }
             }
 
@@ -697,6 +775,13 @@
 
 .ql-editor {
   color: black;
+
+  img {
+    display: inline;
+    height: auto;
+    max-width: 100%;
+    vertical-align: bottom;
+  }
 }
 
 /* 全屏模式样式 */
@@ -800,5 +885,50 @@
   background-repeat: no-repeat;
   background-size: contain;
   content: '';
+}
+
+.editor-wrap--report .ql-editor .ql-report-table {
+  margin: 0 0 16px;
+}
+
+.editor-wrap--report .ql-editor table {
+  width: 100%;
+  margin: 0 0 16px;
+  font-size: 14px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.editor-wrap--report .ql-editor th,
+.editor-wrap--report .ql-editor td {
+  padding: 10px 12px;
+  color: #313238;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid #dcdee5;
+}
+
+.editor-wrap--report .ql-editor thead th {
+  font-weight: 600;
+  color: #313238;
+  background: #f5f7fa;
+}
+
+.editor-wrap--report .ql-toolbar .editor-table-btn {
+  width: auto !important;
+  padding: 0 8px !important;
+  margin: 0 4px;
+  font-size: 14px !important;
+  line-height: 24px !important;
+  color: #3a84ff !important;
+  cursor: pointer;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.editor-wrap--report .ql-toolbar .editor-table-btn:hover {
+  opacity: 80%;
 }
 </style>
