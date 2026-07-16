@@ -317,11 +317,6 @@
       trigger: 'change',
       message: t('说明不能为空'),
     }],
-    misreport_description: [{
-      validator: (value: string) => !!value,
-      trigger: 'blur',
-      message: t('说明不能为空'),
-    }],
     pa_id: [{
       validator: (value: string) => !!value,
       trigger: 'change',
