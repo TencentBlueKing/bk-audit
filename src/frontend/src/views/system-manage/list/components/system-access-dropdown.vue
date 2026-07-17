@@ -240,6 +240,10 @@
     isDropdownVisible.value = false;
     router.push({
       name: 'systemAccessSteps',
+      // 从系统列表进入：保留侧栏，非全屏
+      params: {
+        isShowSideBar: 'true',
+      },
       query: {
         step: '1',
         showModelType: 'false',
@@ -258,6 +262,10 @@
     isSubmenuVisible.value = false;
     router.push({
       name: 'systemAccessSteps',
+      // 从系统列表进入：保留侧栏，非全屏
+      params: {
+        isShowSideBar: 'true',
+      },
       query: {
         step: '1',
         showModelType: 'false',
