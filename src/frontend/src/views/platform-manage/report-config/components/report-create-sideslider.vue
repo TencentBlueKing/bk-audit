@@ -20,7 +20,7 @@
     :quick-close="false"
     show-mask
     :title="isEditMode ? t('编辑报表') : t('新建报表')"
-    :width="640"
+    :width="680"
     :z-index="9999"
     @closed="handleSliderClosed">
     <template #default>
@@ -44,7 +44,7 @@
                 :placeholder="t('选择项目')"
                 :popover-options="{
                   boundary: 'parent',
-                  zIndex: 9999
+                  zIndex: 10050
                 }"
                 style="width: 500px;"
                 @change="handleReportChange">
@@ -93,7 +93,7 @@
               @change="handleNameChange" />
           </bk-form-item>
 
-          <!-- 可见范围 -->
+          <!-- 可见范围：复用工具管理 VisibleRangeField -->
           <bk-form-item
             :label="t('可见范围')"
             property="visibility_type"
@@ -102,8 +102,20 @@
               :form-data="visibilityFormData"
               match-selector-width
               popover-class="is-compact"
+              :popover-z-index="10050"
               @update:form-data="handleVisibleRangeChange" />
           </bk-form-item>
+
+          <!-- 可见范围默认值：参数列表来自 share_detail（与 BKVision 工具一致） -->
+          <scene-param-config
+            v-if="showParamOverrideConfig"
+            :form-data="paramConfigFormData"
+            :input-variables="inputVariables"
+            :popover-z-index="10050"
+            :selected-scenes="selectedSceneItems"
+            :selected-systems="selectedSystemItems"
+            :show-display-name="false"
+            @update:param-overrides="handleParamOverridesChange" />
 
           <!-- 描述 -->
           <bk-form-item
@@ -123,10 +135,43 @@
             :label="t('是否启用')"
             property="status">
             <div class="status-field">
-              <bk-switcher
-                v-model="formData.enabled"
-                size="small"
-                theme="primary" />
+              <bk-popover
+                :is-show="enablePopoverVisible"
+                placement="bottom-start"
+                theme="light"
+                trigger="manual"
+                :z-index="10050"
+                @after-hidden="enablePopoverVisible = false">
+                <bk-switcher
+                  :before-change="handleStatusBeforeChange"
+                  :model-value="formData.enabled"
+                  size="small"
+                  theme="primary" />
+                <template #content>
+                  <div class="report-enable-popover">
+                    <div class="report-enable-popover-title">
+                      {{ t('确认启用该报表？') }}
+                    </div>
+                    <div class="report-enable-popover-text">
+                      {{ t('启用后，可见范围内的空间将可以查看和使用该报表，确认启用吗？') }}
+                    </div>
+                    <div class="report-enable-popover-actions">
+                      <bk-button
+                        class="mr8"
+                        size="small"
+                        theme="primary"
+                        @click="handleConfirmEnable">
+                        {{ t('启用') }}
+                      </bk-button>
+                      <bk-button
+                        size="small"
+                        @click="handleCancelEnable">
+                        {{ t('取消') }}
+                      </bk-button>
+                    </div>
+                  </div>
+                </template>
+              </bk-popover>
               <span class="status-label">{{ formData.enabled ? t('启用') : t('停用') }}</span>
             </div>
           </bk-form-item>
@@ -149,11 +194,14 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, h, nextTick, ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
   import ReportConfigService from '@service/report-config';
   import RootManageService from '@service/root-manage';
+  import SceneManageService from '@service/scene-manage';
   import ToolManageService from '@service/tool-manage';
 
   import ConfigModel from '@model/root/config';
@@ -161,13 +209,18 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import SceneParamConfig from '@views/platform-manage/tool-manage/create-tool/components/scene-param-config.vue';
   import VisibleRangeField from '@views/platform-manage/tool-manage/create-tool/components/visible-range-field.vue';
   import {
     applyVisibilityToFormData,
     buildVisibilityPayload,
+    reconcileSceneParamOverrides,
     shouldSubmitVisibilityPayload,
   } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
-  import type { FormData as ToolFormData } from '@views/platform-manage/tool-manage/create-tool/types';
+  import type {
+    FormData as ToolFormData,
+    SceneParamOverride,
+  } from '@views/platform-manage/tool-manage/create-tool/types';
 
   export interface ReportFormData {
     id?: string;
@@ -179,6 +232,7 @@
     visibility_type: PanelVisibilityType;
     scene_ids: number[];
     system_ids: string[];
+    scene_param_overrides?: Record<string, SceneParamOverride>;
   }
 
   interface ChartListModel {
@@ -217,6 +271,7 @@
   const chartGroupedLists = computed(() => chartLists.value);
   const { messageSuccess } = useMessage();
   const formRef = ref();
+  const enablePopoverVisible = ref(false);
 
   const formData = ref<ReportFormData>({
     bkvisionReport: '',
@@ -226,7 +281,107 @@
     visibility_type: 'all_visible',
     scene_ids: [],
     system_ids: [],
+    scene_param_overrides: {},
   });
+
+  // 参数列表：由 share_detail 填充（与 BKVision 工具第一步一致）
+  const inputVariables = ref<ToolFormData['config']['input_variable']>([]);
+  const allSceneList = ref<Array<{ id: number; name: string }>>([]);
+  const allSystemList = ref<Array<{ id: string; name: string }>>([]);
+
+  /**
+   * 解析 share_detail 响应为覆盖参数选项
+   * service 已解包外层 data，结构为：
+   * { data: { panels, variables, ... }, filters, constants }
+   */
+  const buildInputVariablesFromShareDetail = (res: any): ToolFormData['config']['input_variable'] => {
+    if (!res?.data) return [];
+
+    const panels = Array.isArray(res.data.panels) ? res.data.panels : [];
+    const variables = Array.isArray(res.data.variables) ? res.data.variables : [];
+    const filters = res.filters || {};
+    const constants = res.constants || {};
+    const filterUids = [...new Set(Object.keys(filters))];
+
+    const getInputVariableConfig = (
+      isVariables: boolean,
+      com: any,
+      defaultValue?: string | Array<string>,
+    ) => ({
+      raw_name: (isVariables ? com?.flag : com?.chartConfig?.flag) || '',
+      display_name: (isVariables ? com?.description : com.title) || '',
+      description: com.uid || '',
+      field_category: isVariables ? (com.type || 'variable') : (com.type || ''),
+      required: true,
+      is_default_value: false,
+      raw_default_value: defaultValue || '',
+      default_value: defaultValue || '',
+      choices: [] as Array<{ key: string; name: string }>,
+    });
+
+    const result: ToolFormData['config']['input_variable'] = [];
+    const usedKeys = new Set<string>();
+
+    // 1) 交互组件：filters key ↔ panels.uid，默认值取 filters
+    filterUids.forEach((uid) => {
+      const com = panels.find((p: any) => p.uid === uid);
+      if (!com) return;
+      const item = getInputVariableConfig(false, com, filters[com.uid]);
+      if (!item.raw_name || usedKeys.has(item.raw_name)) return;
+      usedKeys.add(item.raw_name);
+      result.push(item);
+    });
+
+    // 2) 变量：data.variables（跳过 build_in），默认值取 constants[flag]
+    variables.forEach((com: any) => {
+      if (com.build_in) return;
+      const defaultValue = constants[com.flag] ?? '';
+      const item = {
+        ...getInputVariableConfig(true, com, defaultValue),
+        is_default_value: false,
+        raw_default_value: defaultValue || '',
+      };
+      if (!item.raw_name || usedKeys.has(item.raw_name)) return;
+      usedKeys.add(item.raw_name);
+      result.push(item);
+    });
+
+    // 3) 兜底：variables 为空时从 constants 取自定义变量（跳过 bkv_ 内置）
+    if (variables.length === 0) {
+      Object.entries(constants).forEach(([flag, defaultValue]) => {
+        if (!flag || usedKeys.has(flag) || flag.startsWith('bkv_')) return;
+        usedKeys.add(flag);
+        result.push({
+          raw_name: flag,
+          display_name: flag,
+          description: '',
+          field_category: 'variable',
+          required: true,
+          is_default_value: false,
+          raw_default_value: (defaultValue as any) ?? '',
+          default_value: (defaultValue as any) ?? '',
+          choices: [],
+        });
+      });
+    }
+
+    return result;
+  };
+
+  const loadShareDetailVariables = async (shareUid: string) => {
+    if (!shareUid) {
+      inputVariables.value = [];
+      return;
+    }
+    try {
+      const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
+      inputVariables.value = buildInputVariablesFromShareDetail(res);
+      reconcileParamOverrides();
+    } catch (e) {
+      console.error('获取报表参数列表失败:', e);
+      inputVariables.value = [];
+    }
+  };
 
   const visibilityFormData = computed(() => ({
     name: formData.value.name,
@@ -241,9 +396,10 @@
     visibility_type: formData.value.visibility_type,
     scene_ids: formData.value.scene_ids,
     system_ids: formData.value.system_ids,
+    scene_param_overrides: formData.value.scene_param_overrides || {},
     config: {
       referenced_tables: [],
-      input_variable: [],
+      input_variable: inputVariables.value,
       output_fields: [],
       sql: '',
       uid: '',
@@ -252,7 +408,72 @@
         groups: [],
       },
     },
-  } as ToolFormData));
+  } as unknown as ToolFormData));
+
+  const paramConfigFormData = computed(() => visibilityFormData.value);
+
+  const reconcileParamOverrides = () => {
+    formData.value.scene_param_overrides = reconcileSceneParamOverrides(
+      formData.value.scene_param_overrides,
+      inputVariables.value,
+      formData.value.visibility_type,
+      formData.value.scene_ids || [],
+      formData.value.system_ids || [],
+      allSceneList.value,
+      allSystemList.value,
+    );
+  };
+
+  const hasVisibleRangeSelection = computed(() => {
+    const visibilityType = formData.value.visibility_type;
+    if (visibilityType === 'all_visible'
+      || visibilityType === 'all_scenes'
+      || visibilityType === 'all_systems') {
+      return false;
+    }
+    return (formData.value.scene_ids?.length ?? 0) > 0 || (formData.value.system_ids?.length ?? 0) > 0;
+  });
+
+  const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value);
+
+  const selectedSceneItems = computed(() => {
+    if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
+    if (formData.value.visibility_type === 'all_scenes') return [];
+    return allSceneList.value.filter(scene => formData.value.scene_ids.includes(scene.id));
+  });
+
+  const selectedSystemItems = computed(() => {
+    if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
+    if (formData.value.visibility_type === 'all_systems') return [];
+    return allSystemList.value.filter(system => formData.value.system_ids.includes(system.id));
+  });
+
+  const loadSceneListForParams = async () => {
+    try {
+      const data = await SceneManageService.fetchSceneAll({ status: 'enabled' });
+      allSceneList.value = (data || []).map((item: { scene_id: number; name: string }) => ({
+        id: item.scene_id,
+        name: item.name,
+      }));
+    } catch {
+      allSceneList.value = [];
+    }
+  };
+
+  const loadSystemListForParams = async () => {
+    try {
+      const data = await MetaManageService.fetchSystemWithAction({
+        audit_status__in: 'accessed',
+        namespace: 'default',
+      });
+      allSystemList.value = (data || []).map((item: any) => ({
+        id: String(item.system_id || item.id),
+        name: item.name,
+      }));
+    } catch {
+      allSystemList.value = [];
+    }
+  };
 
   const formRules = {
     bkvisionReport: [
@@ -285,11 +506,16 @@
   const handleVisibleRangeChange = (value: ToolFormData) => {
     formData.value = {
       ...formData.value,
-      visibility_type: value.visibility_type,
+      visibility_type: (value.visibility_type || 'all_visible') as PanelVisibilityType,
       scene_ids: value.scene_ids || [],
       system_ids: value.system_ids || [],
     };
+    reconcileParamOverrides();
     formRef.value?.validate('visibility_type');
+  };
+
+  const handleParamOverridesChange = (value: Record<string, SceneParamOverride>) => {
+    formData.value.scene_param_overrides = value;
   };
 
   const fillEditFormData = (data: ReportFormData) => {
@@ -309,9 +535,10 @@
       description: data.description === '--' ? '' : (data.description || ''),
       status: data.status || 'unpublished',
       enabled: (data.status ?? 'unpublished') === 'published',
-      visibility_type: visibilityData.visibility_type,
+      visibility_type: (visibilityData.visibility_type || 'all_visible') as PanelVisibilityType,
       scene_ids: visibilityData.scene_ids,
       system_ids: visibilityData.system_ids,
+      scene_param_overrides: data.scene_param_overrides || {},
     };
   };
 
@@ -324,15 +551,27 @@
       visibility_type: 'all_visible',
       scene_ids: [],
       system_ids: [],
+      scene_param_overrides: {},
     };
+    inputVariables.value = [];
   };
 
-  watch(() => props.isShow, (val) => {
+  watch(() => props.isShow, async (val) => {
     if (val) {
+      enablePopoverVisible.value = false;
+      await Promise.all([
+        loadSceneListForParams(),
+        loadSystemListForParams(),
+      ]);
       if (props.editData) {
         fillEditFormData(props.editData);
       } else {
         resetCreateFormData();
+      }
+      if (formData.value.bkvisionReport) {
+        await loadShareDetailVariables(formData.value.bkvisionReport);
+      } else {
+        inputVariables.value = [];
       }
       nextTick(() => {
         formRef.value?.clearValidate();
@@ -343,15 +582,73 @@
     }
   });
 
-  watch(() => props.editData, (data) => {
+  watch(() => props.editData, async (data) => {
     if (props.isShow && data) {
       fillEditFormData(data);
+      if (data.bkvisionReport) {
+        await loadShareDetailVariables(data.bkvisionReport);
+      } else {
+        inputVariables.value = [];
+      }
     } else if (props.isShow && !data) {
       resetCreateFormData();
     }
   });
 
-  const handleReportChange = (value: string) => {
+  const handleStatusBeforeChange = (newValue: boolean) => {
+    if (newValue) {
+      enablePopoverVisible.value = true;
+      return false;
+    }
+
+    showDisableConfirm();
+    return false;
+  };
+
+  const handleConfirmEnable = () => {
+    formData.value.enabled = true;
+    enablePopoverVisible.value = false;
+  };
+
+  const handleCancelEnable = () => {
+    enablePopoverVisible.value = false;
+  };
+
+  const showDisableConfirm = () => {
+    InfoBox({
+      title: t('确定停用该报表？'),
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            marginBottom: '12px',
+            fontSize: '14px',
+            color: '#313238',
+          },
+        }, `${t('报表：')}${formData.value.name}`),
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            fontSize: '14px',
+            color: '#63656e',
+            textAlign: 'center',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, t('停用后，可见范围内的空间将无法查看和使用该报表，请谨慎操作！')),
+      ]),
+      confirmText: t('停用'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      confirmButtonTheme: 'danger',
+      onConfirm: () => {
+        formData.value.enabled = false;
+      },
+    });
+  };
+
+  const handleReportChange = async (value: string) => {
     if (value) {
       formData.value.bkvisionReport = value;
       for (const group of chartLists.value) {
@@ -363,9 +660,14 @@
           }
         }
       }
+      // 切换报表后重置覆盖配置，再拉取新参数列表
+      formData.value.scene_param_overrides = {};
+      await loadShareDetailVariables(value);
     } else {
       formData.value.bkvisionReport = '';
       formData.value.name = '';
+      formData.value.scene_param_overrides = {};
+      inputVariables.value = [];
     }
     formRef.value?.validate('bkvisionReport');
     formRef.value?.validate('name');
@@ -563,6 +865,30 @@
     margin-left: 8px;
     font-size: 12px;
     color: #63656e;
+  }
+}
+
+.report-enable-popover {
+  width: 280px;
+  padding: 4px 0;
+
+  .report-enable-popover-title {
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #313238;
+  }
+
+  .report-enable-popover-text {
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #63656e;
+  }
+
+  .report-enable-popover-actions {
+    display: flex;
+    justify-content: flex-end;
   }
 }
 
