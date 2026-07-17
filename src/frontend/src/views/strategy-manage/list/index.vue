@@ -387,6 +387,8 @@
   const { locale, t } = useI18n();
   const switchStrategyParams = ref({ strategy_id: 0, toggle: false });
   const leftLabelFilterCondition = ref('');
+  // 记录最近一次请求所用的场景，供 scene:change 比对，避免漏接场景事件导致空列表
+  const lastFetchedScopeId = ref<string | null>(null);
   const strategyTagMap = ref<Record<string, string>>({});
   const statusMap = ref<Record<string, string>>({});
   // 挂起的需要轮询的id列表
@@ -482,11 +484,15 @@
     },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
-  const dataSource = (params: Record<string, any> = {}) => StrategyManageService.fetchStrategyList({
-    ...params,
-    order_type: 'asc',
-    tag: leftLabelFilterCondition.value,
-  });
+  const dataSource = (params: Record<string, any> = {}) => {
+    // 记录本次请求实际使用的场景，供 scene:change 判断场景是否真正变化
+    lastFetchedScopeId.value = getSceneSystemParams().scope_id;
+    return StrategyManageService.fetchStrategyList({
+      ...params,
+      order_type: 'asc',
+      tag: leftLabelFilterCondition.value,
+    });
+  };
   const initStatusFilterList = [
     {
       text: t('已停用', 2),
@@ -1556,6 +1562,12 @@
     nextTick(() => tryFetch());
   };
   const handlFetchData = () => {
+    const currentScopeId = getSceneSystemParams().scope_id;
+    // 场景未发生实际变化时不重复请求：既避免首屏漏接事件后的空列表，
+    // 又保留首次进入的新建行高亮、避免重复请求
+    if (lastFetchedScopeId.value !== null && currentScopeId === lastFetchedScopeId.value) {
+      return;
+    }
     total.value = 0;
     groupList.value.results = [];
     isRequest = false;
@@ -1575,9 +1587,10 @@
       shouldHighlightNewRow.value = false;
     }
     fetchData();
-    setTimeout(() => {
-      onEvent('scene:change', handlFetchData);
-    }, 1000);
+    // 记录首屏请求使用的场景，作为 scene:change 的比对基准
+    lastFetchedScopeId.value = getSceneSystemParams().scope_id;
+    // 立即注册监听，避免场景选择器在 1s 内解析出场景/切换场景时漏接事件导致空列表
+    onEvent('scene:change', handlFetchData);
   });
   onUnmounted(() => {
     off('scene:change', handlFetchData);
