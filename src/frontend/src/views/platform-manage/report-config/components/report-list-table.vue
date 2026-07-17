@@ -13,10 +13,22 @@
 <script setup lang="tsx">
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
+
+  import RootManageService from '@service/root-manage';
+  import ToolManageService from '@service/tool-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
+  import useRequest from '@hooks/use-request';
+
+  import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
+
+  import type { PanelVisibilityType } from '@model/report-config/panel';
 
   interface ReportItem {
     id: string;
@@ -25,14 +37,20 @@
     description: string;
     vision_id: string;
     bkvisionReportName: string;
+    bkvisionSpaceUid?: string;
     status: 'published' | 'unpublished';
     updated_by: string;
     updated_at: string;
+    visibility_type?: PanelVisibilityType;
+    scene_ids?: Array<number | string>;
+    system_ids?: Array<number | string>;
   }
 
   interface Props {
     highlightReportId?: string | null;
     dataSource: (params: any) => Promise<any>;
+    sceneNameMap?: Record<string, string>;
+    systemNameMap?: Record<string, string>;
   }
 
   interface Emits {
@@ -44,12 +62,27 @@
 
   const props = withDefaults(defineProps<Props>(), {
     highlightReportId: null,
+    sceneNameMap: () => ({}),
+    systemNameMap: () => ({}),
   });
 
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const router = useRouter();
   const listRef = ref();
+
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+  });
+
+  const {
+    run: fetchReportDetail,
+  } = useRequest(ToolManageService.fetchReportLists, {
+    defaultValue: null,
+  });
 
   // 新建行高亮 - 响应式 rowClassName
   const rowClassName = computed(() => {
@@ -63,22 +96,120 @@
     unpublished: 'default',
   };
 
+  const getVisibilityLabels = (row: ReportItem) => {
+    if (!row.visibility_type) {
+      return [];
+    }
+    const { visibility_type: visibilityType, scene_ids: sceneIds, system_ids: systemIds } = row;
+
+    if (visibilityType === 'all_visible') {
+      return [t('全部可见')];
+    }
+
+    const labels: string[] = [];
+    const isImplicitAllScenes = visibilityType === 'scenes_and_systems'
+      && !(sceneIds?.length)
+      && !!(systemIds?.length);
+    const isImplicitAllSystems = visibilityType === 'scenes_and_systems'
+      && !!(sceneIds?.length)
+      && !(systemIds?.length);
+
+    if (visibilityType === 'all_scenes' || isImplicitAllScenes) {
+      labels.push(t('全部场景'));
+    } else if (sceneIds && sceneIds.length > 0) {
+      sceneIds.forEach((id: number | string) => {
+        const key = String(id);
+        labels.push(props.sceneNameMap[key] || `场景${id}`);
+      });
+    }
+
+    if (visibilityType === 'all_systems' || isImplicitAllSystems) {
+      labels.push(t('全部系统'));
+    } else if (systemIds && systemIds.length > 0) {
+      systemIds.forEach((id: number | string) => {
+        const key = String(id);
+        labels.push(props.systemNameMap[key] || `平台${id}`);
+      });
+    }
+
+    return labels;
+  };
+
+  const renderVisibilityContent = (row: ReportItem) => {
+    const labels = getVisibilityLabels(row);
+
+    return (
+      <span class="visibility-cell">
+        {labels.length
+          ? (
+            <EditTag
+              data={labels}
+              key={row.id}
+              showCopy={false} />
+          )
+          : <span>--</span>}
+      </span>
+    );
+  };
+
+  const handleGoAuditReport = (row: ReportItem) => {
+    const routeData = router.resolve({
+      name: 'statementManageDetail',
+      params: { id: row.id },
+      query: {
+        scene_id: getSceneSystemParams().scope_id,
+        scene_type: 'scene',
+      },
+    });
+    window.open(routeData.href, '_blank');
+  };
+
+  const handleGoBkvision = async (row: ReportItem) => {
+    if (!row.vision_id) return;
+    const baseUrl = configData.value.third_party_system?.bkvision_web_url || '';
+    if (!baseUrl) return;
+
+    try {
+      const res = await fetchReportDetail({ share_uid: row.vision_id });
+      if (res?.data?.dashboard_uid) {
+        const spaceUid = row.bkvisionSpaceUid || '';
+        window.open(`${baseUrl}#/${spaceUid}/dashboards/detail/root/${res.data.dashboard_uid}`);
+      }
+    } catch (e) {
+      console.error('获取报表详情失败:', e);
+    }
+  };
+
   const tableColumns = ref([
     {
       title: t('报表名称'),
       colKey: 'name',
-      width: 150,
+      width: 180,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ReportItem }) => (
         <span class="report-name-cell">
-          <Tooltips data={row.name} />
+          <span class="report-name-text">
+            <Tooltips data={row.name} />
+          </span>
+          {row.status === 'published' && (
+            <span class="hover-show-icon">
+              <audit-icon
+                v-bk-tooltips={t('点击查看审计报表')}
+                class="jump-link"
+                type="jump-link"
+                onClick={(e: Event) => {
+                  e.stopPropagation();
+                  handleGoAuditReport(row);
+                }} />
+            </span>
+          )}
         </span>
       ),
     },
     {
-      title: t('描述'),
+      title: t('报表描述'),
       colKey: 'description',
-      width: 180,
+      width: 200,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ReportItem }) => (
         <span>{row.description || '--'}</span>
@@ -87,11 +218,37 @@
     {
       title: t('BKVision 报表'),
       colKey: 'bkvisionReportName',
-      width: 160,
+      width: 200,
       ellipsis: true,
       cell: (_h: any, { row }: { row: ReportItem }) => (
-        <span>{row.bkvisionReportName || '--'}</span>
+        <span class="bkvision-report-cell">
+          {row.bkvisionReportName
+            ? (
+              <>
+                <span class="bkvision-report-text">
+                  <Tooltips data={row.bkvisionReportName} />
+                </span>
+                <span class="hover-show-icon">
+                  <audit-icon
+                    v-bk-tooltips={t('跳转至BKVision查看')}
+                    class="jump-link"
+                    type="jump-link"
+                    onClick={(e: Event) => {
+                      e.stopPropagation();
+                      handleGoBkvision(row);
+                    }} />
+                </span>
+              </>
+            )
+            : <span>--</span>}
+        </span>
       ),
+    },
+    {
+      title: t('可见范围'),
+      colKey: 'visibility',
+      width: 220,
+      cell: (_h: any, { row }: { row: ReportItem }) => renderVisibilityContent(row),
     },
     {
       title: t('状态'),
@@ -216,12 +373,52 @@
     :deep(.t-table__row--hover) {
       background-color: #fff !important;
     }
+
+    :deep(.t-table td) {
+      vertical-align: middle;
+    }
   }
 
-  :deep(.report-name-cell) {
+  :deep(.report-name-cell),
+  :deep(.bkvision-report-cell) {
     display: inline-flex;
     align-items: center;
     max-width: 100%;
+  }
+
+  :deep(.report-name-text),
+  :deep(.bkvision-report-text) {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+
+    .show-tooltips-text {
+      display: block;
+    }
+  }
+
+  :deep(.jump-link) {
+    flex-shrink: 0;
+    padding-left: 4px;
+    font-size: 14px;
+    color: #3a84ff;
+    cursor: pointer;
+  }
+
+  :deep(.visibility-cell) {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  :deep(.hover-show-icon) {
+    visibility: hidden;
+  }
+
+  :deep(tr:hover) {
+    .hover-show-icon {
+      visibility: visible;
+    }
   }
 </style>
 

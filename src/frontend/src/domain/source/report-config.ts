@@ -168,6 +168,10 @@ class PanelManage extends ModuleBase {
     name?: string,
     description?: string,
     updated_by?: string,
+    vision_id?: string,
+    visibility_type?: string,
+    scene_ids?: number[],
+    system_ids?: string[],
     scenario?: string,
   }) {
     return Request.get<IRequestResponsePaginationData<PanelModel>>(
