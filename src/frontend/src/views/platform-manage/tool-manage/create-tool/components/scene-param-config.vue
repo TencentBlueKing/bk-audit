@@ -44,6 +44,10 @@
               multiple
               multiple-mode="tag"
               :placeholder="t('请选择需要覆盖的参数')"
+              :popover-options="{
+                boundary: 'body',
+                zIndex: popoverZIndex,
+              }"
               @change="(val: string[]) => handleOverrideChange(item, val)">
               <bk-option
                 v-for="param in inputVariableList"
@@ -54,15 +58,18 @@
           </div>
         </div>
 
-        <!-- 参数表格：参数名 + 显示名 + 默认值均分剩余宽度 -->
+        <!-- 参数表格：参数名 +（可选）显示名 + 默认值 -->
         <div
           v-if="getTableData(item).length > 0"
-          class="render-field">
+          class="render-field"
+          :class="{ 'is-two-col': !showDisplayName }">
           <div class="field-header-row">
             <div class="field-value col-name">
               {{ t('参数名') }}
             </div>
-            <div class="field-value col-display">
+            <div
+              v-if="showDisplayName"
+              class="field-value col-display">
               {{ t('显示名') }}
             </div>
             <div class="field-value col-default">
@@ -77,7 +84,9 @@
             <div class="field-value col-name">
               <span class="param-name-text">{{ getParamName(row) }}</span>
             </div>
-            <div class="field-value col-display">
+            <div
+              v-if="showDisplayName"
+              class="field-value col-display">
               <span class="param-name-text">{{ getParamDisplayName(row) }}</span>
             </div>
             <div class="field-value col-default">
@@ -132,8 +141,14 @@
     inputVariables: InputVarItem[];
     /** 覆盖参数下拉是否占满容器（弹窗内为 true，编辑/新建页为 false） */
     overrideSelectFullWidth?: boolean;
+    /** 是否展示「显示名」列，报表设计稿为参数名+默认值两列 */
+    showDisplayName?: boolean;
+    /** 下拉 z-index（侧滑内需高于容器） */
+    popoverZIndex?: number;
   }>(), {
     overrideSelectFullWidth: false,
+    showDisplayName: true,
+    popoverZIndex: 2500,
   });
 
   // eslint-disable-next-line func-call-spacing
@@ -264,6 +279,10 @@
     --param-data-col-width: calc((100% - var(--param-action-col-width)) / 3);
 
     margin-top: 16px;
+  }
+
+  .scene-param-config .render-field.is-two-col {
+    --param-data-col-width: calc((100% - var(--param-action-col-width)) / 2);
   }
 
   .param-config-block {

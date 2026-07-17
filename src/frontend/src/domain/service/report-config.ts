@@ -175,6 +175,10 @@ export default  {
     name?: string,
     description?: string,
     updated_by?: string,
+    vision_id?: string,
+    visibility_type?: string,
+    scene_ids?: number[],
+    system_ids?: string[],
     scenario?: string,
   }) {
     return PanelModelSource.fetchPlatformPanels(params)

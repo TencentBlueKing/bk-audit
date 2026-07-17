@@ -296,9 +296,12 @@
     popoverClass?: string;
     /** 下拉宽度是否跟随选择器（默认固定 640px） */
     matchSelectorWidth?: boolean;
+    /** 下拉面板 z-index（侧滑/弹层内需高于容器，如 sideslider 9999） */
+    popoverZIndex?: number;
   }>(), {
     popoverClass: '',
     matchSelectorWidth: false,
+    popoverZIndex: 2100,
   });
 
   const emit = defineEmits<{(e: 'update:formData', value: FormData): void}>();
@@ -315,6 +318,7 @@
     top: '0px',
     left: '0px',
     width: '',
+    zIndex: props.popoverZIndex as number | string,
   });
 
   // 动态计算可显示的 tag 数量
@@ -610,6 +614,7 @@
       popoverStyle.top = `${rect.bottom + 4}px`;
       popoverStyle.left = `${rect.left}px`;
       popoverStyle.width = props.matchSelectorWidth ? `${rect.width}px` : '';
+      popoverStyle.zIndex = props.popoverZIndex;
     });
   };
 
