@@ -28,6 +28,7 @@
         <bk-tab
           v-model:active="active"
           class="risk-detail-tab"
+          :class="{ 'risk-detail-tab--hide-panel-header': !detailData.has_report }"
           type="card-grid">
           <bk-tab-panel
             v-for="item in visiblePanels"
@@ -266,7 +267,7 @@
     ...strategyInfoData.value,
   }));
 
-  // 无调查报告时只展示「关联事件」页签，保证标题可见
+  // 无调查报告时仅挂载「关联事件」panel，并隐藏页签头（由内容区展示区块标题）
   const visiblePanels = computed(() => (
     detailData.value.has_report
       ? panels
@@ -380,6 +381,13 @@
         height: auto;
         min-height: 0;
         overflow: visible;
+      }
+
+      /* 无调查报告时隐藏 bk-tab-panel 页签头，避免与内容区「关联事件」标题重复 */
+      &.risk-detail-tab--hide-panel-header {
+        :deep(.bk-tab-header) {
+          display: none;
+        }
       }
     }
   }
