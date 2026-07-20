@@ -127,6 +127,39 @@
     });
   };
 
+  const TOOLTIP_WRAP_STYLE_ID = 'audit-bkvision-tooltip-wrap';
+  const TOOLTIP_WRAP_CSS = `
+    /* OverflowTitle tips 默认 boundary=document.body，BKVision scopeCss 后 max-width/换行会失效 */
+    .bk-popover,
+    .bk-pop2-content,
+    .t-popup__content:not(:has(.t-select__dropdown)):not(:has(.t-list)):not(:has(.t-menu)):not(:has(.t-tree)),
+    .t-popup__content .text-ov,
+    .t-popup .text-ov,
+    [class*='overflow-popover']:not(.overflow-popover-reference) {
+      max-width: min(480px, 80vw) !important;
+      white-space: normal !important;
+      word-break: break-all !important;
+      overflow-wrap: anywhere !important;
+      line-height: 1.4;
+    }
+  `;
+
+  const injectTooltipWrapStyle = (root: ParentNode | ShadowRoot | null | undefined) => {
+    if (!root) {
+      return;
+    }
+    const existed = 'getElementById' in root
+      ? (root as Document | ShadowRoot).getElementById(TOOLTIP_WRAP_STYLE_ID)
+      : (root as ParentNode).querySelector?.(`#${TOOLTIP_WRAP_STYLE_ID}`);
+    if (existed) {
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = TOOLTIP_WRAP_STYLE_ID;
+    style.textContent = TOOLTIP_WRAP_CSS;
+    root.appendChild(style);
+  };
+
   // 关闭弹窗时清理实例
   const closeBK = () => {
     if (app) {
@@ -263,6 +296,12 @@
           handleError,
         },
       );
+      // BKVision 运行在 Shadow DOM，且气泡可能 teleport 到 body；两边都注入换行样式
+      injectTooltipWrapStyle(document.head);
+      const visionPanel = panelRef.value?.querySelector('bk-vision-panel') as HTMLElement & {
+        shadowRoot?: ShadowRoot | null;
+      } | null;
+      injectTooltipWrapStyle(visionPanel?.shadowRoot);
     } catch (error) {
       console.error(error);
     }
@@ -286,5 +325,24 @@
 .panel {
   width: 100%;
   height: 100%;
+}
+</style>
+
+<!--
+  BKVision 表格 OverflowTitle tips 会挂到 document.body，scopeCss 后自身换行样式失效。
+  这里用非 scoped 样式兜底（与 init 注入逻辑一致）。
+-->
+<style lang="postcss">
+.bk-popover,
+.bk-pop2-content,
+.t-popup__content:not(:has(.t-select__dropdown), :has(.t-list), :has(.t-menu), :has(.t-tree)),
+.t-popup__content .text-ov,
+.t-popup .text-ov,
+[class*='overflow-popover']:not(.overflow-popover-reference) {
+  max-width: min(480px, 80vw) !important;
+  line-height: 1.4;
+  word-break: break-all !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
 }
 </style>
