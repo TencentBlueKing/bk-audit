@@ -163,6 +163,7 @@
   };
 
   // 进入编辑态时自动聚焦
+  // 注意：当外部先设置 isEditing，再触发本组件挂载时，watch 不会触发（除非 immediate:true）
   watch(() => props.isEditing, async (val) => {
     if (val) {
       localValue.value = _.cloneDeep(props.tag.value) || '';
@@ -178,7 +179,7 @@
     } else {
       document.removeEventListener('click', handleDocumentClick);
     }
-  });
+  }, { immediate: true });
 
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleDocumentClick);
