@@ -601,7 +601,6 @@
     {
       label: () => t('策略名称'),
       fixed: 'left',
-      sort: 'custom',
       field: () => 'strategy_name',
       minWidth: 220,
       render: ({ data }: { data: StrategyModel}) => {
@@ -846,7 +845,6 @@
       label: () => t('最近更新人'),
       field: () => 'updated_by',
       width: 120,
-      sort: 'custom',
     },
     {
       label: () => t('最近更新时间'),
