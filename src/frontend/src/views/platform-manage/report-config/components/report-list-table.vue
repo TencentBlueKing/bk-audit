@@ -66,7 +66,7 @@
 
   const tableColumns = ref([
     {
-      title: t('名称'),
+      title: t('报表名称'),
       colKey: 'name',
       width: 150,
       ellipsis: true,

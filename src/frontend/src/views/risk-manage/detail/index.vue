@@ -26,6 +26,7 @@
           @updated-data="handleUpdatedData" />
         <!-- 关联事件 / 事件调查报告 -->
         <bk-tab
+          :key="detailData.has_report ? 'risk-detail-with-report' : 'risk-detail-link-only'"
           v-model:active="active"
           class="risk-detail-tab"
           :class="{ 'risk-detail-tab--hide-panel-header': !detailData.has_report }"
@@ -159,10 +160,11 @@
     { name: 'linkEvent', label: t('关联事件') },
   ];
 
-  const active = ref<keyof typeof comMap>('linkEvent');
+  const active = ref<keyof typeof comMap>('eventReport');
 
   let timeout: undefined | number = undefined;
   let reportGeneratingTimer: undefined | number = undefined;
+  let syncedActiveTabRiskId: string | undefined;
 
   const {
     loading: strategyLoading,
@@ -191,6 +193,13 @@
     },
     manual: true,
     onSuccess(data) {
+      const riskIdKey = String(data.risk_id ?? route.params.riskId);
+      if (syncedActiveTabRiskId !== riskIdKey) {
+        syncedActiveTabRiskId = riskIdKey;
+        nextTick(() => {
+          active.value = data.has_report ? 'eventReport' : 'linkEvent';
+        });
+      }
       // 如果正在生成报告，启动快速轮询（每3秒）
       if (data.report_generating) {
         startReportGeneratingPolling();
@@ -274,14 +283,24 @@
       : panels.filter(item => item.name === 'linkEvent')
   ));
 
-  // 有无调查报告时，保证当前页签始终有效；有报告时默认落在报告页签
   watch(
-    () => detailData.value.has_report,
-    (hasReport) => {
-      active.value = hasReport ? 'eventReport' : 'linkEvent';
+    () => route.params.riskId,
+    () => {
+      syncedActiveTabRiskId = undefined;
     },
-    {
-      immediate: true,
+  );
+
+  // 新建调查报告后自动切到报告 Tab；轮询刷新不打扰用户当前选中的 Tab
+  watch(
+    () => riskData.value.has_report,
+    (hasReport, hadReport) => {
+      if (hasReport && hadReport === false) {
+        nextTick(() => {
+          active.value = 'eventReport';
+        });
+      } else if (!hasReport && hadReport === true) {
+        active.value = 'linkEvent';
+      }
     },
   );
 

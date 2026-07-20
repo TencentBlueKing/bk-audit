@@ -61,7 +61,7 @@
             class="search-input"
             :data="searchSelectData"
             :get-menu-list="getMenuList"
-            :placeholder="t('搜索 名称、描述、BKVision 报表、更新人')"
+            :placeholder="t('搜索 报表名称、描述、BKVision 报表、更新人')"
             @change="handleSearch" />
         </div>
       </div>
@@ -124,7 +124,7 @@
   // 搜索关键词
   const searchKeyword = ref<any[]>([]);
   const searchSelectData = ref([
-    { name: '名称', id: 'name', placeholder: '请输入名称' },
+    { name: t('报表名称'), id: 'name', placeholder: t('请输入报表名称') },
     { name: '描述', id: 'description', placeholder: '请输入描述' },
     { name: 'BKVision 报表', id: 'bkvision_report', placeholder: '请输入BKVision报表' },
     { name: '更新人', id: 'updated_by', placeholder: '请输入更新人', children: [] as Array<{ id: string; name: string }> },
