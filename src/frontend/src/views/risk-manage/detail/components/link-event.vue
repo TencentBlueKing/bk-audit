@@ -22,6 +22,9 @@
         :key="detailRenderKey"
         class="body">
         <template v-if="hasLoadedData">
+          <div class="link-event-section-title">
+            {{ t('关联事件') }}
+          </div>
           <link-event-timeline
             v-if="linkEventList.length > 0"
             :active-index="active"
@@ -521,7 +524,7 @@
       label: string,
       value: number
     }>,
-    data: RiskManageModel & StrategyInfo
+    data: RiskManageModel & StrategyInfo,
   }
 
   interface DisplayValue {
@@ -1290,6 +1293,15 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+  }
+
+  .link-event-section-title {
+    padding: 16px 24px 0;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
   }
 
   .list-item-detail {
