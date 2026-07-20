@@ -23,7 +23,8 @@ export default {
     全部展开: 'Expand All',
     全部收起: 'Collapse All',
     全部: 'All',
-    '搜索 报表ID、名称、描述、BKVision 报表、更新人': 'Search Report ID, Name, Description, BKVision Report, Updated By',
+    '搜索 报表ID、名称、描述、BKVision 报表、更新人': 'Search Report ID, Report Name, Description, BKVision Report, Updated By',
+    '搜索 报表名称、描述、BKVision 报表、更新人': 'Search Report Name, Description, BKVision Report, Updated By',
     // Report Config - Table
     报表ID: 'Report ID',
     报表名称: 'Report Name',
