@@ -72,13 +72,6 @@
       </div>
     </div>
   </audit-sideslider>
-  <risk-content-item
-    v-for="(item,index) in experienceData"
-    :key="item.id"
-    class="mt16"
-    :data="experienceData[index]"
-    :show-edit-btn="myExperienceData === item"
-    @edit="handleEditExperience" />
 </template>
 
 <script setup lang='ts'>
@@ -103,8 +96,6 @@
   import RichEditor from '@components/editor/index.vue';
 
   import { changeConfirm } from '@utils/assist';
-
-  import RiskContentItem from './components/risk-content-item.vue';
 
   interface Emits{
     (e:'update'):void,
@@ -210,6 +201,10 @@
     }
   }, {
     immediate: true,
+  });
+
+  defineExpose({
+    handleEditExperience,
   });
 </script>
 <style scoped lang="postcss">

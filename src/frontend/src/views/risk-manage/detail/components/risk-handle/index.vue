@@ -48,6 +48,7 @@
         <!-- 风险总结 -->
         <risk-content-btn
           v-if="data.status==='closed'"
+          ref="riskContentRef"
           :data="data"
           :user-info="userInfo"
           @update="handleUpdate" />
@@ -71,6 +72,8 @@
           :risk-id="riskId"
           :status-data="statusData"
           :user-info="userInfo"
+          v-bind="getTimelineContentProps(getIndexByTag(tag))"
+          @edit="handleEditRiskExperience"
           @update="handleUpdate" />
       </template>
     </bk-timeline>
@@ -94,11 +97,14 @@
   import AccountManageService from '@service/account-manage';
   import ItsmManageService from '@service/itsm-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
+  import RiskExperienceManage from '@service/risk-experience-manage';
   import RiskManageService from '@service/risk-manage';
   import SoapManageService from '@service/soap-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
+
+  import dialogueIconUrl from '@images/dialogue.svg';
 
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -111,6 +117,7 @@
   import CustomProcess  from './components/custom-process.vue';
   import ForApprove from './components/for-approve.vue';
   import MisReport from './components/misreport.vue';
+  import RiskExperience from './components/risk-experience.vue';
   import ReOpenMisReport from './components/reopen-misreport.vue';
 
   interface Emits{
@@ -156,6 +163,7 @@
   const ticketHistory = ref([] as Record<string, any>[]);
 
   const rootRef = ref();
+  const riskContentRef = ref<InstanceType<typeof RiskContentBtn> | null>(null);
   const needScrollToContent = ref(false);
 
   const historyActionMap: Record<string, {
@@ -202,6 +210,10 @@
       name: t('重开单据'),
       icon: 'reopen',
     },
+    RiskExperience: {
+      name: t('风险总结'),
+      icon: 'dialogue',
+    },
   };
   const comMap = {
     ReOpenMisReport,
@@ -214,6 +226,7 @@
     AutoProcess: ForApprove,
     NewRisk: 'div',
     await_deal: AwaitDeal,
+    RiskExperience,
   };
   const processPackageIdToDetailMap = ref<Record<string, any>>({});
   let isInit = false;
@@ -275,9 +288,61 @@
     manual: true,
   });
 
+  const {
+    run: fetchExperience,
+    data: experienceData,
+  } = useRequest(RiskExperienceManage.fetchExperience, {
+    defaultValue: [],
+  });
+
+  const handleEditRiskExperience = () => {
+    riskContentRef.value?.handleEditExperience();
+  };
+
+  const isOwnRiskExperience = (item: Record<string, any>) => (
+    item?.action === 'RiskExperience'
+    && item.experience?.created_by === userInfo.value.username
+  );
+
+  const compareExperienceByTime = (
+    a: { created_at: string },
+    b: { created_at: string },
+  ) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+
+  const appendRiskExperienceTimeline = () => {
+    const experiences = [...(experienceData.value || [])].sort(compareExperienceByTime);
+    experiences.forEach((exp) => {
+      const action = 'RiskExperience';
+      list.value.unshift({
+        tag: renderTimelineTag(
+          action,
+          `exp-${exp.id}`,
+          historyActionMap[action].name,
+          exp.created_at,
+        ),
+        content: '<template/>',
+        icon: () => renderTimelineIcon(action),
+      });
+      ticketHistory.value.unshift({
+        action: 'RiskExperience',
+        time: exp.created_at,
+        experience: exp,
+      });
+    });
+  };
+
   const handleUpdate = () => {
     isInit = false;
     emits('update');
+  };
+
+  const getTimelineContentProps = (item: Record<string, any>) => {
+    if (item?.action === 'RiskExperience') {
+      return {
+        showEditBtn: isOwnRiskExperience(item),
+      };
+    }
+    return {};
   };
 
   const renderTimelineIcon = (action: string, active = false) => (
@@ -287,11 +352,18 @@
         background: active ? '#E1ECFF' : '#F0F1F5',
         color: active ? '#3A84FF' : '#989CA7',
       }}>
-      <audit-icon type={ historyActionMap[action].icon } />
+      {action === 'RiskExperience' ? (
+        <img
+          alt=""
+          class="risk-handle-timeline-dialogue-icon"
+          src={dialogueIconUrl} />
+      ) : (
+        <audit-icon type={ historyActionMap[action].icon } />
+      )}
     </span>
   );
 
-  const renderTimelineTag = (action: string, index: number, title: string, time: string) => (
+  const renderTimelineTag = (action: string, index: number | string, title: string, time: string) => (
     `<p class="risk-handle-timeline-tag ${action}-${index}">
       <span class="risk-handle-timeline-tag__title">${title}</span>
       <span class="risk-handle-timeline-tag__time">${time}</span>
@@ -389,18 +461,24 @@
       // 翻转列表
       list.value.reverse();
       ticketHistory.value.reverse();
-      isInit = true;
 
-      if (ticketHistory.value.length > 0) {
-        handleFetchParamsDetail();
-      }
-      nextTick(() => {
-        const el =  document.getElementById('risk-manage-content-btn');
-        if (el && needScrollToContent.value) {
-          el.scrollIntoView();
-          needScrollToContent.value = false;
-          removeSearchParam('scrollToContent');
+      fetchExperience({
+        risk_id: data.risk_id,
+      }).then(() => {
+        appendRiskExperienceTimeline();
+        isInit = true;
+
+        if (ticketHistory.value.length > 0) {
+          handleFetchParamsDetail();
         }
+        nextTick(() => {
+          const el =  document.getElementById('risk-manage-content-btn');
+          if (el && needScrollToContent.value) {
+            el.scrollIntoView();
+            needScrollToContent.value = false;
+            removeSearchParam('scrollToContent');
+          }
+        });
       });
     }
     if (data.scene_id) {
@@ -583,10 +661,18 @@
       font-size: 16px;
       line-height: 1;
     }
+
+    .risk-handle-timeline-dialogue-icon {
+      display: block;
+      width: 12px;
+      height: 12px;
+      object-fit: contain;
+    }
   }
 
   :deep(.bk-timeline-content .reopen-mis-report-wrap),
-  :deep(.bk-timeline-content .approve-wrap) {
+  :deep(.bk-timeline-content .approve-wrap),
+  :deep(.bk-timeline-content .risk-experience-wrap) {
     padding: 0;
     font-size: 12px;
     color: #63656e;
@@ -597,7 +683,8 @@
   }
 
   :deep(.bk-timeline-content .approve-wrap > .mis-content),
-  :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content) {
+  :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content),
+  :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
     padding: 12px 8px 12px 12px;
     margin-top: 8px;
     background: #f5f7fa;
