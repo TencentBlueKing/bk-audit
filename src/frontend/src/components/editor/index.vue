@@ -67,6 +67,7 @@
   import InsertTableDialog from '@views/risk-manage/detail/components/event-report/insert-table-dialog.vue';
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import ReportTableBlot, {
+    hasTableContent,
     insertReportTable,
     registerReportTableMatcher,
   } from '@views/risk-manage/detail/components/event-report/report-table-blot';
@@ -635,6 +636,312 @@
   };
 
 
+  const getActiveReportTableCell = (evt: ClipboardEvent) => {
+    const path = typeof evt.composedPath === 'function' ? evt.composedPath() : [];
+    for (let i = 0; i < path.length; i += 1) {
+      const node = path[i];
+      if (!(node instanceof HTMLElement)) {
+        continue;
+      }
+      const cell = node.closest('td, th');
+      if (cell?.closest('.ql-report-table')) {
+        return cell as HTMLTableCellElement;
+      }
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('.ql-report-table')) {
+      const cell = active.closest('td, th');
+      if (cell) {
+        return cell as HTMLTableCellElement;
+      }
+    }
+    return null;
+  };
+
+  const ensureSelectionInTableCell = (cell: HTMLTableCellElement) => {
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (cell.contains(range.commonAncestorContainer)) {
+        return;
+      }
+    }
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const isTableCellPlaceholderOnly = (cell: HTMLTableCellElement) => {
+    const normalized = cell.innerHTML
+      .replace(/&nbsp;/gi, ' ')
+      .trim()
+      .toLowerCase();
+    return normalized === '' || normalized === '<br>' || normalized === '<br/>';
+  };
+
+  const prepareTableCellForPaste = (targetCell: HTMLTableCellElement) => {
+    if (isTableCellPlaceholderOnly(targetCell)) {
+      targetCell.replaceChildren();
+    }
+  };
+
+  const trimPlainTextForTableCell = (text: string) => text
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\n+$/g, '');
+
+  const normalizePastedHtmlForTableCell = (rawHtml: string) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div id="paste-root">${rawHtml}</div>`, 'text/html');
+    const root = doc.getElementById('paste-root');
+    if (!root) {
+      return rawHtml.trim();
+    }
+    root.querySelectorAll('meta, style, link').forEach(node => node.remove());
+    const blockTags = ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
+    root.querySelectorAll(blockTags.join(',')).forEach((block) => {
+      const parent = block.parentElement;
+      if (!parent) {
+        return;
+      }
+      while (block.firstChild) {
+        parent.insertBefore(block.firstChild, block);
+      }
+      block.remove();
+    });
+    let normalizedHtml = root.innerHTML.trim();
+    normalizedHtml = normalizedHtml.replace(/^(\s|<br\s*\/?>)+/gi, '');
+    normalizedHtml = normalizedHtml.replace(/(\s|<br\s*\/?>)+$/gi, '');
+    return normalizedHtml;
+  };
+
+  const setTableCellHtmlContent = (targetCell: HTMLTableCellElement, html: string) => {
+    const normalized = normalizePastedHtmlForTableCell(html);
+    targetCell.replaceChildren();
+    if (normalized) {
+      targetCell.insertAdjacentHTML('beforeend', normalized);
+    } else {
+      targetCell.append(document.createElement('br'));
+    }
+  };
+
+  const cleanupTableCellTrailingBr = (targetCell: HTMLTableCellElement) => {
+    const hasText = (targetCell.textContent || '').replace(/\u00a0/g, ' ').trim().length > 0;
+    if (!hasText) {
+      if (!targetCell.querySelector('img') && !targetCell.textContent?.trim()) {
+        targetCell.replaceChildren();
+        targetCell.append(document.createElement('br'));
+      }
+      return;
+    }
+    Array.from(targetCell.querySelectorAll('br')).forEach((br) => {
+      let sibling = br.nextSibling;
+      while (sibling && sibling.nodeType === Node.TEXT_NODE && !sibling.textContent?.trim()) {
+        sibling = sibling.nextSibling;
+      }
+      if (!sibling) {
+        br.remove();
+      }
+    });
+    const { firstChild } = targetCell;
+    if (firstChild?.nodeName === 'BR' && targetCell.childNodes.length > 1) {
+      firstChild.remove();
+    }
+  };
+
+  const finishTableCellPaste = (cell: HTMLTableCellElement) => {
+    cleanupTableCellTrailingBr(cell);
+    ensureSelectionInTableCell(cell);
+    notifyEditorContentChange();
+  };
+
+  const insertHtmlIntoTableCell = (html: string) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    range.insertNode(template.content);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  };
+
+  const pastePlainTextIntoTableCell = (text: string) => {
+    const trimmed = trimPlainTextForTableCell(text);
+    if (!trimmed) {
+      return;
+    }
+    if (document.queryCommandSupported('insertText')) {
+      document.execCommand('insertText', false, trimmed);
+      return;
+    }
+    insertHtmlIntoTableCell(trimmed.replace(/\n/g, '<br>'));
+  };
+
+  const notifyEditorContentChange = () => {
+    nextTick(() => {
+      const quillInstance = editorRef.value?.getQuill();
+      quillInstance?.root.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  const getTableCellPosition = (cell: HTMLTableCellElement) => {
+    const row = cell.parentElement as HTMLTableRowElement | null;
+    const table = cell.closest('table');
+    if (!row || !table) {
+      return null;
+    }
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const rowIndex = rows.indexOf(row);
+    const cells = Array.from(row.querySelectorAll('td, th'));
+    const colIndex = cells.indexOf(cell);
+    if (rowIndex < 0 || colIndex < 0) {
+      return null;
+    }
+    return {
+      rowIndex,
+      colIndex,
+      rows,
+    };
+  };
+
+  const getTableCellAt = (
+    table: HTMLTableElement,
+    rowIndex: number,
+    colIndex: number,
+  ): HTMLTableCellElement | null => {
+    const row = table.querySelectorAll('tr')[rowIndex];
+    if (!row) {
+      return null;
+    }
+    const cells = row.querySelectorAll('td, th');
+    return (cells[colIndex] as HTMLTableCellElement) || null;
+  };
+
+  const pasteGridPlainTextIntoTable = (startCell: HTMLTableCellElement, plainText: string) => {
+    const table = startCell.closest('table');
+    const position = getTableCellPosition(startCell);
+    if (!table || !position) {
+      pastePlainTextIntoTableCell(plainText);
+      return;
+    }
+    const lines = plainText.replace(/\r\n/g, '\n').split('\n');
+    while (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+    lines.forEach((line, rowOffset) => {
+      const values = line.split('\t');
+      values.forEach((value, colOffset) => {
+        const target = getTableCellAt(
+          table,
+          position.rowIndex + rowOffset,
+          position.colIndex + colOffset,
+        );
+        if (target) {
+          target.textContent = value;
+        }
+      });
+    });
+  };
+
+  const handleTableCellPaste = async (evt: ClipboardEvent, tableCell: HTMLTableCellElement) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    const { clipboardData } = evt;
+    if (!clipboardData) {
+      return;
+    }
+    if (clipboardData.files && clipboardData.files.length > 0) {
+      return;
+    }
+
+    tableCell.focus();
+    prepareTableCellForPaste(tableCell);
+    ensureSelectionInTableCell(tableCell);
+
+    const plainText = trimPlainTextForTableCell(clipboardData.getData('text/plain'));
+    const html = clipboardData.getData('text/html');
+    const hasBase64Image = Boolean(html && /<img[\s\S]*?src=["']data:image\//i.test(html));
+    const isGridPaste = plainText.includes('\t')
+      || (plainText.includes('\n') && hasTableContent(html || ''));
+
+    try {
+      if (isGridPaste) {
+        pasteGridPlainTextIntoTable(tableCell, plainText);
+        return;
+      }
+
+      if (hasBase64Image && html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const imgTags = doc.querySelectorAll('img');
+        const promises: Promise<void>[] = [];
+        imgTags.forEach((imgTag) => {
+          const imageElement = imgTag as HTMLImageElement;
+          imageElement.removeAttribute('width');
+          imageElement.removeAttribute('height');
+          imageElement.style.maxWidth = '100%';
+          imageElement.style.height = 'auto';
+          imageElement.style.verticalAlign = 'bottom';
+          if (imageElement.src.startsWith('data:image/')) {
+            promises.push(uploadImage(imageElement.src).then((url) => {
+              if (url) {
+                imageElement.src = url;
+              }
+            }));
+          }
+        });
+        await Promise.all(promises);
+        const contentHtml = normalizePastedHtmlForTableCell(doc.body.innerHTML);
+        if (isTableCellPlaceholderOnly(tableCell)) {
+          setTableCellHtmlContent(tableCell, contentHtml);
+        } else {
+          insertHtmlIntoTableCell(contentHtml);
+        }
+        nextTick(() => normalizeEditorImages(tableCell));
+        return;
+      }
+
+      if (html && hasTableContent(html)) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const cells = doc.querySelectorAll('td, th');
+        if (cells.length === 1) {
+          setTableCellHtmlContent(tableCell, cells[0].innerHTML || plainText);
+        } else {
+          pastePlainTextIntoTableCell(plainText);
+        }
+        return;
+      }
+
+      if (html && html.trim()) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const contentHtml = normalizePastedHtmlForTableCell(doc.body.innerHTML);
+        if (isTableCellPlaceholderOnly(tableCell) || !tableCell.textContent?.trim()) {
+          setTableCellHtmlContent(tableCell, contentHtml);
+        } else if (!insertHtmlIntoTableCell(contentHtml)) {
+          tableCell.insertAdjacentHTML('beforeend', contentHtml);
+        }
+      } else {
+        pastePlainTextIntoTableCell(plainText);
+      }
+    } finally {
+      finishTableCellPaste(tableCell);
+    }
+  };
+
   onMounted(() => {
     document.addEventListener('keydown', handleKeydown);
     const quill = editorRef.value?.getQuill();
@@ -643,57 +950,67 @@
       nextTick(() => normalizeEditorImages(quill.root));
       quill.root.addEventListener(
         'paste',
-        async (evt: any) => {
+        async (evt: ClipboardEvent) => {
           quill.enable(!props?.disabled); // source设置用户通过鼠标或键盘等输入设备进行编辑的能力。当"api"或 时，不会影响 API 调用的功能"silent"。
-          const clipboardData = evt.clipboardData || evt.originalEvent.clipboardData;
-          if (clipboardData) {
-            const html = clipboardData.getData('text/html');
-            if (html) {
-              evt.preventDefault();
-              const parser = new DOMParser();
-              const doc = parser.parseFromString(html, 'text/html');
-              const imgTags = doc.querySelectorAll('img');
-              const promises: Promise<void>[] = [];
+          const clipboardData = evt.clipboardData || (evt as any).originalEvent?.clipboardData;
+          if (!clipboardData) {
+            return;
+          }
 
-              // base64图片拦截处理
-              if (imgTags.length > 0) {
-                for (let index = 0; index < imgTags.length; index += 1) {
-                  const imgTag = imgTags[index] as HTMLImageElement;
-                  imgTag.removeAttribute('width');
-                  imgTag.removeAttribute('height');
-                  imgTag.style.maxWidth = '100%';
-                  imgTag.style.height = 'auto';
-                  imgTag.style.verticalAlign = 'bottom';
-                  const base64Image = imgTag.src;
-                  // base64
-                  if (base64Image.startsWith('data:image/')) {
-                    promises.push(uploadImage(base64Image).then((url) => {
-                      imgTag.src = url; // 替换为上传后的 URL
-                    }));
-                  }
+          const tableCell = getActiveReportTableCell(evt);
+          if (tableCell) {
+            await handleTableCellPaste(evt, tableCell);
+            return;
+          }
+
+          const html = clipboardData.getData('text/html');
+          const hasFiles = clipboardData.files && clipboardData.files.length > 0;
+
+          if (html) {
+            evt.preventDefault();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const imgTags = doc.querySelectorAll('img');
+            const promises: Promise<void>[] = [];
+
+            // base64图片拦截处理
+            if (imgTags.length > 0) {
+              for (let index = 0; index < imgTags.length; index += 1) {
+                const imgTag = imgTags[index] as HTMLImageElement;
+                imgTag.removeAttribute('width');
+                imgTag.removeAttribute('height');
+                imgTag.style.maxWidth = '100%';
+                imgTag.style.height = 'auto';
+                imgTag.style.verticalAlign = 'bottom';
+                const base64Image = imgTag.src;
+                // base64
+                if (base64Image.startsWith('data:image/')) {
+                  promises.push(uploadImage(base64Image).then((url) => {
+                    imgTag.src = url; // 替换为上传后的 URL
+                  }));
                 }
-                await Promise.all(promises);
               }
-              quill.focus();
-              if (quill.getSelection()) {
-                quill.clipboard.dangerouslyPasteHTML(quill.getSelection().index, doc.body.innerHTML);
-                nextTick(() => normalizeEditorImages(quill.root));
-              }
+              await Promise.all(promises);
             }
+            quill.focus();
+            const range = quill.getSelection(true);
+            const pasteIndex = range ? range.index : Math.max(0, quill.getLength() - 1);
+            quill.clipboard.dangerouslyPasteHTML(pasteIndex, doc.body.innerHTML);
+            nextTick(() => normalizeEditorImages(quill.root));
+          }
 
-            // 单个文件检测处理
-            if (clipboardData && clipboardData.files && clipboardData.files.length) {
-              evt.preventDefault();
-              const { files } = clipboardData;
-              fetchUploadImage(files).then((data) => {
-                if (!data) return;
-                successData.value = data.data;
-                insertImage();
-              });
-            }
+          // 单个文件检测处理
+          if (hasFiles) {
+            evt.preventDefault();
+            const { files } = clipboardData;
+            fetchUploadImage(files).then((data) => {
+              if (!data) return;
+              successData.value = data.data;
+              insertImage();
+            });
           }
         },
-        false,
+        true,
       );
     }
   });
