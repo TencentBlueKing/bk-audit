@@ -313,7 +313,6 @@
       name: t('BKVision 报表'),
       id: 'bkvision_report',
       placeholder: t('请输入BKVision报表'),
-      async: true,
     },
     {
       name: t('可见范围'),
@@ -603,13 +602,6 @@
         ? buildVisibilityChildren()
         : filterVisibilityChildren(keyword);
       return searchItem.children;
-    }
-
-    if (item.id === 'bkvision_report') {
-      const normalizedKeyword = keyword.trim().toLowerCase();
-      if (!normalizedKeyword) return [];
-      return buildBkvisionChildren().filter(child => child.name.toLowerCase()
-        .includes(normalizedKeyword));
     }
 
     return searchItem.children || [];
