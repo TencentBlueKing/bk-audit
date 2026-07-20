@@ -28,6 +28,7 @@ export default {
   fetchStrategyList(params: {
     label?: string
     name?: string,
+    order_field?: string
     order_type?: string
     page?: number,
     page_size?: number

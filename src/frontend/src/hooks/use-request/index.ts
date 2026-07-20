@@ -87,6 +87,11 @@ export default function <T> (
       return result;
     })
       .catch((errorMsg) => {
+        if (errorMsg?.code === 'CANCEL') {
+          error.value = false;
+          errorMessage.value = '';
+          return data.value;
+        }
         error.value = true;
         errorMessage.value = errorMsg.message;
         throw errorMsg;

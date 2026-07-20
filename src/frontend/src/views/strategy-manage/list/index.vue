@@ -389,6 +389,8 @@
   const leftLabelFilterCondition = ref('');
   // 记录最近一次请求所用的场景，供 scene:change 比对，避免漏接场景事件导致空列表
   const lastFetchedScopeId = ref<string | null>(null);
+  // 列表是否已成功加载过（用于区分「场景相同但首屏请求失败」与「无需重复请求」）
+  const hasListLoadedOnce = ref(false);
   const strategyTagMap = ref<Record<string, string>>({});
   const statusMap = ref<Record<string, string>>({});
   // 挂起的需要轮询的id列表
@@ -487,9 +489,24 @@
   const dataSource = (params: Record<string, any> = {}) => {
     // 记录本次请求实际使用的场景，供 scene:change 判断场景是否真正变化
     lastFetchedScopeId.value = getSceneSystemParams().scope_id;
+    // render-list 统一产出 sort: ['-field'] / ['field']，策略后台接口使用 order_field + order_type
+    const { sort, order_field: orderFieldFromParams, order_type: orderTypeFromParams, ...rest } = params;
+    let orderField = orderFieldFromParams;
+    let orderType = orderTypeFromParams;
+    let primarySort = '';
+    if (Array.isArray(sort)) {
+      primarySort = sort[0] || '';
+    } else if (typeof sort === 'string') {
+      primarySort = sort;
+    }
+    if (primarySort) {
+      const isDesc = primarySort.startsWith('-');
+      orderField = isDesc ? primarySort.slice(1) : primarySort;
+      orderType = isDesc ? 'desc' : 'asc';
+    }
     return StrategyManageService.fetchStrategyList({
-      ...params,
-      order_type: 'asc',
+      ...rest,
+      ...(orderField ? { order_field: orderField, order_type: orderType || 'asc' } : {}),
       tag: leftLabelFilterCondition.value,
     });
   };
@@ -750,6 +767,7 @@
       sort: 'custom',
       width: 120,
       render: ({ data }: { data: StrategyModel }) => {
+        const riskCount = data.risk_count ?? 0;
         const to = {
           name: 'sceneRiskManageList',
           query: {
@@ -758,12 +776,12 @@
             strategy_id: data.strategy_id,
           },
         };
-        return data.risk_count ? <router-link to = {to} target='_blank'>
+        return riskCount ? <router-link to = {to} target='_blank'>
           <span v-bk-tooltips={{
             content: t('近6个月此策略产生风险单总数，点击查看'),
-            disabled: !data.risk_count,
-          }}>{data.risk_count}</span>
-        </router-link> : <span>{data.risk_count}</span>;
+            disabled: !riskCount,
+          }}>{riskCount}</span>
+        </router-link> : <span>{riskCount}</span>;
       },
     },
     {
@@ -1424,6 +1442,7 @@
   };
   let isRequest = false;
   const handleRequestSuccess = (data: Strategy) => {
+    hasListLoadedOnce.value = true;
     // 先检验策略列表权限再获取通知组
     if (!groupList.value.results.length) {
       fetchGroupList();
@@ -1563,15 +1582,42 @@
   };
   const handlFetchData = () => {
     const currentScopeId = getSceneSystemParams().scope_id;
-    // 场景未发生实际变化时不重复请求：既避免首屏漏接事件后的空列表，
-    // 又保留首次进入的新建行高亮、避免重复请求
-    if (lastFetchedScopeId.value !== null && currentScopeId === lastFetchedScopeId.value) {
+    // 场景未变且列表已成功加载过时才跳过；首屏因 sort 解析失败/请求取消等未加载成功时仍需重试
+    if (
+      lastFetchedScopeId.value !== null
+      && currentScopeId === lastFetchedScopeId.value
+      && hasListLoadedOnce.value
+    ) {
       return;
     }
+    const isSceneChanged = lastFetchedScopeId.value !== null
+      && currentScopeId !== lastFetchedScopeId.value;
+
     total.value = 0;
+    hasListLoadedOnce.value = false;
     groupList.value.results = [];
     isRequest = false;
     shouldHighlightNewRow.value = false; // 场景切换后不再高亮新建行
+
+    // 真正切换场景：清空搜索/筛选/排序，避免旧场景参数带到新场景
+    if (isSceneChanged) {
+      searchKey.value = [];
+      renderLabelRef.value?.resetAllLabel();
+      leftLabelFilterCondition.value = '';
+      tableColumn.value.forEach((column) => {
+        if (column.filter && Array.isArray(column.filter.checked)) {
+          // eslint-disable-next-line no-param-reassign
+          column.filter.checked.length = 0;
+        }
+        if (column.sort) {
+          // eslint-disable-next-line no-param-reassign
+          column.sort = 'custom';
+        }
+      });
+      listRef.value?.resetFetchData();
+      return;
+    }
+
     listRef.value?.fetchData();
   };
   // 页面刷新前标记，刷新后不再高亮
@@ -1586,11 +1632,9 @@
       sessionStorage.removeItem('audit-strategy-page-reloaded');
       shouldHighlightNewRow.value = false;
     }
-    fetchData();
-    // 记录首屏请求使用的场景，作为 scene:change 的比对基准
-    lastFetchedScopeId.value = getSceneSystemParams().scope_id;
-    // 立即注册监听，避免场景选择器在 1s 内解析出场景/切换场景时漏接事件导致空列表
+    // 立即注册监听，避免场景选择器在首屏解析场景时漏接事件导致空列表
     onEvent('scene:change', handlFetchData);
+    fetchData();
   });
   onUnmounted(() => {
     off('scene:change', handlFetchData);

@@ -45,6 +45,7 @@ class Strategy extends ModuleBase {
     label?: string,
     name?: string,
     page?: number,
+    order_field?: string
     order_type?: string
     page_size?: number
     strategy_type?: string
