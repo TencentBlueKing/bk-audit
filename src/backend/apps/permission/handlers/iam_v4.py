@@ -37,27 +37,62 @@ class IAMV4Permission:
         return get_action_by_id(action)
 
     @staticmethod
-    def _resource_to_v4(resource: Optional[Resource]) -> Optional[dict]:
-        """Convert IAM SDK resources to V4 API payload, dropping malformed ancestor nodes."""
+    def _resource_base_payload(resource: Optional[Resource]) -> Optional[dict]:
+        """Convert IAM SDK resource identity fields to IAM V4 resource payload."""
         if resource is None:
             return None
-        payload = {"type": resource.type, "id": str(resource.id)}
-        path = (resource.attribute or {}).get(KEYWORD_BK_IAM_PATH) or (resource.attribute or {}).get("_bk_iam_path_")
+        return {"type": resource.type, "id": str(resource.id)}
+
+    @staticmethod
+    def _iam_path(resource: Resource) -> str:
+        return (
+            (resource.attribute or {}).get(KEYWORD_BK_IAM_PATH) or (resource.attribute or {}).get("_bk_iam_path_") or ""
+        )
+
+    @classmethod
+    def _resource_to_v4_auth(cls, resource: Optional[Resource]) -> Optional[dict]:
+        """Build V4 direct-auth resource payload.
+
+        IAM V4 direct-auth APIs match parent-resource grants through
+        `attributes._bk_iam_path_`; `ancestors` is only used by apply-url
+        payloads.
+        """
+        payload = cls._resource_base_payload(resource)
+        if payload is None or resource is None:
+            return payload
+        path = cls._iam_path(resource)
         if path:
-            ancestors = []
-            for node in path.strip("/").split("/"):
-                if not node:
-                    continue
-                if "," not in node:
-                    logger.warning("[IAMV4] skip invalid iam path node: %s", node)
-                    continue
-                node_type, node_id = node.split(",", 1)
-                if not node_type or not node_id:
-                    logger.warning("[IAMV4] skip invalid iam path node: %s", node)
-                    continue
-                ancestors.append({"type": node_type, "id": node_id})
-            if ancestors:
-                payload["ancestors"] = ancestors
+            payload["attributes"] = {KEYWORD_BK_IAM_PATH: path}
+        return payload
+
+    @classmethod
+    def _resource_to_v4_authorization(cls, resource: Optional[Resource]) -> Optional[dict]:
+        """Build V4 role authorization relation payload without auth-only attributes."""
+        return cls._resource_base_payload(resource)
+
+    @classmethod
+    def _resource_to_v4_apply(cls, resource: Optional[Resource]) -> Optional[dict]:
+        """Convert IAM SDK resources to the apply-url topology payload expected by V4."""
+        payload = cls._resource_base_payload(resource)
+        if payload is None or resource is None:
+            return payload
+        path = cls._iam_path(resource)
+        if not path:
+            return payload
+        ancestors = []
+        for node in path.strip("/").split("/"):
+            if not node:
+                continue
+            if "," not in node:
+                logger.warning("[IAMV4] skip invalid iam path node: %s", node)
+                continue
+            node_type, node_id = node.split(",", 1)
+            if not node_type or not node_id:
+                logger.warning("[IAMV4] skip invalid iam path node: %s", node)
+                continue
+            ancestors.append({"type": node_type, "id": node_id})
+        if ancestors:
+            payload["ancestors"] = ancestors
         return payload
 
     @staticmethod
@@ -107,7 +142,7 @@ class IAMV4Permission:
                     "subject": self.subject,
                     "action_id": action.id,
                 }
-                resource_payload = self._resource_to_v4(resource)
+                resource_payload = self._resource_to_v4_auth(resource)
                 if resource_payload is not None:
                     payload["resource"] = resource_payload
                 result = api.bk_iam_v4.direct_auth.request(payload)
@@ -158,7 +193,7 @@ class IAMV4Permission:
                             system_id=settings.BK_IAM_SYSTEM_ID,
                             subject=self.subject,
                             action_id=action.id,
-                            resources=[self._resource_to_v4(resource) for _, resource in resource_chunk],
+                            resources=[self._resource_to_v4_auth(resource) for _, resource in resource_chunk],
                         )
                     except Exception as error:  # pylint: disable=broad-except
                         logger.exception(
@@ -181,7 +216,7 @@ class IAMV4Permission:
                         "subject": self.subject,
                         "action_ids": [action.id for action in action_chunk],
                     }
-                    resource_payload = self._resource_to_v4(resource)
+                    resource_payload = self._resource_to_v4_auth(resource)
                     if resource_payload is not None:
                         payload["resource"] = resource_payload
                     response = api.bk_iam_v4.direct_auth_by_actions.request(payload)
@@ -240,7 +275,8 @@ class IAMV4Permission:
                 permissions.append({"action_id": action.id})
                 continue
             matched_resources = [
-                self._resource_to_v4(resource) for resource in self._matched_resources_for_action(action, resources)
+                self._resource_to_v4_apply(resource)
+                for resource in self._matched_resources_for_action(action, resources)
             ]
             permission = {"action_id": action.id}
             if matched_resources:
@@ -302,7 +338,7 @@ class IAMV4Permission:
             "role_id": role_id,
             "subject": subject,
             "related_resource_type_id": related_resource_type_id,
-            "resources": [self._resource_to_v4(resource) for resource in resources],
+            "resources": [self._resource_to_v4_authorization(resource) for resource in resources],
             "expired_at": self._authorization_expired_at(),
         }
         api.bk_iam_v4.add_authorization(
@@ -324,7 +360,7 @@ class IAMV4Permission:
             "role_id": role_id,
             "subject": subject,
             "related_resource_type_id": resources[0].type if resources else "",
-            "resources": [self._resource_to_v4(resource) for resource in resources],
+            "resources": [self._resource_to_v4_authorization(resource) for resource in resources],
         }
         api.bk_iam_v4.revoke_authorization(
             system_id=settings.BK_IAM_SYSTEM_ID,
@@ -347,7 +383,7 @@ class IAMV4Permission:
                 "page_size": page_size,
                 "related_resource_type_id": resource.type if resource else "",
             }
-            resource_payload = self._resource_to_v4(resource) if resource else None
+            resource_payload = self._resource_to_v4_authorization(resource) if resource else None
             if resource_payload is not None:
                 payload["resource"] = resource_payload
             response = api.bk_iam_v4.list_authorization_subject.request(payload)
