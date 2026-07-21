@@ -4,6 +4,7 @@ from unittest import mock
 from django.test import SimpleTestCase, override_settings
 from iam import Resource
 
+from api.bk_iam_v4.serializers import DirectAuthByResourcesRequestSerializer
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.iam_v4 import IAMV4Permission
 
@@ -56,17 +57,71 @@ class TestIAMV4Permission(SimpleTestCase):
             }
         )
 
-    def test_resource_to_v4_skips_invalid_path_node(self):
+    @override_settings(BK_IAM_SYSTEM_ID="bk-audit")
+    @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.direct_auth")
+    def test_is_allowed_sends_iam_path_as_attributes_for_secondary_resource(self, mock_direct_auth):
+        mock_direct_auth.request.return_value = {"allowed": True}
+        resource = Resource("bk-audit", "notice_group", "100", {"_bk_iam_path_": "/scene,1/"})
+
+        result = IAMV4Permission(username="admin").is_allowed(ActionEnum.DELETE_NOTICE_GROUP_V2, [resource])
+
+        self.assertTrue(result)
+        mock_direct_auth.request.assert_called_once_with(
+            {
+                "system_id": "bk-audit",
+                "subject": {"type": "user", "id": "admin"},
+                "action_id": ActionEnum.DELETE_NOTICE_GROUP_V2.id,
+                "resource": {"type": "notice_group", "id": "100", "attributes": {"_bk_iam_path_": "/scene,1/"}},
+            }
+        )
+
+    def test_direct_auth_by_resources_serializer_keeps_attributes(self):
+        payload = {
+            "system_id": "bk-audit",
+            "subject": {"type": "user", "id": "admin"},
+            "action_id": ActionEnum.DELETE_NOTICE_GROUP_V2.id,
+            "resources": [
+                {
+                    "type": "notice_group",
+                    "id": "100",
+                    "attributes": {"_bk_iam_path_": "/scene,1/"},
+                }
+            ],
+        }
+
+        serializer = DirectAuthByResourcesRequestSerializer(data=payload)
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data["resources"][0]["attributes"],
+            {"_bk_iam_path_": "/scene,1/"},
+        )
+
+    def test_resource_to_v4_auth_uses_attributes_path(self):
+        resource = Resource("bk-audit", "strategy", "100", {"_bk_iam_path_": "/scene,1/"})
+
+        result = IAMV4Permission._resource_to_v4_auth(resource)
+
+        self.assertEqual(result, {"type": "strategy", "id": "100", "attributes": {"_bk_iam_path_": "/scene,1/"}})
+
+    def test_resource_to_v4_authorization_does_not_use_attributes_path(self):
+        resource = Resource("bk-audit", "strategy", "100", {"_bk_iam_path_": "/scene,1/"})
+
+        result = IAMV4Permission._resource_to_v4_authorization(resource)
+
+        self.assertEqual(result, {"type": "strategy", "id": "100"})
+
+    def test_resource_to_v4_apply_skips_invalid_path_node(self):
         resource = Resource("bk-audit", "strategy", "100", {"_bk_iam_path_": "/invalid/scene,1/"})
 
-        result = IAMV4Permission._resource_to_v4(resource)
+        result = IAMV4Permission._resource_to_v4_apply(resource)
 
         self.assertEqual(result, {"type": "strategy", "id": "100", "ancestors": [{"type": "scene", "id": "1"}]})
 
-    def test_resource_to_v4_skips_empty_path_node(self):
+    def test_resource_to_v4_apply_skips_empty_path_node(self):
         resource = Resource("bk-audit", "strategy", "100", {"_bk_iam_path_": "/scene,/system,bklog/"})
 
-        result = IAMV4Permission._resource_to_v4(resource)
+        result = IAMV4Permission._resource_to_v4_apply(resource)
 
         self.assertEqual(result, {"type": "strategy", "id": "100", "ancestors": [{"type": "system", "id": "bklog"}]})
 
@@ -231,6 +286,22 @@ class TestIAMV4Permission(SimpleTestCase):
 
     @override_settings(BK_IAM_SYSTEM_ID="bk-audit")
     @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.direct_auth_by_resources")
+    def test_batch_is_allowed_sends_iam_path_as_attributes_for_secondary_resources(self, mock_by_resources):
+        mock_by_resources.return_value = [{"resource_id": "100", "allowed": True}]
+        resources = [[Resource("bk-audit", "notice_group", "100", {"_bk_iam_path_": "/scene,1/"})]]
+
+        result = IAMV4Permission(username="admin").batch_is_allowed([ActionEnum.DELETE_NOTICE_GROUP_V2], resources)
+
+        self.assertEqual(result, {"100": {ActionEnum.DELETE_NOTICE_GROUP_V2.id: True}})
+        mock_by_resources.assert_called_once_with(
+            system_id="bk-audit",
+            subject={"type": "user", "id": "admin"},
+            action_id=ActionEnum.DELETE_NOTICE_GROUP_V2.id,
+            resources=[{"type": "notice_group", "id": "100", "attributes": {"_bk_iam_path_": "/scene,1/"}}],
+        )
+
+    @override_settings(BK_IAM_SYSTEM_ID="bk-audit")
+    @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.direct_auth_by_resources")
     @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.direct_auth")
     def test_batch_is_allowed_uses_no_resource_for_sensitive_action(self, mock_direct_auth, mock_by_resources):
         mock_direct_auth.request.return_value = {"allowed": True}
@@ -307,6 +378,33 @@ class TestIAMV4Permission(SimpleTestCase):
             }
         )
 
+    @override_settings(BK_IAM_SYSTEM_ID="bk-audit", IAM_V4_BATCH_AUTH_CHUNK_SIZE=20)
+    @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.direct_auth_by_actions")
+    def test_batch_is_allowed_sends_iam_path_as_attributes_for_action_batch_api(self, mock_by_actions):
+        mock_by_actions.request.side_effect = [
+            [{"action_id": ActionEnum.DELETE_NOTICE_GROUP_V2.id, "allowed": True}],
+            [{"action_id": ActionEnum.DELETE_NOTICE_GROUP_V2.id, "allowed": False}],
+        ]
+        resources = [[Resource("bk-audit", "notice_group", "100", {"_bk_iam_path_": "/scene,1/"})], []]
+
+        result = IAMV4Permission(username="admin").batch_is_allowed([ActionEnum.DELETE_NOTICE_GROUP_V2], resources)
+
+        self.assertEqual(
+            result,
+            {
+                "100": {ActionEnum.DELETE_NOTICE_GROUP_V2.id: True},
+                "": {ActionEnum.DELETE_NOTICE_GROUP_V2.id: False},
+            },
+        )
+        mock_by_actions.request.assert_any_call(
+            {
+                "system_id": "bk-audit",
+                "subject": {"type": "user", "id": "admin"},
+                "action_ids": [ActionEnum.DELETE_NOTICE_GROUP_V2.id],
+                "resource": {"type": "notice_group", "id": "100", "attributes": {"_bk_iam_path_": "/scene,1/"}},
+            }
+        )
+
     @override_settings(BK_IAM_SYSTEM_ID="bk-audit", IAM_V4_AUTHORIZATION_EXPIRED_DAYS=365)
     @mock.patch("apps.permission.handlers.iam_v4.time.time", return_value=1000)
     @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.add_authorization")
@@ -332,6 +430,24 @@ class TestIAMV4Permission(SimpleTestCase):
                     "expired_at": 31537000,
                 }
             ],
+        )
+
+    @override_settings(BK_IAM_SYSTEM_ID="bk-audit", IAM_V4_AUTHORIZATION_EXPIRED_DAYS=365)
+    @mock.patch("apps.permission.handlers.iam_v4.time.time", return_value=1000)
+    @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.add_authorization")
+    def test_grant_instance_permission_does_not_send_auth_attributes(self, mock_add, _mock_time):
+        resource = Resource("bk-audit", "notice_group", "100", {"_bk_iam_path_": "/scene,1/"})
+
+        IAMV4Permission(username="admin").grant_instance_permission(
+            role_id="scene_admin",
+            subject={"type": "user", "id": "tom"},
+            resources=[resource],
+            operator="admin",
+        )
+
+        self.assertEqual(
+            mock_add.call_args.kwargs["authorizations"][0]["resources"],
+            [{"type": "notice_group", "id": "100"}],
         )
 
     @override_settings(BK_IAM_SYSTEM_ID="bk-audit", IAM_V4_LIST_ROLE_SUBJECTS_PAGE_SIZE=100)
@@ -366,6 +482,28 @@ class TestIAMV4Permission(SimpleTestCase):
         mock_apply_url.assert_called_once_with(
             system_id="bk-audit",
             permissions=[{"action_id": ActionEnum.MANAGE_PLATFORM.id}],
+        )
+
+    @override_settings(BK_IAM_SYSTEM_ID="bk-audit")
+    @mock.patch("apps.permission.handlers.iam_v4.api.bk_iam_v4.generate_perm_apply_url")
+    def test_get_apply_data_sends_ancestors_for_secondary_resource_apply_url(self, mock_apply_url):
+        mock_apply_url.return_value = {"url": "https://iam.example/apply"}
+        resource = Resource("bk-audit", "notice_group", "100", {"_bk_iam_path_": "/scene,1/"})
+
+        _data, url = IAMV4Permission(username="admin").get_apply_data(
+            [ActionEnum.DELETE_NOTICE_GROUP_V2],
+            [resource],
+        )
+
+        self.assertEqual(url, "https://iam.example/apply")
+        mock_apply_url.assert_called_once_with(
+            system_id="bk-audit",
+            permissions=[
+                {
+                    "action_id": ActionEnum.DELETE_NOTICE_GROUP_V2.id,
+                    "resources": [{"type": "notice_group", "id": "100", "ancestors": [{"type": "scene", "id": "1"}]}],
+                }
+            ],
         )
 
     @override_settings(BK_IAM_SYSTEM_ID="bk-audit")
