@@ -33,7 +33,7 @@ import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
 
-import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+import { getSceneSystemParams, getToolListScopeParams } from '@/utils/assist/scene-system-params';
 
 
 class ToolManage extends ModuleBase {
@@ -60,10 +60,8 @@ class ToolManage extends ModuleBase {
     scope_id?: string,
     status?: string[],
   }) {
-    const sceneParams = getSceneSystemParams();
     const mergedParams = {
-      scope_type: sceneParams.scope_type,
-      scope_id: sceneParams.scope_id,
+      ...getToolListScopeParams(),
       ...params,
     };
     const query = `?${processedParams(mergedParams).toString()}`;
@@ -124,7 +122,11 @@ class ToolManage extends ModuleBase {
     status?: string[],
     namespace?: string,
   }) {
-    const query = params ? `?${processedParams(params).toString()}` : '';
+    const mergedParams = {
+      ...getToolListScopeParams(),
+      ...params,
+    };
+    const query = `?${processedParams(mergedParams).toString()}`;
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
   // 工具执行

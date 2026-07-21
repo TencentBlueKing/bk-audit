@@ -142,7 +142,10 @@
 
   import ToolListTable from './components/tool-list-table.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getToolListScopeParams,
+    isToolDetailScopeReady,
+  } from '@/utils/assist/scene-system-params';
 
   provideToolManageContext(createSceneToolManageContext());
   type ActionType = 'delete' | 'enable' | 'disable';
@@ -424,7 +427,10 @@
 
   // 获取全局状态统计（分别请求各状态数量）
   const fetchStatusCounts = () => {
-    const scopeParams = getSceneSystemParams();
+    const scopeParams = getToolListScopeParams();
+    if (!isToolDetailScopeReady(scopeParams)) {
+      return;
+    }
     // 不传 status 即获取全部工具
     const allPromise = ToolManageService.fetchAllTools(scopeParams);
     const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'], ...scopeParams });
@@ -502,25 +508,27 @@
   // 监听场景切换事件
   const { on: onEvent, off } = useEventBus();
 
-  // 刷新所有数据（场景切换时调用）
-  const refreshAllData = () => {
-    const scopeParams = getSceneSystemParams();
+  const loadScopeDependentData = () => {
+    const scopeParams = getToolListScopeParams();
+    if (!isToolDetailScopeReady(scopeParams)) {
+      return;
+    }
     fetchToolsTagsList(scopeParams);
-    fetchUserList();
     fetchAllToolsData(scopeParams);
-    refreshList();
-    // 场景切换时也需要刷新状态统计
     fetchStatusCounts();
   };
 
+  // 刷新所有数据（场景切换时调用）
+  const refreshAllData = () => {
+    fetchUserList();
+    loadScopeDependentData();
+    refreshList();
+  };
+
   onMounted(() => {
-    const scopeParams = getSceneSystemParams();
-    fetchToolsTagsList(scopeParams);
     fetchUserList();
     fetchStrategyList();
-    fetchAllToolsData(scopeParams);
-    // 初始化时获取一次状态统计
-    fetchStatusCounts();
+    loadScopeDependentData();
     // 仅「编辑返回」时恢复搜索，并消费掉缓存
     const hasKey = setSearchKey();
     removePageParams(LIST_PAGE_KEY);

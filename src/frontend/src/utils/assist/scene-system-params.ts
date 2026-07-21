@@ -218,8 +218,9 @@ export const getToolListScopeParams = (extra?: {
   status?: string | string[];
 }) => {
   const { scope_type: scopeType, scope_id: scopeId } = getSceneSystemParams();
+  const resolvedScopeType = scopeType || (scopeId ? 'scene' : 'cross_scene');
   return {
-    scope_type: scopeType || 'cross_scene',
+    scope_type: resolvedScopeType,
     ...(scopeId ? { scope_id: scopeId } : {}),
     ...extra,
   };
