@@ -51,7 +51,9 @@
         content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
         placement: 'top',
       }"
+      allow-create
       :disabled="dataConfig.disabled"
+      :placeholder="t('请输入人员进行搜索')"
       @change="handleUserChange" />
 
     <date-picker
@@ -264,7 +266,20 @@
   const handleShowText = (value: any) => {
     // 1. 如果是真正的数组，直接连接
     if (Array.isArray(value)) {
-      return value.length > 0 ? value.join(',') : '';
+      const normalized = value
+        .map((u) => {
+          if (!u) return '';
+          if (typeof u === 'string') return u;
+          return u.id
+            || u.bk_username
+            || u.username
+            || u.login_name
+            || u.name
+            || u.display_name
+            || '';
+        })
+        .filter(Boolean);
+      return normalized.length > 0 ? normalized.join(',') : '';
     }
 
     // 2. 如果是字符串且看起来像数组，尝试解析

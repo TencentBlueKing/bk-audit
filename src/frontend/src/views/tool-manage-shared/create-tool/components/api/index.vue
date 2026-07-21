@@ -513,20 +513,34 @@
     isHeadersNoPassIndex.value = [];
   };
 
-  // 参数配置改变
-  const handleParamsConfigChange = (isNOSame: boolean) => {
-    // isNOSame 为 false 时，表示参数配置没有改变，不需要重新调试
-    isSameInitParamsConfig.value = !isNOSame;
+  // 参数配置改变；needsRedebug 为 true 时表示接口相关参数发生实质变更，需重新调试
+  const handleParamsConfigChange = (needsRedebug: boolean) => {
+    isSameInitParamsConfig.value = !needsRedebug;
+
+    if (!needsRedebug) {
+      editModeIseditInfo.value = false;
+      emits(
+        'getIsDoneDeBug',
+        isDoneDeBug.value,
+        false,
+        isSuccess.value,
+        isSameInitApiConfig.value && isSameInitParamsConfig.value,
+      );
+      return;
+    }
+
     isSuccess.value = false;
     isDoneDeBug.value = false;
     editModeIseditInfo.value = true;
-    // 参数配置发生实质变更时，已存的分页/查询结果配置不再适用，
-    // 隐藏对应模块，等用户重新调试成功后再展示
-    if (isNOSame) {
-      hasInitPagination.value = false;
-      hasInitResultConfig.value = false;
-    }
-    emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
+    hasInitPagination.value = false;
+    hasInitResultConfig.value = false;
+    emits(
+      'getIsDoneDeBug',
+      false,
+      editModeIseditInfo.value,
+      isSuccess.value,
+      isSameInitApiConfig.value && isSameInitParamsConfig.value,
+    );
   };
 
   // 判断是否只是改变了headers的description字段
@@ -558,30 +572,48 @@
 
   watch(() => formData.value.api_config, (newValue) => {
     if (isSetConfigsSuccess.value) {
-      // 仅在初始化完成后，配置变更才需要重置调试状态
-      isSuccess.value = false;
-      isDoneDeBug.value = false;
-      // 判断newValue 与initformData.value是否完全相同
+      // 判断 newValue 与 initformData.value 是否完全相同
       if (initformData.value && JSON.stringify(newValue) === JSON.stringify(initformData.value.api_config)) {
         editModeIseditInfo.value = false;
         isSameInitApiConfig.value = true;
-        emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
-      } else {
-        // 如果只是改变了headers数组每一项的description，那么不需要重新调试
-        if (isOnlyHeadersDescriptionChanged(newValue, initformData.value?.api_config)) {
-          isSameInitApiConfig.value = true;
-          editModeIseditInfo.value = false;
-          emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
-        } else {
-          isSameInitApiConfig.value = false;
-          editModeIseditInfo.value = true;
-          // api 配置发生实质变更时，已存的分页/查询结果配置不再适用，
-          // 隐藏对应模块，等用户重新调试成功后再展示
-          hasInitPagination.value = false;
-          hasInitResultConfig.value = false;
-          emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
-        }
+        emits(
+          'getIsDoneDeBug',
+          isDoneDeBug.value,
+          false,
+          isSuccess.value,
+          isSameInitApiConfig.value && isSameInitParamsConfig.value,
+        );
+        return;
       }
+
+      // 如果只是改变了 headers 的 description，那么不需要重新调试
+      if (isOnlyHeadersDescriptionChanged(newValue, initformData.value?.api_config)) {
+        isSameInitApiConfig.value = true;
+        editModeIseditInfo.value = false;
+        emits(
+          'getIsDoneDeBug',
+          isDoneDeBug.value,
+          false,
+          isSuccess.value,
+          isSameInitApiConfig.value && isSameInitParamsConfig.value,
+        );
+        return;
+      }
+
+      // 仅在初始化完成后，api 配置发生实质变更才需要重置调试状态
+      isSuccess.value = false;
+      isDoneDeBug.value = false;
+      isSameInitApiConfig.value = false;
+      editModeIseditInfo.value = true;
+      hasInitPagination.value = false;
+      hasInitResultConfig.value = false;
+      emits(
+        'getIsDoneDeBug',
+        false,
+        editModeIseditInfo.value,
+        isSuccess.value,
+        isSameInitApiConfig.value && isSameInitParamsConfig.value,
+      );
     }
   }, {
     deep: true,

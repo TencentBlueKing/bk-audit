@@ -36,7 +36,10 @@
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
     ref,
+    onBeforeUnmount,
+    onMounted,
     watch,
   } from 'vue';
 
@@ -114,9 +117,8 @@
   };
   // 离职人员：用户中心未命中列表；命中列表（含搜索到的用户）用正常样式
   const isUserInList = (userInfo: Record<string, any>) => {
-    if (userInfo.type === 'custom') {
-      return false;
-    }
+    // allowCreate 创建的自定义输入：按业务需求，tag 展示样式应参考“搜索到的人名”而非灰色离职样式
+    if (userInfo.type === 'custom') return true;
     if (userInfo.type === 'userGroup' || userInfo.type === 'virtual') {
       return true;
     }
@@ -201,6 +203,37 @@
   const handleBlur = () => {
     emit('blur');
   };
+
+  // bk-form 等外层表单可能会截获 Enter 触发提交/失焦，导致 allowCreate 无法按键创建自定义用户。
+  // 这里仅在 allowCreate 开启时，拦截 Enter 的冒泡/默认行为，确保 bk-user-selector 自己能处理 Enter 创建逻辑。
+  let enterInputEl: HTMLInputElement | null = null;
+  const handleUserSelectorEnterKeydown = (e: KeyboardEvent) => {
+    if (!props.allowCreate) return;
+    if (e.key !== 'Enter') return;
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    e.preventDefault();
+  };
+
+  onMounted(async () => {
+    await nextTick();
+    const rootEl = userSelectorRef.value?.$el as HTMLElement | null | undefined;
+    if (!rootEl) return;
+
+    // bk-user-selector 内部的搜索输入框 class 在不同场景可能略有差异，这里按优先级挑选。
+    const candidate = rootEl.querySelector('input.user-selector-input')
+      || rootEl.querySelector('input.search-input')
+      || rootEl.querySelector('input');
+    if (candidate && candidate instanceof HTMLInputElement) {
+      enterInputEl = candidate;
+      enterInputEl.addEventListener('keydown', handleUserSelectorEnterKeydown);
+    }
+  });
+
+  onBeforeUnmount(() => {
+    enterInputEl?.removeEventListener('keydown', handleUserSelectorEnterKeydown);
+    enterInputEl = null;
+  });
 
   watch(
     () => [props.modelValue, props.multiple] as const,
