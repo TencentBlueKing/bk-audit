@@ -179,9 +179,12 @@
 
   .title {
     margin-bottom: 16px;
+    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
+    font-style: normal;
     font-weight: 700;
     line-height: 22px;
+    letter-spacing: 0;
     color: #313238;
 
     .title-input {
