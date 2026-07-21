@@ -50,33 +50,13 @@
                 class="no-label"
                 label-width="0"
                 property="configs.config_type">
-                <bk-cascader
-                  :key="cascaderRenderKey"
-                  v-slot="{data, node}"
+                <data-source-picker
                   v-model="tableId"
-                  :filter-method="configTypeTableFilter"
-                  filterable
-                  id-key="value"
-                  is-remote
+                  :decode-type-biz-id="decodeTypeBizId"
                   :list="allConfigTypeTable"
-                  name-key="label"
-                  :placeholder="t('搜索数据名称、别名、数据ID等')"
-                  :popover-options="{ clickContentAutoHide: false }"
-                  :remote-method="handleCascaderRemoteLoad"
-                  trigger="click"
-                  @change="handleChangeTable"
-                  @toggle="handleCascaderToggle">
-                  <p
-                    v-bk-tooltips="{
-                      disabled: !data.disabled || !data.leaf,
-                      content: node.pathNames[0] === '资产数据'
-                        ? t('该系统暂未上报资源数据')
-                        : t('审计无权限，请前往BKBase申请授权'),
-                      delay: 400,
-                    }">
-                    {{ node.name }}
-                  </p>
-                </bk-cascader>
+                  :load-children="handlePickerLoadChildren"
+                  :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
+                  @change="handleChangeTable" />
               </bk-form-item>
               <template v-if="formData.configs.config_type === 'EventLog'">
                 <event-log-component
@@ -296,6 +276,7 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import ExpectedResults from './components/expected-results/index.vue';
+  import DataSourcePicker from './components/data-source-picker.vue';
   import LinkDataDetailComponent from './components/link-table-detail/index.vue';
   import OtherTableDetailComponent from './components/other-table-detail/index.vue';
   import RulesComponent from './components/rules/index.vue';
@@ -384,6 +365,8 @@
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
   let isInit = false;
+  // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
+  let tableIdEchoSeq = 0;
 
   const formData = ref<IFormData>({
     configs: {
@@ -437,7 +420,6 @@
   type BizChildNode = { label: string, value: string, leaf: boolean };
   const bizChildrenCache = ref<Record<string, BizChildNode[]>>({});
   const bizChildrenPending = new Map<string, Promise<BizChildNode[]>>();
-  const cascaderRenderKey = ref(0);
 
   const encodeTypeBizId = (tableType: string, bizId: string | number) => (
     `${tableType}${BIZ_ID_SEP}${bizId}`
@@ -446,11 +428,6 @@
     const raw = String(value);
     const prefix = `${tableType}${BIZ_ID_SEP}`;
     return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-  };
-
-  const remountCascader = async () => {
-    cascaderRenderKey.value += 1;
-    await nextTick();
   };
 
   const replaceMineBizRtTree = (
@@ -470,7 +447,6 @@
               label: bizItem.label,
               value: encodedBizId,
               leaf: false,
-              disabled: children.length === 0,
               children: children.map(child => ({
                 label: child.label,
                 value: encodeTypeBizId(
@@ -638,7 +614,7 @@
     bizItem.value = encodedBizId;
     bizItem.children = children;
     bizItem.leaf = false;
-    bizItem.disabled = children.length === 0;
+    bizItem.disabled = false;
   };
 
   const syncBizChildrenCacheToList = () => {
@@ -651,38 +627,10 @@
     });
   };
 
-  const handleCascaderToggle = (visible: boolean) => {
-    if (!visible) {
-      syncBizChildrenCacheToList();
-    }
-  };
-
-  const handleCascaderRemoteLoad = (
-    node: Record<string, any>,
-    updateNodes: (nodes: Array<Record<string, any>>) => void,
-  ) => {
-    const tableType = node.parent?.id;
-    // 非 MineBizRt：同步返回已预加载的 children
-    if (tableType !== MINE_BIZ_RT_TYPE || node.level !== 2) {
-      updateNodes(node.data?.children || []);
-      return;
-    }
-    const bizId = decodeTypeBizId(tableType, node.id);
-    // 编辑回显已 patch 到 list 的优先复用，避免异步替换后丢失勾选
-    if (node.data?.children?.length) {
-      updateNodes(node.data.children);
-      return;
-    }
-    const cacheKey = getBizChildrenCacheKey(tableType, bizId);
-    const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
-      updateNodes(cached);
-      return;
-    }
-    // 仅通过 updateNodes 更新面板，不修改 list，避免弹框收起
-    loadBizTableChildren(tableType, bizId).then((children) => {
-      updateNodes(children);
-    });
+  const handlePickerLoadChildren = async (tableType: string, bizId: string) => {
+    const children = await loadBizTableChildren(tableType, bizId);
+    patchBizChildren(tableType, bizId, children);
+    return children;
   };
 
   // 获取联表tableid
@@ -728,19 +676,9 @@
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
         allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
+        syncBizChildrenCacheToList();
         typeTableLoading.value = false;
       });
-  };
-
-  // 搜索数据源
-  const configTypeTableFilter = (node: Record<string, any>, key: string) => {
-    // 转换searchKey为小写以支持大小写不敏感的搜索
-    const lowercaseSearchKey = key.toLowerCase();
-    // 只匹配叶子节点
-    const isLeaf = !Array.isArray(node.children) || node.children.length === 0;
-    if (!isLeaf) return false;
-    return node.data.label.toLowerCase().includes(lowercaseSearchKey)
-      || node.data.value.toLowerCase().includes(lowercaseSearchKey);
   };
 
   // 选择tableid后，获取该table的可用调度方式
@@ -1004,6 +942,9 @@
 
   // 选择tableid和数据源类型
   const handleChangeTable = (value: Array<string>) => {
+    // 用户主动选择时作废进行中的编辑回显，防止异步回写覆盖
+    tableIdEchoSeq += 1;
+
     const handleTableChangeCore = (value: Array<string>) => {
       const typeAndId = getFirstAndLast(value);
       const { config_type: configType, rt_id_or_uid: encodedRtIdOrUid  } = typeAndId;
@@ -1059,11 +1000,16 @@
       handleTableChangeCore(value);
       return;
     }
-    // 已有配置时弹窗确认
+    // 已有配置时弹窗确认；确认后 onClose 也会触发，需跳过回退
+    let switchConfirmed = false;
     InfoBox(createInfoBoxConfig({
-      onConfirm: () => handleTableChangeCore(value),
+      onConfirm: () => {
+        switchConfirmed = true;
+        handleTableChangeCore(value);
+      },
       onClose: () => {
-        tableId.value = previousTableId.value;
+        if (switchConfirmed) return;
+        tableId.value = [...previousTableId.value];
       },
     }));
   };
@@ -1108,24 +1054,31 @@
   };
 
   const changeTableId = async () => {
+    tableIdEchoSeq += 1;
+    const echoSeq = tableIdEchoSeq;
+    const isEchoValid = () => echoSeq === tableIdEchoSeq;
+
     const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
     if (!tableItem) return;
     // 联表和日志只有两层，直接拼接
     if (tableItem.value === 'EventLog') {
+      if (!isEchoValid()) return;
       tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.rt_id as string];
       previousTableId.value = tableId.value ;
       nextTick(() => {
         eventLogRef.value?.setConfigs(formData.value.configs.data_source.system_ids);
       });
     } else if (tableItem.value === 'LinkTable') {
+      if (!isEchoValid()) return;
       tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.link_table.uid];
       previousTableId.value = tableId.value ;
     } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
       const rtId = formData.value.configs.data_source.rt_id as string;
       const bizId = extractBizIdFromRtId(rtId);
       if (!bizId) return;
-      // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值并重挂载
+      // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
       const children = await loadBizTableChildren(tableItem.value, bizId);
+      if (!isEchoValid()) return;
       const matchedChild = children.find((item) => {
         const realValue = decodeTypeBizId(MINE_BIZ_RT_TYPE, item.value);
         return realValue === rtId
@@ -1143,9 +1096,10 @@
         selectedRtId,
       ];
       previousTableId.value = [...echoPath];
-      // 先清空再设值，避免旧路径干扰；随后强制重建 cascader 内部树
+      // 先清空再设值，避免旧路径干扰
       tableId.value = [];
-      await remountCascader();
+      await nextTick();
+      if (!isEchoValid()) return;
       tableId.value = echoPath;
       await nextTick();
     } else {
@@ -1156,6 +1110,7 @@
             if (decodeTypeBizId(tableItem.value, cItem.value)
               === formData.value.configs.data_source.rt_id) {
               const id = [item.value, cItem.value];
+              if (!isEchoValid()) return;
               tableId.value = [formData.value.configs.config_type, ...id];
               previousTableId.value = tableId.value ;
             }
@@ -1360,6 +1315,8 @@
     padding: 16px 32px 24px;
 
     .select-group {
+      max-width: 640px;
+
       :deep(.bk-form-item) {
         margin-bottom: 0;
       }
@@ -1367,8 +1324,21 @@
 
     .select-group-grid {
       display: grid;
-      grid-template-columns: auto 1fr;
+      width: 100%;
+      max-width: none;
+      grid-template-columns: 320px minmax(0, 1fr);
       gap: 8px;
+
+      /* 左侧数据源固定宽度，右侧系统选择铺满剩余空间 */
+      :deep(.data-source-picker) {
+        max-width: none;
+      }
+
+      :deep(.strategy-customize-eventlog-wrap),
+      :deep(.strategy-customize-eventlog-wrap .bk-form-item),
+      :deep(.strategy-customize-eventlog-wrap .bk-select) {
+        width: 100%;
+      }
     }
 
     :deep(.bk-infobox-title) {
