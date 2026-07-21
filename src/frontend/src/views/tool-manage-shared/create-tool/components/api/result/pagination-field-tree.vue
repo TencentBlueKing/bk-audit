@@ -43,7 +43,16 @@
         <span
           v-else
           class="expand-icon-placeholder" />
-        <span class="node-label">{{ node.name }}({{ node.path }})</span>
+        <span
+          v-bk-tooltips="{
+            content: getNodeDisplayName(node),
+            placement: 'top',
+            disabled: !isNodeLabelEllipsis(node.path),
+          }"
+          class="node-label"
+          @mouseenter="(e: MouseEvent) => checkNodeLabelEllipsis(e, node.path)">
+          {{ getNodeDisplayName(node) }}
+        </span>
         <span class="node-type">{{ getTypeLabel(node.type) }}</span>
       </div>
       <div
@@ -98,6 +107,20 @@
 
   const { t } = useI18n();
   const expandedNodes = ref<string[]>([]);
+  const nodeLabelEllipsisMap = ref<Record<string, boolean>>({});
+
+  const getNodeDisplayName = (node: TreeNode) => `${node.name}(${node.path})`;
+
+  const checkNodeLabelEllipsis = (e: MouseEvent, path: string) => {
+    const target = e.target as HTMLElement;
+    if (!target) return;
+    nodeLabelEllipsisMap.value = {
+      ...nodeLabelEllipsisMap.value,
+      [path]: target.scrollWidth > target.clientWidth,
+    };
+  };
+
+  const isNodeLabelEllipsis = (path: string) => !!nodeLabelEllipsisMap.value[path];
 
   const filteredNodes = computed(() => {
     if (!props.filterText) return props.nodes;

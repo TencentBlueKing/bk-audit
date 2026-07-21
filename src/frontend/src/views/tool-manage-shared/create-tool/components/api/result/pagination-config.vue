@@ -513,12 +513,12 @@
   };
 
   const updateFieldPopoverWidth = (event?: MouseEvent) => {
-    const trigger = (event?.currentTarget as HTMLElement | null)
-      || paginationRootRef.value?.querySelector('.pagination-field-trigger');
-    if (!trigger) {
+    const cell = (event?.currentTarget as HTMLElement | null)?.closest('.pagination-field-col')
+      || paginationRootRef.value?.querySelector('.pagination-field-col');
+    if (!cell) {
       return;
     }
-    fieldPopoverWidth.value = Math.max(Math.round(trigger.getBoundingClientRect().width), 240);
+    fieldPopoverWidth.value = Math.max(Math.round(cell.getBoundingClientRect().width), 360);
   };
 
   // 打开弹层
@@ -1033,35 +1033,29 @@
 }
 
 .pagination-field-col {
-  padding: 0;
+  min-width: 0;
 }
 
 .pagination-field-cell {
   display: flex;
-  flex: 1 1 auto;
   width: 100%;
-  min-width: 0;
+  height: 100%;
+  min-height: 40px;
+  flex: 1;
   align-self: stretch;
-
-  > * {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-  }
 }
 
 .pagination-field-popover-host {
-  display: block !important;
-  flex: 1 1 auto;
-  width: 100% !important;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: 1;
 }
 
-.pagination-field-cell :deep(.pagination-field-popover-host),
-.pagination-field-cell :deep(.bk-popover) {
-  display: block !important;
-  width: 100% !important;
-  min-width: 0;
+:deep(.pagination-field-popover-host > *) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .field-selector {
