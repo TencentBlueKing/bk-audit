@@ -17,12 +17,15 @@
 -->
 <template>
   <div class="risk-manage-detail-linkevent-part">
-    <bk-loading :loading="loading">
+    <bk-loading :loading="showListLoading">
       <div
         :key="detailRenderKey"
         class="body">
         <template v-if="hasLoadedData">
-          <div class="link-event-section-title">
+          <!-- 无调查报告时（页签头隐藏）展示区块标题；有 Tab「关联事件」时不再重复 -->
+          <div
+            v-if="showSectionTitle"
+            class="link-event-section-title">
             {{ t('关联事件') }}
           </div>
           <link-event-timeline
@@ -525,6 +528,8 @@
       value: number
     }>,
     data: RiskManageModel & StrategyInfo,
+    /** 是否展示内容区「关联事件」标题（有 Tab 页签时传 false，避免与页签文案重复） */
+    showSectionTitle?: boolean,
   }
 
   interface DisplayValue {
@@ -547,7 +552,9 @@
   type DisplayValueKeys = keyof typeof displayValueDict.value;
 
   type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    showSectionTitle: true,
+  });
   const emits = defineEmits<Emits>();
 
   const getStrategyDisplayText = (strategyId?: string | number | null) => {
@@ -563,6 +570,8 @@
 
   const activeStatus = ref('');
   const loading = ref(false);
+  // 仅列表尚未加载出内容时展示 loading，后台静默刷新不再转圈
+  const showListLoading = computed(() => loading.value && !hasLoadedData.value);
   const newIndex = ref<number[]>([]);
   const addEventRef = ref();
   const router = useRouter();
@@ -1009,21 +1018,60 @@
   });
 
   // 执行定时器刷新列表
-  const timeoutRefresh = () => {
-    getAddEventList({
-      id: props.data.risk_id,
-    }).then((data) => {
-      currentPage.value = 1; // 重置页码
-      fetchLinkEvent({
-        start_time: data.event_time,
-        end_time: data.event_end_time,
-        risk_id: data.risk_id,
-        page: currentPage.value,
-        page_size: 50,
-        scope_id: props.data.scene_id,
-        scope_type: 'scene',
+  const buildLinkEventFetchParams = (page = 1) => ({
+    start_time: props.data.event_time,
+    end_time: props.data.event_end_time,
+    risk_id: props.data.risk_id,
+    page,
+    page_size: 50,
+    scope_id: props.data.scene_id,
+    scope_type: 'scene',
+  });
+
+  const applyUnsyncedEvents = () => {
+    if (!(addEventData.value.unsynced_events?.length > 0)) {
+      return;
+    }
+    linkEventList.value = mergeUnsyncedEvents(
+      addEventData.value.unsynced_events,
+      linkEventList.value,
+    );
+    activeStatus.value = linkEventList.value[0]?.status || '';
+    [eventItem.value] = linkEventList.value;
+    hasLoadedData.value = true;
+    newIndex.value = linkEventList.value.map((item, index) => {
+      if (item.status === 'new') {
+        return index;
+      }
+      return -1;
+    }).filter(item => item !== -1);
+    if (linkEventList.value.some(item => item.status === 'new')) {
+      activeStatus.value = 'new';
+      scheduleNewEventPoll();
+    }
+  };
+
+  /** 刷新关联事件列表（添加事件 / 创建报告后由父组件或内部成功回调调用） */
+  const refreshLinkEvents = async () => {
+    if (!props.data.risk_id) {
+      return;
+    }
+    currentPage.value = 1;
+    active.value = 0;
+    // 不开关外层 bk-loading：父级详情刷新时常并发，避免出现双 loading
+    try {
+      await getAddEventList({
+        id: props.data.risk_id,
       });
-    });
+      applyUnsyncedEvents();
+      await fetchLinkEvent(buildLinkEventFetchParams(1));
+    } finally {
+      hasLoadedData.value = true;
+    }
+  };
+
+  const timeoutRefresh = () => {
+    refreshLinkEvents();
   };
   const handleTimelineLoadMore = () => {
     if (!hasMoreTimelineEvents.value || isLoadingMore.value) {
@@ -1031,15 +1079,7 @@
     }
     isLoadingMore.value = true;
     currentPage.value += 1;
-    fetchLinkEvent({
-      start_time: props.data.event_time,
-      end_time: props.data.event_end_time,
-      risk_id: props.data.risk_id,
-      page: currentPage.value,
-      page_size: 50,
-      scope_id: props.data.scene_id,
-      scope_type: 'scene',
-    });
+    fetchLinkEvent(buildLinkEventFetchParams(currentPage.value));
   };
 
   const handlerSelectByIndex = (index: number) => {
@@ -1135,46 +1175,16 @@
   // 添加事件成功
   const handleAddSuccess = () => {
     active.value = 0;
-    // 立即触发父组件刷新数据，更新 report_generating 状态
-    emits('updatedData');
-    // 先立即获取未同步的事件，让新添加的事件立即显示
-    getAddEventList({
-      id: props.data.risk_id,
-    }).then(() => {
-      // 如果有未同步的事件，立即显示在列表中
-      if (addEventData.value.unsynced_events?.length > 0) {
-        linkEventList.value = mergeUnsyncedEvents(
-          addEventData.value.unsynced_events,
-          linkEventList.value,
-        );
-        activeStatus.value = linkEventList.value[0]?.status || '';
-        [eventItem.value] = linkEventList.value;
-        hasLoadedData.value = true;
-        // 标记新添加的事件索引
-        newIndex.value = linkEventList.value.map((item, index) => {
-          if (item.status === 'new') {
-            return index;
-          }
-          return -1;
-        }).filter(item => item !== -1);
-        // 如果有新事件，启动定时器刷新（避免重复叠加定时器）
-        if (linkEventList.value.some(item => item.status === 'new')) {
-          activeStatus.value = 'new';
-          scheduleNewEventPoll();
-        }
+    // 先本地刷新列表；父级 updatedData 会再拉风险详情（不要在子级再开 loading，避免双转圈）
+    refreshLinkEvents().then(() => {
+      if (
+        linkEventList.value.length === 0
+        || linkEventList.value.some(item => item.status === 'new')
+      ) {
+        scheduleNewEventPoll();
       }
-      // 然后刷新完整的事件列表
-      currentPage.value = 1; // 重置页码
-      fetchLinkEvent({
-        start_time: props.data.event_time,
-        end_time: props.data.event_end_time,
-        risk_id: props.data.risk_id,
-        page: currentPage.value,
-        page_size: 50,
-        scope_id: props.data.scene_id,
-        scope_type: 'scene',
-      });
     });
+    emits('updatedData');
   };
   // 防抖处理
   let fetchTimeout: number | undefined;
@@ -1232,6 +1242,10 @@
       clearTimeout(fetchTimeout);
     }
     clearRefreshTimeout();
+  });
+
+  defineExpose({
+    refreshLinkEvents,
   });
 </script>
 <style lang="postcss" scoped>

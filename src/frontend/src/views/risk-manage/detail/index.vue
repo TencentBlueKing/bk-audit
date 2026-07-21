@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading :loading="loading || strategyLoading || statusLoading">
+  <bk-loading :loading="pageLoading">
     <div class="risk-manage-detail-wrap mb12">
       <div class="left">
         <!-- {{ detailData }} -->
@@ -40,6 +40,7 @@
               :is="comMap[item.name]"
               ref="renderComRef"
               :data="detailData"
+              :show-section-title="!detailData.has_report"
               :strategy-list="strategyList"
               @get-event-data="handleGetEventData"
               @updated-data="handleUpdatedData" />
@@ -228,9 +229,29 @@
 
   const currentStageName = computed(() => stageNameMap[riskData.value.status] || t('人工处理'));
 
+  // 仅首次进入详情展示全页 loading；后续刷新（添加事件/报告）不再盖一层，避免与子模块 loading 叠两层
+  const pageLoading = computed(() => (
+    (!riskData.value.risk_id && loading.value)
+    || strategyLoading.value
+    || statusLoading.value
+  ));
+
+  const refreshLinkEventList = () => {
+    nextTick(() => {
+      const refs = renderComRef.value;
+      const list = Array.isArray(refs) ? refs : [refs];
+      list.forEach((item: any) => {
+        item?.refreshLinkEvents?.();
+      });
+    });
+  };
+
   const handleUpdate = () => {
     fetchRiskList({
       id: route.params.riskId,
+    }).then(() => {
+      // 添加事件 / 创建调查报告后同步刷新关联事件列表
+      refreshLinkEventList();
     });
   };
   // 轮训查询详情（原有逻辑，60秒一次）
@@ -297,9 +318,16 @@
       if (hasReport && hadReport === false) {
         nextTick(() => {
           active.value = 'eventReport';
+          // tab key 变化会重建子组件，稍后再拉一次关联事件，避免列表停在旧状态
+          nextTick(() => {
+            refreshLinkEventList();
+          });
         });
       } else if (!hasReport && hadReport === true) {
         active.value = 'linkEvent';
+        nextTick(() => {
+          refreshLinkEventList();
+        });
       }
     },
   );
