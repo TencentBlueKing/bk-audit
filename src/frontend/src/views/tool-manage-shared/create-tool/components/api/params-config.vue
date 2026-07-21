@@ -283,7 +283,9 @@
                     type="number" />
                   <audit-user-selector-tenant
                     v-else-if="item.field_category === 'person_select'"
-                    v-model="item.default_value" />
+                    v-model="item.default_value"
+                    allow-create
+                    :placeholder="t('请输入人员进行搜索')" />
                   <div
                     v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
                     class="time-range-select-wrapper"
@@ -678,17 +680,14 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
             return true;
           }
           if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
-            // 时间范围选择器：检验split_config, position, time_range, field_category
+            // 时间范围选择器：仅 split_config、position 变更需要重新调试
+            // 显示名/参数说明/是否必填/前端类型/默认值/是否可见 变更无需重新调试
             return JSON.stringify(item.split_config) !== JSON.stringify(oldItem.split_config)
-              || item.position !== oldItem.position
-              || item.field_category !== oldItem.field_category
-              || JSON.stringify(item.time_range) !== JSON.stringify(oldItem.time_range);
+              || item.position !== oldItem.position;
           }
-          // 普通字段：检验var_name, position, default_value, field_category
+          // 普通字段：仅 var_name、position 变更需要重新调试
           return item.var_name !== oldItem.var_name
-            || item.position !== oldItem.position
-            || item.field_category !== oldItem.field_category
-            || JSON.stringify(item.default_value) !== JSON.stringify(oldItem.default_value);
+            || item.position !== oldItem.position;
         });
 
         if (hasChanged) {
@@ -742,13 +741,34 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
   });
   defineExpose<Exposes>({
     getData() {
+      const normalizePersonSelectValue = (val: any) => {
+        if (!val) return [];
+        const arr = Array.isArray(val) ? val : [val];
+        return arr
+          .map((u) => {
+            if (!u) return '';
+            if (typeof u === 'string') return u;
+            // bk-user-selector 允许创建自定义 tag：这里容错把对象归一化成字符串 id
+            return u.id
+              || u.bk_username
+              || u.username
+              || u.login_name
+              || u.name
+              || u.display_name
+              || '';
+          })
+          .filter(Boolean);
+      };
+
       const data = paramList.value.map((item: any) => ({
         ...item,
         // 生成唯一row_name
         raw_name: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger')
           ? (item.split_config.end_field + item.split_config.start_field  + item.position)
           : (item.var_name + item.position),
-        default_value: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.time_range : item.default_value,
+        default_value: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger')
+          ? item.time_range
+          : (item.field_category === 'person_select' ? normalizePersonSelectValue(item.default_value) : item.default_value),
       }));
       // 删除isPass
       const cleanedData = data.map((item: any) => {
