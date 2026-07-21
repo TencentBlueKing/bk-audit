@@ -16,8 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from typing import Dict, List
+
 from django.utils.translation import gettext_lazy
 from iam.model.models import ResourceType
+from pydantic import BaseModel, Field
 
 from core.choices import TextChoices
 
@@ -66,3 +69,53 @@ PANEL = ResourceType(
     provider_config=None,
     version=None,
 )
+
+
+# ==================== 默认值覆盖配置模型 ====================
+
+
+class DefaultValueOverrideConfig(BaseModel):
+    """默认值覆盖配置模型。
+
+    用于定义 VisionPanel 的 default_value_overrides 字段结构。
+    配置协议：
+    {
+        "scenes": {
+            "1001": {
+                "time_filter_panel_uid": ["now-7d/d", "now"],
+                "custom_variable_uid": ["value_a"]
+            }
+        },
+        "systems": {
+            "bk_monitor": {
+                "time_filter_panel_uid": ["now-1d/d", "now"]
+            }
+        }
+    }
+    """
+
+    scenes: Dict[str, Dict[str, List]] = Field(
+        default_factory=dict, description="场景级别的默认值覆盖，key 为场景 ID，value 为变量 uid 到默认值列表的映射"
+    )
+    systems: Dict[str, Dict[str, List]] = Field(
+        default_factory=dict, description="系统级别的默认值覆盖，key 为系统 ID，value 为变量 uid 到默认值列表的映射"
+    )
+
+    class Config:
+        extra = "allow"
+
+
+class ScopeDefaultValueOverride(BaseModel):
+    """单个 scope 命中的默认值覆盖映射。
+
+    用于用户侧详情接口返回，只包含当前 scope 命中的单份映射。
+    例如：
+    - scene 视角：返回 {"time_filter_panel_uid": ["now-7d/d", "now"]}
+    - system 视角：返回 {"time_filter_panel_uid": ["now-1d/d", "now"]}
+    - cross_scene/cross_system：返回 {}
+    """
+
+    overrides: Dict[str, List] = Field(default_factory=dict, description="当前 scope 命中的默认值覆盖映射，key 为变量 uid，value 为默认值列表")
+
+    class Config:
+        extra = "allow"

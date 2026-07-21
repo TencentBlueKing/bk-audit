@@ -29,7 +29,7 @@ from services.web.vision.models import (
 
 @admin.register(VisionPanel)
 class VisionPanelAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index", "vision_id"]
+    list_display = ["id", "name", "priority_index", "vision_id", "status", "category", "default_value_overrides"]
 
 
 @admin.register(SceneReportGroup)
