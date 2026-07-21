@@ -119,7 +119,7 @@
   const toolType: Record<ToolTypeKey, string> = {
     api: t('API接口'),
     data_search: t('数据查询'),
-    bk_vision: t('BKVision图标'),
+    bk_vision: t('BKVision图表'),
   };
 
   const isPlatformTool = (row: ToolModel) => row.visibility?.binding_type === 'platform_binding';
