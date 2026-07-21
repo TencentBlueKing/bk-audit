@@ -445,9 +445,9 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_original_default_without_overrides(self, mock_get_scopes):
-        """测试使用原始默认值且不在覆盖列表中时不报错"""
-        mock_get_scopes.return_value = (["1001"], ["sys001"])
+    def test_use_original_default_when_no_override(self, mock_get_scopes):
+        """测试场景无覆盖配置时使用原始默认值"""
+        mock_get_scopes.return_value = (["1002"], [])  # 用户有场景 1002 权限
 
         tool = MockTool(
             config={
@@ -459,14 +459,67 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
                     }
                 ],
                 "default_value_overrides": {
-                    "scenes": {"1001": {"username": "admin"}},
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1002 不在覆盖配置中
                 },
             }
         )
         # 使用原始默认值
         params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
 
-        # 不应抛出异常
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
+        self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    def test_use_original_default_when_has_override_raises_exception(self, mock_get_scopes):
+        """测试场景有覆盖配置时使用原始默认值抛出异常"""
+        from core.exceptions import PermissionException
+
+        mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 权限
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1001 有覆盖配置
+                },
+            }
+        )
+        # 使用原始默认值（应该被拒绝）
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 应该抛出异常（场景 1001 有覆盖配置，只能使用覆盖值）
+        with self.assertRaises(PermissionException):
+            self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    def test_use_original_default_with_mixed_scenes(self, mock_get_scopes):
+        """测试用户有多个场景（部分有覆盖，部分无覆盖）时可以使用原始默认值"""
+        mock_get_scopes.return_value = (["1001", "1002"], [])  # 用户有场景 1001 和 1002 权限
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1001 有覆盖，1002 无覆盖
+                },
+            }
+        )
+        # 使用原始默认值
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")

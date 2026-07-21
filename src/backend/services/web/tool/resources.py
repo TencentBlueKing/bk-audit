@@ -1044,21 +1044,38 @@ class ExecuteTool(ToolBase):
         # 收集用户有权限的场景/系统允许的默认值
         allowed_defaults = {}
 
-        # 场景级别的默认值
+        # 场景级别的默认值：遍历用户有权限的每个场景
         scenes_overrides = default_value_overrides.get("scenes", {})
-        for scene_id, overrides in scenes_overrides.items():
-            if scene_id in user_allowed_scene_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
+        for scene_id in user_allowed_scene_ids:
+            if scene_id in scenes_overrides:
+                # 场景有覆盖配置，收集覆盖值
+                overrides = scenes_overrides[scene_id]
+                if isinstance(overrides, dict):
+                    for raw_name, default_value in overrides.items():
+                        if raw_name:
+                            allowed_defaults.setdefault(raw_name, []).append(default_value)
 
-        # 系统级别的默认值
+        # 系统级别的默认值：遍历用户有权限的每个系统
         systems_overrides = default_value_overrides.get("systems", {})
-        for system_id, overrides in systems_overrides.items():
-            if system_id in user_allowed_system_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
+        for system_id in user_allowed_system_ids:
+            if system_id in systems_overrides:
+                # 系统有覆盖配置，收集覆盖值
+                overrides = systems_overrides[system_id]
+                if isinstance(overrides, dict):
+                    for raw_name, default_value in overrides.items():
+                        if raw_name:
+                            allowed_defaults.setdefault(raw_name, []).append(default_value)
+
+        # 计算无覆盖配置的场景/系统
+        user_scenes = set(user_allowed_scene_ids)
+        covered_scenes = set(scenes_overrides.keys())
+        uncovered_scenes = user_scenes - covered_scenes
+
+        user_systems = set(user_allowed_system_ids)
+        covered_systems = set(systems_overrides.keys())
+        uncovered_systems = user_systems - covered_systems
+
+        has_uncovered_scope = bool(uncovered_scenes or uncovered_systems)
 
         input_variable_map = {}
         for var in tool_variables:
@@ -1088,13 +1105,23 @@ class ExecuteTool(ToolBase):
                 # 如果用户在允许的场景/系统下有默认值覆盖，则允许使用覆盖值
                 # 如果用户传入的值不在允许的范围内，则提示越权
                 if raw_name in allowed_defaults:
-                    if value not in allowed_defaults[raw_name] and value != original_default:
-                        raise PermissionException(
-                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                            permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
-                        )
-
+                    # 有覆盖配置
+                    if has_uncovered_scope:
+                        # 有无覆盖的场景/系统，允许：覆盖值 OR 原始默认值
+                        if value not in allowed_defaults[raw_name] and value != original_default:
+                            raise PermissionException(
+                                action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
+                                permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
+                            )
+                    else:
+                        # 所有场景/系统都有覆盖，只能用：覆盖值
+                        if value not in allowed_defaults[raw_name]:
+                            raise PermissionException(
+                                action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
+                                permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
+                            )
                 else:
+                    # 无覆盖配置，只能用：原始默认值
                     if value != original_default:
                         raise PermissionException(
                             action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
