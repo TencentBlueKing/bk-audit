@@ -178,7 +178,6 @@ class Strategy extends ModuleBase {
   getTable(params: {
     table_type: string;
     scene_id?: string;
-    bk_biz_id?: string | number;
   }) {
     return Request.get<Array<{
       label: string;
