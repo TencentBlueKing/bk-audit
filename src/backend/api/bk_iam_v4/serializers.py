@@ -10,6 +10,13 @@ class SubjectSerializer(serializers.Serializer):
 class ResourceInstanceSerializer(serializers.Serializer):
     type = serializers.CharField()
     id = serializers.CharField()
+
+
+class AuthResourceInstanceSerializer(ResourceInstanceSerializer):
+    attributes = serializers.DictField(required=False)
+
+
+class ApplyResourceInstanceSerializer(ResourceInstanceSerializer):
     ancestors = serializers.ListField(child=serializers.DictField(), required=False)
 
 
@@ -27,21 +34,21 @@ class DirectAuthRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField()
     subject = SubjectSerializer()
     action_id = serializers.CharField()
-    resource = ResourceInstanceSerializer(required=False, allow_null=True)
+    resource = AuthResourceInstanceSerializer(required=False, allow_null=True)
 
 
 class DirectAuthByActionsRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField()
     subject = SubjectSerializer()
     action_ids = serializers.ListField(child=serializers.CharField(), allow_empty=False)
-    resource = ResourceInstanceSerializer(required=False, allow_null=True)
+    resource = AuthResourceInstanceSerializer(required=False, allow_null=True)
 
 
 class DirectAuthByResourcesRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField()
     subject = SubjectSerializer()
     action_id = serializers.CharField()
-    resources = ResourceInstanceSerializer(many=True)
+    resources = AuthResourceInstanceSerializer(many=True)
 
 
 class ListAuthorizedResourceRequestSerializer(serializers.Serializer):
@@ -52,7 +59,7 @@ class ListAuthorizedResourceRequestSerializer(serializers.Serializer):
 
 class PermissionApplySerializer(serializers.Serializer):
     action_id = serializers.CharField()
-    resources = ResourceInstanceSerializer(many=True, required=False)
+    resources = ApplyResourceInstanceSerializer(many=True, required=False)
 
 
 class GeneratePermApplyUrlRequestSerializer(serializers.Serializer):

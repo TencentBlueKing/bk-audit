@@ -116,6 +116,40 @@ class TestIAMV4AuthResources(SimpleTestCase):
         self.assertEqual(kwargs["json"]["resources"], [{"type": "scene", "id": "scene-1"}])
 
     @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
+    def test_direct_auth_by_resources_keeps_auth_attributes(self, _mock_build_header):
+        resource = DirectAuthByResourcesResource()
+        resource.session.request = mock.Mock(
+            return_value=_mock_response([{"resource_id": "notice-1", "allowed": True}])
+        )
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "subject": {"type": "user", "id": "admin"},
+                "action_id": "delete_notice_group_v2",
+                "resources": [
+                    {
+                        "type": "notice_group",
+                        "id": "notice-1",
+                        "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                    }
+                ],
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(
+            kwargs["json"]["resources"],
+            [
+                {
+                    "type": "notice_group",
+                    "id": "notice-1",
+                    "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                }
+            ],
+        )
+
+    @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
     def test_list_authorized_resource_uses_relation_endpoint(self, _mock_build_header):
         resource = ListAuthorizedResourceResource()
         resource.session.request = mock.Mock(return_value=_mock_response([{"type": "scene", "ids": ["scene-1"]}]))
@@ -204,6 +238,37 @@ class TestIAMV4RoleResources(SimpleTestCase):
         self.assertNotIn("operator", kwargs["json"][0])
         self.assertEqual(kwargs["json"][0]["role_id"], "scene_admin")
 
+    @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
+    def test_add_authorization_drops_auth_and_apply_resource_fields(self, _mock_build_header):
+        resource = AddAuthorizationResource()
+        resource.session.request = mock.Mock(return_value=_mock_response(None))
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "operator": "operator_user",
+                "authorizations": [
+                    {
+                        "role_id": "scene_admin",
+                        "related_resource_type_id": "notice_group",
+                        "subject": {"type": "user", "id": "admin"},
+                        "resources": [
+                            {
+                                "type": "notice_group",
+                                "id": "notice-1",
+                                "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                                "ancestors": [{"type": "scene", "id": "scene-1"}],
+                            }
+                        ],
+                        "expired_at": 4102444800,
+                    }
+                ],
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["json"][0]["resources"], [{"type": "notice_group", "id": "notice-1"}])
+
     @mock.patch("api.bk_iam_v4.default.bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME", "system_operator")
     def test_add_authorization_uses_default_operator_header(self):
         resource = AddAuthorizationResource()
@@ -249,6 +314,39 @@ class TestIAMV4RoleResources(SimpleTestCase):
         self.assertNotIn("system_id", kwargs["json"][0])
         self.assertEqual(kwargs["json"][0]["role_id"], "scene_admin")
 
+    @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
+    def test_revoke_authorization_drops_auth_and_apply_resource_fields(self, _mock_build_header):
+        resource = RevokeAuthorizationResource()
+        response = mock.MagicMock(status_code=204, content=b"")
+        response.json.side_effect = ValueError("empty")
+        response.raise_for_status.return_value = None
+        response.request.url = "http://bkiam.test"
+        resource.session.request = mock.Mock(return_value=response)
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "authorizations": [
+                    {
+                        "role_id": "scene_admin",
+                        "related_resource_type_id": "notice_group",
+                        "subject": {"type": "user", "id": "admin"},
+                        "resources": [
+                            {
+                                "type": "notice_group",
+                                "id": "notice-1",
+                                "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                                "ancestors": [{"type": "scene", "id": "scene-1"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["json"][0]["resources"], [{"type": "notice_group", "id": "notice-1"}])
+
     def test_add_authorization_validates_required_authorizations(self):
         resource = AddAuthorizationResource()
 
@@ -292,6 +390,30 @@ class TestIAMV4RoleResources(SimpleTestCase):
         self.assertTrue(kwargs["url"].endswith("/api/v1/open/rbac/mgmt/systems/bk-audit/authorizations/query-subject/"))
         self.assertNotIn("system_id", kwargs["json"])
         self.assertEqual(kwargs["json"]["role_id"], "scene_admin")
+
+    @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
+    def test_list_authorization_subject_drops_auth_and_apply_resource_fields(self, _mock_build_header):
+        resource = ListAuthorizationSubjectResource()
+        resource.session.request = mock.Mock(return_value=_mock_response({"results": []}))
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "role_id": "scene_admin",
+                "related_resource_type_id": "notice_group",
+                "resource": {
+                    "type": "notice_group",
+                    "id": "notice-1",
+                    "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                    "ancestors": [{"type": "scene", "id": "scene-1"}],
+                },
+                "page": 1,
+                "page_size": 100,
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["json"]["resource"], {"type": "notice_group", "id": "notice-1"})
 
     def test_list_authorization_subject_strips_operator_from_body(self):
         resource = ListAuthorizationSubjectResource()
@@ -350,6 +472,36 @@ class TestIAMV4ApplyResource(SimpleTestCase):
         self.assertTrue(kwargs["url"].endswith("/api/v1/open/application/permission-apply-urls/"))
         self.assertEqual(kwargs["json"]["system_id"], "bk-audit")
         self.assertEqual(kwargs["json"]["permissions"][0]["action_id"], "view_scene")
+
+    @mock.patch("api.bk_iam_v4.default.IAMV4BaseResource.build_header", return_value={})
+    def test_generate_perm_apply_url_keeps_ancestors_and_drops_auth_attributes(self, _mock_build_header):
+        resource = GeneratePermApplyUrlResource()
+        resource.session.request = mock.Mock(return_value=_mock_response({"url": "https://iam.example/apply"}))
+
+        resource.request(
+            {
+                "system_id": "bk-audit",
+                "permissions": [
+                    {
+                        "action_id": "delete_notice_group_v2",
+                        "resources": [
+                            {
+                                "type": "notice_group",
+                                "id": "notice-1",
+                                "attributes": {"_bk_iam_path_": "/scene,scene-1/"},
+                                "ancestors": [{"type": "scene", "id": "scene-1"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(
+            kwargs["json"]["permissions"][0]["resources"],
+            [{"type": "notice_group", "id": "notice-1", "ancestors": [{"type": "scene", "id": "scene-1"}]}],
+        )
 
 
 class TestIAMV4SystemResources(SimpleTestCase):
