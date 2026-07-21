@@ -124,7 +124,17 @@ class ToolManage extends ModuleBase {
     status?: string[],
     namespace?: string,
   }) {
-    const query = params ? `?${processedParams(params).toString()}` : '';
+    // scope_type 为后端必填；无参/空参调用时回退当前场景/系统，避免 /tool/all/? 空查询 500
+    const sceneParams = getSceneSystemParams();
+    const { scope_type: paramScopeType, scope_id: paramScopeId, ...rest } = params || {};
+    const scopeType = paramScopeType || sceneParams.scope_type || 'cross_scene';
+    const scopeId = paramScopeId || sceneParams.scope_id;
+    const mergedParams = {
+      ...rest,
+      scope_type: scopeType,
+      ...(scopeId ? { scope_id: scopeId } : {}),
+    };
+    const query = `?${processedParams(mergedParams).toString()}`;
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/${query}`);
   }
   // 工具执行
