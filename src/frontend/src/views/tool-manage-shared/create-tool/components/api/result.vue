@@ -285,7 +285,12 @@
       return formatDate(value);
     }
     if (field.field_category === 'person_select') {
-      const arr = Array.isArray(value) ? value : (value ? [value] : []);
+      let arr: any[] = [];
+      if (Array.isArray(value)) {
+        arr = value;
+      } else if (value) {
+        arr = [value];
+      }
       const normalized = arr
         .map((u) => {
           if (!u) return '';

@@ -20,13 +20,14 @@
     <bk-loading :loading="showListLoading">
       <div
         :key="detailRenderKey"
-        class="body">
+        class="body"
+        :class="{ 'is-section-title-mode': showSectionTitle }">
         <template v-if="hasLoadedData">
-          <!-- 无调查报告时（页签头隐藏）展示区块标题；有 Tab「关联事件」时不再重复 -->
+          <!-- 无调查报告时（页签头隐藏）展示区块标题；有 Tab「关联事件列表」时不再重复 -->
           <div
             v-if="showSectionTitle"
             class="link-event-section-title">
-            {{ t('关联事件') }}
+            {{ t('关联事件列表') }}
           </div>
           <link-event-timeline
             v-if="linkEventList.length > 0"
@@ -80,7 +81,7 @@
             <div class="detail-content">
               <!-- 基本信息 -->
               <template v-if="basicInfo.length">
-                <div class="title mt16">
+                <div class="link-event-block-title">
                   {{ t('基本信息') }}
                 </div>
                 <div class="base-info info-field-rows">
@@ -263,7 +264,7 @@
                 class="section-divider" />
 
               <!-- 事件详情 -->
-              <div class="title">
+              <div class="link-event-block-title">
                 {{ t('事件详情') }}
               </div>
               <template v-if="eventDataKeyArr.length || eventDataKeyArrNormal.length">
@@ -528,7 +529,7 @@
       value: number
     }>,
     data: RiskManageModel & StrategyInfo,
-    /** 是否展示内容区「关联事件」标题（有 Tab 页签时传 false，避免与页签文案重复） */
+    /** 是否展示内容区「关联事件列表」标题（有 Tab 页签时传 false，避免与页签文案重复） */
     showSectionTitle?: boolean,
   }
 
@@ -1289,7 +1290,7 @@
   .timeline-empty-action {
     display: flex;
     justify-content: flex-end;
-    padding: 8px 24px 16px;
+    padding: 8px 0 16px;
   }
 
   .add-event {
@@ -1307,37 +1308,66 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+
+    /* 有 Tab 时，页签到内容 24px（设计稿）；底部与容器留 16px */
+    padding: 24px 16px 16px;
+    box-sizing: border-box;
+
+    /* 无调查报告仅展示区块标题时，标题上下为 16px */
+    &.is-section-title-mode {
+      padding-top: 16px;
+    }
+  }
+
+  .link-event-section-title,
+  .link-event-block-title {
+    padding-left: 0;
+    margin-left: 0;
+    text-align: left;
   }
 
   .link-event-section-title {
-    padding: 16px 24px 0;
-    margin-bottom: 8px;
+    margin-bottom: 16px;
+    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 14px;
+    font-style: normal;
     font-weight: 700;
     line-height: 22px;
+    letter-spacing: 0;
     color: #313238;
+  }
+
+  .link-event-block-title {
+    margin-bottom: 16px;
+    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 20px;
+    letter-spacing: 0;
+    color: #4d4f56;
   }
 
   .list-item-detail {
     width: 100%;
-    padding: 0 24px;
+    padding: 0;
+    margin: 0;
     box-sizing: border-box;
-
-    .title {
-      margin-bottom: 16px;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 22px;
-      color: #313238;
-    }
 
     .detail-content {
       width: 100%;
       height: auto;
+
+      /* 时间轴到首个区块标题（基本信息/事件详情）24px */
+      > .link-event-block-title:first-child {
+        margin-top: 24px;
+      }
     }
 
     .section-divider {
       height: 1px;
+
+      /* 「基本信息」内容与「事件详情」之间上下各 24px */
       margin: 24px 0;
       background: #dcdee5;
     }

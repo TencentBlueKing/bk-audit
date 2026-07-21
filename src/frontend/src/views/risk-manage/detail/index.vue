@@ -24,7 +24,7 @@
           :risk-status-common="riskStatusCommon"
           :strategy-list="strategyList"
           @updated-data="handleUpdatedData" />
-        <!-- 关联事件 / 事件调查报告 -->
+        <!-- 关联事件列表 / 事件调查报告 -->
         <bk-tab
           :key="detailData.has_report ? 'risk-detail-with-report' : 'risk-detail-link-only'"
           v-model:active="active"
@@ -158,7 +158,7 @@
 
   const panels = [
     { name: 'eventReport', label: t('事件调查报告') },
-    { name: 'linkEvent', label: t('关联事件') },
+    { name: 'linkEvent', label: t('关联事件列表') },
   ];
 
   const active = ref<keyof typeof comMap>('eventReport');
@@ -297,7 +297,7 @@
     ...strategyInfoData.value,
   }));
 
-  // 无调查报告时仅挂载「关联事件」panel，并隐藏页签头（由内容区展示区块标题）
+  // 无调查报告时仅挂载「关联事件列表」panel，并隐藏页签头（由内容区展示区块标题）
   const visiblePanels = computed(() => (
     detailData.value.has_report
       ? panels
@@ -424,16 +424,35 @@
       margin-top: 16px;
       overflow: visible;
 
+      :deep(.bk-tab-header),
+      :deep(.bk-tab-label),
+      :deep(.bk-tab-header .bk-tab-header-item) {
+        font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 400;
+        line-height: 22px;
+        letter-spacing: 0;
+      }
+
       :deep(.bk-tab-content) {
         height: auto;
         min-height: 0;
+        padding: 0;
         overflow: visible;
       }
 
-      /* 无调查报告时隐藏 bk-tab-panel 页签头，避免与内容区「关联事件」标题重复 */
+      /* 无调查报告时隐藏 bk-tab-panel 页签头，避免与内容区「关联事件列表」标题重复 */
       &.risk-detail-tab--hide-panel-header {
+        /* 与上方基本信息区间距 16px；内部顶距由 link-event .body padding-top 提供 */
+        margin-top: 16px;
+
         :deep(.bk-tab-header) {
           display: none;
+        }
+
+        :deep(.bk-tab-content) {
+          padding: 0;
         }
       }
     }

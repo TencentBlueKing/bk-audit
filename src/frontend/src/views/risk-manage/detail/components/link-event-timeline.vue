@@ -369,7 +369,7 @@
 .link-event-timeline {
   position: relative;
   width: 100%;
-  padding: 8px 24px 16px;
+  padding: 0;
   box-sizing: border-box;
 }
 
