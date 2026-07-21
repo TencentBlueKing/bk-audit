@@ -489,10 +489,11 @@
   });
 
   // 获取全部工具（用于下钻时获取工具名称）
+  // 注意：本项目 useRequest 在 manual:true 时会自动用 defaultParams 发起请求；
+  // 这里必须由 onMounted / scene:change 带上 scope 后再调，避免先发空参 /tool/all/ 导致 500
   const {
     run: fetchAllToolsData,
   } = useRequest(ToolManageService.fetchAllTools, {
-    manual: true,
     defaultValue: [],
     onSuccess: (data) => {
       allToolsData.value = data;
