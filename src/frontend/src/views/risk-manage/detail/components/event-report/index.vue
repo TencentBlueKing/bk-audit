@@ -370,11 +370,14 @@
 }
 
 .event-report {
-  padding: 10px;
+  /* 有 Tab 时，页签到「基本信息」24px；底部留 16px */
+  padding: 24px 16px 16px;
   margin-bottom: 10px;
 
   .event-report-section-title {
+    font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
     font-size: 12px;
+    font-style: normal;
     font-weight: 700;
     line-height: 20px;
     letter-spacing: 0;
