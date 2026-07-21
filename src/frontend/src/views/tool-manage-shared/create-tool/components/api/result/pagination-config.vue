@@ -212,7 +212,6 @@
               <div class="table-cell col-default-page-size">
                 <bk-select
                   v-model="row.default_page_size"
-                  auto-focus
                   :class="{ 'is-error-select': row.defaultPageSizeError }"
                   @change="() => { row.defaultPageSizeError = false; }">
                   <bk-option
@@ -225,7 +224,6 @@
               <div class="table-cell col-position">
                 <bk-select
                   v-model="row.position"
-                  auto-focus
                   :class="{ 'is-error-select': row.positionError }"
                   @change="() => { row.positionError = false; }">
                   <bk-option
