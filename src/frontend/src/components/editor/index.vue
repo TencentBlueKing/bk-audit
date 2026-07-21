@@ -446,7 +446,8 @@
     USE_PROFILES: { html: true },
     ADD_ATTR: ['style', 'colspan', 'rowspan', 'target'],
     // 粘贴流程需短暂保留 data:image，上传后再替换为远端 URL
-    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+    // 将 - 放在字符类末尾，避免 .-: 被解析为过宽字符范围（CodeQL）
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
   };
 
   const sanitizePastedHtml = (html: string) => {
