@@ -40,15 +40,11 @@
                   :filter-method="configTypeTableFilter"
                   filterable
                   id-key="value"
-                  is-remote
                   :list="index === 0 ? allConfigTypeTable : leftTableList"
                   name-key="label"
                   :placeholder="t('搜索数据名称、别名、数据ID等')"
-                  :popover-options="{ clickContentAutoHide: false }"
-                  :remote-method="handleCascaderRemoteLoad"
-                  trigger="click"
-                  @change="(value: Array<string>) => handleSelectLeftTable(value, index)"
-                  @toggle="handleCascaderToggle">
+                  trigger="hover"
+                  @change="(value: Array<string>) => handleSelectLeftTable(value, index)">
                   <p
                     v-bk-tooltips="{
                       disabled: !data.disabled || !data.leaf,
@@ -64,7 +60,7 @@
                   v-if="link.left_table.table_type && link.left_table.table_type !== 'EventLog'"
                   class="view-icon"
                   type="view"
-                  @click="dataStructurePreview(link.left_table.rt_id, link.left_table.table_type)" />
+                  @click="dataStructurePreview(link.left_table.rt_id)" />
               </select-verify>
               <template v-if="link.left_table.table_type === 'EventLog'">
                 <select-verify
@@ -82,7 +78,7 @@
                   <audit-icon
                     class="view-icon"
                     type="view"
-                    @click="dataStructurePreview(link.left_table.rt_id, link.left_table.table_type)" />
+                    @click="dataStructurePreview(link.left_table.rt_id)" />
                 </select-verify>
               </template>
             </div>
@@ -105,15 +101,11 @@
                   :filter-method="configTypeTableFilter"
                   filterable
                   id-key="value"
-                  is-remote
                   :list="rightTableList"
                   name-key="label"
                   :placeholder="t('搜索数据名称、别名、数据ID等')"
-                  :popover-options="{ clickContentAutoHide: false }"
-                  :remote-method="handleCascaderRemoteLoad"
-                  trigger="click"
-                  @change="(value: Array<string>) => handleSelectRightTable(value, index)"
-                  @toggle="handleCascaderToggle">
+                  trigger="hover"
+                  @change="(value: Array<string>) => handleSelectRightTable(value, index)">
                   <p
                     v-bk-tooltips="{
                       disabled: !data.disabled || !data.leaf,
@@ -129,7 +121,7 @@
                   v-if="link.right_table.table_type && link.right_table.table_type !== 'EventLog'"
                   class="view-icon"
                   type="view"
-                  @click="dataStructurePreview(link.right_table.rt_id, link.right_table.table_type)" />
+                  @click="dataStructurePreview(link.right_table.rt_id)" />
               </select-verify>
               <template v-if="link.right_table.table_type === 'EventLog'">
                 <select-verify
@@ -147,7 +139,7 @@
                   <audit-icon
                     class="view-icon"
                     type="view"
-                    @click="dataStructurePreview(link.right_table.rt_id, link.right_table.table_type)" />
+                    @click="dataStructurePreview(link.right_table.rt_id)" />
                 </select-verify>
               </template>
             </div>
@@ -156,8 +148,8 @@
           <table-field
             ref="tableFieldRef"
             v-model:linkFields="link.link_fields"
-            :left-table-rt-id="getRealRtId(link.left_table.table_type, link.left_table.rt_id)"
-            :right-table-rt-id="getRealRtId(link.right_table.table_type, link.right_table.rt_id)" />
+            :left-table-rt-id="link.left_table.rt_id"
+            :right-table-rt-id="link.right_table.rt_id" />
           <!-- 删除关联关系 -->
           <audit-icon
             v-if="links.length > 1"
@@ -210,29 +202,17 @@
     children: Array<{
       label: string
       value: string
-      leaf?: boolean
-      disabled?: boolean
       children?: Array<{
         label: string
         value: string
-        leaf?: boolean
-        disabled?: boolean
       }>
     }>
   }
-
-  // 与策略创建一致：MineBizRt 点击第二列后再带 bk_biz_id 懒加载第三列
-  // cascader 按单层 id 展开，跨类型重复 bizId/rtId 会串选，二/三级 value 需绑上 tableType
-  const MINE_BIZ_RT_TYPE = 'MineBizRt';
-  const BIZ_ID_SEP = '__';
-  type BizChildNode = { label: string, value: string, leaf: boolean };
 
   const { t } = useI18n();
   const tableFieldRef = ref();
   const selectVerifyRef = ref();
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
-  const bizChildrenCache = ref<Record<string, BizChildNode[]>>({});
-  const bizChildrenPending = new Map<string, Promise<BizChildNode[]>>();
   const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
     required: true,
   });
@@ -249,23 +229,6 @@
   }>>([]);
   const oldFirstLefTable = ref<Array<string>>([]);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
-
-  const encodeTypeBizId = (tableType: string, bizId: string | number) => (
-    `${tableType}${BIZ_ID_SEP}${bizId}`
-  );
-  const decodeTypeBizId = (tableType: string, value: string | number) => {
-    const raw = String(value);
-    const prefix = `${tableType}${BIZ_ID_SEP}`;
-    return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-  };
-  const getRealRtId = (tableType: string, pathOrId: string | string[]) => {
-    if (!pathOrId) return '';
-    const last = Array.isArray(pathOrId) ? pathOrId[pathOrId.length - 1] : pathOrId;
-    if (!last) return '';
-    return tableType === 'EventLog' || tableType === 'LinkTable'
-      ? String(last)
-      : decodeTypeBizId(tableType, last);
-  };
 
   if (!isEditMode.value) {
     isInit = true;
@@ -287,29 +250,22 @@
     return resultHeight > (windowHeight - 450) ? windowHeight - 450 : resultHeight;
   });
 
-  const dataStructurePreview = (rtId: Array<string> | string, tableType = '') => {
+  const dataStructurePreview = (rtId: Array<string> | string) => {
     showStructure.value = true;
-    const last = Array.isArray(rtId) && rtId.length > 0 ? rtId[rtId.length - 1] : '';
-    currentViewRtId.value = tableType && last
-      ? getRealRtId(tableType, last)
-      : last;
+    currentViewRtId.value = rtId.length > 0 ? rtId[rtId.length - 1] : '';
   };
 
-  const setDeepestLeafDisabled = (node: any, selectedRtIds: Set<string>, tableType = '') => {
-    const type = tableType || node.value;
+  const setDeepestLeafDisabled = (node: any, selectedRtIds: Set<string>) => {
     if (!node.children || node.children.length === 0) {
       // 当前节点就是叶子节点
-      const realValue = decodeTypeBizId(type, node.value);
       return {
         ...node,
-        disabled: !selectedRtIds.has(realValue),
+        disabled: !selectedRtIds.has(node.value),
       };
     }
 
     // 递归处理子节点
-    const processedChildren = node.children.map((child: any) => (
-      setDeepestLeafDisabled(child, selectedRtIds, type)
-    ));
+    const processedChildren = node.children.map((child: any) => setDeepestLeafDisabled(child, selectedRtIds));
 
     return {
       ...node,
@@ -322,14 +278,18 @@
     const selectedTableTypes = new Set<string>();
     const selectedRtIds = new Set<string>();
 
-    // 收集所有已选的table_type和真实 rt_id
+    // 收集所有已选的table_type和rt_id
     links.value.forEach((link) => {
       selectedTableTypes.add(link.left_table.table_type);
       selectedTableTypes.add(link.right_table.table_type);
-      const leftRealId = getRealRtId(link.left_table.table_type, link.left_table.rt_id);
-      const rightRealId = getRealRtId(link.right_table.table_type, link.right_table.rt_id);
-      if (leftRealId) selectedRtIds.add(leftRealId);
-      if (rightRealId) selectedRtIds.add(rightRealId);
+      if (link.left_table.rt_id.length) {
+        // 取rt_id数组的最后一个元素
+        selectedRtIds.add(link.left_table.rt_id[link.left_table.rt_id.length - 1]);
+      }
+      if (link.right_table.rt_id.length) {
+        // 取rt_id数组的最后一个元素
+        selectedRtIds.add(link.right_table.rt_id[link.right_table.rt_id.length - 1]);
+      }
     });
 
     // 从 allConfigTypeTable 中筛选出与收集到的类型匹配的项
@@ -340,13 +300,15 @@
 
   // 右表不能再选EventLog，如果左表选了，直接隐藏不显示
   const rightTableList = computed(() => {
-    // 收集所有已选的真实 rt_id
+    // 收集所有已选的rt_id
     const usedRtIds = new Set<string>();
     links.value.forEach((link) => {
-      const leftRealId = getRealRtId(link.left_table.table_type, link.left_table.rt_id);
-      const rightRealId = getRealRtId(link.right_table.table_type, link.right_table.rt_id);
-      if (leftRealId) usedRtIds.add(leftRealId);
-      if (rightRealId) usedRtIds.add(rightRealId);
+      if (link.left_table.rt_id.length) {
+        usedRtIds.add(link.left_table.rt_id[link.left_table.rt_id.length - 1]);
+      }
+      if (link.right_table.rt_id.length) {
+        usedRtIds.add(link.right_table.rt_id[link.right_table.rt_id.length - 1]);
+      }
     });
 
     // 过滤掉EventLog类型（如果左表选了EventLog）
@@ -361,7 +323,7 @@
         ...child,
         children: child.children?.map(leaf => ({
           ...leaf,
-          disabled: usedRtIds.has(decodeTypeBizId(table.value, leaf.value)),
+          disabled: usedRtIds.has(leaf.value),
         })),
       })),
     }));
@@ -374,130 +336,6 @@
     defaultValue: [],
   });
 
-  const mapLazyLoadBizChildren = (data: Array<Record<string, any>>): ConfigTypeTableItem['children'] => data.map(bizItem => ({
-    label: String(bizItem.label ?? ''),
-    value: encodeTypeBizId(MINE_BIZ_RT_TYPE, bizItem.value),
-    leaf: false,
-  }));
-
-  const mapTableChildren = (
-    data: Array<Record<string, any>>,
-    tableType: string,
-  ): ConfigTypeTableItem['children'] => data.map(tableItem => ({
-    label: String(tableItem.label ?? ''),
-    value: tableType === 'EventLog'
-      ? String(tableItem.value)
-      : encodeTypeBizId(tableType, tableItem.value),
-    leaf: !(tableItem.children && tableItem.children.length),
-    disabled: !(tableItem.children && tableItem.children.length) && tableType !== 'EventLog',
-    children: tableItem.children?.map((child: Record<string, any>) => ({
-      label: String(child.label ?? ''),
-      value: encodeTypeBizId(tableType, child.value),
-      leaf: !(child.children && child.children.length),
-    })),
-  }));
-
-  const getBizChildrenCacheKey = (tableType: string, bizId: string | number) => (
-    `${tableType}_${bizId}`
-  );
-
-  const loadBizTableChildren = (
-    tableType: string,
-    bizId: string | number,
-  ): Promise<BizChildNode[]> => {
-    const cacheKey = getBizChildrenCacheKey(tableType, bizId);
-    const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
-      return Promise.resolve(cached);
-    }
-    const pending = bizChildrenPending.get(cacheKey);
-    if (pending) {
-      return pending;
-    }
-    const promise = StrategyManageService.fetchScenePermissionTable({
-      table_type: tableType,
-      bk_biz_id: bizId,
-      scene_id: getSceneSystemParams().scope_id,
-    }).then((data) => {
-      let tableList = data as Array<Record<string, any>>;
-      if (tableList?.[0]?.children) {
-        const bizNode = tableList.find(item => String(item.value) === String(bizId));
-        tableList = bizNode?.children || [];
-      }
-      const children = tableList.map(item => ({
-        label: String(item.label ?? ''),
-        value: encodeTypeBizId(tableType, item.value),
-        leaf: true,
-      }));
-      bizChildrenCache.value[cacheKey] = children;
-      bizChildrenPending.delete(cacheKey);
-      return children;
-    })
-      .catch((err) => {
-        bizChildrenPending.delete(cacheKey);
-        throw err;
-      });
-    bizChildrenPending.set(cacheKey, promise);
-    return promise;
-  };
-
-  const patchBizChildren = (
-    tableType: string,
-    bizId: string | number,
-    children: Array<{ label: string, value: string, leaf: boolean }>,
-  ) => {
-    const typeItem = allConfigTypeTable.value.find(item => item.value === tableType);
-    const encodedBizId = encodeTypeBizId(tableType, bizId);
-    const bizItem = typeItem?.children?.find(item => (
-      String(item.value) === encodedBizId
-      || decodeTypeBizId(tableType, item.value) === String(bizId)
-    ));
-    if (!bizItem) return;
-    bizItem.value = encodedBizId;
-    bizItem.children = children;
-    bizItem.leaf = false;
-    bizItem.disabled = children.length === 0;
-  };
-
-  const syncBizChildrenCacheToList = () => {
-    Object.entries(bizChildrenCache.value).forEach(([cacheKey, children]) => {
-      const [tableType, ...bizIdParts] = cacheKey.split('_');
-      const bizId = bizIdParts.join('_');
-      if (!tableType || !bizId) return;
-      patchBizChildren(tableType, bizId, children);
-    });
-  };
-
-  const handleCascaderToggle = (visible: boolean) => {
-    if (!visible) {
-      syncBizChildrenCacheToList();
-    }
-  };
-
-  const handleCascaderRemoteLoad = (
-    node: Record<string, any>,
-    updateNodes: (nodes: Array<Record<string, any>>) => void,
-  ) => {
-    const tableType = node.parent?.id;
-    if (tableType !== MINE_BIZ_RT_TYPE || node.level !== 2) {
-      updateNodes(node.data?.children || []);
-      return;
-    }
-    const bizId = decodeTypeBizId(tableType, node.id);
-    if (node.data?.children?.length) {
-      updateNodes(node.data.children);
-      return;
-    }
-    const cacheKey = getBizChildrenCacheKey(tableType, bizId);
-    const cached = bizChildrenCache.value[cacheKey];
-    if (cached?.length) {
-      updateNodes(cached);
-      return;
-    }
-    loadBizTableChildren(tableType, bizId).then((children) => {
-      updateNodes(children);
-    });
-  };
 
   // 获取全部tableid
   const getAllConfigTypeTable = () => {
@@ -509,19 +347,18 @@
       });
       return [{
         ...item,
-        children: item.value === MINE_BIZ_RT_TYPE
-          ? mapLazyLoadBizChildren(data)
-          : mapTableChildren(data, item.value),
+        children: data.map(tableItem => ({
+          ...tableItem,
+          leaf: true,
+          disabled: !(tableItem.children && tableItem.children.length) && item.value !== 'EventLog',
+        })),
       }];
     });
     // 获取全部table
     Promise.all(requests.map(fn => fn()))
       .then((results) => {
-        const flattenedResults = results.reduce(
-          (acc, curr) => acc.concat(curr),
-          [] as Array<ConfigTypeTableItem>,
-        );
-        allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
+        const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), []);
+        allConfigTypeTable.value = flattenedResults;
         loading.value = false;
       });
   };
@@ -693,32 +530,12 @@
    * @param rtId 要查找的rt_id
    * @returns 完整的级联路径数组，如['config_type', 'parent_id', 'rt_id']
    */
-  const findFullPath = async (rtId: string, tableType: string): Promise<string[]> => {
+  const findFullPath = (rtId: string, tableType: string): string[] => {
     if (!rtId) return [];
 
     // 如果是EventLog类型，直接返回两层路径
     if (tableType === 'EventLog') {
       return [tableType, rtId];
-    }
-
-    // MineBizRt：按 bk_biz_id 请求子表后拼完整路径
-    if (tableType === MINE_BIZ_RT_TYPE) {
-      const bizId = rtId.split('_')[0];
-      if (!bizId) return [];
-      const children = await loadBizTableChildren(tableType, bizId);
-      patchBizChildren(tableType, bizId, children);
-      const matched = children.find((item) => {
-        const realValue = decodeTypeBizId(tableType, item.value);
-        return realValue === rtId
-          || realValue === `${bizId}_${rtId}`
-          || realValue.endsWith(`_${rtId}`)
-          || item.label === rtId;
-      });
-      return [
-        tableType,
-        encodeTypeBizId(tableType, bizId),
-        matched?.value || encodeTypeBizId(tableType, rtId),
-      ];
     }
 
     // 遍历所有配置类型
@@ -730,14 +547,14 @@
       for (const child of configType.children || []) {
         // 如果有三级子项，则遍历查找
         for (const grandChild of child.children || []) {
-          if (decodeTypeBizId(tableType, grandChild.value) === rtId) {
-            return [configType.value, child.value, grandChild.value];
+          if (grandChild.value === rtId) {
+            return [configType.value, child.value, rtId];
           }
         }
 
         // 如果没有三级子项，检查二级子项本身是否匹配
-        if (decodeTypeBizId(tableType, child.value) === rtId || child.value === rtId) {
-          return [configType.value, child.value];
+        if (child.value === rtId) {
+          return [configType.value, rtId];
         }
       }
     }
@@ -766,28 +583,29 @@
       }
 
       // 处理每个link的rt_id，转换为完整的级联路径
-      const nextLinks = [];
-      for (const link of value) {
-        const leftPath = Array.isArray(link.left_table.rt_id)
-          ? [...link.left_table.rt_id]
-          : await findFullPath(link.left_table.rt_id as string, link.left_table.table_type);
-        const rightPath = Array.isArray(link.right_table.rt_id)
-          ? [...link.right_table.rt_id]
-          : await findFullPath(link.right_table.rt_id as string, link.right_table.table_type);
+      links.value = value.map((link) => {
+        // 创建全新的left_table对象
+        const leftTable = {
+          ...link.left_table,
+          rt_id: Array.isArray(link.left_table.rt_id)
+            ? [...link.left_table.rt_id]
+            : findFullPath(link.left_table.rt_id as string, link.left_table.table_type),
+        };
 
-        nextLinks.push({
+        // 创建全新的right_table对象
+        const rightTable = {
+          ...link.right_table,
+          rt_id: Array.isArray(link.right_table.rt_id)
+            ? [...link.right_table.rt_id]
+            : findFullPath(link.right_table.rt_id as string, link.right_table.table_type),
+        };
+
+        return {
           ...link,
-          left_table: {
-            ...link.left_table,
-            rt_id: leftPath,
-          },
-          right_table: {
-            ...link.right_table,
-            rt_id: rightPath,
-          },
-        });
-      }
-      links.value = nextLinks;
+          left_table: leftTable,
+          right_table: rightTable,
+        };
+      });
 
       nextTick(() => {
         isInit = true;

@@ -347,25 +347,18 @@
       }
       const params = _.cloneDeep(validator);
       params.config.links = params.config.links.map((link) => {
-        // 处理rt_id：级联路径取最后一层，并去掉类型前缀还原真实 id
+        // 处理rt_id，如果是数组，取最后一个
         const leftTableRtId = link.left_table.rt_id;
         const rightTableRtId = link.right_table.rt_id;
-        const decodeRtId = (tableType: string, pathOrId: string | string[]) => {
-          const last = Array.isArray(pathOrId) ? _.last(pathOrId) : pathOrId;
-          if (!last) return '';
-          if (tableType === 'EventLog' || tableType === 'LinkTable') return String(last);
-          const prefix = `${tableType}__`;
-          return String(last).startsWith(prefix) ? String(last).slice(prefix.length) : String(last);
-        };
         const item =  {
           ...link,
           left_table: {
             ...link.left_table,
-            rt_id: decodeRtId(link.left_table.table_type, leftTableRtId),
+            rt_id: (Array.isArray(leftTableRtId) ?  _.last(leftTableRtId)  : leftTableRtId) as string,
           },
           right_table: {
             ...link.right_table,
-            rt_id: decodeRtId(link.right_table.table_type, rightTableRtId),
+            rt_id: (Array.isArray(rightTableRtId) ?  _.last(rightTableRtId)  : rightTableRtId) as string,
           },
         };
         // 处理别名，如果相同的表，用一样的别名
