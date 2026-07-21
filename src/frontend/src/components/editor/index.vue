@@ -442,7 +442,7 @@
   );
 
   // 粘贴 HTML 统一消毒，避免 clipboard / 用户输入导致 XSS
-  const PASTE_HTML_SANITIZE_OPTIONS: DOMPurify.Config = {
+  const PASTE_HTML_SANITIZE_OPTIONS = {
     USE_PROFILES: { html: true },
     ADD_ATTR: ['style', 'colspan', 'rowspan', 'target'],
     // 粘贴流程需短暂保留 data:image，上传后再替换为远端 URL
