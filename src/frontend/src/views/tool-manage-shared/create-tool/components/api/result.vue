@@ -118,7 +118,9 @@
                 type="number" />
               <audit-user-selector-tenant
                 v-else-if="item.field_category === 'person_select'"
-                v-model="formModel[item.raw_name]" />
+                v-model="formModel[item.raw_name]"
+                allow-create
+                :placeholder="t('请输入人员进行搜索')" />
               <div
                 v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
                 @mouseenter.stop="handleMouseEnterTimeRange(item.raw_name)"
@@ -283,7 +285,21 @@
       return formatDate(value);
     }
     if (field.field_category === 'person_select') {
-      return value.join(',');
+      const arr = Array.isArray(value) ? value : (value ? [value] : []);
+      const normalized = arr
+        .map((u) => {
+          if (!u) return '';
+          if (typeof u === 'string') return u;
+          return u.id
+            || u.bk_username
+            || u.username
+            || u.login_name
+            || u.name
+            || u.display_name
+            || '';
+        })
+        .filter(Boolean);
+      return normalized.join(',');
     }
     return value;
   };

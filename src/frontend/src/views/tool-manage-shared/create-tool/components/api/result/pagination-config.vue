@@ -72,113 +72,119 @@
               v-for="(row, index) in paginationRows"
               :key="index"
               class="table-body-row">
-              <div class="table-cell col-list-field">
-                <bk-popover
-                  :arrow="false"
-                  ext-cls="pagination-field-popover"
-                  :is-show="row.showListFieldPopover"
-                  placement="bottom-start"
-                  theme="light"
-                  trigger="manual"
-                  :width="320"
-                  @after-hidden="() => { row.showListFieldPopover = false; closeAllPopovers(); }">
-                  <div
-                    class="field-selector pagination-field-trigger"
-                    :class="[{ 'is-error': row.listFieldError }]"
-                    @click="openPopover(paginationRows.indexOf(row), 'list_field')">
-                    <bk-tag
-                      v-if="row.list_field"
-                      class="field-tag"
-                      closable
-                      @close.stop="handleClearField(row, 'list_field')">
+              <div class="table-cell col-list-field pagination-field-col">
+                <div class="pagination-field-cell">
+                  <bk-popover
+                    :arrow="false"
+                    class="pagination-field-popover-host"
+                    ext-cls="pagination-field-popover"
+                    :is-show="row.showListFieldPopover"
+                    placement="bottom-start"
+                    theme="light"
+                    trigger="manual"
+                    :width="fieldPopoverWidth"
+                    @after-hidden="() => { row.showListFieldPopover = false; closeAllPopovers(); }">
+                    <div
+                      class="field-selector pagination-field-trigger"
+                      :class="[{ 'is-error': row.listFieldError }]"
+                      @click="openPopover(paginationRows.indexOf(row), 'list_field', $event)">
+                      <bk-tag
+                        v-if="row.list_field"
+                        class="field-tag"
+                        closable
+                        @close.stop="handleClearField(row, 'list_field')">
+                        <span
+                          v-bk-tooltips="{
+                            content: getFieldDisplayName(row.list_field),
+                            placement: 'top',
+                            disabled: !row.listFieldEllipsis,
+                          }"
+                          class="field-tag-text"
+                          @mouseenter="(e: MouseEvent) => checkEllipsis(e, row, 'listFieldEllipsis')">
+                          {{ getFieldDisplayName(row.list_field) }}
+                        </span>
+                      </bk-tag>
                       <span
-                        v-bk-tooltips="{
-                          content: getFieldDisplayName(row.list_field),
-                          placement: 'top',
-                          disabled: !row.listFieldEllipsis,
-                        }"
-                        class="field-tag-text"
-                        @mouseenter="(e: MouseEvent) => checkEllipsis(e, row, 'listFieldEllipsis')">
-                        {{ getFieldDisplayName(row.list_field) }}
-                      </span>
-                    </bk-tag>
-                    <span
-                      v-else
-                      class="placeholder">{{ t('请选择数据列表字段') }}</span>
-                  </div>
-                  <template #content>
-                    <div class="field-tree-popover">
-                      <bk-input
-                        v-model="row.listFieldSearch"
-                        clearable
-                        :placeholder="t('搜索字段')"
-                        style="margin-bottom: 8px;"
-                        @clear="row.listFieldSearch = ''" />
-                      <div class="tree-container">
-                        <field-tree
-                          :filter-text="row.listFieldSearch"
-                          :nodes="arrayFieldNodes"
-                          :selected-fields="getAllSelectedFields()"
-                          type="array"
-                          @select="(node: any) => handleSelectField(row, 'list_field', node)" />
-                      </div>
+                        v-else
+                        class="placeholder">{{ t('请选择数据列表字段') }}</span>
                     </div>
-                  </template>
-                </bk-popover>
+                    <template #content>
+                      <div class="field-tree-popover">
+                        <bk-input
+                          v-model="row.listFieldSearch"
+                          clearable
+                          :placeholder="t('搜索字段')"
+                          style="margin-bottom: 8px;"
+                          @clear="row.listFieldSearch = ''" />
+                        <div class="tree-container">
+                          <field-tree
+                            :filter-text="row.listFieldSearch"
+                            :nodes="arrayFieldNodes"
+                            :selected-fields="getAllSelectedFields()"
+                            type="array"
+                            @select="(node: any) => handleSelectField(row, 'list_field', node)" />
+                        </div>
+                      </div>
+                    </template>
+                  </bk-popover>
+                </div>
               </div>
-              <div class="table-cell col-total-field">
-                <bk-popover
-                  :arrow="false"
-                  ext-cls="pagination-field-popover"
-                  :is-show="row.showTotalFieldPopover"
-                  placement="bottom-start"
-                  theme="light"
-                  trigger="manual"
-                  :width="320"
-                  @after-hidden="() => { row.showTotalFieldPopover = false; closeAllPopovers(); }">
-                  <div
-                    class="field-selector pagination-field-trigger"
-                    :class="[{ 'is-error': row.totalFieldError }]"
-                    @click="openPopover(paginationRows.indexOf(row), 'total_field')">
-                    <bk-tag
-                      v-if="row.total_field"
-                      class="field-tag"
-                      closable
-                      @close.stop="handleClearField(row, 'total_field')">
+              <div class="table-cell col-total-field pagination-field-col">
+                <div class="pagination-field-cell">
+                  <bk-popover
+                    :arrow="false"
+                    class="pagination-field-popover-host"
+                    ext-cls="pagination-field-popover"
+                    :is-show="row.showTotalFieldPopover"
+                    placement="bottom-start"
+                    theme="light"
+                    trigger="manual"
+                    :width="fieldPopoverWidth"
+                    @after-hidden="() => { row.showTotalFieldPopover = false; closeAllPopovers(); }">
+                    <div
+                      class="field-selector pagination-field-trigger"
+                      :class="[{ 'is-error': row.totalFieldError }]"
+                      @click="openPopover(paginationRows.indexOf(row), 'total_field', $event)">
+                      <bk-tag
+                        v-if="row.total_field"
+                        class="field-tag"
+                        closable
+                        @close.stop="handleClearField(row, 'total_field')">
+                        <span
+                          v-bk-tooltips="{
+                            content: getFieldDisplayName(row.total_field),
+                            placement: 'top',
+                            disabled: !row.totalFieldEllipsis,
+                          }"
+                          class="field-tag-text"
+                          @mouseenter="(e: MouseEvent) => checkEllipsis(e, row, 'totalFieldEllipsis')">
+                          {{ getFieldDisplayName(row.total_field) }}
+                        </span>
+                      </bk-tag>
                       <span
-                        v-bk-tooltips="{
-                          content: getFieldDisplayName(row.total_field),
-                          placement: 'top',
-                          disabled: !row.totalFieldEllipsis,
-                        }"
-                        class="field-tag-text"
-                        @mouseenter="(e: MouseEvent) => checkEllipsis(e, row, 'totalFieldEllipsis')">
-                        {{ getFieldDisplayName(row.total_field) }}
-                      </span>
-                    </bk-tag>
-                    <span
-                      v-else
-                      class="placeholder">{{ t('请选择数据总条数字段') }}</span>
-                  </div>
-                  <template #content>
-                    <div class="field-tree-popover">
-                      <bk-input
-                        v-model="row.totalFieldSearch"
-                        clearable
-                        :placeholder="t('搜索字段')"
-                        style="margin-bottom: 8px;"
-                        @clear="row.totalFieldSearch = ''" />
-                      <div class="tree-container">
-                        <field-tree
-                          :filter-text="row.totalFieldSearch"
-                          :nodes="numberFieldNodes"
-                          :selected-fields="getAllSelectedFields()"
-                          type="number"
-                          @select="(node: any) => handleSelectField(row, 'total_field', node)" />
-                      </div>
+                        v-else
+                        class="placeholder">{{ t('请选择数据总条数字段') }}</span>
                     </div>
-                  </template>
-                </bk-popover>
+                    <template #content>
+                      <div class="field-tree-popover">
+                        <bk-input
+                          v-model="row.totalFieldSearch"
+                          clearable
+                          :placeholder="t('搜索字段')"
+                          style="margin-bottom: 8px;"
+                          @clear="row.totalFieldSearch = ''" />
+                        <div class="tree-container">
+                          <field-tree
+                            :filter-text="row.totalFieldSearch"
+                            :nodes="numberFieldNodes"
+                            :selected-fields="getAllSelectedFields()"
+                            type="number"
+                            @select="(node: any) => handleSelectField(row, 'total_field', node)" />
+                        </div>
+                      </div>
+                    </template>
+                  </bk-popover>
+                </div>
               </div>
               <div class="table-cell col-page-param">
                 <bk-input
@@ -301,6 +307,7 @@
   const activePopoverRow = ref<number | null>(null); // 当前激活的弹层行索引
   const activePopoverField = ref<'list_field' | 'total_field' | null>(null); // 当前激活的弹层字段类型
   const paginationRootRef = ref<HTMLElement | null>(null);
+  const fieldPopoverWidth = ref(320);
 
   const pageSizeOptions = [10, 20, 50, 100, 200, 500];
   const positionOptions = [
@@ -507,9 +514,23 @@
     activePopoverField.value = null;
   };
 
+  const updateFieldPopoverWidth = (event?: MouseEvent) => {
+    const trigger = (event?.currentTarget as HTMLElement | null)
+      || paginationRootRef.value?.querySelector('.pagination-field-trigger');
+    if (!trigger) {
+      return;
+    }
+    fieldPopoverWidth.value = Math.max(Math.round(trigger.getBoundingClientRect().width), 240);
+  };
+
   // 打开弹层
-  const openPopover = (rowIndex: number, field: 'list_field' | 'total_field') => {
+  const openPopover = (
+    rowIndex: number,
+    field: 'list_field' | 'total_field',
+    event?: MouseEvent,
+  ) => {
     closeAllPopovers();
+    updateFieldPopoverWidth(event);
     activePopoverRow.value = rowIndex;
     activePopoverField.value = field;
 
@@ -941,7 +962,7 @@
         padding: 0;
         overflow: hidden;
         border-left: 1px solid #dcdee5;
-        align-items: center;
+        align-items: stretch;
         justify-content: flex-start;
 
         &:first-child {
@@ -954,6 +975,25 @@
           align-items: center;
           padding-left: 16px;
         }
+
+        /* 单元格内表单控件撑满列宽 */
+        > .bk-input,
+        > .bk-select,
+        > .bk-popover {
+          flex: 1 1 auto;
+          width: 100%;
+          min-width: 0;
+        }
+      }
+
+      /* bk-popover / bk-select 内部触发器同步撑满 */
+      :deep(.bk-popover),
+      :deep(.bk-popover-reference),
+      :deep(.bk-popover-trigger),
+      :deep(.bk-select) {
+        display: block;
+        width: 100%;
+        min-width: 0;
       }
 
       /* 单元格内部输入框/下拉框：去掉边框，与单元格融为一体 */
@@ -992,6 +1032,38 @@
       }
     }
   }
+}
+
+.pagination-field-col {
+  padding: 0;
+}
+
+.pagination-field-cell {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
+
+  > * {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.pagination-field-popover-host {
+  display: block !important;
+  flex: 1 1 auto;
+  width: 100% !important;
+  min-width: 0;
+}
+
+.pagination-field-cell :deep(.pagination-field-popover-host),
+.pagination-field-cell :deep(.bk-popover) {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0;
 }
 
 .field-selector {
@@ -1042,8 +1114,14 @@
 }
 
 .field-tree-popover {
+  width: 100%;
   max-height: 300px;
   padding: 8px;
+  box-sizing: border-box;
+
+  :deep(.bk-input) {
+    width: 100%;
+  }
 
   .tree-container {
     max-height: 250px;
