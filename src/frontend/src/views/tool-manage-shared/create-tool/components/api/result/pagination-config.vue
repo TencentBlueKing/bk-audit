@@ -960,7 +960,7 @@
         padding: 0;
         overflow: hidden;
         border-left: 1px solid #dcdee5;
-        align-items: stretch;
+        align-items: center;
         justify-content: flex-start;
 
         &:first-child {
@@ -973,25 +973,6 @@
           align-items: center;
           padding-left: 16px;
         }
-
-        /* 单元格内表单控件撑满列宽 */
-        > .bk-input,
-        > .bk-select,
-        > .bk-popover {
-          flex: 1 1 auto;
-          width: 100%;
-          min-width: 0;
-        }
-      }
-
-      /* bk-popover / bk-select 内部触发器同步撑满 */
-      :deep(.bk-popover),
-      :deep(.bk-popover-reference),
-      :deep(.bk-popover-trigger),
-      :deep(.bk-select) {
-        display: block;
-        width: 100%;
-        min-width: 0;
       }
 
       /* 单元格内部输入框/下拉框：去掉边框，与单元格融为一体 */
@@ -1030,38 +1011,6 @@
       }
     }
   }
-}
-
-.pagination-field-col {
-  padding: 0;
-}
-
-.pagination-field-cell {
-  display: flex;
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  align-self: stretch;
-
-  > * {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-.pagination-field-popover-host {
-  display: block !important;
-  flex: 1 1 auto;
-  width: 100% !important;
-  min-width: 0;
-}
-
-.pagination-field-cell :deep(.pagination-field-popover-host),
-.pagination-field-cell :deep(.bk-popover) {
-  display: block !important;
-  width: 100% !important;
-  min-width: 0;
 }
 
 .field-selector {
