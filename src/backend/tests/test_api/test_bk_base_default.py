@@ -5,17 +5,15 @@ from django.conf import settings
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
-from api.bk_base.constants import AUTH_DIMENSION_BIZ, UserAuthActionEnum
+from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.default import (
     CreateFlowNode,
     DeleteFlowNode,
-    GetBizsList,
     ProjectDataBatchAdd,
     ProjectDataBatchCheck,
     UpdateFlowNode,
 )
 from api.bk_base.serializers import (
-    GetBizsListReqSerializer,
     GetMineResultTablesReqSerializer,
     ProjectDataBatchAddReqSerializer,
     ProjectDataBatchCheckReqSerializer,
@@ -190,64 +188,3 @@ class TestFlowNodeResource(SimpleTestCase):
         for resource_cls in [CreateFlowNode, UpdateFlowNode, DeleteFlowNode]:
             with self.subTest(resource_cls=resource_cls.__name__):
                 self.assertEqual(resource_cls.TIMEOUT, 5 * 60)
-
-
-class TestGetBizsListReqSerializer(SimpleTestCase):
-    def test_should_fill_default_action_and_dimension(self):
-        serializer = GetBizsListReqSerializer(data={"bk_username": "tester"})
-
-        self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["bk_username"], "tester")
-        self.assertEqual(serializer.validated_data["action_id"], UserAuthActionEnum.RT_QUERY)
-        self.assertEqual(serializer.validated_data["dimension"], AUTH_DIMENSION_BIZ)
-
-    def test_should_accept_custom_action_id(self):
-        serializer = GetBizsListReqSerializer(
-            data={
-                "bk_username": "tester",
-                "action_id": UserAuthActionEnum.RT_QUERY,
-                "dimension": "bk_biz_id",
-            }
-        )
-
-        self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["action_id"], UserAuthActionEnum.RT_QUERY)
-        self.assertEqual(serializer.validated_data["dimension"], "bk_biz_id")
-
-
-class TestGetBizsListResource(SimpleTestCase):
-    def test_should_disable_platform_authorization(self):
-        self.assertFalse(GetBizsList.platform_authorization)
-
-    @mock.patch("api.bk_base.default.BkBaseResource.build_header", return_value={})
-    def test_request_should_validate_and_parse_response(self, _mock_build_header):
-        resource = GetBizsList()
-        mock_response = mock.MagicMock()
-        mock_response.json.return_value = {
-            "result": True,
-            "data": [
-                {"bk_biz_id": 1, "bk_biz_name": "蓝鲸"},
-                {"bk_biz_id": 2, "bk_biz_name": "测试业务"},
-            ],
-            "code": "1500200",
-            "message": "ok",
-            "errors": None,
-        }
-        mock_response.raise_for_status.return_value = None
-        mock_response.request.url = "http://bkbase.test"
-        resource.session.get = mock.Mock(return_value=mock_response)
-
-        result = resource.request({"bk_username": "tester"})
-
-        self.assertEqual(
-            result,
-            [
-                {"bk_biz_id": 1, "bk_biz_name": "蓝鲸"},
-                {"bk_biz_id": 2, "bk_biz_name": "测试业务"},
-            ],
-        )
-        kwargs = resource.session.get.call_args.kwargs
-        self.assertEqual(kwargs["params"]["bk_username"], "tester")
-        self.assertEqual(kwargs["params"]["action_id"], UserAuthActionEnum.RT_QUERY)
-        self.assertEqual(kwargs["params"]["dimension"], AUTH_DIMENSION_BIZ)
-        self.assertTrue(resource.session.get.call_args.args[0].endswith("/v3/auth/users/scope_dimensions/"))
