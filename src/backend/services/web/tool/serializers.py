@@ -621,6 +621,12 @@ class GetToolDetailByNameAPIGWRequestSerializer(serializers.Serializer):
     lite_mode = serializers.BooleanField(required=False, default=True, label=gettext_lazy("精简模式"))
 
 
+class GetMCPToolDetailByNameRequestSerializer(GetToolDetailByNameAPIGWRequestSerializer):
+    """MCP 用户态按命名空间和名称获取工具详情请求序列化器。"""
+
+    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+
+
 class GetToolDetailByNameAPIGWResponseSerializer(serializers.ModelSerializer):
     """通过名称获取工具详情响应序列化器(APIGW)"""
 

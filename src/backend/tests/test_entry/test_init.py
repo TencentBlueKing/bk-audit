@@ -31,8 +31,12 @@ from services.web.databus.constants import (
 )
 from services.web.databus.models import Snapshot
 from services.web.entry.constants import (
+    AGENT_AUTH_KEY,
     AUDIT_DOC_CONFIG_KEY,
+    INIT_AGENT_CONFIG_FINISHED_KEY,
     INIT_ASSET_FINISHED_KEY,
+    INIT_DOC_CONFIG_FINISHED_KEY,
+    INIT_SDK_CONFIG_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
     SDK_CONFIG_KEY,
 )
@@ -247,23 +251,36 @@ class SystemInitSdkConfigTests(TestCase):
         super().setUp()
         self.handler = SystemInitHandler()
 
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=False)
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @override_settings(
         BKAPP_GO_SDK_CONFIG='{"doc": "go_sdk_doc"}',
         BKAPP_JAVA_SDK_CONFIG='{"doc": "java_sdk_doc"}',
         BKAPP_PYTHON_SDK_CONFIG='{"doc": "python_sdk_doc"}',
     )
-    def test_init_sdk_config_with_env(self, mock_set):
+    def test_init_sdk_config_with_env(self, mock_set, _mock_get):
         """测试从 settings 读取 SDK 配置"""
         self.handler.init_sdk_config()
 
-        mock_set.assert_called_once()
-        call_args = mock_set.call_args
-        self.assertEqual(call_args.args[0], SDK_CONFIG_KEY)
-        sdk_config = call_args.args[1]
+        self.assertEqual(mock_set.call_args_list[0].args[0], SDK_CONFIG_KEY)
+        sdk_config = mock_set.call_args_list[0].args[1]
         self.assertEqual(sdk_config["go_sdk"], '{"doc": "go_sdk_doc"}')
         self.assertEqual(sdk_config["java_sdk"], '{"doc": "java_sdk_doc"}')
         self.assertEqual(sdk_config["python_sdk"], '{"doc": "python_sdk_doc"}')
+        self.assertEqual(
+            mock_set.call_args_list,
+            [
+                mock.call(SDK_CONFIG_KEY, sdk_config),
+                mock.call(INIT_SDK_CONFIG_FINISHED_KEY, True),
+            ],
+        )
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=True)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    def test_init_sdk_config_skips_completed_initialization(self, mock_set, _mock_get):
+        self.handler.init_sdk_config()
+
+        mock_set.assert_not_called()
 
 
 @override_settings(BKAPP_INIT_SYSTEM="True")
@@ -274,18 +291,92 @@ class SystemInitDocConfigTests(TestCase):
         super().setUp()
         self.handler = SystemInitHandler()
 
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=False)
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @override_settings(
         BKAPP_AUDIT_ACCESS_GUIDE="https://example.com/guide",
         BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS="https://example.com/standards",
     )
-    def test_init_doc_config_with_env(self, mock_set):
+    def test_init_doc_config_with_env(self, mock_set, _mock_get):
         """测试从 settings 读取文档配置"""
         self.handler.init_doc_config()
 
-        mock_set.assert_called_once()
-        call_args = mock_set.call_args
-        self.assertEqual(call_args.args[0], AUDIT_DOC_CONFIG_KEY)
-        doc_config = call_args.args[1]
+        self.assertEqual(mock_set.call_args_list[0].args[0], AUDIT_DOC_CONFIG_KEY)
+        doc_config = mock_set.call_args_list[0].args[1]
         self.assertEqual(doc_config["audit_access_guide"], "https://example.com/guide")
         self.assertEqual(doc_config["audit_operation_log_record_standards"], "https://example.com/standards")
+        self.assertEqual(
+            mock_set.call_args_list,
+            [
+                mock.call(AUDIT_DOC_CONFIG_KEY, doc_config),
+                mock.call(INIT_DOC_CONFIG_FINISHED_KEY, True),
+            ],
+        )
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=True)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    def test_init_doc_config_skips_completed_initialization(self, mock_set, _mock_get):
+        self.handler.init_doc_config()
+
+        mock_set.assert_not_called()
+
+
+@override_settings(BKAPP_INIT_SYSTEM="True")
+class SystemInitAgentConfigTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.handler = SystemInitHandler()
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=False)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @override_settings(
+        BKAPP_AGENT_AUTH_CONFIG=(
+            '{"agents": [{"code": "bp-ai-aud-rsk-srch", "ping_url": "https://agent.example.woa.com/ping/"}]}'
+        )
+    )
+    def test_init_agent_config_writes_validated_config(self, mock_set, _mock_get):
+        self.handler.init_agent_config()
+
+        self.assertEqual(
+            mock_set.call_args_list,
+            [
+                mock.call(
+                    AGENT_AUTH_KEY,
+                    {
+                        "agents": [
+                            {
+                                "code": "bp-ai-aud-rsk-srch",
+                                "enabled": True,
+                                "ping_url": "https://agent.example.woa.com/ping/",
+                            }
+                        ]
+                    },
+                ),
+                mock.call(INIT_AGENT_CONFIG_FINISHED_KEY, True),
+            ],
+        )
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=True)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    def test_init_agent_config_skips_completed_initialization(self, mock_set, _mock_get):
+        self.handler.init_agent_config()
+
+        mock_set.assert_not_called()
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get", return_value=False)
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @override_settings(BKAPP_AGENT_AUTH_CONFIG="{}")
+    def test_init_agent_config_skips_empty_default(self, mock_set, _mock_get):
+        self.handler.init_agent_config()
+
+        mock_set.assert_not_called()
+
+    def test_init_global_meta_config_runs_agent_config(self):
+        with (
+            mock.patch.object(self.handler, "init_doc_config"),
+            mock.patch.object(self.handler, "init_sdk_config"),
+            mock.patch.object(self.handler, "init_agent_config") as mock_init_agent_config,
+        ):
+            self.handler.init_global_meta_config()
+
+        mock_init_agent_config.assert_called_once_with()

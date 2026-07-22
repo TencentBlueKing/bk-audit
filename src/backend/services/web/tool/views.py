@@ -12,7 +12,12 @@ from apps.permission.handlers.drf import (
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.utils.data import get_value_by_request, get_value_by_request_or_path
-from services.web.tool.permissions import CallerContextPermission, UseToolPermission
+from core.view_sets import UserAPIGWViewSet
+from services.web.tool.permissions import (
+    CallerContextPermission,
+    UseToolByNamePermission,
+    UseToolPermission,
+)
 
 
 class ToolViewSet(ResourceViewSet):
@@ -68,6 +73,25 @@ class ToolAPIGWViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
         ResourceRoute("GET", resource.tool.get_tool_detail_by_name_apigw, endpoint="detail_by_name"),
+    ]
+
+
+class MCPUserToolViewSet(UserAPIGWViewSet):
+    """供 MCP 调用的工具用户态接口。"""
+
+    lookup_field = "uid"
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action == "execute":
+            permissions.append(AnyOfPermissions(CallerContextPermission(), UseToolPermission()))
+        elif self.action == "detail_by_name":
+            permissions.append(UseToolByNamePermission())
+        return permissions
+
+    resource_routes = [
+        ResourceRoute("POST", resource.tool.execute_tool, endpoint="execute", pk_field="uid"),
+        ResourceRoute("GET", resource.tool.get_mcp_tool_detail_by_name, endpoint="detail_by_name"),
     ]
 
 

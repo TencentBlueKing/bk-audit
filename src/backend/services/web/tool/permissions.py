@@ -22,6 +22,7 @@ from rest_framework.permissions import BasePermission
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from core.models import get_request_username
+from core.utils.data import get_value_by_request, get_value_by_request_or_path
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
 from services.web.common.scope_permission import ScopeInstancePermission
@@ -54,6 +55,22 @@ class UseToolPermission(ScopeInstancePermission):
     def _get_tool_status(tool_uid: str):
         tool = Tool.last_version_tool(uid=tool_uid)
         return tool.status if tool else None
+
+
+class UseToolByNamePermission(UseToolPermission):
+    """按名称查询工具详情时的用户态工具使用权限。"""
+
+    def has_permission(self, request, view):
+        tool_name = get_value_by_request(request, "name")
+        namespace = get_value_by_request_or_path(request, "namespace")
+        tool = Tool.all_latest_tools().filter(namespace=namespace, name=tool_name).first()
+        if tool is None:
+            return True
+        # 由 MCP Resource 返回 404“工具未上架”错误，避免用户态权限层把该业务状态改写为 403。
+        if tool.status != PanelStatus.PUBLISHED:
+            return True
+        self.get_instance_id = lambda: tool.uid
+        return super().has_permission(request, view)
 
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:

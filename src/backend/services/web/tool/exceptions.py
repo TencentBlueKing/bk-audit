@@ -172,6 +172,13 @@ class ToolNotPublished(ToolException):
     MESSAGE = gettext_lazy("工具未发布")
 
 
+class MCPToolNotPublished(ToolNotPublished):
+    """MCP 工具详情不暴露未上架工具，按不存在处理。"""
+
+    STATUS_CODE = 404
+    MESSAGE = gettext_lazy("工具未上架")
+
+
 class ToolTypeNotSupport(ToolException):
     """
     工具类型不支持

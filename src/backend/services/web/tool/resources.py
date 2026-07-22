@@ -83,6 +83,7 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import (
     DataSearchTablePermission,
+    MCPToolNotPublished,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
@@ -92,6 +93,7 @@ from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
+    GetMCPToolDetailByNameRequestSerializer,
     GetToolDetailByNameAPIGWRequestSerializer,
     GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
@@ -1653,24 +1655,49 @@ class GetToolDetailByNameAPIGW(ToolBase):
     def validate_response_data(self, response_data):
         return response_data
 
+    def get_tool(self, validated_request_data):
+        return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
+
+    def raise_tool_not_published(self):
+        raise ToolNotPublished()
+
     def perform_request(self, validated_request_data):
         from core.utils.tools import get_app_info
 
         # 仅做应用权限校验
         get_app_info()
 
-        tool_name = validated_request_data["name"]
         lite_mode = validated_request_data.get("lite_mode", True)
 
         # 通过名称查找最新版本的工具
-        tool = Tool.all_latest_tools().filter(name=tool_name).first()
+        tool = self.get_tool(validated_request_data)
         if not tool:
             raise ToolDoesNotExist()
         if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
+            self.raise_tool_not_published()
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data
+
+
+class GetMCPToolDetailByName(GetToolDetailByNameAPIGW):
+    """按命名空间查询用户可使用的 MCP 工具详情。"""
+
+    name = gettext_lazy("通过名称获取工具详情(MCP)")
+    RequestSerializer = GetMCPToolDetailByNameRequestSerializer
+
+    def get_tool(self, validated_request_data):
+        return (
+            Tool.all_latest_tools()
+            .filter(
+                namespace=validated_request_data["namespace"],
+                name=validated_request_data["name"],
+            )
+            .first()
+        )
+
+    def raise_tool_not_published(self):
+        raise MCPToolNotPublished()
 
 
 # ==================== 场景工具管理 ====================

@@ -11,6 +11,7 @@ router = ResourceRouter()
 # 注意：tool/platform 和 tool/scene 必须在 tool 之前注册，
 # 否则 "platform"/"scene" 会被 DefaultRouter 误匹配为 tool/{pk} 的 pk 值，导致 405
 router.register("tool_apigw", views.ToolAPIGWViewSet)
+router.register("mcp_user/tool", views.MCPUserToolViewSet)
 router.register("tool/platform", views.PlatformSceneToolViewSet)
 router.register("tool/scene", views.SceneScopeToolViewSet)
 router.register("tool", views.ToolViewSet)

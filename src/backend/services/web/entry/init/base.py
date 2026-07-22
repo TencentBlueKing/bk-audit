@@ -45,19 +45,24 @@ from services.web.databus.storage.serializers import (
 )
 from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
+    AGENT_AUTH_KEY,
     AUDIT_DOC_CONFIG_KEY,
+    INIT_AGENT_CONFIG_FINISHED_KEY,
     INIT_ASSET_FINISHED_KEY,
+    INIT_DOC_CONFIG_FINISHED_KEY,
     INIT_DORIS_FISHED_KEY,
     INIT_ES_FISHED_KEY,
     INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
+    INIT_SDK_CONFIG_FINISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
     SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
+from services.web.entry.serializers import AgentAuthConfigSerializer
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
     EVENT_ES_CLUSTER_ID_KEY,
@@ -121,9 +126,8 @@ class SystemInitHandler:
         self.create_or_update_plugin_etl()
         self.init_system()
         self.init_asset()
-        self.init_sdk_config()
-        self.init_doc_config()
         self.init_system_rule_audit()
+        self.init_global_meta_config()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -239,6 +243,16 @@ class SystemInitHandler:
         print("[InitSystem] Finished")
         self.post_init(INIT_SYSTEM_FINISHED_KEY)
 
+    def init_global_meta_config(self):
+        """
+        初始化配置
+        从 settings 读取配置信息并存储到全局配置中。
+        """
+
+        self.init_doc_config()
+        self.init_sdk_config()
+        self.init_agent_config()
+
     def init_sdk_config(self):
         """
         初始化 SDK 配置
@@ -252,12 +266,16 @@ class SystemInitHandler:
 
         默认值: 空字符串
         """
+        if self.pre_check(INIT_SDK_CONFIG_FINISHED_KEY):
+            return
+
         sdk_config = {
             "go_sdk": settings.BKAPP_GO_SDK_CONFIG,
             "java_sdk": settings.BKAPP_JAVA_SDK_CONFIG,
             "python_sdk": settings.BKAPP_PYTHON_SDK_CONFIG,
         }
         GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
+        self.post_init(INIT_SDK_CONFIG_FINISHED_KEY)
 
     def init_doc_config(self):
         """
@@ -272,11 +290,29 @@ class SystemInitHandler:
 
         默认值: 空字符串
         """
+        if self.pre_check(INIT_DOC_CONFIG_FINISHED_KEY):
+            return
+
         audit_doc_config = {
             "audit_access_guide": settings.BKAPP_AUDIT_ACCESS_GUIDE,
             "audit_operation_log_record_standards": settings.BKAPP_AUDIT_OPERATION_LOG_RECORD_STANDARDS,
         }
         GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
+        self.post_init(INIT_DOC_CONFIG_FINISHED_KEY)
+
+    def init_agent_config(self):
+        """首次将环境中的 Agent ping 配置写入全局配置。"""
+        if self.pre_check(INIT_AGENT_CONFIG_FINISHED_KEY):
+            return
+
+        agent_config = json.loads(settings.BKAPP_AGENT_AUTH_CONFIG)
+        if not agent_config:
+            return
+
+        serializer = AgentAuthConfigSerializer(data=agent_config)
+        serializer.is_valid(raise_exception=True)
+        GlobalMetaConfig.set(AGENT_AUTH_KEY, serializer.validated_data)
+        self.post_init(INIT_AGENT_CONFIG_FINISHED_KEY)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""

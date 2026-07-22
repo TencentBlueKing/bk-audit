@@ -1724,6 +1724,1151 @@ paths:
           userVerifiedRequired: true
         disabledStages: []
         descriptionEn:
+  /mcp/risks/{risk_id}/:
+    get:
+      operationId: mcp_retrieve_risk
+      description: 获取当前用户有查看权限的风险详情，供 Agent 理解风险上下文并选择后续策略下钻工具。
+      tags: []
+      parameters:
+        - in: path
+          name: risk_id
+          type: string
+          required: true
+          description: 风险ID
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险ID
+              event_content:
+                type: string
+                description: 风险描述
+              raw_event_id:
+                type: string
+                description: 原始事件ID
+              strategy_id:
+                type: integer
+                description: 策略ID
+              event_evidence:
+                type: string
+                description: 风险证据
+              event_type:
+                type: array
+                items:
+                  type: string
+                description: 风险类型
+              event_data:
+                type: object
+                description: 事件数据
+              event_time:
+                type: string
+                format: date-time
+                description: 首次发现时间
+              event_end_time:
+                type: string
+                format: date-time
+                description: 最后发现时间
+              event_source:
+                type: string
+                description: 事件来源
+              operator:
+                type: array
+                items:
+                  type: string
+                description: 责任人
+              status:
+                type: string
+                description: 风险状态
+                enum:
+                  - stand_by
+                  - new
+                  - await_deal
+                  - for_approve
+                  - auto_process
+                  - closed
+              rule_id:
+                type: integer
+                description: 处理规则ID
+              rule_version:
+                type: integer
+                description: 处理规则版本
+              origin_operator:
+                type: array
+                items:
+                  type: string
+                description: 初始处理人
+              current_operator:
+                type: array
+                items:
+                  type: string
+                description: 当前处理人
+              notice_users:
+                type: array
+                items:
+                  type: string
+                description: 关注人
+              risk_label:
+                type: string
+                description: 风险标记
+                enum:
+                  - normal
+                  - misreport
+              last_operate_time:
+                type: string
+                format: date-time
+                description: 最后操作时间
+              title:
+                type: string
+                description: 风险标题
+              tags:
+                type: array
+                items:
+                  type: integer
+                description: 标签ID列表
+              ticket_history:
+                type: array
+                description: 单据流转历史
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 节点ID（UUID）
+                    risk_id:
+                      type: string
+                      description: 风险ID
+                    action:
+                      type: string
+                      description: 操作类型
+                    operator:
+                      type: string
+                      description: 操作人
+                    current_operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 当前处理人
+                    timestamp:
+                      type: number
+                      format: float
+                      description: 操作时间戳
+                    time:
+                      type: string
+                      description: 操作时间（格式化字符串）
+                    process_result:
+                      type: object
+                      description: 处理结果
+                    status:
+                      type: string
+                      description: 节点状态
+                      enum:
+                        - running
+                        - success
+                        - failed
+              unsynced_events:
+                type: array
+                description: 未同步的手动事件
+                items:
+                  type: object
+                  properties:
+                    manual_event_id:
+                      type: integer
+                      description: 手动事件ID
+                    event_time:
+                      type: string
+                      format: date-time
+                      description: 事件时间
+                    event_data:
+                      type: object
+                      description: 事件数据
+              created_at:
+                type: string
+                format: date-time
+                description: 创建时间
+              created_by:
+                type: string
+                description: 创建人
+              updated_at:
+                type: string
+                format: date-time
+                description: 更新时间
+              updated_by:
+                type: string
+                description: 更新人
+              manual_synced:
+                type: boolean
+                description: 手动建的单是否已同步
+                default: true
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/mcp_user/risk/{risk_id}/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/risks/{risk_id}/strategy_info/:
+    get:
+      operationId: mcp_retrieve_risk_strategy_info
+      description: >-
+        获取当前用户可查看风险的策略下钻配置。Agent 应选择 drill_config.tool.uid 调用 mcp_execute_tool，
+        并按 config 组装 tool_variables，同时传入风险调用方上下文。
+      tags: []
+      parameters:
+        - in: path
+          name: risk_id
+          type: string
+          required: true
+          description: 风险ID；后续调用 execute_tool 时作为 caller_resource_id 使用。
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              risk_level:
+                type: string
+                description: 风险等级
+                enum:
+                  - LOW
+                  - MIDDLE
+                  - HIGH
+              risk_hazard:
+                type: string
+                description: 风险危害
+              risk_guidance:
+                type: string
+                description: 处理指引
+              event_basic_field_configs:
+                type: array
+                description: 事件基础字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    drill_config:
+                      type: array
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
+                              version:
+                                type: integer
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
+                          config:
+                            type: array
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
+                                target_value_type:
+                                  type: string
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
+                                target_field_type:
+                                  type: string
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
+                                target_value:
+                                  type: string
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
+                          drill_name:
+                            type: string
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              event_data_field_configs:
+                type: array
+                description: 事件数据字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
+                              version:
+                                type: integer
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
+                          config:
+                            type: array
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
+                                target_value_type:
+                                  type: string
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
+                                target_field_type:
+                                  type: string
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
+                                target_value:
+                                  type: string
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
+                          drill_name:
+                            type: string
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              event_evidence_field_configs:
+                type: array
+                description: 事件证据字段配置。APIGW 默认仅返回配置了 drill_config 的字段，可作为 execute_tool.drill_field。
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
+                              version:
+                                type: integer
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
+                          config:
+                            type: array
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
+                                target_value_type:
+                                  type: string
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
+                                target_field_type:
+                                  type: string
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
+                                target_value:
+                                  type: string
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
+                          drill_name:
+                            type: string
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+              risk_meta_field_config:
+                type: array
+                description: 风险元字段配置。APIGW 默认仅返回配置了 drill_config 的字段；如需从风险事件数据取值，优先使用 basic/data/evidence 字段组。
+                items:
+                  type: object
+                  properties:
+                    field_name:
+                      type: string
+                      description: 字段名
+                    display_name:
+                      type: string
+                      description: 显示名称
+                    is_priority:
+                      type: boolean
+                      description: 是否优先展示
+                    description:
+                      type: string
+                      description: 字段描述
+                    enum_mappings:
+                      type: object
+                      description: 枚举映射配置（当 prohibit_enum_mappings=true 时不返回）
+                      properties:
+                        related_type:
+                          type: string
+                          description: 关联类型
+                        related_object_id:
+                          type: string
+                          description: 关联对象ID
+                        collection_id:
+                          type: string
+                          description: 枚举集合ID
+                        mappings:
+                          type: array
+                          description: 枚举映射列表
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: 枚举值
+                              name:
+                                type: string
+                                description: 枚举名称
+                    drill_config:
+                      type: array
+                      description: >-
+                        当前字段可用的下钻工具配置。每个元素对应一个可调用工具；调用 execute_tool 时，
+                        path uid 使用 tool.uid，body.drill_field 使用当前字段的 field_name，
+                        body.params.tool_variables 按 config 逐项生成。
+                      items:
+                        type: object
+                        properties:
+                          tool:
+                            type: object
+                            description: 下钻工具信息。真正调用 execute_tool 时以 tool.uid 作为 path 参数 uid。
+                            properties:
+                              uid:
+                                type: string
+                                description: 工具唯一标识，对应 execute_tool 的 path 参数 uid。
+                              version:
+                                type: integer
+                                description: 策略配置时关联的工具版本，用于识别配置来源；execute_tool 会执行当前可用工具。
+                          config:
+                            type: array
+                            description: >-
+                              下钻变量映射列表。每个元素描述 execute_tool.params.tool_variables 中一个
+                              raw_name/value 如何从固定值或风险事件数据生成。
+                            items:
+                              type: object
+                              properties:
+                                source_field:
+                                  type: string
+                                  description: execute_tool.params.tool_variables[].raw_name，即目标工具的入参变量名，不是风险字段名。
+                                target_value_type:
+                                  type: string
+                                  description: >-
+                                    取值来源类型。fixed_value 表示工具变量 value 直接使用 target_value；
+                                    field 表示工具变量 value 需要从风险事件记录中读取 target_value 指定的字段。
+                                target_field_type:
+                                  type: string
+                                  description: >-
+                                    target_value_type=field 时的风险字段来源。basic 表示从事件记录顶层字段取值；
+                                    data/evidence 等非 basic 来源按事件扩展数据 event_data 取值；
+                                    fixed_value 时可为空。
+                                target_value:
+                                  type: string
+                                  description: >-
+                                    目标值。target_value_type=fixed_value 时表示要传给工具变量的固定值；
+                                    target_value_type=field 时表示风险事件字段名，Agent 应从风险事件数据读取该字段值。
+                          drill_name:
+                            type: string
+                            description: 下钻工具展示名称，便于选择工具；真正调用以 tool.uid 为准。
+                    is_show:
+                      type: boolean
+                      description: 是否展示
+                    duplicate_field:
+                      type: boolean
+                      description: 是否去重字段
+                    field_type:
+                      type: string
+                      description: 字段类型
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/mcp_user/risk/{risk_id}/strategy_info/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/risks/events/:
+    get:
+      operationId: mcp_list_risk_event
+      description: 获取当前用户有查看权限的风险关联事件。请先取得风险详情，再按风险时间范围传入分页查询条件。
+      tags: []
+      parameters:
+        - in: query
+          name: risk_id
+          type: string
+          required: true
+          description: 风险ID
+        - in: query
+          name: namespace
+          type: string
+          required: false
+          description: 命名空间
+          default: default
+        - in: query
+          name: start_time
+          type: string
+          required: true
+          description: 开始时间（格式：YYYY-MM-DD HH:MM:SS）
+        - in: query
+          name: end_time
+          type: string
+          required: true
+          description: 结束时间（格式：YYYY-MM-DD HH:MM:SS）
+        - in: query
+          name: page
+          type: integer
+          required: true
+          description: 页码
+          minimum: 1
+          default: 1
+        - in: query
+          name: page_size
+          type: integer
+          required: true
+          description: 每页数量
+          minimum: 1
+          default: 10
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: 当前页码
+              num_pages:
+                type: integer
+                description: 总页数
+              total:
+                type: integer
+                description: 总记录数
+              results:
+                type: array
+                description: 事件列表
+                items:
+                  type: object
+                  description: 事件数据（字段结构由策略配置决定）
+              event_end_time:
+                type: string
+                format: date-time
+                description: 事件结束时间
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/mcp_user/event/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/analyse_reports/{report_id}/risks/:
+    post:
+      operationId: mcp_list_analyse_report_risk
+      description: 获取当前请求者自己创建的 AI 分析报告已绑定风险，使用平台标准分页；不额外按全局风险权限过滤。
+      tags: []
+      parameters:
+        - in: path
+          name: report_id
+          type: integer
+          required: true
+          description: AI 分析报告 ID
+        - in: query
+          name: page
+          type: integer
+          required: false
+          description: 页码
+          minimum: 1
+          default: 1
+        - in: query
+          name: page_size
+          type: integer
+          required: false
+          description: 每页数量
+          minimum: 1
+          maximum: 100
+          default: 10
+        - in: body
+          name: body
+          required: false
+          schema:
+            type: object
+            properties:
+              risk_id:
+                type: string
+                description: 风险ID，多个用逗号分隔
+              risk_level:
+                type: string
+                description: 风险等级，多个用逗号分隔
+                enum:
+                  - LOW
+                  - MIDDLE
+                  - HIGH
+              status:
+                type: string
+                description: 风险状态，多个用逗号分隔
+                enum:
+                  - stand_by
+                  - new
+                  - await_deal
+                  - for_approve
+                  - auto_process
+                  - closed
+              risk_label:
+                type: string
+                description: 风险标签，多个用逗号分隔
+                enum:
+                  - normal
+                  - misreport
+              keyword:
+                type: string
+                description: 搜索关键词，匹配 risk_id、title、event_content
+              with_detail:
+                type: boolean
+                description: 是否返回风险自身完整详情，不返回风险报告内容
+                default: false
+      responses:
+        '200':
+          description: 成功
+          schema:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: 当前页码
+              num_pages:
+                type: integer
+                description: 总页数
+              total:
+                type: integer
+                description: 总记录数
+              results:
+                type: array
+                description: 报告已绑定风险列表
+                items:
+                  type: object
+                  properties:
+                    risk_id:
+                      type: string
+                      description: 风险ID
+                    title:
+                      type: string
+                      description: 风险标题
+                    risk_level:
+                      type: string
+                      description: 风险等级
+                    status:
+                      type: string
+                      description: 风险状态
+                    event_time:
+                      type: string
+                      format: date-time
+                      description: 首次发现时间
+                    event_end_time:
+                      type: string
+                      format: date-time
+                      description: 最后发现时间
+                    operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 责任人
+                    current_operator:
+                      type: array
+                      items:
+                        type: string
+                      description: 当前处理人
+                    strategy_id:
+                      type: integer
+                      description: 策略ID
+                    risk_label:
+                      type: string
+                      description: 风险标签
+                    detail:
+                      type: object
+                      description: 风险自身完整详情，仅 with_detail=true 时返回，不包含风险报告 report 字段
+                      properties:
+                        risk_id:
+                          type: string
+                          description: 风险ID
+                        raw_event_id:
+                          type: string
+                          description: 原始事件ID
+                        strategy_id:
+                          type: integer
+                          description: 策略ID
+                        scene_id:
+                          type: integer
+                          description: 场景ID
+                        title:
+                          type: string
+                          description: 风险标题
+                        event_content:
+                          type: string
+                          description: 风险描述
+                        event_evidence:
+                          type: string
+                          description: 风险证据
+                        event_type:
+                          type: array
+                          items:
+                            type: string
+                          description: 风险类型
+                        event_data:
+                          type: object
+                          description: 事件原始数据
+                        event_time:
+                          type: string
+                          format: date-time
+                          description: 首次发现时间
+                        event_end_time:
+                          type: string
+                          format: date-time
+                          description: 最后发现时间
+                        event_source:
+                          type: string
+                          description: 事件来源
+                        operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 责任人
+                        status:
+                          type: string
+                          description: 风险展示状态
+                        current_operator:
+                          type: array
+                          items:
+                            type: string
+                          description: 当前处理人
+                        notice_users:
+                          type: array
+                          items:
+                            type: string
+                          description: 关注人
+                        risk_label:
+                          type: string
+                          description: 风险标签
+                        last_operate_time:
+                          type: string
+                          format: date-time
+                          description: 最后操作时间
+                        tags:
+                          type: array
+                          items:
+                            type: integer
+                          description: 标签ID列表
+                        has_report:
+                          type: boolean
+                          description: 是否存在风险报告
+                        report_enabled:
+                          type: boolean
+                          description: 策略是否启用AI报告
+                        report_auto_render:
+                          type: boolean
+                          description: 策略是否自动生成AI报告
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/mcp_user/analyse_report/{report_id}/risks/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/{namespace}/tools/{uid}/execute/:
+    post:
+      operationId: mcp_execute_tool
+      description: >-
+        使用真实用户身份执行工具。风险下钻时传 caller_resource_type=risk、caller_resource_id、drill_field、
+        event_start_time/event_end_time，并按策略 drill_config 组装 params.tool_variables；调用方风险权限或工具使用权限任一满足即可。
+      tags: []
+      parameters:
+        - in: path
+          name: namespace
+          type: string
+          required: true
+          description: 命名空间
+        - in: path
+          name: uid
+          type: string
+          required: true
+          description: 工具唯一标识；风险下钻时使用 retrieve_risk_strategy_info 返回的 drill_config.tool.uid。
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - params
+            properties:
+              params:
+                type: object
+                description: 工具执行参数。风险下钻时按 retrieve_risk_strategy_info 返回的 drill_config.config 组装 tool_variables。
+                properties:
+                  tool_variables:
+                    type: array
+                    description: >-
+                      工具变量列表。风险下钻时每一项由 drill_config.config 生成：
+                      raw_name 使用 source_field，value 按 target_value_type/target_value/target_field_type
+                      从固定值或风险事件数据中取值。
+                    items:
+                      type: object
+                      properties:
+                        raw_name:
+                          type: string
+                          description: 工具变量原始名称；风险下钻时填写 drill_config.config[].source_field。
+                        value:
+                          type: string
+                          description: >-
+                            工具变量值，类型根据工具变量决定（string/number/array 等）。风险下钻时：
+                            fixed_value 直接填写 target_value；field 从风险事件记录中读取 target_value 指定的字段值。
+                  page:
+                    type: integer
+                    description: 页码（仅 data_search 类型）
+                    default: 1
+                  page_size:
+                    type: integer
+                    description: 每页数量（仅 data_search 类型）
+                    default: 100
+              caller_resource_type:
+                type: string
+                description: 调用方资源类型。风险下钻时固定传 risk，用于声明本次工具执行来自风险上下文。
+              caller_resource_id:
+                type: string
+                description: 调用方资源实例ID。风险下钻时传风险ID，应与 retrieve_risk_strategy_info 的 id 一致。
+              drill_field:
+                type: string
+                description: >-
+                  指定使用哪个策略字段的 drill_config 进行变量值校验。风险下钻时传所选字段的 field_name，
+                  后端仅使用该字段下与当前 uid 匹配的 config 校验 params.tool_variables。
+              event_start_time:
+                type: string
+                description: >-
+                  风险事件开始时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
+                  需要与 drill_field、event_end_time 一起传入。
+              event_end_time:
+                type: string
+                description: >-
+                  风险事件结束时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
+                  需要与 drill_field、event_start_time 一起传入。
+      responses:
+        "200":
+          description: 执行成功
+          schema:
+            type: object
+            required:
+              - data
+              - tool_type
+            properties:
+              data:
+                type: object
+                description: 执行结果数据，结构根据 tool_type 不同而不同
+              tool_type:
+                type: string
+                description: 工具类型
+                enum:
+                  - data_search
+                  - api
+                  - bk_vision
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/namespaces/{namespace}/mcp_user/tool/{uid}/execute/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/{namespace}/tools/detail_by_name/:
+    get:
+      operationId: mcp_get_tool_detail_by_name
+      description: 根据工具名称获取当前用户可使用工具的执行配置。仅返回 Agent 执行所需的基础信息和输入变量定义。
+      tags: []
+      parameters:
+        - in: path
+          name: namespace
+          type: string
+          required: true
+          description: 命名空间
+        - in: query
+          name: name
+          type: string
+          required: true
+          description: 工具名称
+        - in: query
+          name: lite_mode
+          type: boolean
+          required: false
+          default: true
+          description: 是否仅返回输入变量配置
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              uid:
+                type: string
+                description: 工具唯一标识
+              name:
+                type: string
+                description: 工具名称
+              tool_type:
+                type: string
+                description: 工具类型
+                enum:
+                  - data_search
+                  - api
+                  - bk_vision
+              version:
+                type: integer
+                description: 工具版本
+              description:
+                type: string
+                description: 工具描述
+              namespace:
+                type: string
+                description: 命名空间
+              config:
+                type: object
+                description: 工具配置
+                properties:
+                  input_variable:
+                    type: array
+                    description: 输入变量定义
+                    items:
+                      type: object
+                      properties:
+                        raw_name:
+                          type: string
+                          description: 变量原始名称
+                        display_name:
+                          type: string
+                          description: 变量显示名称
+                        required:
+                          type: boolean
+                          description: 是否必填
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/namespaces/{namespace}/mcp_user/tool/detail_by_name/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
   /backent_api:
     x-bk-apigateway-method-any:
       operationId: bk_audit_backent_api

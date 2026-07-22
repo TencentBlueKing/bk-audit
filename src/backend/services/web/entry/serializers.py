@@ -30,3 +30,19 @@ class HomeResponseSerializer(serializers.Serializer):
 
 class HealthzResponseSerializer(serializers.Serializer):
     healthy = serializers.BooleanField(default=True)
+
+
+class AgentPingConfigSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    enabled = serializers.BooleanField(default=True)
+    ping_url = serializers.URLField()
+
+
+class AgentAuthConfigSerializer(serializers.Serializer):
+    agents = AgentPingConfigSerializer(many=True, required=False, default=list)
+
+    def validate_agents(self, agents):
+        codes = [agent["code"] for agent in agents]
+        if len(codes) != len(set(codes)):
+            raise serializers.ValidationError("agent code 不可重复")
+        return agents
