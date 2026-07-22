@@ -164,6 +164,7 @@ export default {
   fetchTable(params: {
     table_type: string;
     scene_id?: string;
+    bk_biz_id?: string | number;
   }) {
     return StrategySource.getTable(params)
       .then(({ data }) => data);
@@ -174,6 +175,7 @@ export default {
   fetchScenePermissionTable(params: {
     table_type: string;
     scene_id?: string;
+    bk_biz_id?: string | number;
   }) {
     if (params.table_type === 'BuildIn' || params.table_type === 'BizRt') {
       return StrategySource.getScenePermissionTable(params)
