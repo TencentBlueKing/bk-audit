@@ -42,9 +42,7 @@
             {{ t('数据源') }}
           </span>
           <bk-loading :loading="typeTableLoading">
-            <div
-              class="select-group"
-              :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
+            <div class="select-group">
               <bk-form-item
                 v-if="allConfigTypeTable.length"
                 class="no-label"
@@ -56,13 +54,10 @@
                   :list="allConfigTypeTable"
                   :load-children="handlePickerLoadChildren"
                   :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
-                  @change="handleChangeTable" />
+                  :system-ids="formData.configs.data_source.system_ids"
+                  @change="handleChangeTable"
+                  @event-log-commit="handleEventLogCommit" />
               </bk-form-item>
-              <template v-if="formData.configs.config_type === 'EventLog'">
-                <event-log-component
-                  ref="eventLogRef"
-                  @update-system="handleUpdateSystem" />
-              </template>
             </div>
           </bk-loading>
           <!-- 联表详情 -->
@@ -269,6 +264,8 @@
   import { useRoute } from 'vue-router';
 
   import LinkDataManageService from '@service/link-data-manage';
+  import CollectorManageService from '@service/collector-manage';
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
@@ -280,7 +277,6 @@
   import LinkDataDetailComponent from './components/link-table-detail/index.vue';
   import OtherTableDetailComponent from './components/other-table-detail/index.vue';
   import RulesComponent from './components/rules/index.vue';
-  import EventLogComponent from './components/scheme-input/event-log.vue';
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -357,7 +353,6 @@
   const route = useRoute();
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
-  const eventLogRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -545,7 +540,10 @@
     value: tableType === 'EventLog'
       ? String(tableItem.value)
       : encodeTypeBizId(tableType, tableItem.value),
-    leaf: !(tableItem.children && tableItem.children.length),
+    // 操作日志：点插件后再懒加载系统列表，与我的授权结果表一致
+    leaf: tableType === 'EventLog'
+      ? false
+      : !(tableItem.children && tableItem.children.length),
     disabled: !(tableItem.children && tableItem.children.length) && tableType !== 'EventLog',
     children: tableItem.children?.map((child: Record<string, any>) => ({
       label: String(child.label ?? ''),
@@ -628,9 +626,58 @@
   };
 
   const handlePickerLoadChildren = async (tableType: string, bizId: string) => {
+    if (tableType === 'EventLog') {
+      return loadEventLogSystems();
+    }
     const children = await loadBizTableChildren(tableType, bizId);
     patchBizChildren(tableType, bizId, children);
     return children;
+  };
+
+  // 操作日志：点插件后懒加载系统列表（与 event-log 原逻辑一致）
+  const eventLogSystemCache = ref<BizChildNode[] | null>(null);
+  let eventLogSystemPending: Promise<BizChildNode[]> | null = null;
+
+  const loadEventLogSystems = async (): Promise<BizChildNode[]> => {
+    if (eventLogSystemCache.value?.length) {
+      return eventLogSystemCache.value;
+    }
+    if (eventLogSystemPending) {
+      return eventLogSystemPending;
+    }
+    eventLogSystemPending = (async () => {
+      const systems = await MetaManageService.fetchSystemWithAction({
+        action_ids: 'view_system',
+        scope_id: getSceneSystemParams().scope_id,
+        scope_type: 'scene',
+      });
+      const systemIds = (systems || []).map((item: { id: string }) => item.id).join(',');
+      if (!systemIds) {
+        eventLogSystemCache.value = [];
+        return [];
+      }
+      const statusMap = await CollectorManageService.fetchBatchSystemCollectorStatusList({
+        system_ids: systemIds,
+      });
+      const children = (systems || [])
+        .map((item: { id: string; name: string }) => ({
+          id: item.id,
+          name: item.name,
+          status: statusMap?.[item.id]?.status,
+        }))
+        .filter((item: { status?: string }) => item.status !== 'unset')
+        .map((item: { id: string; name: string }) => ({
+          label: item.name,
+          value: item.id,
+          leaf: true,
+        }));
+      eventLogSystemCache.value = children;
+      return children;
+    })()
+      .finally(() => {
+        eventLogSystemPending = null;
+      });
+    return eventLogSystemPending;
   };
 
   // 获取联表tableid
@@ -733,7 +780,7 @@
     property: item.property || {},
   }));
 
-  // 未配置预期结果时，默认用全部表字段回填（与 getFields/下一步 行为一致）
+  // 未配置预期结果时，提交/下一步再用全部表字段回填（界面上不自动勾选）
   const buildDefaultSelectFromTableFields = () => {
     const displayNameCount = tableFields.value.reduce<Record<string, number>>(
       (acc, item) => {
@@ -760,23 +807,12 @@
     });
   };
 
-  const syncExpectedResultFromTableFields = () => {
-    // 已有预期结果时不覆盖（编辑回显 / 用户手动配置）
-    if (formData.value.configs.select.length > 0 || !tableFields.value.length) {
-      return;
-    }
-    const select = buildDefaultSelectFromTableFields();
-    formData.value.configs.select = select;
-    expectedResultsRef.value?.setSelect(select);
-  };
-
   // 选择tableid后，获取表字段
   const fetDatabaseTableFields = (rtId: string) => {
     StrategyManageService.fetchTableRtFields({
       table_id: rtId,
     }).then((data) => {
       tableFields.value = setTableFields(data, rtId);
-      syncExpectedResultFromTableFields();
     });
   };
 
@@ -796,7 +832,6 @@
       data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
-      syncExpectedResultFromTableFields();
     });
   };
 
@@ -937,16 +972,20 @@
       connector: 'and',
       conditions: [],
     };
-    [eventLogRef, rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
+    [rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
   };
 
   // 选择tableid和数据源类型
-  const handleChangeTable = (value: Array<string>) => {
+  const handleChangeTable = (
+    value: Array<string>,
+    options?: { systemIds?: string[] },
+  ) => {
     // 用户主动选择时作废进行中的编辑回显，防止异步回写覆盖
     tableIdEchoSeq += 1;
+    const systemIdsBackup = [...(formData.value.configs.data_source.system_ids || [])];
 
-    const handleTableChangeCore = (value: Array<string>) => {
-      const typeAndId = getFirstAndLast(value);
+    const handleTableChangeCore = (nextValue: Array<string>) => {
+      const typeAndId = getFirstAndLast(nextValue);
       const { config_type: configType, rt_id_or_uid: encodedRtIdOrUid  } = typeAndId;
       // 级联内部 value 带类型前缀，落库/拉字段需还原真实 id
       const rtIdOrUid = configType && encodedRtIdOrUid
@@ -961,7 +1000,7 @@
         resetDataSource();
         tableFields.value = [];
         // 更新前次记录
-        previousTableId.value = value;
+        previousTableId.value = nextValue;
         return;
       }
 
@@ -971,7 +1010,20 @@
       }
 
       // 统一处理数据源设置
-      if (configType === 'LinkTable') {
+      if (configType === 'EventLog') {
+        // 路径：[EventLog, pluginId]；系统多选随 options.systemIds 提交
+        const pluginId = nextValue[1] || '';
+        formData.value.configs.data_source.rt_id = pluginId;
+        formData.value.configs.data_source.link_table.uid = '';
+        formData.value.configs.data_source.link_table.version = 0;
+        formData.value.configs.data_source.system_ids = options?.systemIds
+          ? [...options.systemIds]
+          : [];
+        if (pluginId) {
+          fetDatabaseTableFields(pluginId);
+          fetchSourceType({ config_type: configType, rt_id: pluginId });
+        }
+      } else if (configType === 'LinkTable') {
         formData.value.configs.data_source.link_table.uid = rtIdOrUid || '';
         formData.value.configs.data_source.rt_id = '';
         formData.value.configs.data_source.system_ids = [];
@@ -980,6 +1032,7 @@
         formData.value.configs.data_source.rt_id = rtIdOrUid || '';
         formData.value.configs.data_source.link_table.uid = '';
         formData.value.configs.data_source.link_table.version = 0;
+        formData.value.configs.data_source.system_ids = [];
         if (rtIdOrUid) {
           fetDatabaseTableFields(rtIdOrUid);
           fetchSourceType({ config_type: configType, rt_id: rtIdOrUid });
@@ -987,17 +1040,26 @@
       }
 
       // 更新前次记录
-      previousTableId.value = value;
+      previousTableId.value = nextValue;
     };
 
-    // 相同值返回
-    if (previousTableId.value.join(',') === value.join(',')) {
+    const samePath = previousTableId.value.join(',') === value.join(',');
+    if (samePath) {
+      // 操作日志仅变更系统多选
+      if (value[0] === 'EventLog' && options?.systemIds) {
+        formData.value.configs.data_source.system_ids = [...options.systemIds];
+      }
       return;
     }
 
+    const applyChange = () => {
+      tableId.value = [...value];
+      handleTableChangeCore(value);
+    };
+
     // 首次初始化或没有配置数据，直接处理
     if (!formData.value.configs.config_type || !hasData.value) {
-      handleTableChangeCore(value);
+      applyChange();
       return;
     }
     // 已有配置时弹窗确认；确认后 onClose 也会触发，需跳过回退
@@ -1005,18 +1067,19 @@
     InfoBox(createInfoBoxConfig({
       onConfirm: () => {
         switchConfirmed = true;
-        handleTableChangeCore(value);
+        applyChange();
       },
       onClose: () => {
         if (switchConfirmed) return;
         tableId.value = [...previousTableId.value];
+        formData.value.configs.data_source.system_ids = systemIdsBackup;
       },
     }));
   };
 
-  // 更新系统
-  const handleUpdateSystem = (systemIds: Array<string>) => {
-    formData.value.configs.data_source.system_ids = systemIds;
+  // 操作日志：关闭面板时提交插件 + 系统多选
+  const handleEventLogCommit = (payload: { path: string[]; systemIds: string[] }) => {
+    handleChangeTable(payload.path, { systemIds: payload.systemIds });
   };
 
   // 更新预期数据
@@ -1060,14 +1123,14 @@
 
     const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
     if (!tableItem) return;
-    // 联表和日志只有两层，直接拼接
+    // 操作日志：插件路径回显，系统多选走 system_ids
     if (tableItem.value === 'EventLog') {
       if (!isEchoValid()) return;
-      tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.rt_id as string];
-      previousTableId.value = tableId.value ;
-      nextTick(() => {
-        eventLogRef.value?.setConfigs(formData.value.configs.data_source.system_ids);
-      });
+      const pluginId = formData.value.configs.data_source.rt_id as string;
+      await loadEventLogSystems();
+      if (!isEchoValid()) return;
+      tableId.value = [formData.value.configs.config_type, pluginId];
+      previousTableId.value = tableId.value;
     } else if (tableItem.value === 'LinkTable') {
       if (!isEchoValid()) return;
       tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.link_table.uid];
@@ -1315,29 +1378,10 @@
     padding: 16px 32px 24px;
 
     .select-group {
-      max-width: 640px;
+      width: 100%;
 
       :deep(.bk-form-item) {
         margin-bottom: 0;
-      }
-    }
-
-    .select-group-grid {
-      display: grid;
-      width: 100%;
-      max-width: none;
-      grid-template-columns: 320px minmax(0, 1fr);
-      gap: 8px;
-
-      /* 左侧数据源固定宽度，右侧系统选择铺满剩余空间 */
-      :deep(.data-source-picker) {
-        max-width: none;
-      }
-
-      :deep(.strategy-customize-eventlog-wrap),
-      :deep(.strategy-customize-eventlog-wrap .bk-form-item),
-      :deep(.strategy-customize-eventlog-wrap .bk-select) {
-        width: 100%;
       }
     }
 

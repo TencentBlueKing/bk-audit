@@ -126,8 +126,12 @@
   };
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
-    const item = props.aggregateList.find(item => item.value === element.aggregate);
-    return `[${item?.label}] ${element.display_name}`;
+    const item = props.aggregateList.find(item => (
+      item.value === element.aggregate
+      || ((element.aggregate === null || element.aggregate === undefined)
+        && (item.value === null || item.value === undefined || item.value === ''))
+    ));
+    return `[${item?.label || t('不聚合')}] ${element.display_name}`;
   };
 
   const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
