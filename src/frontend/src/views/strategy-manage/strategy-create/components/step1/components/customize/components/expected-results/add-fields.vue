@@ -209,11 +209,12 @@
                       <td style="background-color: #fff;">
                         <bk-select
                           v-model="item.aggregate"
+                          :allow-empty-values="allowEmptyAggregateValues"
                           :popover-options="{ boundary: 'parent'}"
                           @change="(val: string) => handleAggregateChange(val, item)">
                           <bk-option
                             v-for="aggItem in item.aggregateList"
-                            :key="aggItem.value"
+                            :key="String(aggItem.value)"
                             :disabled="aggItem.disabled"
                             :label="aggItem.label"
                             :value="aggItem.value" />
@@ -334,6 +335,23 @@
   });
   const { t } = useI18n();
 
+  // bk-select 无法正确回显 null，「不聚合」在弹窗内用空字符串作为选项值
+  const NO_AGGREGATE_VALUE = '';
+  // 允许空字符串作为合法选项，否则会显示「请选择」
+  const allowEmptyAggregateValues = [NO_AGGREGATE_VALUE, null];
+  const toSelectAggregate = (value: unknown) => (
+    value === null || value === undefined ? NO_AGGREGATE_VALUE : value
+  );
+  const fromSelectAggregate = (value: unknown) => (
+    value === NO_AGGREGATE_VALUE || value === null || value === undefined ? null : value
+  );
+  const isNoAggregateOption = (item: Record<string, any>) => (
+    item.value === NO_AGGREGATE_VALUE
+    || item.value === null
+    || item.value === undefined
+    || item.label === t('不聚合')
+  );
+
   const isShow = ref(false);
   const editIndex = ref(-1);
   const commAggRef = ref<{
@@ -402,12 +420,13 @@
   const commonAggs = computed(() => props.aggregateList
     .filter(agg => tableData.value
       .every(field => field.aggregateList
-        .some(item => item.value === agg.value)))
+        .some(item => item.value === toSelectAggregate(agg.value))))
     .map(agg => ({
       ...agg,
+      value: toSelectAggregate(agg.value),
       disabled: tableData.value
         .some(field => field.aggregateList
-          .find(item => item.value === agg.value)?.disabled),
+          .find(item => item.value === toSelectAggregate(agg.value))?.disabled),
     })) as Array<{
       label: string,
       value: string,
@@ -419,7 +438,7 @@
     if (!item.disabled) {
       tableData.value = tableData.value.map(field => ({
         ...field,
-        aggregate: item.value,
+        aggregate: toSelectAggregate(item.value),
       }));
     }
     commAggRef.value?.hide();
@@ -437,18 +456,22 @@
 
   // 生成可用聚合算法列表
   const createAggregateList = (field: ExDatabaseTableFieldModel) => {
-    const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
+    const typeAggs = fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap] || [];
+    const baseList = props.aggregateList.filter(item => (
+      typeAggs.includes(item.value) || isNoAggregateOption(item)
+    ));
 
     // 检测重复聚合算法
     const existingAggregates = new Set(props.expectedResultList
       .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`
         && (!field.aggregate || item.aggregate !== field.aggregate))
-      .map(item => item.aggregate));
+      .map(item => toSelectAggregate(item.aggregate)));
 
-    // 禁用已存在的选项
+    // 禁用已存在的选项；不聚合统一用空字符串，避免 bk-select 无法回显 null
     return baseList.map<Record<string, any>>(item => ({
       ...item,
-      disabled: existingAggregates.has(item.value),
+      value: toSelectAggregate(item.value),
+      disabled: existingAggregates.has(toSelectAggregate(item.value)),
     }));
   };
 
@@ -462,12 +485,18 @@
     const processedField = {
       ...field,
       aggregateList: createAggregateList(field),
-      aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
+      // 编辑回显：null/undefined 映射为不聚合占位值
+      aggregate: toSelectAggregate(field.aggregate ? field.aggregate : null),
     };
 
-    // 设置初始选中值
-    if (!isEdit.value && processedField.aggregate === null) {
-      processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
+    // 新增字段时默认「不聚合」
+    if (!isEdit.value && processedField.aggregate === NO_AGGREGATE_VALUE) {
+      const noAggregate = processedField.aggregateList.find(item => (
+        !item.disabled && isNoAggregateOption(item)
+      ));
+      processedField.aggregate = noAggregate?.value
+        ?? processedField.aggregateList.find(item => !item.disabled)?.value
+        ?? NO_AGGREGATE_VALUE;
     }
 
     // 处理显示名称 - 编辑模式下不添加聚合算法后缀
@@ -522,8 +551,8 @@
     // 判断当前显示名是否已经带有后缀，去除旧后缀
     // eslint-disable-next-line no-param-reassign
     const baseName = currentItem.display_name.replace(/(_[A-Z]+)?$/, '');
-    // 拼接新后缀
-    if (val && val !== '不聚合') {
+    // 拼接新后缀（空字符串表示不聚合）
+    if (val && val !== NO_AGGREGATE_VALUE) {
       // eslint-disable-next-line no-param-reassign
       currentItem.display_name = `${baseName}_${val}`;
     } else {
@@ -597,10 +626,13 @@
   const handleAddField = () => {
     if (!isEdit.value) {
       tableData.value.forEach((item) => {
-        // 过滤不需要的属性
+        // 过滤不需要的属性；提交时把不聚合占位值还原为 null
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = item;
-        emits('addExpectedResult', pureItem);
+        emits('addExpectedResult', {
+          ...pureItem,
+          aggregate: fromSelectAggregate(pureItem.aggregate),
+        });
       });
     } else {
       // 处理编辑模式
@@ -609,8 +641,10 @@
         // 过滤不需要的属性
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = currentItem;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        emits('addExpectedResult', pureItem, editIndex.value);
+        emits('addExpectedResult', {
+          ...pureItem,
+          aggregate: fromSelectAggregate(pureItem.aggregate),
+        }, editIndex.value);
       }
     }
 
@@ -639,8 +673,8 @@
   });
   const isTableAggregate = ref(false);
   watch(() => tableData.value, (data) => {
-    // 检查data数组中是否有aggregate为空的项
-    const hasEmptyAggregate = data.some(item => item.aggregate === undefined || item.aggregate === '');
+    // 空字符串表示「不聚合」，不算未选择；仅 undefined/null 视为未填
+    const hasEmptyAggregate = data.some(item => item.aggregate === undefined || item.aggregate === null);
 
     // 设置isTableAggregate的值
     isTableAggregate.value = hasEmptyAggregate;
