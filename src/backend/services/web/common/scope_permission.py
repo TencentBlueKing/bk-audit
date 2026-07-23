@@ -269,6 +269,44 @@ class ScopePermission:
 
         return result
 
+    def check_resource_permission_in_scope(
+        self,
+        scope: ScopeContext,
+        resource_type: BindingResourceType,
+        resource_id: str,
+        raise_exception: bool = True,
+    ) -> bool:
+        """
+        校验用户在指定 scope 下能否消费指定资源。
+        """
+        # 1. 根据 scope 方向选择 action，回收当前 scope 下的 scene/system IDs
+        # get_scene_ids/get_system_ids 已根据 scope_type 自动处理：
+        # - SCENE/SYSTEM: 返回单个 ID（如果有权限）
+        # - CROSS_SCENE/CROSS_SYSTEM: 返回所有有权限的 ID
+        if scope.is_scene_scope:
+            action = ActionEnum.VIEW_SCENE
+            scene_ids = self.get_scene_ids(scope, action)
+            system_ids = []
+        else:  # system_scope
+            action = ActionEnum.VIEW_SYSTEM
+            system_ids = self.get_system_ids(scope, action)
+            scene_ids = []
+
+        # 2. 校验 scope 入口权限
+        self.check_scope_entry(scope, action, raise_exception=True)
+
+        # 3. 复用现有方法校验资源 visibility 交集
+        result = self._check_visibility_intersection(resource_type, resource_id, scene_ids, system_ids)
+
+        if not result and raise_exception:
+            raise PermissionException(
+                action_name=f"访问资源 ({resource_type}:{resource_id})",
+                apply_url="",
+                permission={},
+            )
+
+        return result
+
     def _get_all_scene_ids(self) -> List[int]:
         """获取用户有 VIEW_SCENE 权限的所有场景 ID（内部复用缓存）"""
         return self.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
@@ -504,6 +542,10 @@ class ScopeInstancePermission(InstancePermission):
         self.published_status = published_status
         super().__init__(*args, **kwargs)
 
+    def _get_scope_context(self, request, view) -> Optional[ScopeContext]:
+        """获取当前请求的 scope 上下文。"""
+        return None
+
     def _get_binding(self, resource_id: str) -> Optional[ResourceBinding]:
         return ResourceBinding.objects.filter(
             resource_type=self.resource_type,
@@ -555,14 +597,29 @@ class ScopeInstancePermission(InstancePermission):
             return False
 
         if self._is_resource_manager_exception(username, resource_id):
+            scope_context = self._get_scope_context(request, view)
+            if scope_context is not None:
+                # 校验 scope 格式，失败会抛 ValidationError
+                ScopeContext.from_request(request, view)
             return True
 
         if not self._is_resource_published(resource_id):
             return False
 
         scope_perm = ScopePermission(username)
-        return scope_perm.check_resource_permission(
-            resource_type=self.resource_type,
-            resource_id=resource_id,
-            raise_exception=True,
-        )
+
+        scope_context = self._get_scope_context(request, view)
+        if scope_context is not None:
+            # 使用精确 scope 校验
+            return scope_perm.check_resource_permission_in_scope(
+                scope=scope_context,
+                resource_type=self.resource_type,
+                resource_id=resource_id,
+                raise_exception=True,
+            )
+        else:
+            return scope_perm.check_resource_permission(
+                resource_type=self.resource_type,
+                resource_id=resource_id,
+                raise_exception=True,
+            )

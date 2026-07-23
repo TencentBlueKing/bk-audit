@@ -61,6 +61,9 @@ class VisionPanel(SoftDeleteModel):
         default="",
     )
     description = models.TextField(gettext_lazy("描述"), blank=True, default="")
+    default_value_overrides = models.JSONField(
+        gettext_lazy("默认值覆盖"), default=dict, blank=True, help_text="存储场景/系统级别的默认值覆盖配置"
+    )
 
     class Meta:
         verbose_name = gettext_lazy("仪表盘")

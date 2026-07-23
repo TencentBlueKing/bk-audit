@@ -36,5 +36,6 @@ router.register("share", views.ShareViewSet)
 router.register("panel/platform", views.PlatformPanelViewSet)
 router.register("panel/scene/group", views.SceneReportGroupManageViewSet)
 router.register("panel/scene", views.ScenePanelManageViewSet)
+router.register("panel", views.PanelDetailViewSet)
 
 urlpatterns = router.urls
