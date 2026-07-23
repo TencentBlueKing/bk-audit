@@ -69,6 +69,8 @@ from services.web.vision.serializers import (
     CreateSceneReportGroupRequestSerializer,
     DeleteScenePanelRequestSerializer,
     DeleteSceneReportGroupRequestSerializer,
+    PanelDetailQuerySerializer,
+    PanelDetailResponseSerializer,
     PanelGroupListQuerySerializer,
     PanelPreferenceSerializer,
     PanelPublishResponseSerializer,
@@ -444,6 +446,7 @@ class CreatePlatformPanel(BKVision):
         from services.web.scene.constants import PanelStatus
 
         visibility_data = validated_request_data.pop("visibility", None) or {}
+        default_value_overrides = validated_request_data.pop("default_value_overrides", None)
         with transaction.atomic():
             panel = VisionPanel.objects.create(
                 id=unique_id(),
@@ -453,6 +456,10 @@ class CreatePlatformPanel(BKVision):
                 description=validated_request_data.get("description", ""),
                 status=validated_request_data.get("status", PanelStatus.UNPUBLISHED),
             )
+            # 保存默认值覆盖配置
+            if default_value_overrides is not None:
+                panel.default_value_overrides = default_value_overrides
+                panel.save(update_fields=["default_value_overrides"])
 
             # 创建平台级绑定关系
             binding = ResourceBinding.objects.create(
@@ -508,10 +515,14 @@ class UpdatePlatformPanel(BKVision):
             raise ScenePanelNotExist()
 
         visibility_data = validated_request_data.pop("visibility", None)
+        default_value_overrides = validated_request_data.pop("default_value_overrides", None)
         with transaction.atomic():
             for field in ["name", "category", "description", "status", "vision_id"]:
                 if field in validated_request_data:
                     setattr(panel, field, validated_request_data[field])
+            # 更新默认值覆盖配置
+            if default_value_overrides is not None:
+                panel.default_value_overrides = default_value_overrides
             panel.save()
 
             if visibility_data:
@@ -638,6 +649,7 @@ class CreateScenePanel(BKVision):
                 category=validated_request_data.get("category", ""),
                 description=validated_request_data.get("description", ""),
                 status=validated_request_data.get("status", PanelStatus.UNPUBLISHED),
+                default_value_overrides=validated_request_data.get("default_value_overrides", {}),
             )
 
             # 创建场景级绑定关系（有且仅有一个场景关联）
@@ -694,7 +706,7 @@ class UpdateScenePanel(BKVision):
         except VisionPanel.DoesNotExist:
             raise ScenePanelNotExist()
 
-        for field in ["name", "category", "description", "vision_id", "status"]:
+        for field in ["name", "category", "description", "vision_id", "status", "default_value_overrides"]:
             if field in validated_request_data:
                 setattr(panel, field, validated_request_data[field])
         panel.save()
@@ -827,6 +839,9 @@ class ListPlatformPanels(BKVision):
         name_list = validated_request_data.get("name", [])
         description_list = validated_request_data.get("description", [])
         updated_by_list = validated_request_data.get("updated_by", [])
+        visibility_type = validated_request_data.get("visibility_type", [])
+        scene_ids = validated_request_data.get("scene_ids") or []
+        system_ids = validated_request_data.get("system_ids") or []
 
         def apply_multi_value_filter(qs, field_name, values, lookup='icontains'):
             q_filter = Q()
@@ -844,6 +859,37 @@ class ListPlatformPanels(BKVision):
         if updated_by_list:
             queryset = apply_multi_value_filter(queryset, "updated_by", updated_by_list)
 
+        if visibility_type or scene_ids or system_ids:
+            binding_type = BindingType.PLATFORM_BINDING
+            matched_uids = None
+
+            # 1) 按 visibility_type 匹配（全部场景或系统没有具体场景/系统 ID）
+            if visibility_type:
+                binding_qs = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.PANEL,
+                    visibility_type=visibility_type,
+                )
+                if binding_type:
+                    binding_qs = binding_qs.filter(binding_type=binding_type)
+                matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
+
+            # 2) 按具体 scene/system ID 可见范围
+            if scene_ids or system_ids:
+                scoped_uids = {
+                    str(uid)
+                    for uid in CompositeScopeFilter.filter_queryset(
+                        queryset=queryset,
+                        binding_type=binding_type,
+                        scene_id=scene_ids,
+                        system_id=system_ids,
+                        resource_type=ResourceVisibilityType.PANEL,
+                        pk_field="uid",
+                    ).values_list("uid", flat=True)
+                }
+                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+
+            queryset = queryset.filter(uid__in=matched_uids or [])
+
         bindings = self._get_binding_map(panel_ids=list(queryset.values_list("id", flat=True)))
         data = []
         for panel in queryset.order_by("-updated_at", "id"):
@@ -860,6 +906,7 @@ class ListPlatformPanels(BKVision):
                     "description": panel.description,
                     "updated_by": panel.updated_by,
                     "updated_at": panel.updated_at,
+                    "default_value_overrides": panel.default_value_overrides or {},
                     "binding_type": binding.binding_type,
                     "visibility_type": binding.visibility_type,
                     "scene_ids": list(
@@ -944,6 +991,7 @@ class ListScenePanels(BKVision):
                     "group_type": item.group.group_type if item else "",
                     "group_priority_index": item.priority_index if item else None,
                     "binding_type": binding.binding_type if binding else None,
+                    "default_value_overrides": panel.default_value_overrides,
                 }
             )
         return data
@@ -1150,3 +1198,62 @@ class UpdatePanelPreference(BKVision):
             defaults={"config": validated_request_data["config"]},
         )
         return pref
+
+
+class GetPanelDetail(BKVision):
+    """
+    报表详情接口。
+    返回本地报表信息和当前 scope 的单份映射
+    响应示例：
+    {
+        "id": "panel_xxx",
+        "vision_id": "bkvision_xxx",
+        "name": "安全总览",
+        "status": "published",
+        "category": "",
+        "description": "",
+        "default_value_override": {
+            "time_filter_panel_uid": ["now-7d/d", "now"]
+        }
+    }
+    """
+
+    name = gettext_lazy("获取报表详情")
+    RequestSerializer = PanelDetailQuerySerializer
+    ResponseSerializer = PanelDetailResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        panel_id = validated_request_data.get("panel_id")
+        scope_type = validated_request_data["scope_type"]
+        scope_id = validated_request_data.get("scope_id")
+
+        # 获取报表信息
+        panel = get_object_or_404(VisionPanel, id=panel_id)
+
+        # 计算当前 scope 命中的默认值覆盖映射
+        default_value_override = {}
+        default_value_overrides = panel.default_value_overrides or {}
+
+        if scope_type == ScopeType.SCENE and scope_id:
+            # 场景视角：只返回该场景的覆盖
+            scenes_overrides = default_value_overrides.get("scenes", {})
+            if str(scope_id) in scenes_overrides:
+                default_value_override = scenes_overrides[str(scope_id)] or {}
+
+        elif scope_type == ScopeType.SYSTEM and scope_id:
+            # 系统视角：只返回该系统的覆盖
+            systems_overrides = default_value_overrides.get("systems", {})
+            if str(scope_id) in systems_overrides:
+                default_value_override = systems_overrides[str(scope_id)] or {}
+        # cross_scene / cross_system 不命中覆盖，返回空对象
+        return {
+            "id": panel.id,
+            "vision_id": panel.vision_id,
+            "name": panel.name or "",
+            "status": panel.status,
+            "category": panel.category,
+            "description": panel.description,
+            "updated_by": panel.updated_by,
+            "updated_at": panel.updated_at,
+            "default_value_override": default_value_override,
+        }
