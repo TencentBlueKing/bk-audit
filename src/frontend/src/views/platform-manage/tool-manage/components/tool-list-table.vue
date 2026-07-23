@@ -784,12 +784,7 @@
     listRef.value.fetchData(params);
   };
 
-  // 组件初始化后，立即带排序参数重新请求（覆盖 tdesign-list 的默认无排序请求）
-  onMounted(() => {
-    nextTick(() => {
-      listRef.value?.fetchData({ sort: ['-created_at'] });
-    });
-  });
+  // 初始列表请求由父组件统一发起（含排序与搜索恢复），避免与缓存搜索条件竞态
 
   defineExpose({ fetchData });
 </script>
