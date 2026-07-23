@@ -164,7 +164,8 @@
     tag_id: string;
     tag_name: string;
     tool_count: number;
-    icon?: string;
+    strategy_count: number;
+    icon: string;
   }
 
   interface SceneItem {
@@ -352,9 +353,10 @@
       }
     }
     // 无论是初始化还是切换，都重新拉取标签和工具列表
-    // 切换场景时，重置选中的标签为"全部工具"
+    // 切换场景时，重置选中的标签为"全部工具"，并清空列表搜索条件
     if (isActualChange) {
       tagId.value = '-3';
+      ContentCardRef.value?.clearSearch();
       // 更新UI选中状态为"全部工具"
       nextTick(() => {
         renderLabelRef.value?.setLabel('-3');
@@ -462,19 +464,21 @@
       // 前5项为固定分类，按目标顺序重排；后续为动态标签
       const fixedTags = data
         .slice(0, FIXED_TAG_COUNT)
-        .sort((a: any, b: any) => fixedTagOrder.indexOf(a.tag_id) - fixedTagOrder.indexOf(b.tag_id));
+        .sort((a, b) => fixedTagOrder.indexOf(a.tag_id) - fixedTagOrder.indexOf(b.tag_id));
       const dynamicTags = data.slice(FIXED_TAG_COUNT);
+      const toLabelItem = (
+        item: { tag_id: string; tag_name: string; tool_count: number },
+        icon: string,
+      ): TagItem => ({
+        tag_id: item.tag_id,
+        tag_name: item.tag_name,
+        tool_count: item.tool_count ?? 0,
+        strategy_count: item.tool_count ?? 0,
+        icon,
+      });
       strategyLabelList.value = [
-        ...fixedTags.map((item: any) => ({
-          ...item,
-          strategy_count: item.tool_count ?? 0,
-          icon: iconMap[item.tag_id] || 'tag',
-        })),
-        ...dynamicTags.map((item: any) => ({
-          ...item,
-          strategy_count: item.tool_count ?? 0,
-          icon: 'tag',
-        })),
+        ...fixedTags.map(item => toLabelItem(item, iconMap[item.tag_id] || 'tag')),
+        ...dynamicTags.map(item => toLabelItem(item, 'tag')),
       ];
       tagsEnums.value = strategyLabelList.value;
       // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
