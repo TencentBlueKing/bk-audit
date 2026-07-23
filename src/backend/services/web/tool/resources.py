@@ -29,6 +29,7 @@ from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.translation import gettext, gettext_lazy
+from pydantic import ValidationError as PydanticValidationError
 from pypinyin import lazy_pinyin
 from rest_framework import serializers as drf_serializers
 
@@ -59,6 +60,7 @@ from services.web.scene.constants import (
     PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
+    VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
@@ -76,6 +78,7 @@ from services.web.strategy_v2.serializers import (
 from services.web.tool.constants import (
     ApiToolConfig,
     DataSearchConfigTypeEnum,
+    SmartPageToolConfig,
     SQLDataSearchConfig,
     TableFieldTypeConfig,
     ToolTagsEnum,
@@ -83,12 +86,20 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import (
     DataSearchTablePermission,
+    InputVariableDataSourceNotConfiguredError,
+    InputVariableNotFoundError,
+    SmartPageApigwDisabled,
+    SmartPageDataSourceNotFound,
     MCPToolNotPublished,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
 )
-from services.web.tool.executor.tool import ToolExecutorFactory
+from services.web.tool.executor.model import SmartPageExecuteParams
+from services.web.tool.executor.tool import (
+    SmartPageSqlTemplateExecutor,
+    ToolExecutorFactory,
+)
 from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
@@ -96,6 +107,7 @@ from services.web.tool.serializers import (
     GetMCPToolDetailByNameRequestSerializer,
     GetToolDetailByNameAPIGWRequestSerializer,
     GetToolDetailByNameAPIGWResponseSerializer,
+    GetToolInputVariableCandidatesRequestSerializer,
     ListRequestSerializer,
     ListToolAllRequestSerializer,
     ListToolTagsRequestSerializer,
@@ -114,6 +126,7 @@ from services.web.tool.serializers import (
     ToolExecuteDebugSerializer,
     ToolFavoriteReqSerializer,
     ToolFavoriteRespSerializer,
+    ToolInputVariableCandidateSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolPublishResponseSerializer,
@@ -820,6 +833,13 @@ class UpdateTool(ToolBase):
         updated_time = validated_request_data.pop("updated_time", None)
         if not tool:
             raise ToolDoesNotExist()
+
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            # smart_page 工具：仅更新 default_value_overrides，不走全量 config 更新逻辑
+            # serializer 已将校验后的 overrides 存入 _smart_page_overrides，并清除了 config
+            smart_page_overrides = validated_request_data.pop("_smart_page_overrides", None)
+            return self._update_smart_page_overrides(tool, smart_page_overrides, validated_request_data, updated_time)
+
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
             new_tool = self.create_tool_new_version(
@@ -841,6 +861,54 @@ class UpdateTool(ToolBase):
             relation_resource_field="tool_uid",
         )
         return tool
+
+    def _update_smart_page_overrides(self, tool, new_overrides, validated_request_data, updated_time=None):
+        """smart_page 工具仅更新 default_value_overrides。
+
+        - overrides 变更时创建新版本，保证历史可追溯
+        - overrides 未变更时（None 或与现有值相同）直接返回原工具
+        """
+        # new_overrides=None 表示本次请求未提交覆盖配置（仅修改了可见范围），无需更新
+        if new_overrides is None:
+            return tool
+
+        # 对比新旧覆盖配置，仅在实际变更时才创建新版本
+        current_overrides = tool.config.get("default_value_overrides", {})
+        if new_overrides == current_overrides:
+            return tool
+
+        config = tool.config if tool.config else {}
+        config['default_value_overrides'] = new_overrides
+        validated_request_data["config"] = config
+        return self.create_tool_new_version(
+            old_tool=tool,
+            validated_request_data=validated_request_data,
+            updated_time=updated_time,
+        )
+
+
+def _normalize_override_value(value):
+    """规范化覆盖值（整数化、去重、升序）。
+
+    list 类型按"整数化、去重、升序"规范化，避免 [100, 200] 与 ["200", 100, 100]
+    因顺序、类型、重复而产生比对误判。其他类型原样返回。
+
+    用于 default_value_overrides 的覆盖值与用户提交值在比对前统一规范化。
+    """
+    if not isinstance(value, list):
+        # 非列表类型（str/int/float/bool/None）原样返回，无需规范化
+        return value
+    # 优先尝试整数化: ["100", 200, 100] → {100, 200} → sorted → [100, 200]
+    # 覆盖 game_ids 等 ID 类场景中字符串/重复/无序的问题
+    try:
+        return sorted({int(item) for item in value})
+    except (TypeError, ValueError):
+        # 元素不可整数化（如字符串列表 ["a", "b"]），仅做去重排序
+        try:
+            return sorted(set(value))
+        except TypeError:
+            # 元素不可哈希或不可排序（如含 dict/list），原样返回
+            return value
 
 
 class ExecuteTool(ToolBase):
@@ -1008,23 +1076,125 @@ class ExecuteTool(ToolBase):
     RequestSerializer = ExecuteToolReqSerializer
     ResponseSerializer = ExecuteToolRespSerializer
 
-    def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
-        """
-        获取用户有权限的场景和系统列表。
+    def _get_user_allowed_scopes(self, username: str, tool) -> Tuple[List[str], List[str]]:
+        """获取 (用户有权场景/系统) ∩ (工具可见场景/系统)。
+        避免工具不可见范围的 override 残留配置被使用（覆盖配置在工具不可见范围 → 不进入允许集合）。
         """
         scope_permission = ScopePermission(username=username)
-        scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
-        system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
+        # 用户有权限查看的场景 ID 和系统 ID
+        user_scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
+        user_system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
 
-        return [str(scene_id) for scene_id in scene_ids], list(system_ids)
+        # 查询工具的 ResourceBinding（可见范围绑定关系）
+        # 无 binding → 工具无可见范围限制，保留用户全部有权范围
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=str(tool.uid),
+        ).first()
+        if not binding:
+            return [str(sid) for sid in user_scene_ids], list(user_system_ids)
+
+        # 根据 binding_type 和 visibility_type 计算工具可见的场景/系统集合
+        # 返回值语义: set = 仅这些 ID 可见, None = 该维度不限制（全集）
+        if binding.binding_type == BindingType.SCENE_BINDING:
+            # 场景级绑定: 仅绑定的场景可见，系统维度固定为空（场景级工具不按系统限制）
+            bound_scene_ids = set(
+                binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+            )
+            bound_system_ids = set()
+        else:
+            # 平台级绑定: 按 visibility_type 决定各维度是否受限
+            vt = binding.visibility_type
+            if vt == VisibilityScope.ALL_VISIBLE:
+                # 全部可见: 两个维度都不限制
+                bound_scene_ids, bound_system_ids = None, None
+            elif vt == VisibilityScope.ALL_SCENES:
+                # 所有场景可见，系统维度为空（不按系统限制）
+                bound_scene_ids, bound_system_ids = None, set()
+            elif vt == VisibilityScope.ALL_SYSTEMS:
+                # 所有系统可见，场景维度为空（不按场景限制）
+                bound_scene_ids, bound_system_ids = set(), None
+            elif vt == VisibilityScope.SPECIFIC_SCENES:
+                # 仅指定场景可见
+                bound_scene_ids = set(
+                    binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+                )
+                bound_system_ids = set()
+            elif vt == VisibilityScope.SPECIFIC_SYSTEMS:
+                # 仅指定系统可见
+                bound_scene_ids, bound_system_ids = set(), set(
+                    binding.binding_systems.values_list("system_id", flat=True)
+                )
+            elif vt == VisibilityScope.SCENES_AND_SYSTEMS:
+                # 同时指定场景和系统
+                bound_scene_ids = set(
+                    binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
+                )
+                bound_system_ids = set(binding.binding_systems.values_list("system_id", flat=True))
+            else:
+                bound_scene_ids, bound_system_ids = set(), set()
+
+        # 求交集: 用户权限 ∩ 工具可见范围
+        # None = 该维度不限制（全集），交集结果为用户全部有权范围
+        # set = 仅保留同时在用户权限和工具可见范围内的 ID
+        intersected_scenes = (
+            [str(sid) for sid in user_scene_ids]
+            if bound_scene_ids is None
+            else [str(sid) for sid in user_scene_ids if sid in bound_scene_ids]
+        )
+        intersected_systems = (
+            list(user_system_ids)
+            if bound_system_ids is None
+            else [sid for sid in user_system_ids if sid in bound_system_ids]
+        )
+        return intersected_scenes, intersected_systems
 
     def _validate_default_value_permissions(self, tool, params, username):
         """校验执行时默认值的权限
 
-        校验规则：
-        1. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
-           用户可自由修改，无需校验（用户可见场景）。
-        2. 允许用户使用其权限范围内场景/系统配置的默认值覆盖。
+         校验规则：
+         1. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
+            用户可自由修改，无需校验（用户可见场景）。
+         2. 允许用户使用其权限范围内场景/系统配置的默认值覆盖。
+
+         1. 假设有一个输入变量：game_ids
+             "default_value_overrides": {
+                 "scenes": {
+                   "1001": {
+                     "game_ids": [100, 200]   --> 场景覆盖值
+                   }
+                 },
+                 "systems": {
+                   "bk_base": {
+                     "game_ids": [100, 200, 500]   --> 系统覆盖值
+                   }
+                 }
+               }
+            input_var_config_map = {
+                 "game_ids": {
+                     "raw_name": "game_ids",
+                     "display_name": "游戏ID",
+                     "type": "multiselect",
+                     "required": true,
+                     "is_show": false,
+                     "default_value": [100, 200, 300]   --> 原始默认值
+                 }
+             },
+        2. 用户从场景1001进入工具详情页，提交的参数值为
+             {
+               "tool_variables": [
+                 {"raw_name": "game_ids", "value": [100, 200]}
+               ]
+             }
+             input_variable_map = {
+                 "game_ids": [100, 200]   # ← 用户提交的值
+             }
+        3. 用户对场景1001、1002以及系统bk_base有权限，则最终允许的可选默认值：
+         遍历场景 1001: game_ids 覆盖为 [100, 200] → allowed_values = [[100, 200]]
+         遍历场景 1002: 无覆盖 → has_unrestricted_scope = True → allowed_values = [[100, 200],[100, 200, 300]]
+         遍历系统 bk_base: game_ids 覆盖为 [100, 200, 500] → allowed_values = [[100, 200], [100, 200, 300], [100, 200, 500] ]
+         4. 最终校验
+             input_variable_map['game_ids'] in allowed_values  -->  校验通过
         """
         config = tool.config
         if not config:
@@ -1034,8 +1204,8 @@ class ExecuteTool(ToolBase):
         if not default_value_overrides:
             return
 
-        # 获取用户有权限的场景/系统列表
-        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
+        # 获取用户有权的 scope，(用户权限 ∩ 工具可见范围)，只保留用户能访问且工具也可见的场景/系统
+        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username, tool)
 
         # 获取工具的输入变量配置
         input_variables_config = config.get("input_variable", [])
@@ -1043,31 +1213,19 @@ class ExecuteTool(ToolBase):
         # 获取用户输入的变量值
         tool_variables = params.get("tool_variables", [])
 
-        # 收集用户有权限的场景/系统允许的默认值
-        allowed_defaults = {}
-
-        # 场景级别的默认值
+        # scenes_overrides / systems_overrides: 管理员为各场景/系统设置的覆盖值
         scenes_overrides = default_value_overrides.get("scenes", {})
-        for scene_id, overrides in scenes_overrides.items():
-            if scene_id in user_allowed_scene_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
-
-        # 系统级别的默认值
         systems_overrides = default_value_overrides.get("systems", {})
-        for system_id, overrides in systems_overrides.items():
-            if system_id in user_allowed_system_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
 
+        # input_variable_map: 用户实际提交的覆盖值
         input_variable_map = {}
         for var in tool_variables:
             raw_name = var.get("raw_name")
             if not raw_name:
                 continue
             input_variable_map[raw_name] = var.get("value")
+
+        # input_var_config_map: 工具配置中全部输入变量的定义映射，用于遍历所有隐藏变量（is_show=False）
         input_var_config_map = {}
         for var in input_variables_config:
             raw_name = var.get("raw_name")
@@ -1075,33 +1233,69 @@ class ExecuteTool(ToolBase):
                 input_var_config_map[raw_name] = var
 
         # 校验 is_show=False 的参数
-        for raw_name, value in input_variable_map.items():
+        for raw_name, input_var_config in input_var_config_map.items():
+            # 跳过用户可见的参数（is_show=True）：用户可以自由修改这些参数，无需校验
+            if input_var_config.get("is_show", True):
+                continue
+            # 豁免时间范围选择器的权限校验（支持相对时间表达式）
+            if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
+                continue
 
-            input_var_config = input_var_config_map.get(raw_name, {})
-            # 仅校验 is_show=False 的参数
-            if not input_var_config.get("is_show", True):
-                # 豁免时间范围选择器的权限校验（支持相对时间表达式）
-                if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
-                    continue
+            # 获取工具的原始默认值
+            original_default = _normalize_override_value(input_var_config.get("default_value"))
 
-                # 获取工具的原始默认值
-                original_default = input_var_config.get("default_value")
+            # effective_value（实际参与校验的值）:
+            #   - 用户提交了该变量 → 用用户提交值（规范化后），如 [100, 200]
+            #   - 用户未提交该变量 → 回退到 original_default，如 [100, 200, 300]
+            if raw_name in input_variable_map:
+                effective_value = _normalize_override_value(input_variable_map[raw_name])
+            else:
+                effective_value = original_default
 
-                # 如果用户在允许的场景/系统下有默认值覆盖，则允许使用覆盖值
-                # 如果用户传入的值不在允许的范围内，则提示越权
-                if raw_name in allowed_defaults:
-                    if value not in allowed_defaults[raw_name] and value != original_default:
-                        raise PermissionException(
-                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                            permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
-                        )
+            # 构建 allowed_values，由两部分组成:
+            #   A. 各有权 scope 的覆盖值（非 null）→ 直接追加到 allowed_values
+            #   B. 如果存在无覆盖的 scope → 在所有 scope 遍历完毕后，追加 original_default
+            allowed_values = []
+            # 标记是否存在对该变量无覆盖的有权 scope（null 覆盖或整层不存在都视为无覆盖）
+            has_unrestricted_scope = False
 
+            # A1: 遍历用户有权的场景，收集场景级覆盖值
+            for scope_id in user_allowed_scene_ids:
+                scope_overrides = scenes_overrides.get(scope_id)
+                if isinstance(scope_overrides, dict) and raw_name in scope_overrides:
+                    override_value = scope_overrides[raw_name]
+                    if override_value is not None:
+                        allowed_values.append(_normalize_override_value(override_value))
+                    else:
+                        has_unrestricted_scope = True
                 else:
-                    if value != original_default:
-                        raise PermissionException(
-                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                            permission=gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": raw_name},
-                        )
+                    has_unrestricted_scope = True
+
+            # A2: 遍历用户有权的系统，收集系统级覆盖值
+            for scope_id in user_allowed_system_ids:
+                scope_overrides = systems_overrides.get(scope_id)
+                if isinstance(scope_overrides, dict) and raw_name in scope_overrides:
+                    override_value = scope_overrides[raw_name]
+                    if override_value is not None:
+                        allowed_values.append(_normalize_override_value(override_value))
+                    else:
+                        has_unrestricted_scope = True
+                else:
+                    has_unrestricted_scope = True
+
+            # B: 存在无覆盖的 scope → 原始默认值也合法
+            # 示例: 场景 1002 未配置覆盖默认值 → original_default [100, 200, 300] 也加入 allowed_values
+            if has_unrestricted_scope:
+                allowed_values.append(original_default)
+
+            # 最终校验
+            # effective_value 必须在 allowed_values 中命中至少一个值，否则抛权限异常
+            # 示例: effective_value=[100, 200], allowed_values=[[100,200], ...] → 命中场景1001覆盖值 → 通过
+            if effective_value not in allowed_values:
+                raise PermissionException(
+                    action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
+                    permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
+                )
 
     def perform_request(self, validated_request_data):
         """
@@ -1122,8 +1316,20 @@ class ExecuteTool(ToolBase):
         check_request_data["current_object_id"] = uid
         check_request_data["tool_variables"] = params.get("tool_variables", [])
         should_skip_permission_from(check_request_data, get_request_username())
+
+        # smart_page 工具参数结构适配:
+        #   原始格式: {"data_source_name": "xxx", "params": {"game_ids": [100,200], "operator": "admin"}}
+        #   转换为:   {"tool_variables": [{"raw_name": "game_ids", "value": [100,200]}, ...]}
+        # 这样可以复用统一的 _validate_default_value_permissions 校验逻辑
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            smart_params = params.get("params", {})
+            equivalent_tool_variables = [{"raw_name": k, "value": v} for k, v in smart_params.items()]
+            params_for_validation = {"tool_variables": equivalent_tool_variables}
+        else:
+            params_for_validation = params
+
         # 校验默认值的权限
-        self._validate_default_value_permissions(tool, params, get_request_username())
+        self._validate_default_value_permissions(tool, params_for_validation, get_request_username())
 
         current_user = get_request_username()
         try:
@@ -1153,6 +1359,10 @@ class ExecuteToolAPIGW(ExecuteTool):
             raise ToolDoesNotExist()
         if tool.status != PanelStatus.PUBLISHED:
             raise ToolNotPublished()
+        # smart_page 工具依赖用户权限校验参数覆盖（default_value_overrides），
+        # 而 APIGW 以 admin 身份执行且不做权限校验，存在越权风险，因此拒绝执行
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            raise SmartPageApigwDisabled()
 
         current_user = "admin"
         try:
@@ -1655,29 +1865,106 @@ class GetToolDetailByNameAPIGW(ToolBase):
     def validate_response_data(self, response_data):
         return response_data
 
-    def get_tool(self, validated_request_data):
-        return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
-
-    def raise_tool_not_published(self):
-        raise ToolNotPublished()
-
     def perform_request(self, validated_request_data):
         from core.utils.tools import get_app_info
 
         # 仅做应用权限校验
         get_app_info()
 
+        tool_name = validated_request_data["name"]
         lite_mode = validated_request_data.get("lite_mode", True)
 
         # 通过名称查找最新版本的工具
-        tool = self.get_tool(validated_request_data)
+        tool = Tool.all_latest_tools().filter(name=tool_name).first()
         if not tool:
             raise ToolDoesNotExist()
         if tool.status != PanelStatus.PUBLISHED:
-            self.raise_tool_not_published()
+            raise ToolNotPublished()
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data
+
+
+class GetToolInputVariableCandidates(ToolBase):
+    """获取工具输入变量的候选项（仅用于平台配置页面）
+
+    用户画像工具：管理员配置 default_value_overrides 时，根据 input_variable.data_source
+    引用的数据源 SQL 查询 BkBase，返回 {id, name} 候选列表。
+
+    约束：
+    - id 必须可转换为整数 gameid，否则跳过
+    - name 必须非空，否则跳过
+    - 返回去重、按 (name, id) 升序排序后的列表
+    """
+
+    name = gettext_lazy("获取工具输入变量候选项")
+    RequestSerializer = GetToolInputVariableCandidatesRequestSerializer
+    ResponseSerializer = ToolInputVariableCandidateSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        raw_name = validated_request_data["raw_name"]
+
+        # 查找工具
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+
+        # 解析工具配置
+        try:
+            config = SmartPageToolConfig.model_validate(tool.config or {})
+        except PydanticValidationError as e:
+            errors = e.errors()
+            detail = "; ".join("{}: {}".format(".".join(str(loc) for loc in err["loc"]), err["msg"]) for err in errors)
+            raise ToolDoesNotExist(message=gettext("工具 %s 配置不合法: %s") % (uid, detail))
+
+        # 定位输入变量
+        var_config = next((v for v in config.input_variable if v.raw_name == raw_name), None)
+        if var_config is None:
+            raise InputVariableNotFoundError(raw_name)
+
+        if not var_config.data_source:
+            raise InputVariableDataSourceNotConfiguredError(raw_name)
+
+        # 定位数据源
+        data_source = next((ds for ds in config.data_sources if ds.name == var_config.data_source), None)
+        if not data_source:
+            raise SmartPageDataSourceNotFound(var_config.data_source)
+
+        # 通过 SmartPageSqlTemplateExecutor 执行 SQL 查询
+        execute_params = SmartPageExecuteParams(
+            data_source_name=data_source.name,
+            params={},
+        )
+        result = SmartPageSqlTemplateExecutor.execute(
+            executor=None,
+            data_source=data_source,
+            params=execute_params,
+        )
+        raw_results = result.result.results
+
+        # 取 id/name 两列，id 转整数，过滤脏数据，去重，按 (name, id) 排序
+        seen_ids = set()
+        candidates = []
+        for row in raw_results:
+            if not isinstance(row, dict):
+                continue
+            try:
+                gid = int(row.get("id"))
+            except (TypeError, ValueError):
+                continue  # id 不可转整数，跳过
+            name = row.get("name")
+            if name is None or str(name) == "":
+                continue  # name 为空，跳过
+            if gid in seen_ids:
+                continue  # 去重
+            seen_ids.add(gid)
+            candidates.append({"id": gid, "name": str(name)})
+
+        candidates.sort(key=lambda x: (x["name"], x["id"]))
+
+        return candidates
 
 
 class GetMCPToolDetailByName(GetToolDetailByNameAPIGW):

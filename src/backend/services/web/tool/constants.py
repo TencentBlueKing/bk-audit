@@ -771,6 +771,19 @@ SmartPageDataSourceConfigUnion = Annotated[
 ]
 
 
+class SmartPageInputVariable(SQLDataSearchInputVariable):
+    """SmartPage 输入变量，复用 SQL 工具变量协议。
+    额外增加 data_source 字段，用于引用 data_sources 中已存在的数据源名称，
+    以便在配置阶段获取候选项（如游戏列表）。
+    """
+
+    data_source: Optional[str] = PydanticField(
+        default=None,
+        title=gettext_lazy("候选项数据源名称"),
+        description=gettext_lazy("引用 data_sources 中已存在的数据源名称，用于配置阶段获取候选项"),
+    )
+
+
 class SmartPageToolConfig(BaseModel):
     """智能页面工具配置"""
 
@@ -786,6 +799,10 @@ class SmartPageToolConfig(BaseModel):
     default_value_overrides: DefaultValueOverrides = PydanticField(
         default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
     )
+    input_variable: Annotated[List[SmartPageInputVariable], ListField(child=DictField())] = PydanticField(
+        default_factory=list,
+        title=gettext_lazy("输入变量列表"),
+    )
 
     @field_validator("data_sources")
     @classmethod
@@ -795,3 +812,23 @@ class SmartPageToolConfig(BaseModel):
             key_field="name",
             error_msg=lambda key: gettext("数据源名称 %s 重复") % key,
         )
+
+    @field_validator("input_variable")
+    @classmethod
+    def validate_unique_input_variable_names(cls, v):
+        return validate_unique_keys(
+            v,
+            key_field="raw_name",
+            error_msg=lambda key: gettext("输入变量名 %s 重复") % key,
+        )
+
+    @model_validator(mode="after")
+    def validate_data_source_reference(self):
+        """校验 input_variable.data_source 引用的数据源名称必须存在于 data_sources 中。"""
+        if not self.input_variable:
+            return self
+        data_source_names = {ds.name for ds in self.data_sources}
+        for var in self.input_variable:
+            if var.data_source and var.data_source not in data_source_names:
+                raise ValueError(gettext("输入变量 %s 引用的数据源 %s 不存在") % (var.raw_name, var.data_source))
+        return self

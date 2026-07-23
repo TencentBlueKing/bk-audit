@@ -24,6 +24,8 @@ from pydantic import ValidationError
 
 from services.web.tool.constants import SmartPageToolConfig, ToolTypeEnum
 from services.web.tool.exceptions import (
+    InputVariableDataSourceNotConfiguredError,
+    InputVariableNotFoundError,
     SmartPageBindParamMissingError,
     SmartPageSqlTemplateRenderError,
 )
@@ -34,7 +36,12 @@ from services.web.tool.executor.model import (
 )
 from services.web.tool.executor.smart_page import render_sql_template
 from services.web.tool.models import Tool
-from services.web.tool.resources import CreateTool, ExecuteTool, UpdateTool
+from services.web.tool.resources import (
+    CreateTool,
+    ExecuteTool,
+    GetToolInputVariableCandidates,
+    UpdateTool,
+)
 
 
 def normalize_sql(sql: str) -> str:
@@ -194,10 +201,11 @@ class TestSqlTemplateRenderer(SimpleTestCase):
         with self.assertRaises(SmartPageSqlTemplateRenderError):
             render_sql_template(sql, {"id": "1"})
 
-    def test_bind_should_render_empty_list_for_in_clause(self):
+    def test_bind_should_render_empty_list_as_null_for_in_clause(self):
+        """空列表渲染为 NULL，使 IN (NULL) 返回空集，等效于限制无游戏"""
         sql = "SELECT * FROM t WHERE id IN ({{ bind('ids', output_type='int') }})"
         rendered = render_sql_template(sql, {"ids": []})
-        self.assertEqual(normalize_sql(rendered), "SELECT * FROM t WHERE id IN ()")
+        self.assertEqual(normalize_sql(rendered), "SELECT * FROM t WHERE id IN (NULL)")
 
     def test_bind_should_quote_string_list_items_for_in_clause(self):
         sql = "SELECT * FROM t WHERE username IN ({{ bind('users') }})"
@@ -353,21 +361,240 @@ class SmartPageAPITestCase(TestCase):
         self.assertEqual(execute_resp["data"]["result"]["data_source_type"], "sql_template")
         self.assertEqual(execute_resp["data"]["result"]["results"], [{"col": "val"}])
 
-    def test_update_smart_page_tool_not_support(self):
-        update_resource = UpdateTool()
-        with self.assertRaisesMessage(Exception, "当前暂不支持智能页面工具更新"):
-            update_resource(
+    def test_update_smart_page_tool_overrides(self):
+        """smart_page 工具更新应支持 default_value_overrides 变更
+
+        直接调用 perform_request（绕过 ResponseSerializer），验证 _smart_page_overrides
+        合并逻辑。此测试覆盖 UpdateTool 对 smart_page 分支的处理。
+        """
+        result = UpdateTool().perform_request(
+            {
+                "uid": self.tool.uid,
+                "_smart_page_overrides": {
+                    "scenes": {"1001": {"risk_level": ["high"]}},
+                    "systems": {},
+                },
+                "tags": [],
+            }
+        )
+        self.assertEqual(result.version, self.tool.version + 1)
+        self.assertEqual(
+            result.config["default_value_overrides"]["scenes"]["1001"]["risk_level"],
+            ["high"],
+        )
+
+    def test_update_smart_page_tool_drops_forbidden_fields(self):
+        """伪造 smart_page 完整 config + 基础属性字段：序列化层应仅保留 overrides
+
+        smart_page 仅允许更新 visibility + default_value_overrides，
+        即使客户端伪造完整 config（含 data_sources/SQL）或基础属性，也必须被丢弃。
+        """
+        from services.web.scene.constants import PanelStatus
+        from services.web.tool.serializers import ToolUpdateRequestSerializer
+
+        forged_config = {
+            # 伪造的 data_sources，试图越权写入恶意 SQL，不应被持久化
+            "data_sources": [
                 {
-                    "uid": self.tool.uid,
-                    "config": {
-                        "data_sources": [
-                            {
-                                "name": "risk_event_source",
-                                "data_source_type": "sql_template",
-                                "config": {"sql_template": "SELECT 2"},
-                            }
-                        ]
-                    },
-                    "tags": [],
+                    "name": "evil_source",
+                    "data_source_type": "sql_template",
+                    "config": {"sql_template": "DROP TABLE games"},
                 }
-            )
+            ],
+            "default_value_overrides": {
+                "scenes": {"1001": {"game_ids": [100, 200]}},
+            },
+        }
+        serializer = ToolUpdateRequestSerializer(
+            data={
+                "uid": self.tool.uid,
+                "config": forged_config,
+                "name": "Hacked Name",
+                "description": "hacked desc",
+                "namespace": "hacked_ns",
+                "status": PanelStatus.UNPUBLISHED.value,
+                "tags": [],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+
+        # config 及伪造的 data_sources 被丢弃，不进入下游更新逻辑
+        self.assertNotIn("config", validated)
+        # 基础属性字段被丢弃，不允许越权改写工具名称/描述/命名空间/状态
+        self.assertNotIn("name", validated)
+        self.assertNotIn("description", validated)
+        self.assertNotIn("namespace", validated)
+        self.assertNotIn("status", validated)
+        # 仅提取 default_value_overrides，供 perform_request 合并
+        self.assertIn("_smart_page_overrides", validated)
+        self.assertEqual(
+            validated["_smart_page_overrides"]["scenes"]["1001"]["game_ids"],
+            [100, 200],
+        )
+
+    def test_update_smart_page_tool_preserves_data_sources_and_name(self):
+        """smart_page 更新仅合并 overrides，data_sources / name 等保持原值不变
+
+        验收标准：伪造 smart_page 完整 config 更新 → SQL 和数据源不变。
+        """
+        original_data_sources = self.tool.config["data_sources"]
+        original_name = self.tool.name
+
+        result = UpdateTool().perform_request(
+            {
+                "uid": self.tool.uid,
+                "_smart_page_overrides": {
+                    "scenes": {"1001": {"game_ids": [100, 200]}},
+                    "systems": {},
+                },
+                "tags": [],
+            }
+        )
+
+        # overrides 变更创建新版本
+        self.assertEqual(result.version, self.tool.version + 1)
+        # data_sources 保持原值，未被伪造数据覆盖
+        self.assertEqual(result.config["data_sources"], original_data_sources)
+        # name 保持原值
+        self.assertEqual(result.name, original_name)
+        # overrides 已合并到新版本 config
+        self.assertEqual(
+            result.config["default_value_overrides"]["scenes"]["1001"]["game_ids"],
+            [100, 200],
+        )
+
+
+class GetToolInputVariableCandidatesTest(TestCase):
+    """获取工具输入变量候选项接口测试
+
+    覆盖点：
+    - 返回规范化 {id, name} 列表：id 转 int、去重、过滤脏数据、按 (name, id) 升序排序
+    - 响应不暴露 rendered_sql
+    - 候选查询不带业务参数
+    - input_variable 未配置 data_source 时拒绝
+    - raw_name 不存在时拒绝
+    """
+
+    def setUp(self):
+        self.namespace = "default_ns"
+        self.tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Audit User Profile",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.SMART_PAGE.value,
+            config=SmartPageToolConfig(
+                marker_type="risk_profile",
+                data_sources=[
+                    {
+                        "name": "game_options",
+                        "description": "游戏候选项",
+                        "data_source_type": "sql_template",
+                        "config": {
+                            "sql_template": "SELECT DISTINCT gameid AS id, game_name AS name FROM games ORDER BY name"
+                        },
+                    }
+                ],
+                input_variable=[
+                    {
+                        "raw_name": "game_ids",
+                        "display_name": "游戏列表",
+                        "required": True,
+                        "field_category": "multiselect",
+                        "choices": [],
+                        "default_value": None,
+                        "is_show": False,
+                        "data_source": "game_options",
+                    }
+                ],
+            ).model_dump(),
+            description="audit user profile tool",
+        )
+
+    @staticmethod
+    def _build_mock_result(rows):
+        """构造 SmartPageSqlTemplateExecutor.execute 的返回值，渲染 SQL 为敏感内容以验证不泄露。"""
+        return SmartPageExecuteResult(
+            data_source_name="game_options",
+            result=SmartPageSqlTemplateExecuteResult(results=rows, rendered_sql="SELECT ... SECRET SQL ..."),
+        )
+
+    @patch("services.web.tool.resources.SmartPageSqlTemplateExecutor.execute")
+    def test_returns_normalized_list_and_hides_sql(self, mock_execute):
+        """候选项接口应返回规范化 {id, name} 列表，且不暴露 rendered_sql"""
+        mock_execute.return_value = self._build_mock_result(
+            [
+                {"id": 200, "name": "GameB"},
+                {"id": 100, "name": "GameA"},
+                {"id": "100", "name": "GameA Dup"},  # id 与上重复（字符串形式）→ 去重
+                {"id": "abc", "name": "BadId"},  # id 不可转 int → 过滤
+                {"id": 300, "name": ""},  # name 为空 → 过滤
+                {"id": 400, "name": None},  # name 为 None → 过滤
+                {"id": 300, "name": "GameC"},  # id 与上面重复 → 去重
+                {"id": 150, "name": "GameA"},  # 同名不同 id → 保留
+                {"id": 500, "name": 12345},  # name 为数字 → 转字符串
+            ]
+        )
+
+        result = GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "game_ids"})
+
+        # 按 (name, id) 升序：数字字符串 "12345" 排在字母前
+        self.assertEqual(
+            result,
+            [
+                {"id": 500, "name": "12345"},
+                {"id": 100, "name": "GameA"},
+                {"id": 150, "name": "GameA"},
+                {"id": 200, "name": "GameB"},
+                {"id": 300, "name": "GameC"},
+            ],
+        )
+        # 每项仅含 id/name 两个键，且 id 必为 int、name 必为 str，不暴露 rendered_sql
+        for item in result:
+            self.assertEqual(set(item.keys()), {"id", "name"})
+            self.assertIsInstance(item["id"], int)
+            self.assertIsInstance(item["name"], str)
+
+    @patch("services.web.tool.resources.SmartPageSqlTemplateExecutor.execute")
+    def test_candidate_query_passes_empty_params(self, mock_execute):
+        """候选项查询不带业务参数：execute 入参 params 为空 dict，且定位到正确数据源"""
+        mock_execute.return_value = self._build_mock_result([])
+
+        GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "game_ids"})
+
+        _, kwargs = mock_execute.call_args
+        self.assertEqual(kwargs["params"].params, {})
+        self.assertEqual(kwargs["data_source"].name, "game_options")
+
+    def test_rejects_missing_data_source(self):
+        """input_variable 未配置 data_source 时应拒绝"""
+        tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Profile Without DataSource",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.SMART_PAGE.value,
+            config=SmartPageToolConfig(
+                data_sources=[],
+                input_variable=[
+                    {
+                        "raw_name": "game_ids",
+                        "display_name": "游戏列表",
+                        "required": True,
+                        "field_category": "multiselect",
+                        "default_value": None,
+                        "is_show": False,
+                    }
+                ],
+            ).model_dump(),
+            description="no data source",
+        )
+
+        with self.assertRaises(InputVariableDataSourceNotConfiguredError):
+            GetToolInputVariableCandidates().perform_request({"uid": tool.uid, "raw_name": "game_ids"})
+
+    def test_raises_when_var_not_found(self):
+        """raw_name 不存在于 input_variable 时应拒绝"""
+        with self.assertRaises(InputVariableNotFoundError):
+            GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "not_exist"})

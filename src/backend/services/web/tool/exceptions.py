@@ -285,3 +285,38 @@ class SmartPageSqlSecurityCheckError(ToolException):
     def __init__(self, detail: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(detail=detail)
         super().__init__(*args, **kwargs)
+
+
+class InputVariableNotFoundError(ToolException):
+    """输入变量不存在"""
+
+    STATUS_CODE = 400
+    ERROR_CODE = "023"
+    MESSAGE = gettext_lazy("输入变量 {raw_name} 不存在")
+
+    def __init__(self, raw_name: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(raw_name=raw_name)
+        super().__init__(*args, **kwargs)
+
+
+class InputVariableDataSourceNotConfiguredError(ToolException):
+    """输入变量未配置 data_source"""
+
+    STATUS_CODE = 400
+    ERROR_CODE = "024"
+    MESSAGE = gettext_lazy("输入变量 {raw_name} 未配置 data_source，无法获取候选项")
+
+    def __init__(self, raw_name: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(raw_name=raw_name)
+        super().__init__(*args, **kwargs)
+
+
+class SmartPageApigwDisabled(ToolException):
+    """
+    智能页面工具暂不支持通过 APIGW 执行
+    存在越权风险
+    """
+
+    STATUS_CODE = 403
+    ERROR_CODE = "025"
+    MESSAGE = gettext_lazy("智能页面工具不支持通过 APIGW 执行")
