@@ -351,6 +351,7 @@ class GetProjectData(BkBaseResource):
     action = "/v3/auth/projects/{project_id}/data/"
     method = "GET"
     url_keys = ["project_id"]
+    cache_type = CacheTypeItem(key="GetProjectData", timeout=60 * 6, user_related=False)
 
 
 class ProjectDataBatchCheck(BkBaseResource):

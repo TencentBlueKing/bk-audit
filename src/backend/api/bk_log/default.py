@@ -21,6 +21,7 @@ from binascii import Error
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
+from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.utils.translation import gettext_lazy
@@ -504,6 +505,7 @@ class GetSpacesMine(BKLogBaseResource):
     name = gettext_lazy("获取空间列表")
     method = "GET"
     action = "/meta/spaces/mine/"
+    cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 6, user_related=False)
 
 
 class CreateCustomCollector(CollectorsBaseResource):
