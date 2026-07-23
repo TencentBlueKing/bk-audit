@@ -22,11 +22,15 @@
     <div class="system-list-page">
       <div class="mb16 action-header">
         <system-access-dropdown />
-        <bk-input
-          v-model="searckKey"
-          :placeholder="t('请输入 系统名称、系统ID 进行搜索')"
-          style="width: 480px;"
-          @change="handleSearch" />
+        <bk-search-select
+          v-model="searchValue"
+          class="search-input"
+          clearable
+          :data="searchSelectData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
+          :placeholder="t('搜索系统名称、系统ID')"
+          unique-select
+          @update:model-value="handleSearch" />
       </div>
       <render-list
         ref="listRef"
@@ -49,6 +53,7 @@
     computed,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
@@ -321,7 +326,58 @@
   const listRef = ref();
   const dataSource = (params: any) => MetaManageService.fetchSystemList({ ...params, audit_status: 'accessed', filter_actions: 'edit_system,view_system' });
 
-  const searckKey = ref('');
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
+
+  // 进出管理页会销毁列表组件，用 sessionStorage 记住搜索条件
+  const SEARCH_STORAGE_KEY = 'system_list_search';
+  const loadSearchValue = (): SearchKey[] => {
+    try {
+      const raw = sessionStorage.getItem(SEARCH_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const persistSearchValue = (value: SearchKey[]) => {
+    if (value?.length) {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, JSON.stringify(value));
+      return;
+    }
+    sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+  };
+  const buildKeywordFromSearch = (keyword: SearchKey[] = []) => {
+    const parts: string[] = [];
+    keyword.forEach((item) => {
+      if (item.values?.length) {
+        parts.push(...item.values.map(v => v.id).filter(Boolean));
+      }
+    });
+    return parts.join(',') || '';
+  };
+
+  const searchValue = ref<SearchKey[]>(loadSearchValue());
+  watch(searchValue, (val) => {
+    persistSearchValue(val);
+  }, { deep: true });
+
+  const searchSelectData = [
+    {
+      name: t('系统名称'),
+      id: 'name',
+      placeholder: t('请输入系统名称'),
+    },
+    {
+      name: t('系统ID'),
+      id: 'system_id',
+      placeholder: t('请输入系统ID'),
+    },
+  ];
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
   const systemStatusMap = (status: string) => {
@@ -417,10 +473,10 @@
     localStorage.setItem('audit-system-list-setting', JSON.stringify(setting));
   };
 
-  // 搜索
-  const handleSearch = (keyword: string|number) => {
+  // 搜索（接口仍使用 keyword，聚合各条件值）
+  const handleSearch = (keyword: SearchKey[] = searchValue.value) => {
     listRef.value.fetchData({
-      keyword,
+      keyword: buildKeywordFromSearch(keyword),
     });
   };
 
@@ -438,7 +494,8 @@
   };
   // 清空搜索
   const handleClearSearch = () => {
-    searckKey.value = '';
+    searchValue.value = [];
+    persistSearchValue([]);
     listRef.value.fetchData({ keyword: '' });
   };
   // 筛选过滤
@@ -483,7 +540,9 @@
   };
 
   onMounted(() => {
-    listRef.value.fetchData();
+    listRef.value.fetchData({
+      keyword: buildKeywordFromSearch(searchValue.value),
+    });
   });
 
 </script>
@@ -496,6 +555,10 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+
+    .search-input {
+      width: 480px;
     }
 
     .audit-render-list {

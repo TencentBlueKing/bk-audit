@@ -364,6 +364,7 @@
 
   interface Exposes {
     getToolsList: (id: string) => void;
+    clearSearch: () => void;
   }
   interface Emits {
     (e: 'change'): void;
@@ -413,7 +414,30 @@
     values: Array<{ id: string; name: string }>;
   }
 
-  const searchValue = ref<SearchKey[]>([]);
+  // 列表搜索条件持久化：toolsSquare ↔ toolDetail 路由 key 不同会销毁重建组件
+  const SEARCH_STORAGE_KEY = 'tools_square_list_search';
+  const loadSearchValue = (): SearchKey[] => {
+    try {
+      const raw = sessionStorage.getItem(SEARCH_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const persistSearchValue = (value: SearchKey[]) => {
+    if (value?.length) {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, JSON.stringify(value));
+      return;
+    }
+    sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+  };
+
+  const searchValue = ref<SearchKey[]>(loadSearchValue());
+  watch(searchValue, (val) => {
+    persistSearchValue(val);
+  }, { deep: true });
 
   // bk-search-select 搜索条件配置
   const searchSelectData = [
@@ -608,6 +632,8 @@
   });
 
   // 监听场景切换，按当前场景拉取全量工具列表，避免缺少 scope_type/scope_id 导致的请求失败
+  // 注意：搜索条件清空只在父组件 handleSceneChange(isActualChange) 中处理，
+  // 避免路由重建 / 场景初始化时误清刚恢复的搜索条件
   watch(() => props.scopeParams, (val) => {
     if (!val || !val.scope_type) return;
     fetchAllToolsList({ ...val, status: 'published' });
@@ -882,6 +908,10 @@
 
 
   defineExpose<Exposes>({
+    clearSearch() {
+      searchValue.value = [];
+      persistSearchValue([]);
+    },
     getToolsList(id: string) {
       nextTick(() => {
         const search: Record<string, any> = {};

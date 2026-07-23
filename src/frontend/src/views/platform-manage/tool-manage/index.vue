@@ -133,9 +133,9 @@
 </template>
 
 <script setup lang='ts'>
-  import { watch, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
+  import { watch, onMounted, onUnmounted, reactive, ref, computed, nextTick } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
+  import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
   import tippy, { type Instance } from 'tippy.js';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -168,6 +168,32 @@
     name: string;
     values: Array<{ id: string; name: string }>;
   }
+
+  // 进出编辑/新建页会销毁列表组件，用 sessionStorage 记住搜索与状态筛选
+  const SEARCH_STORAGE_KEY = 'platform_tool_manage_list_search';
+  const loadListSearchCache = (): { search: SearchKey[]; status: string } => {
+    try {
+      const raw = sessionStorage.getItem(SEARCH_STORAGE_KEY);
+      if (!raw) return { search: [], status: 'all' };
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return { search: parsed, status: 'all' };
+      }
+      return {
+        search: Array.isArray(parsed?.search) ? parsed.search : [],
+        status: typeof parsed?.status === 'string' ? parsed.status : 'all',
+      };
+    } catch {
+      return { search: [], status: 'all' };
+    }
+  };
+  const persistListSearchCache = (search: SearchKey[], status: string) => {
+    if (search?.length || status !== 'all') {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, JSON.stringify({ search, status }));
+      return;
+    }
+    sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+  };
 
   interface SearchSelectItem {
     id: string;
@@ -208,7 +234,8 @@
   const router = useRouter();
   const route = useRoute();
   const isLoading = ref(true);
-  const searchValue = ref<SearchKey[]>([]);
+  const initialListSearchCache = loadListSearchCache();
+  const searchValue = ref<SearchKey[]>(initialListSearchCache.search);
 
   const visibilitySceneOptions = ref<Array<{ id: number; name: string }>>([]);
   const visibilitySystemOptions = ref<Array<{ id: number; system_id?: string; name: string }>>([]);
@@ -478,12 +505,16 @@
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
   const allToolsData = ref<Array<ToolInfo>>([]);
 
-  const statusFilter = ref('all');
+  const statusFilter = ref(initialListSearchCache.status);
   const statusCounts = reactive({
     all: 0,
     published: 0,
     unpublished: 0,
   });
+
+  watch([searchValue, statusFilter], ([search, status]) => {
+    persistListSearchCache(search, status);
+  }, { deep: true });
 
   const confirmActionType = ref<ActionType>('delete');
   const confirmTarget = ref<ToolItem | null>(null);
@@ -761,11 +792,23 @@
       refreshAllData();
     });
     document.addEventListener('mouseover', handleSearchMenuMouseOver, true);
+    // 统一由父组件发起列表请求，恢复搜索与状态筛选
+    nextTick(() => {
+      handleSearch(searchValue.value);
+    });
   });
 
   onUnmounted(() => {
     document.removeEventListener('mouseover', handleSearchMenuMouseOver, true);
     off('scene:change');
+  });
+
+  // 进入新建/编辑保留搜索；切到其他路由（如场景管理）时重置
+  onBeforeRouteLeave((to) => {
+    const keepSearchRoutes = ['platformToolCreate', 'platformToolEdit'];
+    if (!keepSearchRoutes.includes(String(to.name))) {
+      sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+    }
   });
 </script>
 
