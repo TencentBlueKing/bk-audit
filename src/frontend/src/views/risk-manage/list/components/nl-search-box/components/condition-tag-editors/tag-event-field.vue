@@ -19,7 +19,7 @@
     ref="wrapperRef"
     class="condition-tag-item condition-tag-event-item"
     :class="{ 'is-editing': isEditingValue }">
-    <span class="tag-label">{{ item.display_name }}：</span>
+    <span class="tag-label">{{ item.display_name }}</span>
     <!-- 操作符区域 -->
     <bk-popover
       ref="operatorPopoverRef"
@@ -33,7 +33,7 @@
         class="tag-operator-badge"
         :class="{ 'is-active': isOperatorShow }"
         @click.stop="handleToggleOperator">
-        {{ item.operator }}
+        {{ operatorDisplayName }}
       </span>
       <template #content>
         <div
@@ -191,19 +191,44 @@
     Object.assign(el.style, { height: `${scrollH}px` });
   };
 
+  // 操作符中文名兜底（接口未翻译或回退列表时使用）
+  const operatorNameMap: Record<string, string> = {
+    '=': t('=  等于'),
+    '!=': t('!=  不等于'),
+    CONTAINS: t('包含'),
+    'NOT CONTAINS': t('不包含'),
+    IN: t('IN  属于'),
+    'NOT IN': t('NOT IN  不属于'),
+    '>=': t('>=  大于等于'),
+    '<=': t('<=  小于等于'),
+    '>': t('>  大于'),
+    '<': t('<  小于'),
+  };
+
+  const resolveOperatorName = (id: string, name?: string) => {
+    // 接口已带中文则直接用；纯英文 id/name 时走前端中文兜底
+    if (name && name !== id && /[\u4e00-\u9fff]/.test(name)) {
+      return name;
+    }
+    return operatorNameMap[id] || name || id;
+  };
+
   // 操作符列表（与接口 event_filters 操作符枚举保持一致）
-  const operatorList = computed(() => props.conditionList || [
-    { id: '=', name: '=' },
-    { id: '!=', name: '!=' },
-    { id: 'CONTAINS', name: '包含' },
-    { id: 'NOT CONTAINS', name: '不包含' },
-    { id: 'IN', name: 'IN' },
-    { id: 'NOT IN', name: 'NOT IN' },
-    { id: '>=', name: '>=' },
-    { id: '<=', name: '<=' },
-    { id: '>', name: '>' },
-    { id: '<', name: '<' },
-  ]);
+  const operatorList = computed(() => {
+    const list = props.conditionList?.length
+      ? props.conditionList
+      : Object.entries(operatorNameMap).map(([id, name]) => ({ id, name }));
+    return list.map(item => ({
+      ...item,
+      name: resolveOperatorName(item.id, item.name),
+    }));
+  });
+
+  // 标签上展示操作符中文名
+  const operatorDisplayName = computed(() => {
+    const found = operatorList.value.find(item => item.id === props.item.operator);
+    return found?.name || resolveOperatorName(props.item.operator);
+  });
 
   // 是否为多值模式（IN / NOT IN）
   const isMultiValueMode = computed(() => props.item.operator === 'IN' || props.item.operator === 'NOT IN');
