@@ -28,11 +28,15 @@
           @click="handleShowOperation">
           {{ t('新建') }}
         </auth-button>
-        <bk-input
-          v-model="search"
+        <bk-search-select
+          v-model="searchValue"
           class="search-input"
+          clearable
+          :data="searchSelectData"
+          :defaut-using-item="{ inputHtml: t('请选择') }"
           :placeholder="t('搜索 ES 源名称、地址')"
-          @change="handleSearch" />
+          unique-select
+          @update:model-value="handleSearch" />
       </div>
       <bk-loading :loading="isLoading">
         <bk-table
@@ -139,8 +143,28 @@
     fields: Record<string, any>[],
     size: string
   }
+
+  interface SearchKey {
+    id: string;
+    name: string;
+    values: Array<{ id: string; name: string }>;
+  }
+
+  const { t } = useI18n();
   const isSearching = ref(false);
-  const search = ref('');
+  const searchValue = ref<SearchKey[]>([]);
+  const searchSelectData = [
+    {
+      name: t('名称'),
+      id: 'name',
+      placeholder: t('请输入存储名称'),
+    },
+    {
+      name: t('地址'),
+      id: 'address',
+      placeholder: t('请输入 ES 地址（IP）'),
+    },
+  ];
   const { feature: showStorageEdit } = useFeature('storage_edit');
   const tableColumn = [
     {
@@ -344,7 +368,6 @@
     }
     return initSettings();
   });
-  const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const isShowOperation = ref(false);
   const showFooterSlot = ref(true);
@@ -422,14 +445,30 @@
     editData.value = {} as StorageModel;
   };
 
-  // 搜索
-  const handleSearch = (keyword: string|number) => {
-    isSearching.value = true;
-    fetchList({ keyword });
+  // 搜索（接口仍使用 keyword，聚合各条件值）
+  const buildKeywordFromSearch = (keyword: SearchKey[] = []) => {
+    const parts: string[] = [];
+    keyword.forEach((item) => {
+      if (item.values?.length) {
+        parts.push(...item.values.map(v => v.id).filter(Boolean));
+      }
+    });
+    return parts.join(',') || '';
+  };
+
+  const handleSearch = (keyword: SearchKey[] = searchValue.value) => {
+    const keywordStr = buildKeywordFromSearch(keyword);
+    isSearching.value = Boolean(keywordStr);
+    if (keywordStr) {
+      fetchList({ keyword: keywordStr });
+      return;
+    }
+    fetchList();
   };
 
   const handleClearSearch = () => {
-    search.value = '';
+    searchValue.value = [];
+    isSearching.value = false;
     fetchList();
   };
   // 设为默认
