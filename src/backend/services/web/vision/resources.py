@@ -875,20 +875,20 @@ class ListPlatformPanels(BKVision):
 
             # 2) 按具体 scene/system ID 可见范围
             if scene_ids or system_ids:
-                scoped_uids = {
-                    str(uid)
-                    for uid in CompositeScopeFilter.filter_queryset(
+                scoped_ids = {
+                    str(panel_id)
+                    for panel_id in CompositeScopeFilter.filter_queryset(
                         queryset=queryset,
                         binding_type=binding_type,
                         scene_id=scene_ids,
                         system_id=system_ids,
                         resource_type=ResourceVisibilityType.PANEL,
-                        pk_field="uid",
-                    ).values_list("uid", flat=True)
+                        pk_field="id",
+                    ).values_list("id", flat=True)
                 }
-                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+                matched_uids = scoped_ids if matched_uids is None else (matched_uids & scoped_ids)
 
-            queryset = queryset.filter(uid__in=matched_uids or [])
+            queryset = queryset.filter(id__in=matched_uids or [])
 
         bindings = self._get_binding_map(panel_ids=list(queryset.values_list("id", flat=True)))
         data = []
