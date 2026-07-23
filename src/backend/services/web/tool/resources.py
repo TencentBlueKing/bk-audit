@@ -1603,58 +1603,59 @@ class GetToolDetail(ToolBase):
     def _override_default_values(self, tool, scene_id, system_id):
         """根据场景/系统ID动态覆盖默认值
 
-        用途: 工具详情页请求时，根据用户所在的场景/系统，将 input_variable 中的
-        default_value 替换为 default_value_overrides 中配置的覆盖值。
-        这样前端表单会展示该场景/系统下的正确默认值。
-
         default_value_overrides 位于 config 层级，结构：
         {
             "scenes": {
-                "场景ID1": {"raw_name1": "覆盖值1", "raw_name2": "覆盖值2"}
+                "场景ID1": {"raw_name1": "默认值1", "raw_name2": "默认值2"}
             },
             "systems": {
-                "系统ID1": {"raw_name1": "覆盖值3"}
+                "系统ID1": {"raw_name1": "默认值3"}
             }
         }
         """
+        # 如果没有场景或系统信息，直接返回
         if not scene_id and not system_id:
             return
 
+        # 获取工具配置
         config = tool.config
         if not config:
             return
 
+        # 从 config 层级获取 default_value_overrides
         default_value_overrides = config.get("default_value_overrides", {})
         if not default_value_overrides:
             return
 
-        # input_variables 是工具配置中的输入变量定义列表（注意: 直接引用 config 中的列表，修改会同步回去）
+        # 获取输入变量配置
         input_variables = config.get("input_variable", [])
         if not input_variables:
             return
 
-        # 收集所有覆盖值: {raw_name: 覆盖后的默认值}
+        # 收集当前场景/系统的默认值覆盖映射
+        # 结构: {raw_name: overridden_default_value}
         overridden_defaults = {}
 
-        # 场景级覆盖（优先级低）
+        # 优先检查场景级别的参数覆盖
         if scene_id:
             scene_id_str = str(scene_id)
             scene_overrides = default_value_overrides.get("scenes", {})
             if scene_id_str in scene_overrides:
+                # scene_overrides[scene_id_str] 是 {raw_name: default_value} 字典
                 scene_defaults = scene_overrides[scene_id_str]
                 if isinstance(scene_defaults, dict):
                     overridden_defaults.update(scene_defaults)
 
-        # 系统级覆盖（优先级高，会覆盖场景级的同名参数）
+        # 其次检查系统级别的参数覆盖（会覆盖场景级别的同名参数）
         if system_id:
             system_overrides = default_value_overrides.get("systems", {})
             if system_id in system_overrides:
+                # system_overrides[system_id] 是 {raw_name: default_value} 字典
                 system_defaults = system_overrides[system_id]
                 if isinstance(system_defaults, dict):
                     overridden_defaults.update(system_defaults)
 
-        # 将覆盖值写入 input_variable[x].default_value
-        # 前端表单渲染时会读取 default_value 展示为默认选中项
+        # 根据收集到的映射，覆盖输入变量的默认值
         for var_config in input_variables:
             raw_name = var_config.get("raw_name")
             if not raw_name:
