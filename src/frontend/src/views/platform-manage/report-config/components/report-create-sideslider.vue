@@ -118,6 +118,7 @@
             v-else-if="showParamOverrideConfig"
             :form-data="paramConfigFormData"
             :input-variables="inputVariables"
+            override-select-full-width
             :popover-z-index="10050"
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
@@ -1050,6 +1051,12 @@
   .bk-infobox.report-disable-infobox-above-sideslider,
   .bk-infobox.report-disable-infobox-above-sideslider .bk-modal-wrapper,
   .bk-infobox.report-disable-infobox-above-sideslider .bk-modal-mask {
+    z-index: 10060 !important;
+  }
+
+  /* +n hover tips：v-bk-tooltips 默认 z-index≈8000，低于侧滑 9999 */
+  .bk-select-tooltips,
+  .bk-popper.visible-range-overflow-tips {
     z-index: 10060 !important;
   }
 </style>
