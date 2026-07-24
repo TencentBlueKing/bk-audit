@@ -338,6 +338,7 @@
 
   :deep(.override-param-select) {
     width: 100%;
+    font-size: 12px;
 
     .bk-select-trigger {
       width: 100%;
@@ -347,9 +348,18 @@
     .bk-select-tag {
       width: 100%;
       min-height: 32px;
+      font-size: 12px;
       background-color: #fff;
       border-color: #c4c6cc;
       box-sizing: border-box;
+    }
+
+    .bk-select-tag-input {
+      font-size: 12px;
+
+      &::placeholder {
+        font-size: 12px;
+      }
     }
 
     .bk-select-tag-wrapper {
