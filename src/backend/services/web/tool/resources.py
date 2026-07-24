@@ -60,7 +60,6 @@ from services.web.scene.constants import (
     PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
-    VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
@@ -88,9 +87,9 @@ from services.web.tool.exceptions import (
     DataSearchTablePermission,
     InputVariableDataSourceNotConfiguredError,
     InputVariableNotFoundError,
+    MCPToolNotPublished,
     SmartPageApigwDisabled,
     SmartPageDataSourceNotFound,
-    MCPToolNotPublished,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
@@ -1076,125 +1075,24 @@ class ExecuteTool(ToolBase):
     RequestSerializer = ExecuteToolReqSerializer
     ResponseSerializer = ExecuteToolRespSerializer
 
-    def _get_user_allowed_scopes(self, username: str, tool) -> Tuple[List[str], List[str]]:
-        """获取 (用户有权场景/系统) ∩ (工具可见场景/系统)。
-        避免工具不可见范围的 override 残留配置被使用（覆盖配置在工具不可见范围 → 不进入允许集合）。
+    def _get_user_allowed_scopes(self, username: str) -> Tuple[List[str], List[str]]:
+        """
+        获取用户有权限的场景和系统列表。
         """
         scope_permission = ScopePermission(username=username)
-        # 用户有权限查看的场景 ID 和系统 ID
-        user_scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
-        user_system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
+        scene_ids = scope_permission.get_scene_ids(ScopeContext(ScopeType.CROSS_SCENE), ActionEnum.VIEW_SCENE)
+        system_ids = scope_permission.get_system_ids(ScopeContext(ScopeType.CROSS_SYSTEM), ActionEnum.VIEW_SYSTEM)
 
-        # 查询工具的 ResourceBinding（可见范围绑定关系）
-        # 无 binding → 工具无可见范围限制，保留用户全部有权范围
-        binding = ResourceBinding.objects.filter(
-            resource_type=ResourceVisibilityType.TOOL,
-            resource_id=str(tool.uid),
-        ).first()
-        if not binding:
-            return [str(sid) for sid in user_scene_ids], list(user_system_ids)
-
-        # 根据 binding_type 和 visibility_type 计算工具可见的场景/系统集合
-        # 返回值语义: set = 仅这些 ID 可见, None = 该维度不限制（全集）
-        if binding.binding_type == BindingType.SCENE_BINDING:
-            # 场景级绑定: 仅绑定的场景可见，系统维度固定为空（场景级工具不按系统限制）
-            bound_scene_ids = set(
-                binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
-            )
-            bound_system_ids = set()
-        else:
-            # 平台级绑定: 按 visibility_type 决定各维度是否受限
-            vt = binding.visibility_type
-            if vt == VisibilityScope.ALL_VISIBLE:
-                # 全部可见: 两个维度都不限制
-                bound_scene_ids, bound_system_ids = None, None
-            elif vt == VisibilityScope.ALL_SCENES:
-                # 所有场景可见，系统维度为空（不按系统限制）
-                bound_scene_ids, bound_system_ids = None, set()
-            elif vt == VisibilityScope.ALL_SYSTEMS:
-                # 所有系统可见，场景维度为空（不按场景限制）
-                bound_scene_ids, bound_system_ids = set(), None
-            elif vt == VisibilityScope.SPECIFIC_SCENES:
-                # 仅指定场景可见
-                bound_scene_ids = set(
-                    binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
-                )
-                bound_system_ids = set()
-            elif vt == VisibilityScope.SPECIFIC_SYSTEMS:
-                # 仅指定系统可见
-                bound_scene_ids, bound_system_ids = set(), set(
-                    binding.binding_systems.values_list("system_id", flat=True)
-                )
-            elif vt == VisibilityScope.SCENES_AND_SYSTEMS:
-                # 同时指定场景和系统
-                bound_scene_ids = set(
-                    binding.binding_scenes.filter(scene__is_deleted=False).values_list("scene_id", flat=True)
-                )
-                bound_system_ids = set(binding.binding_systems.values_list("system_id", flat=True))
-            else:
-                bound_scene_ids, bound_system_ids = set(), set()
-
-        # 求交集: 用户权限 ∩ 工具可见范围
-        # None = 该维度不限制（全集），交集结果为用户全部有权范围
-        # set = 仅保留同时在用户权限和工具可见范围内的 ID
-        intersected_scenes = (
-            [str(sid) for sid in user_scene_ids]
-            if bound_scene_ids is None
-            else [str(sid) for sid in user_scene_ids if sid in bound_scene_ids]
-        )
-        intersected_systems = (
-            list(user_system_ids)
-            if bound_system_ids is None
-            else [sid for sid in user_system_ids if sid in bound_system_ids]
-        )
-        return intersected_scenes, intersected_systems
+        return [str(scene_id) for scene_id in scene_ids], list(system_ids)
 
     def _validate_default_value_permissions(self, tool, params, username):
         """校验执行时默认值的权限
 
-         校验规则：
-         1. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
-            用户可自由修改，无需校验（用户可见场景）。
-         2. 允许用户使用其权限范围内场景/系统配置的默认值覆盖。
-
-         1. 假设有一个输入变量：game_ids
-             "default_value_overrides": {
-                 "scenes": {
-                   "1001": {
-                     "game_ids": [100, 200]   --> 场景覆盖值
-                   }
-                 },
-                 "systems": {
-                   "bk_base": {
-                     "game_ids": [100, 200, 500]   --> 系统覆盖值
-                   }
-                 }
-               }
-            input_var_config_map = {
-                 "game_ids": {
-                     "raw_name": "game_ids",
-                     "display_name": "游戏ID",
-                     "type": "multiselect",
-                     "required": true,
-                     "is_show": false,
-                     "default_value": [100, 200, 300]   --> 原始默认值
-                 }
-             },
-        2. 用户从场景1001进入工具详情页，提交的参数值为
-             {
-               "tool_variables": [
-                 {"raw_name": "game_ids", "value": [100, 200]}
-               ]
-             }
-             input_variable_map = {
-                 "game_ids": [100, 200]   # ← 用户提交的值
-             }
-        3. 用户对场景1001、1002以及系统bk_base有权限，则最终允许的可选默认值：
-         遍历场景 1001: game_ids 覆盖为 [100, 200] → allowed_values = [[100, 200]]
-         遍历场景 1002: 无覆盖 → has_unrestricted_scope = True → allowed_values = [[100, 200],[100, 200, 300]]
-         遍历系统 bk_base: game_ids 覆盖为 [100, 200, 500] → allowed_values = [[100, 200], [100, 200, 300], [100, 200, 500] ]
-         4. 最终校验
-             input_variable_map['game_ids'] in allowed_values  -->  校验通过
+        校验规则：
+        1. 允许用户使用其权限范围内场景/系统。
+        2. 工具授权范围（ResourceBinding）与用户权限范围的交集。
+        3. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
+           用户可自由修改，无需校验（用户可见场景）。
         """
         config = tool.config
         if not config:
@@ -1204,98 +1102,162 @@ class ExecuteTool(ToolBase):
         if not default_value_overrides:
             return
 
-        # 获取用户有权的 scope，(用户权限 ∩ 工具可见范围)，只保留用户能访问且工具也可见的场景/系统
-        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username, tool)
+        # 1. 获取用户实际可访问的范围（用户权限 ∩ 工具授权）
+        accessible_scenes, accessible_systems = self._get_accessible_scopes(username, tool.uid)
+        if not accessible_scenes and not accessible_systems:
+            return
 
-        # 获取工具的输入变量配置
-        input_variables_config = config.get("input_variable", [])
+        # 2. 收集允许的默认值和覆盖情况
+        allowed_defaults, has_uncovered_scope = self._collect_allowed_defaults(
+            default_value_overrides, accessible_scenes, accessible_systems
+        )
 
-        # 获取用户输入的变量值
-        tool_variables = params.get("tool_variables", [])
+        # 3. 校验输入变量
+        self._validate_input_variables(config, params, allowed_defaults, has_uncovered_scope)
 
-        # scenes_overrides / systems_overrides: 管理员为各场景/系统设置的覆盖值
+    def _get_accessible_scopes(self, username, tool_uid):
+        """获取用户实际可访问的工具范围（用户权限 ∩ 工具授权）
+
+        Returns:
+            tuple: (accessible_scenes, accessible_systems)
+        """
+        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
+
+        binding = (
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=tool_uid,
+            )
+            .prefetch_related('binding_scenes__scene', 'binding_systems')
+            .first()
+        )
+
+        if binding:
+            tool_bound_scenes = set(
+                binding.binding_scenes.filter(scene__is_deleted=False).values_list('scene_id', flat=True)
+            )
+            tool_bound_systems = set(binding.binding_systems.values_list('system_id', flat=True))
+        else:
+            tool_bound_scenes = set()
+            tool_bound_systems = set()
+
+        # 取交集：用户实际可访问的工具范围（用户权限 ∩ 工具授权）
+        return (
+            set(user_allowed_scene_ids) & tool_bound_scenes,
+            set(user_allowed_system_ids) & tool_bound_systems,
+        )
+
+    def _collect_allowed_defaults(self, default_value_overrides, accessible_scenes, accessible_systems):
+        """收集用户实际可访问的场景/系统允许的默认值
+
+        Args:
+            default_value_overrides: 默认值覆盖配置
+            accessible_scenes: 可访问的场景 ID 集合
+            accessible_systems: 可访问的系统 ID 集合
+
+        Returns:
+            tuple: (allowed_defaults, has_uncovered_scope)
+        """
+        allowed_defaults = {}
         scenes_overrides = default_value_overrides.get("scenes", {})
         systems_overrides = default_value_overrides.get("systems", {})
 
-        # input_variable_map: 用户实际提交的覆盖值
-        input_variable_map = {}
-        for var in tool_variables:
-            raw_name = var.get("raw_name")
-            if not raw_name:
+        # 收集场景级别的默认值
+        for scene_id in accessible_scenes:
+            overrides = scenes_overrides.get(scene_id)
+            if not overrides or not isinstance(overrides, dict):
                 continue
-            input_variable_map[raw_name] = var.get("value")
+            for raw_name, default_value in overrides.items():
+                if raw_name:
+                    allowed_defaults.setdefault(raw_name, []).append(default_value)
 
-        # input_var_config_map: 工具配置中全部输入变量的定义映射，用于遍历所有隐藏变量（is_show=False）
-        input_var_config_map = {}
-        for var in input_variables_config:
-            raw_name = var.get("raw_name")
-            if raw_name:
-                input_var_config_map[raw_name] = var
-
-        # 校验 is_show=False 的参数
-        for raw_name, input_var_config in input_var_config_map.items():
-            # 跳过用户可见的参数（is_show=True）：用户可以自由修改这些参数，无需校验
-            if input_var_config.get("is_show", True):
+        # 收集系统级别的默认值
+        for system_id in accessible_systems:
+            overrides = systems_overrides.get(system_id)
+            if not overrides or not isinstance(overrides, dict):
                 continue
-            # 豁免时间范围选择器的权限校验（支持相对时间表达式）
-            if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
-                continue
+            for raw_name, default_value in overrides.items():
+                if raw_name:
+                    allowed_defaults.setdefault(raw_name, []).append(default_value)
 
-            # 获取工具的原始默认值
-            original_default = _normalize_override_value(input_var_config.get("default_value"))
+        # 计算交集范围内无覆盖配置的场景/系统
+        uncovered_scenes = accessible_scenes - set(scenes_overrides.keys())
+        uncovered_systems = accessible_systems - set(systems_overrides.keys())
+        has_uncovered_scope = bool(uncovered_scenes or uncovered_systems)
 
-            # effective_value（实际参与校验的值）:
-            #   - 用户提交了该变量 → 用用户提交值（规范化后），如 [100, 200]
-            #   - 用户未提交该变量 → 回退到 original_default，如 [100, 200, 300]
-            if raw_name in input_variable_map:
-                effective_value = _normalize_override_value(input_variable_map[raw_name])
-            else:
-                effective_value = original_default
+        return allowed_defaults, has_uncovered_scope
 
-            # 构建 allowed_values，由两部分组成:
-            #   A. 各有权 scope 的覆盖值（非 null）→ 直接追加到 allowed_values
-            #   B. 如果存在无覆盖的 scope → 在所有 scope 遍历完毕后，追加 original_default
-            allowed_values = []
-            # 标记是否存在对该变量无覆盖的有权 scope（null 覆盖或整层不存在都视为无覆盖）
-            has_unrestricted_scope = False
+    def _validate_input_variables(self, config, params, allowed_defaults, has_uncovered_scope):
+        """校验输入变量的默认值权限
 
-            # A1: 遍历用户有权的场景，收集场景级覆盖值
-            for scope_id in user_allowed_scene_ids:
-                scope_overrides = scenes_overrides.get(scope_id)
-                if isinstance(scope_overrides, dict) and raw_name in scope_overrides:
-                    override_value = scope_overrides[raw_name]
-                    if override_value is not None:
-                        allowed_values.append(_normalize_override_value(override_value))
-                    else:
-                        has_unrestricted_scope = True
-                else:
-                    has_unrestricted_scope = True
+        Args:
+            config: 工具配置
+            params: 请求参数
+            allowed_defaults: 允许的默认值字典
+            has_uncovered_scope: 是否存在无覆盖的范围
+        """
+        input_variables_config = config.get("input_variable", [])
+        tool_variables = params.get("tool_variables", [])
 
-            # A2: 遍历用户有权的系统，收集系统级覆盖值
-            for scope_id in user_allowed_system_ids:
-                scope_overrides = systems_overrides.get(scope_id)
-                if isinstance(scope_overrides, dict) and raw_name in scope_overrides:
-                    override_value = scope_overrides[raw_name]
-                    if override_value is not None:
-                        allowed_values.append(_normalize_override_value(override_value))
-                    else:
-                        has_unrestricted_scope = True
-                else:
-                    has_unrestricted_scope = True
+        input_variable_map = {var["raw_name"]: var.get("value") for var in tool_variables if var.get("raw_name")}
 
-            # B: 存在无覆盖的 scope → 原始默认值也合法
-            # 示例: 场景 1002 未配置覆盖默认值 → original_default [100, 200, 300] 也加入 allowed_values
-            if has_unrestricted_scope:
-                allowed_values.append(original_default)
+        input_var_config_map = {var["raw_name"]: var for var in input_variables_config if var.get("raw_name")}
 
-            # 最终校验
-            # effective_value 必须在 allowed_values 中命中至少一个值，否则抛权限异常
-            # 示例: effective_value=[100, 200], allowed_values=[[100,200], ...] → 命中场景1001覆盖值 → 通过
-            if effective_value not in allowed_values:
-                raise PermissionException(
-                    action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                    permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
-                )
+        # 校验参数
+        for raw_name, value in input_variable_map.items():
+            self._validate_single_variable(raw_name, value, input_var_config_map, allowed_defaults, has_uncovered_scope)
+
+    def _validate_single_variable(self, raw_name, value, input_var_config_map, allowed_defaults, has_uncovered_scope):
+        """校验单个输入变量的默认值权限
+
+        Args:
+            raw_name: 变量原始名称
+            value: 变量值
+            input_var_config_map: 输入变量配置映射
+            allowed_defaults: 允许的默认值字典
+            has_uncovered_scope: 是否存在无覆盖的范围
+        """
+        input_var_config = input_var_config_map.get(raw_name, {})
+
+        # 跳过 is_show=True 的参数
+        if input_var_config.get("is_show", True):
+            return
+
+        # 豁免时间范围选择器
+        if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
+            return
+
+        original_default = input_var_config.get("default_value")
+
+        # 根据覆盖情况校验
+        if raw_name not in allowed_defaults:
+            # 无覆盖配置，只能用原始默认值
+            if value != original_default:
+                self._raise_permission_exception(raw_name, use_original_message=True)
+        elif has_uncovered_scope:
+            # 有无覆盖的场景/系统，允许：覆盖值 OR 原始默认值
+            if value not in allowed_defaults[raw_name] and value != original_default:
+                self._raise_permission_exception(raw_name)
+        else:
+            # 所有场景/系统都有覆盖，只能用覆盖值
+            if value not in allowed_defaults[raw_name]:
+                self._raise_permission_exception(raw_name)
+
+    def _raise_permission_exception(self, var_name, use_original_message=False):
+        """抛出权限异常
+
+        Args:
+            var_name: 变量名称
+            use_original_message: 是否使用原始默认值的错误消息
+        """
+        if use_original_message:
+            action_name = gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": var_name}
+            permission = gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": var_name}
+        else:
+            action_name = gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": var_name}
+            permission = gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": var_name}
+
+        raise PermissionException(action_name=action_name, permission=permission)
 
     def perform_request(self, validated_request_data):
         """

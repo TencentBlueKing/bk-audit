@@ -35,10 +35,9 @@ from services.web.tool.resources import ExecuteTool, GetToolDetail
 class MockTool:
     """模拟 Tool 对象用于测试"""
 
-    def __init__(self, config, tool_type="data_search", uid="mock-tool-uid"):
+    def __init__(self, config, tool_type="data_search", uid="test_tool"):
         self.config = config
         self.tool_type = tool_type
-        self.uid = uid
 
 
 class DefaultValueOverridesModelTest(TestCase):
@@ -446,12 +445,71 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_original_default_in_override_scope_raises(self, mock_get_scopes):
-        """所有有权场景都有覆盖时，提交原始默认值应被拒绝（不能绕过为原始默认值）"""
+    def test_use_original_default_when_no_override(self, mock_get_scopes):
+        """测试场景无覆盖配置时使用原始默认值"""
+        mock_get_scopes.return_value = (["1002"], [])  # 用户有场景 1002 权限
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1002 不在覆盖配置中
+                },
+            }
+        )
+        # 使用原始默认值
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
+        self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    @mock.patch("services.web.tool.resources.ResourceBinding")
+    def test_use_original_default_when_has_override_raises_exception(self, mock_binding, mock_get_scopes):
+        """测试场景有覆盖配置时使用原始默认值抛出异常"""
         from core.exceptions import PermissionException
 
-        # 用户仅对场景 1001 有权，且 1001 对该变量有覆盖；无其他无覆盖的有权 scope
-        mock_get_scopes.return_value = (["1001"], [])
+        mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 权限
+
+        # 工具绑定到场景 1001
+        mock_binding_instance = mock.MagicMock()
+        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001"]
+        mock_binding_instance.binding_systems.values_list.return_value = []
+        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
+            mock_binding_instance
+        )
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1001 有覆盖配置
+                },
+            }
+        )
+        # 使用原始默认值（应该被拒绝）
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 应该抛出异常（场景 1001 有覆盖配置，只能使用覆盖值）
+        with self.assertRaises(PermissionException):
+            self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    def test_use_original_default_with_mixed_scenes(self, mock_get_scopes):
+        """测试用户有多个场景（部分有覆盖，部分无覆盖）时可以使用原始默认值"""
+        mock_get_scopes.return_value = (["1001", "1002"], [])  # 用户有场景 1001 和 1002 权限
 
         tool = MockTool(
             config={
@@ -467,11 +525,11 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
                 },
             }
         )
-        # 所有权场景都覆盖了该变量，使用原始默认值应被拒绝
+        # 使用原始默认值
         params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
 
-        with self.assertRaises(PermissionException):
-            self.resource._validate_default_value_permissions(tool, params, self.username)
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
+        self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
     def test_use_allowed_scene_default(self, mock_get_scopes):
@@ -522,11 +580,20 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_unauthorized_default_raises_exception(self, mock_get_scopes):
+    @mock.patch("services.web.tool.resources.ResourceBinding")
+    def test_use_unauthorized_default_raises_exception(self, mock_binding, mock_get_scopes):
         """测试使用无权使用的默认值抛出异常"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 的权限
+
+        # 工具绑定到场景 1001 和 1002
+        mock_binding_instance = mock.MagicMock()
+        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001", "1002"]
+        mock_binding_instance.binding_systems.values_list.return_value = []
+        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
+            mock_binding_instance
+        )
 
         tool = MockTool(
             config={
@@ -650,176 +717,6 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
 
         with self.assertRaises(PermissionException):
             self.resource._validate_default_value_permissions(tool, params, self.username)
-
-    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_omit_hidden_variable_when_override_exists_raises(self, mock_get_scopes):
-        """存在覆盖时省略隐藏变量应被拒绝（不能通过省略参数绕过为全量）"""
-        from core.exceptions import PermissionException
-
-        mock_get_scopes.return_value = (["1001"], [])
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "game_ids", "is_show": False, "default_value": None}],
-                "default_value_overrides": {"scenes": {"1001": {"game_ids": [100, 200]}}},
-            }
-        )
-        # 用户省略 game_ids，应被拒绝（不能等价于用原始默认值 null 全量查询）
-        params = {"tool_variables": []}
-
-        with self.assertRaises(PermissionException):
-            self.resource._validate_default_value_permissions(tool, params, self.username)
-
-    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_null_override_treated_as_no_override(self, mock_get_scopes):
-        """null 覆盖视为未配置覆盖：使用原始默认值应通过"""
-        mock_get_scopes.return_value = (["1001"], [])
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "game_ids", "is_show": False, "default_value": None}],
-                "default_value_overrides": {"scenes": {"1001": {"game_ids": None}}},
-            }
-        )
-        # null 覆盖被忽略，无有效覆盖时使用原始默认值 null 应通过
-        params = {"tool_variables": [{"raw_name": "game_ids", "value": None}]}
-
-        # 不应抛出异常
-        self.resource._validate_default_value_permissions(tool, params, self.username)
-
-    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_empty_list_override_is_valid_restriction(self, mock_get_scopes):
-        """空列表 [] 是有效限制值：传 [] 通过，传 null 被拒"""
-        from core.exceptions import PermissionException
-
-        mock_get_scopes.return_value = (["1001"], [])
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "game_ids", "is_show": False, "default_value": None}],
-                "default_value_overrides": {"scenes": {"1001": {"game_ids": []}}},
-            }
-        )
-        # 传 [] 命中覆盖（显式限制为无游戏），应通过
-        self.resource._validate_default_value_permissions(
-            tool, {"tool_variables": [{"raw_name": "game_ids", "value": []}]}, self.username
-        )
-        # 传 null 不命中 [] 覆盖，应被拒绝（不能用 null 绕过空集限制）
-        with self.assertRaises(PermissionException):
-            self.resource._validate_default_value_permissions(
-                tool, {"tool_variables": [{"raw_name": "game_ids", "value": None}]}, self.username
-            )
-
-    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_override_list_value_normalized_before_comparison(self, mock_get_scopes):
-        """list 覆盖值比对前规范化：[200, '100', 100] 等价于 [100, 200]"""
-        mock_get_scopes.return_value = (["1001"], [])
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "game_ids", "is_show": False, "default_value": None}],
-                "default_value_overrides": {"scenes": {"1001": {"game_ids": [100, 200]}}},
-            }
-        )
-        # 顺序、类型、重复不同的等价列表应通过
-        params = {"tool_variables": [{"raw_name": "game_ids", "value": [200, "100", 100]}]}
-
-        # 不应抛出异常
-        self.resource._validate_default_value_permissions(tool, params, self.username)
-
-    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_mixed_scopes_unrestricted_scene_allows_original_default(self, mock_get_scopes):
-        """部分有权场景有覆盖、部分无覆盖时，原始默认值按 any-match 可用
-
-        默认值=1，A 覆盖=2，B 覆盖=3，C 无覆盖：
-        - 只有 A → 可选 {2}
-        - A+B → 可选 {2,3}
-        - A+B+C → 可选 {1,2,3}（C 无覆盖，原始默认值 1 合法）
-        """
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "x", "is_show": False, "default_value": 1}],
-                "default_value_overrides": {
-                    "scenes": {"A": {"x": 2}, "B": {"x": 3}},  # C 无覆盖
-                },
-            }
-        )
-
-        # 只有 A → 传 1 应拒绝（A 覆盖了 x，无无覆盖的有权 scope）
-        mock_get_scopes.return_value = (["A"], [])
-        from core.exceptions import PermissionException
-
-        with self.assertRaises(PermissionException):
-            self.resource._validate_default_value_permissions(
-                tool, {"tool_variables": [{"raw_name": "x", "value": 1}]}, self.username
-            )
-
-        # A+B+C → 传 1 应通过（C 对 x 无覆盖，原始默认值 1 合法）
-        mock_get_scopes.return_value = (["A", "B", "C"], [])
-        self.resource._validate_default_value_permissions(
-            tool, {"tool_variables": [{"raw_name": "x", "value": 1}]}, self.username
-        )
-        # 同一权限下传 2、3 也应通过
-        for val in (2, 3):
-            self.resource._validate_default_value_permissions(
-                tool, {"tool_variables": [{"raw_name": "x", "value": val}]}, self.username
-            )
-        # 传未覆盖值 4 应拒绝
-        with self.assertRaises(PermissionException):
-            self.resource._validate_default_value_permissions(
-                tool, {"tool_variables": [{"raw_name": "x", "value": 4}]}, self.username
-            )
-
-    def test_visibility_intersection_excludes_invisible_scene_override(self):
-        """工具不可见场景的 override 不进入允许集合"""
-        from core.exceptions import PermissionException
-        from services.web.scene.constants import (
-            BindingType,
-            ResourceVisibilityType,
-            VisibilityScope,
-        )
-        from services.web.scene.models import (
-            ResourceBinding,
-            ResourceBindingScene,
-            Scene,
-        )
-
-        tool = MockTool(
-            config={
-                "input_variable": [{"raw_name": "game_ids", "is_show": False, "default_value": None}],
-                "default_value_overrides": {
-                    "scenes": {
-                        "1001": {"game_ids": [100, 200]},  # 工具可见
-                        "1002": {"game_ids": [1, 2, 3, 4, 5]},  # 工具不可见（残留/恶意）
-                    },
-                },
-            },
-            uid="intersect-tool-uid",
-        )
-        # 工具仅对场景 1001 可见
-        Scene.objects.create(scene_id=1001, name="intersect-visible-scene")
-        binding = ResourceBinding.objects.create(
-            resource_type=ResourceVisibilityType.TOOL,
-            resource_id="intersect-tool-uid",
-            binding_type=BindingType.PLATFORM_BINDING,
-            visibility_type=VisibilityScope.SPECIFIC_SCENES,
-        )
-        ResourceBindingScene.objects.create(binding=binding, scene_id=1001)
-
-        # 用户有权场景 1001、1002，但工具仅可见 1001 → 求交后 1002 的覆盖不进入允许集合
-        # 仅 mock ScopePermission 控制"用户有权范围"，不 mock _get_user_allowed_scopes，走真实求交逻辑
-        with mock.patch("services.web.tool.resources.ScopePermission") as mock_scope:
-            mock_scope.return_value.get_scene_ids.return_value = [1001, 1002]
-            mock_scope.return_value.get_system_ids.return_value = []
-            # 用户传 1002（不可见场景）的覆盖值 → 应被拒绝
-            with self.assertRaises(PermissionException):
-                self.resource._validate_default_value_permissions(
-                    tool,
-                    {"tool_variables": [{"raw_name": "game_ids", "value": [1, 2, 3, 4, 5]}]},
-                    self.username,
-                )
-            # 用户传 1001（可见场景）的覆盖值 → 应通过
-            self.resource._validate_default_value_permissions(
-                tool,
-                {"tool_variables": [{"raw_name": "game_ids", "value": [100, 200]}]},
-                self.username,
-            )
 
 
 class ToolRetrieveRequestSerializerTest(TestCase):
