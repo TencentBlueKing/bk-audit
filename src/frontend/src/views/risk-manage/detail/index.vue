@@ -49,7 +49,8 @@
       </div>
       <risk-handle-dock
         v-if="route.name !== 'attentionManageDetail'"
-        :current-stage-name="currentStageName">
+        :current-stage-name="currentStageName"
+        :default-expanded="shouldExpandHandleDock">
         <risk-handle
           :data="riskData"
           embedded
@@ -228,6 +229,9 @@
   });
 
   const currentStageName = computed(() => stageNameMap[riskData.value.status] || t('人工处理'));
+
+  // 列表「处理」入口带 tab=handleRisk，进入详情时默认展开工单处理
+  const shouldExpandHandleDock = computed(() => route.query.tab === 'handleRisk');
 
   // 仅首次进入详情展示全页 loading；后续刷新（添加事件/报告）不再盖一层，避免与子模块 loading 叠两层
   const pageLoading = computed(() => (
