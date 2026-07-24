@@ -29,6 +29,8 @@
   } from 'vue-router';
 
   import IamApplyDataModel from '@model/iam/apply-data';
+  import ReportConfigService from '@service/report-config';
+  import ToolManageService from '@service/tool-manage';
 
   import useMessage from '@hooks/use-message';
 
@@ -72,6 +74,159 @@
     }
   };
 
+  const getScopeConstants = () => {
+    // 平台管理跳转会带 scope 查询参数，优先于 localStorage，避免新开页被全局选择覆盖
+    const queryScopeId = Array.isArray(route.query.scope_id)
+      ? route.query.scope_id[0]
+      : route.query.scope_id;
+    const querySceneId = Array.isArray(route.query.scene_id)
+      ? route.query.scene_id[0]
+      : route.query.scene_id;
+    const queryScopeType = Array.isArray(route.query.scope_type)
+      ? route.query.scope_type[0]
+      : route.query.scope_type;
+
+    if (queryScopeType === 'system' && queryScopeId) {
+      return {
+        scope_type: 'system',
+        scope_id: String(queryScopeId),
+      };
+    }
+    if (queryScopeType === 'scene' && (queryScopeId || querySceneId)) {
+      return {
+        scope_type: 'scene',
+        scope_id: String(queryScopeId || querySceneId),
+      };
+    }
+    if (querySceneId) {
+      return {
+        scope_type: 'scene',
+        scope_id: String(querySceneId),
+      };
+    }
+
+    return {
+      scope_type: getSceneSystemParams().scope_type,
+      scope_id: getSceneSystemParams().scope_id,
+    };
+  };
+
+  // 按当前 scope 拉取平台报表配置的默认值覆盖
+  const fetchPanelDetailWithOverride = async (scope: {
+    scope_type: string,
+    scope_id: string,
+  }) => {
+    if (!scope.scope_type || !scope.scope_id) {
+      return {
+        vision_id: '',
+        default_value_override: {} as Record<string, any>,
+      };
+    }
+    try {
+      const detail = await ReportConfigService.fetchPanelDetail({
+        panel_id: String(route.params.id),
+        scope_type: scope.scope_type,
+        scope_id: String(scope.scope_id),
+      });
+      return {
+        vision_id: detail?.vision_id || '',
+        default_value_override: detail?.default_value_override || {},
+      };
+    } catch (e) {
+      console.error('获取报表默认值覆盖失败:', e);
+      return {
+        vision_id: '',
+        default_value_override: {} as Record<string, any>,
+      };
+    }
+  };
+
+  /**
+   * 从 share_detail 解析变量 / 交互组件 flag 集合
+   * 与报表配置、BKVision 工具一致：variable → constants，其余 → filters
+   */
+  const resolveParamFlagSets = async (visionId: string) => {
+    const variableFlags = new Set<string>();
+    const filterFlags = new Set<string>();
+
+    if (!visionId) {
+      return { variableFlags, filterFlags };
+    }
+
+    try {
+      const res = await ToolManageService.fetchReportLists({ share_uid: visionId });
+      if (!res?.data) {
+        return { variableFlags, filterFlags };
+      }
+
+      const panels = Array.isArray(res.data.panels) ? res.data.panels : [];
+      const variables = Array.isArray(res.data.variables) ? res.data.variables : [];
+      const shareFilters = res.filters || {};
+      const shareConstants = res.constants || {};
+
+      Object.keys(shareFilters).forEach((uid) => {
+        const panel = panels.find((item: any) => item.uid === uid);
+        const flag = panel?.chartConfig?.flag;
+        if (flag) {
+          filterFlags.add(flag);
+        }
+      });
+
+      variables.forEach((item: any) => {
+        if (!item.build_in && item.flag) {
+          variableFlags.add(item.flag);
+        }
+      });
+
+      // variables 为空时，constants 中的非内置项按变量处理
+      if (variables.length === 0) {
+        Object.keys(shareConstants).forEach((flag) => {
+          if (flag && !flag.startsWith('bkv_')) {
+            variableFlags.add(flag);
+          }
+        });
+      }
+    } catch (e) {
+      console.error('获取报表参数分类失败:', e);
+    }
+
+    return { variableFlags, filterFlags };
+  };
+
+  // 按 BKVision 工具规则拆分覆盖值到 constants / filters
+  const splitOverrideParams = (
+    override: Record<string, any>,
+    variableFlags: Set<string>,
+    filterFlags: Set<string>,
+  ) => {
+    const constants: Record<string, any> = {};
+    const filters: Record<string, any> = {};
+
+    Object.entries(override || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return;
+      }
+      if (Array.isArray(value) && value.length === 0) {
+        return;
+      }
+
+      // 与工具执行一致：明确是变量 → constants；明确是交互组件 → filters
+      if (variableFlags.has(key)) {
+        constants[key] = value;
+      } else if (filterFlags.has(key)) {
+        filters[key] = value;
+      } else if (variableFlags.size === 0 && filterFlags.size === 0) {
+        // 分类信息缺失时，默认按变量处理，避免 filters/constants 重复传参
+        constants[key] = value;
+      } else {
+        // 有分类信息但未命中时，优先按交互组件（非 variable）处理
+        filters[key] = value;
+      }
+    });
+
+    return { constants, filters };
+  };
+
   const init = async  () => {
     // 校验id是否有效
     if (!isValidId(route.params.id)) {
@@ -80,7 +235,19 @@
     }
 
     try {
-      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      const scopeConstants = getScopeConstants();
+      const [panelDetail] = await Promise.all([
+        fetchPanelDetailWithOverride(scopeConstants),
+        loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js'),
+      ]);
+
+      const { variableFlags, filterFlags } = await resolveParamFlagSets(panelDetail.vision_id);
+      const { constants: overrideConstants, filters: overrideFilters } = splitOverrideParams(
+        panelDetail.default_value_override,
+        variableFlags,
+        filterFlags,
+      );
+
       app = await window.BkVisionSDK.init(
         '#panel',
         route.params.id,
@@ -91,10 +258,12 @@
             { type: 'tool', id: 'refresh', build_in: true },
             { type: 'menu', id: 'excel', build_in: true },
           ],
+          // 对齐 BKVision 工具：variable → constants，交互组件 → filters
           constants: {
-            scope_type: getSceneSystemParams().scope_type,
-            scope_id: getSceneSystemParams().scope_id,
+            ...overrideConstants,
+            ...scopeConstants,
           },
+          filters: overrideFilters,
           handleError,
         },
       );
