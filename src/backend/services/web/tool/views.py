@@ -82,6 +82,7 @@ class PlatformSceneToolViewSet(ResourceViewSet):
     PUT    /api/v1/tool/platform/{uid}/          编辑平台级工具
     DELETE /api/v1/tool/platform/{uid}/          删除平台级工具
     POST   /api/v1/tool/platform/{uid}/publish/  上架/下架
+    POST /api/v1/tool/platform/input_variable_candidates/ 获取工具输入变量候选项（用于用户画像工具管理端配置）
     """
 
     def get_permissions(self):
@@ -92,6 +93,11 @@ class PlatformSceneToolViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.tool.update_platform_scene_tool, pk_field="uid"),
         ResourceRoute("DELETE", resource.tool.delete_platform_scene_tool, pk_field="uid"),
         ResourceRoute("POST", resource.tool.publish_platform_scene_tool, endpoint="publish", pk_field="uid"),
+        ResourceRoute(
+            "POST",
+            resource.tool.get_tool_input_variable_candidates,
+            endpoint="input_variable_candidates",
+        ),
     ]
 
 
