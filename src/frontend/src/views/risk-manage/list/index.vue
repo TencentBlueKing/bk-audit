@@ -228,6 +228,7 @@
   ]);
 
   const buildBaseTableColumns = () => useRiskColumns({
+    t,
     deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
     detailRouteName: 'riskManageDetail',
     overrides: {
@@ -480,7 +481,6 @@
     manual: true,
     defaultValue: [],
   });
-
   // 获取AI搜索用的场景列表（与"所属场景"下拉选项保持一致，使用已筛选的场景）
   const {
     data: riskScenesData,

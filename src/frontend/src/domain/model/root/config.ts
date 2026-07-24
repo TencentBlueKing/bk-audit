@@ -84,6 +84,13 @@ export default class Config {
     BK_TENANT_ID: string;
     BK_USER_WEB_APIGW_URL: string;
   };
+  agent_auth: {
+    agents: Array<{
+      code: string;
+      enabled: boolean;
+      ping_url: string;
+    }>;
+  };
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
     this.app_code = payload.app_code;
@@ -115,6 +122,7 @@ export default class Config {
     this.tool = payload.tool;
     this.audit_doc_config = payload.audit_doc_config;
     this.tenant_config = payload.tenant_config;
+    this.agent_auth = payload.agent_auth;
   }
 
   initHelpInfo(params: Config['help_info']) {
