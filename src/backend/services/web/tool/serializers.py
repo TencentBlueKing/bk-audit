@@ -202,7 +202,7 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 attrs["_smart_page_overrides"] = validated_config.default_value_overrides.model_dump()
                 attrs.pop("config", None)
                 # 丢弃 name/description/namespace/status 等其他字段，避免越权改写工具基础属性
-                for forbidden_field in ("name", "description", "namespace", "status"):
+                for forbidden_field in ("name", "description", "namespace", "status", "tags"):
                     attrs.pop(forbidden_field, None)
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})

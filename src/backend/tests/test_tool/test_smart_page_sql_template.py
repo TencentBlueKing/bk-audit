@@ -598,3 +598,13 @@ class GetToolInputVariableCandidatesTest(TestCase):
         """raw_name 不存在于 input_variable 时应拒绝"""
         with self.assertRaises(InputVariableNotFoundError):
             GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "not_exist"})
+
+    @patch("services.web.tool.resources.SmartPageSqlTemplateExecutor.execute")
+    def test_candidate_request_level_full_pipeline(self, mock_execute):
+        """request() 级测试：覆盖请求序列化 → perform_request → 响应序列化全链路"""
+        mock_execute.return_value = self._build_mock_result(
+            [{"id": 100, "name": "GameA"}, {"id": 200, "name": "GameB"}]
+        )
+        resp = GetToolInputVariableCandidates().request({"uid": self.tool.uid, "raw_name": "game_ids"})
+        # 响应经 ToolInputVariableCandidateSerializer 序列化，返回 {id, name} 列表
+        self.assertEqual(resp, [{"id": 100, "name": "GameA"}, {"id": 200, "name": "GameB"}])

@@ -832,3 +832,29 @@ class SmartPageToolConfig(BaseModel):
             if var.data_source and var.data_source not in data_source_names:
                 raise ValueError(gettext("输入变量 %s 引用的数据源 %s 不存在") % (var.raw_name, var.data_source))
         return self
+
+    # 需要规范化（整数化、去重、升序）的覆盖值 raw_name 白名单。
+    # 仅限 smart_page 场景下已明确为「整数 ID 列表」语义的参数，避免影响其他工具/参数。
+    _NORMALIZED_LIST_RAW_NAMES = frozenset({"game_ids"})
+
+    @model_validator(mode="after")
+    def normalize_default_value_overrides(self):
+        """对 smart_page 专有的整数 ID 列表覆盖值做规范化，落库即为可信形态，当前仅作用于 ``game_ids``。"""
+        overrides = self.default_value_overrides
+        if not overrides:
+            return self
+        for scope_map in (overrides.scenes, overrides.systems):
+            if not scope_map:
+                continue
+            for raw_map in scope_map.values():
+                if not isinstance(raw_map, dict):
+                    continue
+                for raw_name in self._NORMALIZED_LIST_RAW_NAMES:
+                    if raw_name in raw_map:
+                        value = raw_map[raw_name]
+                        if isinstance(value, list):
+                            try:
+                                raw_map[raw_name] = sorted({int(item) for item in value})
+                            except (TypeError, ValueError):
+                                pass
+        return self
