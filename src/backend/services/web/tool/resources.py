@@ -60,6 +60,7 @@ from services.web.scene.constants import (
     PanelStatus,
     ResourceVisibilityType,
     SceneStatus,
+    VisibilityScope,
 )
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter
@@ -437,33 +438,7 @@ class ListTool(ToolBase):
         system_ids = validated_request_data.get("system_ids") or []
         if visibility_type or scene_ids or system_ids:
             binding_type = BindingType.PLATFORM_BINDING
-            matched_uids = None
-
-            # 1) 按 visibility_type 匹配（全部场景或系统没有具体场景/系统 ID）
-            if visibility_type:
-                binding_qs = ResourceBinding.objects.filter(
-                    resource_type=ResourceVisibilityType.TOOL,
-                    visibility_type=visibility_type,
-                )
-                if binding_type:
-                    binding_qs = binding_qs.filter(binding_type=binding_type)
-                matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
-
-            # 2) 按具体 scene/system ID 可见范围
-            if scene_ids or system_ids:
-                scoped_uids = {
-                    str(uid)
-                    for uid in CompositeScopeFilter.filter_queryset(
-                        queryset=queryset,
-                        binding_type=binding_type,
-                        scene_id=scene_ids,
-                        system_id=system_ids,
-                        resource_type=ResourceVisibilityType.TOOL,
-                        pk_field="uid",
-                    ).values_list("uid", flat=True)
-                }
-                matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
-
+            matched_uids = self._build_visibility_uids(visibility_type, scene_ids, system_ids, binding_type)
             queryset = queryset.filter(uid__in=matched_uids or [])
 
         # 处理虚拟标签：清空 tags 以避免后续按普通标签筛选
@@ -562,6 +537,78 @@ class ListTool(ToolBase):
         self.attach_visibility_metadata(tools)
 
         return ToolListResponseSerializer(instance=tools, many=True).data
+
+    def _build_visibility_uids(self, visibility_type: str, scene_ids: list, system_ids: list, binding_type: str) -> set:
+        """构建可见性筛选的 UID 集合（与 ListPlatformPanels 实现一致）"""
+        matched_uids = None
+
+        # 1) 按 visibility_type 匹配
+        if visibility_type:
+            binding_qs = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.TOOL,
+                visibility_type=visibility_type,
+                binding_type=binding_type,
+            )
+            matched_uids = {str(uid) for uid in binding_qs.values_list("resource_id", flat=True)}
+
+            # 如果是 all_scenes，同时返回 scenes_and_systems 中 binding_scenes 为空的资源
+            if visibility_type == VisibilityScope.ALL_SCENES:
+                scenes_and_systems_bindings = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+                    binding_type=binding_type,
+                )
+                for binding in scenes_and_systems_bindings:
+                    if binding.binding_scenes.count() == 0:
+                        matched_uids.add(binding.resource_id)
+
+            # 如果是 all_systems，同时返回 scenes_and_systems 中 binding_systems 为空的资源
+            elif visibility_type == VisibilityScope.ALL_SYSTEMS:
+                scenes_and_systems_bindings = ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.TOOL,
+                    visibility_type=VisibilityScope.SCENES_AND_SYSTEMS,
+                    binding_type=binding_type,
+                )
+                for binding in scenes_and_systems_bindings:
+                    if binding.binding_systems.count() == 0:
+                        matched_uids.add(binding.resource_id)
+
+        # 2) 按具体 scene/system ID 可见范围
+        if scene_ids or system_ids:
+            scoped_uids = set()
+
+            if scene_ids:
+                # 查询绑定了这些场景的资源
+                binding_ids = ResourceBindingScene.objects.filter(
+                    scene_id__in=scene_ids,
+                    scene__is_deleted=False,
+                ).values_list("binding_id", flat=True)
+                scene_scoped_uids = set(
+                    ResourceBinding.objects.filter(
+                        id__in=binding_ids,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        binding_type=binding_type,
+                    ).values_list("resource_id", flat=True)
+                )
+                scoped_uids = scene_scoped_uids
+
+            if system_ids:
+                # 查询绑定了这些系统的资源
+                binding_ids = ResourceBindingSystem.objects.filter(
+                    system_id__in=system_ids,
+                ).values_list("binding_id", flat=True)
+                system_scoped_uids = set(
+                    ResourceBinding.objects.filter(
+                        id__in=binding_ids,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        binding_type=binding_type,
+                    ).values_list("resource_id", flat=True)
+                )
+                scoped_uids = scoped_uids | system_scoped_uids
+
+            matched_uids = scoped_uids if matched_uids is None else (matched_uids & scoped_uids)
+
+        return matched_uids
 
 
 class DeleteTool(ToolBase):
