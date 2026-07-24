@@ -153,6 +153,15 @@
   const dockLeft = ref(0);
   const dockWidth = ref(0);
 
+  watch(() => props.defaultExpanded, (expanded) => {
+    if (expanded) {
+      isExpanded.value = true;
+      if (panelHeight.value < MIN_EXPANDED_HEIGHT) {
+        panelHeight.value = getDefaultExpandedHeight();
+      }
+    }
+  });
+
   const getPageContentBottom = () => {
     const pageTitle = document.querySelector('.audit-navigation-main .page-title') as HTMLElement | null;
     if (pageTitle) {
