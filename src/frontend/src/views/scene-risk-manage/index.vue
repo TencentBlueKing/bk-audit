@@ -185,6 +185,7 @@
   const tableColumns = computed(() => {
     if (!initTableColumns.length) {
       initTableColumns = useRiskColumns({
+        t,
         deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
         detailRouteName: 'sceneRiskManageDetail',
         appendColumns: [actionColumn],

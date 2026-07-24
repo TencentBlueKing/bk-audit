@@ -18,9 +18,11 @@ import {
   createBaseRiskColumns,
   createRiskIdColumn,
   type RiskColumnDeps,
+  type RiskColumnTranslate,
 } from './base-columns';
 
 export interface UseRiskColumnsOptions {
+  t: RiskColumnTranslate;
   deps: RiskColumnDeps;
   detailRouteName: string;
   overrides?: Record<string, Record<string, any>>;
@@ -28,9 +30,9 @@ export interface UseRiskColumnsOptions {
   appendColumns?: any[];
 }
 export const useRiskColumns = (options: UseRiskColumnsOptions) => {
-  const { deps, detailRouteName, overrides, excludeColumns, appendColumns } = options;
-  const baseColumns = createBaseRiskColumns(deps);
-  const riskIdColumn = createRiskIdColumn(detailRouteName);
+  const { t, deps, detailRouteName, overrides, excludeColumns, appendColumns } = options;
+  const baseColumns = createBaseRiskColumns(deps, t);
+  const riskIdColumn = createRiskIdColumn(detailRouteName, t);
   const rowSelectCol = baseColumns.find((c: any) => c.colKey === 'row-select');
   const restColumns = baseColumns.filter((c: any) => c.colKey !== 'row-select');
   let columns: any[] = [
@@ -61,5 +63,5 @@ export const useRiskColumns = (options: UseRiskColumnsOptions) => {
   return columns;
 };
 
-export type { RiskColumnDeps } from './base-columns';
+export type { RiskColumnDeps, RiskColumnTranslate } from './base-columns';
 export { createBaseRiskColumns, createRiskIdColumn } from './base-columns';
