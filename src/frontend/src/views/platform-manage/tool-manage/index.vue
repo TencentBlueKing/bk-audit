@@ -157,7 +157,7 @@
 
   import EditVisibilityDialog from './components/edit-visibility-dialog.vue';
   import ToolListTable from './components/tool-list-table.vue';
-  import { buildVisibilitySearchParams } from './create-tool/submit-payload';
+  import { buildVisibilitySearchQuery } from './create-tool/submit-payload';
 
   provideToolManageContext(createPlatformToolManageContext());
 
@@ -307,7 +307,7 @@
     { id: '__group_system__', name: t('系统列表'), disabled: true },
     { id: 'all_systems', name: t('全部系统') },
     ...visibilitySystemOptions.value.map(system => ({
-      id: `system_${system.id}`,
+      id: `system_${system.system_id || system.id}`,
       name: system.name,
     })),
   ];
@@ -348,7 +348,7 @@
         result.push({ id: 'all_systems', name: t('全部系统') });
       }
       matchingSystems.forEach((system) => {
-        result.push({ id: `system_${system.id}`, name: system.name });
+        result.push({ id: `system_${system.system_id || system.id}`, name: system.name });
       });
     }
 
@@ -589,16 +589,7 @@
     toolListRef.value?.fetchData(params);
   };
 
-  const buildVisibilitySearchFields = (selectedIds: string[]) => {
-    const payload = buildVisibilitySearchParams(selectedIds);
-    if (!payload) return {};
-
-    return {
-      visibility_type: payload.visibility_type,
-      scene_ids: payload.scene_ids.length ? payload.scene_ids : undefined,
-      system_ids: payload.system_ids.length ? payload.system_ids : undefined,
-    };
-  };
+  const buildVisibilitySearchFields = (selectedIds: string[]) => buildVisibilitySearchQuery(selectedIds);
 
   const handleSearchValueUpdate = (keyword: SearchKey[]) => {
     const visibilityItem = keyword.find(item => item.id === 'visibility');

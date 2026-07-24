@@ -334,6 +334,29 @@ export function buildVisibilitySearchParams(selectedIds: string[]): VisibilitySc
   });
 }
 
+export function buildVisibilitySearchQuery(selectedIds: string[]): {
+  visibility_type?: string;
+  scene_ids?: string;
+  system_ids?: string;
+} {
+  const payload = buildVisibilitySearchParams(selectedIds);
+  if (!payload) return {};
+
+  const hasSceneIds = payload.scene_ids.length > 0;
+  const hasSystemIds = payload.system_ids.length > 0;
+
+  if (hasSceneIds || hasSystemIds) {
+    return {
+      scene_ids: hasSceneIds ? payload.scene_ids.join(',') : undefined,
+      system_ids: hasSystemIds ? payload.system_ids.join(',') : undefined,
+    };
+  }
+
+  return {
+    visibility_type: payload.visibility_type,
+  };
+}
+
 interface VisibilityLike {
   visibility_type?: string;
   scenes?: Record<string, Record<string, any>>;
