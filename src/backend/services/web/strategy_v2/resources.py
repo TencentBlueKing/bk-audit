@@ -68,6 +68,7 @@ from core.exceptions import PermissionException
 from core.observability import submit_with_observation_context
 from core.utils.data import choices_to_dict, compare_dict_specific_keys
 from core.utils.page import paginate_queryset
+from core.utils.retry import FuncRunner
 from services.web.analyze.constants import (
     BaseControlTypeChoices,
     FilterOperator,
@@ -1299,8 +1300,16 @@ class GetRTMeta(StrategyV2Base, CacheResource):
     def get_data_manager(self, result_table_id):
         """获取数据表的维护者。"""
         result = {
-            'managers': api.bk_base.get_role_users_list(role_id="result_table.manager", scope_id=result_table_id),
-            'viewers': api.bk_base.get_role_users_list(role_id="result_table.viewer", scope_id=result_table_id),
+            'managers': FuncRunner(
+                func=api.bk_base.get_role_users_list,
+                kwargs={"role_id": "result_table.manager", "scope_id": result_table_id},
+                max_retry=2,
+            ).run(),
+            'viewers': FuncRunner(
+                func=api.bk_base.get_role_users_list,
+                kwargs={"role_id": "result_table.viewer", "scope_id": result_table_id},
+                max_retry=2,
+            ).run(),
         }
         return result
 
