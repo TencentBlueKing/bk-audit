@@ -288,7 +288,7 @@
 
   const handleGenerateReport = (data: RiskManageModel) => {
     router.push({
-      name: 'riskManageDetail',
+      name: 'sceneRiskManageDetail',
       params: {
         riskId: data.risk_id,
       },
@@ -300,7 +300,7 @@
 
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {
     const params: Record<string, any> = {
-      name: 'processedManageDetail',
+      name: 'sceneRiskManageDetail',
       params: {
         riskId: data.risk_id,
       },
@@ -495,7 +495,7 @@
 
 
   onBeforeRouteLeave((to, from, next) => {
-    if (to.name === 'processedManageDetail') {
+    if (to.name === 'sceneRiskManageDetail') {
       const params = getSearchParamsPost('event_filters');
       const paramsEventFilters = JSON.stringify(params.event_filters);
       const EventFiltersParams = {
