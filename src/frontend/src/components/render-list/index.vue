@@ -198,6 +198,14 @@
   const isLoading = ref(false);
   // 新增：用户是否手动选择了分页大小的标志
   const isUserSelectedPageSize = ref(false);
+  /** page 非法（NaN/≤0）时回退为 1，避免添加/编辑返回后出现 page=NaN */
+  const normalizePage = (page: unknown, fallback = 1) => {
+    const num = Number(page);
+    if (!Number.isFinite(num) || num < 1) {
+      return fallback;
+    }
+    return Math.floor(num);
+  };
   const parseSortParam = (sort?: string | string[]) => {
     if (!sort) return undefined;
     if (Array.isArray(sort)) return sort;
@@ -307,7 +315,7 @@
           }
           const params = {
             ...cleanedParams,
-            page: isUnload.value ? 1 : pagination.current,
+            page: isUnload.value ? 1 : normalizePage(pagination.current),
             page_size: pageSize,
             ...sceneParams,
             ...sceneIdParam,
@@ -337,14 +345,14 @@
 
     // 从详情/编辑返回：优先恢复 sessionStorage 中记录的分页
     if (recordParams?.page_size) {
-      pagination.current = Number(recordParams.page) || 1;
+      pagination.current = normalizePage(recordParams.page);
       pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
       isUserSelectedPageSize.value = true;
     } else {
       const pageValue = isUnload.value ? 1 : page;
       if (pageValue && pageSize) {
-        pagination.current = ~~pageValue;
+        pagination.current = normalizePage(pageValue);
         pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
         pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
       } else {
@@ -445,7 +453,7 @@
   };
   // 切换页码
   const handlePageValueChange = (pageValue:number) => {
-    pagination.current = pageValue;
+    pagination.current = normalizePage(pageValue);
     isUnload.value = false;
     isLoading.value = true;
     fetchListData();
@@ -624,10 +632,10 @@
       const recordParams = getRecordPageParams();
       removePageParams();
       if (params.page) {
-        pagination.current = params.page;
+        pagination.current = normalizePage(params.page);
       }
       if (recordParams) {
-        pagination.current = Number(recordParams.page);
+        pagination.current = normalizePage(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
         // 从详情/编辑返回时恢复离开前的分页大小，避免被 calcTableHeight 重置为 10
         isUserSelectedPageSize.value = true;

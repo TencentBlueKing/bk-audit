@@ -512,6 +512,14 @@
   const isSearching = ref(false);
 
   let isReady = false;
+  /** page 非法（NaN/≤0）时回退为 1，避免添加/编辑返回后出现 page=NaN */
+  const normalizePage = (page: unknown, fallback = 1) => {
+    const num = Number(page);
+    if (!Number.isFinite(num) || num < 1) {
+      return fallback;
+    }
+    return Math.floor(num);
+  };
   const {
     getSearchParams,
     replaceSearchParams,
@@ -564,7 +572,7 @@
 
     const rawParams: Record<string, any> = {
       ...paramsMemo,
-      page: isUnload.value ? 1 : pagination.current,
+      page: isUnload.value ? 1 : normalizePage(pagination.current),
       page_size: currentLimit < 10 ? 10 : currentLimit,
       ...(isNeedSceneParams ? sceneParams : {}),
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
@@ -1132,7 +1140,7 @@
     const pageValue = isUnload.value ? 1 : page;
     // 非首次加载时，才从 URL 读取 page_size
     if (pageValue && pageSize) {
-      pagination.current = ~~pageValue;
+      pagination.current = normalizePage(pageValue);
       if (isUnload.value) {
         // 首次加载时，强制使用默认值 10，忽略 URL 中的 page_size
         pagination.limit = 10;
@@ -1216,7 +1224,7 @@
 
   // 切换页码
   const handlePageChange = (pageValue: number) => {
-    pagination.current = pageValue;
+    pagination.current = normalizePage(pageValue);
     isUnload.value = false;
     isLoading.value = true;
     fetchListData();
@@ -1440,10 +1448,10 @@
       const recordParams = getRecordPageParams();
       removePageParams();
       if (params.page) {
-        pagination.current = params.page;
+        pagination.current = normalizePage(params.page);
       }
       if (recordParams) {
-        pagination.current = Number(recordParams.page);
+        pagination.current = normalizePage(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       }
       isLoading.value = true;
