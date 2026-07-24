@@ -35,7 +35,7 @@ from services.web.tool.resources import ExecuteTool, GetToolDetail
 class MockTool:
     """模拟 Tool 对象用于测试"""
 
-    def __init__(self, config, tool_type="data_search"):
+    def __init__(self, config, tool_type="data_search", uid="test_tool"):
         self.config = config
         self.tool_type = tool_type
 
@@ -445,9 +445,71 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_original_default_without_overrides(self, mock_get_scopes):
-        """测试使用原始默认值且不在覆盖列表中时不报错"""
-        mock_get_scopes.return_value = (["1001"], ["sys001"])
+    def test_use_original_default_when_no_override(self, mock_get_scopes):
+        """测试场景无覆盖配置时使用原始默认值"""
+        mock_get_scopes.return_value = (["1002"], [])  # 用户有场景 1002 权限
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1002 不在覆盖配置中
+                },
+            }
+        )
+        # 使用原始默认值
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
+        self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    @mock.patch("services.web.tool.resources.ResourceBinding")
+    def test_use_original_default_when_has_override_raises_exception(self, mock_binding, mock_get_scopes):
+        """测试场景有覆盖配置时使用原始默认值抛出异常"""
+        from core.exceptions import PermissionException
+
+        mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 权限
+
+        # 工具绑定到场景 1001
+        mock_binding_instance = mock.MagicMock()
+        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001"]
+        mock_binding_instance.binding_systems.values_list.return_value = []
+        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
+            mock_binding_instance
+        )
+
+        tool = MockTool(
+            config={
+                "input_variable": [
+                    {
+                        "raw_name": "username",
+                        "is_show": False,
+                        "default_value": "default_user",
+                    }
+                ],
+                "default_value_overrides": {
+                    "scenes": {"1001": {"username": "admin"}},  # 场景 1001 有覆盖配置
+                },
+            }
+        )
+        # 使用原始默认值（应该被拒绝）
+        params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
+
+        # 应该抛出异常（场景 1001 有覆盖配置，只能使用覆盖值）
+        with self.assertRaises(PermissionException):
+            self.resource._validate_default_value_permissions(tool, params, self.username)
+
+    @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
+    def test_use_original_default_with_mixed_scenes(self, mock_get_scopes):
+        """测试用户有多个场景（部分有覆盖，部分无覆盖）时可以使用原始默认值"""
+        mock_get_scopes.return_value = (["1001", "1002"], [])  # 用户有场景 1001 和 1002 权限
 
         tool = MockTool(
             config={
@@ -463,10 +525,10 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
                 },
             }
         )
-        # 使用原始默认值
+        # 所有权场景都覆盖了该变量，使用原始默认值应被拒绝
         params = {"tool_variables": [{"raw_name": "username", "value": "default_user"}]}
 
-        # 不应抛出异常
+        # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
@@ -518,11 +580,20 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_unauthorized_default_raises_exception(self, mock_get_scopes):
+    @mock.patch("services.web.tool.resources.ResourceBinding")
+    def test_use_unauthorized_default_raises_exception(self, mock_binding, mock_get_scopes):
         """测试使用无权使用的默认值抛出异常"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 的权限
+
+        # 工具绑定到场景 1001 和 1002
+        mock_binding_instance = mock.MagicMock()
+        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001", "1002"]
+        mock_binding_instance.binding_systems.values_list.return_value = []
+        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
+            mock_binding_instance
+        )
 
         tool = MockTool(
             config={
