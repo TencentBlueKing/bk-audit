@@ -49,6 +49,7 @@ import SelectVerify from '@components/select-verify/index.vue';
 import SearchBox from '@components/search-box/index.vue';
 
 import WaterMark from '@utils/assist/water-mark';
+import { warmAgents } from '@utils/assist/ping-agent';
 
 import cursor from '@directives/cursor';
 
@@ -118,6 +119,10 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
           reportApiSpeed: true, // 接口测速
           reportAssetSpeed: true, // 静态资源测速
         });
+      }
+      // 登录后预热 agents（地址来自 Entry.agent_auth，失败不阻断业务）
+      if (config.agent_auth?.agents?.length) {
+        warmAgents(config.agent_auth.agents);
       }
     });
 

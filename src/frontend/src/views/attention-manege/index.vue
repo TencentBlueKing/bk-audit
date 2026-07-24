@@ -54,6 +54,7 @@
     onUnmounted,
     ref,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
     useRouter,
@@ -78,6 +79,7 @@
 
   import FieldConfig from './components/config';
 
+  const { t } = useI18n();
   const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{
     checked: Array<string>,
@@ -101,6 +103,7 @@
   const tableColumns = computed(() => {
     if (!initTableColumns.length) {
       const baseColumns = useRiskColumns({
+        t,
         deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
         detailRouteName: 'attentionManageDetail',
       });
