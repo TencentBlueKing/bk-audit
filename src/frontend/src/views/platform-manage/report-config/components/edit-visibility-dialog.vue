@@ -47,6 +47,7 @@
             v-if="showParamOverrideConfig"
             :form-data="visibilityFormData"
             :input-variables="inputVariables"
+            override-select-full-width
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
             @update:param-overrides="handleParamOverridesChange" />
