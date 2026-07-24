@@ -18,7 +18,8 @@
 <template>
   <div
     v-if="configList.length > 0"
-    class="scene-param-config">
+    class="scene-param-config"
+    @mouseover="handleOverflowTagHover">
     <div
       v-for="item in configList"
       :key="item.key"
@@ -159,6 +160,25 @@
   const { t } = useI18n();
 
   const inputVariableList = computed(() => props.inputVariables || []);
+
+  // bk-select +n tips 默认 z-index≈8000，侧滑内需抬高
+  const ensureSelectOverflowTipsZIndex = () => {
+    const targetZ = Number(props.popoverZIndex) + 10;
+    document.querySelectorAll<HTMLElement>('.bk-select-tooltips').forEach((el) => {
+      const tipEl = el;
+      if ((Number(tipEl.style.zIndex) || 0) < targetZ) {
+        tipEl.style.zIndex = String(targetZ);
+      }
+    });
+  };
+
+  const handleOverflowTagHover = (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (!target?.closest?.('.bk-select-overflow-tag')) return;
+    // bk-tooltips 在 mouseenter 内 setTimeout(0) 创建 tips，需延后抬高
+    setTimeout(ensureSelectOverflowTipsZIndex, 0);
+    setTimeout(ensureSelectOverflowTipsZIndex, 20);
+  };
 
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
@@ -344,10 +364,13 @@
       width: 100%;
     }
 
-    /* 边框与背景应在 .bk-select-tag 上，勿重复设置 trigger */
+    /* 固定单行高度，保证 collapse-tags 能按换行计算 +n 溢出 */
     .bk-select-tag {
       width: 100%;
+      height: 32px;
+      max-height: 32px;
       min-height: 32px;
+      overflow: hidden;
       font-size: 12px;
       background-color: #fff;
       border-color: #c4c6cc;
@@ -365,6 +388,7 @@
     .bk-select-tag-wrapper {
       flex-wrap: wrap;
       gap: 4px;
+      height: 30px;
       overflow: hidden;
     }
 
