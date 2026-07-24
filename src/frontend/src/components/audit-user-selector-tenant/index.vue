@@ -23,6 +23,7 @@
     :api-base-url="apiBaseUrl"
     :auto-focus="autoFocus"
     :disabled="isDisabled"
+    :free-paste="freePasteEnabled"
     :multiple="multiple"
     :render-list-item="renderListItem"
     :render-tag="renderTag"
@@ -50,6 +51,8 @@
   interface Props {
     modelValue: Array<string> | string;
     allowCreate?: boolean;
+    /** 粘贴未命中用户中心的人员时是否创建（离职人员等）；默认跟随 allowCreate */
+    freePaste?: boolean;
     multiple?: boolean;
     // collapseTags?: boolean;  //bk-select 属性 bk-user-select 不支持
     // needRecord?: boolean;
@@ -68,6 +71,7 @@
   const props = withDefaults(defineProps<Props>(), {
     modelValue: () => [],
     allowCreate: false,
+    freePaste: undefined,
     multiple: true,
     // collapseTags: true,
     // needRecord: false,
@@ -79,6 +83,11 @@
 
   const emit = defineEmits<Emits>();
   const userSelectorRef = ref();
+
+  // allowCreate 开启时默认同步开启 freePaste，否则粘贴离职/不存在人员会被丢弃
+  const freePasteEnabled = computed(() => (
+    props.freePaste === undefined ? props.allowCreate : props.freePaste
+  ));
 
   const normalizeModelValue = (modelValue: Props['modelValue']): Props['modelValue'] => {
     if (props.multiple) {
@@ -115,10 +124,12 @@
       || userInfo.bk_username
       || id;
   };
-  // 离职人员：用户中心未命中列表；命中列表（含搜索到的用户）用正常样式
+  // 离职/不存在人员：用户中心未命中（含 allowCreate、freePaste 的 custom）用灰色失效字色
+  // 命中列表（含搜索到的用户）用正常样式 —— 对齐 c77c074c8 / 776efa61b
   const isUserInList = (userInfo: Record<string, any>) => {
-    // allowCreate 创建的自定义输入：按业务需求，tag 展示样式应参考“搜索到的人名”而非灰色离职样式
-    if (userInfo.type === 'custom') return true;
+    if (userInfo.type === 'custom') {
+      return false;
+    }
     if (userInfo.type === 'userGroup' || userInfo.type === 'virtual') {
       return true;
     }
@@ -259,6 +270,7 @@
       border-color: #f0f1f5;
     }
 
+    /* 离职/不存在：灰色 tag + 失效字色 #c4c6cc */
     .custom-tag.is-resigned {
       color: #c4c6cc;
       background-color: #f0f1f5;
@@ -280,21 +292,6 @@
       color: #c4c6cc !important;
     }
 
-    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) {
-      color: #63656e !important;
-      background-color: #f0f1f5 !important;
-      border-color: #f0f1f5 !important;
-    }
-
-    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)):hover {
-      color: #63656e !important;
-      background-color: #f0f1f5 !important;
-    }
-
-    .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) .tag-content .user-name {
-      color: #63656e !important;
-    }
-
     &.nl-tag-user-selector .user-tag.is-custom,
     &.nl-tag-user-selector .user-tag.is-custom .tag-content .user-name,
     &.nl-tag-user-selector .custom-tag.is-resigned {
@@ -306,21 +303,6 @@
     &.nl-tag-user-selector .user-tag.is-custom:hover {
       color: #c4c6cc !important;
       background-color: #f0f1f5 !important;
-    }
-
-    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) {
-      color: #63656e !important;
-      background-color: #f0f1f5 !important;
-      border-color: #f0f1f5 !important;
-    }
-
-    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)):hover {
-      color: #63656e !important;
-      background-color: #f0f1f5 !important;
-    }
-
-    &.nl-tag-user-selector .user-tag.is-custom:has(.custom-tag:not(.is-resigned)) .tag-content .user-name {
-      color: #63656e !important;
     }
 
     .avatar {
