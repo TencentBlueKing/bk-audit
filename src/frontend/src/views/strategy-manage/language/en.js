@@ -252,6 +252,7 @@ export default {
     '指先通过蓝鲸 BKBase 的 AIOps 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。': 'Refers to the method of first developing a scenario model in AIops of Blue Whale BKBase, and then configuring the field mapping generation strategy in the audit center. It is suitable for situations where you have data development capabilities in AIOps and need to implement a more complex audit solution.',
     规则配置: 'Rule Configuration',
     预期结果: 'Expected Results',
+    预期结果不能为空: 'Expected Results is required',
     风险发现规则: 'Risk Discovery Rules',
     请选择数据源类型: 'Please select the data source type',
     '未配置时，默认查询语句为 select *': 'When not configured, the default query statement is select *',
