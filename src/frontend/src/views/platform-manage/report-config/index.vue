@@ -93,9 +93,13 @@
           :data-source="dataSource"
           :highlight-report-id="highlightReportId"
           :scene-name-map="sceneNameMap"
+          :scene-options="visibilitySceneOptions"
+          :scope-options-loading="visibilityOptionsLoading"
           :system-name-map="systemNameMap"
+          :system-options="visibilitySystemOptions"
           @delete="handleShowDeleteConfirm"
           @edit="handleEdit"
+          @edit-visibility="handleEditVisibility"
           @request-success="handleRequestSuccess"
           @toggle-status="handleConfirmToggleStatus" />
       </div>
@@ -108,6 +112,14 @@
         @cancel="handleReportSidesliderCancel"
         @submit="handleReportSubmit"
         @success="handleCreateSuccess" />
+
+      <!-- 修改可见范围弹窗 -->
+      <edit-visibility-dialog
+        v-model:is-show="isEditVisibilityShow"
+        :scene-options="visibilitySceneOptions"
+        :system-options="visibilitySystemOptions"
+        :target="editVisibilityTarget"
+        @success="handleVisibilityEditSuccess" />
     </div>
   </skeleton-loading>
 </template>
@@ -128,12 +140,14 @@
   import useRequest from '@hooks/use-request';
   import useMessage from '@/hooks/use-message';
 
-  import { buildVisibilitySearchParams } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
+  import { buildVisibilitySearchQuery } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
 
   import ReportCreateSideslider, {
     type ReportFormData,
   } from './components/report-create-sideslider.vue';
   import ReportListTable from './components/report-list-table.vue';
+  import EditVisibilityDialog from './components/edit-visibility-dialog.vue';
+  import { showReportDisableConfirm } from './show-report-disable-confirm';
 
   interface SearchKey {
     id: string;
@@ -166,9 +180,12 @@
   const isChartListsReady = ref(false);
   const reportSidesliderVisible = ref(false);
   const editReportData = ref<ReportFormData | null>(null);
+  const isEditVisibilityShow = ref(false);
+  const editVisibilityTarget = ref<any>(null);
 
   const visibilitySceneOptions = ref<Array<{ id: number; name: string }>>([]);
   const visibilitySystemOptions = ref<Array<{ id: number; system_id?: string; name: string }>>([]);
+  const visibilityOptionsLoading = ref(false);
 
   const sceneNameMap = computed(() => {
     const map: Record<string, string> = {};
@@ -237,7 +254,7 @@
     { id: '__group_system__', name: t('系统列表'), disabled: true },
     { id: 'all_systems', name: t('全部系统') },
     ...visibilitySystemOptions.value.map(system => ({
-      id: `system_${system.id}`,
+      id: `system_${system.system_id || system.id}`,
       name: system.name,
     })),
   ];
@@ -278,7 +295,7 @@
         result.push({ id: 'all_systems', name: t('全部系统') });
       }
       matchingSystems.forEach((system) => {
-        result.push({ id: `system_${system.id}`, name: system.name });
+        result.push({ id: `system_${system.system_id || system.id}`, name: system.name });
       });
     }
 
@@ -458,16 +475,7 @@
     return '';
   };
 
-  const buildVisibilitySearchFields = (selectedIds: string[]) => {
-    const payload = buildVisibilitySearchParams(selectedIds);
-    if (!payload) return {};
-
-    return {
-      visibility_type: payload.visibility_type,
-      scene_ids: payload.scene_ids.length ? payload.scene_ids : undefined,
-      system_ids: payload.system_ids.length ? payload.system_ids : undefined,
-    };
-  };
+  const buildVisibilitySearchFields = (selectedIds: string[]) => buildVisibilitySearchQuery(selectedIds);
 
   const getSearchParams = (): Record<string, any> => {
     const search: Record<string, any> = {
@@ -556,6 +564,7 @@
           visibility_type: panel.visibility_type,
           scene_ids: panel.scene_ids || [],
           system_ids: panel.system_ids || [],
+          default_value_overrides: panel.default_value_overrides,
         }));
         const filteredResults = filterResultsByBkvisionReport(results, searchParams.bkvision_report);
 
@@ -661,6 +670,7 @@
   };
 
   const loadVisibilityOptions = async () => {
+    visibilityOptionsLoading.value = true;
     try {
       const scenes = await SceneManageService.fetchSceneAll({ status: 'enabled' });
       visibilitySceneOptions.value = (scenes || []).map((s: { scene_id: number; name: string }) => ({
@@ -682,6 +692,8 @@
       }));
     } catch {
       visibilitySystemOptions.value = [];
+    } finally {
+      visibilityOptionsLoading.value = false;
     }
     searchSelectData.value = buildSearchSelectData();
   };
@@ -702,8 +714,19 @@
       visibility_type: report.visibility_type || 'all_visible',
       scene_ids: report.scene_ids || [],
       system_ids: report.system_ids || [],
+      default_value_overrides: report.default_value_overrides,
     };
     reportSidesliderVisible.value = true;
+  };
+
+  const handleEditVisibility = (row: any) => {
+    editVisibilityTarget.value = row;
+    isEditVisibilityShow.value = true;
+  };
+
+  const handleVisibilityEditSuccess = () => {
+    editVisibilityTarget.value = null;
+    refreshList();
   };
 
   const getConfirmBtnStyle = (isMatch: boolean) => ({
@@ -770,33 +793,9 @@
       return;
     }
 
-    InfoBox({
-      title: t('确定停用该报表？'),
-      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
-        h('div', {
-          style: {
-            marginBottom: '12px',
-            fontSize: '14px',
-            color: '#313238',
-          },
-        }, `${t('报表：')}${report.name}`),
-        h('div', {
-          style: {
-            padding: '12px 16px',
-            fontSize: '14px',
-            color: '#63656e',
-            textAlign: 'center',
-            backgroundColor: '#f5f7fa',
-            borderRadius: '2px',
-          },
-        }, t('停用后，可见范围内的空间将无法查看和使用该报表，请谨慎操作！')),
-      ]),
-      confirmText: t('停用'),
-      cancelText: t('取消'),
-      headerAlign: 'center',
-      contentAlign: 'center',
-      footerAlign: 'center',
-      confirmButtonTheme: 'danger',
+    showReportDisableConfirm({
+      name: report.name,
+      t,
       onConfirm: () => PanelModelService.publishPlatformPanel({
         panel_id: report.id,
         status: 'unpublished',
@@ -918,10 +917,10 @@
   };
 
   onMounted(() => {
-    // 先获取图表列表，再加载报表表格，确保 BKVision 列能正确映射名称
+    // 场景/系统选项与图表列表并行加载，表格出现时仍可能在 loading（跳转弹层可展示）
+    loadVisibilityOptions();
     fetchChartLists().then(() => {
       fetchStatusCounts();
-      loadVisibilityOptions();
     });
     document.addEventListener('mouseover', handleSearchMenuMouseOver, true);
   });
@@ -1046,33 +1045,6 @@
     background-color: #979ba5;
   }
 
-  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-button,
-  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-button:single-button,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:vertical:start:decrement,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:vertical:start:increment,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:vertical:end:decrement,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:vertical:end:increment,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:single-button:vertical:decrement,
-  .bk-search-select-popover
-  .bk-search-select-menu
-  .menu-content::-webkit-scrollbar-button:single-button:vertical:increment,
-  .bk-search-select-popover .bk-search-select-menu .menu-content::-webkit-scrollbar-corner {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    background: transparent !important;
-    appearance: none !important;
-  }
 
   .bk-search-select-popover .bk-search-select-menu .menu-content .menu-item {
     display: flex !important;

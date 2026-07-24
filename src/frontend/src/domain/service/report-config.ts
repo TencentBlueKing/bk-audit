@@ -14,7 +14,11 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import PanelModel, { type PanelVisibilityPayload } from '@model/report-config/panel';
+import PanelModel, {
+  type PanelDefaultValueOverrides,
+  type PanelDetail,
+  type PanelVisibilityPayload,
+} from '@model/report-config/panel';
 
 import PanelModelSource from '../source/report-config';
 
@@ -177,8 +181,8 @@ export default  {
     updated_by?: string,
     vision_id?: string,
     visibility_type?: string,
-    scene_ids?: number[],
-    system_ids?: string[],
+    scene_ids?: string | number[],
+    system_ids?: string | string[],
     scenario?: string,
   }) {
     return PanelModelSource.fetchPlatformPanels(params)
@@ -197,6 +201,7 @@ export default  {
     description?: string,
     status?: 'published' | 'unpublished',
     visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.createPlatformPanel(params)
       .then(({ data }) => data);
@@ -212,6 +217,7 @@ export default  {
     description?: string,
     status?: 'published' | 'unpublished',
     visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.updatePlatformPanel(params)
       .then(({ data }) => data);
@@ -230,6 +236,17 @@ export default  {
     status?: 'published' | 'unpublished',
   }) {
     return PanelModelSource.publishPlatformPanel(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取报表详情（按当前 scope 返回单份 default_value_override）
+   */
+  fetchPanelDetail(params: {
+    panel_id: string,
+    scope_type: string,
+    scope_id?: string,
+  }): Promise<PanelDetail> {
+    return PanelModelSource.fetchPanelDetail(params)
       .then(({ data }) => data);
   },
 };

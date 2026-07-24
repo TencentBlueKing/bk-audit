@@ -141,7 +141,7 @@
     inputVariables: InputVarItem[];
     /** 覆盖参数下拉是否占满容器（弹窗内为 true，编辑/新建页为 false） */
     overrideSelectFullWidth?: boolean;
-    /** 是否展示「显示名」列，报表设计稿为参数名+默认值两列 */
+    /** 是否展示「显示名」列 */
     showDisplayName?: boolean;
     /** 下拉 z-index（侧滑内需高于容器） */
     popoverZIndex?: number;
@@ -163,7 +163,7 @@
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
 
-  // 展示第一步「显示名」，无值时显示 --
+  // 展示第一步「显示名」
   const getParamDisplayName = (param: Pick<InputVarItem, 'display_name'>) => param.display_name || '--';
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块

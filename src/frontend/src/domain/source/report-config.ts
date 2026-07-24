@@ -18,7 +18,11 @@
 
 import Request, { type IRequestResponsePaginationData } from '@utils/request';
 
-import PanelModel, { type PanelVisibilityPayload } from './../model/report-config/panel';
+import PanelModel, {
+  type PanelDefaultValueOverrides,
+  type PanelDetail,
+  type PanelVisibilityPayload,
+} from './../model/report-config/panel';
 import ModuleBase from './module-base';
 
 class PanelManage extends ModuleBase {
@@ -170,8 +174,8 @@ class PanelManage extends ModuleBase {
     updated_by?: string,
     vision_id?: string,
     visibility_type?: string,
-    scene_ids?: number[],
-    system_ids?: string[],
+    scene_ids?: string | number[],
+    system_ids?: string | string[],
     scenario?: string,
   }) {
     return Request.get<IRequestResponsePaginationData<PanelModel>>(
@@ -192,6 +196,7 @@ class PanelManage extends ModuleBase {
     description?: string,
     status?: 'published' | 'unpublished',
     visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return Request.post(`bkvision${this.module}/panel/platform/`, {
       params,
@@ -206,6 +211,7 @@ class PanelManage extends ModuleBase {
     description?: string,
     status?: 'published' | 'unpublished',
     visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     const { panel_id: panelId, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/platform/${panelId}/`, {
@@ -228,6 +234,23 @@ class PanelManage extends ModuleBase {
   }) {
     return Request.post(`bkvision${this.module}/panel/platform/${params.panel_id}/publish/`, {
       params,
+    });
+  }
+  /**
+   * 获取报表详情（按当前 scope 返回单份 default_value_override）
+   * GET /bkvision/api/v1/panel/{panel_id}/
+   */
+  fetchPanelDetail(params: {
+    panel_id: string,
+    scope_type: string,
+    scope_id?: string,
+  }) {
+    const { panel_id: panelId, ...query } = params;
+    return Request.get<PanelDetail>(`bkvision${this.module}/panel/${panelId}/`, {
+      params: {
+        panel_id: panelId,
+        ...query,
+      },
     });
   }
 }
