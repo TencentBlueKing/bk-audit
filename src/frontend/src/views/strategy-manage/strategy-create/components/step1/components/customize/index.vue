@@ -44,7 +44,6 @@
           <bk-loading :loading="typeTableLoading">
             <div class="select-group">
               <bk-form-item
-                v-if="allConfigTypeTable.length"
                 class="no-label"
                 label-width="0"
                 property="configs.config_type">
@@ -722,7 +721,7 @@
     Promise.all(requests.map(fn => fn()))
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
-        allConfigTypeTable.value = flattenedResults.filter(item => item.children && item.children.length > 0);
+        allConfigTypeTable.value = flattenedResults;
         syncBizChildrenCacheToList();
         typeTableLoading.value = false;
       });
