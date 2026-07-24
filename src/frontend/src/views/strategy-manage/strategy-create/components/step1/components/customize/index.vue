@@ -80,7 +80,9 @@
         </bk-form-item>
         <bk-form-item
           label=""
-          label-width="160">
+          label-width="160"
+          property="configs.select"
+          required>
           <template #label>
             <span
               v-bk-tooltips="{
@@ -779,33 +781,6 @@
     property: item.property || {},
   }));
 
-  // 未配置预期结果时，提交/下一步再用全部表字段回填（界面上不自动勾选）
-  const buildDefaultSelectFromTableFields = () => {
-    const displayNameCount = tableFields.value.reduce<Record<string, number>>(
-      (acc, item) => {
-        const displayName = `${item.display_name}${
-          item.aggregate ? `_${item.aggregate}` : ''
-        }`;
-        acc[displayName] = (acc[displayName] || 0) + 1;
-        return acc;
-      },
-      {},
-    );
-    return tableFields.value.map((item) => {
-      const displayName = `${item.display_name}${
-        item.aggregate ? `_${item.aggregate}` : ''
-      }`;
-      return {
-        ...item,
-        aggregate: null,
-        display_name:
-          displayNameCount[displayName] > 1
-            ? `${item.table}.${item.display_name}`
-            : displayName,
-      };
-    });
-  };
-
   // 选择tableid后，获取表字段
   const fetDatabaseTableFields = (rtId: string) => {
     StrategyManageService.fetchTableRtFields({
@@ -1257,11 +1232,6 @@
             ? (_.last(tableIdList) || '')
             : tableIdList) as string,
         };
-      }
-      // 如果select为空数组，传全部
-      if (params.configs.select && params.configs.select.length === 0) {
-        params.configs.select = buildDefaultSelectFromTableFields();
-        expectedResultsRef.value.setSelect(params.configs.select);
       }
       // 同步display_name
       params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1
