@@ -52,7 +52,13 @@
           <!-- 溢出 +n -->
           <span
             v-if="overflowCount > 0"
-            v-bk-tooltips="{ content: overflowNames, theme: 'dark', placement: 'top-start' }"
+            v-bk-tooltips="{
+              content: overflowNames,
+              theme: 'dark',
+              placement: 'top-start',
+              extCls: 'visible-range-overflow-tips',
+              onShow: ensureOverflowTipsZIndex,
+            }"
             class="overflow-count">
             +{{ overflowCount }}
           </span>
@@ -522,6 +528,17 @@
   const overflowCount = computed(() => Math.max(0, allDisplayTags.value.length - visibleCount.value));
   const overflowNames = computed(() => allDisplayTags.value.slice(visibleCount.value).map(t => t.name)
     .join('、'));
+
+  // v-bk-tooltips 默认 z-index≈8000，侧滑/高层级弹层内需抬高，避免被遮挡
+  const ensureOverflowTipsZIndex = () => {
+    const targetZ = Number(props.popoverZIndex) + 10;
+    document.querySelectorAll<HTMLElement>('.visible-range-overflow-tips').forEach((el) => {
+      const tipEl = el;
+      if ((Number(tipEl.style.zIndex) || 0) < targetZ) {
+        tipEl.style.zIndex = String(targetZ);
+      }
+    });
+  };
 
   // 下拉选项 label 溢出检测（仅截断时显示 tooltip）
   const labelOverflowMap = reactive<Record<string, boolean>>({});
