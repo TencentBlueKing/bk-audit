@@ -31,6 +31,7 @@
         @update:model-value="handleSearch" />
     </div>
     <scroll-faker
+      ref="scrollFakerRef"
       :style="scrollStyle">
       <bk-loading
         :loading="loading"
@@ -336,6 +337,10 @@
   </div>
 </template>
 
+<script lang="tsx">
+  // 广场/详情路由切换会重建页面实例，滚动位置需提到模块级保存
+  let cachedToolsSquareScrollTop = 0;
+</script>
 <script setup lang='tsx'>
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -363,8 +368,10 @@
 
 
   interface Exposes {
-    getToolsList: (id: string) => void;
+    getToolsList: (id: string, restoreScroll?: boolean) => void;
     clearSearch: () => void;
+    saveScrollPosition: () => void;
+    restoreScrollPosition: () => Promise<void>;
   }
   interface Emits {
     (e: 'change'): void;
@@ -513,7 +520,30 @@
   };
 
   const cardListRef = ref<HTMLElement | null>(null);
+  const scrollFakerRef = ref<{
+    getScroll:() => { scrollTop: number };
+    scrollTo: (scrollLeft: number, scrollTop: number) => void;
+  }>();
   const loading = ref(false);
+
+  const saveScrollPosition = () => {
+    cachedToolsSquareScrollTop = scrollFakerRef.value?.getScroll()?.scrollTop ?? 0;
+  };
+
+  const restoreScrollPosition = async () => {
+    if (cachedToolsSquareScrollTop <= 0) return;
+    const apply = () => {
+      scrollFakerRef.value?.scrollTo(0, cachedToolsSquareScrollTop);
+    };
+    await nextTick();
+    apply();
+    requestAnimationFrame(() => {
+      apply();
+      // 列表刚显示时高度可能尚未稳定，再补一次
+      setTimeout(apply, 50);
+      setTimeout(apply, 320);
+    });
+  };
 
   // 分组折叠状态
   const collapsedGroups = ref<Set<string>>(new Set());
@@ -848,6 +878,7 @@
   };
 
   const handleClickTool = async (toolInfo: ToolInfo, groupKey?: string) => {
+    saveScrollPosition();
     urlToolsIds.value.add(toolInfo.uid);
     appendSearchParams({
       tool_id: Array.from(urlToolsIds.value).join(','),
@@ -912,7 +943,12 @@
       searchValue.value = [];
       persistSearchValue([]);
     },
-    getToolsList(id: string) {
+    saveScrollPosition,
+    restoreScrollPosition,
+    getToolsList(id: string, restoreScroll = false) {
+      if (!restoreScroll) {
+        cachedToolsSquareScrollTop = 0;
+      }
       nextTick(() => {
         const search: Record<string, any> = {};
         searchValue.value.forEach((item) => {
@@ -941,8 +977,11 @@
         }).then((data) => {
           dataList.value = data;
         })
-          .finally(() => {
+          .finally(async () => {
             loading.value = false;
+            if (restoreScroll) {
+              await restoreScrollPosition();
+            }
           });
       });
     },
