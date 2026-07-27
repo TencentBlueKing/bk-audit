@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -230,6 +230,26 @@
   const isSidebarAnimating = ref(false);
   let sidebarAnimateTimer: ReturnType<typeof setTimeout> | null = null;
   const isReturningHome = ref(false);
+  // 从详情回到广场：跳过侧栏展开触发的列表重载，并在动画结束后还原滚动
+  const isRestoringListScroll = ref(false);
+  let restoreListScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const restoreListScrollAfterReturn = () => {
+    if (restoreListScrollTimer) clearTimeout(restoreListScrollTimer);
+    const tryRestore = () => {
+      ContentCardRef.value?.restoreScrollPosition?.();
+    };
+    nextTick(() => {
+      tryRestore();
+      requestAnimationFrame(tryRestore);
+    });
+    // 侧栏展开动画约 320ms，结束后再还原一次，避免布局变化把滚动冲掉
+    restoreListScrollTimer = setTimeout(() => {
+      tryRestore();
+      isRestoringListScroll.value = false;
+      restoreListScrollTimer = null;
+    }, 360);
+  };
   const isInitialSceneSetup = ref(false);
   const route = useRoute();
   const router = useRouter();
@@ -294,6 +314,7 @@
 
   // 点击继续使用工具
   const handleContinueUsingTool = () => {
+    ContentCardRef.value?.saveScrollPosition();
     const lastTool = openedTools.value[openedTools.value.length - 1];
     if (lastTool) {
       switchTab(lastTool.uid);
@@ -483,11 +504,10 @@
       tagsEnums.value = strategyLabelList.value;
       // 工具已打开时，仅更新标签数据，不重置标签选中状态（侧边栏已收起，避免触发 goHome）
       if (hasOpenedTools.value) return;
-      // 始终清空 all，避免 render-label 顶部出现空白行
-      renderLabelRef.value?.resetAll([]);
-      // 初始化阶段（lastSceneKey 为 null）或 tagId 为空时：需要触发加载工具列表
-      // 场景切换阶段（lastSceneKey 不为 null 且 tagId 已有值）：只更新标签数据，工具列表已在 handleSceneChange 中触发
+      // 初始化阶段才 resetAll（active=-3 时会 emit checked 拉列表）；
+      // 从详情 keep-alive 返回时只更新数量，避免重新请求把滚动重置到顶部
       if (isInitialSceneSetup.value || lastSceneKey.value === null || !tagId.value) {
+        renderLabelRef.value?.resetAll([]);
         if ((isInitialSceneSetup.value || lastSceneKey.value === null) && tagId.value) {
           // 初始化阶段且 tagId 有值（从 sessionStorage 恢复）：直接设置选中状态并加载对应列表
           renderLabelRef.value?.setLabel(tagId.value);
@@ -532,6 +552,7 @@
   }
 
   const handleOpenTool = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    ContentCardRef.value?.saveScrollPosition();
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid, { scopeOnly: true });
@@ -539,6 +560,7 @@
   };
 
   const handleAddToolFromPopover = (tool: ToolInfo, overrideContext?: ToolDetailOverrideContext) => {
+    ContentCardRef.value?.saveScrollPosition();
     openTool(tool, { overrideContext });
     isSidebarCollapsed.value = true;
     syncRouteToUrl(tool.uid, { scopeOnly: true });
@@ -547,35 +569,55 @@
 
   const handleGoHomePage = async () => {
     isReturningHome.value = true;
+    isRestoringListScroll.value = true;
+    ContentCardRef.value?.saveScrollPosition();
     goHome();
     syncRouteToUrl();
     await nextTick();
     // 保持用户之前选择的标签，不强制重置为"全部工具"
     renderLabelRef.value?.setLabel(tagId.value || '-3');
-    ContentCardRef.value?.getToolsList(tagId.value || '-3');
+    if (tagId.value === '-5') {
+      ContentCardRef.value?.getToolsList(tagId.value || '-3', true);
+    } else {
+      restoreListScrollAfterReturn();
+    }
     isReturningHome.value = false;
   };
 
   const handleCloseToolPanel = async () => {
+    isRestoringListScroll.value = true;
+    ContentCardRef.value?.saveScrollPosition();
     clearAll();
     isSidebarCollapsed.value = false;
     syncRouteToUrl();
     await nextTick();
-    ContentCardRef.value?.getToolsList(tagId.value);
+    if (tagId.value === '-5') {
+      ContentCardRef.value?.getToolsList(tagId.value, true);
+      isRestoringListScroll.value = false;
+    } else {
+      restoreListScrollAfterReturn();
+    }
   };
 
   const handleCloseTab = async (uid: string) => {
     closeTab(uid);
     if (!hasOpenedTools.value) {
+      isRestoringListScroll.value = true;
+      ContentCardRef.value?.saveScrollPosition();
       syncRouteToUrl();
       await nextTick();
-      ContentCardRef.value?.getToolsList(tagId.value);
+      if (tagId.value === '-5') {
+        ContentCardRef.value?.getToolsList(tagId.value, true);
+        isRestoringListScroll.value = false;
+      } else {
+        restoreListScrollAfterReturn();
+      }
     }
   };
 
   watch(hasOpenedTools, (val) => {
     isSidebarCollapsed.value = val;
-    if (!val) {
+    if (!val && !isRestoringListScroll.value) {
       // 工具全部关闭，回到广场时刷新标签数量（如最近使用计数）
       refreshTagsList();
     }
@@ -589,7 +631,8 @@
       window.dispatchEvent(new Event('resize'));
     }, 320);
 
-    if (val || isReturningHome.value) return;
+    // 从详情返回时不要 resetAll/checked 重拉列表，否则滚动会回到顶部
+    if (val || isReturningHome.value || isRestoringListScroll.value) return;
     nextTick(() => {
       safeResetLabels();
       if (hasOpenedTools.value) {
@@ -627,9 +670,28 @@
     }
   });
 
+  // 进详情前缓存滚动；从详情返回后还原（同实例 keep-alive 下作为兜底）
+  onDeactivated(() => {
+    ContentCardRef.value?.saveScrollPosition();
+  });
+
+  onActivated(() => {
+    if (hasOpenedTools.value) return;
+    isRestoringListScroll.value = true;
+    nextTick(() => {
+      if (tagId.value === '-5') {
+        ContentCardRef.value?.getToolsList(tagId.value, true);
+        isRestoringListScroll.value = false;
+        return;
+      }
+      restoreListScrollAfterReturn();
+    });
+  });
+
   onUnmounted(() => {
     off('scene:change');
     if (sidebarAnimateTimer) clearTimeout(sidebarAnimateTimer);
+    if (restoreListScrollTimer) clearTimeout(restoreListScrollTimer);
   });
 </script>
 
