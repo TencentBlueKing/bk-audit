@@ -21,10 +21,8 @@ import json
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
-from bk_resource.utils.common_utils import is_backend
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.core.handlers.wsgi import WSGIRequest
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
@@ -68,27 +66,17 @@ class AIAgentBase(BkApiResource, abc.ABC):
         return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
+        """仅传递 Agent 应用态接口所需的应用凭证。"""
+        params.pop("_is_backend", None)
+        params.pop("_request", None)
+        params.pop("bk_username", None)
+        params.pop("access_token", None)
+        oauth_params = self.oath_cookies_params
+        oauth_keys = oauth_params.keys() if isinstance(oauth_params, dict) else (oauth_params,)
+        for key in oauth_keys:
+            params.pop(key, None)
         params["bk_app_code"] = self.app_code
         params["bk_app_secret"] = self.secret_key
-
-        if params.pop("_is_backend", False) or is_backend():
-            params.pop("_request", None)
-            params = self.add_platform_auth_params(params, force_platform_auth=True)
-            return params
-
-        from blueapps.utils.request_provider import get_local_request
-
-        _request = params.pop("_request", None)
-        req: WSGIRequest = _request or get_local_request()
-
-        auth_info = self.build_auth_args(req)
-        params.update(auth_info)
-        if req is not None:
-            user = getattr(req, "user", None)
-            if user:
-                params["bk_username"] = getattr(user, "bk_username", None) or getattr(user, "username", None) or ""
-
-        params = self.add_platform_auth_params(params)
         return params
 
 

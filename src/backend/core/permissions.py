@@ -85,3 +85,11 @@ class APIGWPermission(BasePermission):
     def has_permission(self, request, view):
         get_app_info(request)
         return True
+
+
+class UserAPIGWPermission(APIGWPermission):
+    """校验 APIGW 请求且要求网关已解析出登录用户。"""
+
+    def has_permission(self, request, view):
+        super().has_permission(request, view)
+        return bool(getattr(request, "user", None) and request.user.is_authenticated)

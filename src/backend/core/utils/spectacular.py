@@ -1,8 +1,10 @@
 import inspect
+import re
 
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter
+from rest_framework import serializers as drf_serializers
 
 
 class BKResourceAutoSchema(AutoSchema):
@@ -36,13 +38,26 @@ class BKResourceAutoSchema(AutoSchema):
                     return route
         return None
 
+    def _get_path_parameter_names(self):
+        """提取当前路由模板中的路径参数，避免它们重复出现在 body 或 query schema。"""
+        return set(re.findall(r"\{([\w-]+)\}", self.path))
+
     def get_request_serializer(self):
         route = self._get_matched_route()
         if route:
             req_serializer = route.resource_class.RequestSerializer
             if req_serializer:
-                return req_serializer
+                serializer = req_serializer()
+                for field_name in self._get_path_parameter_names():
+                    serializer.fields.pop(field_name, None)
+                return serializer
         return super().get_request_serializer()
+
+    def _is_list_view(self, serializer=None):
+        route = self._get_matched_route()
+        if route:
+            return route.enable_paginate
+        return super()._is_list_view(serializer)
 
     def get_response_serializers(self):
         route = self._get_matched_route()
@@ -64,9 +79,10 @@ class BKResourceAutoSchema(AutoSchema):
                 if serializer_class:
                     try:
                         serializer = serializer_class()
+                        path_parameter_names = self._get_path_parameter_names()
                         for field_name, field in serializer.fields.items():
-                            from rest_framework import serializers as drf_serializers
-
+                            if field_name in path_parameter_names:
+                                continue
                             # 映射 DRF 字段类型到 OpenAPI 类型
                             field_type_map = {
                                 drf_serializers.IntegerField: int,

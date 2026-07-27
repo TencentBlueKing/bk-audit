@@ -211,7 +211,7 @@ class ListEventResponseSerializer(serializers.Serializer):
     num_pages = serializers.IntegerField(label=gettext_lazy("Total Pages"))
     total = serializers.IntegerField(label=gettext_lazy("Total"))
     results = serializers.ListField(label=gettext_lazy("Events"), child=serializers.JSONField())
-    event_end_time = serializers.SerializerMethodField()
+    event_end_time = serializers.CharField(required=False, allow_null=True, label=gettext_lazy("事件结束时间"))
 
     def get_event_end_time(self, obj: Risk) -> str | None:
         """
@@ -1969,27 +1969,11 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
     )
 
     def to_representation(self, instance):
-        risk = instance
-        if not isinstance(instance, dict):
-            instance = {
-                "risk_id": instance.risk_id,
-                "title": instance.title,
-                "risk_level": getattr(instance.strategy, "risk_level", None),
-                "status": instance.status,
-                "event_time": instance.event_time,
-                "event_end_time": instance.event_end_time,
-                "operator": instance.operator,
-                "current_operator": instance.current_operator,
-                "strategy_id": getattr(instance.strategy, "strategy_id", instance.strategy_id),
-                "risk_label": instance.risk_label,
-                "detail": getattr(instance, "detail", None),
-            }
         data = super().to_representation(instance)
-        detail = instance.get("detail")
-        if detail is None and self.context.get("with_detail") and not isinstance(risk, dict):
-            detail = RiskInfoWithoutReportSerializer(risk).data
-        if detail is not None:
-            data["detail"] = detail
+        if not isinstance(instance, dict):
+            data["risk_level"] = getattr(instance.strategy, "risk_level", None)
+        if self.context.get("with_detail"):
+            data["detail"] = RiskInfoWithoutReportSerializer(instance).data
         else:
             data.pop("detail", None)
         return data

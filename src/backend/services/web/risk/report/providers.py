@@ -218,7 +218,7 @@ class AIProvider(Provider):
 
         try:
             result = api.bk_plugins_ai_audit_report.chat_completion(
-                user=self.context.get("user", "admin"),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
+                user=self._get_agent_user(),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
                 input=f'当前分析的Risk ID是{self.context["risk_id"]}。若后续无其他要求，返回标准的Markdown格式。\n' + prompt,
                 chat_history=[],
                 execute_kwargs={"stream": True},
@@ -227,6 +227,12 @@ class AIProvider(Provider):
         except Exception as e:
             logger.error("[AIProvider] AI执行失败:risk_id=%s,error=%s", self.context.get("risk_id", "unknown"), e)
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"
+
+    def _get_agent_user(self) -> str:
+        """使用策略更新人调用 Agent；缺失时保持 admin 回退。"""
+        if not self.context.get("risk_id"):
+            return "admin"
+        return getattr(getattr(self._risk, "strategy", None), "updated_by", "") or "admin"
 
     def _check_and_report_result_quality(self, result: str) -> None:
         """检测 AI 生成结果质量并上报监控事件（不阻断返回）
