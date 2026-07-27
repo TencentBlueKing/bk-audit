@@ -865,6 +865,7 @@
       event_filters: eventFiltersParams.value,
     };
     replaceSearchParams(EventFiltersParams);
+    handleSubmit();
   };
 
   // 搜索参数序列化（与 search-box 完全一致）
