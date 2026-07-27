@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from bk_resource.viewsets import ResourceViewSet
 
-from core.permissions import APIGWPermission, IsAdminPermission
+from core.permissions import APIGWPermission, IsAdminPermission, UserAPIGWPermission
 
 
 class APIGWViewSet(ResourceViewSet):
@@ -27,6 +27,13 @@ class APIGWViewSet(ResourceViewSet):
 
     def get_permissions(self):
         return [APIGWPermission()]
+
+
+class UserAPIGWViewSet(ResourceViewSet):
+    """供 APIGW 用户态 Resource 使用，保留默认认证链路。"""
+
+    def get_permissions(self):
+        return [UserAPIGWPermission()]
 
 
 class AdminViewSet(ResourceViewSet):

@@ -46,7 +46,6 @@ from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import preserved_order_sort
-from core.utils.tools import get_app_info
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
@@ -92,12 +91,13 @@ from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
+    GetMCPToolDetailByNameRequestSerializer,
     GetToolDetailByNameAPIGWRequestSerializer,
-    GetToolDetailByNameAPIGWResponseSerializer,
     ListRequestSerializer,
     ListToolAllRequestSerializer,
     ListToolTagsRequestSerializer,
     ListToolTagsResponseSerializer,
+    MCPToolDetailResponseSerializer,
     PlatformSceneToolCreateRequestSerializer,
     PlatformSceneToolPublishRequestSerializer,
     PlatformSceneToolUpdateRequestSerializer,
@@ -1137,13 +1137,30 @@ class ExecuteTool(ToolBase):
         return {"data": data, "tool_type": tool.tool_type}
 
 
+class MCPExecuteTool(ExecuteTool):
+    """用户态 MCP 工具执行，移除结果中的 SQL 执行实现细节。"""
+
+    name = gettext_lazy("工具执行(MCP)")
+
+    def perform_request(self, validated_request_data):
+        response_data = super().perform_request(validated_request_data)
+        result = response_data.get("data") or {}
+        if response_data["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
+            result.pop("query_sql", None)
+            result.pop("count_sql", None)
+        if response_data["tool_type"] == ToolTypeEnum.SMART_PAGE.value:
+            nested_result = result.get("result")
+            if isinstance(nested_result, dict):
+                nested_result.pop("rendered_sql", None)
+        return response_data
+
+
 class ExecuteToolAPIGW(ExecuteTool):
     """
-    工具执行(APIGW)，仅校验 app_code
+    工具执行(APIGW)，应用身份校验由 ViewSet 统一处理。
     """
 
     def perform_request(self, validated_request_data):
-        get_app_info()
         uid = validated_request_data["uid"]
         params = validated_request_data["params"]
         tool: Tool = Tool.last_version_tool(uid=uid)
@@ -1614,63 +1631,48 @@ class FavoriteTool(ToolBase):
 
 
 class GetToolDetailByNameAPIGW(ToolBase):
-    """
-    通过工具名称获取工具详情(APIGW)
-
-    仅做应用权限校验，不校验用户权限。
-    支持 lite_mode 模式，默认只返回 input_variable 定义。
-
-    请求参数：
-    ```json
-    {
-        "name": "工具名称",
-        "lite_mode": true  // 可选，默认 true，只返回 input_variable
-    }
-    ```
-
-    响应结构（lite_mode=true）：
-    ```json
-    {
-        "uid": "xxx",
-        "name": "xxx",
-        "tool_type": "data_search",
-        "version": 1,
-        "description": "xxx",
-        "namespace": "xxx",
-        "config": {
-            "input_variable": [...]
-        }
-    }
-    ```
-
-    响应结构（lite_mode=false）：返回完整的工具配置
-    """
+    """按名称获取工具的安全调用契约，应用态鉴权由 ViewSet 统一处理。"""
 
     name = gettext_lazy("通过名称获取工具详情(APIGW)")
     RequestSerializer = GetToolDetailByNameAPIGWRequestSerializer
-    ResponseSerializer = GetToolDetailByNameAPIGWResponseSerializer
+    ResponseSerializer = MCPToolDetailResponseSerializer
 
-    def validate_response_data(self, response_data):
-        return response_data
+    def get_tool(self, validated_request_data):
+        return Tool.all_latest_tools().filter(name=validated_request_data["name"]).first()
 
-    def perform_request(self, validated_request_data):
-        from core.utils.tools import get_app_info
+    def raise_tool_not_published(self):
+        raise ToolNotPublished()
 
-        # 仅做应用权限校验
-        get_app_info()
-
-        tool_name = validated_request_data["name"]
-        lite_mode = validated_request_data.get("lite_mode", True)
-
-        # 通过名称查找最新版本的工具
-        tool = Tool.all_latest_tools().filter(name=tool_name).first()
+    def get_tool_detail(self, validated_request_data):
+        tool = self.get_tool(validated_request_data)
         if not tool:
             raise ToolDoesNotExist()
         if tool.status != PanelStatus.PUBLISHED:
-            raise ToolNotPublished()
+            self.raise_tool_not_published()
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE:
+            raise ToolTypeNotSupport()
 
-        serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
-        return serializer.data
+        return tool
+
+    def perform_request(self, validated_request_data):
+        return self.get_tool_detail(validated_request_data)
+
+
+class GetMCPToolDetailByName(GetToolDetailByNameAPIGW):
+    """按命名空间查询用户可使用的 MCP 工具详情。"""
+
+    name = gettext_lazy("通过名称获取工具详情(MCP)")
+    RequestSerializer = GetMCPToolDetailByNameRequestSerializer
+
+    def get_tool(self, validated_request_data):
+        return (
+            Tool.all_latest_tools()
+            .filter(
+                namespace=validated_request_data["namespace"],
+                name=validated_request_data["name"],
+            )
+            .first()
+        )
 
 
 # ==================== 场景工具管理 ====================

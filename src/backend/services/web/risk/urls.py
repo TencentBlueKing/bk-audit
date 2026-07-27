@@ -20,9 +20,12 @@ from bk_resource.routers import ResourceRouter
 from django.conf.urls import include
 from django.urls import path
 
-from services.web.risk import views
+from services.web.risk import mcp_views, views
 
 router = ResourceRouter()
 router.register_module(views)
+router.register("mcp_user/risk", mcp_views.MCPUserRiskViewSet)
+router.register("mcp_user/event", mcp_views.MCPUserEventViewSet)
+router.register("mcp_user/analyse_report", mcp_views.MCPUserAnalyseReportViewSet)
 
 urlpatterns = (path("", include(router.urls)),)

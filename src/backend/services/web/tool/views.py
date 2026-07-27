@@ -12,6 +12,10 @@ from apps.permission.handlers.drf import (
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.utils.data import get_value_by_request, get_value_by_request_or_path
+from core.view_sets import APIGWViewSet, UserAPIGWViewSet
+from services.web.scene.constants import PanelStatus
+from services.web.tool.exceptions import ToolDoesNotExist, ToolNotPublished
+from services.web.tool.models import Tool
 from services.web.tool.permissions import CallerContextPermission, UseToolPermission
 
 
@@ -54,20 +58,48 @@ class ToolViewSet(ResourceViewSet):
     ]
 
 
-class ToolAPIGWViewSet(ResourceViewSet):
+class ToolAPIGWViewSet(APIGWViewSet):
     """
     Execute Tool APIGW
     """
 
-    def get_authenticators(self):
-        return []
-
-    def get_permissions(self):
-        return []
-
     resource_routes = [
         ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
         ResourceRoute("GET", resource.tool.get_tool_detail_by_name_apigw, endpoint="detail_by_name"),
+    ]
+
+
+class MCPUserToolViewSet(UserAPIGWViewSet):
+    """供 MCP 调用的工具用户态接口。"""
+
+    lookup_field = "uid"
+
+    def get_tool_uid_by_name(self):
+        tool = (
+            Tool.all_latest_tools()
+            .filter(
+                namespace=get_value_by_request_or_path(self.request, "namespace"),
+                name=get_value_by_request(self.request, "name"),
+            )
+            .first()
+        )
+        if tool is None:
+            raise ToolDoesNotExist()
+        if tool.status != PanelStatus.PUBLISHED:
+            raise ToolNotPublished()
+        return tool.uid
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action == "execute":
+            permissions.append(AnyOfPermissions(CallerContextPermission(), UseToolPermission()))
+        elif self.action == "detail_by_name":
+            permissions.append(UseToolPermission(get_instance_id=self.get_tool_uid_by_name))
+        return permissions
+
+    resource_routes = [
+        ResourceRoute("POST", resource.tool.mcp_execute_tool, endpoint="execute", pk_field="uid"),
+        ResourceRoute("GET", resource.tool.get_mcp_tool_detail_by_name, endpoint="detail_by_name"),
     ]
 
 

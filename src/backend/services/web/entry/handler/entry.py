@@ -28,6 +28,7 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
+    AGENT_AUTH_KEY,
     AI_PRACTICES_KEY,
     AUDIT_DOC_CONFIG_KEY,
     BKBASE_WEB_URL_KEY,
@@ -46,6 +47,7 @@ from services.web.entry.constants import (
     V3_SYSTEM_CREATE_URL_KEY,
     VISION_SHARE_PERMISSION_URL_KEY,
 )
+from services.web.entry.serializers import AgentAuthConfigSerializer
 
 
 class EntryHandler(object):
@@ -136,8 +138,17 @@ class EntryHandler(object):
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
             "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
             "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
+            "agent_auth": cls.get_agent_auth_config(),
         }
         return data
+
+    @classmethod
+    def get_agent_auth_config(cls):
+        serializer = AgentAuthConfigSerializer(data=GlobalMetaConfig.get(AGENT_AUTH_KEY, default={}))
+        if not serializer.is_valid():
+            logger.warning("invalid agent_auth global meta config")
+            return {"agents": []}
+        return serializer.validated_data
 
     @classmethod
     def get_version(cls):

@@ -39,6 +39,9 @@ INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
 INIT_SYSTEM_FINISHED_KEY = "init_system_finished_check"
 INIT_ASSET_FINISHED_KEY = "init_asset_finished_check"
 INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY = "init_system_rule_audit_finished_check"
+INIT_SDK_CONFIG_FINISHED_KEY = "init_sdk_config_finished_check"
+INIT_DOC_CONFIG_FINISHED_KEY = "init_doc_config_finished_check"
+INIT_AGENT_CONFIG_FINISHED_KEY = "init_agent_config_finished_check"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
 DEFAULT_QUERY_STRING_HELP_ENV_KEY = "BKAPP_QUERY_STRING_HELP"
@@ -84,6 +87,7 @@ BKVISION_WEB_URL_KEY = "bkvision_web_url"
 SDK_CONFIG_KEY = "sdk_config"
 AUDIT_DOC_CONFIG_KEY = "audit_doc_config"
 PLATFORM_ADMIN_USERS_KEY = "platform_admin_users"
+AGENT_AUTH_KEY = "agent_auth"
 
 # AI 实践文档地址
 AI_PRACTICES_KEY = "ai_practices"

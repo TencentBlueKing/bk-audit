@@ -163,13 +163,11 @@ class ToolDoesNotExist(ToolException):
 
 
 class ToolNotPublished(ToolException):
-    """
-    工具未发布
-    """
+    """工具未上架。"""
 
-    STATUS_CODE = 400
+    STATUS_CODE = 404
     ERROR_CODE = "022"
-    MESSAGE = gettext_lazy("工具未发布")
+    MESSAGE = gettext_lazy("工具未上架")
 
 
 class ToolTypeNotSupport(ToolException):

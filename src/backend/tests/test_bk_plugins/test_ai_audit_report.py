@@ -721,7 +721,8 @@ class TestAIAuditReportAPIGWConfig(TestCase):
     def test_audit_report_mcp_uses_report_risk_resource(self):
         definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text(encoding="utf-8")
 
-        self.assertIn("list_analyse_report_risk_apigw", definition)
+        self.assertIn("mcp_list_analyse_report_risk", definition)
+        self.assertNotIn("list_analyse_report_risk_apigw\n", definition)
         self.assertNotIn("list_risk_apigw", definition)
 
     def test_report_risk_apigw_resource_defined(self):
@@ -750,10 +751,10 @@ class TestAIAuditReportAPIGWConfig(TestCase):
         yaml_path = BACKEND_DIR / "support-files/apigw/definition.yaml"
         # 模拟修复后代码的调用方式: 显式传 encoding
         content = yaml_path.read_text(encoding="utf-8")
-        # 验证读到非空字符串, 包含 list_analyse_report_risk_apigw (说明 UTF-8 解析成功)
+        # 验证读到非空字符串，包含用户态 MCP Resource（说明 UTF-8 解析成功）
         self.assertIsInstance(content, str)
         self.assertGreater(len(content), 0)
-        self.assertIn("list_analyse_report_risk_apigw", content)
+        self.assertIn("mcp_list_analyse_report_risk", content)
 
     @unittest.skipUnless(sys.platform == "win32", "仅在 Windows 真实环境验证 GBK 默认编码修复")
     def test_yaml_default_encoding_raises_on_windows(self):
