@@ -91,6 +91,10 @@ from services.web.tool.exceptions import (
     MCPToolNotPublished,
     SmartPageApigwDisabled,
     SmartPageDataSourceNotFound,
+    InputVariableDataSourceNotConfiguredError,
+    InputVariableNotFoundError,
+    SmartPageApigwDisabled,
+    SmartPageDataSourceNotFound,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
@@ -926,35 +930,14 @@ class UpdateTool(ToolBase):
         config = tool.config if tool.config else {}
         config['default_value_overrides'] = new_overrides
         validated_request_data["config"] = config
+        # 防止客户端通过提交 tags 字段越权修改标签
+        tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
+        validated_request_data["tags"] = list(Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True))
         return self.create_tool_new_version(
             old_tool=tool,
             validated_request_data=validated_request_data,
             updated_time=updated_time,
         )
-
-
-def _normalize_override_value(value):
-    """规范化覆盖值（整数化、去重、升序）。
-
-    list 类型按"整数化、去重、升序"规范化，避免 [100, 200] 与 ["200", 100, 100]
-    因顺序、类型、重复而产生比对误判。其他类型原样返回。
-
-    用于 default_value_overrides 的覆盖值与用户提交值在比对前统一规范化。
-    """
-    if not isinstance(value, list):
-        # 非列表类型（str/int/float/bool/None）原样返回，无需规范化
-        return value
-    # 优先尝试整数化: ["100", 200, 100] → {100, 200} → sorted → [100, 200]
-    # 覆盖 game_ids 等 ID 类场景中字符串/重复/无序的问题
-    try:
-        return sorted({int(item) for item in value})
-    except (TypeError, ValueError):
-        # 元素不可整数化（如字符串列表 ["a", "b"]），仅做去重排序
-        try:
-            return sorted(set(value))
-        except TypeError:
-            # 元素不可哈希或不可排序（如含 dict/list），原样返回
-            return value
 
 
 class ExecuteTool(ToolBase):
@@ -1892,6 +1875,88 @@ class GetToolDetailByNameAPIGW(ToolBase):
 
         serializer = GetToolDetailByNameAPIGWResponseSerializer(tool, lite_mode=lite_mode)
         return serializer.data
+
+
+class GetToolInputVariableCandidates(ToolBase):
+    """获取工具输入变量的候选项（仅用于平台配置页面）
+
+    用户画像工具：管理员配置 default_value_overrides 时，根据 input_variable.data_source
+    引用的数据源 SQL 查询 BkBase，返回 {id, name} 候选列表。
+
+    约束：
+    - id 必须可转换为整数 gameid，否则跳过
+    - name 必须非空，否则跳过
+    - 返回去重、按 (name, id) 升序排序后的列表
+    """
+
+    name = gettext_lazy("获取工具输入变量候选项")
+    RequestSerializer = GetToolInputVariableCandidatesRequestSerializer
+    ResponseSerializer = ToolInputVariableCandidateSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        raw_name = validated_request_data["raw_name"]
+
+        # 查找工具
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+
+        # 解析工具配置
+        try:
+            config = SmartPageToolConfig.model_validate(tool.config or {})
+        except ValidationError as e:
+            errors = e.errors()
+            detail = "; ".join("{}: {}".format(".".join(str(loc) for loc in err["loc"]), err["msg"]) for err in errors)
+            raise ToolDoesNotExist(message=gettext("工具 %s 配置不合法: %s") % (uid, detail))
+
+        # 定位输入变量
+        var_config = next((v for v in config.input_variable if v.raw_name == raw_name), None)
+        if var_config is None:
+            raise InputVariableNotFoundError(raw_name)
+
+        if not var_config.data_source:
+            raise InputVariableDataSourceNotConfiguredError(raw_name)
+
+        # 定位数据源
+        data_source = next((ds for ds in config.data_sources if ds.name == var_config.data_source), None)
+        if not data_source:
+            raise SmartPageDataSourceNotFound(var_config.data_source)
+
+        # 通过 SmartPageSqlTemplateExecutor 执行 SQL 查询
+        execute_params = SmartPageExecuteParams(
+            data_source_name=data_source.name,
+            params={},
+        )
+        result = SmartPageSqlTemplateExecutor.execute(
+            executor=None,
+            data_source=data_source,
+            params=execute_params,
+        )
+        raw_results = result.result.results
+
+        # 取 id/name 两列，id 转整数，过滤脏数据，去重，按 (name, id) 排序
+        seen_ids = set()
+        candidates = []
+        for row in raw_results:
+            if not isinstance(row, dict):
+                continue
+            try:
+                gid = int(row.get("id"))
+            except (TypeError, ValueError):
+                continue  # id 不可转整数，跳过
+            name = row.get("name")
+            if name is None or str(name) == "":
+                continue  # name 为空，跳过
+            if gid in seen_ids:
+                continue  # 去重
+            seen_ids.add(gid)
+            candidates.append({"id": gid, "name": str(name)})
+
+        candidates.sort(key=lambda x: (x["name"], x["id"]))
+
+        return candidates
 
 
 class GetToolInputVariableCandidates(ToolBase):
