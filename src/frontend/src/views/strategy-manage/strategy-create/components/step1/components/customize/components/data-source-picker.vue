@@ -35,7 +35,8 @@
 
     <div
       v-show="panelVisible"
-      class="dsp-panel">
+      class="dsp-panel"
+      :class="{ 'is-empty-panel': isSourceEmpty }">
       <div
         v-if="list.length"
         class="dsp-tabs">
@@ -50,6 +51,25 @@
       </div>
 
       <div
+        v-if="isSourceEmpty"
+        class="dsp-empty">
+        <img
+          class="dsp-empty-img"
+          src="@images/empty.svg">
+        <div class="dsp-empty-title">
+          {{ t('暂无数据源') }}
+        </div>
+        <div class="dsp-empty-desc">
+          <span>{{ t('请在企微联系') }}</span>
+          <span
+            class="dsp-empty-contact"
+            @click.stop="contactHelper">iegsec_helper</span>
+          <span>{{ t('数据源空态联系后缀') }}</span>
+        </div>
+      </div>
+
+      <div
+        v-else
         class="dsp-body"
         :class="{ 'is-single-column': !hasThirdLevel }">
         <div class="dsp-column dsp-column-left">
@@ -187,6 +207,12 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
+
+  import useRequest from '@/hooks/use-request';
+
   interface PickerNode {
     label: string;
     value: string;
@@ -237,6 +263,17 @@
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  const contactHelper = () => {
+    window.open(`wxwork://message?uin=${configData.value.iegsec_helper}`, '_blank');
+  };
 
   const rootRef = ref<HTMLElement>();
   const panelVisible = ref(false);
@@ -290,6 +327,14 @@
   ));
 
   const leftList = computed(() => activeTypeItem.value?.children || []);
+
+  // 当前分类下无任何可选数据（非搜索过滤为空）时展示设计稿空态
+  const isSourceEmpty = computed(() => {
+    if (!props.list.length) {
+      return true;
+    }
+    return leftList.value.length === 0 && !leftKeyword.value.trim();
+  });
 
   const filteredLeftList = computed(() => {
     const keyword = leftKeyword.value.trim().toLowerCase();
@@ -756,6 +801,46 @@
   border: 1px solid #dcdee5;
   border-radius: 2px;
   box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
+
+  &.is-empty-panel {
+    width: 480px;
+  }
+}
+
+.dsp-empty {
+  display: flex;
+  height: 280px;
+  padding: 24px 16px;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dsp-empty-img {
+  width: 220px;
+  height: 100px;
+  object-fit: contain;
+}
+
+.dsp-empty-title {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: #63656e;
+}
+
+.dsp-empty-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #979ba5;
+}
+
+.dsp-empty-contact {
+  margin: 0 4px;
+  color: #3a84ff;
+  cursor: pointer;
 }
 
 .dsp-tabs {
