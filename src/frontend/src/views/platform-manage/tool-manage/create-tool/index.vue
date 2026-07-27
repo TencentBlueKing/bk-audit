@@ -127,6 +127,7 @@
                 :input-variables="formData.config.input_variable"
                 :selected-scenes="selectedSceneItems"
                 :selected-systems="selectedSystemItems"
+                :tool-uid="formData.uid || ''"
                 @update:param-overrides="handleParamOverridesChange" />
             </template>
           </card-part-vue>

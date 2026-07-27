@@ -207,5 +207,14 @@ export default  {
     }) {
     return ToolManageSources.getReportLists(params).then(({ data }) => data);
   },
+  /**
+   * @desc 获取平台工具输入变量候选选项（如 game_ids）
+   */
+  fetchInputVariableCandidates(params: {
+      uid: string,
+      raw_name: string,
+    }) {
+    return ToolManageSources.getInputVariableCandidates(params).then(({ data }) => data || []);
+  },
 
 };

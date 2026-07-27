@@ -50,6 +50,7 @@
             override-select-full-width
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
+            :tool-uid="props.target?.uid || ''"
             @update:param-overrides="handleParamOverridesChange" />
         </div>
       </div>
