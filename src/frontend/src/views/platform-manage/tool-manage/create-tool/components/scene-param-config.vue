@@ -41,6 +41,7 @@
               class="override-param-select"
               :clearable="false"
               collapse-tags
+              filterable
               :model-value="item.override_keys"
               multiple
               multiple-mode="tag"
@@ -49,12 +50,13 @@
                 boundary: 'body',
                 zIndex: popoverZIndex,
               }"
+              :search-placeholder="t('请输入关键字')"
               @change="(val: string[]) => handleOverrideChange(item, val)">
               <bk-option
                 v-for="param in inputVariableList"
                 :id="param.raw_name"
                 :key="param.raw_name"
-                :name="getParamName(param)" />
+                :name="getParamOptionLabel(param)" />
             </bk-select>
           </div>
         </div>
@@ -91,7 +93,26 @@
               <span class="param-name-text">{{ getParamDisplayName(row) }}</span>
             </div>
             <div class="field-value col-default">
+              <bk-select
+                v-if="isMultiSelectVar(row.raw_name)"
+                class="override-default-multiselect"
+                collapse-tags
+                filterable
+                :loading="isCandidatesLoading(row.raw_name)"
+                :model-value="getOverrideValue(item, row.raw_name)"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择')"
+                :search-placeholder="t('请输入关键字')"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)">
+                <bk-option
+                  v-for="choice in getMultiSelectChoices(row.raw_name)"
+                  :id="choice.key"
+                  :key="choice.key"
+                  :name="choice.name" />
+              </bk-select>
               <bk-input
+                v-else
                 :model-value="getOverrideValue(item, row.raw_name)"
                 :placeholder="t('请输入')"
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
@@ -110,8 +131,14 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from 'vue';
+  import {
+    computed,
+    ref,
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import ToolManageService from '@service/tool-manage';
 
   import type { SceneParamOverride, FormData } from '../types';
 
@@ -133,6 +160,15 @@
     field_category?: string;
     default_value?: any;
     raw_default_value?: any;
+    choices?: Array<{
+      key: string;
+      name: string;
+    }>;
+  }
+
+  interface CandidateChoice {
+    key: string;
+    name: string;
   }
 
   const props = withDefaults(defineProps<{
@@ -140,6 +176,8 @@
     selectedScenes: Array<{ id: number; name: string }>;
     selectedSystems: Array<{ id: string; name: string }>;
     inputVariables: InputVarItem[];
+    /** 当前工具 uid，用于拉取输入变量候选选项 */
+    toolUid?: string;
     /** 覆盖参数下拉是否占满容器（弹窗内为 true，编辑/新建页为 false） */
     overrideSelectFullWidth?: boolean;
     /** 是否展示「显示名」列 */
@@ -147,6 +185,7 @@
     /** 下拉 z-index（侧滑内需高于容器） */
     popoverZIndex?: number;
   }>(), {
+    toolUid: '',
     overrideSelectFullWidth: false,
     showDisplayName: true,
     popoverZIndex: 2500,
@@ -156,6 +195,14 @@
   const emit = defineEmits<{
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
   }>();
+
+  /** 无 display_name 时的硬编码展示名映射 */
+  const PARAM_DISPLAY_NAME_MAP: Record<string, string> = {
+    game_ids: '游戏列表',
+  };
+
+  /** 需通过候选接口拉取选项的参数 */
+  const CANDIDATE_API_RAW_NAMES = new Set(['game_ids']);
 
   const { t } = useI18n();
 
@@ -180,11 +227,26 @@
     setTimeout(ensureSelectOverflowTipsZIndex, 20);
   };
 
+  // 候选选项缓存：raw_name -> choices
+  const candidatesMap = ref<Record<string, CandidateChoice[]>>({});
+  const candidatesLoadingMap = ref<Record<string, boolean>>({});
+  const candidatesFetchedSet = ref<Set<string>>(new Set());
+
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
 
-  // 展示第一步「显示名」
-  const getParamDisplayName = (param: Pick<InputVarItem, 'display_name'>) => param.display_name || '--';
+  // 展示第一步「显示名」，无值时回退硬编码映射
+  const getParamDisplayName = (param: Pick<InputVarItem, 'raw_name' | 'display_name'>) => (
+    param.display_name || PARAM_DISPLAY_NAME_MAP[param.raw_name] || '--'
+  );
+
+  // 覆盖参数下拉：参数名(显示名)，支持按两者搜索
+  const getParamOptionLabel = (param: Pick<InputVarItem, 'raw_name' | 'var_name' | 'display_name'>) => {
+    const name = getParamName(param);
+    const displayName = getParamDisplayName(param);
+    if (!displayName || displayName === '--') return name;
+    return `${name}(${displayName})`;
+  };
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
   const configList = computed<ConfigItem[]>(() => {
@@ -220,6 +282,15 @@
     return list;
   });
 
+  // 当前已选中的覆盖参数 raw_name 集合
+  const activeOverrideRawNames = computed(() => {
+    const names = new Set<string>();
+    configList.value.forEach((item) => {
+      (item.override_keys || []).forEach(key => names.add(key));
+    });
+    return names;
+  });
+
   // 获取某个区块的表格数据：只展示已选中覆盖的参数
   const getTableData = (item: ConfigItem) => {
     if (!item.override_keys || item.override_keys.length === 0) return [];
@@ -229,21 +300,139 @@
     });
   };
 
-  // 获取某参数在某个区块中的覆盖值
-  const getOverrideValue = (item: ConfigItem, rawName: string) => item.default_values[rawName] ?? '';
+  const getInputVarConfig = (rawName: string) => inputVariableList.value.find(v => v.raw_name === rawName);
+
+  const isMultiSelectVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'multiselect'
+    || CANDIDATE_API_RAW_NAMES.has(rawName);
+
+  const isCandidatesLoading = (rawName: string) => !!candidatesLoadingMap.value[rawName];
+
+  /** 格式：游戏名称(gameid)，便于名称/ID 搜索与回显 */
+  const formatGameChoiceName = (name: string, id: number | string) => `${name}(${id})`;
+
+  const getMultiSelectChoices = (rawName: string): CandidateChoice[] => {
+    if (candidatesMap.value[rawName]?.length) {
+      return candidatesMap.value[rawName];
+    }
+    const configChoices = getInputVarConfig(rawName)?.choices || [];
+    return configChoices.map(item => ({
+      key: String(item.key),
+      name: item.name,
+    }));
+  };
+
+  const normalizeMultiSelectValue = (val: unknown): string[] => {
+    if (Array.isArray(val)) return val.map(item => String(item));
+    if (val === undefined || val === null || val === '') return [];
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return Array.isArray(parsed) ? parsed.map(item => String(item)) : [];
+        } catch {
+          // ignore
+        }
+      }
+      if (trimmed.includes(',')) {
+        const parts = trimmed.split(',').map(s => s.trim());
+        return parts.filter(Boolean);
+      }
+      return trimmed ? [trimmed] : [];
+    }
+    return [String(val)];
+  };
+
+  /** game_ids 提交值为数字数组；下拉展示用字符串 id 匹配 option */
+  const normalizeGameIdsValue = (val: unknown): number[] => {
+    const list = normalizeMultiSelectValue(val);
+    return list
+      .map((item) => {
+        const num = Number(item);
+        return Number.isFinite(num) ? num : null;
+      })
+      .filter((item): item is number => item !== null);
+  };
+
+  const getOverrideValue = (item: ConfigItem, rawName: string) => {
+    const raw = item.default_values[rawName];
+    if (raw === undefined || raw === null || raw === '') {
+      return isMultiSelectVar(rawName) ? [] : '';
+    }
+    // 下拉 option.id 为字符串，回显也统一转成字符串
+    if (rawName === 'game_ids') return normalizeGameIdsValue(raw).map(String);
+    if (isMultiSelectVar(rawName)) return normalizeMultiSelectValue(raw);
+    return raw;
+  };
 
   // 从第一步工具配置中读取参数原始默认值
   const getParamOriginalDefault = (rawName: string) => {
     const param = inputVariableList.value.find(v => v.raw_name === rawName);
-    if (!param) return '';
+    if (!param) return isMultiSelectVar(rawName) ? [] : '';
     if (param.default_value !== undefined && param.default_value !== '') {
       return param.default_value;
     }
     if (param.raw_default_value !== undefined && param.raw_default_value !== '') {
       return param.raw_default_value;
     }
+    if (isMultiSelectVar(rawName)) return [];
     return param.default_value ?? '';
   };
+
+  const fetchCandidates = async (rawName: string) => {
+    if (!props.toolUid || !CANDIDATE_API_RAW_NAMES.has(rawName)) return;
+    if (candidatesFetchedSet.value.has(rawName) || candidatesLoadingMap.value[rawName]) return;
+
+    candidatesLoadingMap.value = {
+      ...candidatesLoadingMap.value,
+      [rawName]: true,
+    };
+    try {
+      const list = await ToolManageService.fetchInputVariableCandidates({
+        uid: props.toolUid,
+        raw_name: rawName,
+      });
+      candidatesMap.value = {
+        ...candidatesMap.value,
+        [rawName]: (list || []).map(item => ({
+          key: String(item.id),
+          name: formatGameChoiceName(item.name, item.id),
+        })),
+      };
+      candidatesFetchedSet.value = new Set([...candidatesFetchedSet.value, rawName]);
+    } catch {
+      candidatesMap.value = {
+        ...candidatesMap.value,
+        [rawName]: [],
+      };
+    } finally {
+      candidatesLoadingMap.value = {
+        ...candidatesLoadingMap.value,
+        [rawName]: false,
+      };
+    }
+  };
+
+  // 覆盖参数中出现需拉取候选的字段时请求接口
+  watch(
+    [() => props.toolUid, activeOverrideRawNames],
+    () => {
+      if (!props.toolUid) return;
+      activeOverrideRawNames.value.forEach((rawName) => {
+        if (CANDIDATE_API_RAW_NAMES.has(rawName)) {
+          fetchCandidates(rawName);
+        }
+      });
+    },
+    { immediate: true, deep: true },
+  );
+
+  // 工具切换时清空候选缓存
+  watch(() => props.toolUid, () => {
+    candidatesMap.value = {};
+    candidatesLoadingMap.value = {};
+    candidatesFetchedSet.value = new Set();
+  });
 
   // 覆盖参数选择变更
   const handleOverrideChange = (item: ConfigItem, keys: string[]) => {
@@ -256,6 +445,9 @@
         newValues[k] = item.default_values[k];
       } else {
         newValues[k] = getParamOriginalDefault(k);
+      }
+      if (CANDIDATE_API_RAW_NAMES.has(k)) {
+        fetchCandidates(k);
       }
     }
     item.default_values = newValues;
@@ -272,7 +464,11 @@
   // 默认值输入变更
   const handleDefaultValueChange = (item: ConfigItem, rawName: string, value: any) => {
     /* eslint-disable no-param-reassign */
-    item.default_values[rawName] = value;
+    if (rawName === 'game_ids') {
+      item.default_values[rawName] = normalizeGameIdsValue(value);
+    } else {
+      item.default_values[rawName] = value;
+    }
     /* eslint-enable no-param-reassign */
     emitChange();
   };
@@ -402,6 +598,39 @@
     }
 
     .bk-select-overflow-tag {
+      flex-shrink: 0;
+      margin: 0;
+      color: #63656e;
+      background-color: #f0f1f5;
+      border: 1px solid #dcdee5;
+      border-radius: 2px;
+    }
+  }
+
+  /* 默认值多选：用于如 game_ids 的 multiselect 覆盖 */
+  :deep(.override-default-multiselect) {
+    width: 100%;
+
+    .bk-select-trigger {
+      width: 100%;
+    }
+
+    .bk-select-tag {
+      width: 100%;
+      min-height: 32px;
+      background-color: #fff;
+      border: none;
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+
+    .bk-select-tag-wrapper {
+      flex-wrap: wrap;
+      gap: 4px;
+      overflow: hidden;
+    }
+
+    .bk-tag {
       flex-shrink: 0;
       margin: 0;
       color: #63656e;

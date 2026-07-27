@@ -26,9 +26,11 @@ export function buildDefaultValueOverrides(overrides?: Record<string, SceneParam
     const paramValues: Record<string, any> = {};
     item.override_param_keys.forEach((key) => {
       const value = item.param_default_values?.[key];
-      if (value !== undefined && value !== '') {
-        paramValues[key] = value;
+      // 空数组视为未覆盖（不限制数据范围）
+      if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+        return;
       }
+      paramValues[key] = value;
     });
 
     if (!Object.keys(paramValues).length) {

@@ -375,6 +375,7 @@
         { id: 'data_search', name: '数据查询' },
         { id: 'api', name: 'API' },
         { id: 'bk_vision', name: 'BK-Vision' },
+        { id: 'smart_page', name: '智能用户画像' },
       ],
     },
     {
