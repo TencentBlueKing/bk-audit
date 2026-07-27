@@ -627,15 +627,25 @@ class AnalyseReportRiskListBase(AnalyseReportMeta):
     check_report_owner = True
 
     def perform_request(self, validated_request_data):
+        self.with_detail = validated_request_data.get("with_detail", False)
         report_id = validated_request_data["report_id"]
         if self.check_report_owner:
             self.get_user_report(report_id)
 
         queryset = self.get_report_risk_queryset(report_id)
         queryset = self.filter_report_risks(queryset, validated_request_data)
-        if validated_request_data.get("with_detail", False):
-            return self.attach_risk_detail(queryset)
         return queryset
+
+    def validate_response_data(self, response_data):
+        if isinstance(response_data, QuerySet):
+            response_serializer = self.ResponseSerializer(
+                response_data,
+                many=True,
+                context={"with_detail": getattr(self, "with_detail", False)},
+            )
+            self._response_serializer = response_serializer
+            return response_serializer.data
+        return super().validate_response_data(response_data)
 
     def get_report_risk_queryset(self, report_id: int):
         risk_ids = AnalyseReportRisk.objects.filter(report_id=report_id).values("risk_id")
@@ -665,9 +675,6 @@ class AnalyseReportRiskListBase(AnalyseReportMeta):
             )
 
         return queryset.distinct()
-
-    def attach_risk_detail(self, queryset):
-        return ListAnalyseReportRiskResponseSerializer(queryset, many=True, context={"with_detail": True}).data
 
 
 class ListAnalyseReportRisk(AnalyseReportRiskListBase):
@@ -701,8 +708,6 @@ class ListAnalyseReportRiskAPIGW(AnalyseReportRiskListBase):
 
         queryset = self.get_report_risk_queryset(report_id)
         queryset = self.filter_report_risks(queryset, validated_request_data)
-
-        # ResourceViewSet 会先执行 resource 响应序列化，再处理 enable_paginate；这里需先分页再渲染详情。
         paged_queryset, page = paginate_data(queryset=queryset, request=request)
         data = ListAnalyseReportRiskResponseSerializer(
             paged_queryset,
@@ -710,6 +715,17 @@ class ListAnalyseReportRiskAPIGW(AnalyseReportRiskListBase):
             context={"with_detail": with_detail},
         ).data
         return page.get_paginated_response(data).data
+
+
+class MCPListAnalyseReportRisk(ListAnalyseReportRiskAPIGW):
+    """MCP 报告关联风险列表，复用 APIGW 分页与响应契约。"""
+
+    name = gettext_lazy("报告关联风险列表(MCP)")
+
+    @property
+    def check_report_owner(self) -> bool:
+        """MCP 使用真实用户身份，必须校验报告归属。"""
+        return True
 
 
 class ListAnalyseReportByRisk(AnalyseReportMeta):

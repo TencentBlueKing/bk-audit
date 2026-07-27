@@ -618,34 +618,114 @@ class GetToolDetailByNameAPIGWRequestSerializer(serializers.Serializer):
     """通过名称获取工具详情请求序列化器(APIGW)"""
 
     name = serializers.CharField(label=gettext_lazy("工具名称"))
-    lite_mode = serializers.BooleanField(required=False, default=True, label=gettext_lazy("精简模式"))
 
 
-class GetToolDetailByNameAPIGWResponseSerializer(serializers.ModelSerializer):
-    """通过名称获取工具详情响应序列化器(APIGW)"""
+class GetMCPToolDetailByNameRequestSerializer(GetToolDetailByNameAPIGWRequestSerializer):
+    """MCP 用户态按命名空间和名称获取工具详情请求序列化器。"""
 
-    config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
+    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+
+
+_MCP_TOOL_INPUT_KEYS = (
+    "raw_name",
+    "display_name",
+    "description",
+    "required",
+    "field_category",
+    "choices",
+    "is_show",
+    "default_value",
+    "raw_default_value",
+    "is_default_value",
+)
+
+
+def _project_mcp_tool_output_field(field):
+    result = {key: field[key] for key in ("raw_name", "display_name", "description", "json_path") if key in field}
+    field_config = field.get("field_config")
+    if isinstance(field_config, dict):
+        result["field_config"] = {
+            key: value
+            for key, value in {
+                "field_type": field_config.get("field_type"),
+                "output_fields": [
+                    _project_mcp_tool_output_field(item) for item in field_config.get("output_fields", [])
+                ],
+            }.items()
+            if value not in (None, [])
+        }
+    drill_config = field.get("drill_config")
+    if isinstance(drill_config, list):
+        result["drill_config"] = [
+            {
+                key: value
+                for key, value in {
+                    "tool": {
+                        key: item.get("tool", {}).get(key)
+                        for key in ("uid", "version")
+                        if item.get("tool", {}).get(key) is not None
+                    },
+                    "drill_name": item.get("drill_name"),
+                    "config": [
+                        {
+                            key: variable[key]
+                            for key in ("target_value_type", "target_value", "source_field")
+                            if key in variable
+                        }
+                        for variable in item.get("config", [])
+                    ],
+                }.items()
+                if value not in (None, {}, [])
+            }
+            for item in drill_config
+        ]
+    return result
+
+
+def project_mcp_tool_config(tool_type, config):
+    """构造 Agent 调用所需的工具配置白名单，禁止透传执行实现与凭证。"""
+    input_variables = []
+    for variable in config.get("input_variable", []):
+        projected = {key: variable[key] for key in _MCP_TOOL_INPUT_KEYS if key in variable}
+        if not projected.get("is_show", True):
+            for key in ("default_value", "raw_default_value", "is_default_value"):
+                projected.pop(key, None)
+        input_variables.append(projected)
+
+    result = {"input_variable": input_variables}
+    if tool_type == ToolTypeEnum.DATA_SEARCH.value:
+        result["output_fields"] = [_project_mcp_tool_output_field(field) for field in config.get("output_fields", [])]
+    elif tool_type == ToolTypeEnum.API.value:
+        output_config = config.get("output_config") or {}
+        result["output_config"] = {
+            "enable_grouping": output_config.get("enable_grouping", False),
+            "groups": [
+                {
+                    key: value
+                    for key, value in {
+                        "name": group.get("name"),
+                        "output_fields": [
+                            _project_mcp_tool_output_field(field) for field in group.get("output_fields", [])
+                        ],
+                    }.items()
+                    if value not in (None, [])
+                }
+                for group in output_config.get("groups", [])
+            ],
+        }
+    return result
+
+
+class MCPToolDetailResponseSerializer(serializers.ModelSerializer):
+    """Agent 安全调用契约，只暴露入参、出参与下钻映射。"""
+
+    config = serializers.JSONField()
 
     class Meta:
         model = Tool
-        fields = [
-            "uid",
-            "name",
-            "tool_type",
-            "version",
-            "description",
-            "namespace",
-            "config",
-        ]
-
-    def __init__(self, *args, **kwargs):
-        self.lite_mode = kwargs.pop("lite_mode", True)
-        super().__init__(*args, **kwargs)
+        fields = ["uid", "name", "tool_type", "version", "description", "namespace", "config"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if self.lite_mode:
-            # lite_mode 模式下，config 只保留 input_variable 定义
-            config = data.get("config", {})
-            data["config"] = {"input_variable": config.get("input_variable", [])}
+        data["config"] = project_mcp_tool_config(instance.tool_type, instance.config or {})
         return data

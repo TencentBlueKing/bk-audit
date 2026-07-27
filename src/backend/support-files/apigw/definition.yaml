@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.9"
+  version: "0.0.12"
   # 版本标题
-  title: "0.0.9"
+  title: "0.0.12"
   # 版本描述
-  comment: "优化风险策略信息 MCP schema 描述，补充风险下钻 execute_tool 调用说明"
+  comment: "补充用户态 MCP 风险下钻工具的条件必填参数与调用链说明"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
@@ -44,13 +44,13 @@ stages:
         labels:
           - "审计"
         resource_names:
-          - retrieve_risk
-          - list_analyse_report_risk_apigw
-          - execute_tool
-          - retrieve_risk_strategy_info
-          - list_risk_event_apigw
-          - get_tool_detail_by_name
-        is_public: false
+          - mcp_retrieve_risk
+          - mcp_list_analyse_report_risk
+          - mcp_execute_tool
+          - mcp_retrieve_risk_strategy_info
+          - mcp_list_risk_event
+          - mcp_get_tool_detail_by_name
+        is_public: true
         status: 1
         protocol_type: "streamable_http"
         target_app_codes:
@@ -62,7 +62,7 @@ stages:
           - "risk"
         resource_names:
           - list_event_fields_by_strategy_brief
-        is_public: false
+        is_public: true
         status: 1
         protocol_type: "streamable_http"
         target_app_codes:
@@ -85,13 +85,13 @@ stages:
         labels:
           - "审计"
         resource_names:
-          - retrieve_risk
-          - list_analyse_report_risk_apigw
-          - execute_tool
-          - retrieve_risk_strategy_info
-          - list_risk_event_apigw
-          - get_tool_detail_by_name
-        is_public: false
+          - mcp_retrieve_risk
+          - mcp_list_analyse_report_risk
+          - mcp_execute_tool
+          - mcp_retrieve_risk_strategy_info
+          - mcp_list_risk_event
+          - mcp_get_tool_detail_by_name
+        is_public: true
         status: 1
         protocol_type: "streamable_http"
         target_app_codes:
@@ -103,7 +103,7 @@ stages:
           - "risk"
         resource_names:
           - list_event_fields_by_strategy_brief
-        is_public: false
+        is_public: true
         status: 1
         protocol_type: "streamable_http"
         target_app_codes:

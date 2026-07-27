@@ -141,6 +141,25 @@ class TestAIProviderCache(TestCase):
 
         self.assertTrue(provider.enable_cache)
 
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_execute_ai_agent_uses_strategy_updated_by(self, mock_chat_completion):
+        Strategy.objects.filter(strategy_id=self.strategy.strategy_id).update(updated_by="alice")
+        mock_chat_completion.return_value = "AI response"
+        provider = AIProvider(context={"risk_id": self.risk.risk_id}, ai_variables_config=[])
+
+        provider._execute_ai_agent("test prompt")
+
+        self.assertEqual(mock_chat_completion.call_args.kwargs["user"], "alice")
+
+    @mock.patch("services.web.risk.report.providers.api.bk_plugins_ai_audit_report.chat_completion")
+    def test_execute_ai_agent_falls_back_to_admin_without_strategy_updated_by(self, mock_chat_completion):
+        mock_chat_completion.return_value = "AI response"
+        provider = AIProvider(context={"risk_id": self.risk.risk_id}, ai_variables_config=[])
+
+        provider._execute_ai_agent("test prompt")
+
+        self.assertEqual(mock_chat_completion.call_args.kwargs["user"], "admin")
+
     def test_generate_cache_key_contains_risk_id(self):
         """测试缓存 key 包含 risk_id"""
         provider = AIProvider(

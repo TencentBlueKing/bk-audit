@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 from unittest import mock
 
-from core.exceptions import AppPermissionDenied
+from rest_framework.test import APIRequestFactory
+
+from core.permissions import APIGWPermission
 from services.web.scene.constants import PanelStatus
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.exceptions import ToolNotPublished
 from services.web.tool.models import Tool
+from services.web.tool.views import ToolAPIGWViewSet
 
 from ..base import TestCase
 
 
 class TestExecuteToolAPIGWResource(TestCase):
-    def test_execute_tool_apigw_calls_app_auth(self):
+    def test_execute_tool_apigw_executes_without_resource_level_app_auth(self):
         tool = Tool.objects.create(
             namespace="ns",
             name="apigw_tool",
@@ -25,7 +28,6 @@ class TestExecuteToolAPIGWResource(TestCase):
         mock_executor = mock.Mock()
         mock_executor.execute.return_value = mock.Mock(model_dump=mock.Mock(return_value={"ok": True}))
         with (
-            mock.patch("tool.resources.get_app_info") as mock_get_app_info,
             mock.patch(
                 "tool.resources.ToolExecutorFactory.create_from_tool",
                 return_value=mock_executor,
@@ -36,19 +38,9 @@ class TestExecuteToolAPIGWResource(TestCase):
             result = self.resource.tool.execute_tool_apigw({"uid": "tool_uid", "params": {}})
         self.assertEqual(result["tool_type"], ToolTypeEnum.BK_VISION.value)
         self.assertEqual(result["data"], {"ok": True})
-        mock_get_app_info.assert_called_once()
         mock_create_executor.assert_called_once_with(tool)
         mock_record_usage.assert_called_once_with("admin", tool.uid)
         mock_skip_permission.assert_not_called()
-
-    def test_execute_tool_apigw_denied_without_app(self):
-        with (
-            mock.patch("tool.resources.get_app_info", side_effect=AppPermissionDenied()),
-            mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
-        ):
-            with self.assertRaises(AppPermissionDenied):
-                self.resource.tool.execute_tool_apigw({"uid": "tool_uid", "params": {}})
-        mock_record_usage.assert_not_called()
 
     def test_execute_tool_apigw_denies_unpublished_tool(self):
         Tool.objects.create(
@@ -63,7 +55,6 @@ class TestExecuteToolAPIGWResource(TestCase):
         )
 
         with (
-            mock.patch("tool.resources.get_app_info"),
             mock.patch("tool.resources.ToolExecutorFactory.create_from_tool") as mock_create_executor,
             mock.patch("tool.resources.recent_tool_usage_manager.record_usage") as mock_record_usage,
         ):
@@ -158,15 +149,9 @@ class TestGetToolDetailByNameAPIGWResource(TestCase):
             status=PanelStatus.PUBLISHED,
         )
 
-    def test_get_tool_detail_by_name_lite_mode_true(self):
-        """测试 lite_mode=True 时只返回 input_variable"""
-        with mock.patch("core.utils.tools.get_app_info"):
-            result = self.resource.tool.get_tool_detail_by_name_apigw(
-                {
-                    "name": "test_tool_by_name",
-                    "lite_mode": True,
-                }
-            )
+    def test_get_tool_detail_by_name_returns_safe_calling_contract(self):
+        """工具详情只返回 Agent 执行所需的安全调用契约。"""
+        result = self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})
 
         self.assertEqual(result["uid"], "tool_uid_by_name")
         self.assertEqual(result["name"], "test_tool_by_name")
@@ -174,74 +159,32 @@ class TestGetToolDetailByNameAPIGWResource(TestCase):
         self.assertEqual(result["version"], 1)
         self.assertEqual(result["description"], "测试工具描述")
         self.assertEqual(result["namespace"], "ns")
-        # lite_mode=True 时，config 只包含 input_variable
         self.assertIn("input_variable", result["config"])
         self.assertNotIn("sql", result["config"])
-        self.assertNotIn("output_fields", result["config"])
-        self.assertNotIn("referenced_tables", result["config"])
-
-    def test_get_tool_detail_by_name_lite_mode_false(self):
-        """测试 lite_mode=False 时返回完整配置"""
-        with mock.patch("core.utils.tools.get_app_info"):
-            result = self.resource.tool.get_tool_detail_by_name_apigw(
-                {
-                    "name": "test_tool_by_name",
-                    "lite_mode": False,
-                }
-            )
-
-        self.assertEqual(result["uid"], "tool_uid_by_name")
-        # lite_mode=False 时，config 包含完整内容
-        self.assertIn("input_variable", result["config"])
-        self.assertIn("sql", result["config"])
         self.assertIn("output_fields", result["config"])
-        self.assertIn("referenced_tables", result["config"])
-
-    def test_get_tool_detail_by_name_default_lite_mode(self):
-        """测试默认 lite_mode=True"""
-        with mock.patch("core.utils.tools.get_app_info"):
-            result = self.resource.tool.get_tool_detail_by_name_apigw(
-                {
-                    "name": "test_tool_by_name",
-                }
-            )
-
-        # 默认 lite_mode=True，config 只包含 input_variable
-        self.assertIn("input_variable", result["config"])
-        self.assertNotIn("sql", result["config"])
+        self.assertNotIn("referenced_tables", result["config"])
 
     def test_get_tool_detail_by_name_tool_not_exist(self):
         """测试工具不存在时抛出异常"""
         from services.web.tool.exceptions import ToolDoesNotExist
 
-        with mock.patch("core.utils.tools.get_app_info"):
-            with self.assertRaises(ToolDoesNotExist):
-                self.resource.tool.get_tool_detail_by_name_apigw(
-                    {
-                        "name": "non_existent_tool",
-                        "lite_mode": True,
-                    }
-                )
+        with self.assertRaises(ToolDoesNotExist):
+            self.resource.tool.get_tool_detail_by_name_apigw({"name": "non_existent_tool"})
 
-    def test_get_tool_detail_by_name_denied_without_app(self):
-        """测试没有应用权限时抛出异常"""
-        with mock.patch("core.utils.tools.get_app_info", side_effect=AppPermissionDenied()):
-            with self.assertRaises(AppPermissionDenied):
-                self.resource.tool.get_tool_detail_by_name_apigw(
-                    {
-                        "name": "test_tool_by_name",
-                        "lite_mode": True,
-                    }
-                )
+    def test_tool_apigw_uses_viewset_app_permission(self):
+        """应用态鉴权由 APIGW ViewSet 统一承担，Resource 不重复校验。"""
+        request = APIRequestFactory().get("/api/v1/namespaces/ns/tool_apigw/detail_by_name/")
+        view = ToolAPIGWViewSet()
+        view.request = request
+
+        permissions = view.get_permissions()
+
+        self.assertEqual(len(permissions), 1)
+        self.assertIsInstance(permissions[0], APIGWPermission)
 
     def test_get_tool_detail_by_name_apigw_denies_unpublished_tool(self):
         self.tool.status = PanelStatus.UNPUBLISHED
         self.tool.save(update_fields=["status"])
 
-        with (
-            mock.patch("core.utils.tools.get_app_info"),
-            mock.patch("tool.resources.GetToolDetailByNameAPIGWResponseSerializer") as mock_serializer,
-        ):
-            with self.assertRaises(ToolNotPublished):
-                self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})
-        mock_serializer.assert_not_called()
+        with self.assertRaises(ToolNotPublished):
+            self.resource.tool.get_tool_detail_by_name_apigw({"name": "test_tool_by_name"})

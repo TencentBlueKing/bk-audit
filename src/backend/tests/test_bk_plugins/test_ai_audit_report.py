@@ -93,10 +93,8 @@ class TestAIAuditReportAuth(TestCase):
         with override_settings(AI_AGENT_SECRET_KEY="", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
             self.assertEqual(self.resource.secret_key, "report_secret")
 
-    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
-    @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
-    def test_add_esb_info_backend_with_custom_auth(self, mock_platform_auth, mock_is_backend):
-        """测试后台模式下使用自定义认证信息"""
+    def test_add_esb_info_uses_custom_agent_application_credentials(self):
+        """测试使用自定义 Agent 应用凭证"""
         custom_app_code = "custom_ai_audit_app"
         custom_secret_key = "custom_ai_audit_secret"
 
@@ -113,10 +111,8 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), custom_app_code)
             self.assertEqual(result.get("bk_app_secret"), custom_secret_key)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
-    @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
-    def test_add_esb_info_backend_with_default_auth(self, mock_platform_auth, mock_is_backend):
-        """测试后台模式下使用默认认证信息"""
+    def test_add_esb_info_uses_default_agent_application_credentials(self):
+        """测试使用默认 Agent 应用凭证"""
         with override_settings(
             AI_AGENT_APP_CODE="",
             AI_AGENT_SECRET_KEY="",
@@ -130,25 +126,33 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), settings.APP_CODE)
             self.assertEqual(result.get("bk_app_secret"), settings.SECRET_KEY)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=True)
     @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params, **kwargs: params)
-    def test_add_esb_info_backend_removes_internal_params(self, mock_platform_auth, mock_is_backend):
-        """测试后台模式下移除内部参数"""
-        params = {"_is_backend": True, "_request": mock.Mock(), "test_param": "value"}
+    def test_add_esb_info_only_keeps_agent_application_credentials(self, mock_platform_auth):
+        """测试不向 Agent 透传审计侧用户态鉴权信息"""
+        oauth_params = self.resource.oath_cookies_params
+        oauth_param_key = next(iter(oauth_params)) if isinstance(oauth_params, dict) else oauth_params
+        params = {
+            "_is_backend": True,
+            "_request": mock.Mock(),
+            "bk_username": "admin",
+            "access_token": "user-token",
+            oauth_param_key: "user-cookie",
+            "test_param": "value",
+        }
         result = self.resource.add_esb_info_before_request(params)
 
-        # 验证内部参数已被移除
+        self.assertEqual(result["bk_app_code"], self.resource.app_code)
+        self.assertEqual(result["bk_app_secret"], self.resource.secret_key)
         self.assertNotIn("_is_backend", result)
         self.assertNotIn("_request", result)
+        self.assertNotIn("bk_username", result)
+        self.assertNotIn("access_token", result)
+        self.assertNotIn(oauth_param_key, result)
+        self.assertEqual(result["test_param"], "value")
+        mock_platform_auth.assert_not_called()
 
-    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=False)
-    @mock.patch("blueapps.utils.request_provider.get_local_request", return_value=None)
-    @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params: params)
-    @mock.patch.object(ChatCompletion, "build_auth_args", return_value={})
-    def test_add_esb_info_frontend_with_custom_auth(
-        self, mock_build_auth, mock_platform_auth, mock_get_request, mock_is_backend
-    ):
-        """测试前端模式下使用自定义认证信息"""
+    def test_add_esb_info_frontend_uses_custom_agent_application_credentials(self):
+        """测试前端调用同样只使用自定义 Agent 应用凭证"""
         custom_app_code = "custom_ai_audit_app"
         custom_secret_key = "custom_ai_audit_secret"
 
@@ -165,27 +169,14 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(result.get("bk_app_code"), custom_app_code)
             self.assertEqual(result.get("bk_app_secret"), custom_secret_key)
 
-    @mock.patch("api.bk_plugins_ai_agent.default.is_backend", return_value=False)
-    @mock.patch("blueapps.utils.request_provider.get_local_request")
-    @mock.patch.object(ChatCompletion, "add_platform_auth_params", side_effect=lambda params: params)
-    @mock.patch.object(ChatCompletion, "build_auth_args", return_value={"bk_token": "test_token"})
-    def test_add_esb_info_frontend_with_user(
-        self, mock_build_auth, mock_platform_auth, mock_get_request, mock_is_backend
-    ):
-        """测试前端模式下添加用户信息"""
-        # 模拟请求对象
-        mock_request = mock.Mock()
-        mock_user = mock.Mock()
-        mock_user.username = "test_user"
-        mock_user.bk_username = "test_bk_user"
-        mock_request.user = mock_user
-        mock_get_request.return_value = mock_request
+    def test_build_header_maps_user_to_agent_execution_header(self):
+        """测试执行用户只通过 Agent 约定 Header 传递"""
+        params = {"user": "xxx", "input": "test"}
 
-        params = {"test_param": "value"}
-        result = self.resource.add_esb_info_before_request(params)
+        headers = self.resource.build_header(params)
 
-        # 验证用户信息已添加
-        self.assertEqual(result.get("bk_username"), "test_bk_user")
+        self.assertEqual(headers["X-BKAIDEV-USER"], "xxx")
+        self.assertNotIn("user", params)
 
 
 class TestAIAuditAnalyseAuth(TestCase):
@@ -721,7 +712,8 @@ class TestAIAuditReportAPIGWConfig(TestCase):
     def test_audit_report_mcp_uses_report_risk_resource(self):
         definition = (BACKEND_DIR / "support-files/apigw/definition.yaml").read_text(encoding="utf-8")
 
-        self.assertIn("list_analyse_report_risk_apigw", definition)
+        self.assertIn("mcp_list_analyse_report_risk", definition)
+        self.assertNotIn("list_analyse_report_risk_apigw\n", definition)
         self.assertNotIn("list_risk_apigw", definition)
 
     def test_report_risk_apigw_resource_defined(self):
@@ -750,10 +742,10 @@ class TestAIAuditReportAPIGWConfig(TestCase):
         yaml_path = BACKEND_DIR / "support-files/apigw/definition.yaml"
         # 模拟修复后代码的调用方式: 显式传 encoding
         content = yaml_path.read_text(encoding="utf-8")
-        # 验证读到非空字符串, 包含 list_analyse_report_risk_apigw (说明 UTF-8 解析成功)
+        # 验证读到非空字符串，包含用户态 MCP Resource（说明 UTF-8 解析成功）
         self.assertIsInstance(content, str)
         self.assertGreater(len(content), 0)
-        self.assertIn("list_analyse_report_risk_apigw", content)
+        self.assertIn("mcp_list_analyse_report_risk", content)
 
     @unittest.skipUnless(sys.platform == "win32", "仅在 Windows 真实环境验证 GBK 默认编码修复")
     def test_yaml_default_encoding_raises_on_windows(self):

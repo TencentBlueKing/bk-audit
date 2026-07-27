@@ -179,6 +179,7 @@ from services.web.risk.serializers import (
     RiskExportAsyncRespSerializer,
     RiskExportReqSerializer,
     RiskInfoSerializer,
+    RiskInfoWithoutReportSerializer,
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
     UpdateRiskRequestSerializer,
@@ -327,10 +328,16 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
 
 class RetrieveRiskAPIGW(RetrieveRisk):
     audit_action = None
+    ResponseSerializer = RiskInfoWithoutReportSerializer
 
     def perform_request(self, validated_request_data):
-        risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
-        return RiskInfoSerializer(risk).data
+        return get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+
+
+class MCPRetrieveRisk(RetrieveRiskAPIGW):
+    """获取 MCP 可见的风险详情，不返回风险报告正文。"""
+
+    name = gettext_lazy("获取风险详情(MCP)")
 
 
 class ListRisk(RiskMeta):
