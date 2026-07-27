@@ -21,12 +21,12 @@
         <component
           :is="Component"
           v-if="currentRoute.meta?.keepAlive"
-          :key="String(currentRoute.name)" />
+          :key="String(currentRoute.meta?.keepAliveKey || currentRoute.name)" />
       </keep-alive>
       <component
         :is="Component"
         v-if="!currentRoute.meta?.keepAlive"
-        :key="String(currentRoute.name)" />
+        :key="String(currentRoute.meta?.keepAliveKey || currentRoute.name)" />
     </template>
   </router-view>
 </template>

@@ -33,6 +33,9 @@ export default {
       meta: {
         title: '工具广场',
         nodeSideContent: true,
+        // 广场与详情共用缓存实例，返回时保留列表滚动位置
+        keepAlive: true,
+        keepAliveKey: 'toolsSquarePage',
       },
     },
     {
@@ -42,6 +45,8 @@ export default {
       meta: {
         title: '工具详情',
         nodeSideContent: true,
+        keepAlive: true,
+        keepAliveKey: 'toolsSquarePage',
       },
     },
   ],
