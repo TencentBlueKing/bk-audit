@@ -1163,9 +1163,12 @@ class ExecuteTool(ToolBase):
         )
 
         if binding:
-            tool_bound_scenes = set(
-                binding.binding_scenes.filter(scene__is_deleted=False).values_list('scene_id', flat=True)
-            )
+            tool_bound_scenes = {
+                str(scene_id)
+                for scene_id in binding.binding_scenes.filter(scene__is_deleted=False).values_list(
+                    'scene_id', flat=True
+                )
+            }
             tool_bound_systems = set(binding.binding_systems.values_list('system_id', flat=True))
         else:
             tool_bound_scenes = set()
