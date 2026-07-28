@@ -89,7 +89,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
 
     def test_mcp_schema_keeps_legacy_resource_contract(self):
-        """用户态 MCP 仅变更鉴权和路由，不得缩减既有 Agent 可见契约。"""
+        """用户态 MCP 不得缩减既有 Agent 可见的请求和响应结构。"""
         operations = self._get_operations()
 
         for mcp_operation_id, legacy_operation_id in MCP_SCHEMA_SOURCES.items():
@@ -99,10 +99,12 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
             self.assertEqual(mcp_operation["responses"], legacy_operation["responses"])
 
             legacy_parameters = {
-                (parameter["in"], parameter["name"]): parameter for parameter in legacy_operation["parameters"]
+                (parameter["in"], parameter["name"]): self._without_description(parameter)
+                for parameter in legacy_operation["parameters"]
             }
             mcp_parameters = {
-                (parameter["in"], parameter["name"]): parameter for parameter in mcp_operation["parameters"]
+                (parameter["in"], parameter["name"]): self._without_description(parameter)
+                for parameter in mcp_operation["parameters"]
             }
             for parameter_key, legacy_parameter in legacy_parameters.items():
                 parameter_key = (
@@ -119,6 +121,29 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         }
         self.assertIn(("path", "namespace"), detail_parameters)
         self.assertNotIn(("query", "lite_mode"), detail_parameters)
+
+    def test_mcp_execute_tool_describes_risk_drill_required_context(self):
+        """风险下钻的条件必填参数及时间来源必须暴露给 MCP Agent。"""
+        operations = self._get_operations()
+        execute_operation = operations["mcp_execute_tool"]
+        strategy_operation = operations["mcp_retrieve_risk_strategy_info"]
+
+        self.assertIn("params.tool_variables 非空", execute_operation["description"])
+        self.assertIn("必须同时传入", execute_operation["description"])
+        self.assertIn("mcp_retrieve_risk", strategy_operation["description"])
+        self.assertIn("event_time/event_end_time", strategy_operation["description"])
+
+        body_schema = next(
+            parameter["schema"] for parameter in execute_operation["parameters"] if parameter["in"] == "body"
+        )
+        for field_name in (
+            "caller_resource_type",
+            "caller_resource_id",
+            "drill_field",
+            "event_start_time",
+            "event_end_time",
+        ):
+            self.assertIn("风险下钻且 params.tool_variables 非空时必填", body_schema["properties"][field_name]["description"])
 
     def test_all_audit_report_servers_use_new_mcp_resources(self):
         definition = self._load_definition()
@@ -137,7 +162,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.11")
+        self.assertEqual(definition["release"]["version"], "0.0.12")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
 
     def _get_operations(self):
@@ -147,6 +172,19 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
             for operation in methods.values()
             if isinstance(operation, dict) and "operationId" in operation
         }
+
+    @staticmethod
+    def _without_description(parameter):
+        """MCP 可以加强调用说明，但不得变更原有参数结构。"""
+        if isinstance(parameter, dict):
+            return {
+                key: TestMCPUserAPIGWConfig._without_description(value)
+                for key, value in parameter.items()
+                if key != "description"
+            }
+        if isinstance(parameter, list):
+            return [TestMCPUserAPIGWConfig._without_description(value) for value in parameter]
+        return parameter
 
     @staticmethod
     def _load_definition():

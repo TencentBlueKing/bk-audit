@@ -1937,8 +1937,9 @@ paths:
     get:
       operationId: mcp_retrieve_risk_strategy_info
       description: >-
-        获取当前用户可查看风险的策略下钻配置。Agent 应选择 drill_config.tool.uid 调用 mcp_execute_tool，
-        并按 config 组装 tool_variables，同时传入风险调用方上下文。
+        获取当前用户可查看风险的策略下钻配置。Agent 应先调用 mcp_retrieve_risk 获取 event_time/event_end_time，
+        再选择 drill_config.tool.uid 调用 mcp_execute_tool，并按 config 组装 tool_variables；风险下钻且
+        params.tool_variables 非空时，必须同时传入风险调用方上下文、drill_field、event_start_time 和 event_end_time。
       tags: []
       parameters:
         - in: path
@@ -2679,8 +2680,10 @@ paths:
     post:
       operationId: mcp_execute_tool
       description: >-
-        使用真实用户身份执行工具。风险下钻时传 caller_resource_type=risk、caller_resource_id、drill_field、
-        event_start_time/event_end_time，并按策略 drill_config 组装 params.tool_variables；调用方风险权限或工具使用权限任一满足即可。
+        使用真实用户身份执行工具。风险下钻且 params.tool_variables 非空时，caller_resource_type=risk、
+        caller_resource_id、drill_field、event_start_time、event_end_time 必须同时传入；先调用 mcp_retrieve_risk，
+        使用返回的 event_time/event_end_time 填充时间范围，再按策略 drill_config 组装 params.tool_variables。
+        调用方风险权限或工具使用权限任一满足即可。
       tags: []
       parameters:
         - in: path
@@ -2732,25 +2735,25 @@ paths:
                     default: 100
               caller_resource_type:
                 type: string
-                description: 调用方资源类型。风险下钻时固定传 risk，用于声明本次工具执行来自风险上下文。
+                description: 调用方资源类型。风险下钻且 params.tool_variables 非空时必填，固定传 risk，用于声明本次工具执行来自风险上下文。
               caller_resource_id:
                 type: string
-                description: 调用方资源实例ID。风险下钻时传风险ID，应与 retrieve_risk_strategy_info 的 id 一致。
+                description: 调用方资源实例ID。风险下钻且 params.tool_variables 非空时必填，传风险ID，应与 retrieve_risk_strategy_info 的 id 一致。
               drill_field:
                 type: string
                 description: >-
-                  指定使用哪个策略字段的 drill_config 进行变量值校验。风险下钻时传所选字段的 field_name，
+                  指定使用哪个策略字段的 drill_config 进行变量值校验。风险下钻且 params.tool_variables 非空时必填，传所选字段的 field_name，
                   后端仅使用该字段下与当前 uid 匹配的 config 校验 params.tool_variables。
               event_start_time:
                 type: string
                 description: >-
-                  风险事件开始时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
-                  需要与 drill_field、event_end_time 一起传入。
+                  风险事件开始时间，用于后端调用 list_event 获取事件数据。风险下钻且 params.tool_variables 非空时必填，
+                  使用 mcp_retrieve_risk 返回的 event_time，并与 drill_field、event_end_time 一起传入。
               event_end_time:
                 type: string
                 description: >-
-                  风险事件结束时间，用于后端调用 list_event 获取事件数据。tool_variables 的值来源于风险字段时，
-                  需要与 drill_field、event_start_time 一起传入。
+                  风险事件结束时间，用于后端调用 list_event 获取事件数据。风险下钻且 params.tool_variables 非空时必填，
+                  使用 mcp_retrieve_risk 返回的 event_end_time，并与 drill_field、event_start_time 一起传入。
       responses:
         "200":
           description: 执行成功
