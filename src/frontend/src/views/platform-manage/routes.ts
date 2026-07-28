@@ -41,7 +41,7 @@ export default {
       component: () => import('@views/platform-manage/report-config/index.vue'),
       name: 'platformReportConfig',
       meta: {
-        title: '报表管理',
+        title: '全局报表',
         nodeSideContent: false,
       },
     },
@@ -50,7 +50,7 @@ export default {
       component: () => import('@views/platform-manage/tool-manage/index.vue'),
       name: 'platformToolConfig',
       meta: {
-        title: '工具管理',
+        title: '全局工具',
         nodeSideContent: false,
       },
     },
