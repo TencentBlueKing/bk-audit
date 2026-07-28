@@ -1,31 +1,57 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <div class="chat-welcome">
-    <!-- 可滚动内容区 -->
-    <div class="welcome-content">
-      <!-- Logo + 标题区域 -->
+    <div class="welcome-column">
+      <!-- 标题区 -->
       <div class="welcome-hero">
-        <div class="hero-logo">
-          <div class="logo-block">
-            <audit-icon type="audit" />
-          </div>
-        </div>
+        <img
+          alt="AI助手"
+          class="logo-icon"
+          :src="aiChatIcon">
         <h1 class="hero-title">
-          SecChat
+          AI助手
         </h1>
         <p class="hero-desc">
-          HIDS 安全智能助手 — 分析主机行为、解读风险告警、调查安全事件
+          审计中心智能助手 — 分析审计风险、解读告警、检索日志、生成报告
         </p>
       </div>
 
-      <!-- 功能卡片网格 -->
+      <!-- 功能卡片 -->
       <div class="prompt-grid">
         <div
           v-for="item in promptCards"
           :key="item.title"
           class="prompt-card"
-          @click="$emit('select-prompt', item.prompt)">
+          :class="{ 'is-disabled': item.disabled }"
+          :title="item.disabled ? '暂未开放' : undefined"
+          @click="handleCardClick(item)">
           <div class="card-icon">
-            <audit-icon :type="item.icon" />
+            <img
+              v-if="item.iconSrc"
+              alt=""
+              class="card-icon-img"
+              :src="item.iconSrc">
+            <ai-setting-icon
+              v-else-if="item.useSettingIcon"
+              class="card-icon-img" />
+            <audit-icon
+              v-else
+              :type="item.icon" />
           </div>
           <div class="card-content">
             <div class="card-title">
@@ -37,201 +63,218 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 底部输入区（固定不被压缩） -->
-    <chat-input
-      @attach="$emit('attach')"
-      @send="$emit('select-prompt', $event)" />
+      <!-- 输入区：与卡片同宽 -->
+      <chat-input
+        class="welcome-input"
+        @attach="$emit('attach')"
+        @send="$emit('select-prompt', $event)" />
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+  import AiSettingIcon from './ai-setting-icon.vue';
   import ChatInput from './chat-input.vue';
 
-  defineEmits<{
+  import aiChatIcon from '@images/ai-chat-icon.svg';
+  import biaobiaoIcon from '@images/biaobiao-icon.svg';
+  import fengxianIcon from '@images/fengxian-icon.svg';
+  import shiyongIcon from '@images/shiyong-icon.svg';
+
+  const emit = defineEmits<{
     'select-prompt': [prompt: string];
     attach: [];
   }>();
 
   const promptCards = [
     {
-      icon: 'analysis',
-      title: '分析主机行为',
-      desc: '分析目标主机的一场行为与安全风险',
-      prompt: '请帮我分析主机的异常行为',
+      icon: 'audit',
+      title: '审计日志检索',
+      desc: '用对话查询与统计各系统审计日志',
+      prompt: '请帮我检索审计日志',
+      disabled: false,
     },
     {
-      icon: 'alert',
-      title: '解读风险告警',
-      desc: '解读当前未处理的主机风险告警',
-      prompt: '帮我解读主机的风险告警',
+      icon: 'shujutongji',
+      title: '风险分析',
+      desc: '分析当前审计风险分布与趋势',
+      prompt: '请帮我分析当前审计风险分布与趋势',
+      disabled: true,
     },
     {
-      icon: 'view',
-      title: '查看安全事件',
-      desc: '查看近期未处理的安全事件',
-      prompt: '请帮我查看近期未处理的安全事件',
+      icon: '',
+      iconSrc: fengxianIcon,
+      title: '风险解读',
+      desc: '解读未处理的高危风险告警',
+      prompt: '帮我解读未处理的高危风险告警',
+      disabled: true,
     },
     {
-      icon: 'check-line',
-      title: '主机健康检查',
-      desc: '对目标主机进行安全基线合规检查',
-      prompt: '请对主机进行安全基线合规检查',
+      icon: '',
+      iconSrc: biaobiaoIcon,
+      title: '报表解读',
+      desc: '解读审计报表数据与趋势分析',
+      prompt: '请帮我解读审计报表数据与趋势',
+      disabled: true,
     },
     {
-      icon: 'chart',
-      title: '安全态势总览',
-      desc: '了解当前全网安全态势概况',
-      prompt: '请帮我了解当前全网安全态势概况',
+      icon: '',
+      useSettingIcon: true,
+      title: '场景配置',
+      desc: '了解如何配置审计场景与检测策略',
+      prompt: '请介绍如何配置审计场景与检测策略',
+      disabled: true,
     },
     {
-      icon: 'help-document-fill',
-      title: 'HIDS 使用帮助',
-      desc: '了解 HIDS 功能配置与使用方法',
-      prompt: '请介绍 HIDS 的功能配置与使用方法',
+      icon: '',
+      iconSrc: shiyongIcon,
+      title: '使用帮助',
+      desc: '了解审计中心功能配置与使用方法',
+      prompt: '请介绍审计中心的功能配置与使用方法',
+      disabled: true,
     },
   ];
+
+  const handleCardClick = (item: typeof promptCards[0]) => {
+    if (item.disabled) return;
+    emit('select-prompt', item.prompt);
+  };
 </script>
 
 <style lang="postcss" scoped>
   .chat-welcome {
-    flex: 1;
     display: flex;
+    width: 100%;
+    height: 100%;
+    padding: 40px 24px;
+    overflow: auto;
+    background-color: #f5f7fa;
+    box-sizing: border-box;
+    flex: 1;
     flex-direction: column;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+  }
 
-    .welcome-content {
-      padding: 60px 24px 0;
-      overflow-y: auto;
-      background: #f5f7fa;
-      flex: 1;
+  /* 标题 / 卡片 / 输入 同一宽度，水平垂直居中 */
+  .welcome-column {
+    display: flex;
+    width: 960px;
+    max-width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
 
-      &::-webkit-scrollbar {
-        width: 4px;
-      }
+  .welcome-hero {
+    display: flex;
+    margin-bottom: 40px;
+    flex-direction: column;
+    align-items: center;
 
-      &::-webkit-scrollbar-thumb {
-        background: #dcdee5;
-        border-radius: 2px;
-      }
+    .logo-icon {
+      display: block;
+      width: 56px;
+      height: auto;
+      margin-bottom: 16px;
     }
 
-    /* Logo + 标题 */
-    .welcome-hero {
+    .hero-title {
+      margin: 0 0 12px;
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 44px;
+      color: #313238;
+    }
+
+    .hero-desc {
+      margin: 0;
+      font-size: 14px;
+      line-height: 22px;
+      color: #63656e;
+      text-align: center;
+    }
+  }
+
+  .prompt-grid {
+    display: grid;
+    width: 100%;
+    margin-bottom: 28px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+
+    .prompt-card {
       display: flex;
-      width: 100%;
-      max-width: 900px;
-      margin-right: auto;
-      margin-bottom: 40px;
-      margin-left: auto;
-      flex-direction: column;
-      align-items: center;
+      min-width: 0;
+      padding: 20px;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #eaebf0;
+      border-radius: 8px;
+      transition: border-color .2s, box-shadow .2s;
+      align-items: flex-start;
+      gap: 14px;
+      box-sizing: border-box;
 
-      .hero-logo {
-        margin-bottom: 20px;
-
-        .logo-block {
-          display: flex;
-          width: 64px;
-          height: 64px;
-          background: #e1ecff;
-          border-radius: 16px;
-          align-items: center;
-          justify-content: center;
-
-          i {
-            font-size: 32px;
-            color: #3a84ff;
-          }
-
-          .audit-icon {
-            font-size: 32px;
-            color: #3a84ff;
-          }
-        }
+      &:hover:not(.is-disabled) {
+        border-color: #3a84ff;
+        box-shadow: 0 2px 8px rgb(58 132 255 / 12%);
       }
 
-      .hero-title {
-        margin: 0 0 12px;
-        font-size: 32px;
-        font-weight: 600;
-        letter-spacing: 1px;
-        color: #313238;
+      &.is-disabled {
+        cursor: not-allowed;
       }
 
-      .hero-desc {
-        margin: 0;
-        font-size: 14px;
-        line-height: 22px;
-        color: #63656e;
-        text-align: center;
-      }
-    }
-
-    /* 功能卡片 */
-    .prompt-grid {
-      display: grid;
-      width: 100%;
-      max-width: 900px;
-      margin-right: auto;
-      margin-bottom: 40px;
-      margin-left: auto;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-
-      .prompt-card {
+      .card-icon {
         display: flex;
-        padding: 18px 20px;
-        cursor: pointer;
-        background: #fff;
-        border: 1px solid #e6e9f0;
+        width: 44px;
+        height: 44px;
+        background: #f0f5ff;
         border-radius: 8px;
-        transition: border-color .2s, box-shadow .2s;
-        align-items: flex-start;
-        gap: 14px;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
 
-        &:hover {
-          border-color: #3a84ff;
-          box-shadow: 0 2px 8px rgb(58 132 255 / 12%);
+        i,
+        .audit-icon,
+        .card-icon-img {
+          font-size: 22px;
+          color: #3a84ff;
         }
 
-        .card-icon {
-          display: flex;
-          width: 40px;
-          height: 40px;
-          background: #f0f5ff;
-          border-radius: 8px;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+        .card-icon-img {
+          display: block;
+          width: 22px;
+          height: 22px;
+        }
+      }
 
-          i,
-          .audit-icon {
-            font-size: 20px;
-            color: #3a84ff;
-          }
+      .card-content {
+        flex: 1;
+        min-width: 0;
+
+        .card-title {
+          margin-bottom: 4px;
+          font-size: 14px;
+          font-weight: 500;
+          line-height: 22px;
+          color: #313238;
         }
 
-        .card-content {
-          flex: 1;
-          min-width: 0;
-
-          .card-title {
-            margin-bottom: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            line-height: 22px;
-            color: #313238;
-          }
-
-          .card-desc {
-            font-size: 12px;
-            line-height: 20px;
-            color: #979ba5;
-          }
+        .card-desc {
+          font-size: 12px;
+          line-height: 20px;
+          color: #979ba5;
         }
       }
     }
+  }
+
+  .welcome-input {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    z-index: 10;
   }
 </style>
