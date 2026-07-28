@@ -102,17 +102,20 @@
   const router = useRouter();
 
   const listRef = ref();
+  const shouldHidePlatformDisabledTool = (tool: any) => tool.visibility?.binding_type === 'platform_binding'
+    && tool.status !== 'published';
   // 适配器：将 fetchToolsList 返回的数组包装为 tdesign-list 期望的分页结构
   const dataSource = (params: any) => ToolManageService.fetchToolsList(params).then((list) => {
+    const visibleList = list.filter(tool => !shouldHidePlatformDisabledTool(tool));
     const page = params?.page || 1;
     const pageSize = params?.page_size || 10;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     return {
-      results: list.slice(start, end),
+      results: visibleList.slice(start, end),
       page,
-      num_pages: Math.ceil(list.length / pageSize),
-      total: list.length,
+      num_pages: Math.ceil(visibleList.length / pageSize),
+      total: visibleList.length,
     };
   });
 
