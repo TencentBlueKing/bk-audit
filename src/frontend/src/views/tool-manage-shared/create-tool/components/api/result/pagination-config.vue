@@ -295,6 +295,7 @@
   interface Exposes {
     getPaginationConfig: () => { enable_pagination: boolean; pagination_config: any[] };
     setPaginationConfig: (data: any) => void;
+    deleteNotExistedFields: () => void;
     validate: () => boolean;
   }
 
@@ -707,9 +708,9 @@
     return isValid;
   };
 
-  // 当 resultData 变更时（重新调试后），保持分页配置不变
+  // 当 resultData 变更时（重新调试后），保持分页配置不变，由外部触发 deleteNotExistedFields 做 diff
   watch(() => props.resultData, () => {
-    // 数据变更后不清空配置，让用户手动调整
+    // 数据变更后不清空配置，待调试完成后按 schema 清除已消失字段
   });
 
   const buildParamRawName = (varName: string, position: string): string => `${varName}${position}`;
@@ -782,9 +783,41 @@
     }
   };
 
+  /** 调试后 diff：清除新返回结构中已不存在的列表字段/总数字段，保留其余分页参数 */
+  const deleteNotExistedFields = () => {
+    const collectPaths = (nodes: any[]): string[] => {
+      let paths: string[] = [];
+      (nodes || []).forEach((node) => {
+        if (node.path) paths.push(node.path);
+        if (node.json_path) paths.push(node.json_path);
+        if (node.children?.length) paths = paths.concat(collectPaths(node.children));
+        if (node.list?.length) paths = paths.concat(collectPaths(node.list));
+      });
+      return paths;
+    };
+
+    const allPaths = new Set([
+      ...collectPaths(parsedTreeNodes.value),
+      ...collectPaths(arrayFieldNodes.value),
+      ...collectPaths(numberFieldNodes.value),
+    ]);
+
+    paginationRows.value.forEach((row) => {
+      if (row.list_field && !allPaths.has(row.list_field)) {
+        /* eslint-disable-next-line no-param-reassign */
+        row.list_field = '';
+      }
+      if (row.total_field && !allPaths.has(row.total_field)) {
+        /* eslint-disable-next-line no-param-reassign */
+        row.total_field = '';
+      }
+    });
+  };
+
   defineExpose<Exposes>({
     getPaginationConfig,
     setPaginationConfig,
+    deleteNotExistedFields,
     validate,
   });
 

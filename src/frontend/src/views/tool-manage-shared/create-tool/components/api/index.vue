@@ -393,6 +393,8 @@
   const hasInitPagination = ref(false);
   // 编辑模式下，之前是否已设置过查询结果（一般编辑模式下都设置过，用于回显时直接展示查询结果设置模块）
   const hasInitResultConfig = ref(false);
+  // 只有在“触发重新调试前”才会缓存当前分页/查询结果配置
+  const hasCachedOutputConfig = ref(false);
   const resultData = ref<Array<resultDataModel> | string>('');
   const isHeadersPass = ref(true);
   const isHeadersNoPassIndex = ref<number[]>([]);
@@ -449,27 +451,96 @@
     formData.value.api_config.headers.splice(index, 1);
   };
 
+  /** 将当前分页/查询结果配置缓存到 formData，避免后续 diff 丢失 */
+  const cacheCurrentOutputConfig = () => {
+    const resultConfigFromRef = resultConfigRef.value?.handleGetResultConfig?.();
+    const paginationData = paginationConfigRef.value?.getPaginationConfig?.();
+    if (!resultConfigFromRef && !paginationData) {
+      return;
+    }
+    hasCachedOutputConfig.value = true;
+    formData.value.output_config = {
+      ...formData.value.output_config,
+      ...(resultConfigFromRef || {}),
+      ...(paginationData || {}),
+      result_schema: {
+        tree_data: formData.value.output_config?.result_schema?.tree_data,
+      },
+    };
+  };
+
+  /** 调试成功后按新 schema diff：结构仍存在的配置保留，消失字段清除 */
+  const reapplyAndDiffOutputConfig = (prevResultConfig: any, prevPaginationConfig: any) => {
+    nextTick(() => {
+      if (prevResultConfig) {
+        resultConfigRef.value?.setConfigs(prevResultConfig);
+      }
+      if (prevPaginationConfig) {
+        paginationConfigRef.value?.setPaginationConfig(prevPaginationConfig);
+      }
+      // 等待 setConfigs 内部 nextTick 完成后再做字段 diff
+      nextTick(() => {
+        nextTick(() => {
+          resultConfigRef.value?.deleteNotExistedFields?.();
+          paginationConfigRef.value?.deleteNotExistedFields?.();
+        });
+      });
+    });
+  };
+
   // 调试
   const handleDeBugDone = (res: any, isSucc: boolean) => {
-    resultData.value = '';
-    nextTick(() => {
-      resultData.value = res;
-      isSuccess.value = isSucc;
+    // 调试失败：保留原调试结果与分页/查询结果配置，不清空
+    if (!isSucc) {
+      isSuccess.value = false;
       isDoneDeBug.value = true;
-      isSameInitParamsConfig.value = isSucc;
+      isSameInitParamsConfig.value = false;
+      emits(
+        'getIsDoneDeBug',
+        isDoneDeBug.value,
+        editModeIseditInfo.value,
+        isSuccess.value,
+        isSameInitApiConfig.value && isSameInitParamsConfig.value,
+      );
+      return;
+    }
 
-      // 调试成功后，分页设置与查询结果设置同时出现，共享同一次调试结果
-      if (isSucc) {
-        hasInitPagination.value = true;
-        hasInitResultConfig.value = true;
+    // 重新调试成功后：把“重新调试前缓存”的配置回填（此时子组件刚挂载，需要 nextTick 后 set）
+    const cachedOutputConfig = formData.value.output_config || {};
+    const prevResultConfig = cachedOutputConfig.groups && Array.isArray(cachedOutputConfig.groups)
+      ? {
+        enable_grouping: !!cachedOutputConfig.enable_grouping,
+        groups: cachedOutputConfig.groups,
       }
+      : null;
+    const prevPaginationConfig = (cachedOutputConfig.pagination_config && Array.isArray(cachedOutputConfig.pagination_config))
+      ? {
+        enable_pagination: !!cachedOutputConfig.enable_pagination,
+        pagination_config: cachedOutputConfig.pagination_config,
+      }
+      : null;
+    const hadPreviousConfig = !!(prevResultConfig || prevPaginationConfig);
 
-      emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value, isSameInitApiConfig.value && isSameInitParamsConfig.value);
-      // 编辑模式下，重新调试更改查询结果设置 删除已经不存在的字段
-      if (isSucc && props.isEditMode) {
-        resultConfigRef.value.deleteNotExistedFields();
-      }
-    });
+    resultData.value = res;
+    isSuccess.value = true;
+    isDoneDeBug.value = true;
+    isSameInitParamsConfig.value = true;
+    hasInitPagination.value = true;
+    hasInitResultConfig.value = true;
+
+    emits(
+      'getIsDoneDeBug',
+      isDoneDeBug.value,
+      editModeIseditInfo.value,
+      isSuccess.value,
+      isSameInitApiConfig.value && isSameInitParamsConfig.value,
+    );
+
+    // 有历史配置时：回填后按新返回结构 diff，仅删除已不存在的字段
+    if (hasCachedOutputConfig.value && hadPreviousConfig && (prevResultConfig || prevPaginationConfig)) {
+      reapplyAndDiffOutputConfig(prevResultConfig, prevPaginationConfig);
+      hasCachedOutputConfig.value = false;
+    }
   };
 
   const initResultConfig = (data: any) => {
@@ -529,11 +600,13 @@
       return;
     }
 
+    // 需重新调试时：缓存当前配置，但先隐藏分页/查询结果区块（等待成功后再展示并 diff）
+    cacheCurrentOutputConfig();
+    hasInitPagination.value = false;
+    hasInitResultConfig.value = false;
     isSuccess.value = false;
     isDoneDeBug.value = false;
     editModeIseditInfo.value = true;
-    hasInitPagination.value = false;
-    hasInitResultConfig.value = false;
     emits(
       'getIsDoneDeBug',
       false,
@@ -601,12 +674,14 @@
       }
 
       // 仅在初始化完成后，api 配置发生实质变更才需要重置调试状态
+      // 保留分页/查询结果配置，待重新调试成功后再按 schema diff
+      cacheCurrentOutputConfig();
+      hasInitPagination.value = false;
+      hasInitResultConfig.value = false;
       isSuccess.value = false;
       isDoneDeBug.value = false;
       isSameInitApiConfig.value = false;
       editModeIseditInfo.value = true;
-      hasInitPagination.value = false;
-      hasInitResultConfig.value = false;
       emits(
         'getIsDoneDeBug',
         false,
