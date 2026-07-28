@@ -371,6 +371,47 @@
         };
 
         const allJsonPaths = getAllJsonPaths(treeData.value);
+
+        // 将当前已选节点转为 output_fields 结构，便于在交互配置后重新调试时做 diff
+        const selectedItemsToFields = (items: any[]) => items.map((item: any) => {
+          if (item.type === 'table') {
+            return {
+              raw_name: item.name,
+              json_path: item.json_path,
+              description: item.listDescription || '',
+              display_name: item.listName || '',
+              drill_config: null,
+              enum_mappings: null,
+              field_config: {
+                field_type: 'table',
+                output_fields: (item.list || []).map((listItem: any) => ({
+                  raw_name: listItem.name,
+                  json_path: listItem.json_path,
+                  description: listItem?.description || listItem?.config?.description || '',
+                  display_name: listItem?.display_name || listItem?.config?.display_name || '',
+                  drill_config: listItem?.drill_config || listItem?.config?.drill_config || null,
+                  enum_mappings: {
+                    mappings: listItem?.enum_mappings?.mappings || listItem?.config?.mappings || [],
+                  },
+                })),
+              },
+            };
+          }
+          return {
+            raw_name: item.name,
+            json_path: item.json_path,
+            description: item?.config?.description || '',
+            display_name: item?.config?.display_name || '',
+            drill_config: item?.config?.drill_config || null,
+            enum_mappings: {
+              mappings: item?.config?.mappings || [],
+            },
+            field_config: {
+              field_type: 'kv',
+            },
+          };
+        });
+
         // 通用的过滤函数
         const filterFields = (fields: any[]): any[] => fields.map((field: any) => {
           // 深拷贝字段，避免直接修改原对象
@@ -379,9 +420,9 @@
           // 如果有field_config.output_fields，检查其中的json_path是否存在
           if (filteredField.field_config?.output_fields && Array.isArray(filteredField.field_config.output_fields)) {
             // 过滤output_fields，只保留存在的json_path
-            const outputFields = filteredField.field_config.output_fields;
+            const nestedFields = filteredField.field_config.output_fields;
             // eslint-disable-next-line max-len
-            filteredField.field_config.output_fields = outputFields.filter((outputField: any) => allJsonPaths.includes(outputField.json_path));
+            filteredField.field_config.output_fields = nestedFields.filter((outputField: any) => allJsonPaths.includes(outputField.json_path));
           }
 
           return filteredField;
@@ -401,8 +442,11 @@
 
         // 判断是分组模式还是非分组模式
         if (props.isGrouping && props.groupOutputFields) {
-          // 分组模式：处理 groupOutputFields
-          const filteredFields = filterFields(props.groupOutputFields);
+          // 分组模式：优先用 groupOutputFields，否则从当前已选同步
+          const sourceFields = props.groupOutputFields.length > 0
+            ? props.groupOutputFields
+            : selectedItemsToFields(selectedItems.value);
+          const filteredFields = filterFields(sourceFields);
           // 先清理所有选中状态
           selectedId.value = [];
           selectValue.value = [];
@@ -413,14 +457,18 @@
           // 通过事件更新分组数据
           emits('groupContentChange', filteredFields, props.groupKey || '');
         } else {
-          // 非分组模式：处理 noGroupfields
-          const filteredFields = filterFields(noGroupfields.value);
+          // 非分组模式：优先用 noGroupfields，交互配置后回退到当前已选
+          const sourceFields = noGroupfields.value.length > 0
+            ? noGroupfields.value
+            : selectedItemsToFields(selectedItems.value);
+          const filteredFields = filterFields(sourceFields);
           // 先清理所有选中状态
           selectedId.value = [];
           selectValue.value = [];
           selectedItems.value = [];
           // 然后恢复勾选状态
           restoreCheckedNodes(filteredFields);
+          noGroupfields.value = filteredFields;
           outputFields.value = filteredFields;
         }
       });
