@@ -3,7 +3,18 @@
     class="chat-sidebar"
     :class="{ 'is-collapsed': collapsed }">
     <template v-if="!collapsed">
-      <!-- 搜索框 -->
+      <!-- 场景选择 -->
+      <div class="sidebar-project">
+        <scene-system-selector
+          v-model="selectedScene"
+          :popover-width="288"
+          scene-permission="view_scene"
+          system-permission="view_system"
+          width="100%"
+          @change="handleSceneChange" />
+      </div>
+
+      <!-- 搜索区：搜索框 + 筛选按钮 -->
       <div class="sidebar-search">
         <div class="search-box">
           <input
@@ -22,10 +33,12 @@
           @show="isDropdownShow = true">
           <div
             class="filter-btn"
-            :class="{ 'is-active': isDropdownShow }">
-            <audit-icon
-              class="icon-control"
-              type="filter" />
+            :class="{ 'is-active': isDropdownShow }"
+            title="更多操作">
+            <img
+              alt=""
+              class="filter-icon"
+              :src="aiSettingIcon">
           </div>
           <template #content>
             <bk-dropdown-menu>
@@ -72,28 +85,36 @@
         <div
           class="new-chat-btn"
           @click="$emit('new-chat')">
-          <span>
-            <audit-icon type="add" />
-          </span>
+          <img
+            alt=""
+            class="new-chat-icon"
+            :src="aiAddIcon">
           新对话
         </div>
       </div>
 
       <!-- 对话列表 -->
       <div class="conversation-list">
-        <!-- 置顶 -->
-        <div
-          v-if="filteredPinned.length"
-          class="conv-section">
+        <!-- 历史对话（未分组，置顶优先） -->
+        <div class="conv-section">
           <div class="section-label">
-            置顶
+            <span class="label-text">历史对话</span>
+            <span
+              class="label-action"
+              @click="showAddGroupDialog">
+              <plus />
+            </span>
           </div>
+
           <div
-            v-for="conv in filteredPinned"
+            v-for="conv in filteredHistoryList"
             :key="conv.id"
             class="conv-item"
             :class="{ 'is-active': activeId === conv.id, 'is-menu-open': activeMenuId === conv.id }"
-            @click="$emit('select', conv.id)">
+            draggable="true"
+            @click="$emit('select', conv.id)"
+            @dragend="handleDragEnd"
+            @dragstart="handleDragStart($event, 'conversation', conv.id)">
             <span class="conv-dot">•</span>
             <template v-if="editingConvId === conv.id">
               <bk-input
@@ -108,12 +129,14 @@
             <template v-else>
               <span class="conv-title">{{ conv.title }}</span>
             </template>
-            <div class="conv-actions is-pinned-actions">
+            <div
+              class="conv-actions"
+              :class="{ 'is-pinned-actions': conv.pinned }">
               <audit-icon
+                v-if="conv.pinned"
                 class="action-btn pin-icon"
                 type="attention" />
               <bk-dropdown
-                class="more-dropdown"
                 :is-show="activeMenuId === conv.id"
                 placement="bottom-end"
                 trigger="click"
@@ -121,12 +144,12 @@
                 @hide="hideMenu"
                 @show="showMenu(conv.id)">
                 <ellipsis
-                  class="action-btn more-icon"
+                  class="action-btn"
                   :class="{ 'is-active': activeMenuId === conv.id }" />
                 <template #content>
                   <bk-dropdown-menu>
                     <bk-dropdown-item @click="handlePin(conv.id)">
-                      取消置顶
+                      {{ conv.pinned ? '取消置顶' : '置顶对话' }}
                     </bk-dropdown-item>
                     <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
                       重命名
@@ -171,93 +194,6 @@
                             </bk-dropdown-item>
                             <bk-dropdown-item @click="showExportDialog('pdf')">
                               导出 PDF
-                            </bk-dropdown-item>
-                          </bk-dropdown-menu>
-                        </template>
-                      </bk-dropdown>
-                    </bk-dropdown-item>
-                    <bk-dropdown-item @click="handleDelete(conv.id)">
-                      删除
-                    </bk-dropdown-item>
-                  </bk-dropdown-menu>
-                </template>
-              </bk-dropdown>
-            </div>
-          </div>
-        </div>
-
-        <!-- 历史对话（无分组） -->
-        <div class="conv-section">
-          <div class="section-label">
-            <span class="label-text">历史对话</span>
-            <span
-              class="label-action"
-              @click="showAddGroupDialog">
-              <plus />
-            </span>
-          </div>
-
-          <div
-            v-for="conv in filteredUngroupedHistory"
-            :key="conv.id"
-            class="conv-item"
-            :class="{ 'is-active': activeId === conv.id, 'is-menu-open': activeMenuId === conv.id }"
-            draggable="true"
-            @click="$emit('select', conv.id)"
-            @dragend="handleDragEnd"
-            @dragstart="handleDragStart($event, 'conversation', conv.id)">
-            <span class="conv-dot">•</span>
-            <template v-if="editingConvId === conv.id">
-              <bk-input
-                ref="editConvInputRef"
-                v-model="editConvTitle"
-                class="conv-title-input"
-                size="small"
-                @blur="cancelEditConv"
-                @click.stop
-                @enter="confirmEditConv(conv.id)" />
-            </template>
-            <template v-else>
-              <span class="conv-title">{{ conv.title }}</span>
-            </template>
-            <div class="conv-actions">
-              <bk-dropdown
-                :is-show="activeMenuId === conv.id"
-                placement="bottom-end"
-                trigger="click"
-                @click.stop
-                @hide="hideMenu"
-                @show="showMenu(conv.id)">
-                <ellipsis
-                  class="action-btn"
-                  :class="{ 'is-active': activeMenuId === conv.id }" />
-                <template #content>
-                  <bk-dropdown-menu>
-                    <bk-dropdown-item @click="handlePin(conv.id)">
-                      置顶对话
-                    </bk-dropdown-item>
-                    <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
-                      重命名
-                    </bk-dropdown-item>
-                    <bk-dropdown-item @click="moveToGroup(conv.id, undefined)">
-                      移出分组
-                    </bk-dropdown-item>
-                    <bk-dropdown-item ext-cls="sub-menu-item">
-                      <bk-dropdown
-                        placement="right-start"
-                        style="width: 100%"
-                        trigger="hover">
-                        <div class="dropdown-sub-trigger">
-                          <span>移动到分组</span>
-                          <angle-right class="sub-icon" />
-                        </div>
-                        <template #content>
-                          <bk-dropdown-menu>
-                            <bk-dropdown-item
-                              v-for="g in groups"
-                              :key="g.id"
-                              @click="moveToGroup(conv.id, g.name)">
-                              {{ g.name }}
                             </bk-dropdown-item>
                           </bk-dropdown-menu>
                         </template>
@@ -310,8 +246,10 @@
                   @enter="confirmEditGroup(group.name)" />
               </template>
               <template v-else>
-                <span class="group-name">{{ group.name }}</span>
-                <span class="group-count">{{ filteredGroupedHistory[group.name]?.length || 0 }}</span>
+                <span class="group-name">
+                  {{ group.name }}
+                  <span class="group-count">({{ filteredGroupedHistory[group.name]?.length || 0 }})</span>
+                </span>
                 <bk-dropdown
                   class="group-more-dropdown"
                   :is-show="activeGroupMenuId === group.name"
@@ -454,18 +392,24 @@
       class="collapsed-toolbar">
       <div
         class="toolbar-item"
+        title="展开"
         @click="$emit('toggle')">
-        <angle-right class="collapse-icon" />
+        <angle-right class="toolbar-icon expand-icon" />
       </div>
       <div
         class="toolbar-item"
+        title="新对话"
         @click="$emit('new-chat')">
-        <audit-icon type="add" />
+        <img
+          alt=""
+          class="toolbar-icon add-icon"
+          :src="aiAddIcon">
       </div>
       <div
         class="toolbar-item"
+        title="搜索对话"
         @click="handleSearchClick">
-        <search />
+        <search class="toolbar-icon search-icon" />
       </div>
     </div>
 
@@ -474,9 +418,7 @@
       v-else
       class="collapse-btn"
       @click="$emit('toggle')">
-      <audit-icon
-        class="collapse-icon"
-        type="navi-expand" />
+      <angle-left class="collapse-icon" />
     </div>
 
     <!-- 新建分组弹窗 -->
@@ -826,7 +768,12 @@
 
 <script lang="ts" setup>
   import { ref, computed, watch, nextTick } from 'vue';
-  import { AngleRight, Search, Folder, FolderShape, Ellipsis, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
+  import { AngleLeft, AngleRight, Search, Folder, FolderShape, Ellipsis, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
+
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+
+  import aiAddIcon from '@images/ai-add.svg';
+  import aiSettingIcon from '@images/ai-setting.svg';
 
   interface Conversation {
     id: string;
@@ -840,6 +787,12 @@
   interface Group {
     id: string;
     name: string;
+  }
+
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
   }
 
   const props = defineProps<{
@@ -868,6 +821,11 @@
   const searchInputRef = ref<HTMLInputElement | null>(null);
   const isDropdownShow = ref(false);
   const isSearchClicked = ref(false);
+  const selectedScene = ref<SceneItem | null>(null);
+
+  const handleSceneChange = (value: SceneItem | null) => {
+    selectedScene.value = value;
+  };
 
   // 报告列表相关
   const isReportListShow = ref(false);
@@ -999,18 +957,14 @@
     }
   });
 
-  const pinnedConversations = computed(() => props.conversations.filter(c => c.pinned));
-  const historyConversations = computed(() => props.conversations.filter(c => !c.pinned));
-
-  const filteredPinned = computed(() => {
-    if (!searchKeyword.value) return pinnedConversations.value;
-    return pinnedConversations.value.filter(c => c.title.includes(searchKeyword.value));
-  });
-
-  const filteredUngroupedHistory = computed(() => {
-    const ungrouped = historyConversations.value.filter(c => !c.groupName);
-    if (!searchKeyword.value) return ungrouped;
-    return ungrouped.filter(c => c.title.includes(searchKeyword.value));
+  const filteredHistoryList = computed(() => {
+    const ungrouped = props.conversations.filter(c => !c.groupName);
+    const sorted = [
+      ...ungrouped.filter(c => c.pinned),
+      ...ungrouped.filter(c => !c.pinned),
+    ];
+    if (!searchKeyword.value) return sorted;
+    return sorted.filter(c => c.title.includes(searchKeyword.value));
   });
 
   const filteredGroupedHistory = computed(() => {
@@ -1019,7 +973,7 @@
     props.groups.forEach((g) => {
       grouped[g.name] = [];
     });
-    const groupedConvs = historyConversations.value.filter(c => c.groupName);
+    const groupedConvs = props.conversations.filter(c => c.groupName);
     for (const conv of groupedConvs) {
       if (searchKeyword.value && !conv.title.includes(searchKeyword.value)) continue;
       const key = conv.groupName!;
@@ -1029,22 +983,8 @@
     return grouped;
   });
 
-  // 监听分组内容变化，如果分组内容为0，则自动删除该分组
-  watch(filteredGroupedHistory, (newVal) => {
-    // 只有在非搜索状态下才自动删除空分组，避免搜索时误删
-    if (searchKeyword.value) return;
-
-    const emptyGroups = Object.keys(newVal).filter(groupName => newVal[groupName].length === 0);
-    if (emptyGroups.length > 0) {
-      const newGroups = props.groups.filter(g => !emptyGroups.includes(g.name));
-      if (newGroups.length !== props.groups.length) {
-        emit('update-groups', newGroups);
-      }
-    }
-  }, { deep: true });
-
-  // 分组折叠状态
-  const collapsedGroups = ref<Set<string>>(new Set());
+  // 分组折叠状态（默认折叠空分组与无展开项）
+  const collapsedGroups = ref<Set<string>>(new Set(['风险分析', '风险解读']));
 
   const toggleGroup = (groupName: string) => {
     if (collapsedGroups.value.has(groupName)) {

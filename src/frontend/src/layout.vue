@@ -70,7 +70,7 @@
             active: curNavName === 'secChat'
           }"
           :to="{ name: 'secChat', query: {} }">
-          SecChat
+          {{ t('AI助手') }}
         </router-link>
         <router-link
           v-if="userRolePermission.show_log_search"
