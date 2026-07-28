@@ -513,7 +513,10 @@
         groups: cachedOutputConfig.groups,
       }
       : null;
-    const prevPaginationConfig = (cachedOutputConfig.pagination_config && Array.isArray(cachedOutputConfig.pagination_config))
+    const prevPaginationConfig = (
+      cachedOutputConfig.pagination_config
+      && Array.isArray(cachedOutputConfig.pagination_config)
+    )
       ? {
         enable_pagination: !!cachedOutputConfig.enable_pagination,
         pagination_config: cachedOutputConfig.pagination_config,
