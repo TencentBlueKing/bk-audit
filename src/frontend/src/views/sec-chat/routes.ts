@@ -19,7 +19,7 @@ export default {
   name: 'secChat',
   component: () => import('@views/sec-chat/index.vue'),
   meta: {
-    title: 'SecChat',
+    title: 'AI助手',
     navName: 'secChat',
     nodeSideContent: true,
     keepAlive: true,

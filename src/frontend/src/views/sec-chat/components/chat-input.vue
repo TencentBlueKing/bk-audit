@@ -31,8 +31,20 @@
               v-for="tag in shortcutTags"
               :key="tag.id"
               class="shortcut-tag"
+              :class="{ 'is-disabled': tag.disabled }"
+              :title="tag.disabled ? '暂未开放' : undefined"
               @click="selectTag(tag)">
-              <audit-icon :type="tag.icon" />
+              <img
+                v-if="tag.iconSrc"
+                alt=""
+                class="tag-icon-img"
+                :src="tag.iconSrc">
+              <ai-setting-icon
+                v-else-if="tag.useSettingIcon"
+                class="tag-icon-img" />
+              <audit-icon
+                v-else
+                :type="tag.icon" />
               <span>{{ tag.title }}</span>
             </div>
           </div>
@@ -60,16 +72,33 @@
             class="slash-menu">
             <ul class="slash-menu-list">
               <li
-                v-for="(cmd, index) in shortcutTags"
+                v-for="(cmd, index) in filteredSlashCommands"
                 :key="cmd.id"
                 class="slash-menu-item"
-                :class="{ 'is-active': activeSlashIndex === index }"
-                @click="selectSlashCommand(cmd)"
-                @mouseenter="activeSlashIndex = index">
+                :class="{
+                  'is-active': activeSlashIndex === index,
+                  'is-disabled': cmd.disabled,
+                }"
+                @mousedown.prevent="selectSlashCommand(cmd)"
+                @mouseenter="!cmd.disabled && (activeSlashIndex = index)">
+                <img
+                  v-if="cmd.iconSrc"
+                  alt=""
+                  class="cmd-icon-img"
+                  :src="cmd.iconSrc">
+                <ai-setting-icon
+                  v-else-if="cmd.useSettingIcon"
+                  class="cmd-icon-img" />
                 <audit-icon
+                  v-else
                   class="cmd-icon"
                   :type="cmd.icon" />
                 <span class="cmd-title">{{ cmd.title }}</span>
+              </li>
+              <li
+                v-if="!filteredSlashCommands.length"
+                class="slash-menu-empty">
+                无匹配指令
               </li>
             </ul>
           </div>
@@ -78,10 +107,12 @@
             v-model="inputValue"
             class="input-textarea"
             :disabled="disabled || generating"
-            :placeholder="placeholder || '请输入安全问题，输入 / 唤起快捷指令，Shift+Enter 换行'"
+            :placeholder="placeholder || '请输入 / 唤起快捷指令，Shift+Enter 换行'"
             rows="1"
-            @input="autoResize"
-            @keydown="handleKeydown" />
+            @click="updateSlashMenuState"
+            @input="handleInput"
+            @keydown="handleKeydown"
+            @keyup="updateSlashMenuState" />
         </div>
         <button
           v-if="generating"
@@ -97,20 +128,28 @@
           :class="{ 'is-active': inputValue.trim() && !disabled }"
           :disabled="!inputValue.trim() || disabled"
           @click="handleSend">
-          <audit-icon
-            class="send-icon"
-            type="right" />
+          <img
+            alt=""
+            class="send-icon-img"
+            :src="fasongIcon">
         </button>
       </div>
       <div class="input-hint">
-        SecChat 基于 AI 大模型生成回答，请注意验证关键信息的准确性
+        AI助手 基于 AI 大模型生成回答，请注意验证关键信息的准确性
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { ref, nextTick, watch } from 'vue';
+  import { computed, nextTick, ref } from 'vue';
+
+  import AiSettingIcon from './ai-setting-icon.vue';
+
+  import biaobiaoIcon from '@images/biaobiao-icon.svg';
+  import fasongIcon from '@images/fasong-icon.svg';
+  import fengxianIcon from '@images/fengxian-icon.svg';
+  import shiyongIcon from '@images/shiyong-icon.svg';
 
   const props = defineProps<{
     disabled?: boolean;
@@ -129,6 +168,8 @@
   const showShortcuts = ref(true);
   const showSlashMenu = ref(false);
   const activeSlashIndex = ref(0);
+  const slashQuery = ref('');
+  const slashStartIndex = ref(-1);
 
   const commandIconPath1 = 'M846.9 177.1l-59.4-59.4c-15.6-15.6-40.9-15.6-56.6 0L216.4 632.2'
     + 'c-15.6 15.6-15.6 40.9 0 56.6l59.4 59.4c15.6 15.6 40.9 15.6 56.6 0l514.5-514.5'
@@ -139,72 +180,127 @@
     + 'c0 17.7 14.3 32 32 32s32-14.3 32-32v-64h64c17.7 0 32-14.3 32-32s-14.3-32-32-32z';
 
   const shortcutTags = [
-    { id: 'analyze', icon: 'analysis', title: '主机行为分析', prompt: '请帮我分析主机的异常行为' },
-    { id: 'alert', icon: 'alert', title: '解读风险告警', prompt: '帮我解读主机的风险告警' },
-    { id: 'event', icon: 'view', title: '查看安全事件', prompt: '请帮我查看近期未处理的安全事件' },
-    { id: 'check', icon: 'check-line', title: '主机健康检查', prompt: '请对主机进行安全基线合规检查' },
-    { id: 'overview', icon: 'chart', title: '安全态势总览', prompt: '请帮我了解当前全网安全态势概况' },
-    { id: 'help', icon: 'help-document-fill', title: 'HIDS 使用帮助', prompt: '请介绍 HIDS 的功能配置与使用方法' },
+    { id: 'log', icon: 'audit', title: '审计日志检索', prompt: '请帮我检索审计日志', disabled: false },
+    { id: 'analysis', icon: 'shujutongji', title: '风险分析', prompt: '请帮我分析当前审计风险分布与趋势', disabled: true },
+    { id: 'alert', icon: '', iconSrc: fengxianIcon, title: '风险解读', prompt: '帮我解读未处理的高危风险告警', disabled: true },
+    { id: 'report', icon: '', iconSrc: biaobiaoIcon, title: '报表解读', prompt: '请帮我解读审计报表数据与趋势', disabled: true },
+    { id: 'scene', icon: '', useSettingIcon: true, title: '场景配置', prompt: '请介绍如何配置审计场景与检测策略', disabled: true },
+    { id: 'help', icon: '', iconSrc: shiyongIcon, title: '使用帮助', prompt: '请介绍审计中心的功能配置与使用方法', disabled: true },
   ];
 
-  // 监听输入，以判断是否触发斜杠菜单
-  watch(inputValue, (val) => {
-    if (props.generating) return;
-    // 当输入以 / 结尾且前面是空或者空白字符时，触发菜单
-    if (val === '/' || val.endsWith(' /') || val.endsWith('\n/')) {
-      showSlashMenu.value = true;
-      activeSlashIndex.value = 0;
-    } else {
-      showSlashMenu.value = false;
-    }
+  const enabledSlashCommands = computed(() => shortcutTags.filter(item => !item.disabled));
+
+  const filteredSlashCommands = computed(() => {
+    const keyword = slashQuery.value.trim().toLowerCase();
+    const list = enabledSlashCommands.value;
+    if (!keyword) return list;
+    return list.filter(item => (
+      item.title.toLowerCase().includes(keyword)
+      || item.prompt.toLowerCase().includes(keyword)
+    ));
   });
 
+  /** 根据光标位置检测是否处于 / 指令模式 */
+  const updateSlashMenuState = () => {
+    if (props.generating || props.disabled) {
+      showSlashMenu.value = false;
+      return;
+    }
+    const textarea = textareaRef.value;
+    const { value } = inputValue;
+    const cursor = textarea?.selectionStart ?? value.length;
+    const textBeforeCursor = value.slice(0, cursor);
+    const match = textBeforeCursor.match(/(?:^|[\s\n])\/([^\s\n]*)$/);
+
+    if (match) {
+      slashStartIndex.value = textBeforeCursor.lastIndexOf('/');
+      slashQuery.value = match[1] || '';
+      showSlashMenu.value = true;
+      showShortcuts.value = true;
+      if (activeSlashIndex.value >= filteredSlashCommands.value.length) {
+        activeSlashIndex.value = 0;
+      }
+    } else {
+      showSlashMenu.value = false;
+      slashQuery.value = '';
+      slashStartIndex.value = -1;
+    }
+  };
+
+  const handleInput = () => {
+    autoResize();
+    updateSlashMenuState();
+  };
+
   const selectSlashCommand = (cmd: typeof shortcutTags[0]) => {
-    if (props.generating) return;
-    // 替换掉触发斜杠的文本，填充指令内容
-    const val = inputValue.value;
-    const lastSlashIdx = val.lastIndexOf('/');
-    if (lastSlashIdx !== -1) {
-      inputValue.value = val.substring(0, lastSlashIdx) + cmd.prompt;
+    if (props.generating || cmd.disabled) return;
+    const { value } = inputValue;
+    const start = slashStartIndex.value >= 0 ? slashStartIndex.value : value.lastIndexOf('/');
+    const textarea = textareaRef.value;
+    const cursor = textarea?.selectionStart ?? value.length;
+
+    if (start >= 0) {
+      inputValue.value = `${value.slice(0, start)}${cmd.prompt}${value.slice(cursor)}`;
     } else {
       inputValue.value = cmd.prompt;
     }
+
     showSlashMenu.value = false;
+    slashQuery.value = '';
+    slashStartIndex.value = -1;
+
     nextTick(() => {
-      textareaRef.value?.focus();
+      const el = textareaRef.value;
+      if (!el) return;
+      const pos = start >= 0 ? start + cmd.prompt.length : cmd.prompt.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
       autoResize();
     });
   };
 
   const handleKeydown = (e: KeyboardEvent) => {
     if (props.generating) return;
+    // 中文输入法选词中，不拦截回车
+    if (e.isComposing || e.keyCode === 229) return;
 
-    if (showSlashMenu.value) {
+    if (showSlashMenu.value && filteredSlashCommands.value.length) {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        activeSlashIndex.value = (activeSlashIndex.value - 1 + shortcutTags.length) % shortcutTags.length;
+        const len = filteredSlashCommands.value.length;
+        activeSlashIndex.value = (activeSlashIndex.value - 1 + len) % len;
         return;
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        activeSlashIndex.value = (activeSlashIndex.value + 1) % shortcutTags.length;
+        activeSlashIndex.value = (activeSlashIndex.value + 1) % filteredSlashCommands.value.length;
         return;
       }
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        selectSlashCommand(shortcutTags[activeSlashIndex.value]);
+        selectSlashCommand(filteredSlashCommands.value[activeSlashIndex.value]);
         return;
       }
       if (e.key === 'Escape') {
+        e.preventDefault();
         showSlashMenu.value = false;
         return;
       }
     }
 
-    // 默认回车发送（不是 Shift+Enter 且没有开启菜单时）
-    if (e.key === 'Enter' && !e.shiftKey && !showSlashMenu.value) {
+    // Enter 发送；Shift+Enter 换行（不 preventDefault，由 textarea 插入换行）
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+
+    if (e.key === 'Enter' && e.shiftKey) {
+      // 换行后下一帧更新高度与 / 菜单状态
+      nextTick(() => {
+        autoResize();
+        updateSlashMenuState();
+      });
     }
   };
 
@@ -212,6 +308,9 @@
     if (!inputValue.value.trim() || props.disabled || props.generating) return;
     emit('send', inputValue.value.trim());
     inputValue.value = '';
+    showSlashMenu.value = false;
+    slashQuery.value = '';
+    slashStartIndex.value = -1;
     if (textareaRef.value) {
       textareaRef.value.style.height = 'auto';
     }
@@ -222,8 +321,9 @@
   };
 
   const selectTag = (tag: typeof shortcutTags[0]) => {
-    if (props.generating) return;
+    if (props.generating || tag.disabled) return;
     inputValue.value = tag.prompt;
+    showSlashMenu.value = false;
     nextTick(() => {
       textareaRef.value?.focus();
       autoResize();
@@ -244,16 +344,24 @@
 
 <style lang="postcss" scoped>
   .chat-input-area {
+    width: 100%;
+    min-width: 0;
     flex-shrink: 0;
-    padding: 16px 24px 120px;
-    background: #f5f7fa;
+    padding: 0;
+    background: transparent;
+    box-sizing: border-box;
 
     .input-wrapper {
-      max-width: 900px;
-      margin: 0 auto;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0;
+      box-sizing: border-box;
 
       .shortcut-commands {
         display: flex;
+        width: 100%;
+        min-width: 0;
         margin-bottom: 8px;
 
         .command-btn {
@@ -299,12 +407,14 @@
           display: flex;
           align-items: center;
           width: 100%;
+          min-width: 0;
 
           .shortcut-tags {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             flex: 1;
+            min-width: 0;
             overflow-x: auto;
 
             &::-webkit-scrollbar {
@@ -313,7 +423,7 @@
 
             .shortcut-tag {
               display: flex;
-              padding: 6px 16px;
+              padding: 4px 12px;
               font-size: 12px;
               color: #63656e;
               white-space: nowrap;
@@ -323,14 +433,27 @@
               border-radius: 16px;
               transition: all .2s;
               align-items: center;
-              gap: 6px;
+              gap: 4px;
+              flex-shrink: 0;
 
-              &:hover {
+              &:hover:not(.is-disabled) {
                 color: #3a84ff;
                 border-color: #3a84ff;
               }
 
+              &.is-disabled {
+                cursor: not-allowed;
+              }
+
               i {
+                font-size: 14px;
+                color: #3a84ff;
+              }
+
+              .tag-icon-img {
+                display: block;
+                width: 14px;
+                height: 14px;
                 font-size: 14px;
                 color: #3a84ff;
               }
@@ -371,17 +494,22 @@
 
       .input-box {
         display: flex;
-        padding: 8px 12px;
+        width: 100%;
+        min-width: 0;
+        min-height: 64px;
+        padding: 12px 16px;
+        overflow: visible;
         background: #fff;
-        border: 1px solid transparent;
+        border: 1px solid #eaebf0;
         border-radius: 8px;
-        box-shadow: 0 2px 8px rgb(0 0 0 / 5%);
+        box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
         transition: all .2s;
         align-items: flex-end;
+        box-sizing: border-box;
 
         &:focus-within {
           border-color: #3a84ff;
-          box-shadow: 0 2px 12px rgb(0 0 0 / 10%);
+          box-shadow: 0 2px 12px rgb(58 132 255 / 12%);
         }
 
         .attach-btn {
@@ -396,6 +524,10 @@
           align-items: center;
           justify-content: center;
 
+          &:hover {
+            color: #3a84ff;
+          }
+
           .attach-icon {
             font-size: 18px;
           }
@@ -406,20 +538,24 @@
           position: relative;
           display: flex;
           align-items: center;
+          min-width: 0;
           min-height: 32px;
           margin: 0 8px;
+          overflow: visible;
 
           .slash-menu {
             position: absolute;
-            bottom: calc(100% + 12px);
+            bottom: calc(100% + 8px);
             left: 0;
-            z-index: 100;
-            width: 180px;
+            z-index: 200;
+            width: 220px;
+            max-height: 280px;
+            overflow: auto;
             padding: 4px 0;
             background: #fff;
             border: 1px solid #dcdee5;
             border-radius: 4px;
-            box-shadow: 0 2px 6px rgb(0 0 0 / 10%);
+            box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
 
             .slash-menu-list {
               padding: 0;
@@ -446,9 +582,23 @@
                   color: #3a84ff;
                 }
 
+                .cmd-icon-img {
+                  display: block;
+                  width: 14px;
+                  height: 14px;
+                  font-size: 14px;
+                  color: #3a84ff;
+                }
+
                 .cmd-title {
                   font-size: 14px;
                 }
+              }
+
+              .slash-menu-empty {
+                padding: 12px 16px;
+                font-size: 12px;
+                color: #c4c6cc;
               }
             }
           }
@@ -495,21 +645,37 @@
           padding: 0;
           overflow: hidden;
           cursor: pointer;
-          background: transparent;
+          background: #c4c6cc;
           border: none;
           border-radius: 6px;
-          transition: all .2s;
+          transition: background .2s, opacity .2s;
           flex-shrink: 0;
           align-items: center;
           justify-content: center;
 
+          .send-icon-img {
+            display: block;
+            width: 18px;
+            height: 18px;
+          }
+
           svg,
           .send-icon {
             font-size: 18px;
-            transform: translateY(2px);
+            color: #fff;
+          }
+
+          &.is-active {
+            background: linear-gradient(90deg, #0061A5 0%, #0D99FF 100%);
+
+            &:hover {
+              opacity: 92%;
+            }
           }
 
           &.is-generating {
+            background: linear-gradient(90deg, #0061A5 0%, #0D99FF 100%);
+
             &:hover {
               opacity: 80%;
             }
@@ -522,7 +688,7 @@
       }
 
       .input-hint {
-        margin-top: 12px;
+        margin-top: 8px;
         font-size: 12px;
         line-height: 18px;
         color: #c4c6cc;

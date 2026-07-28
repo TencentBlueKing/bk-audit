@@ -13,86 +13,106 @@
     width: 0;
     min-width: 0;
     border-right: none;
+    overflow: visible;
 
     /* 折叠态悬浮工具栏 */
     .collapsed-toolbar {
       position: absolute;
-      top: 20px;
-      right: -44px; /* 挂在内容区 */
+      top: 16px;
+      left: 12px;
       z-index: 25;
       display: flex;
-      width: 32px;
+      width: 40px;
       padding: 12px 0;
       background: #fff;
-      border: 1px solid #e6e9f0;
-      border-radius: 16px;
-      transform: none;
-      box-shadow: 0 2px 12px rgb(0 0 0 / 8%);
+      border: none;
+      border-radius: 20px;
+      box-shadow: 0 2px 10px 0 rgb(0 0 0 / 12%);
       flex-direction: column;
       align-items: center;
       gap: 16px;
+      box-sizing: border-box;
 
       .toolbar-item {
         display: flex;
-        width: 24px;
-        height: 24px;
-        color: #63656e;
+        width: 28px;
+        height: 28px;
+        color: #4d4f56;
         cursor: pointer;
-        border-radius: 50%;
-        transition: all .2s;
+        border-radius: 4px;
+        transition: color .2s, background .2s;
         align-items: center;
         justify-content: center;
 
         &:hover {
           color: #3a84ff;
+          background: #f0f5ff;
         }
 
-        i,
-        svg {
-          font-size: 16px;
+        .toolbar-icon {
+          display: block;
+          flex-shrink: 0;
+        }
+
+        .expand-icon{
+          font-size: 35px;
+        }
+        .search-icon {
+          font-size: 30px;
+          width: 25px;
+          height: 25px;
+
+          :deep(svg),
+          svg {
+            width: 20px;
+            height: 20px;
+            font-size: 20px;
+          }
+        }
+
+        .add-icon {
+          width: 20px;
+          height: 20px;
+          /* ai-add.svg 为白色，收起态白底需转为深色 */
+          filter: brightness(0) saturate(100%);
+          opacity: .75;
+          transition: opacity .2s, filter .2s;
+        }
+
+        &:hover .add-icon {
+          opacity: 1;
+          filter: brightness(0) saturate(100%) invert(42%) sepia(98%) saturate(1496%) hue-rotate(198deg) brightness(101%) contrast(101%);
         }
       }
     }
   }
 
-  /* 顶部 Logo */
-  .sidebar-logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  /* 场景选择 */
+  .sidebar-project {
     padding: 16px 16px 12px;
     flex-shrink: 0;
 
-    .logo-block {
-      width: 28px;
-      height: 28px;
-      background: linear-gradient(135deg, #6ab0ff 0%, #3a84ff 100%);
-      border-radius: 7px;
-      flex-shrink: 0;
-    }
-
-    .logo-text {
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: .5px;
-      color: #313238;
+    :deep(.scene-system-selector) {
+      width: 100%;
+      box-sizing: border-box;
     }
   }
 
-  /* 搜索框 */
+  /* 搜索区：搜索框 + 筛选按钮（上方有分隔线） */
   .sidebar-search {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 16px 12px;
+    padding: 12px 16px;
+    border-top: 1px solid #eaebf0;
     flex-shrink: 0;
-    margin-top: 16px;
 
     .search-box {
       position: relative;
       display: flex;
       align-items: center;
       flex: 1;
+      min-width: 0;
 
       .search-input {
         width: 100%;
@@ -124,6 +144,7 @@
       .search-icon {
         position: absolute;
         right: 10px;
+        z-index: 1;
         font-size: 14px;
         color: #c4c6cc;
         pointer-events: none;
@@ -141,6 +162,7 @@
       transition: background .2s, color .2s;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
 
       &:hover {
         color: #3a84ff;
@@ -152,7 +174,11 @@
         background: #e1ecff;
       }
 
-      i {
+      i,
+      .icon-control,
+      .filter-icon {
+        width: 12px;
+        height: 12px;
         font-size: 14px;
       }
     }
@@ -160,25 +186,28 @@
 
   /* 新对话按钮 */
   .new-chat-area {
-    padding: 0 16px 16px;
+    padding: 0 16px 12px;
     flex-shrink: 0;
 
     .new-chat-btn {
       display: flex;
       width: 100%;
-      height: 32px;
-      font-size: 13px;
+      height: 36px;
+      padding: 0 12px;
+      font-size: 14px;
       font-weight: 400;
+      line-height: 22px;
       color: #fff;
       cursor: pointer;
-      background: linear-gradient(90deg, #0061a5 0%, #3a8cff 100%);
+      background: linear-gradient(90deg, #0061a5 0%, #0d99ff 100%);
       border: none;
       border-radius: 4px;
       transition: opacity .2s;
       user-select: none;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 8px;
+      box-sizing: border-box;
 
       &:hover {
         opacity: 90%;
@@ -188,21 +217,10 @@
         opacity: 85%;
       }
 
-      .new-chat-icon-wrap {
-        display: inline-flex;
-        width: 16px;
-        height: 16px;
-        border: 1.5px solid rgb(255 255 255 / 80%);
-        border-radius: 50%;
-        align-items: center;
-        justify-content: center;
+      .new-chat-icon {
+        width: 20px;
+        height: 20px;
         flex-shrink: 0;
-
-        svg {
-          width: 10px;
-          height: 10px;
-          font-size: 10px;
-        }
       }
     }
   }
@@ -229,11 +247,13 @@
     /* 分组标题 */
     .section-label {
       display: flex;
-      padding: 8px 8px 4px;
-      font-size: 12px;
-      line-height: 20px;
+      height: 32px;
+      padding: 0 8px;
+      font-size: 14px;
+      line-height: 22px;
       color: #979ba5;
       align-items: center;
+      box-sizing: border-box;
 
       .label-text {
         flex: 1;
@@ -241,9 +261,9 @@
 
       .label-action {
         display: flex;
-        width: 20px;
-        height: 20px;
-        font-size: 14px;
+        width: 24px;
+        height: 24px;
+        font-size: 25px;
         color: #979ba5;
         cursor: pointer;
         border-radius: 4px;
@@ -320,21 +340,14 @@
           font-size: 14px;
           text-overflow: ellipsis;
           white-space: nowrap;
-        }
+          flex: 1;
+          min-width: 0;
 
-        .group-count {
-          min-width: 18px;
-          padding: 0 7px;
-          margin-left: 8px;
-          font-size: 12px;
-          line-height: 18px;
-          color: #979ba5;
-          text-align: center;
-          background: #f0f1f5;
-          border-radius: 10px;
-          opacity: 100%;
-          transition: opacity .15s;
-          flex-shrink: 0;
+          .group-count {
+            margin-left: 4px;
+            font-size: 14px;
+            color: #979ba5;
+          }
         }
 
         .group-more-dropdown {
@@ -564,34 +577,36 @@
     }
   }
 
-  /* 悬浮折叠按钮 */
-
-  /* ⚠️ z-index 必须高于报告列表面板(20)，确保始终可见不被遮挡 */
+  /* 悬浮折叠按钮：32x32 圆形，垂直中心与场景/搜索分隔线对齐 */
   .collapse-btn {
     position: absolute;
-    top: 14px;
-    right: -14px;
+    top: 44px; /* 场景区高度(16+32+12) - 按钮半高(16) */
+    right: -16px;
     z-index: 25;
     display: flex;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
+    padding: 6px;
     color: #979ba5;
     cursor: pointer;
     background: #fff;
-    border: 1px solid #e6e9f0;
-    border-radius: 50%;
-    box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
-    transition: all .2s ease;
+    border: none;
+    border-radius: 99px;
+    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 15%);
+    box-sizing: border-box;
+    transition: color .2s ease, box-shadow .2s ease;
     align-items: center;
     justify-content: center;
 
     &:hover {
       color: #3a84ff;
+      box-shadow: 0 2px 6px 0 rgb(0 0 0 / 20%);
     }
 
     .collapse-icon {
-      font-size: 14px;
-      transition: transform .2s ease;
+      font-size: 30px;
+      color: #4D4F56;
+      line-height: 1;
     }
   }
 
