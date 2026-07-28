@@ -213,6 +213,7 @@
                 <bk-select
                   v-model="row.default_page_size"
                   :class="{ 'is-error-select': row.defaultPageSizeError }"
+                  :popover-options="{ boundary: 'body' }"
                   @change="() => { row.defaultPageSizeError = false; }">
                   <bk-option
                     v-for="size in pageSizeOptions"
@@ -225,6 +226,7 @@
                 <bk-select
                   v-model="row.position"
                   :class="{ 'is-error-select': row.positionError }"
+                  :popover-options="{ boundary: 'body' }"
                   @change="() => { row.positionError = false; }">
                   <bk-option
                     v-for="pos in positionOptions"
@@ -960,7 +962,7 @@
         padding: 0;
         overflow: hidden;
         border-left: 1px solid #dcdee5;
-        align-items: stretch;
+        align-items: center;
         justify-content: flex-start;
 
         &:first-child {
@@ -974,24 +976,13 @@
           padding-left: 16px;
         }
 
-        /* 单元格内表单控件撑满列宽 */
+        /* 仅撑满触发器宽度，避免对 .bk-popover 设 display:block 破坏下拉定位 */
         > .bk-input,
-        > .bk-select,
-        > .bk-popover {
+        > .bk-select {
           flex: 1 1 auto;
           width: 100%;
           min-width: 0;
         }
-      }
-
-      /* bk-popover / bk-select 内部触发器同步撑满 */
-      :deep(.bk-popover),
-      :deep(.bk-popover-reference),
-      :deep(.bk-popover-trigger),
-      :deep(.bk-select) {
-        display: block;
-        width: 100%;
-        min-width: 0;
       }
 
       /* 单元格内部输入框/下拉框：去掉边框，与单元格融为一体 */
@@ -999,7 +990,7 @@
       :deep(.bk-select-trigger),
       :deep(.bk-select .bk-input) {
         width: 100%;
-        height: 40px !important;
+        height: 42px !important;
         background: transparent;
         border: none;
       }
@@ -1033,42 +1024,38 @@
 }
 
 .pagination-field-col {
-  padding: 0;
+  min-width: 0;
 }
 
 .pagination-field-cell {
   display: flex;
-  flex: 1 1 auto;
   width: 100%;
-  min-width: 0;
-  align-self: stretch;
-
-  > * {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-  }
+  height: 100%;
+  min-height: 42px;
+  flex: 1;
 }
 
 .pagination-field-popover-host {
-  display: block !important;
-  flex: 1 1 auto;
-  width: 100% !important;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: 1;
 }
 
-.pagination-field-cell :deep(.pagination-field-popover-host),
-.pagination-field-cell :deep(.bk-popover) {
-  display: block !important;
-  width: 100% !important;
-  min-width: 0;
+/* 仅作用于字段选择触发器，不影响同表内 bk-select 的 popover 定位 */
+:deep(.pagination-field-popover-host > .bk-popover-reference),
+:deep(.pagination-field-popover-host > .bk-popover-trigger),
+:deep(.pagination-field-popover-host > span) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .field-selector {
   display: flex;
   width: 100%;
   height: 100%;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 12px;
   overflow: hidden;
   font-size: 12px;
