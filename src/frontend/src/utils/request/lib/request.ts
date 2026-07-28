@@ -42,7 +42,9 @@ export interface Config {
     timeout?: number,
     cache?: string | number | boolean,
     onUploadProgress?: (params: CancelTokenSource) => void,
-    permission?: 'page' | 'dialog' | 'catch'
+    permission?: 'page' | 'dialog' | 'catch',
+    /** 为 true 时不弹全局错误 toast，由调用方自行 catch 处理 */
+    catchError?: boolean,
   }
 }
 

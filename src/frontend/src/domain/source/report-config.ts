@@ -239,6 +239,7 @@ class PanelManage extends ModuleBase {
   /**
    * 获取报表详情（按当前 scope 返回单份 default_value_override）
    * GET /bkvision/api/v1/panel/{panel_id}/
+   * 默认 catchError：调用方自行兜底，避免未实现/无覆盖时弹全局错误
    */
   fetchPanelDetail(params: {
     panel_id: string,
@@ -250,6 +251,9 @@ class PanelManage extends ModuleBase {
       params: {
         panel_id: panelId,
         ...query,
+      },
+      payload: {
+        catchError: true,
       },
     });
   }

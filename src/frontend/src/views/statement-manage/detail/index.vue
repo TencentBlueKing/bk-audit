@@ -22,6 +22,7 @@
 <script setup lang="ts">
   import {
     nextTick,
+    onUnmounted,
     watch,
   } from 'vue';
   import {
@@ -43,10 +44,15 @@
     status: number
   }
 
+  const BKVISION_SCRIPT_SRC = 'https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js';
+
   const route = useRoute();
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
   let app: any;
+  // 取消过期的并发 init，避免先完成的请求覆盖正确图表
+  let initSeq = 0;
+  let lastInitKey = '';
 
   // 校验id是否为有效值
   const isValidId = (id: any): boolean => {
@@ -57,6 +63,10 @@
   };
 
   const loadScript = (src: string) => new Promise((resolve, reject) => {
+    if (window.BkVisionSDK) {
+      resolve(undefined);
+      return;
+    }
     const script = document.createElement('script');
     script.src = src;
     script.onload = () => resolve(script);
@@ -65,43 +75,56 @@
   });
 
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
-    if (err.data.code === '9900403') {
+    if (err?.data?.code === '9900403') {
       const iamResult = new IamApplyDataModel(err.data.data || {});
       // 页面展示没权限提示
       emit('permission-page', iamResult);
-    } else {
+    } else if (err?.message) {
       messageError(err.message);
     }
   };
 
+  const getQueryString = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value[0] ? String(value[0]) : '';
+    }
+    return value ? String(value) : '';
+  };
+
   const getScopeConstants = () => {
     // 平台管理跳转会带 scope 查询参数，优先于 localStorage，避免新开页被全局选择覆盖
-    const queryScopeId = Array.isArray(route.query.scope_id)
-      ? route.query.scope_id[0]
-      : route.query.scope_id;
-    const querySceneId = Array.isArray(route.query.scene_id)
-      ? route.query.scene_id[0]
-      : route.query.scene_id;
-    const queryScopeType = Array.isArray(route.query.scope_type)
-      ? route.query.scope_type[0]
-      : route.query.scope_type;
+    const queryScopeId = getQueryString(route.query.scope_id);
+    const querySceneId = getQueryString(route.query.scene_id);
+    const queryScopeType = getQueryString(route.query.scope_type);
 
+    if (queryScopeType === 'cross_scene' || querySceneId === 'allSecen') {
+      return {
+        scope_type: 'cross_scene',
+        scope_id: '',
+      };
+    }
+    if (queryScopeType === 'cross_system' || querySceneId === 'allSystem') {
+      return {
+        scope_type: 'cross_system',
+        scope_id: '',
+      };
+    }
     if (queryScopeType === 'system' && queryScopeId) {
       return {
         scope_type: 'system',
-        scope_id: String(queryScopeId),
+        scope_id: queryScopeId,
       };
     }
     if (queryScopeType === 'scene' && (queryScopeId || querySceneId)) {
       return {
         scope_type: 'scene',
-        scope_id: String(queryScopeId || querySceneId),
+        scope_id: queryScopeId || querySceneId,
       };
     }
     if (querySceneId) {
       return {
         scope_type: 'scene',
-        scope_id: String(querySceneId),
+        scope_id: querySceneId,
       };
     }
 
@@ -111,7 +134,11 @@
     };
   };
 
-  // 按当前 scope 拉取平台报表配置的默认值覆盖
+  const buildInitKey = (scope: { scope_type: string, scope_id: string }) => (
+    `${String(route.params.id)}|${scope.scope_type}|${scope.scope_id}`
+  );
+
+  // 按当前 scope 拉取平台报表配置的默认值覆盖（失败不影响出图）
   const fetchPanelDetailWithOverride = async (scope: {
     scope_type: string,
     scope_id: string,
@@ -227,28 +254,49 @@
     return { constants, filters };
   };
 
-  const init = async  () => {
-    // 校验id是否有效
-    if (!isValidId(route.params.id)) {
-      console.warn('Invalid panel id:', route.params.id);
+  const destroyApp = () => {
+    if (app) {
+      app.unmount();
+      app = null;
+    }
+  };
+
+  const init = async () => {
+    if (!isValidId(route.params.id) || route.name !== 'statementManageDetail') {
       return;
     }
 
+    const scopeConstants = getScopeConstants();
+    const initKey = buildInitKey(scopeConstants);
+    // 相同 panel + scope 且实例仍在，跳过重复初始化
+    if (initKey === lastInitKey && app) {
+      return;
+    }
+
+    initSeq += 1;
+    const seq = initSeq;
+    destroyApp();
+
     try {
-      const scopeConstants = getScopeConstants();
-      const [panelDetail] = await Promise.all([
-        fetchPanelDetailWithOverride(scopeConstants),
-        loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js'),
-      ]);
+      if (!window.BkVisionSDK) {
+        await loadScript(BKVISION_SCRIPT_SRC);
+      }
+      if (seq !== initSeq) return;
+
+      // 覆盖配置失败不阻塞出图
+      const panelDetail = await fetchPanelDetailWithOverride(scopeConstants);
+      if (seq !== initSeq) return;
 
       const { variableFlags, filterFlags } = await resolveParamFlagSets(panelDetail.vision_id);
+      if (seq !== initSeq) return;
+
       const { constants: overrideConstants, filters: overrideFilters } = splitOverrideParams(
         panelDetail.default_value_override,
         variableFlags,
         filterFlags,
       );
 
-      app = await window.BkVisionSDK.init(
+      const instance = await window.BkVisionSDK.init(
         '#panel',
         route.params.id,
         {
@@ -267,24 +315,42 @@
           handleError,
         },
       );
+      if (seq !== initSeq) {
+        instance?.unmount?.();
+        return;
+      }
+      app = instance;
+      lastInitKey = initKey;
     } catch (error) {
-      console.error(error);
+      if (seq === initSeq) {
+        console.error(error);
+      }
     }
   };
 
-  watch(() => route, () => {
-    // 增加更严谨的id校验
-    if (isValidId(route.params.id) && route.name === 'statementManageDetail') {
+  // 不防抖：场景选择器会反复改 query，防抖会被不断重置导致永远不 init
+  watch(
+    () => [
+      route.name,
+      route.params.id,
+      route.query.scene_id,
+      route.query.scope_id,
+      route.query.scope_type,
+    ],
+    () => {
       nextTick(() => {
-        if (app) {
-          app.unmount();
-        }
         init();
       });
-    }
-  }, {
-    deep: true,
-    immediate: true,
+    },
+    {
+      immediate: true,
+    },
+  );
+
+  onUnmounted(() => {
+    initSeq += 1;
+    lastInitKey = '';
+    destroyApp();
   });
 
 </script>

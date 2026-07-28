@@ -233,6 +233,16 @@
     type: 'aggregate' | 'scene' | 'system';
   }
 
+  interface ScopeParams {
+    scope_id: string;
+    scope_type: string;
+  }
+
+  interface SceneSystemSelectorLists {
+    sceneList: SceneItem[];
+    systemList: SceneItem[];
+  }
+
   interface Props {
     menuData: MenuDataType[];
   }
@@ -248,43 +258,85 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const sceneChangeItem = ref();
+  const sceneChangeItem = ref<SceneItem | null>(null);
   const sceneSystemSelectorRef = ref();
   // 场景选择器
   const selectedScene = ref<SceneItem | null>();
   const sceneSystemSelectorList = ref<SceneSystemSelectorLists>({} as SceneSystemSelectorLists);
+  // useRequest.onSuccess 不回传 run 参数，用标记驱动切换后跳转
+  let pendingSceneChangeNavigate = false;
+
+  /** 从选中项直接解析 scope，避免 router.replace 未完成时读到旧 URL */
+  const resolveScopeFromSceneItem = (item: SceneItem): ScopeParams => {
+    if (item.id === 'allSecen') {
+      return { scope_id: '', scope_type: 'cross_scene' };
+    }
+    if (item.id === 'allSystem') {
+      return { scope_id: '', scope_type: 'cross_system' };
+    }
+    return {
+      scope_id: String(item.id),
+      scope_type: item.type === 'system' ? 'system' : 'scene',
+    };
+  };
+
+  const resolveCurrentScope = (): ScopeParams => {
+    if (sceneChangeItem.value) {
+      return resolveScopeFromSceneItem(sceneChangeItem.value);
+    }
+    return getSceneSystemParams();
+  };
+
   // 场景切换
   const handleSceneChange = (val: SceneItem) => {
     sceneSystemSelectorList.value = sceneSystemSelectorRef.value.getLists();
     sceneChangeItem.value = val;
     searchKeyword.value = '';
+    pendingSceneChangeNavigate = true;
+    // 先清空旧目录，避免切换过程中仍展示上一场景树
+    groups.value = [];
+    sideRoutes.value = [];
+    allSideRoutes.value = [];
 
-    emit('refresh-menu', {
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-    });
+    const scope = resolveScopeFromSceneItem(val);
+    emit('refresh-menu', scope);
+    // 只走偏好 → 分组一条链路，避免与 getSceneSystemParams（旧 URL）并行抢跑
     fetchPanelPreference();
-    fetchGroups({
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-      // 标记为场景切换，成功后自动选中第一项
-      isSceneChange: true,
-    });
   };
 
   // 场景切换后默认选中第一个子菜单项
-  const navigateToFirstChild = () => {
+  const navigateToFirstChild = (): boolean => {
     const firstScene = allSideRoutes.value[0];
     if (firstScene?.children?.length > 0) {
       const firstGroup = firstScene.children[0];
       if (firstGroup?.children?.length > 0) {
         const firstChild = firstGroup.children[0];
+        const scope = resolveCurrentScope();
+        // 用当前选中场景写 query，避免保留切换前的旧 scope
+        const query: Record<string, string> = { ...route.query as Record<string, string> };
+        if (scope.scope_type === 'cross_scene') {
+          query.scene_id = 'allSecen';
+          query.scope_id = '';
+          query.scope_type = 'cross_scene';
+        } else if (scope.scope_type === 'cross_system') {
+          query.scene_id = 'allSystem';
+          query.scope_id = '';
+          query.scope_type = 'cross_system';
+        } else if (scope.scope_type && scope.scope_id) {
+          query.scene_id = scope.scope_id;
+          query.scope_id = scope.scope_id;
+          query.scope_type = scope.scope_type;
+        }
+        delete query.sceneId;
         router.replace({
+          name: 'statementManageDetail',
           params: { id: firstChild.id },
-          query: route.query, // ⚠️ 保留现有 query 参数（包括 scene_id）
+          query,
         });
+        return true;
       }
     }
+    return false;
   };
 
   // 侧边栏宽度阈值，小于此值认为是收起状态
@@ -382,11 +434,13 @@
     clickFavorite.value = false;
     if (isAggregateMode.value) {
       router.push({
+        name: 'statementManageDetail',
         params: { id: String(panelId) },
         query: { ...route.query, sceneId: String(sceneId) },
       });
     } else {
       router.push({
+        name: 'statementManageDetail',
         params: { id: String(panelId) },
         query: route.query,
       });
@@ -474,12 +528,10 @@
   } = useRequest(PanelModelService.updateFavorite, {
     defaultValue: {},
     onSuccess: () => {
-      emit('refresh-menu', { scope_id: getSceneSystemParams().scope_id, scope_type: getSceneSystemParams().scope_type });
+      const scope = resolveCurrentScope();
+      emit('refresh-menu', scope);
       setTimeout(() => {
-        fetchGroups({
-          scope_id: getSceneSystemParams().scope_id,
-          scope_type: getSceneSystemParams().scope_type,
-        });
+        fetchGroups(scope);
       }, 0);
     },
   });
@@ -520,11 +572,12 @@
         // 返回空对象，默认展开全部
         userPreference.value = {};
       }
-      // 获取用户偏好后，再获取分组数据
-      fetchGroups({
-        scope_id: getSceneSystemParams().scope_id,
-        scope_type: getSceneSystemParams().scope_type,
-      });
+      const scope = resolveCurrentScope();
+      // 场景尚未选中时不要请求分组（否则 rebuild 时空 sceneChangeItem 会清空目录树）
+      if (!sceneChangeItem.value || !scope.scope_type) {
+        return;
+      }
+      fetchGroups(scope);
     },
   });
 
@@ -546,10 +599,6 @@
     });
   };
   // sceneSystemSelector 返回的列表数据结构
-  interface SceneSystemSelectorLists {
-    sceneList: SceneItem[];
-    systemList: SceneItem[];
-  }
   const allSideRoutes = ref<Array<{
     id: string;
     name: string;
@@ -558,78 +607,96 @@
     children: SideRouteItem[];
   }>>([]);
   // 获取分组
-  const groups = ref<Array<{ id: number; name: string; priority_index: number }>>([]);
+  const groups = ref<Array<{ id: number; name: string; priority_index: number; scene_id?: number }>>([]);
+
+  const applyExpandedPreference = () => {
+    // expandedGroupIds 为空数组表示用户主动全部收起；undefined 表示没有偏好，默认展开
+    if (userPreference.value.expandedGroupIds !== undefined) {
+      expandedGroups.value = userPreference.value.expandedGroupIds;
+    } else {
+      expandedGroups.value = sideRoutes.value.map(g => g.id);
+    }
+    if (userPreference.value.isFavoritesExpanded !== undefined) {
+      isFavoritesExpanded.value = userPreference.value.isFavoritesExpanded;
+    }
+  };
+
+  /** 用当前 groups + menuData 组装目录树（菜单异步到达后可再次调用） */
+  const rebuildSideRoutes = (options?: { navigateToFirst?: boolean }) => {
+    if (!sceneChangeItem.value) {
+      allSideRoutes.value = [];
+      return;
+    }
+
+    sideRoutes.value = groups.value.map(item => ({
+      scene_id: item.scene_id,
+      id: item.id,
+      name: item.name,
+      priority_index: item.priority_index,
+      children: props.menuData
+        .filter(menuItem => Array.isArray(menuItem.group_ids)
+          && menuItem.group_ids.map(String).includes(String(item.id)))
+        .map((menuItem) => {
+          const groupInfo = Array.isArray(menuItem.groups)
+            ? menuItem.groups.find(g => String(g.group_id) === String(item.id))
+            : undefined;
+          return { ...menuItem, priorityIndexForSort: groupInfo?.priority_index ?? 0 };
+        })
+        .sort((a, b) => (b.priorityIndexForSort ?? 0) - (a.priorityIndexForSort ?? 0)),
+    }))
+      .sort((a, b) => b.priority_index - a.priority_index)
+      .filter(group => group.children.length > 0);
+
+    if (sceneChangeItem.value.type === 'aggregate') {
+      const selectType = sceneChangeItem.value.id === 'allSecen'
+        ? sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen')
+        : sceneSystemSelectorList.value.systemList.filter(i => i.id !== 'allSystem');
+      allSideRoutes.value = selectType.map((scene: SceneItem) => {
+        const children = sideRoutes.value.filter(side => side.scene_id === Number(scene.id));
+        return {
+          id: scene.id,
+          name: scene.name,
+          type: scene.type,
+          scene_id: scene.id,
+          children,
+        };
+      }).filter(i => i.children.length > 0);
+    } else {
+      allSideRoutes.value = [{
+        scene_id: sceneChangeItem.value.id,
+        id: sceneChangeItem.value.id,
+        name: sceneChangeItem.value.name,
+        type: sceneChangeItem.value.type,
+        children: sideRoutes.value,
+      }].filter(i => i.children.length > 0);
+    }
+
+    applyExpandedPreference();
+
+    // 菜单可能晚于分组到达：仅在真正跳转成功后清除标记
+    if (options?.navigateToFirst && navigateToFirstChild()) {
+      pendingSceneChangeNavigate = false;
+    }
+  };
+
   const {
     run: fetchGroups,
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
     onSuccess: (
       data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>,
-      params?: Record<string, unknown>,
     ) => {
       groups.value = data;
-      sideRoutes.value =  data.map(item => ({
-        scene_id: item.scene_id,
-        id: item.id,
-        name: item.name,
-        priority_index: item.priority_index,
-        children: props.menuData
-          .filter(menuItem => Array.isArray(menuItem.group_ids)
-            && menuItem.group_ids.map(String).includes(String(item.id)))
-          .map((menuItem) => {
-            // 从 groups 数组中找到当前分组的 priority_index
-            const groupInfo = Array.isArray(menuItem.groups)
-              ? menuItem.groups.find(g => String(g.group_id) === String(item.id))
-              : undefined;
-            return { ...menuItem, priorityIndexForSort: groupInfo?.priority_index ?? 0 };
-          })
-          .sort((a, b) => (b.priorityIndexForSort ?? 0) - (a.priorityIndexForSort ?? 0)),
-      }))
-        .sort((a, b) => b.priority_index - a.priority_index)
-        .filter(group => group.children.length > 0);
-
-      if (sceneChangeItem.value.type === 'aggregate') {
-        const selectType = sceneChangeItem.value.id === 'allSecen' ? sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen')
-          : sceneSystemSelectorList.value.systemList.filter(i => i.id !== 'allSystem');
-        allSideRoutes.value = selectType.map((scene: SceneItem) => {
-          const children = sideRoutes.value.filter(side => side.scene_id === Number(scene.id));
-          return {
-            id: scene.id,
-            name: scene.name,
-            type: scene.type,
-            scene_id: scene.id,
-            children,
-          } as { id: string; name: string; type: 'aggregate' | 'scene' | 'system'; scene_id: string; children: SideRouteItem[] };
-        }).filter(i => i.children.length > 0);
-      } else {
-        allSideRoutes.value = [{
-          scene_id: sceneChangeItem.value.id,
-          id: sceneChangeItem.value.id,
-          name: sceneChangeItem.value.name,
-          type: sceneChangeItem.value.type,
-          children: sideRoutes.value,
-        } as { id: string; name: string; type: 'aggregate' | 'scene' | 'system'; scene_id: string; children: SideRouteItem[] }].filter(i => i.children.length > 0);
-      }
-      // 场景切换后默认选中第一个子菜单项
-      if (params?.isSceneChange) {
-        navigateToFirstChild();
-      }
-
-      // 根据用户偏好设置展开的分组
-      // 注意：expandedGroupIds 为空数组表示用户主动全部收起，应保持收起状态
-      // expandedGroupIds 为 undefined 表示没有用户偏好，应默认展开所有分组
-      if (userPreference.value.expandedGroupIds !== undefined) {
-        expandedGroups.value = userPreference.value.expandedGroupIds;
-      } else {
-        // 没有用户偏好，默认展开所有分组
-        expandedGroups.value = sideRoutes.value.map(g => g.id);
-      }
-      // 恢复我的收藏展开状态
-      if (userPreference.value.isFavoritesExpanded !== undefined) {
-        isFavoritesExpanded.value = userPreference.value.isFavoritesExpanded;
-      }
+      rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     },
   });
+
+  // 菜单异步晚于分组到达时，用已有 groups 重建目录树
+  watch(() => props.menuData, () => {
+    if (groups.value.length > 0 && sceneChangeItem.value) {
+      rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
+    }
+  }, { deep: true });
 
   // 聚合模式下，根据 panelId 查找所属场景并 emit
   const emitPanelScene = () => {
