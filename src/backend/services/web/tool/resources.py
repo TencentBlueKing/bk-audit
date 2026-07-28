@@ -129,6 +129,28 @@ from services.web.tool.tool import (
 )
 
 
+def _is_empty_value(value):
+    """统一判断空值：null、空字符串、空数组视为同一种空"""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    if isinstance(value, (list, tuple)) and len(value) == 0:
+        return True
+    return False
+
+
+def _values_are_equal_for_empty(val1, val2):
+    """
+    仅处理空值等价比较
+    null、""、[] 视为相等
+    其他类型直接比较
+    """
+    if _is_empty_value(val1) and _is_empty_value(val2):
+        return True
+    return val1 == val2
+
+
 class ToolBase(AuditMixinResource, abc.ABC):
     tags = ["Tool"]
 
@@ -1088,14 +1110,18 @@ class ExecuteTool(ToolBase):
                 # 如果用户在允许的场景/系统下有默认值覆盖，则允许使用覆盖值
                 # 如果用户传入的值不在允许的范围内，则提示越权
                 if raw_name in allowed_defaults:
-                    if value not in allowed_defaults[raw_name] and value != original_default:
+                    is_allowed = any(
+                        _values_are_equal_for_empty(value, allowed_value)
+                        for allowed_value in allowed_defaults[raw_name]
+                    )
+                    if not is_allowed and not _values_are_equal_for_empty(value, original_default):
                         raise PermissionException(
                             action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
                             permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
                         )
 
                 else:
-                    if value != original_default:
+                    if not _values_are_equal_for_empty(value, original_default):
                         raise PermissionException(
                             action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
                             permission=gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": raw_name},

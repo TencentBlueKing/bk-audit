@@ -87,6 +87,28 @@ from services.web.tool.models import Tool
 ReportConfigSerializer = type(ReportConfig.drf_serializer())
 
 
+def _is_empty_value(value):
+    """统一判断空值：null、空字符串、空数组视为同一种空"""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    if isinstance(value, (list, tuple)) and len(value) == 0:
+        return True
+    return False
+
+
+def _values_are_equal_for_empty(val1, val2):
+    """
+    仅处理空值等价比较
+    null、""、[] 视为相等
+    其他类型直接比较
+    """
+    if _is_empty_value(val1) and _is_empty_value(val2):
+        return True
+    return val1 == val2
+
+
 def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
     """
     将策略 configs.select 中的 field_type 合并到 event_data_field_configs，按 (field_name, display_name) 唯一键匹配。
@@ -366,7 +388,7 @@ class StrategySerializer(serializers.Serializer):
                         if var_config is None:
                             continue
 
-                        # 校验用户不可见(is_show=False)
+                        # 校验用户不可见 (is_show=False)
                         if not var_config.get("is_show", True):
                             # 豁免时间范围选择器的权限校验（支持相对时间表达式）
                             if var_config.get("field_category") in ["time_range_select", "time-ranger"]:
@@ -377,10 +399,11 @@ class StrategySerializer(serializers.Serializer):
                             original_default = var_config.get("default_value")
                             # source_field 即工具变量的 raw_name
                             if source_field in allowed_defaults:
-                                if (
-                                    target_value not in allowed_defaults[source_field]
-                                    and target_value != original_default
-                                ):
+                                is_allowed = any(
+                                    _values_are_equal_for_empty(target_value, allowed_value)
+                                    for allowed_value in allowed_defaults[source_field]
+                                )
+                                if not is_allowed and not _values_are_equal_for_empty(target_value, original_default):
                                     raise serializers.ValidationError(
                                         {
                                             "tool": gettext("下钻工具 %(tool)s 的 %(field)s 只能使用默认值" "或当前用户有权限的场景/系统允许的覆盖值")
@@ -388,7 +411,7 @@ class StrategySerializer(serializers.Serializer):
                                         }
                                     )
                             else:
-                                if target_value != original_default:
+                                if not _values_are_equal_for_empty(target_value, original_default):
                                     raise serializers.ValidationError(
                                         {
                                             "tool": gettext("下钻工具 %(tool)s 的 %(field)s 不可见，只能使用默认值")
