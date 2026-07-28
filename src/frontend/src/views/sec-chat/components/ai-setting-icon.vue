@@ -1,0 +1,75 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <svg
+    class="ai-setting-icon"
+    fill="none"
+    height="12"
+    viewBox="0 0 12 12"
+    width="12"
+    xmlns="http://www.w3.org/2000/svg">
+    <path
+      clip-rule="evenodd"
+      :d="pathD"
+      fill="currentColor"
+      fill-rule="evenodd" />
+  </svg>
+</template>
+
+<script lang="ts" setup>
+  const pathD = [
+    'M3.35417 7.5C4.24757 7.5 4.99771 8.142 5.20926 9.00625',
+    'C5.22963 9.00375 5.24975 9 5.27083 9H11.0208C11.2853 9 11.5 9.224',
+    '11.5 9.5C11.5 9.776 11.2853 10 11.0208 10H5.27083C5.24975 10',
+    '5.22963 9.99625 5.20926 9.99375C4.99771 10.858 4.24757 11.5 3.35417 11.5',
+    'C2.46076 11.5 1.71063 10.858 1.49907 9.99375C1.47871 9.99625 1.45858 10',
+    '1.4375 10H0.479167C0.214667 10 0 9.776 0 9.5C0 9.224 0.214667 9',
+    '0.479167 9H1.4375C1.45858 9 1.47871 9.00375 1.49907 9.00625',
+    'C1.71063 8.142 2.46076 7.5 3.35417 7.5ZM3.35417 8.5C2.82565 8.5',
+    '2.39583 8.9485 2.39583 9.5C2.39583 10.0515 2.82565 10.5 3.35417 10.5',
+    'C3.88269 10.5 4.3125 10.0515 4.3125 9.5C4.3125 8.9485 3.88269 8.5',
+    '3.35417 8.5ZM8.14583 3.5C9.03924 3.5 9.78937 4.142 10.0009 5.00625',
+    'C10.0213 5.00375 10.0414 5 10.0625 5H11.0208C11.2853 5 11.5 5.224',
+    '11.5 5.5C11.5 5.776 11.2853 6 11.0208 6H10.0625C10.0414 6',
+    '10.0213 5.99625 10.0009 5.99375C9.78937 6.858 9.03924 7.5 8.14583 7.5',
+    'C7.25243 7.5 6.50229 6.858 6.29074 5.99375C6.27038 5.99625 6.25025 6',
+    '6.22917 6H0.479167C0.214667 6 0 5.776 0 5.5C0 5.224 0.214667 5',
+    '0.479167 5H6.22917C6.25025 5 6.27038 5.00375 6.29074 5.00625',
+    'C6.50229 4.142 7.25243 3.5 8.14583 3.5ZM8.14583 4.5C7.61731 4.5',
+    '7.1875 4.9485 7.1875 5.5C7.1875 6.0515 7.61731 6.5 8.14583 6.5',
+    'C8.67435 6.5 9.10417 6.0515 9.10417 5.5C9.10417 4.9485 8.67435 4.5',
+    '8.14583 4.5ZM3.35417 0C4.24757 0 4.99771 0.642 5.20926 1.50625',
+    'C5.22963 1.50375 5.24975 1.5 5.27083 1.5H11.0208C11.2853 1.5',
+    '11.5 1.724 11.5 2C11.5 2.276 11.2853 2.5 11.0208 2.5H5.27083',
+    'C5.24975 2.5 5.22963 2.49625 5.20926 2.49375C4.99771 3.358 4.24757 4',
+    '3.35417 4C2.46076 4 1.71063 3.358 1.49907 2.49375C1.47871 2.49625',
+    '1.45858 2.5 1.4375 2.5H0.479167C0.214667 2.5 0 2.276 0 2C0 1.724',
+    '0.214667 1.5 0.479167 1.5H1.4375C1.45858 1.5 1.47871 1.50375',
+    '1.49907 1.50625C1.71063 0.642 2.46076 0 3.35417 0ZM3.35417 1',
+    'C2.82565 1 2.39583 1.4485 2.39583 2C2.39583 2.5515 2.82565 3',
+    '3.35417 3C3.88269 3 4.3125 2.5515 4.3125 2C4.3125 1.4485 3.88269 1',
+    '3.35417 1Z',
+  ].join('');
+</script>
+
+<style scoped>
+  .ai-setting-icon {
+    display: block;
+    width: 1em;
+    height: 1em;
+  }
+</style>
