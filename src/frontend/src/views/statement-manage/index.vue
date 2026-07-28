@@ -19,7 +19,7 @@
     class="loading"
     :loading="isLoading">
     <div
-      v-if="!isLoading && isEmpty"
+      v-if="!isLoading && isEmpty && !hasDetailRoute"
       class="empty-wrapper">
       <bk-exception
         class="empty-content"
@@ -63,6 +63,10 @@
   const currentMenuData = ref<Array<{ id: string; name: string }>>([]);
   // 是否显示暂无数据
   const isEmpty = computed(() => !isLoading.value && currentMenuData.value.length === 0);
+  // 已进入具体报表时保留 router-view，避免菜单刷新过程中卸载详情导致不请求
+  const hasDetailRoute = computed(() => (
+    route.name === 'statementManageDetail' && !!route.params?.id
+  ));
 
   const { emit } = useEventBus();
   const router = useRouter();
@@ -96,7 +100,10 @@
       emit('statement-menuData', menuData);
       // 菜单为空时，清空路由参数并显示空状态
       if (menuData.length === 0 && route.params?.id) {
-        router.replace({ name: 'statementManage' });
+        router.replace({
+          name: 'statementManage',
+          query: route.query,
+        });
       } else if (!(route.params?.id) && menuData.length > 0 && menuData[0]?.id) {
         // 仅当没有id且menuData有数据时才进行路由跳转
         router.push({
