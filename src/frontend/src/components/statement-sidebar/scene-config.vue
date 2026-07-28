@@ -44,6 +44,7 @@
 
     <!-- 场景信息 -->
     <audit-menu-item
+      class="top-level-menu-item"
       :class="{ active: currentRoute === 'sceneInfo' }"
       index="sceneInfo"
       @click="handleMenuClick('sceneInfo')">
@@ -233,8 +234,18 @@
   }
 
   .menu-item-icon {
+    display: inline-flex;
+    width: 16px;
     margin-right: 10px;
     font-size: 16px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  :deep(.top-level-menu-item) {
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
   }
 
   .side-group {
@@ -256,9 +267,13 @@
   }
 
   .side-group-icon {
+    display: inline-flex;
+    width: 16px;
     margin-right: 10px;
     font-size: 16px;
     color: #acb9d1;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .side-group-name {
