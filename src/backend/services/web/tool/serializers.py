@@ -200,10 +200,10 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 # smart_page 仅提取 default_value_overrides，忽略 data_sources 等敏感字段
                 validated_config = SmartPageToolConfig.model_validate(config)
                 attrs["_smart_page_overrides"] = validated_config.default_value_overrides.model_dump()
-                attrs.pop("config", None)
-                # 丢弃 name/description/namespace/status 等其他字段，避免越权改写工具基础属性
-                for forbidden_field in ("name", "description", "namespace", "status", "tags"):
-                    attrs.pop(forbidden_field, None)
+                # 避免越权改写工具基础属性（name/description/namespace/status/tags/config 等）
+                allowed_keys = {"uid", "_smart_page_overrides"}
+                for key in [k for k in list(attrs.keys()) if k not in allowed_keys]:
+                    attrs.pop(key)
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
             # smart_page 分支已 pop config，此处仅对其他工具类型回写校验后的 config
@@ -664,10 +664,3 @@ class GetToolInputVariableCandidatesRequestSerializer(serializers.Serializer):
 
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     raw_name = serializers.CharField(label=gettext_lazy("输入变量名"))
-
-
-class ToolInputVariableCandidateSerializer(serializers.Serializer):
-    """工具输入变量候选项响应序列化器"""
-
-    id = serializers.IntegerField(label=gettext_lazy("候选项 ID"))
-    name = serializers.CharField(label=gettext_lazy("候选项名称"))

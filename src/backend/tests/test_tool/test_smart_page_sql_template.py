@@ -28,6 +28,7 @@ from services.web.tool.exceptions import (
     InputVariableNotFoundError,
     SmartPageBindParamMissingError,
     SmartPageSqlTemplateRenderError,
+    ToolDoesNotExist,
 )
 from services.web.tool.executor.model import (
     SmartPageExecuteParams,
@@ -466,11 +467,12 @@ class SmartPageAPITestCase(TestCase):
 
 
 class GetToolInputVariableCandidatesTest(TestCase):
-    """获取工具输入变量候选项接口测试
+    """获取工具输入变量候选项接口测试（用户画像工具，数据源均为 SQL 模板类型）
 
     覆盖点：
-    - 返回规范化 {id, name} 列表：id 转 int、去重、过滤脏数据、按 (name, id) 升序排序
-    - 响应不暴露 rendered_sql
+    - 按 raw_name 定位对应的 data_source 执行（同一工具下可有多个不同 data_source）
+    - 原样返回数据源结果，不做字段转换/去重/排序，信任返回数据
+    - 响应不暴露 rendered_sql 等内部字段
     - 候选查询不带业务参数
     - input_variable 未配置 data_source 时拒绝
     - raw_name 不存在时拒绝
@@ -521,44 +523,37 @@ class GetToolInputVariableCandidatesTest(TestCase):
         )
 
     @patch("services.web.tool.resources.SmartPageSqlTemplateExecutor.execute")
-    def test_returns_normalized_list_and_hides_sql(self, mock_execute):
-        """候选项接口应返回规范化 {id, name} 列表，且不暴露 rendered_sql"""
+    def test_returns_raw_rows_and_hides_sql(self, mock_execute):
+        """候选项接口应原样返回数据源结果（信任数据），且不暴露 rendered_sql"""
         mock_execute.return_value = self._build_mock_result(
             [
                 {"id": 200, "name": "GameB"},
-                {"id": 100, "name": "GameA"},
-                {"id": "100", "name": "GameA Dup"},  # id 与上重复（字符串形式）→ 去重
-                {"id": "abc", "name": "BadId"},  # id 不可转 int → 过滤
-                {"id": 300, "name": ""},  # name 为空 → 过滤
-                {"id": 400, "name": None},  # name 为 None → 过滤
-                {"id": 300, "name": "GameC"},  # id 与上面重复 → 去重
-                {"id": 150, "name": "GameA"},  # 同名不同 id → 保留
-                {"id": 500, "name": 12345},  # name 为数字 → 转字符串
+                {"id": "100", "name": "GameA Dup"},  # 字符串 id 原样保留，不去重
+                {"id": "abc", "name": "BadId"},  # 不合法的 id 原样保留，不过滤
+                {"id": 300, "name": ""},  # 空 name 原样保留，不过滤
+                {"id": 300, "name": "GameC"},
+                {"id": 500, "name": 12345},  # 数字 name 原样保留，不转字符串
             ]
         )
 
         result = GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "game_ids"})
 
-        # 按 (name, id) 升序：数字字符串 "12345" 排在字母前
+        # 结果原样透传，不做任何转换/去重/排序
         self.assertEqual(
             result,
             [
-                {"id": 500, "name": "12345"},
-                {"id": 100, "name": "GameA"},
-                {"id": 150, "name": "GameA"},
                 {"id": 200, "name": "GameB"},
+                {"id": "100", "name": "GameA Dup"},
+                {"id": "abc", "name": "BadId"},
+                {"id": 300, "name": ""},
                 {"id": 300, "name": "GameC"},
+                {"id": 500, "name": 12345},
             ],
         )
-        # 每项仅含 id/name 两个键，且 id 必为 int、name 必为 str，不暴露 rendered_sql
-        for item in result:
-            self.assertEqual(set(item.keys()), {"id", "name"})
-            self.assertIsInstance(item["id"], int)
-            self.assertIsInstance(item["name"], str)
 
     @patch("services.web.tool.resources.SmartPageSqlTemplateExecutor.execute")
     def test_candidate_query_passes_empty_params(self, mock_execute):
-        """候选项查询不带业务参数：execute 入参 params 为空 dict，且定位到正确数据源"""
+        """候选项查询不带业务参数：execute 入参 params 为空 dict，且定位到正确 data_source"""
         mock_execute.return_value = self._build_mock_result([])
 
         GetToolInputVariableCandidates().perform_request({"uid": self.tool.uid, "raw_name": "game_ids"})
@@ -594,6 +589,41 @@ class GetToolInputVariableCandidatesTest(TestCase):
         with self.assertRaises(InputVariableDataSourceNotConfiguredError):
             GetToolInputVariableCandidates().perform_request({"uid": tool.uid, "raw_name": "game_ids"})
 
+    def test_rejects_non_smart_page_tool(self):
+        """非智能页面工具（如 API 工具）调用该接口应被拒绝"""
+        tool = Tool.objects.create(
+            uid=str(uuid.uuid4()),
+            version=1,
+            name="Non SmartPage Tool",
+            namespace=self.namespace,
+            tool_type=ToolTypeEnum.API.value,
+            config=SmartPageToolConfig(
+                data_sources=[
+                    {
+                        "name": "game_options",
+                        "description": "游戏候选项",
+                        "data_source_type": "sql_template",
+                        "config": {"sql_template": "SELECT 1"},
+                    }
+                ],
+                input_variable=[
+                    {
+                        "raw_name": "game_ids",
+                        "display_name": "游戏列表",
+                        "required": True,
+                        "field_category": "multiselect",
+                        "default_value": None,
+                        "is_show": False,
+                        "data_source": "game_options",
+                    }
+                ],
+            ).model_dump(),
+            description="non smart page tool",
+        )
+
+        with self.assertRaises(ToolDoesNotExist):
+            GetToolInputVariableCandidates().perform_request({"uid": tool.uid, "raw_name": "game_ids"})
+
     def test_raises_when_var_not_found(self):
         """raw_name 不存在于 input_variable 时应拒绝"""
         with self.assertRaises(InputVariableNotFoundError):
@@ -606,5 +636,5 @@ class GetToolInputVariableCandidatesTest(TestCase):
             [{"id": 100, "name": "GameA"}, {"id": 200, "name": "GameB"}]
         )
         resp = GetToolInputVariableCandidates().request({"uid": self.tool.uid, "raw_name": "game_ids"})
-        # 响应经 ToolInputVariableCandidateSerializer 序列化，返回 {id, name} 列表
+        # 响应整体原样透传（无 ResponseSerializer，框架不做逐元素序列化），返回原始结果
         self.assertEqual(resp, [{"id": 100, "name": "GameA"}, {"id": 200, "name": "GameB"}])

@@ -302,14 +302,3 @@ class InputVariableDataSourceNotConfiguredError(ToolException):
     def __init__(self, raw_name: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(raw_name=raw_name)
         super().__init__(*args, **kwargs)
-
-
-class SmartPageApigwDisabled(ToolException):
-    """
-    智能页面工具暂不支持通过 APIGW 执行
-    存在越权风险
-    """
-
-    STATUS_CODE = 403
-    ERROR_CODE = "025"
-    MESSAGE = gettext_lazy("智能页面工具不支持通过 APIGW 执行")
