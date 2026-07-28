@@ -103,7 +103,7 @@
         v-for="side in filteredSideRoutes"
         :key="side.id">
         <div
-          v-if="sceneChangeItem.type === 'aggregate'"
+          v-if="isAggregateMode"
           class="side-scene-header">
           <bk-tag
             class="type-tag"
@@ -683,9 +683,7 @@
     run: fetchGroups,
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
-    onSuccess: (
-      data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>,
-    ) => {
+    onSuccess: (data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>) => {
       groups.value = data;
       rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     },
