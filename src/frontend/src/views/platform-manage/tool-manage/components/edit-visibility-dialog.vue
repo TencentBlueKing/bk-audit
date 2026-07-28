@@ -289,13 +289,19 @@
   const selectedSceneItems = computed(() => {
     if (!formData.scene_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_scenes') return [];
-    return allSceneList.value.filter(scene => formData.scene_ids.includes(scene.id));
+    const sceneMap = new Map(allSceneList.value.map(scene => [scene.id, scene]));
+    return formData.scene_ids
+      .map(sceneId => sceneMap.get(sceneId))
+      .filter((scene): scene is { id: number; name: string } => Boolean(scene));
   });
 
   const selectedSystemItems = computed(() => {
     if (!formData.system_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_systems') return [];
-    return allSystemList.value.filter(system => formData.system_ids.includes(system.id));
+    const systemMap = new Map(allSystemList.value.map(system => [system.id, system]));
+    return formData.system_ids
+      .map(systemId => systemMap.get(systemId))
+      .filter((system): system is { id: string; name: string } => Boolean(system));
   });
 
   const handleVisibleRangeChange = (val: FormData) => {

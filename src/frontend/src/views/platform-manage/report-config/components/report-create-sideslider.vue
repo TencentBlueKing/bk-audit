@@ -472,13 +472,19 @@
   const selectedSceneItems = computed(() => {
     if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_scenes') return [];
-    return allSceneList.value.filter(scene => formData.value.scene_ids.includes(scene.id));
+    const sceneMap = new Map(allSceneList.value.map(scene => [scene.id, scene]));
+    return formData.value.scene_ids
+      .map(sceneId => sceneMap.get(sceneId))
+      .filter((scene): scene is { id: number; name: string } => Boolean(scene));
   });
 
   const selectedSystemItems = computed(() => {
     if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_systems') return [];
-    return allSystemList.value.filter(system => formData.value.system_ids.includes(system.id));
+    const systemMap = new Map(allSystemList.value.map(system => [system.id, system]));
+    return formData.value.system_ids
+      .map(systemId => systemMap.get(systemId))
+      .filter((system): system is { id: string; name: string } => Boolean(system));
   });
 
   const loadSceneListForParams = async () => {
