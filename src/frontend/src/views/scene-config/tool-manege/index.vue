@@ -126,7 +126,7 @@
   import ToolManageService from '@service/tool-manage';
   import MetaManageService from '@service/meta-manage';
 
-  import ToolDetailModel from '@model/tool/tool-detail';
+  import ToolInfoModel from '@model/tool/tool-info';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
@@ -237,7 +237,7 @@
   // 策略列表（用于匹配策略名称）
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
   // 全部工具数据（用于下钻时获取工具名称）
-  const allToolsData = ref<Array<ToolDetailModel>>([]);
+  const allToolsData = ref<Array<ToolInfoModel>>([]);
 
   // 状态筛选
   const statusFilter = ref('all');
@@ -246,6 +246,9 @@
     published: 0,
     unpublished: 0,
   });
+
+  const shouldHidePlatformDisabledTool = (tool: any) => tool.visibility?.binding_type === 'platform_binding'
+    && tool.status !== 'published';
 
   // 确认操作弹窗相关（删除/启用/停用）
   const confirmActionType = ref<ActionType>('delete');
@@ -430,9 +433,9 @@
     const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'], ...scopeParams });
     const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'], ...scopeParams });
     Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([all, published, unpublished]) => {
-      statusCounts.all = all.length;
-      statusCounts.published = published.length;
-      statusCounts.unpublished = unpublished.length;
+      statusCounts.all = all.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
+      statusCounts.published = published.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
+      statusCounts.unpublished = unpublished.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
     });
   };
 
@@ -496,7 +499,7 @@
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     onSuccess: (data) => {
-      allToolsData.value = data;
+      allToolsData.value = data.filter(tool => !shouldHidePlatformDisabledTool(tool)) as unknown as ToolInfoModel[];
     },
   });
 
