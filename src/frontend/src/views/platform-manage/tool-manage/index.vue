@@ -579,7 +579,7 @@
   const refreshList = (searchParams?: Record<string, any>) => {
     const params: Record<string, any> = {
       ...searchParams,
-      sort: ['-created_at'],
+      sort: ['name'],
     };
     if (statusFilter.value !== 'all') {
       params.status = [statusFilter.value];
@@ -647,7 +647,7 @@
   const handleClearSearch = () => {
     searchValue.value = [];
     statusFilter.value = 'all';
-    toolListRef.value?.fetchData({ sort: ['-created_at'] });
+    toolListRef.value?.fetchData({ sort: ['name'] });
   };
 
   const handleRequestSuccess = () => {
