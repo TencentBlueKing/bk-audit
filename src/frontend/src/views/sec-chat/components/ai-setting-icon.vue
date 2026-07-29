@@ -69,7 +69,7 @@
 <style scoped>
   .ai-setting-icon {
     display: block;
-    width: 1em;
-    height: 1em;
+    width: 100%;
+    height: 100%;
   }
 </style>
