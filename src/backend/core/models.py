@@ -249,7 +249,9 @@ class SoftDeleteModel(OperateRecordModel):
         而是通过标记删除字段 is_deleted 来软删除
         """
         self.is_deleted = True
-        self.save()
+        # 仅更新 is_deleted，OperateRecordModel.save() 会自动追加 updated_at/updated_by
+        # 避免并发覆盖其他字段，同时减少不必要的数据库 IO
+        self.save(update_fields=["is_deleted"])
 
     class Meta:
         """元数据定义"""
