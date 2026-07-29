@@ -116,6 +116,7 @@
           </bk-loading>
           <scene-param-config
             v-else-if="showParamOverrideConfig"
+            class="visibility-param-config"
             :form-data="paramConfigFormData"
             :input-variables="inputVariables"
             override-select-full-width
@@ -1022,6 +1023,11 @@
 .visibility-param-loading {
   min-height: 120px;
   margin-top: 16px;
+  margin-bottom: 24px;
+}
+
+.visibility-param-config {
+  margin-bottom: 24px;
 }
 
 .visibility-param-loading-placeholder {
