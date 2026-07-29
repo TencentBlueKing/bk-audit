@@ -108,7 +108,8 @@ def _render_bind_value(value: Any, output_type: Optional[str] = None) -> str:
 
     if isinstance(value, (list, tuple, set)):
         if len(value) == 0:
-            return ""
+            # 当game_ids: []，显式限制为无游戏，返回空集
+            return "NULL"
         rendered_items = []
         for item in value:
             rendered_item = _cast_bind_scalar_value(item, bind_output_type)
