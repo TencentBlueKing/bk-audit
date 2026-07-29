@@ -26,7 +26,6 @@
     <action-list
       ref="actionListRef"
       :can-edit-system="canEditSystem"
-      :data="data"
       @add-resource-type="handleAddResourceType"
       @update-list-length="handleUpdateListLength"
       @update-resource="handleUpdateResource" />
