@@ -46,9 +46,6 @@
               alt=""
               class="card-icon-img"
               :src="item.iconSrc">
-            <ai-setting-icon
-              v-else-if="item.useSettingIcon"
-              class="card-icon-img" />
             <audit-icon
               v-else
               :type="item.icon" />
@@ -74,10 +71,10 @@
 </template>
 
 <script lang="ts" setup>
-  import AiSettingIcon from './ai-setting-icon.vue';
   import ChatInput from './chat-input.vue';
 
   import aiChatIcon from '@images/ai-chat-icon.svg';
+  import aiSettingIcon from '@images/ai-setting.svg';
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';
   import shiyongIcon from '@images/shiyong-icon.svg';
@@ -120,7 +117,7 @@
     },
     {
       icon: '',
-      useSettingIcon: true,
+      iconSrc: aiSettingIcon,
       title: '场景配置',
       desc: '了解如何配置审计场景与检测策略',
       prompt: '请介绍如何配置审计场景与检测策略',
