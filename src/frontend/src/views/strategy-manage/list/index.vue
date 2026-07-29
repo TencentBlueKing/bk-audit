@@ -1580,6 +1580,19 @@
   };
   const handlFetchData = () => {
     const currentScopeId = getSceneSystemParams().scope_id;
+    // 深链场景：URL 已携带 strategy_id 等筛选条件时，首屏的 fetchData() 会立刻触发筛选请求；
+    // 若此刻收到 scene:change 事件，handlFetchData 里调用无筛选的 listRef.fetchData() 会把筛选冲掉。
+    // 因此在“尚未首次加载成功”阶段，若存在 URL 筛选参数则直接跳过。
+    const urlSearch = getSearchParams();
+    const hasUrlStrategyFilter = Boolean(urlSearch.strategy_id
+      || urlSearch.strategy_name
+      || urlSearch.strategy_type
+      || urlSearch.tag
+      || urlSearch.status
+      || urlSearch.report_status);
+    if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
+      return;
+    }
     // 场景未变且列表已成功加载过时才跳过；首屏因 sort 解析失败/请求取消等未加载成功时仍需重试
     if (
       lastFetchedScopeId.value !== null
