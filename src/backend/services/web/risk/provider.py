@@ -152,14 +152,16 @@ class RiskResourceProvider(IAMResourceProvider):
         # 注意：filter.start_time/end_time 为毫秒时间戳，这里保持毫秒精度，避免边界被截断
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        base_qs = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        # 使用 _objects（原始 manager）以包含已软删除记录，使 Doris 侧 is_deleted 值可靠同步。
+        # 参考 strategy_v2/provider.py 在 fetch_instance_list 返回 is_deleted 的先例。
+        base_qs = Risk._objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
 
         # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
         pk_list = list(
             base_qs.order_by("updated_at").values_list("risk_id", flat=True)[page.slice_from : page.slice_to]
         )
         # 用主键精确回表，只回表 page_size 条记录
-        queryset = Risk.objects.filter(risk_id__in=pk_list).order_by("updated_at")
+        queryset = Risk._objects.filter(risk_id__in=pk_list).order_by("updated_at")
 
         results = [
             {
