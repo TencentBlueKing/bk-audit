@@ -149,6 +149,7 @@
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fasongIcon from '@images/fasong-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';
+  import aiSettingIcon from '@images/ai-setting.svg';
   import shiyongIcon from '@images/shiyong-icon.svg';
 
   const props = defineProps<{
@@ -184,7 +185,7 @@
     { id: 'analysis', icon: 'shujutongji', title: '风险分析', prompt: '请帮我分析当前审计风险分布与趋势', disabled: true },
     { id: 'alert', icon: '', iconSrc: fengxianIcon, title: '风险解读', prompt: '帮我解读未处理的高危风险告警', disabled: true },
     { id: 'report', icon: '', iconSrc: biaobiaoIcon, title: '报表解读', prompt: '请帮我解读审计报表数据与趋势', disabled: true },
-    { id: 'scene', icon: '', useSettingIcon: true, title: '场景配置', prompt: '请介绍如何配置审计场景与检测策略', disabled: true },
+    { id: 'scene', icon: '', iconSrc: aiSettingIcon, useSettingIcon: true, title: '场景配置', prompt: '请介绍如何配置审计场景与检测策略', disabled: true },
     { id: 'help', icon: '', iconSrc: shiyongIcon, title: '使用帮助', prompt: '请介绍审计中心的功能配置与使用方法', disabled: true },
   ];
 
