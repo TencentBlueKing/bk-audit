@@ -53,7 +53,7 @@
       <bk-table
         :border="['outer']"
         :columns="tableColumn"
-        :data="data">
+        :data="actionList">
         <template #empty>
           <bk-exception
             v-if="searchKey.length"
@@ -89,7 +89,7 @@
   </div>
   <add-action
     ref="addActionRef"
-    :action-list="data"
+    :action-list="actionList"
     @add-resource-type="handleAddResourceType"
     @update-action="handleUpdateAction" />
 </template>
@@ -102,7 +102,6 @@
 
   import MetaManageService from '@service/meta-manage';
 
-  import SystemModel from '@model/meta/system';
   import SystemActionModel from '@model/meta/system-action';
 
   import useRequest from '@hooks/use-request';
@@ -113,7 +112,6 @@
 
   interface Props {
     canEditSystem: boolean;
-    data: SystemModel;
   }
 
   interface Emits {
@@ -270,7 +268,7 @@
   const {
     run: fetchSystemActionList,
     loading,
-    data,
+    data: actionList,
   }  = useRequest(MetaManageService.fetchSystemActionList, {
     defaultParams: {
       id: route.params.id,
@@ -367,7 +365,7 @@
     fetchSystemActionList(search);
   };
 
-  watch(() => data.value, (newList) => {
+  watch(() => actionList.value, (newList) => {
     emits('updateListLength', newList.length);
   }, {
     deep: true,

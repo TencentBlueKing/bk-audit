@@ -54,12 +54,9 @@
 
   interface Props {
     data: SystemModel;
-    id: string;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  const props = defineProps<Props>();
 
   const themeMap: Record<string, 'info' | 'warning' | 'success' | 'danger' | undefined> = {
     normal: 'success',
