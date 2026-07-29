@@ -98,15 +98,44 @@ def _is_empty_value(value):
     return False
 
 
+def _normalize_value_for_comparison(value):
+    """
+    通用标准化处理（不依赖 field_category）
+    1. 空值统一为 None
+    2. 字符串按逗号分割转数组并排序（适用于 person_select 等）
+    3. 数组排序（保持元素顺序无关的比较）
+    4. 其他类型保持不变
+    """
+    # 空值处理
+    if _is_empty_value(value):
+        return None
+
+    # 字符串转数组（按逗号分割）
+    if isinstance(value, str):
+        parts = [v.strip() for v in value.split(",") if v.strip()]
+        return sorted(parts) if parts else value  # 如果没有逗号，保持原字符串
+
+    # 数组/元组处理
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return None
+        return sorted([str(v) for v in value if v is not None and str(v).strip()])
+
+    # 其他类型（数字、布尔值等）保持不变
+    return value
+
+
 def _values_are_equal_for_empty(val1, val2):
     """
-    仅处理空值等价比较
-    null、""、[] 视为相等
-    其他类型直接比较
+    比较两个值是否相等，使用标准化处理
+    1. 空值等价：null、""、[] 视为相等
+    2. 字符串/数组等价："user1,user2" == ["user1", "user2"]
+    3. 数组顺序无关：["user2", "user1"] == ["user1", "user2"]
+    4. 其他类型直接比较
     """
-    if _is_empty_value(val1) and _is_empty_value(val2):
-        return True
-    return val1 == val2
+    normalized1 = _normalize_value_for_comparison(val1)
+    normalized2 = _normalize_value_for_comparison(val2)
+    return normalized1 == normalized2
 
 
 def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
@@ -388,7 +417,7 @@ class StrategySerializer(serializers.Serializer):
                         if var_config is None:
                             continue
 
-                        # 校验用户不可见 (is_show=False)
+                        # 校验用户不可见(is_show=False)
                         if not var_config.get("is_show", True):
                             # 豁免时间范围选择器的权限校验（支持相对时间表达式）
                             if var_config.get("field_category") in ["time_range_select", "time-ranger"]:
