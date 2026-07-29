@@ -139,6 +139,57 @@ from services.web.tool.tool import (
 )
 
 
+def _is_empty_value(value):
+    """统一判断空值：null、空字符串、空数组视为同一种空"""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    if isinstance(value, (list, tuple)) and len(value) == 0:
+        return True
+    return False
+
+
+def _normalize_value_for_comparison(value):
+    """
+    通用标准化处理
+    1. 空值统一为 None
+    2. 字符串按逗号分割转数组并排序
+    3. 数组排序（保持元素顺序无关的比较）
+    4. 其他类型保持不变
+    """
+    # 空值处理
+    if _is_empty_value(value):
+        return None
+
+    # 字符串转数组（按逗号分割）
+    if isinstance(value, str):
+        parts = [v.strip() for v in value.split(",") if v.strip()]
+        return sorted(parts) if parts else value  # 如果没有逗号，保持原字符串
+
+    # 数组/元组处理
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return None
+        return sorted([str(v) for v in value if v is not None and str(v).strip()])
+
+    # 其他类型（数字、布尔值等）保持不变
+    return value
+
+
+def _values_are_equal_for_empty(val1, val2):
+    """
+    比较两个值是否相等，使用标准化处理
+    1. 空值等价：null、""、[] 视为相等
+    2. 字符串/数组等价："user1,user2" == ["user1", "user2"]
+    3. 数组顺序无关：["user2", "user1"] == ["user1", "user2"]
+    4. 其他类型直接比较
+    """
+    normalized1 = _normalize_value_for_comparison(val1)
+    normalized2 = _normalize_value_for_comparison(val2)
+    return normalized1 == normalized2
+
+
 class ToolBase(AuditMixinResource, abc.ABC):
     tags = ["Tool"]
 
@@ -1207,18 +1258,24 @@ class ExecuteTool(ToolBase):
 
         original_default = input_var_config.get("default_value")
 
-        # 根据覆盖情况校验
+        # 根据覆盖情况校验（使用空值等价比较）
         if raw_name not in allowed_defaults:
             # 无覆盖配置，只能用原始默认值
-            if value != original_default:
+            if not _values_are_equal_for_empty(value, original_default):
                 self._raise_permission_exception(raw_name, use_original_message=True)
         elif has_uncovered_scope:
             # 有无覆盖的场景/系统，允许：覆盖值 OR 原始默认值
-            if value not in allowed_defaults[raw_name] and value != original_default:
+            is_allowed = any(
+                _values_are_equal_for_empty(value, allowed_value) for allowed_value in allowed_defaults[raw_name]
+            )
+            if not is_allowed and not _values_are_equal_for_empty(value, original_default):
                 self._raise_permission_exception(raw_name)
         else:
             # 所有场景/系统都有覆盖，只能用覆盖值
-            if value not in allowed_defaults[raw_name]:
+            is_allowed = any(
+                _values_are_equal_for_empty(value, allowed_value) for allowed_value in allowed_defaults[raw_name]
+            )
+            if not is_allowed:
                 self._raise_permission_exception(raw_name)
 
     def _raise_permission_exception(self, var_name, use_original_message=False):
