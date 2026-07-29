@@ -20,11 +20,13 @@
       v-if="isShowreSource"
       ref="resourceTypeListRef"
       :can-edit-system="canEditSystem"
+      :data="data"
       @update-action="handleUpdateAction"
       @update-list-length="handleUpdateList" />
     <action-list
       ref="actionListRef"
       :can-edit-system="canEditSystem"
+      :data="data"
       @add-resource-type="handleAddResourceType"
       @update-list-length="handleUpdateListLength"
       @update-resource="handleUpdateResource" />
@@ -34,11 +36,14 @@
   import { computed, ref, watch } from 'vue';
   import { useRoute } from 'vue-router';
 
+  import SystemModel from '@model/meta/system';
+
   import ActionList from './components/action-list/index.vue';
   import ResourceTypeList from './components/resource-type-list/index.vue';
 
   interface Props {
     canEditSystem: boolean;
+    data: SystemModel;
   }
   interface Emits {
     (e: 'getIsDisabledBtn', val: Record<string, any>): void;

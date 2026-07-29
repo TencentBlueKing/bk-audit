@@ -42,7 +42,7 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { onMounted } from 'vue';
+  import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -52,18 +52,13 @@
 
   import useRequest from '@hooks/use-request';
 
-  interface Exposes {
-    loading: boolean
-  }
-
   interface Props {
-    data?: SystemModel;  // 改为可选属性
-    id: string
+    data: SystemModel;
+    id: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     id: '',
-    data: undefined,  // 默认值设为undefined
   });
 
   const themeMap: Record<string, 'info' | 'warning' | 'success' | 'danger' | undefined> = {
@@ -73,19 +68,10 @@
   };
 
   const { t } = useI18n();
-
   const route = useRoute();
 
-  const {
-    data,
-    loading,
-    run: fetchSystemDetail,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id || props.id,
-    },
-    defaultValue: new SystemModel(),
-  });
+  // 复用父组件下发的系统详情，避免重复请求
+  const data = computed(() => props.data || new SystemModel());
 
   const {
     data: GlobalChoices,
@@ -99,19 +85,8 @@
   const systemStatusText = (val: string) => {
     if (!GlobalChoices.value?.meta_system_status) return val;
     const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
-    return statusItem?.name || val; // 如果找不到对应状态，返回原值
+    return statusItem?.name || val;
   };
-  onMounted(() => {
-    if (route.params.id || props.id) {
-      fetchSystemDetail({
-        id: route.params.id || props.id,
-      });
-    }
-  });
-  defineExpose<Exposes>({
-    loading: loading.value,  // 使用.value获取实际布尔值
-  });
-
 </script>
 <style lang="postcss">
   .system-detail-box {
