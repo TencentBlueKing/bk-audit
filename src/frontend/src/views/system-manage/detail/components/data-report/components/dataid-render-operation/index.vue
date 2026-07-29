@@ -16,46 +16,43 @@
 -->
 <template>
   <div class="collector-operation">
-    <template
-      v-if="!loading">
-      <auth-component
-        action-id="edit_system"
-        class="operation-btn"
-        :permission="dataCheckMap.edit_system"
-        :resource="data.system_id">
+    <auth-component
+      action-id="edit_system"
+      class="operation-btn"
+      :permission="permission"
+      :resource="data.system_id">
+      <audit-icon
+        v-bk-tooltips="t('查看')"
+        class="operation-icon"
+        type="audit"
+        @click.stop="handleDetail" />
+    </auth-component>
+    <auth-component
+      action-id="edit_system"
+      class="operation-btn"
+      :permission="permission"
+      :resource="data.system_id">
+      <audit-icon
+        v-bk-tooltips="t('编辑')"
+        class="operation-icon"
+        type="edit-fill"
+        @click.stop="handleEdit" />
+    </auth-component>
+    <auth-component
+      action-id="edit_system"
+      class="operation-btn"
+      :permission="permission"
+      :resource="data.system_id">
+      <audit-popconfirm
+        :confirm-handler="handleDelete"
+        :content="t('删除后不可直接找回，需要重新接入')"
+        :title="t('确认删除采集任务？')">
         <audit-icon
-          v-bk-tooltips="t('查看')"
+          v-bk-tooltips="t('删除')"
           class="operation-icon"
-          type="audit"
-          @click.stop="handleDetail" />
-      </auth-component>
-      <auth-component
-        action-id="edit_system"
-        class="operation-btn"
-        :permission="dataCheckMap.edit_system"
-        :resource="data.system_id">
-        <audit-icon
-          v-bk-tooltips="t('编辑')"
-          class="operation-icon"
-          type="edit-fill"
-          @click.stop="handleEdit" />
-      </auth-component>
-      <auth-component
-        action-id="edit_system"
-        class="operation-btn"
-        :permission="dataCheckMap.edit_system"
-        :resource="data.system_id">
-        <audit-popconfirm
-          :confirm-handler="handleDelete"
-          :content="t('删除后不可直接找回，需要重新接入')"
-          :title="t('确认删除采集任务？')">
-          <audit-icon
-            v-bk-tooltips="t('删除')"
-            class="operation-icon"
-            type="delete" />
-        </audit-popconfirm>
-      </auth-component>
-    </template>
+          type="delete" />
+      </audit-popconfirm>
+    </auth-component>
   </div>
   <bk-sideslider
     v-model:isShow="isShowDetail"
@@ -82,7 +79,6 @@
   } from 'vue-router';
 
   import DataIdManageService from '@service/dataid-manage';
-  import IamManageService from '@service/iam-manage';
 
   import type CollectorModel from '@model/collector/collector';
 
@@ -90,14 +86,15 @@
 
   import EditInfo from './edit-info/index.vue';
 
-  const props = defineProps<Props>();
-
+  const props = withDefaults(defineProps<Props>(), {
+    permission: false,
+  });
 
   const emit = defineEmits<Emits>();
 
-
   interface Props {
     data: CollectorModel;
+    permission?: boolean;
   }
   interface Emits {
     (e: 'getCollectorLists'): void
@@ -108,19 +105,6 @@
   const route = useRoute();
   const router = useRouter();
   const isShowDetail = ref(false);
-
-  const {
-    loading,
-    data: dataCheckMap,
-  // eslint-disable-next-line vue/no-setup-props-destructure
-  } = useRequest(IamManageService.check, {
-    defaultValue: {},
-    defaultParams: {
-      action_ids: 'edit_system',
-      resources: props.data.system_id,
-    },
-    manual: true,
-  });
 
   /**
    * 删除采集接口
@@ -141,15 +125,7 @@
   const handleDetail = () => {
     isShowDetail.value = true;
   };
-  // const handleEdit = () => {
-  //   router.push({
-  //     name: 'logDataIdEdit',
-  //     params: {
-  //       systemId: route.params.id,
-  //       id: props.data.bk_data_id,
-  //     },
-  //   });
-  // };
+
   const handleEdit = () => {
     router.push({
       name: 'logDataIdEdit',

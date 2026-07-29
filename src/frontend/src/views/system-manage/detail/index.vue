@@ -22,7 +22,6 @@
     <div class="system-manage-detail-header">
       <system-info
         :id="route.params.id as string"
-        ref="appRef"
         :data="data" />
     </div>
     <bk-tab
@@ -31,11 +30,10 @@
       type="card-grid"
       @change="handleChange">
       <bk-tab-panel
-        v-for="(item, index) in panels"
-        :key="index"
+        v-for="item in panels"
+        :key="item.name"
         :label="item.label"
-        :name="item.name"
-        render-directive="if">
+        :name="item.name">
         <template #label>
           <div class="customize-label">
             <span
@@ -71,13 +69,23 @@
             </div>
           </div>
         </template>
-        <component
-          :is="renderContentComponent"
-          :can-edit-system="canEditSystem"
-          :data="data"
-          @update-system-detail="handleUpdateSystemDetail" />
       </bk-tab-panel>
     </bk-tab>
+    <!-- 已访问 tab 保活，避免切换时卸载取消请求再重复发起 -->
+    <div class="system-manage-detail-tab-content">
+      <template
+        v-for="item in panels"
+        :key="item.name">
+        <component
+          :is="contentComponentMap[item.name as keyof typeof contentComponentMap]"
+          v-if="visitedTabs.has(item.name)"
+          v-show="contentType === item.name"
+          :can-edit-system="canEditSystem"
+          :data="data"
+          :edit-system-permission="editSystemPermission"
+          @update-system-detail="handleUpdateSystemDetail" />
+      </template>
+    </div>
   </skeleton-loading>
 </template>
 <script setup lang="ts">
@@ -87,6 +95,7 @@
     nextTick,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
@@ -139,32 +148,44 @@
       label: t('系统诊断'),
       describe: t('诊断系统接入状态与数据质量'),
     },
-    // 系统诊断
   ];
 
   const contentType = ref<keyof typeof contentComponentMap>('basicInfo');
-  const appRef = ref();
 
-  const { getSearchParams, appendSearchParams } = useUrlSearch();
+  const { getSearchParams } = useUrlSearch();
   const searchParams = getSearchParams();
   if (searchParams.contentType
     && _.has(contentComponentMap, searchParams.contentType)) {
     contentType.value = searchParams.contentType as keyof typeof contentComponentMap;
   }
 
-  const renderContentComponent = computed(() => contentComponentMap[contentType.value]);
+  const visitedTabs = ref(new Set<string>([contentType.value]));
 
   const skeletonLoadingName = computed(() => (contentType.value === 'accessModel'
     ? 'systemDetailList'
     : 'systemDetail'));
 
   const canEditSystem = computed(() => data.value.source_type !== 'iam_v3' && data.value.source_type !== 'iam_v4');
+  const editSystemPermission = computed(() => Boolean(data.value.permission?.edit_system));
+
+  const markVisited = (value: string) => {
+    if (visitedTabs.value.has(value)) {
+      return;
+    }
+    visitedTabs.value = new Set([...visitedTabs.value, value]);
+  };
 
   const handleChange = (value: 'basicInfo' | 'accessModel' | 'dataReport' | 'systemDiagnosis') => {
-    appendSearchParams({
-      contentType: value,
-    });
+    markVisited(value);
+    // 仅更新 URL，不派发 popstate，避免干扰路由/组件生命周期
+    const curSearchParams = new URLSearchParams(window.location.search);
+    curSearchParams.set('contentType', value);
+    window.history.replaceState({}, '', `?${curSearchParams.toString()}`);
   };
+
+  watch(contentType, (value) => {
+    markVisited(value);
+  });
 
   const {
     data,
@@ -237,5 +258,14 @@
         }
       }
     }
+
+    /* 内容区移到 tab 外部保活，隐藏面板默认空白区域 */
+    .bk-tab-content {
+      display: none;
+    }
+  }
+
+  .system-manage-detail-tab-content {
+    background: #fff;
   }
 </style>

@@ -24,10 +24,10 @@
         <bk-button
           v-bk-tooltips="{
             content: t('暂不支持变更，请前往权限中心变更'),
-            disabled:(systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4')
+            disabled: canEditSystem,
           }"
           class="mr8"
-          :disabled="!(systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4')"
+          :disabled="!canEditSystem"
           theme="primary"
           @click="handleCreate">
           <audit-icon
@@ -111,6 +111,11 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Props {
+    canEditSystem: boolean;
+    data: SystemModel;
+  }
+
   interface Emits {
     (e: 'updateResource'): void;
     (e: 'updateListLength', listLength: number): void;
@@ -136,6 +141,7 @@
     onlyRecommendChildren?: boolean,
   }
 
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const route = useRoute();
   const { t } = useI18n();
@@ -202,10 +208,10 @@
           <bk-button
             theme='primary'
             class='mr16'
-            disabled={!(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
+            disabled={!props.canEditSystem}
             v-bk-tooltips={{
               content: t('暂不支持变更，请前往权限中心变更'),
-              disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
+              disabled: props.canEditSystem,
             }}
             onClick={() => handleEdit(data)}
             text>
@@ -217,10 +223,10 @@
             class="ml8"
             confirmHandler={() => handleDelete(data)}>
             <bk-button
-              disabled={!(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
+              disabled={!props.canEditSystem}
               v-bk-tooltips={{
                 content: t('暂不支持变更，请前往权限中心变更'),
-                disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
+                disabled: props.canEditSystem,
               }}
               theme='primary'
               text>
@@ -285,17 +291,6 @@
       });
       emits('updateResource');
     },
-  });
-
-  // 获取系统详情
-  const {
-    data: systemDetailData,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id,
-    },
-    defaultValue: new SystemModel(),
-    manual: true,
   });
   // 获取操作
   // const {

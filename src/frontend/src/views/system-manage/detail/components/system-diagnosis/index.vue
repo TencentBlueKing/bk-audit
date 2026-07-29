@@ -15,15 +15,15 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading :loading="loading">
+  <bk-loading :loading="pageLoading">
     <div
-      v-if="status === 'normal' && !loading"
+      v-if="status === 'normal' && !pageLoading"
       style="width: 100%;height: 100%;">
       <div
         id="panel" />
     </div>
     <div
-      v-if="status !== 'normal' && !loading"
+      v-if="status !== 'normal' && !pageLoading"
       class="system-diagnosis-container">
       <div class="main-title">
         {{ t('系统诊断，向救火式风险修复说拜拜！') }}
@@ -228,11 +228,10 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
-  import MetaManageService from '@service/meta-manage';
   import RootManageService from '@service/root-manage';
   import StatementManageService from '@service/statement-manage';
 
@@ -250,12 +249,18 @@
     status: number
   }
 
+  interface Props {
+    data: SystemModel;
+  }
+
+  const props = defineProps<Props>();
+
   const { t } = useI18n();
   const route = useRoute();
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
 
-  const status = ref<string>('');
+  const status = computed(() => props.data.status || '');
   const systemId = ref<string>(route.params.id as string);
 
   const loadScript = (src: string) => new Promise((resolve, reject) => {
@@ -320,30 +325,18 @@
   });
 
   const {
-    loading,
-    run: fetchSystemStatus,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id,
-    },
-    defaultValue: new SystemModel(),
-    manual: true,
-    onSuccess: (data) => {
-      status.value = data.status;
-    },
-  });
-
-  const {
     data: configData,
+    loading: configLoading,
     run: fetchConfig,
   } = useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
     manual: true,
   });
 
+  const pageLoading = computed(() => !props.data?.system_id || configLoading.value);
+
   // 组件挂载时主动请求数据
   onMounted(() => {
-    fetchSystemStatus({ id: route.params.id });
     fetchConfig();
   });
 

@@ -74,6 +74,7 @@
                       class="operation-icon">
                       <auth-component
                         action-id="edit_system"
+                        :permission="editSystemPermission"
                         :resource="route.params.id">
                         <audit-icon
                           :type="isHide?'view':'hide'"
@@ -81,6 +82,7 @@
                       </auth-component>
                       <auth-component
                         action-id="edit_system"
+                        :permission="editSystemPermission"
                         :resource="route.params.id">
                         <audit-icon
                           v-bk-tooltips="t('复制')"
@@ -153,7 +155,8 @@
                   token: token.token,
                   hosts: data.hosts,
                   collector_config_name: token.collector_config_name,
-                }" />
+                }"
+                :permission="editSystemPermission" />
             </div>
             <recent-data
               v-if="showRecentDataMap['api']"
@@ -304,6 +307,7 @@
                   :is="dataIdStatusCom[dataIdStatusMap[item.bk_data_id].operation]"
                   ref="dataIdStatusComRef"
                   :data="item"
+                  :permission="editSystemPermission"
                   @get-collector-lists="handleDataIdList" />
               </div>
               <recent-data
@@ -367,6 +371,13 @@
     name: string;
     type?: string;
   }
+  interface Props {
+    editSystemPermission?: boolean;
+  }
+
+  withDefaults(defineProps<Props>(), {
+    editSystemPermission: false,
+  });
 
   const { t } = useI18n();
   const router = useRouter();
@@ -523,7 +534,7 @@
     run: fetchApiPushHost,
   }  = useRequest(CollectorManageService.fetchApiPushHost, {
     defaultValue: {
-      enabled: true,
+      enabled: false,
       hosts: [],
     },
     defaultParams: {
