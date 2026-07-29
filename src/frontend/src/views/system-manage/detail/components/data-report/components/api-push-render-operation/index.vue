@@ -19,6 +19,7 @@
     <auth-component
       action-id="edit_system"
       class="operation-btn"
+      :permission="permission"
       :resource="route.params.id">
       <audit-icon
         v-bk-tooltips="t('查看')"
@@ -53,9 +54,12 @@
       hosts: string[];
       collector_config_name: string;
     };
+    permission?: boolean;
   }
 
-  defineProps<Props>();
+  withDefaults(defineProps<Props>(), {
+    permission: false,
+  });
 
   const { t } = useI18n();
   const route = useRoute();
@@ -93,4 +97,3 @@
     padding: 22px 40px;
   }
 </style>
-

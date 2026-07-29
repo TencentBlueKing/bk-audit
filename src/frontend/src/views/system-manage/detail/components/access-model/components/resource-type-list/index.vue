@@ -26,10 +26,10 @@
         <bk-button
           v-bk-tooltips="{
             content: t('暂不支持变更，请前往权限中心变更'),
-            disabled: (systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4'),
+            disabled: canEditSystem,
           }"
           class="mr8"
-          :disabled="!(systemDetailData.source_type !== 'iam_v3' && systemDetailData.source_type !== 'iam_v4')"
+          :disabled="!canEditSystem"
           theme="primary"
           @click="handleCreate">
           <audit-icon
@@ -51,7 +51,7 @@
         value-split-code=","
         @update:model-value="handleSearch" />
     </div>
-    <bk-loading :loading="loading || isSystemDataLoading">
+    <bk-loading :loading="loading">
       <bk-table
         :border="['outer']"
         :columns="renderTableColumn"
@@ -131,6 +131,10 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Props {
+    canEditSystem: boolean;
+    data: SystemModel;
+  }
   interface Emits {
     (e: 'updateAction'): void;
     (e: 'updateListLength', listLength: number): void;
@@ -154,6 +158,7 @@
     onlyRecommendChildren?: boolean,
   }
 
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t, locale } = useI18n();
   const route = useRoute();
@@ -319,10 +324,10 @@
             <bk-button
               theme='primary'
               class='mr16'
-              disabled={ !(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
+              disabled={!props.canEditSystem}
               v-bk-tooltips={{
                 content: t('暂不支持变更，请前往权限中心变更'),
-                disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
+                disabled: props.canEditSystem,
               }}
               onClick={() => handleEdit(data)}
               text>
@@ -358,10 +363,10 @@
                         class="ml8"
                         confirmHandler={() => handleDelete(data)}>
                         <bk-button
-                          disabled={!(systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4')}
+                          disabled={!props.canEditSystem}
                           v-bk-tooltips={{
                             content: t('暂不支持变更，请前往权限中心变更'),
-                            disabled: (systemDetailData.value.source_type !== 'iam_v3' && systemDetailData.value.source_type !== 'iam_v4'),
+                            disabled: props.canEditSystem,
                           }}
                           text>
                           {t('删除')}
@@ -392,20 +397,7 @@
       includes(snapShotStatusList.value[item.resource_type_id]?.status));
   });
 
-  // 获取系统详情
-  const {
-    loading: isSystemDataLoading,
-    run: fetchSystemDetail,
-    data: systemDetailData,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id,
-    },
-    defaultValue: new SystemModel(),
-    // manual: true,
-  });
-
-  // 获取列表数据
+  // 获取列表数据（系统详情由父组件下发，避免重复请求）
   const {
     loading,
     run: fetchSysetemResourceTypeList,
@@ -415,7 +407,6 @@
       id: route.params.id,
     },
     defaultValue: [],
-    // manual: true,
   });
 
   const {
@@ -499,21 +490,22 @@
   };
 
   const getSnapShotStatus = () => {
+    const systemId = props.data?.system_id || (route.params.id as string);
+    if (!systemId) return;
     const resourceIds = resourceTypeList.value.map(item => item.resource_type_id).join(',');
     fetchSnapShotStatus({
-      system_id: systemDetailData.value.system_id,
+      system_id: systemId,
       resource_type_ids: resourceIds,
     });
   };
 
-  Promise.all([fetchSystemDetail({
-    id: route.params.id,
-  }), fetchSysetemResourceTypeList({
-    id: route.params.id,
-  })]).then(() => {
-    // 获取资源快照状态
-    getSnapShotStatus();
-  });
+  const initResourceTypeList = () => {
+    fetchSysetemResourceTypeList({
+      id: route.params.id,
+    }).then(() => {
+      getSnapShotStatus();
+    });
+  };
 
   // 更新资源快照状态
   const handleDataStatus = () => {
@@ -562,6 +554,7 @@
   });
   onMounted(() => {
     checkPermission();
+    initResourceTypeList();
   });
 
   defineExpose({
