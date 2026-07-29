@@ -78,6 +78,7 @@ class RiskEventSubscriptionTestMixin:
             (cls.RISK_ALIAS, "current_operator", "current_operator"),
             (cls.RISK_ALIAS, "notice_users", "notice_users"),
             (cls.RISK_ALIAS, "risk_label", "risk_label"),
+            (cls.RISK_ALIAS, "is_deleted", "risk_is_deleted"),
             (cls.RISK_ALIAS, "title", "risk_title"),
             (cls.STRATEGY_TAG_ALIAS, "tag_ids_json", "strategy_tag_ids"),
             (cls.STRATEGY_ALIAS, "risk_level", "risk_level"),
@@ -118,7 +119,8 @@ class RiskEventSubscriptionTestMixin:
             f"{risk_join}"
             f"JOIN {strategy} `{cls.STRATEGY_ALIAS}` ON `e`.`strategy_id`=`s`.`strategy_id` "
             f"LEFT JOIN {subquery} `{cls.STRATEGY_TAG_ALIAS}` ON `s`.`strategy_id`=`st`.`strategy_id` "
-            f"WHERE `e`.`dtEventTimeStamp` BETWEEN {self.TIME_RANGE[0]} AND {self.TIME_RANGE[1]})"
+            f"WHERE `e`.`dtEventTimeStamp` BETWEEN {self.TIME_RANGE[0]} AND {self.TIME_RANGE[1]} "
+            f"AND `r`.`is_deleted`='false')"
         )
 
     def _expected_query_sql(self, limit: int = 10, where: str | None = None) -> str:

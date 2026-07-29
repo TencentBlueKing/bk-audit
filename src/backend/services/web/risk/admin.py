@@ -104,6 +104,8 @@ class RiskAdmin(admin.ModelAdmin):
     # 支持基于命中策略过滤
     list_filter = ["status", "display_status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
     list_per_page = 50  # 减少每页数量以提升性能
+    # 批量软删除 action（走 SoftDeleteQuerySet.delete → UPDATE is_deleted=true）
+    actions = ["soft_delete_selected"]
 
     def get_queryset(self, request):
         """
@@ -153,6 +155,14 @@ class RiskAdmin(admin.ModelAdmin):
         return self._truncate_json_field(obj.notice_users)
 
     notice_users_short.short_description = _("关注人")
+
+    def soft_delete_selected(self, request, queryset):
+        """批量软删除选中风险单（UPDATE is_deleted=true，非物理删除）"""
+        deleted, _ = queryset.delete()
+        self.message_user(request, _("已软删除 %d 条风险单") % deleted, level="SUCCESS")
+
+    soft_delete_selected.short_description = _("软删除选中风险")
+    soft_delete_selected.allowed_permissions = {"delete"}
 
 
 @admin.register(ProcessApplication)
