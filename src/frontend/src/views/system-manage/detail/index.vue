@@ -20,9 +20,7 @@
     :loading="loading"
     :name="skeletonLoadingName">
     <div class="system-manage-detail-header">
-      <system-info
-        :id="route.params.id as string"
-        :data="data" />
+      <system-info :data="data" />
     </div>
     <bk-tab
       v-model:active="contentType"
