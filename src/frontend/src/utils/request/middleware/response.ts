@@ -142,30 +142,40 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
 
   // 统一错误处理逻辑
   interceptors.use(undefined, (error: RequestError) => {
+    const isSilent = Boolean(error.response?.config?.payload?.silent);
     switch (error.code) {
       // 未登陆
       case 401:
         redirectLogin(error.response.data.login_url);
         break;
       case 403:
-        handlePermission(error);
+        if (!isSilent) {
+          handlePermission(error);
+        }
         break;
       case 409:
-        messageError(error.response.data.message);
+        if (!isSilent) {
+          messageError(error.response.data.message);
+        }
         break;
       case 'CANCEL':
         break;
         // 网络超时
       case 'ECONNABORTED':
-        messageError('请求超时');
+        if (!isSilent) {
+          messageError('请求超时');
+        }
         break;
       default:
-        if (error.response.data.code === '9900403') {
+        if (isSilent) {
+          break;
+        }
+        if (error.response?.data?.code === '9900403') {
           handlePermission(error);
-        } else if (error.response.data.code === '2905003') {
+        } else if (error.response?.data?.code === '2905003') {
           console.log('error', error);
         } else {
-          messageError(`${error.message} (${error.response.data.trace_id})`);
+          messageError(`${error.message} (${error.response?.data?.trace_id || ''})`);
         }
     }
     return Promise.reject(error);

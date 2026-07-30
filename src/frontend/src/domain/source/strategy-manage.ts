@@ -210,9 +210,10 @@ class Strategy extends ModuleBase {
   // 获取表格的信息
   getTableRtMeta(params: {
     table_id: string
-  }) {
+  }, payload = {} as IRequestPayload) {
     return Request.get<RtMetaModel>(`${this.path}/strategy_table/rt_meta/`, {
       params,
+      payload,
     });
   }
   // 获取表格最后一条数据

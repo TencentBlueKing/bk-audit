@@ -189,8 +189,8 @@ export default {
    */
   fetchTableRtMeta(params: {
     table_id: string
-  }) {
-    return StrategySource.getTableRtMeta(params)
+  }, payload: Record<string, any> = {}) {
+    return StrategySource.getTableRtMeta(params, payload)
       .then(({ data }) => data);
   },
   /**
