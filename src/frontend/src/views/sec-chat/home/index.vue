@@ -1,4 +1,4 @@
-/*
+<!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,42 +13,27 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
-*/
-export default {
-  path: '/sec-chat',
-  name: 'secChat',
-  component: () => import('@views/sec-chat/index.vue'),
-  redirect: {
-    name: 'secChatHome',
-  },
-  meta: {
-    title: 'AI助手',
-    navName: 'secChat',
-    nodeSideContent: true,
-    keepAlive: true,
-  },
-  children: [
-    {
-      path: '',
-      name: 'secChatHome',
-      component: () => import('@views/sec-chat/home/index.vue'),
-      meta: {
-        title: 'AI助手',
-        navName: 'secChat',
-        nodeSideContent: true,
-        keepAlive: true,
-      },
-    },
-    {
-      path: 'audit-log-retrieval/:conversationId?',
+-->
+<template>
+  <chat-welcome @select-prompt="handleSelectPrompt" />
+</template>
+
+<script lang="ts" setup>
+  import { useRouter } from 'vue-router';
+
+  import ChatWelcome from '../components/chat-welcome.vue';
+  import { useSecChatStore } from '../composables/use-sec-chat-store';
+  import type { SelectPromptPayload } from '../types';
+
+  const router = useRouter();
+  const { createLogConversation } = useSecChatStore();
+
+  const handleSelectPrompt = (payload: SelectPromptPayload) => {
+    if (payload.sceneType !== 'log') return;
+    const conversation = createLogConversation(payload.prompt);
+    router.push({
       name: 'secChatAuditLog',
-      component: () => import('@views/sec-chat/audit-log-retrieval/index.vue'),
-      meta: {
-        title: '审计日志检索',
-        navName: 'secChat',
-        nodeSideContent: true,
-        keepAlive: true,
-      },
-    },
-  ],
-};
+      params: { conversationId: conversation.id },
+    });
+  };
+</script>
