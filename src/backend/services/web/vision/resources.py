@@ -892,7 +892,7 @@ class ListPlatformPanels(BKVision):
 
         bindings = self._get_binding_map(panel_ids=list(queryset.values_list("id", flat=True)))
         data = []
-        for panel in queryset.order_by("-updated_at", "id"):
+        for panel in queryset.order_by("name", "-updated_at", "id"):
             binding = bindings.get(str(panel.id))
             if not binding:
                 continue
