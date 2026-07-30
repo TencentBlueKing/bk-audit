@@ -65,13 +65,14 @@
       <chat-input
         class="welcome-input"
         @attach="$emit('attach')"
-        @send="$emit('select-prompt', $event)" />
+        @send="handleInputSend" />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
   import ChatInput from './chat-input.vue';
+  import type { ChatSceneType, SelectPromptPayload } from '../types';
 
   import aiChatIcon from '@images/ai-chat-icon.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
@@ -80,7 +81,7 @@
   import shiyongIcon from '@images/shiyong-icon.svg';
 
   const emit = defineEmits<{
-    'select-prompt': [prompt: string];
+    'select-prompt': [payload: SelectPromptPayload];
     attach: [];
   }>();
 
@@ -90,6 +91,7 @@
       title: '审计日志检索',
       desc: '用对话查询与统计各系统审计日志',
       prompt: '请帮我检索审计日志',
+      sceneType: 'log' as ChatSceneType,
       disabled: false,
     },
     {
@@ -135,7 +137,18 @@
 
   const handleCardClick = (item: typeof promptCards[0]) => {
     if (item.disabled) return;
-    emit('select-prompt', item.prompt);
+    emit('select-prompt', {
+      prompt: item.prompt,
+      sceneType: item.sceneType,
+    });
+  };
+
+  const handleInputSend = (prompt: string) => {
+    // 当前仅开放审计日志检索，欢迎页发送一律进入该场景
+    emit('select-prompt', {
+      prompt,
+      sceneType: 'log',
+    });
   };
 </script>
 

@@ -18,10 +18,37 @@ export default {
   path: '/sec-chat',
   name: 'secChat',
   component: () => import('@views/sec-chat/index.vue'),
+  redirect: {
+    name: 'secChatHome',
+  },
   meta: {
     title: 'AI助手',
     navName: 'secChat',
     nodeSideContent: true,
     keepAlive: true,
   },
+  children: [
+    {
+      path: '',
+      name: 'secChatHome',
+      component: () => import('@views/sec-chat/home/index.vue'),
+      meta: {
+        title: 'AI助手',
+        navName: 'secChat',
+        nodeSideContent: true,
+        keepAlive: true,
+      },
+    },
+    {
+      path: 'audit-log-retrieval/:conversationId?',
+      name: 'secChatAuditLog',
+      component: () => import('@views/sec-chat/audit-log-retrieval/index.vue'),
+      meta: {
+        title: '审计日志检索',
+        navName: 'secChat',
+        nodeSideContent: true,
+        keepAlive: true,
+      },
+    },
+  ],
 };
