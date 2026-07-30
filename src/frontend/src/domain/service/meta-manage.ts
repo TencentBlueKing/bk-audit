@@ -379,8 +379,8 @@ export default {
    * @desc 获取系统详情
    * @param { String } id
    */
-  fetchSystemInfo(params: Record<'id', string>) {
-    return MetaManageSource.getSystemInfo(params)
+  fetchSystemInfo(params: Record<'id', string>, payload: Record<string, any> = {}) {
+    return MetaManageSource.getSystemInfo(params, payload)
       .then(({ data }) => new SystemModel(data));
   },
   /**

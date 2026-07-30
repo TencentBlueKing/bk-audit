@@ -42,7 +42,11 @@ export interface Config {
     timeout?: number,
     cache?: string | number | boolean,
     onUploadProgress?: (params: CancelTokenSource) => void,
-    permission?: 'page' | 'dialog' | 'catch'
+    permission?: 'page' | 'dialog' | 'catch',
+    /** 为 true 时不弹出全局错误提示（用于批量拉取等可忽略失败的场景） */
+    silent?: boolean,
+    /** 外部传入时复用同一 CancelToken，便于批量请求一并取消 */
+    cancelTokenSource?: CancelTokenSource,
   }
 }
 
@@ -154,7 +158,7 @@ export default class Request {
       return this.cache.get(this.taskKey);
     }
 
-    const source = CancelToken.source();
+    const source = this.config.payload?.cancelTokenSource || CancelToken.source();
     setCancelTokenSource(source);
 
     const requestHandler = axios({

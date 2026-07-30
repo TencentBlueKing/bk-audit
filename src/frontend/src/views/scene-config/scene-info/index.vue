@@ -70,6 +70,7 @@
 </template>
 
 <script setup lang="tsx">
+  import axios, { type CancelTokenSource } from 'axios';
   import { computed, onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
@@ -95,6 +96,7 @@
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
+  const { CancelToken } = axios;
   const router = useRouter();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -302,6 +304,28 @@
   }));
 
   const DETAIL_BATCH_SIZE = 10;
+  // 详情批量拉取的世代号：离开页面 / 切换场景时递增，用于中止未完成的遍历请求
+  let detailFetchToken = 0;
+  // 同一轮批量详情共享 CancelToken，离开页时一并取消进行中的 HTTP
+  let detailCancelSource: CancelTokenSource | null = null;
+
+  const getDetailRequestPayload = () => ({
+    silent: true,
+    ...(detailCancelSource ? { cancelTokenSource: detailCancelSource } : {}),
+  });
+
+  const abortDetailFetches = () => {
+    detailFetchToken += 1;
+    detailCancelSource?.cancel('scene-info detail aborted');
+    detailCancelSource = null;
+  };
+
+  const beginDetailFetches = () => {
+    abortDetailFetches();
+    detailCancelSource = CancelToken.source();
+    detailFetchToken += 1;
+    return detailFetchToken;
+  };
 
   // 关联系统表格数据（通过新接口获取有权限的系统列表，再分批获取详情）
   const systemDetailList = ref<Array<Record<string, any>>>([]);
@@ -324,10 +348,10 @@
   type SystemItem = { system_id: string };
 
   const fetchSystemDetailsBatch = (systems: SystemItem[]) => Promise.all(systems.map(sys => MetaManageService
-    .fetchSystemInfo({ id: sys.system_id })
+    .fetchSystemInfo({ id: sys.system_id }, getDetailRequestPayload())
     .catch(() => null))).then(details => details.filter(Boolean).map(mapSystemDetail));
 
-  const fetchPermissionSystems = async () => {
+  const fetchPermissionSystems = async (token: number) => {
     if (!sceneId.value) return;
     systemDetailLoading.value = true;
     systemAllLoaded.value = false;
@@ -335,13 +359,16 @@
     systemTotal.value = 0;
     try {
       const systems = await SceneManageService.fetchScenePermissionSystems(sceneId.value);
+      if (token !== detailFetchToken) return;
       if (!systems?.length) {
         return;
       }
       systemTotal.value = systems.length;
       for (let i = 0; i < systems.length; i += DETAIL_BATCH_SIZE) {
+        if (token !== detailFetchToken) return;
         const batch = systems.slice(i, i + DETAIL_BATCH_SIZE);
         const batchData = await fetchSystemDetailsBatch(batch);
+        if (token !== detailFetchToken) return;
         if (i === 0) {
           systemDetailList.value = batchData;
           systemDetailLoading.value = false;
@@ -350,11 +377,14 @@
         }
       }
     } catch {
+      if (token !== detailFetchToken) return;
       systemDetailList.value = [];
       systemTotal.value = 0;
     } finally {
-      systemDetailLoading.value = false;
-      systemAllLoaded.value = true;
+      if (token === detailFetchToken) {
+        systemDetailLoading.value = false;
+        systemAllLoaded.value = true;
+      }
     }
   };
 
@@ -383,10 +413,10 @@
   type TableItem = Record<string, any>;
 
   const fetchTableDetailsBatch = (tables: TableItem[]) => Promise.all(tables.map(table => StrategyManageService
-    .fetchTableRtMeta({ table_id: table.table_id })
+    .fetchTableRtMeta({ table_id: table.table_id }, getDetailRequestPayload())
     .catch(() => null))).then(details => details.filter(Boolean).map(mapTableDetail));
 
-  const fetchPermissionTables = async () => {
+  const fetchPermissionTables = async (token: number) => {
     if (!sceneId.value) return;
     dataTableDetailLoading.value = true;
     dataTableAllLoaded.value = false;
@@ -399,8 +429,10 @@
     }
     try {
       for (let i = 0; i < tables.length; i += DETAIL_BATCH_SIZE) {
+        if (token !== detailFetchToken) return;
         const batch = tables.slice(i, i + DETAIL_BATCH_SIZE);
         const batchData = await fetchTableDetailsBatch(batch);
+        if (token !== detailFetchToken) return;
         if (i === 0) {
           dataTableDetailList.value = batchData;
           dataTableDetailLoading.value = false;
@@ -409,10 +441,13 @@
         }
       }
     } catch {
+      if (token !== detailFetchToken) return;
       dataTableDetailList.value = [];
     } finally {
-      dataTableAllLoaded.value = true;
-      dataTableDetailLoading.value = false;
+      if (token === detailFetchToken) {
+        dataTableAllLoaded.value = true;
+        dataTableDetailLoading.value = false;
+      }
     }
   };
 
@@ -527,6 +562,8 @@
       isSkeletonLoading.value = false;
       return;
     }
+    // 切换场景前先中止上一轮未完成的详情遍历与进行中的 HTTP
+    abortDetailFetches();
     sceneId.value = newSceneId;
     systemDetailList.value = [];
     systemTotal.value = 0;
@@ -539,17 +576,25 @@
       lastLoadedSceneId = undefined;
       return;
     }
-    lastLoadedSceneId = sceneId.value;
+    const loadingSceneId = sceneId.value;
+    lastLoadedSceneId = loadingSceneId;
     try {
       // 先加载场景基础信息，完成后立即展示统计卡片与基础信息
-      await fetchSceneInfo(sceneId.value as any).catch(() => null);
+      await fetchSceneInfo(loadingSceneId as any).catch(() => null);
+      // 等待期间已离开页面 / 再次切换场景，不再启动详情遍历
+      if (sceneId.value !== loadingSceneId || lastLoadedSceneId !== loadingSceneId) {
+        return;
+      }
       isSkeletonLoading.value = false;
 
       // 关联系统、关联数据表异步加载，表格区域各自展示 loading
-      void fetchPermissionSystems();
-      void fetchPermissionTables();
+      const fetchToken = beginDetailFetches();
+      void fetchPermissionSystems(fetchToken);
+      void fetchPermissionTables(fetchToken);
     } catch {
-      isSkeletonLoading.value = false;
+      if (sceneId.value === loadingSceneId) {
+        isSkeletonLoading.value = false;
+      }
     }
   };
 
@@ -566,6 +611,10 @@
   });
 
   onUnmounted(() => {
+    // 离开页面时中止未完成的关联系统 / 关联数据表详情遍历，并取消进行中的 HTTP
+    lastLoadedSceneId = undefined;
+    sceneId.value = '';
+    abortDetailFetches();
     off('scene:change', handleSceneChange);
   });
 
