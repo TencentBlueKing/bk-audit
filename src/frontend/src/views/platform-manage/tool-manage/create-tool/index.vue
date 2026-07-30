@@ -216,6 +216,7 @@
   import useMessage from '@/hooks/use-message';
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 
   provideToolManageContext(createPlatformToolManageContext());
 
@@ -389,18 +390,13 @@
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
-      allTagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-2') {
-          res.push({
-            tag_id: item.tag_id,
-            tag_name: item.tag_name,
-          });
-        }
-        return res;
-      }, [] as Array<{
-        tag_id: string;
-        tag_name: string;
-      }>);
+      // 排除无标签(-2)与虚拟快捷标签（全部工具/我创建的/最近使用/我的收藏）
+      allTagData.value = filterVirtualToolTags(data)
+        .filter(item => item.tag_id !== '-2')
+        .map(item => ({
+          tag_id: item.tag_id,
+          tag_name: item.tag_name,
+        }));
       data.forEach((item) => {
         allTagMap.value[item.tag_id] = item.tag_name;
       });
