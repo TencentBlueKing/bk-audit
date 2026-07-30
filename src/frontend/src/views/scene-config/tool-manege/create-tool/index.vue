@@ -106,7 +106,6 @@
   import { useI18n } from 'vue-i18n';
   import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
-  import MetaManageService from '@service/meta-manage';
   import RootManageService from '@service/root-manage';
   import ToolManageService from '@service/tool-manage';
 
@@ -132,6 +131,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 
   provideToolManageContext(createSceneToolManageContext());
 
@@ -272,25 +272,20 @@
     manual: true,
   });
 
-  // 获取所有标签列表
+  // 获取场景工具标签
   const {
     loading: tagLoading,
-  } = useRequest(MetaManageService.fetchTags, {
+  } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
-      allTagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-2') {
-          res.push({
-            tag_id: item.tag_id,
-            tag_name: item.tag_name,
-          });
-        }
-        return res;
-      }, [] as Array<{
-        tag_id: string;
-        tag_name: string;
-      }>);
+      // 排除无标签(-2)与虚拟快捷标签（全部工具/我创建的/最近使用/我的收藏）
+      allTagData.value = filterVirtualToolTags(data)
+        .filter(item => item.tag_id !== '-2')
+        .map(item => ({
+          tag_id: item.tag_id,
+          tag_name: item.tag_name,
+        }));
       data.forEach((item) => {
         allTagMap.value[item.tag_id] = item.tag_name;
       });

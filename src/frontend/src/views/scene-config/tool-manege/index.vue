@@ -142,6 +142,7 @@
 
   import ToolListTable from './components/tool-list-table.vue';
 
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   provideToolManageContext(createSceneToolManageContext());
@@ -444,12 +445,9 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
+      // tagsEnums 保留全量（含虚拟标签）供展示名解析；搜索下拉只保留真实业务标签
       tagsEnums.value = data;
-      // 过滤掉内置的快捷筛选标签（-3全部工具、-4我创建的、-5最近使用、-6我的收藏），保留无标签等
-      const excludeIds = ['-3', '-4', '-5', '-6'];
-      const realTags = data.filter((tag: TagItem) => !excludeIds.includes(String(tag.tag_id)));
-      // 同步标签下拉选项
-      tagSelectOptions.value = realTags.map((tag: TagItem) => ({
+      tagSelectOptions.value = filterVirtualToolTags(data).map((tag: TagItem) => ({
         id: String(tag.tag_id),
         name: tag.tag_name,
       }));
