@@ -505,7 +505,7 @@ class GetSpacesMine(BKLogBaseResource):
     name = gettext_lazy("获取空间列表")
     method = "GET"
     action = "/meta/spaces/mine/"
-    cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 6, user_related=False)
+    cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 10, user_related=True)
 
 
 class CreateCustomCollector(CollectorsBaseResource):
