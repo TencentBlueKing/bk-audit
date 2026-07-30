@@ -14,41 +14,41 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default {
-  path: '/sec-chat',
-  name: 'secChat',
-  component: () => import('@views/sec-chat/index.vue'),
-  redirect: {
-    name: 'secChatHome',
-  },
-  meta: {
-    title: 'AI助手',
-    navName: 'secChat',
-    nodeSideContent: true,
-    keepAlive: true,
-  },
-  children: [
-    {
-      path: '',
-      name: 'secChatHome',
-      component: () => import('@views/sec-chat/home/index.vue'),
-      meta: {
-        title: 'AI助手',
-        navName: 'secChat',
-        nodeSideContent: true,
-        keepAlive: true,
-      },
-    },
-    {
-      path: 'audit-log-retrieval/:conversationId?',
-      name: 'secChatAuditLog',
-      component: () => import('@views/sec-chat/audit-log-retrieval/index.vue'),
-      meta: {
-        title: '审计日志检索',
-        navName: 'secChat',
-        nodeSideContent: true,
-        keepAlive: true,
-      },
-    },
-  ],
-};
+export type ChatSceneType = 'log';
+
+export interface SelectedSystem {
+  id: string;
+  name: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  type: 'text' | 'select-system' | 'retrieval-guide';
+  content?: string;
+  status?: 'pending' | 'confirmed' | 'closed';
+  systemIds?: string[];
+  systems?: SelectedSystem[];
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  pinned: boolean;
+  groupName?: string;
+  sceneType?: ChatSceneType;
+  systemIds: string[];
+  systems: SelectedSystem[];
+  messages: ChatMessage[];
+  createdAt: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+}
+
+export interface SelectPromptPayload {
+  prompt: string;
+  sceneType?: ChatSceneType;
+}
