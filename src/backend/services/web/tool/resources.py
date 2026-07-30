@@ -918,9 +918,7 @@ class ExecuteTool(ToolBase):
                 ],
                 "page": 1,
                 "page_size": 100
-            },
-            "caller_resource_type": "risk",
-            "caller_resource_id": "R123"
+            }
         }
         ```
         response:
@@ -976,9 +974,7 @@ class ExecuteTool(ToolBase):
         ```json
         {
             "uid": "vision_tool_123",
-            "params": {},
-            "caller_resource_type": "risk",
-            "caller_resource_id": "R123"
+            "params": {}
         }
         ```
         response:
@@ -991,15 +987,27 @@ class ExecuteTool(ToolBase):
         }
         ```
 
-    4. 权限上下文（可选）
-        - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
-            - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
-            - `caller_resource_id`：调用方资源实例 ID（如风险ID）
-            - `drill_field`：指定使用哪个字段的 drill_config 进行变量值校验
-            - `event_start_time`/`event_end_time`：事件时间范围（用于 list_event 获取事件数据）
-        - 行为说明：
-            - 命中且有权限：跳过原有工具权限校验，直接执行
-            - 命中但无权限：返回标准权限异常（包含可申请信息）
+    4. 风险下钻上下文（仅风险策略字段下钻时使用）
+        - 普通工具执行仅传 `uid` 和 `params`，不得传 `caller_resource_*`、`drill_field`、
+          `event_start_time`、`event_end_time`。
+        - 仅当 `uid` 来自当前风险的策略字段 `drill_config.tool.uid` 时，才传完整的风险下钻上下文：
+        ```json
+        {
+            "uid": "risk_drill_tool_123",
+            "params": {
+                "tool_variables": [
+                    {"raw_name": "username", "value": "admin"}
+                ]
+            },
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123",
+            "drill_field": "operator",
+            "event_start_time": "2026-07-28 00:00:00",
+            "event_end_time": "2026-07-29 00:00:00"
+        }
+        ```
+        - `drill_field` 使用该 `drill_config` 所属字段的 `field_name`；变量值按照对应 `drill_config.config`
+          组装，时间范围使用风险详情中的 `event_time`、`event_end_time`。
     """
 
     name = gettext_lazy("工具执行")
