@@ -2683,7 +2683,7 @@ paths:
         使用真实用户身份执行工具。默认直接执行：只传 params，不得传 caller_resource_type、
         caller_resource_id、drill_field、event_start_time、event_end_time，后端按用户的工具使用权限鉴权。
         仅当 path uid 来自当前风险 mcp_retrieve_risk_strategy_info 返回字段的 drill_config.tool.uid 时，才使用风险下钻模式：
-        必须同时传 caller_resource_type=risk、caller_resource_id=当前风险ID、drill_field=该 drill_config 所属字段的 field_name、
+        必须同时传入 caller_resource_type=risk、caller_resource_id=当前风险ID、drill_field=该 drill_config 所属字段的 field_name、
         event_start_time/event_end_time=同一风险 mcp_retrieve_risk 返回的 event_time/event_end_time，且按 drill_config.config
         组装 params.tool_variables。仅 params.tool_variables 非空不代表风险下钻，不能据此传 caller 上下文。
       tags: []
