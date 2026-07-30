@@ -39,9 +39,6 @@
                 alt=""
                 class="tag-icon-img"
                 :src="tag.iconSrc">
-              <ai-setting-icon
-                v-else-if="tag.useSettingIcon"
-                class="tag-icon-img" />
               <audit-icon
                 v-else
                 :type="tag.icon" />
@@ -86,9 +83,6 @@
                   alt=""
                   class="cmd-icon-img"
                   :src="cmd.iconSrc">
-                <ai-setting-icon
-                  v-else-if="cmd.useSettingIcon"
-                  class="cmd-icon-img" />
                 <audit-icon
                   v-else
                   class="cmd-icon"
@@ -144,8 +138,6 @@
 <script lang="ts" setup>
   import { computed, nextTick, ref } from 'vue';
 
-  import AiSettingIcon from './ai-setting-icon.vue';
-
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fasongIcon from '@images/fasong-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';
@@ -185,7 +177,7 @@
     { id: 'analysis', icon: 'shujutongji', title: '风险分析', prompt: '请帮我分析当前审计风险分布与趋势', disabled: true },
     { id: 'alert', icon: '', iconSrc: fengxianIcon, title: '风险解读', prompt: '帮我解读未处理的高危风险告警', disabled: true },
     { id: 'report', icon: '', iconSrc: biaobiaoIcon, title: '报表解读', prompt: '请帮我解读审计报表数据与趋势', disabled: true },
-    { id: 'scene', icon: '', iconSrc: aiSettingIcon, useSettingIcon: true, title: '场景配置', prompt: '请介绍如何配置审计场景与检测策略', disabled: true },
+    { id: 'scene', icon: '', iconSrc: aiSettingIcon, title: '场景配置', prompt: '请介绍如何配置审计场景与检测策略', disabled: true },
     { id: 'help', icon: '', iconSrc: shiyongIcon, title: '使用帮助', prompt: '请介绍审计中心的功能配置与使用方法', disabled: true },
   ];
 
@@ -341,6 +333,25 @@
     textareaRef.value.style.height = 'auto';
     textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 160)}px`;
   };
+
+  const setInputValue = (text: string) => {
+    inputValue.value = text;
+    showSlashMenu.value = false;
+    slashQuery.value = '';
+    slashStartIndex.value = -1;
+    nextTick(() => {
+      const el = textareaRef.value;
+      if (!el) return;
+      el.focus();
+      const pos = text.length;
+      el.setSelectionRange(pos, pos);
+      autoResize();
+    });
+  };
+
+  defineExpose({
+    setInputValue,
+  });
 </script>
 
 <style lang="postcss" scoped>
