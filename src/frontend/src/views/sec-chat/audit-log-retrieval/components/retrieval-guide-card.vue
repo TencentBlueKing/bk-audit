@@ -229,6 +229,7 @@
   const emit = defineEmits<{
     reselect: [];
     'select-suggestion': [text: string];
+    'submit-query': [text: string];
   }>();
 
   interface FieldRow {
@@ -430,7 +431,7 @@
 
   const handleFilterSearch = (summary: string) => {
     filterCardShow.value = false;
-    emit('select-suggestion', summary);
+    emit('submit-query', summary);
   };
 </script>
 

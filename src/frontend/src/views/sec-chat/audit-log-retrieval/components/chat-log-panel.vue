@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="chat-log-panel">
-    <div class="panel-body">
+    <div
+      ref="panelBodyRef"
+      class="panel-body">
       <div class="chat-surface">
         <div class="message-list">
           <div
@@ -43,7 +45,14 @@
               v-else-if="msg.type === 'retrieval-guide'"
               :systems="msg.systems || []"
               @reselect="$emit('reselect-system')"
-              @select-suggestion="handleSelectSuggestion" />
+              @select-suggestion="handleSelectSuggestion"
+              @submit-query="handleSubmitQuery" />
+
+            <!-- 查询后的结构化结果卡片 -->
+            <retrieval-result-card
+              v-else-if="msg.type === 'retrieval-result' && msg.result"
+              :result="msg.result"
+              @regenerate="handleRegenerate(msg.content || '')" />
           </div>
         </div>
       </div>
@@ -61,19 +70,20 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
+  import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
   import type { ChatMessage, SelectedSystem } from '../../types';
 
-  defineProps<{
+  const props = defineProps<{
     messages: ChatMessage[];
   }>();
 
-  defineEmits<{
+  const emit = defineEmits<{
     'confirm-system': [messageId: string, systemIds: string[], systems: SelectedSystem[]];
     'close-select-system': [messageId: string];
     'reselect-system': [];
@@ -82,10 +92,32 @@
   }>();
 
   const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
+  const panelBodyRef = ref<HTMLElement | null>(null);
 
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);
   };
+
+  const handleSubmitQuery = (text: string) => {
+    emit('send', text);
+  };
+
+  const handleRegenerate = (text: string) => {
+    if (text) emit('send', text);
+  };
+
+  const scrollToBottom = async () => {
+    await nextTick();
+    requestAnimationFrame(() => {
+      const el = panelBodyRef.value;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    });
+  };
+
+  watch(() => props.messages.length, () => {
+    scrollToBottom();
+  });
 </script>
 
 <style lang="postcss" scoped>
