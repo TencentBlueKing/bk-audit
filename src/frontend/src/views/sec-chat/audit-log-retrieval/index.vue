@@ -55,6 +55,7 @@
     confirmSystem,
     closeSelectSystem,
     reselectSystem,
+    sendLogQuery,
   } = useSecChatStore();
 
   const syncConversationFromRoute = () => {
@@ -78,9 +79,8 @@
     router.push({ name: 'secChatHome' });
   };
 
-  // 本阶段仅保留输入入口，后续再接 NL 检索
-  const handleConversationSend = (_content: string) => {
-    void _content;
+  const handleConversationSend = (content: string) => {
+    sendLogQuery(content);
   };
 
   const handleAttach = () => {};

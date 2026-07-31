@@ -16,6 +16,7 @@
 */
 import { computed, ref } from 'vue';
 
+import { buildMockRetrievalResult } from '../audit-log-retrieval/utils/build-mock-result';
 import type {
   Conversation,
   Group,
@@ -267,6 +268,29 @@ export function useSecChatStore() {
     });
   };
 
+  /** 发送检索查询：追加用户气泡 + 结构化结果卡（本阶段 mock） */
+  const sendLogQuery = (content: string) => {
+    const conv = activeConversation.value;
+    if (!conv) return;
+    const text = content.trim();
+    if (!text) return;
+
+    const stamp = Date.now();
+    conv.messages.push({
+      id: `${conv.id}-query-${stamp}`,
+      role: 'user',
+      type: 'text',
+      content: text,
+    });
+    conv.messages.push({
+      id: `${conv.id}-result-${stamp}`,
+      role: 'assistant',
+      type: 'retrieval-result',
+      content: text,
+      result: buildMockRetrievalResult(text),
+    });
+  };
+
   return {
     sidebarCollapsed,
     activeConversationId,
@@ -285,5 +309,6 @@ export function useSecChatStore() {
     confirmSystem,
     closeSelectSystem,
     reselectSystem,
+    sendLogQuery,
   };
 }

@@ -106,6 +106,7 @@
     background-color: #f5f7fa;
 
     .sec-chat-main {
+      position: relative;
       display: flex;
       min-width: 0;
       overflow: hidden;
