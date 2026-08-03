@@ -28,6 +28,7 @@ export const GAME_DETAIL_DISPLAY_ROUTE_KEYS = new Set([
   'coin_balance',
   'total_recharge',
   'total_issue',
+  'wecom',
 ]);
 
 /** @deprecated 使用 GLOBAL_ROUTE_RESERVED_QUERY_KEYS */
@@ -222,10 +223,12 @@ export const mergeToolRouteQuery = (
     gameId?: string;
   } = {},
 ): Record<string, string> => {
-  const gameId = options.gameId || getGameIdFromRoute(routeQuery);
+  // 不从当前 route 自动继承 game_id。
+  // 从游戏详情切回智能页时若继承 game_id，会再次触发自动打开游戏详情，
+  // 且因丢失 initial_tab 而错误落到概览。
   return {
     ...getRouteScopeQuery(routeQuery),
-    ...buildToolExecutionRouteQuery(toolType, { ...options, gameId }),
+    ...buildToolExecutionRouteQuery(toolType, options),
   };
 };
 
@@ -401,7 +404,8 @@ export const buildGameDetailRouteQuery = (
   if (gameData.openid) query.openid = gameData.openid;
   if (options.toolUid) query.tool_uid = options.toolUid;
   if (options.initialTab) query.initial_tab = options.initialTab;
-  if (gameData.ctx) query.ctx = gameData.ctx;
+  // 使用 wecom 而非 ctx，避免与智能页账号类型参数 ctx 冲突，导致误触发企业微信查询
+  if (gameData.ctx) query.wecom = gameData.ctx;
   if (gameData.platType) query.plat_type = gameData.platType;
   if (gameData.platAccount) query.plat_account = gameData.platAccount;
   if (gameData.coinBalance !== undefined && gameData.coinBalance !== null) {
@@ -431,7 +435,8 @@ export const parseGameDetailFromRoute = (
       name: '',
       openid,
       gameid: gameId,
-      ctx: getRouteQueryValue(routeQuery.ctx),
+      // 兼容历史链接中的 ctx
+      ctx: getRouteQueryValue(routeQuery.wecom) || getRouteQueryValue(routeQuery.ctx),
       wechat: '',
       platType: getRouteQueryValue(routeQuery.plat_type),
       platAccount: getRouteQueryValue(routeQuery.plat_account),
