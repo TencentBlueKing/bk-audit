@@ -147,6 +147,7 @@ class CreateScenePanelRequestSerializer(serializers.Serializer):
     category = serializers.CharField(required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
+    default_value_overrides = serializers.JSONField(required=False, default=dict, label="默认值覆盖")
 
 
 class UpdateScenePanelRequestSerializer(serializers.Serializer):
@@ -158,6 +159,7 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    default_value_overrides = serializers.JSONField(required=False, allow_null=True, label="默认值覆盖")
 
 
 class DeleteScenePanelRequestSerializer(serializers.Serializer):
