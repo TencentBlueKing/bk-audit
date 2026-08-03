@@ -213,6 +213,9 @@ export const buildToolExecutionRouteQuery = (
   return buildFlatToolRouteQuery(options.searchList || []);
 };
 
+// 不从当前 route 自动继承 game_id。
+// 从游戏详情切回智能页时若继承 game_id，会再次触发自动打开游戏详情，
+// 且因丢失 initial_tab 而错误落到概览。
 export const mergeToolRouteQuery = (
   routeQuery: Record<string, unknown>,
   toolType: string,
@@ -222,15 +225,10 @@ export const mergeToolRouteQuery = (
     accountId?: string;
     gameId?: string;
   } = {},
-): Record<string, string> =>
-  // 不从当前 route 自动继承 game_id。
-  // 从游戏详情切回智能页时若继承 game_id，会再次触发自动打开游戏详情，
-  // 且因丢失 initial_tab 而错误落到概览。
-  ({
-    ...getRouteScopeQuery(routeQuery),
-    ...buildToolExecutionRouteQuery(toolType, options),
-  })
-;
+): Record<string, string> => ({
+  ...getRouteScopeQuery(routeQuery),
+  ...buildToolExecutionRouteQuery(toolType, options),
+});
 
 type SearchListField = {
   value: unknown;
