@@ -1369,11 +1369,10 @@ class MCPExecuteTool(ExecuteTool):
 
 
 class GetToolInputVariableCandidates(ToolBase):
-    """获取工具输入变量的候选项（仅用于平台配置页面）
+    """获取工具输入变量的候选项
 
-    用户画像工具：管理员配置 default_value_overrides 时，根据 input_variable.data_source
-    引用的数据源（SQL 模板类型，同一工具下可有多个不同的 data_source）查询 BkBase，
-    返回候选项列表。
+    用户画像工具：根据 input_variable.data_source 引用的数据源（SQL 模板类型）查询 BkBase，
+    返回候选项列表。支持平台级和场景级 smart_page 工具，不限 binding_type
     """
 
     name = gettext_lazy("获取工具输入变量候选项")
