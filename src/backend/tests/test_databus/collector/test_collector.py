@@ -238,7 +238,7 @@ class CollectorTest(TestCase):
     def test_bulk_system_collectors_status(self):
         """BulkSystemCollectorsStatusResource"""
         result = self.resource.databus.collector.bulk_system_collectors_status(
-            namespace=self.namespace, system_ids=f"{self.system_id}"
+            namespace=self.namespace, system_ids=[self.system_id]
         )
         self.assertEqual(result, {self.system_id: COLLECTOR_STATUS_RESULT})
 
