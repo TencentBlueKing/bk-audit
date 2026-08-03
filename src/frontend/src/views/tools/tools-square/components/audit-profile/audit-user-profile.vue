@@ -24,7 +24,7 @@
       @reset="handleReset" />
     <template
       v-if="hasQueried && !isQuerying && !userInfoLoading && !gameListLoading
-        && isUserInfoEmpty && (hideGameList || gameList.length === 0)">
+        && isUserInfoEmpty && gameList.length === 0">
       <bk-exception
         class="profile-all-empty"
         scene="part"
@@ -49,12 +49,11 @@
       </bk-loading>
 
       <div
-        v-if="!hideGameList && !(!isQuerying && !userInfoLoading && isUserInfoEmpty)"
+        v-if="!(!isQuerying && !userInfoLoading && isUserInfoEmpty)"
         class="section-divider" />
 
-      <!-- 关联游戏列表 - 独立 loading（openid 单条结果场景隐藏整个游戏列表区块） -->
+      <!-- 关联游戏列表 -->
       <bk-loading
-        v-if="!hideGameList"
         class="game-list-loading-wrapper"
         :loading="isQuerying || userInfoLoading || gameListLoading">
         <div
@@ -230,6 +229,12 @@
   const pendingGameDetailIntent = ref<{ gameid: string; initialTab: string } | null>(null);
   const smartPageIntentSnapshot = ref('');
 
+  /** 当前路由是否正停留在本智能页（而非游戏详情等其它 tab） */
+  const isCurrentSmartPageRoute = () => {
+    const routeUid = typeof route.params.uid === 'string' ? route.params.uid : '';
+    return !!props.toolUid && routeUid === props.toolUid;
+  };
+
   const getSmartPageIntentKey = () => {
     const parsed = parseSmartPageUrlParams(route.query as Record<string, unknown>, props.toolConfig);
     const intent = parseSmartPageGameDetailIntent(route.query as Record<string, unknown>);
@@ -242,6 +247,18 @@
 
   const markSmartPageIntentApplied = () => {
     smartPageIntentSnapshot.value = getSmartPageIntentKey();
+  };
+
+  /** 当前是否已按相同账号条件完成过查询（避免切 tab / URL 同步时重复 execute） */
+  const isSameAccountQuery = (accountType: string, accountId: string) => {
+    if (!accountType || !accountId || lastAccountType.value !== accountType) return false;
+    if (accountType === 'ctx') {
+      return lastQueryParams.value?.form_ctx === accountId;
+    }
+    if (accountType === 'openid') {
+      return lastQueryParams.value?.form_openid === accountId;
+    }
+    return lastQueryParams.value?.[accountType] === accountId;
   };
   // 查询进行中标志：从点击查询起立即为 true，待 useRequest 的 loading 真正接管后自动置 false，
   // 避免请求发起前出现"用户信息块不渲染、loading 也未起来"的空白时间窗
@@ -358,8 +375,6 @@
 
   // 关联游戏列表（接口返回后填充）
   const gameList = ref<Array<Record<string, any>>>([]);
-  // 是否隐藏"关联游戏列表"区块（openid 搜索仅 1 条结果时，已自动跳转到游戏详情，工具页不再展示游戏列表，但仍展示用户信息）
-  const hideGameList = ref(false);
 
   // 缓存 openid_list_first_ctx（微信/QQ/openid 搜索时，从 main_openid_list 首条结果获取的 ctx）
   const openidListFirstCtx = ref('');
@@ -682,9 +697,6 @@
 
         // 微信/QQ/openid 搜索时，游戏列表返回后需要级联查询用户信息
         if (['form_wechat', 'form_qq', 'openid'].includes(lastAccountType.value)) {
-          // 正常展示游戏列表区块
-          hideGameList.value = false;
-
           // openid 搜索时，结果返回后展示工具页内容
           if (lastAccountType.value === 'openid') {
             hasQueried.value = true;
@@ -794,9 +806,9 @@
     emit('openGameDetail', mapGameData(gameData), 'overview');
   };
 
-  // 点击查看记录 - 打开新工具tab，自动展示登录记录tab
+  // 点击查看记录 - 打开新工具tab，自动展示概览tab
   const handleViewRecord = (gameData: Record<string, any>) => {
-    emit('openGameDetail', mapGameData(gameData), 'login');
+    emit('openGameDetail', mapGameData(gameData), 'overview');
   };
 
   const toolSceneId = computed(() => {
@@ -1018,8 +1030,6 @@
     // 重置中间变量
     openidListFirstCtx.value = '';
     gameList.value = [];
-    // 重置游戏列表隐藏标识（仅 openid 单条结果时会再次置 true）
-    hideGameList.value = false;
     // 重置排序状态为默认：按代币存量降序
     sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.current = 1;
@@ -1078,7 +1088,6 @@
     lastQueryParams.value = null;
     lastAccountType.value = '';
     openidListFirstCtx.value = '';
-    hideGameList.value = false;
     // 清除保存的查询状态
     clearQueryState();
     emit('urlParamsSync', { accountType: '', accountId: '' });
@@ -1220,6 +1229,8 @@
   // ========== 组件挂载时恢复查询状态 ==========
   const applyUrlQueryIfPresent = () => {
     if (!props.toolUid || hasAppliedUrlQuery.value) return false;
+    // 游戏详情 URL 也会带 openid/wecom 等字段；仅在当前路由为本智能页时才解析执行，避免误触发其它账号类型查询
+    if (!isCurrentSmartPageRoute()) return false;
     const parsed = parseSmartPageUrlParams(route.query as Record<string, unknown>, props.toolConfig);
     const gameDetailIntent = parseSmartPageGameDetailIntent(route.query as Record<string, unknown>);
     if (!parsed && !gameDetailIntent) return false;
@@ -1228,7 +1239,16 @@
       pendingGameDetailIntent.value = gameDetailIntent;
     }
     markSmartPageIntentApplied();
-    if (!parsed) return true;
+    if (!parsed) {
+      tryOpenGameDetailFromUrlIntent();
+      return true;
+    }
+    // 已查询过相同账号时不再重复 execute，仅补齐游戏详情跳转意图
+    if (isSameAccountQuery(parsed.accountType, parsed.accountId)) {
+      queryInputRef.value?.setForm(parsed.accountType, parsed.accountId);
+      tryOpenGameDetailFromUrlIntent();
+      return true;
+    }
     nextTick(() => {
       queryInputRef.value?.setForm(parsed.accountType, parsed.accountId);
       handleQuery(parsed.accountType, parsed.accountId);
@@ -1250,8 +1270,9 @@
   });
 
   watch(
-    () => [props.toolUid, props.toolConfig, getSmartPageIntentKey()] as const,
-    ([, , intentKey]) => {
+    () => [props.toolUid, props.toolConfig, route.params.uid, getSmartPageIntentKey()] as const,
+    ([, , , intentKey]) => {
+      if (!isCurrentSmartPageRoute()) return;
       if (intentKey === smartPageIntentSnapshot.value) return;
       hasAppliedUrlQuery.value = false;
       applyUrlQueryIfPresent();

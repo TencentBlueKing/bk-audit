@@ -370,9 +370,9 @@
     return '--';
   });
 
-  // 当 initialTab 变化时同步切换 tab
+  // 当 initialTab 变化时同步切换 tab（含外部再次指定同一 tab 的场景）
   watch(() => props.initialTab, (newTab) => {
-    if (newTab) {
+    if (newTab && newTab !== activeTab.value) {
       activeTab.value = newTab;
     }
   });
