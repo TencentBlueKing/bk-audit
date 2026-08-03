@@ -806,9 +806,9 @@
     emit('openGameDetail', mapGameData(gameData), 'overview');
   };
 
-  // 点击查看记录 - 打开新工具tab，自动展示概览tab
+  // 点击查看记录 - 打开新工具tab，自动展示登录记录 tab
   const handleViewRecord = (gameData: Record<string, any>) => {
-    emit('openGameDetail', mapGameData(gameData), 'overview');
+    emit('openGameDetail', mapGameData(gameData), 'login');
   };
 
   const toolSceneId = computed(() => {
