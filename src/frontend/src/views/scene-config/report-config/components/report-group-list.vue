@@ -349,6 +349,9 @@
   import RootManageService from '@service/root-manage';
   import ToolManageService from '@service/tool-manage';
 
+  import type {
+    PanelDefaultValueOverrides,
+  } from '@model/report-config/panel';
   import ConfigModel from '@model/root/config';
 
   import useMessage from '@hooks/use-message';
@@ -369,6 +372,7 @@
     status: 'published' | 'unpublished';
     updatedBy: string;
     updatedAt: string;
+    default_value_overrides?: PanelDefaultValueOverrides;
   }
 
   export interface ReportGroup {

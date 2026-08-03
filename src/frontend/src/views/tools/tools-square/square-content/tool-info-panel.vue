@@ -138,6 +138,7 @@
           :game-data="gameDetailDataMap[tool.uid]"
           :game-name-resolving="!!gameDetailNameResolvingMap[tool.uid]"
           :initial-tab="gameDetailInitialTabMap[tool.uid]"
+          :tool-config="toolDetailMap[gameDetailToolUidMap[tool.uid]]?.config"
           :tool-uid="gameDetailToolUidMap[tool.uid]"
           @tab-change="(tab) => handleGameDetailTabChange(tool.uid, tab)" />
         <!-- 普通工具 -->

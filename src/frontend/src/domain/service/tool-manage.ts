@@ -208,7 +208,7 @@ export default  {
     return ToolManageSources.getReportLists(params).then(({ data }) => data);
   },
   /**
-   * @desc 获取平台工具输入变量候选选项（如 game_ids）
+   * @desc 获取工具输入变量候选选项（如 cc_ids）
    */
   fetchInputVariableCandidates(params: {
       uid: string,

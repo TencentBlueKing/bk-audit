@@ -413,6 +413,7 @@
               status: panel.status || 'unpublished',
               updatedBy: panel.updated_by || '--',
               updatedAt: panel.updated_at || '--',
+              default_value_overrides: panel.default_value_overrides,
             }))
             .filter((report: Report) => !shouldHidePlatformDisabledReport(report)) as Report[],
         }))
@@ -619,6 +620,7 @@
       description: report.description === '-' ? '' : report.description,
       status: report.status,
       enabled: report.status === 'published',
+      default_value_overrides: report.default_value_overrides,
     };
     currentGroupId.value = null;
     reportSidesliderVisible.value = true;
