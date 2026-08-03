@@ -333,7 +333,7 @@
   const getGameDetailTabName = () => {
     const query = route.query as Record<string, unknown>;
     return buildGameDetailTabLabel({
-      ctx: getFirstQueryValue(query.ctx),
+      ctx: getFirstQueryValue(query.wecom) || getFirstQueryValue(query.ctx),
       gameid: getFirstQueryValue(query.game_id),
       name: '',
     }, { resolving: true });

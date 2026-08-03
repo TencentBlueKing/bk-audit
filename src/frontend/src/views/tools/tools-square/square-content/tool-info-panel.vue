@@ -202,6 +202,7 @@
     buildGameDetailTabLabel,
     buildGameDetailUid,
     getFlatToolParamsFromRoute,
+    getRouteQueryValue,
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
@@ -746,9 +747,8 @@
       const detail = toolDetailMap.value[uid];
       if (!detail) return;
       if (detail.tool_type === 'smart_page') {
-        if (smartPageUrlParamsMap.value[uid]) {
-          syncToolParamsToRoute(uid);
-        }
+        // 始终同步路由，避免从游戏详情切回时残留 game_id / openid 等导致再次自动打开游戏详情
+        syncToolParamsToRoute(uid);
         return;
       }
       if (searchListMap.value[uid]?.length) {
@@ -1125,8 +1125,14 @@
       name: existing?.name && existing.name !== String(existing.gameid || '')
         ? existing.name
         : parsed.gameData.name,
+      // 内存中已有 ctx 时优先保留，避免刷新前顶栏信息被空值覆盖
+      ctx: parsed.gameData.ctx || existing?.ctx || '',
     };
-    gameDetailInitialTabMap.value[routeUid] = parsed.initialTab;
+    // 仅当 URL 显式带了 initial_tab，或本地尚未记录时才写入，避免丢失用户当前子 tab
+    const urlInitialTab = getRouteQueryValue((route.query as Record<string, unknown>).initial_tab);
+    if (urlInitialTab || !gameDetailInitialTabMap.value[routeUid]) {
+      gameDetailInitialTabMap.value[routeUid] = parsed.initialTab;
+    }
     gameDetailToolUidMap.value[routeUid] = parsed.toolUid;
     void resolveGameDetailNameIfNeeded(routeUid);
   };
