@@ -202,11 +202,17 @@ class TestSqlTemplateRenderer(SimpleTestCase):
         with self.assertRaises(SmartPageSqlTemplateRenderError):
             render_sql_template(sql, {"id": "1"})
 
-    def test_bind_should_render_empty_list_as_null_for_in_clause(self):
-        """空列表渲染为 NULL，使 IN (NULL) 返回空集，等效于限制无游戏"""
-        sql = "SELECT * FROM t WHERE id IN ({{ bind('ids', output_type='int') }})"
+    def test_bind_in_should_render_empty_list_as_null(self):
+        """bind_in 空列表渲染为 NULL，使 IN (NULL) 返回空集"""
+        sql = "SELECT * FROM t WHERE id IN ({{ bind_in('ids', output_type='int') }})"
         rendered = render_sql_template(sql, {"ids": []})
         self.assertEqual(normalize_sql(rendered), "SELECT * FROM t WHERE id IN (NULL)")
+
+    def test_bind_should_render_empty_list_as_empty_string(self):
+        """bind 空列表渲染为空字符串（通用，不承担 IN 空集语义）"""
+        sql = "SELECT * FROM t WHERE name LIKE '%{{ bind('kw') }}%'"
+        rendered = render_sql_template(sql, {"kw": []})
+        self.assertEqual(normalize_sql(rendered), "SELECT * FROM t WHERE name LIKE '%%'")
 
     def test_bind_should_quote_string_list_items_for_in_clause(self):
         sql = "SELECT * FROM t WHERE username IN ({{ bind('users') }})"
