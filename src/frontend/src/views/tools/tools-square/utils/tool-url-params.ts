@@ -222,15 +222,15 @@ export const mergeToolRouteQuery = (
     accountId?: string;
     gameId?: string;
   } = {},
-): Record<string, string> => {
+): Record<string, string> =>
   // 不从当前 route 自动继承 game_id。
   // 从游戏详情切回智能页时若继承 game_id，会再次触发自动打开游戏详情，
   // 且因丢失 initial_tab 而错误落到概览。
-  return {
+  ({
     ...getRouteScopeQuery(routeQuery),
     ...buildToolExecutionRouteQuery(toolType, options),
-  };
-};
+  })
+;
 
 type SearchListField = {
   value: unknown;
