@@ -56,7 +56,18 @@
                 v-for="param in inputVariableList"
                 :id="param.raw_name"
                 :key="param.raw_name"
-                :name="getParamOptionLabel(param)" />
+                :name="getParamOptionLabel(param)">
+                <span
+                  v-bk-tooltips="getOverflowTips(
+                    getParamOptionLabel(param),
+                    `param-option-${param.raw_name}`,
+                    'right',
+                  )"
+                  class="select-option-overflow"
+                  @mouseenter="(e: MouseEvent) => checkTextOverflow(`param-option-${param.raw_name}`, e)">
+                  {{ getParamOptionLabel(param) }}
+                </span>
+              </bk-option>
             </bk-select>
           </div>
         </div>
@@ -85,16 +96,33 @@
             :key="row.raw_name"
             class="field-row">
             <div class="field-value col-name">
-              <span class="param-name-text">{{ getParamName(row) }}</span>
+              <span
+                v-bk-tooltips="getOverflowTips(
+                  getParamName(row),
+                  `param-name-${item.key}-${row.raw_name}`,
+                )"
+                class="param-name-text"
+                @mouseenter="(e: MouseEvent) => checkTextOverflow(`param-name-${item.key}-${row.raw_name}`, e)">
+                {{ getParamName(row) }}
+              </span>
             </div>
             <div
               v-if="showDisplayName"
               class="field-value col-display">
-              <span class="param-name-text">{{ getParamDisplayName(row) }}</span>
+              <span
+                v-bk-tooltips="getOverflowTips(
+                  getParamDisplayName(row),
+                  `param-display-${item.key}-${row.raw_name}`,
+                )"
+                class="param-name-text"
+                @mouseenter="(e: MouseEvent) => checkTextOverflow(`param-display-${item.key}-${row.raw_name}`, e)">
+                {{ getParamDisplayName(row) }}
+              </span>
             </div>
             <div class="field-value col-default">
               <bk-select
                 v-if="isMultiSelectVar(row.raw_name)"
+                :auto-height="false"
                 class="override-default-multiselect"
                 collapse-tags
                 filterable
@@ -102,14 +130,27 @@
                 :model-value="getOverrideValue(item, row.raw_name)"
                 multiple
                 multiple-mode="tag"
-                :placeholder="t('请选择')"
-                :search-placeholder="t('请输入关键字')"
-                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)">
+                :placeholder="t('请选择，可粘贴名称/ID批量勾选')"
+                :search-placeholder="t('请输入关键字，支持粘贴 Excel 批量勾选')"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)"
+                @search-change="(val: string) => handleDefaultSearchChange(item, row.raw_name, val)"
+                @toggle="(open: boolean) => handleDefaultSelectToggle(open, item, row.raw_name)">
                 <bk-option
                   v-for="choice in getMultiSelectChoices(row.raw_name)"
                   :id="choice.key"
                   :key="choice.key"
-                  :name="choice.name" />
+                  :name="choice.name">
+                  <span
+                    v-bk-tooltips="getOverflowTips(
+                      choice.name,
+                      `choice-${row.raw_name}-${choice.key}`,
+                      'right',
+                    )"
+                    class="select-option-overflow"
+                    @mouseenter="(e: MouseEvent) => checkTextOverflow(`choice-${row.raw_name}-${choice.key}`, e)">
+                    {{ choice.name }}
+                  </span>
+                </bk-option>
               </bk-select>
               <bk-input
                 v-else
@@ -133,12 +174,17 @@
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
+    onBeforeUnmount,
+    reactive,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
+
+  import useMessage from '@hooks/use-message';
 
   import type { SceneParamOverride, FormData } from '../types';
 
@@ -196,15 +242,17 @@
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
   }>();
 
-  /** 无 display_name 时的硬编码展示名映射 */
+  /** 无 display_name 时的硬编码展示名映射（Story 允许临时字典） */
   const PARAM_DISPLAY_NAME_MAP: Record<string, string> = {
+    cc_ids: '业务列表',
     game_ids: '游戏列表',
   };
 
-  /** 需通过候选接口拉取选项的参数 */
-  const CANDIDATE_API_RAW_NAMES = new Set(['game_ids']);
+  /** 需通过候选接口拉取选项的参数（与工具详情 input_variable.raw_name 对齐） */
+  const CANDIDATE_API_RAW_NAMES = new Set(['cc_ids', 'game_ids']);
 
   const { t } = useI18n();
+  const { messageSuccess, messageWarn } = useMessage();
 
   const inputVariableList = computed(() => props.inputVariables || []);
 
@@ -247,6 +295,29 @@
     if (!displayName || displayName === '--') return name;
     return `${name}(${displayName})`;
   };
+
+  /** 仅文本溢出时展示 tips；delay 配合 mouseenter 量宽，避免首次 hover 读到旧 disabled */
+  const textOverflowMap = reactive<Record<string, boolean>>({});
+
+  const isTextOverflow = (key: string) => !!textOverflowMap[key];
+
+  const checkTextOverflow = (key: string, e: MouseEvent) => {
+    const el = e.currentTarget as HTMLElement | null;
+    if (!el) return;
+    textOverflowMap[key] = el.scrollWidth > el.clientWidth + 1;
+  };
+
+  const getOverflowTips = (
+    content: string,
+    key: string,
+    placement: 'top' | 'right' = 'top',
+  ) => ({
+    content,
+    placement,
+    theme: 'dark' as const,
+    delay: 200,
+    disabled: !isTextOverflow(key),
+  });
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
   const configList = computed<ConfigItem[]>(() => {
@@ -307,8 +378,8 @@
 
   const isCandidatesLoading = (rawName: string) => !!candidatesLoadingMap.value[rawName];
 
-  /** 格式：游戏名称(gameid)，便于名称/ID 搜索与回显 */
-  const formatGameChoiceName = (name: string, id: number | string) => `${name}(${id})`;
+  /** 格式：名称(id)，便于名称/ID 搜索与回显（如 业务A(100)、游戏名称(gameid)） */
+  const formatCandidateChoiceName = (name: string, id: number | string) => `${name}(${id})`;
 
   const getMultiSelectChoices = (rawName: string): CandidateChoice[] => {
     if (candidatesMap.value[rawName]?.length) {
@@ -343,8 +414,8 @@
     return [String(val)];
   };
 
-  /** game_ids 提交值为数字数组；下拉展示用字符串 id 匹配 option */
-  const normalizeGameIdsValue = (val: unknown): number[] => {
+  /** 候选多选提交值为数字数组；下拉展示用字符串 id 匹配 option */
+  const normalizeCandidateIdsValue = (val: unknown): number[] => {
     const list = normalizeMultiSelectValue(val);
     return list
       .map((item) => {
@@ -360,7 +431,7 @@
       return isMultiSelectVar(rawName) ? [] : '';
     }
     // 下拉 option.id 为字符串，回显也统一转成字符串
-    if (rawName === 'game_ids') return normalizeGameIdsValue(raw).map(String);
+    if (CANDIDATE_API_RAW_NAMES.has(rawName)) return normalizeCandidateIdsValue(raw).map(String);
     if (isMultiSelectVar(rawName)) return normalizeMultiSelectValue(raw);
     return raw;
   };
@@ -379,6 +450,20 @@
     return param.default_value ?? '';
   };
 
+  const applyCandidateList = (
+    rawName: string,
+    list: Array<{ id: number | string; name: string }>,
+  ) => {
+    candidatesMap.value = {
+      ...candidatesMap.value,
+      [rawName]: list.map(item => ({
+        key: String(item.id),
+        name: formatCandidateChoiceName(item.name, item.id),
+      })),
+    };
+    candidatesFetchedSet.value = new Set([...candidatesFetchedSet.value, rawName]);
+  };
+
   const fetchCandidates = async (rawName: string) => {
     if (!props.toolUid || !CANDIDATE_API_RAW_NAMES.has(rawName)) return;
     if (candidatesFetchedSet.value.has(rawName) || candidatesLoadingMap.value[rawName]) return;
@@ -392,19 +477,9 @@
         uid: props.toolUid,
         raw_name: rawName,
       });
-      candidatesMap.value = {
-        ...candidatesMap.value,
-        [rawName]: (list || []).map(item => ({
-          key: String(item.id),
-          name: formatGameChoiceName(item.name, item.id),
-        })),
-      };
-      candidatesFetchedSet.value = new Set([...candidatesFetchedSet.value, rawName]);
+      applyCandidateList(rawName, list || []);
     } catch {
-      candidatesMap.value = {
-        ...candidatesMap.value,
-        [rawName]: [],
-      };
+      applyCandidateList(rawName, []);
     } finally {
       candidatesLoadingMap.value = {
         ...candidatesLoadingMap.value,
@@ -464,14 +539,170 @@
   // 默认值输入变更
   const handleDefaultValueChange = (item: ConfigItem, rawName: string, value: any) => {
     /* eslint-disable no-param-reassign */
-    if (rawName === 'game_ids') {
-      item.default_values[rawName] = normalizeGameIdsValue(value);
+    if (CANDIDATE_API_RAW_NAMES.has(rawName)) {
+      item.default_values[rawName] = normalizeCandidateIdsValue(value);
     } else {
       item.default_values[rawName] = value;
     }
     /* eslint-enable no-param-reassign */
     emitChange();
   };
+
+  /**
+   * 解析 Excel 粘贴文本：按换行/制表符/逗号拆分名称或 ID
+   */
+  const parsePasteTokens = (text: string): string[] => {
+    const tokens = text
+      .split(/[\r\n\t,，;；]+/)
+      .map(item => item.trim())
+      .filter(Boolean);
+    return [...new Set(tokens)];
+  };
+
+  /** 是否按批量粘贴处理（Excel 多行/多列，或多项分隔） */
+  const isBatchPasteText = (text: string, tokens: string[]) => (
+    /[\r\n\t]/.test(text) || tokens.length > 1
+  );
+
+  /**
+   * 用粘贴 token 匹配候选项：支持 id、名称、名称(id)
+   */
+  const matchChoicesByTokens = (choices: CandidateChoice[], tokens: string[]) => {
+    const matchedKeys = new Set<string>();
+    const unmatched: string[] = [];
+
+    tokens.forEach((token) => {
+      const lower = token.toLowerCase();
+      const parenMatch = token.match(/^(.*)\(([^)]+)\)$/);
+      const found = choices.find((choice) => {
+        if (choice.key === token || choice.key.toLowerCase() === lower) return true;
+        if (choice.name === token || choice.name.toLowerCase() === lower) return true;
+        const nameOnly = choice.name.replace(/\([^)]*\)$/, '').trim();
+        if (nameOnly === token || nameOnly.toLowerCase() === lower) return true;
+        if (parenMatch) {
+          const [, namePart, idPart] = parenMatch;
+          if (choice.key === idPart || choice.key.toLowerCase() === idPart.toLowerCase()) return true;
+          if (nameOnly === namePart.trim() || nameOnly.toLowerCase() === namePart.trim().toLowerCase()) return true;
+        }
+        if (choice.name.endsWith(`(${token})`)) return true;
+        return false;
+      });
+
+      if (found) {
+        matchedKeys.add(found.key);
+      } else {
+        unmatched.push(token);
+      }
+    });
+
+    return {
+      matched: [...matchedKeys],
+      unmatched,
+    };
+  };
+
+  const clearDefaultSelectSearch = () => {
+    const input = document.querySelector('.bk-select-popover .bk-select-search-input') as HTMLInputElement | null;
+    if (!input) return;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  /** 批量匹配并勾选；成功处理返回 true */
+  let lastBatchKey = '';
+  let lastBatchAt = 0;
+  const applyBatchSelectByText = (item: ConfigItem, rawName: string, text: string) => {
+    const normalized = String(text || '').trim();
+    if (!normalized) return false;
+
+    const tokens = parsePasteTokens(normalized);
+    if (!isBatchPasteText(normalized, tokens) || tokens.length === 0) return false;
+
+    // 粘贴与 search-change 可能连续触发，短时间去重
+    const batchKey = `${item.key}::${rawName}::${normalized}`;
+    const now = Date.now();
+    if (batchKey === lastBatchKey && now - lastBatchAt < 800) return true;
+    lastBatchKey = batchKey;
+    lastBatchAt = now;
+
+    const choices = getMultiSelectChoices(rawName);
+    const { matched, unmatched } = matchChoicesByTokens(choices, tokens);
+    if (matched.length > 0) {
+      const current = normalizeMultiSelectValue(getOverrideValue(item, rawName));
+      const merged = [...new Set([...current, ...matched])];
+      handleDefaultValueChange(item, rawName, merged);
+      messageSuccess(t('已批量勾选 {n} 项', { n: matched.length }));
+    }
+    if (unmatched.length > 0) {
+      const preview = unmatched.slice(0, 5).join('、');
+      const suffix = unmatched.length > 5 ? '...' : '';
+      messageWarn(t('未匹配 {n} 项：{list}', {
+        n: unmatched.length,
+        list: `${preview}${suffix}`,
+      }));
+    } else if (matched.length === 0) {
+      messageWarn(t('未匹配到可勾选的选项'));
+    }
+    return true;
+  };
+
+  // 粘贴进搜索框后，bk-select 可能先写入搜索词；用 search-change 兜底批量勾选
+  const applyingBatchSelect = ref(false);
+  const handleDefaultSearchChange = (item: ConfigItem, rawName: string, val: string) => {
+    if (applyingBatchSelect.value) return;
+    if (!applyBatchSelectByText(item, rawName, val)) return;
+
+    applyingBatchSelect.value = true;
+    nextTick(() => {
+      clearDefaultSelectSearch();
+      applyingBatchSelect.value = false;
+    });
+  };
+
+  /** 打开下拉时在 document 捕获粘贴，避免只绑到会被重建的 input */
+  let activePasteTarget: { item: ConfigItem; rawName: string } | null = null;
+  let defaultSelectPasteCleanup: (() => void) | null = null;
+
+  const handleDocumentPaste = (event: ClipboardEvent) => {
+    if (!activePasteTarget) return;
+    const target = event.target as HTMLElement | null;
+    const isSelectSearch = !!target?.closest?.('.bk-select-popover')
+      && (
+        target.classList?.contains('bk-select-search-input')
+        || !!target.closest?.('.bk-select-search-wrapper')
+      );
+    if (!isSelectSearch) return;
+
+    const text = event.clipboardData?.getData('text/plain') || '';
+    if (!applyBatchSelectByText(activePasteTarget.item, activePasteTarget.rawName, text)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    nextTick(() => clearDefaultSelectSearch());
+  };
+
+  const handleDefaultSelectToggle = (
+    open: boolean,
+    item: ConfigItem,
+    rawName: string,
+  ) => {
+    defaultSelectPasteCleanup?.();
+    defaultSelectPasteCleanup = null;
+    activePasteTarget = null;
+    if (!open) return;
+
+    activePasteTarget = { item, rawName };
+    document.addEventListener('paste', handleDocumentPaste, true);
+    defaultSelectPasteCleanup = () => {
+      document.removeEventListener('paste', handleDocumentPaste, true);
+    };
+  };
+
+  onBeforeUnmount(() => {
+    defaultSelectPasteCleanup?.();
+    defaultSelectPasteCleanup = null;
+    activePasteTarget = null;
+  });
 
   // 向外发出变更事件（仅用户主动操作时触发，避免无限递归）
   const emitChange = () => {
@@ -492,7 +723,9 @@
 <style lang="postcss" scoped>
   .scene-param-config {
     --param-action-col-width: 50px;
-    --param-data-col-width: calc((100% - var(--param-action-col-width)) / 3);
+    /* 参数名/显示名偏短，收窄以腾出默认值列宽，减少下拉选项截断 */
+    --param-name-col-width: 18%;
+    --param-display-col-width: 18%;
 
     margin-top: 16px;
   }
@@ -542,8 +775,8 @@
 
     /* 与下方表格参数名列同宽 */
     .form-control {
-      width: 33.33%;
-      max-width: 33.33%;
+      width: var(--param-name-col-width);
+      max-width: var(--param-name-col-width);
     }
 
     &.is-full-width .form-control {
@@ -607,37 +840,68 @@
     }
   }
 
-  /* 默认值多选：用于如 game_ids 的 multiselect 覆盖 */
+  /* 默认值多选：固定单行 + collapse-tags，溢出以 +n 展示（hover 看全部） */
   :deep(.override-default-multiselect) {
     width: 100%;
+    height: 100%;
 
     .bk-select-trigger {
       width: 100%;
+      height: 100%;
     }
 
     .bk-select-tag {
       width: 100%;
-      min-height: 32px;
+      height: 42px;
+      min-height: 42px;
+      max-height: 42px;
+      padding-right: 20px;
       background-color: #fff;
       border: none;
       border-radius: 0;
       box-sizing: border-box;
     }
 
+    .bk-select-tag.collapse-tag .bk-select-tag-wrapper {
+      height: 34px;
+    }
+
     .bk-select-tag-wrapper {
-      flex-wrap: wrap;
       gap: 4px;
       overflow: hidden;
     }
 
     .bk-tag {
       flex-shrink: 0;
+      max-width: 140px;
       margin: 0;
       color: #63656e;
       background-color: #f0f1f5;
       border: 1px solid #dcdee5;
       border-radius: 2px;
     }
+
+    .bk-select-overflow-tag {
+      flex-shrink: 0;
+      margin: 0;
+      color: #63656e;
+      cursor: pointer;
+      background-color: #f0f1f5;
+      border: 1px solid #dcdee5;
+      border-radius: 2px;
+    }
+  }
+
+  /* 下拉选项超出时 hover tips */
+  :deep(.select-option-overflow),
+  .select-option-overflow {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .render-field {
@@ -652,8 +916,20 @@
     display: flex;
   }
 
-  .col-name,
-  .col-display,
+  .col-name {
+    flex: 0 0 var(--param-name-col-width);
+    width: var(--param-name-col-width);
+    max-width: var(--param-name-col-width);
+    min-width: 0;
+  }
+
+  .col-display {
+    flex: 0 0 var(--param-display-col-width);
+    width: var(--param-display-col-width);
+    max-width: var(--param-display-col-width);
+    min-width: 0;
+  }
+
   .col-default {
     flex: 1 1 0;
     min-width: 0;
@@ -749,13 +1025,17 @@
 
   :deep(.field-value) {
     .param-name-text {
+      display: block;
       width: 100%;
+      max-width: 100%;
       padding: 0 8px;
       overflow: hidden;
       font-size: 12px;
+      line-height: 20px;
       color: #4d4f56;
       text-overflow: ellipsis;
       white-space: nowrap;
+      box-sizing: border-box;
     }
 
     .bk-input {

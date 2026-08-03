@@ -60,6 +60,7 @@ export default  {
     category: string,
     status?: 'published' | 'unpublished',
     description?: string,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
@@ -72,10 +73,12 @@ export default  {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
+    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);

@@ -93,6 +93,18 @@
               @change="handleNameChange" />
           </bk-form-item>
 
+          <bk-loading
+            v-if="paramConfigLoading"
+            class="param-config-loading"
+            loading
+            size="small">
+            <div class="param-config-loading-placeholder" />
+          </bk-loading>
+          <report-param-config
+            v-else-if="showParamConfig"
+            v-model="inputVariables"
+            :report-lists-panels="reportListsPanels" />
+
           <!-- 所属分组 -->
           <bk-form-item
             :label="t('所属分组')"
@@ -176,10 +188,16 @@
   import ToolManageService from '@service/tool-manage';
 
   import ConfigModel from '@model/root/config';
+  import type {
+    PanelDefaultValueOverrides,
+  } from '@model/report-config/panel';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import ReportParamConfig, {
+    type ReportInputVariable,
+  } from './report-param-config.vue';
 
   export interface ReportGroup {
     id: number;
@@ -194,6 +212,7 @@
     description: string;
     status?: 'published' | 'unpublished';
     enabled: boolean;
+    default_value_overrides?: PanelDefaultValueOverrides;
   }
 
   interface ChartListModel {
@@ -258,6 +277,157 @@
     enabled: false,
   });
 
+  const currentScope = computed(() => getSceneSystemParams());
+  const inputVariables = ref<ReportInputVariable[]>([]);
+  const reportListsPanels = ref<Array<Record<string, any>>>([]);
+  const paramConfigLoading = ref(false);
+  let paramConfigLoadSeq = 0;
+
+  const runParamConfigLoad = async (task: () => Promise<void>) => {
+    paramConfigLoadSeq += 1;
+    const seq = paramConfigLoadSeq;
+    paramConfigLoading.value = true;
+    try {
+      await task();
+    } finally {
+      if (seq === paramConfigLoadSeq) {
+        paramConfigLoading.value = false;
+      }
+    }
+  };
+
+  const buildInputVariablesFromShareDetail = (res: any): ReportInputVariable[] => {
+    if (!res?.data) return [];
+
+    const panels = Array.isArray(res.data.panels) ? res.data.panels : [];
+    const variables = Array.isArray(res.data.variables) ? res.data.variables : [];
+    const filters = res.filters || {};
+    const constants = res.constants || {};
+    const filterUids = [...new Set(Object.keys(filters))];
+
+    const getInputVariableConfig = (
+      isVariables: boolean,
+      com: any,
+      defaultValue?: string | Array<string>,
+    ): ReportInputVariable => ({
+      raw_name: (isVariables ? com?.flag : com?.chartConfig?.flag) || '',
+      display_name: (isVariables ? com?.description : com.title) || '',
+      description: com.uid || '',
+      field_category: isVariables ? 'variable' : (com.type || ''),
+      required: true,
+      is_default_value: false,
+      raw_default_value: defaultValue || '',
+      default_value: defaultValue || '',
+      choices: [],
+    });
+
+    const result: ReportInputVariable[] = [];
+    const usedKeys = new Set<string>();
+
+    filterUids.forEach((uid) => {
+      const com = panels.find((item: any) => item.uid === uid);
+      if (!com) return;
+      const inputItem = getInputVariableConfig(false, com, filters[com.uid]);
+      if (!inputItem.raw_name || usedKeys.has(inputItem.raw_name)) return;
+      usedKeys.add(inputItem.raw_name);
+      result.push(inputItem);
+    });
+
+    variables.forEach((item: any) => {
+      if (item.build_in) return;
+      const defaultValue = constants[item.flag] ?? '';
+      const inputItem = getInputVariableConfig(true, item, defaultValue);
+      if (!inputItem.raw_name || usedKeys.has(inputItem.raw_name)) return;
+      usedKeys.add(inputItem.raw_name);
+      result.push(inputItem);
+    });
+
+    if (variables.length === 0) {
+      Object.entries(constants).forEach(([flag, defaultValue]) => {
+        if (!flag || usedKeys.has(flag) || flag.startsWith('bkv_')) return;
+        usedKeys.add(flag);
+        result.push({
+          raw_name: flag,
+          display_name: flag,
+          description: '',
+          field_category: 'variable',
+          required: true,
+          is_default_value: false,
+          raw_default_value: (defaultValue as any) ?? '',
+          default_value: (defaultValue as any) ?? '',
+          choices: [],
+        });
+      });
+    }
+
+    return result;
+  };
+
+  /** 将 BKVision 参数配置转为当前 scope 的 default_value_overrides */
+  const buildDefaultValueOverridesFromVariables = (variables: ReportInputVariable[]): PanelDefaultValueOverrides => {
+    const paramValues: Record<string, any> = {};
+    variables.forEach((item) => {
+      if (item.is_default_value || !item.raw_name) return;
+      const value = item.default_value;
+      if (value === undefined || value === null || value === '') return;
+      if (Array.isArray(value) && value.length === 0) return;
+      paramValues[item.raw_name] = value;
+    });
+
+    const scopeType = currentScope.value.scope_type;
+    const scopeId = currentScope.value.scope_id;
+    if (!scopeId || !(scopeType === 'scene' || scopeType === 'system')) {
+      return { scenes: {}, systems: {} };
+    }
+
+    if (!Object.keys(paramValues).length) {
+      return { scenes: {}, systems: {} };
+    }
+
+    return scopeType === 'scene'
+      ? { scenes: { [String(scopeId)]: paramValues }, systems: {} }
+      : { scenes: {}, systems: { [String(scopeId)]: paramValues } };
+  };
+
+  /** 用已保存的覆盖值回填到 BKVision 参数（有覆盖 → 自定义；无覆盖 → 使用默认值） */
+  const applyOverrideToVariables = (
+    variables: ReportInputVariable[],
+    overrideMap: Record<string, any> = {},
+  ): ReportInputVariable[] => variables.map((item) => {
+    if (item.raw_name in overrideMap) {
+      return {
+        ...item,
+        is_default_value: false,
+        default_value: overrideMap[item.raw_name],
+      };
+    }
+    return {
+      ...item,
+      is_default_value: true,
+      default_value: item.raw_default_value || '',
+    };
+  });
+
+  const loadShareDetailVariables = async (shareUid: string) => {
+    if (!shareUid) {
+      inputVariables.value = [];
+      reportListsPanels.value = [];
+      return;
+    }
+    try {
+      const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
+      reportListsPanels.value = Array.isArray(res?.data?.panels) ? res.data.panels : [];
+      inputVariables.value = buildInputVariablesFromShareDetail(res);
+    } catch (e) {
+      console.error('获取报表参数列表失败:', e);
+      inputVariables.value = [];
+      reportListsPanels.value = [];
+    }
+  };
+
+  const showParamConfig = computed(() => !paramConfigLoading.value
+    && inputVariables.value.length > 0);
+
   // 新建模式，重置表单
   const formRules = {
     bkvisionReport: [
@@ -289,6 +459,39 @@
     formRef.value?.validate('groupId');
   };
 
+  const loadEditParamOverrides = async (data: ReportFormData) => {
+    if (!data.id || inputVariables.value.length === 0) {
+      return;
+    }
+
+    const scopeType = currentScope.value.scope_type;
+    const scopeId = currentScope.value.scope_id;
+    if (!(scopeType === 'scene' || scopeType === 'system') || !scopeId) {
+      return;
+    }
+
+    let overrideMap: Record<string, any> = {};
+    const listOverrides = data.default_value_overrides;
+    if (listOverrides) {
+      overrideMap = scopeType === 'scene'
+        ? (listOverrides.scenes?.[String(scopeId)] || {})
+        : (listOverrides.systems?.[String(scopeId)] || {});
+    } else {
+      try {
+        const detail = await ReportConfigService.fetchPanelDetail({
+          panel_id: data.id,
+          scope_type: scopeType,
+          scope_id: String(scopeId),
+        });
+        overrideMap = detail?.default_value_override || {};
+      } catch (e) {
+        console.error('获取场景报表参数覆盖配置失败:', e);
+      }
+    }
+
+    inputVariables.value = applyOverrideToVariables(inputVariables.value, overrideMap);
+  };
+
   // 新建分组
   const handleCreateGroup = () => {
     emit('create-group');
@@ -303,6 +506,7 @@
       description: data.description || '--',
       status: data.status || 'unpublished',
       enabled: (data.status ?? 'unpublished') === 'published',
+      default_value_overrides: data.default_value_overrides,
     };
   };
 
@@ -322,16 +526,25 @@
       description: '',
       enabled: false,
     };
+    inputVariables.value = [];
+    reportListsPanels.value = [];
   };
 
   // 监听显示状态，重置/填充表单
-  watch(() => props.isShow, (val) => {
+  watch(() => props.isShow, async (val) => {
     if (val) {
-      if (props.editData) {
-        fillEditFormData(props.editData);
-      } else {
-        resetCreateFormData();
-      }
+      const bootstrap = async () => {
+        if (props.editData) {
+          fillEditFormData(props.editData);
+          if (formData.value.bkvisionReport) {
+            await loadShareDetailVariables(formData.value.bkvisionReport);
+          }
+          await loadEditParamOverrides(props.editData);
+        } else {
+          resetCreateFormData();
+        }
+      };
+      await runParamConfigLoad(bootstrap);
       // 打开时清除校验状态，避免立即显示错误提示
       nextTick(() => {
         formRef.value?.clearValidate();
@@ -340,15 +553,29 @@
           formRef.value?.clearValidate();
         }, 100);
       });
+    } else {
+      paramConfigLoadSeq += 1;
+      paramConfigLoading.value = false;
     }
   });
 
   // 监听 editData 变化（双重保障，解决 isShow 与 editData 更新时序竞态问题）
-  watch(() => props.editData, (data) => {
+  watch(() => props.editData, async (data) => {
     if (props.isShow && data) {
-      fillEditFormData(data);
+      await runParamConfigLoad(async () => {
+        fillEditFormData(data);
+        if (data.bkvisionReport) {
+          await loadShareDetailVariables(data.bkvisionReport);
+        } else {
+          inputVariables.value = [];
+          reportListsPanels.value = [];
+        }
+        await loadEditParamOverrides(data);
+      });
     } else if (props.isShow && !data) {
       resetCreateFormData();
+      paramConfigLoadSeq += 1;
+      paramConfigLoading.value = false;
     }
   });
 
@@ -363,7 +590,7 @@
   // bkvisionReport 直接存储 uid，无需额外处理
 
   // 报表选择变化处理
-  const handleReportChange = (value: string) => {
+  const handleReportChange = async (value: string) => {
     if (value) {
       formData.value.bkvisionReport = value;
       // 从 chartLists 中查找报表名称并自动填充
@@ -376,9 +603,16 @@
           }
         }
       }
+      await runParamConfigLoad(async () => {
+        await loadShareDetailVariables(value);
+      });
     } else {
       formData.value.bkvisionReport = '';
       formData.value.name = '';
+      inputVariables.value = [];
+      reportListsPanels.value = [];
+      paramConfigLoadSeq += 1;
+      paramConfigLoading.value = false;
     }
     formRef.value?.validate('bkvisionReport');
     formRef.value?.validate('name');
@@ -489,6 +723,7 @@
       const groupId = selectedGroup?.id || '';
       // 直接使用 bkvisionReport 作为 vision_id
       const visionId = formData.value.bkvisionReport;
+      const defaultValueOverrides = buildDefaultValueOverridesFromVariables(inputVariables.value);
 
       if (isEditMode.value && formData.value.id) {
         // 编辑模式，调用 updatePanel API
@@ -501,6 +736,7 @@
           name: formData.value.name,
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || undefined,
+          default_value_overrides: defaultValueOverrides,
         });
       } else {
         // 创建模式，调用 createPanel API
@@ -511,6 +747,7 @@
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description,
           scene_id: getSceneSystemParams().scope_id,
+          default_value_overrides: defaultValueOverrides,
         });
       }
     });
@@ -628,5 +865,14 @@
   :deep(.bk-form-label) {
     font-size: 12px;
   }
+}
+
+.param-config-loading {
+  min-height: 120px;
+  margin-bottom: 24px;
+}
+
+.param-config-loading-placeholder {
+  min-height: 120px;
 }
 </style>

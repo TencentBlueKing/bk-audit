@@ -497,6 +497,27 @@
   const isUserInfoEmpty = computed(() => !userInfo.value.wecom
     && !userInfo.value.username);
 
+  /**
+   * 从工具详情 input_variable 读取场景/系统合并后的数据范围默认值（如 cc_ids）。
+   * 未覆盖或空数组时不传，后端按全量数据返回。
+   */
+  const getDataRangeParams = (): Record<string, number[]> => {
+    const inputVars = props.toolConfig?.input_variable;
+    if (!Array.isArray(inputVars)) return {};
+    const scopeRawNames = ['cc_ids', 'game_ids'];
+    for (const rawName of scopeRawNames) {
+      const target = inputVars.find((item: { raw_name?: string }) => item.raw_name === rawName);
+      if (!target) continue;
+      const value = (target as { default_value?: unknown }).default_value;
+      if (!Array.isArray(value) || value.length === 0) continue;
+      const ids = value
+        .map((item: unknown) => Number(item))
+        .filter((item: number) => Number.isFinite(item));
+      if (ids.length) return { [rawName]: ids };
+    }
+    return {};
+  };
+
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
     loading: userInfoLoading,
@@ -563,6 +584,7 @@
       params: {
         data_source_name: 'main_auditrisk_stat',
         params: {
+          ...getDataRangeParams(),
           one_year_ago_Ymd: getOneYearAgoYmd(),
           username,
         },
@@ -669,6 +691,7 @@
       params: {
         data_source_name: 'main_qqwechat_list',
         params: {
+          ...getDataRangeParams(),
           one_day_ago_Ymd: getOneDayAgoYmd(),
           username,
         },
@@ -778,20 +801,24 @@
       params: {
         data_source_name: 'main_user_info',
         params: {
+          ...getDataRangeParams(),
           username: ctx,
         },
       },
     });
   };
 
-  // 执行数据源查询
+  // 执行数据源查询（透传详情合并后的数据范围默认值，如 cc_ids）
   const executeDataSource = (dataSourceName: string, params: Record<string, any>, runner: typeof fetchUserInfo) => {
     if (!props.toolUid) return;
     runner({
       uid: props.toolUid,
       params: {
         data_source_name: dataSourceName,
-        params,
+        params: {
+          ...getDataRangeParams(),
+          ...params,
+        },
       },
     });
   };

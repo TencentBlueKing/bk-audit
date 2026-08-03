@@ -212,6 +212,7 @@
     resetFormData(visibility || detail.visibility);
 
     toolConfigSnapshot.value = _.cloneDeep(detail.config || {});
+    formData.tool_type = detail.tool_type || '';
     formData.config.input_variable = detail.config?.input_variable || [];
     formData.scene_param_overrides = parseDefaultValueOverrides(
       detail.config?.default_value_overrides,
@@ -290,18 +291,19 @@
   const selectedSceneItems = computed(() => {
     if (!formData.scene_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_scenes') return [];
-    const sceneMap = new Map(allSceneList.value.map(scene => [scene.id, scene]));
+    // 兼容 scene_id 数字/字符串不一致导致选中场景无法映射、覆盖表单区块为空
+    const sceneMap = new Map(allSceneList.value.map(scene => [String(scene.id), scene]));
     return formData.scene_ids
-      .map(sceneId => sceneMap.get(sceneId))
+      .map(sceneId => sceneMap.get(String(sceneId)))
       .filter((scene): scene is { id: number; name: string } => Boolean(scene));
   });
 
   const selectedSystemItems = computed(() => {
     if (!formData.system_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_systems') return [];
-    const systemMap = new Map(allSystemList.value.map(system => [system.id, system]));
+    const systemMap = new Map(allSystemList.value.map(system => [String(system.id), system]));
     return formData.system_ids
-      .map(systemId => systemMap.get(systemId))
+      .map(systemId => systemMap.get(String(systemId)))
       .filter((system): system is { id: string; name: string } => Boolean(system));
   });
 

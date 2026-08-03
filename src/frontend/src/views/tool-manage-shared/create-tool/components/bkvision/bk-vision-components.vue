@@ -105,12 +105,16 @@
       }>
     };
     disabled: boolean;
+    /** InfoBox 额外 class（侧滑内需抬高层级时传入） */
+    infoBoxClass?: string;
   }
   interface Emits {
     (e: 'change', value: any): void
     (e: 'changeIsDefaultValue', value: boolean): void
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    infoBoxClass: '',
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const now = new Date();
@@ -184,6 +188,7 @@
   const handleDefaultValueToggle = (checked: boolean | string | number) => {
     if (checked === true) {
       InfoBox({
+        class: props.infoBoxClass || undefined,
         title: t('提示'),
         closeIcon: false,
         content: t('当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示'),
