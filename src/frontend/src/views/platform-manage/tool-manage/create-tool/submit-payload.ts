@@ -26,7 +26,7 @@ export function buildDefaultValueOverrides(overrides?: Record<string, SceneParam
     const paramValues: Record<string, any> = {};
     item.override_param_keys.forEach((key) => {
       const value = item.param_default_values?.[key];
-      // 空数组视为未覆盖（不限制数据范围）
+      // 空数组视为未覆盖（不限制数据范围）；正常路径由前端必填校验拦截空默认值
       if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
         return;
       }

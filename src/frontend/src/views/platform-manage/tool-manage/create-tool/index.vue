@@ -123,6 +123,7 @@
               <!-- 各场景/系统参数配置：未选可见范围、全部可见、全部场景、全部系统时不展示 -->
               <scene-param-config
                 v-if="showParamOverrideConfig"
+                ref="sceneParamConfigRef"
                 :form-data="formData"
                 :input-variables="formData.config.input_variable"
                 :selected-scenes="selectedSceneItems"
@@ -248,6 +249,8 @@
   const formRef = ref();
   const comRef = ref();
   const toolTypeSectionRef = ref();
+  // eslint-disable-next-line func-call-spacing
+  const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
 
   const { messageWarn } = useMessage();
   const loading = ref(false);
@@ -626,8 +629,12 @@
 
   // 提交
   const handleSubmit = async () => {
-    // 步骤2：formRef/comRef 已卸载，直接提交 formData
+    // 步骤2：formRef/comRef 已卸载，校验覆盖参数后提交 formData
     if (currentStep.value === 2) {
+      if (showParamOverrideConfig.value && sceneParamConfigRef.value
+        && !sceneParamConfigRef.value.validate()) {
+        return;
+      }
       doSubmit();
       return;
     }

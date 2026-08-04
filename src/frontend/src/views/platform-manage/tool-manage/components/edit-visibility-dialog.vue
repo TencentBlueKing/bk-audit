@@ -45,6 +45,7 @@
 
           <scene-param-config
             v-if="showParamOverrideConfig"
+            ref="sceneParamConfigRef"
             :form-data="formData"
             :input-variables="formData.config.input_variable"
             override-select-full-width
@@ -150,6 +151,8 @@
   const { messageSuccess } = useMessage();
 
   const isShow = defineModel<boolean>('isShow', { default: false });
+  // eslint-disable-next-line func-call-spacing
+  const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
 
   const tagNameMap = computed(() => {
     const map: Record<string, string> = {};
@@ -338,6 +341,11 @@
 
   const handleConfirm = () => {
     if (!props.target?.uid || !isDetailReady.value) return;
+
+    if (showParamOverrideConfig.value && sceneParamConfigRef.value
+      && !sceneParamConfigRef.value.validate()) {
+      return;
+    }
 
     const hasVisibilitySelection = shouldSubmitVisibilityPayload(formData);
     const visibility = hasVisibilitySelection
