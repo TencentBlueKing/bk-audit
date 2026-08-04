@@ -86,6 +86,12 @@
     if (!filters.length) {
       return '';
     }
+    const fieldKey = getConditionFieldKey(condition);
+    const config = FieldConfig[fieldKey as keyof typeof FieldConfig];
+    // 多选类字段（system-id / select / user-selector 等）需回填为数组，否则组件无法选中并会清空条件
+    if (config && config.type !== 'string') {
+      return filters.map(item => String(item));
+    }
     if (filters.length === 1) {
       return String(filters[0]);
     }
@@ -120,12 +126,25 @@
   });
   // 添加时间格式转换函数
   const formatTimeWithTimezone = (timeStr: string) => {
+    let normalized = timeStr;
+    // 兼容链接中残留的 %2B / %252B，避免再次 encode 后变成非法时间
+    for (let i = 0; i < 3 && /%2B/i.test(normalized); i += 1) {
+      try {
+        const decoded = decodeURIComponent(normalized);
+        if (decoded === normalized) {
+          break;
+        }
+        normalized = decoded;
+      } catch {
+        break;
+      }
+    }
     // 如果已经是标准格式，直接返回
-    if (timeStr.includes('+')) {
-      return timeStr;
+    if (normalized.includes('+')) {
+      return normalized;
     }
 
-    return timeStr.replace(/\s(\d{2}:\d{2})$/, '+$1');
+    return normalized.replace(/\s(\d{2}:\d{2})$/, '+$1');
   };
   const normalizeParamArray = (value: unknown) => {
     if (_.isArray(value)) {
@@ -167,14 +186,15 @@
 
   const pendingUrlConditions = ref<UrlCondition[]>([]);
   if (urlPostParams.conditions) {
-    const conditions = _.isArray(urlPostParams.conditions)
+    const rawConditions = _.isArray(urlPostParams.conditions)
       ? urlPostParams.conditions
       : [urlPostParams.conditions];
+    // 拍平，避免 conditions[] 多值被错误解析成嵌套数组后无法回填
+    const conditions = rawConditions.flatMap((item: UrlCondition | UrlCondition[]) => (
+      _.isArray(item) ? item : [item]
+    )).filter((condition: UrlCondition) => Boolean(condition?.field?.raw_name));
     pendingUrlConditions.value = conditions;
     conditions.forEach((condition: UrlCondition) => {
-      if (!condition?.field?.raw_name) {
-        return;
-      }
       const fieldKey = getConditionFieldKey(condition);
       const fieldValue = getConditionFieldValue(condition);
       if (fieldValue) {
