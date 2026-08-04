@@ -451,9 +451,23 @@
     }
   };
 
+  // 从地址栏读取实时 query（列表页会用 history.replaceState 写条件，route.query 可能过期）
+  const getCurrentQueryFromLocation = () => {
+    const params = new URLSearchParams(window.location.search);
+    const query: Record<string, string | string[]> = {};
+    Array.from(new Set(params.keys())).forEach((key) => {
+      const values = params.getAll(key);
+      query[key] = values.length <= 1 ? (values[0] ?? '') : values;
+    });
+    return query;
+  };
+
   // 同步场景参数到路由 query 参数
   const syncSceneIdToRoute = (item: SelectorItem | null) => {
-    const currentQuery = { ...route.query };
+    const currentQuery = {
+      ...route.query,
+      ...getCurrentQueryFromLocation(),
+    };
     if (!item || !item.id) {
       // 清空所有场景相关参数
       const newQuery = { ...currentQuery };
