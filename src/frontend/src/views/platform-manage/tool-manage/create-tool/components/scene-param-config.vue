@@ -124,7 +124,7 @@
                 v-if="isMultiSelectVar(row.raw_name)"
                 :auto-height="false"
                 class="override-default-multiselect"
-                collapse-tags
+                clearable
                 filterable
                 :loading="isCandidatesLoading(row.raw_name)"
                 :model-value="getOverrideValue(item, row.raw_name)"
@@ -132,9 +132,34 @@
                 multiple-mode="tag"
                 :placeholder="t('请选择，可粘贴名称/ID批量勾选')"
                 :search-placeholder="t('请输入关键字，支持粘贴 Excel 批量勾选')"
+                selected-style="checkbox"
+                show-select-all
+                show-selected-icon
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)"
+                @clear="() => handleDefaultValueChange(item, row.raw_name, [])"
                 @search-change="(val: string) => handleDefaultSearchChange(item, row.raw_name, val)"
                 @toggle="(open: boolean) => handleDefaultSelectToggle(open, item, row.raw_name)">
+                <!-- 自行渲染首项 + +n，避免 collapse-tags 初次回显/候选加载后不折叠 -->
+                <template #tag="{ selected }">
+                  <template v-if="selected.length">
+                    <bk-tag
+                      class="override-selected-tag"
+                      closable
+                      @close="handleRemoveSelectedValue(item, row.raw_name, selected[0].value)">
+                      {{ getSelectedChoiceLabel(row.raw_name, selected[0].value) }}
+                    </bk-tag>
+                    <bk-tag
+                      v-if="selected.length > 1"
+                      v-bk-tooltips="{
+                        content: getOverflowSelectedTips(row.raw_name, selected),
+                        theme: 'dark',
+                        placement: 'top',
+                      }"
+                      class="override-selected-overflow-tag">
+                      +{{ selected.length - 1 }}
+                    </bk-tag>
+                  </template>
+                </template>
                 <bk-option
                   v-for="choice in getMultiSelectChoices(row.raw_name)"
                   :id="choice.key"
@@ -425,15 +450,63 @@
       .filter((item): item is number => item !== null);
   };
 
+  /** 稳定空数组，避免每次渲染新引用触发 select 重算 */
+  const EMPTY_MULTI_VALUE: string[] = [];
+  const overrideDisplayCache = new Map<string, string[]>();
+
+  const getStableStringList = (cacheKey: string, next: string[]) => {
+    const prev = overrideDisplayCache.get(cacheKey);
+    if (prev
+      && prev.length === next.length
+      && prev.every((item, index) => item === next[index])) {
+      return prev;
+    }
+    overrideDisplayCache.set(cacheKey, next);
+    return next;
+  };
+
   const getOverrideValue = (item: ConfigItem, rawName: string) => {
     const raw = item.default_values[rawName];
     if (raw === undefined || raw === null || raw === '') {
-      return isMultiSelectVar(rawName) ? [] : '';
+      return isMultiSelectVar(rawName) ? EMPTY_MULTI_VALUE : '';
     }
+    const cacheKey = `${item.key}::${rawName}`;
     // 下拉 option.id 为字符串，回显也统一转成字符串
-    if (CANDIDATE_API_RAW_NAMES.has(rawName)) return normalizeCandidateIdsValue(raw).map(String);
-    if (isMultiSelectVar(rawName)) return normalizeMultiSelectValue(raw);
+    if (CANDIDATE_API_RAW_NAMES.has(rawName)) {
+      return getStableStringList(cacheKey, normalizeCandidateIdsValue(raw).map(String));
+    }
+    if (isMultiSelectVar(rawName)) {
+      return getStableStringList(cacheKey, normalizeMultiSelectValue(raw));
+    }
     return raw;
+  };
+
+  /** 回显标签文案：优先候选项名称(id)，避免候选未加载时只显示裸 id */
+  const getSelectedChoiceLabel = (rawName: string, value: string | number) => {
+    const key = String(value);
+    const choice = getMultiSelectChoices(rawName).find(item => item.key === key);
+    return choice?.name || key;
+  };
+
+  const getOverflowSelectedTips = (
+    rawName: string,
+    selected: Array<{ value: string | number; label?: string | number }>,
+  ) => selected
+    .slice(1)
+    .map(item => getSelectedChoiceLabel(rawName, item.value))
+    .join(', ');
+
+  const handleRemoveSelectedValue = (
+    item: ConfigItem,
+    rawName: string,
+    value: string | number,
+  ) => {
+    const current = normalizeMultiSelectValue(getOverrideValue(item, rawName));
+    handleDefaultValueChange(
+      item,
+      rawName,
+      current.filter(id => id !== String(value)),
+    );
   };
 
   // 从第一步工具配置中读取参数原始默认值
@@ -507,12 +580,11 @@
     candidatesMap.value = {};
     candidatesLoadingMap.value = {};
     candidatesFetchedSet.value = new Set();
+    overrideDisplayCache.clear();
   });
 
   // 覆盖参数选择变更
   const handleOverrideChange = (item: ConfigItem, keys: string[]) => {
-    /* eslint-disable no-param-reassign */
-    item.override_keys = keys;
     // 清理不再选中的参数；新选中的参数自动代入第一步配置的默认值
     const newValues: Record<string, any> = {};
     for (const k of keys) {
@@ -525,9 +597,11 @@
         fetchCandidates(k);
       }
     }
-    item.default_values = newValues;
-    /* eslint-enable no-param-reassign */
-    emitChange();
+    emitChange({
+      key: item.key,
+      override_keys: keys,
+      default_values: newValues,
+    });
   };
 
   // 移除单个覆盖参数
@@ -536,16 +610,19 @@
     handleOverrideChange(item, keys);
   };
 
-  // 默认值输入变更
+  // 默认值输入变更：显式 patch 后再 emit，避免 mutate computed item 后被重算覆盖
   const handleDefaultValueChange = (item: ConfigItem, rawName: string, value: any) => {
-    /* eslint-disable no-param-reassign */
+    const nextValues = { ...item.default_values };
     if (CANDIDATE_API_RAW_NAMES.has(rawName)) {
-      item.default_values[rawName] = normalizeCandidateIdsValue(value);
+      nextValues[rawName] = normalizeCandidateIdsValue(value);
     } else {
-      item.default_values[rawName] = value;
+      nextValues[rawName] = value;
     }
-    /* eslint-enable no-param-reassign */
-    emitChange();
+    overrideDisplayCache.delete(`${item.key}::${rawName}`);
+    emitChange({
+      key: item.key,
+      default_values: nextValues,
+    });
   };
 
   /**
@@ -601,11 +678,18 @@
     };
   };
 
+  /** 清空下拉搜索词：同步 Vue v-model，避免过滤残留导致勾选项不可见 */
   const clearDefaultSelectSearch = () => {
     const input = document.querySelector('.bk-select-popover .bk-select-search-input') as HTMLInputElement | null;
     if (!input) return;
-    input.value = '';
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (valueSetter) {
+      valueSetter.call(input, '');
+    } else {
+      input.value = '';
+    }
     input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   };
 
   /** 批量匹配并勾选；成功处理返回 true */
@@ -626,13 +710,24 @@
     lastBatchAt = now;
 
     const choices = getMultiSelectChoices(rawName);
+    if (!choices.length) {
+      messageWarn(t('选项尚未加载完成，请稍后重试'));
+      return true;
+    }
+
     const { matched, unmatched } = matchChoicesByTokens(choices, tokens);
-    if (matched.length > 0) {
-      const current = normalizeMultiSelectValue(getOverrideValue(item, rawName));
+    const current = normalizeMultiSelectValue(getOverrideValue(item, rawName));
+    const currentSet = new Set(current);
+    const newlyMatched = matched.filter(key => !currentSet.has(key));
+
+    if (newlyMatched.length > 0) {
       const merged = [...new Set([...current, ...matched])];
       handleDefaultValueChange(item, rawName, merged);
-      messageSuccess(t('已批量勾选 {n} 项', { n: matched.length }));
+      messageSuccess(t('已批量勾选 {n} 项', { n: newlyMatched.length }));
+    } else if (matched.length > 0) {
+      messageWarn(t('匹配项均已勾选'));
     }
+
     if (unmatched.length > 0) {
       const preview = unmatched.slice(0, 5).join('、');
       const suffix = unmatched.length > 5 ? '...' : '';
@@ -655,13 +750,19 @@
     applyingBatchSelect.value = true;
     nextTick(() => {
       clearDefaultSelectSearch();
-      applyingBatchSelect.value = false;
+      // 再清一次，确保 Vue 内部 searchValue 与过滤状态复位
+      nextTick(() => {
+        clearDefaultSelectSearch();
+        applyingBatchSelect.value = false;
+      });
     });
   };
 
   /** 打开下拉时在 document 捕获粘贴，避免只绑到会被重建的 input */
-  let activePasteTarget: { item: ConfigItem; rawName: string } | null = null;
+  let activePasteTarget: { key: string; rawName: string } | null = null;
   let defaultSelectPasteCleanup: (() => void) | null = null;
+
+  const resolveActiveConfigItem = (key: string) => configList.value.find(item => item.key === key);
 
   const handleDocumentPaste = (event: ClipboardEvent) => {
     if (!activePasteTarget) return;
@@ -673,12 +774,22 @@
       );
     if (!isSelectSearch) return;
 
+    const item = resolveActiveConfigItem(activePasteTarget.key);
+    if (!item) return;
+
     const text = event.clipboardData?.getData('text/plain') || '';
-    if (!applyBatchSelectByText(activePasteTarget.item, activePasteTarget.rawName, text)) return;
+    if (!applyBatchSelectByText(item, activePasteTarget.rawName, text)) return;
 
     event.preventDefault();
     event.stopPropagation();
-    nextTick(() => clearDefaultSelectSearch());
+    applyingBatchSelect.value = true;
+    nextTick(() => {
+      clearDefaultSelectSearch();
+      nextTick(() => {
+        clearDefaultSelectSearch();
+        applyingBatchSelect.value = false;
+      });
+    });
   };
 
   const handleDefaultSelectToggle = (
@@ -691,7 +802,7 @@
     activePasteTarget = null;
     if (!open) return;
 
-    activePasteTarget = { item, rawName };
+    activePasteTarget = { key: item.key, rawName };
     document.addEventListener('paste', handleDocumentPaste, true);
     defaultSelectPasteCleanup = () => {
       document.removeEventListener('paste', handleDocumentPaste, true);
@@ -704,16 +815,25 @@
     activePasteTarget = null;
   });
 
-  // 向外发出变更事件（仅用户主动操作时触发，避免无限递归）
-  const emitChange = () => {
+  // 向外发出变更；可带 patch，避免依赖已过期的 computed item 引用
+  const emitChange = (patch?: {
+    key: string;
+    override_keys?: string[];
+    default_values?: Record<string, any>;
+  }) => {
     const result: Record<string, SceneParamOverride> = {};
     for (const item of configList.value) {
+      const isPatched = patch?.key === item.key;
       result[item.key] = {
         target_id: item.id,
         target_type: item.type,
         target_name: item.name,
-        override_param_keys: [...item.override_keys],
-        param_default_values: { ...item.default_values },
+        override_param_keys: isPatched && patch?.override_keys
+          ? [...patch.override_keys]
+          : [...item.override_keys],
+        param_default_values: isPatched && patch?.default_values
+          ? { ...patch.default_values }
+          : { ...item.default_values },
       };
     }
     emit('update:paramOverrides', result);
@@ -840,7 +960,7 @@
     }
   }
 
-  /* 默认值多选：固定单行 + collapse-tags，溢出以 +n 展示（hover 看全部） */
+  /* 默认值多选：固定单行，首项 tag + +n（自定义渲染，不依赖 collapse-tags 测量） */
   :deep(.override-default-multiselect) {
     width: 100%;
     height: 100%;
@@ -855,33 +975,36 @@
       height: 42px;
       min-height: 42px;
       max-height: 42px;
-      padding-right: 20px;
+      padding-right: 40px;
       background-color: #fff;
       border: none;
       border-radius: 0;
       box-sizing: border-box;
     }
 
-    .bk-select-tag.collapse-tag .bk-select-tag-wrapper {
-      height: 34px;
-    }
-
     .bk-select-tag-wrapper {
+      display: flex;
       gap: 4px;
       overflow: hidden;
+      flex-wrap: nowrap;
+      align-items: center;
     }
 
+    .override-selected-tag,
     .bk-tag {
-      flex-shrink: 0;
-      max-width: 140px;
+      flex-shrink: 1;
+      max-width: 160px;
       margin: 0;
+      overflow: hidden;
       color: #63656e;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       background-color: #f0f1f5;
       border: 1px solid #dcdee5;
       border-radius: 2px;
     }
 
-    .bk-select-overflow-tag {
+    .override-selected-overflow-tag {
       flex-shrink: 0;
       margin: 0;
       color: #63656e;
@@ -889,6 +1012,11 @@
       background-color: #f0f1f5;
       border: 1px solid #dcdee5;
       border-radius: 2px;
+    }
+
+    /* 关闭组件内置 +n，改用自定义 overflow tag */
+    .bk-select-overflow-tag {
+      display: none !important;
     }
   }
 
