@@ -420,9 +420,14 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         self.resource = ExecuteTool()
         self.username = "test_user"
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_is_show_true_no_validation(self, mock_get_scopes):
+    def test_is_show_true_no_validation(self, mock_get_scopes, mock_validator_cls):
         """测试 is_show=True 的参数不校验权限"""
+        mock_get_scopes.return_value = ([], [])
+        mock_validator = mock.MagicMock()
+        mock_validator_cls.return_value = mock_validator
+
         tool = MockTool(
             config={
                 "input_variable": [
@@ -439,16 +444,18 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         )
         params = {"tool_variables": [{"raw_name": "username", "value": "admin"}]}
 
-        # 该用例所有参数均为 is_show=True，无需校验权限；显式设置 mock 返回值避免解包失败
-        mock_get_scopes.return_value = ([], [])
-
         # 不应抛出异常
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_original_default_when_no_override(self, mock_get_scopes):
+    def test_use_original_default_when_no_override(self, mock_get_scopes, mock_validator_cls):
         """测试场景无覆盖配置时使用原始默认值"""
         mock_get_scopes.return_value = (["1002"], [])  # 用户有场景 1002 权限
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = ({"1002"}, set())
+        mock_validator.collect_allowed_defaults.return_value = ({}, set())  # 无覆盖，uncovered_raw_names 为空
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -470,21 +477,19 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    @mock.patch("services.web.tool.resources.ResourceBinding")
-    def test_use_original_default_when_has_override_raises_exception(self, mock_binding, mock_get_scopes):
+    def test_use_original_default_when_has_override_raises_exception(self, mock_get_scopes, mock_validator_cls):
         """测试场景有覆盖配置时使用原始默认值抛出异常"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 权限
-
-        # 工具绑定到场景 1001
-        mock_binding_instance = mock.MagicMock()
-        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001"]
-        mock_binding_instance.binding_systems.values_list.return_value = []
-        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
-            mock_binding_instance
+        mock_validator = mock.MagicMock()
+        # 模拟 validate_tool_default_values 抛出异常
+        mock_validator.validate_tool_default_values.side_effect = PermissionException(
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 不可见，只能使用默认值"
         )
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -507,10 +512,19 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         with self.assertRaises(PermissionException):
             self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_original_default_with_mixed_scenes(self, mock_get_scopes):
+    def test_use_original_default_with_mixed_scenes(self, mock_get_scopes, mock_validator_cls):
         """测试用户有多个场景（部分有覆盖，部分无覆盖）时可以使用原始默认值"""
         mock_get_scopes.return_value = (["1001", "1002"], [])  # 用户有场景 1001 和 1002 权限
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = ({"1001", "1002"}, set())
+        mock_validator.collect_allowed_defaults.return_value = (
+            {"username": ["admin"]},
+            {"username"},
+        )  # 有覆盖，但存在未覆盖的 scope
+        mock_validator.validate_variable_value.return_value = True  # 校验通过（有 uncovered 时允许原始默认值）
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -532,10 +546,16 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常（场景 1002 无覆盖配置，可以使用原始默认值）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_allowed_scene_default(self, mock_get_scopes):
+    def test_use_allowed_scene_default(self, mock_get_scopes, mock_validator_cls):
         """测试使用用户有权限的场景的默认值"""
         mock_get_scopes.return_value = (["1001", "1002"], [])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = ({"1001", "1002"}, set())
+        mock_validator.collect_allowed_defaults.return_value = ({"username": ["admin"]}, set())
+        mock_validator.validate_variable_value.return_value = True
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -556,10 +576,16 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常（用户在场景 1001 中有权限）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_use_allowed_system_default(self, mock_get_scopes):
+    def test_use_allowed_system_default(self, mock_get_scopes, mock_validator_cls):
         """测试使用用户有权限的系统的默认值"""
         mock_get_scopes.return_value = ([], ["sys001"])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = (set(), {"sys001"})
+        mock_validator.collect_allowed_defaults.return_value = ({"env": ["prod"]}, set())
+        mock_validator.validate_variable_value.return_value = True
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -580,21 +606,19 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常（用户在系统 sys001 中有权限）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    @mock.patch("services.web.tool.resources.ResourceBinding")
-    def test_use_unauthorized_default_raises_exception(self, mock_binding, mock_get_scopes):
+    def test_use_unauthorized_default_raises_exception(self, mock_get_scopes, mock_validator_cls):
         """测试使用无权使用的默认值抛出异常"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = (["1001"], [])  # 用户只有场景 1001 的权限
-
-        # 工具绑定到场景 1001 和 1002
-        mock_binding_instance = mock.MagicMock()
-        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001", "1002"]
-        mock_binding_instance.binding_systems.values_list.return_value = []
-        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
-            mock_binding_instance
+        mock_validator = mock.MagicMock()
+        # 模拟 validate_tool_default_values 抛出异常
+        mock_validator.validate_tool_default_values.side_effect = PermissionException(
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 的默认值不存在"
         )
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -619,10 +643,15 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         with self.assertRaises(PermissionException):
             self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_no_default_value_overrides(self, mock_get_scopes):
+    def test_no_default_value_overrides(self, mock_get_scopes, mock_validator_cls):
         """测试工具没有配置 default_value_overrides 时不校验"""
         mock_get_scopes.return_value = ([], [])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = (set(), set())
+        mock_validator.collect_allowed_defaults.return_value = ({}, set())  # 无覆盖
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -641,10 +670,15 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_empty_params(self, mock_get_scopes):
+    def test_empty_params(self, mock_get_scopes, mock_validator_cls):
         """测试没有传入参数时不校验"""
         mock_get_scopes.return_value = ([], [])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = (set(), set())
+        mock_validator.collect_allowed_defaults.return_value = ({}, set())
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -657,10 +691,16 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_multiple_input_variables(self, mock_get_scopes):
+    def test_multiple_input_variables(self, mock_get_scopes, mock_validator_cls):
         """测试多个输入变量的权限校验"""
         mock_get_scopes.return_value = (["1001"], ["sys001"])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = ({"1001"}, {"sys001"})
+        mock_validator.collect_allowed_defaults.return_value = ({"username": ["admin"], "env": ["prod"]}, set())
+        mock_validator.validate_variable_value.side_effect = [True, True]  # 两个变量都校验通过
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -692,21 +732,19 @@ class ExecuteToolValidateDefaultValuePermissionsTest(TestCase):
         # 不应抛出异常（两个值都在允许范围内）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    @mock.patch("services.web.tool.resources.ResourceBinding")
-    def test_value_not_in_allowed_defaults(self, mock_binding, mock_get_scopes):
+    def test_value_not_in_allowed_defaults(self, mock_get_scopes, mock_validator_cls):
         """测试传入的值不在允许范围内抛出异常"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = (["1001"], [])
-
-        # 工具绑定到场景 1001
-        mock_binding_instance = mock.MagicMock()
-        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = ["1001"]
-        mock_binding_instance.binding_systems.values_list.return_value = []
-        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
-            mock_binding_instance
+        mock_validator = mock.MagicMock()
+        # 模拟 validate_tool_default_values 抛出异常
+        mock_validator.validate_tool_default_values.side_effect = PermissionException(
+            action_name="使用隐藏参数 username 的默认值", permission="参数 username 的默认值不存在"
         )
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -797,10 +835,16 @@ class ApiToolRawNameMatchingTest(TestCase):
         self.resource = ExecuteTool()
         self.username = "test_user"
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    def test_override_keyed_by_raw_name(self, mock_get_scopes):
+    def test_override_keyed_by_raw_name(self, mock_get_scopes, mock_validator_cls):
         """覆盖配置按 raw_name 匹配：用户传入 raw_name 对应的允许值应通过"""
         mock_get_scopes.return_value = ([], ["sys001"])
+        mock_validator = mock.MagicMock()
+        mock_validator.get_accessible_scopes.return_value = (set(), {"sys001"})
+        mock_validator.collect_allowed_defaults.return_value = ({"query": ["system_query"]}, set())
+        mock_validator.validate_variable_value.return_value = True
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={
@@ -823,21 +867,19 @@ class ApiToolRawNameMatchingTest(TestCase):
         # 不应抛出异常（覆盖按 raw_name="query" 匹配）
         self.resource._validate_default_value_permissions(tool, params, self.username)
 
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     @mock.patch.object(ExecuteTool, "_get_user_allowed_scopes")
-    @mock.patch("services.web.tool.resources.ResourceBinding")
-    def test_override_not_matched_by_wrong_raw_name(self, mock_binding, mock_get_scopes):
+    def test_override_not_matched_by_wrong_raw_name(self, mock_get_scopes, mock_validator_cls):
         """覆盖配置按 raw_name 匹配：raw_name 无法对应到任何输入变量时不生效"""
         from core.exceptions import PermissionException
 
         mock_get_scopes.return_value = ([], ["sys001"])
-
-        # 工具绑定到系统 sys001
-        mock_binding_instance = mock.MagicMock()
-        mock_binding_instance.binding_scenes.filter.return_value.values_list.return_value = []
-        mock_binding_instance.binding_systems.values_list.return_value = ["sys001"]
-        mock_binding.objects.filter.return_value.prefetch_related.return_value.first.return_value = (
-            mock_binding_instance
+        mock_validator = mock.MagicMock()
+        # 模拟 validate_tool_default_values 抛出异常
+        mock_validator.validate_tool_default_values.side_effect = PermissionException(
+            action_name="使用隐藏参数 query 的默认值", permission="参数 query 的默认值不存在"
         )
+        mock_validator_cls.return_value = mock_validator
 
         tool = MockTool(
             config={

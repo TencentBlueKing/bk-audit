@@ -42,7 +42,6 @@ from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.exceptions import PermissionException
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -137,57 +136,6 @@ from services.web.tool.tool import (
     recent_tool_usage_manager,
     sync_resource_tags,
 )
-
-
-def _is_empty_value(value):
-    """统一判断空值：null、空字符串、空数组视为同一种空"""
-    if value is None:
-        return True
-    if isinstance(value, str) and value.strip() == "":
-        return True
-    if isinstance(value, (list, tuple)) and len(value) == 0:
-        return True
-    return False
-
-
-def _normalize_value_for_comparison(value):
-    """
-    通用标准化处理
-    1. 空值统一为 None
-    2. 字符串按逗号分割转数组并排序
-    3. 数组排序（保持元素顺序无关的比较）
-    4. 其他类型保持不变
-    """
-    # 空值处理
-    if _is_empty_value(value):
-        return None
-
-    # 字符串转数组（按逗号分割）
-    if isinstance(value, str):
-        parts = [v.strip() for v in value.split(",") if v.strip()]
-        return sorted(parts) if parts else value  # 如果没有逗号，保持原字符串
-
-    # 数组/元组处理
-    if isinstance(value, (list, tuple)):
-        if len(value) == 0:
-            return None
-        return sorted([str(v) for v in value if v is not None and str(v).strip()])
-
-    # 其他类型（数字、布尔值等）保持不变
-    return value
-
-
-def _values_are_equal_for_empty(val1, val2):
-    """
-    比较两个值是否相等，使用标准化处理
-    1. 空值等价：null、""、[] 视为相等
-    2. 字符串/数组等价："user1,user2" == ["user1", "user2"]
-    3. 数组顺序无关：["user2", "user1"] == ["user1", "user2"]
-    4. 其他类型直接比较
-    """
-    normalized1 = _normalize_value_for_comparison(val1)
-    normalized2 = _normalize_value_for_comparison(val2)
-    return normalized1 == normalized2
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
@@ -1128,6 +1076,8 @@ class ExecuteTool(ToolBase):
         3. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
            用户可自由修改，无需校验（用户可见场景）。
         """
+        from services.web.common.default_value_validator import DefaultValueValidator
+
         config = tool.config
         if not config:
             return
@@ -1136,171 +1086,18 @@ class ExecuteTool(ToolBase):
         if not default_value_overrides:
             return
 
-        # 1. 获取用户实际可访问的范围（用户权限 ∩ 工具授权）
-        accessible_scenes, accessible_systems = self._get_accessible_scopes(username, tool.uid)
-        if not accessible_scenes and not accessible_systems:
-            return
-
-        # 2. 收集允许的默认值和覆盖情况
-        allowed_defaults, has_uncovered_scope = self._collect_allowed_defaults(
-            default_value_overrides, accessible_scenes, accessible_systems
-        )
-
-        # 3. 校验输入变量
-        self._validate_input_variables(config, params, allowed_defaults, has_uncovered_scope)
-
-    def _get_accessible_scopes(self, username, tool_uid):
-        """获取用户实际可访问的工具范围（用户权限 ∩ 工具授权）
-
-        Returns:
-            tuple: (accessible_scenes, accessible_systems)
-        """
+        # 获取用户有权限的场景和系统
         user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
 
-        binding = (
-            ResourceBinding.objects.filter(
-                resource_type=ResourceVisibilityType.TOOL,
-                resource_id=tool_uid,
-            )
-            .prefetch_related('binding_scenes__scene', 'binding_systems')
-            .first()
+        validator = DefaultValueValidator()
+        validator.validate_tool_default_values(
+            tool_config=config,
+            tool_variables=params.get("tool_variables", []),
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=tool.uid,
+            user_allowed_scene_ids=set(user_allowed_scene_ids),
+            user_allowed_system_ids=set(user_allowed_system_ids),
         )
-
-        if binding:
-            tool_bound_scenes = {
-                str(scene_id)
-                for scene_id in binding.binding_scenes.filter(scene__is_deleted=False).values_list(
-                    'scene_id', flat=True
-                )
-            }
-            tool_bound_systems = set(binding.binding_systems.values_list('system_id', flat=True))
-        else:
-            tool_bound_scenes = set()
-            tool_bound_systems = set()
-
-        # 取交集：用户实际可访问的工具范围（用户权限 ∩ 工具授权）
-        return (
-            set(user_allowed_scene_ids) & tool_bound_scenes,
-            set(user_allowed_system_ids) & tool_bound_systems,
-        )
-
-    def _collect_allowed_defaults(self, default_value_overrides, accessible_scenes, accessible_systems):
-        """收集用户实际可访问的场景/系统允许的默认值
-
-        Args:
-            default_value_overrides: 默认值覆盖配置
-            accessible_scenes: 可访问的场景 ID 集合
-            accessible_systems: 可访问的系统 ID 集合
-
-        Returns:
-            tuple: (allowed_defaults, has_uncovered_scope)
-        """
-        allowed_defaults = {}
-        scenes_overrides = default_value_overrides.get("scenes", {})
-        systems_overrides = default_value_overrides.get("systems", {})
-
-        # 收集场景级别的默认值
-        for scene_id in accessible_scenes:
-            overrides = scenes_overrides.get(scene_id)
-            if not overrides or not isinstance(overrides, dict):
-                continue
-            for raw_name, default_value in overrides.items():
-                if raw_name:
-                    allowed_defaults.setdefault(raw_name, []).append(default_value)
-
-        # 收集系统级别的默认值
-        for system_id in accessible_systems:
-            overrides = systems_overrides.get(system_id)
-            if not overrides or not isinstance(overrides, dict):
-                continue
-            for raw_name, default_value in overrides.items():
-                if raw_name:
-                    allowed_defaults.setdefault(raw_name, []).append(default_value)
-
-        # 计算交集范围内无覆盖配置的场景/系统
-        uncovered_scenes = accessible_scenes - set(scenes_overrides.keys())
-        uncovered_systems = accessible_systems - set(systems_overrides.keys())
-        has_uncovered_scope = bool(uncovered_scenes or uncovered_systems)
-
-        return allowed_defaults, has_uncovered_scope
-
-    def _validate_input_variables(self, config, params, allowed_defaults, has_uncovered_scope):
-        """校验输入变量的默认值权限
-
-        Args:
-            config: 工具配置
-            params: 请求参数
-            allowed_defaults: 允许的默认值字典
-            has_uncovered_scope: 是否存在无覆盖的范围
-        """
-        input_variables_config = config.get("input_variable", [])
-        tool_variables = params.get("tool_variables", [])
-
-        input_variable_map = {var["raw_name"]: var.get("value") for var in tool_variables if var.get("raw_name")}
-
-        input_var_config_map = {var["raw_name"]: var for var in input_variables_config if var.get("raw_name")}
-
-        # 校验参数
-        for raw_name, value in input_variable_map.items():
-            self._validate_single_variable(raw_name, value, input_var_config_map, allowed_defaults, has_uncovered_scope)
-
-    def _validate_single_variable(self, raw_name, value, input_var_config_map, allowed_defaults, has_uncovered_scope):
-        """校验单个输入变量的默认值权限
-
-        Args:
-            raw_name: 变量原始名称
-            value: 变量值
-            input_var_config_map: 输入变量配置映射
-            allowed_defaults: 允许的默认值字典
-            has_uncovered_scope: 是否存在无覆盖的范围
-        """
-        input_var_config = input_var_config_map.get(raw_name, {})
-
-        # 跳过 is_show=True 的参数
-        if input_var_config.get("is_show", True):
-            return
-
-        # 豁免时间范围选择器
-        if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
-            return
-
-        original_default = input_var_config.get("default_value")
-
-        # 根据覆盖情况校验（使用空值等价比较）
-        if raw_name not in allowed_defaults:
-            # 无覆盖配置，只能用原始默认值
-            if not _values_are_equal_for_empty(value, original_default):
-                self._raise_permission_exception(raw_name, use_original_message=True)
-        elif has_uncovered_scope:
-            # 有无覆盖的场景/系统，允许：覆盖值 OR 原始默认值
-            is_allowed = any(
-                _values_are_equal_for_empty(value, allowed_value) for allowed_value in allowed_defaults[raw_name]
-            )
-            if not is_allowed and not _values_are_equal_for_empty(value, original_default):
-                self._raise_permission_exception(raw_name)
-        else:
-            # 所有场景/系统都有覆盖，只能用覆盖值
-            is_allowed = any(
-                _values_are_equal_for_empty(value, allowed_value) for allowed_value in allowed_defaults[raw_name]
-            )
-            if not is_allowed:
-                self._raise_permission_exception(raw_name)
-
-    def _raise_permission_exception(self, var_name, use_original_message=False):
-        """抛出权限异常
-
-        Args:
-            var_name: 变量名称
-            use_original_message: 是否使用原始默认值的错误消息
-        """
-        if use_original_message:
-            action_name = gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": var_name}
-            permission = gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": var_name}
-        else:
-            action_name = gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": var_name}
-            permission = gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": var_name}
-
-        raise PermissionException(action_name=action_name, permission=permission)
 
     def perform_request(self, validated_request_data):
         """
