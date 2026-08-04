@@ -74,7 +74,6 @@
                       class="operation-icon">
                       <auth-component
                         action-id="edit_system"
-                        :permission="editSystemPermission"
                         :resource="route.params.id">
                         <audit-icon
                           :type="isHide?'view':'hide'"
@@ -82,7 +81,6 @@
                       </auth-component>
                       <auth-component
                         action-id="edit_system"
-                        :permission="editSystemPermission"
                         :resource="route.params.id">
                         <audit-icon
                           v-bk-tooltips="t('复制')"
