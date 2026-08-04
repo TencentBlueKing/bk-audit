@@ -413,9 +413,7 @@
               status: panel.status || 'unpublished',
               updatedBy: panel.updated_by || '--',
               updatedAt: panel.updated_at || '--',
-              default_value_overrides: panel.default_value_overrides,
-            }))
-            .filter((report: Report) => !shouldHidePlatformDisabledReport(report)) as Report[],
+            })) as Report[],
         }))
         // 保留所有分组（包括 reports 为空的，用于全量数据存储）
         .sort((a, b) => b.priority_index - a.priority_index);
@@ -620,7 +618,6 @@
       description: report.description === '-' ? '' : report.description,
       status: report.status,
       enabled: report.status === 'published',
-      default_value_overrides: report.default_value_overrides,
     };
     currentGroupId.value = null;
     reportSidesliderVisible.value = true;
