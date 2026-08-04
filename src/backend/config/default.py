@@ -160,7 +160,7 @@ REST_FRAMEWORK = {
     "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
     "NON_FIELD_ERRORS_KEY": "params_error",
     "DEFAULT_PARSER_CLASSES": (
-        "rest_framework.parsers.JSONParser",
+        "core.parsers.JSONObjectJSONParser",
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ),

@@ -24,7 +24,7 @@ from services.web.tool.resources import (
     MCPExecuteTool,
 )
 from services.web.tool.serializers import ExecuteToolRespSerializer
-from services.web.tool.views import MCPUserToolViewSet
+from services.web.tool.views import MCPUserToolViewSet, ToolViewSet
 from tests.base import TestCase
 
 
@@ -253,3 +253,37 @@ class TestMCPUserToolDetailViewSet(TestCase):
         self.assertNotIn("sql", result["config"])
         self.assertNotIn("referenced_tables", result["config"])
         self.assertNotIn("api_config", result["config"])
+
+
+class TestJSONBodyValidation(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.factory = APIRequestFactory()
+
+    def test_mcp_execute_rejects_json_string_body(self):
+        view = MCPUserToolViewSet.as_view({"post": "execute"})
+        request = self.factory.post(
+            "/api/v1/namespaces/default/mcp_user/tool/tool-1/execute/",
+            '"{\\"params\\": {}}"',
+            content_type="application/json",
+        )
+
+        with mock.patch.object(MCPUserToolViewSet, "get_permissions", return_value=[]):
+            response = view(request, namespace="default", uid="tool-1")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("请求体必须为 JSON 对象", str(response.data))
+
+    def test_regular_execute_rejects_json_string_body(self):
+        view = ToolViewSet.as_view({"post": "execute"})
+        request = self.factory.post(
+            "/api/v1/namespaces/default/tool/tool-1/execute/",
+            '"{\\"params\\": {}}"',
+            content_type="application/json",
+        )
+
+        with mock.patch.object(ToolViewSet, "get_permissions", return_value=[]):
+            response = view(request, uid="tool-1")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("请求体必须为 JSON 对象", str(response.data))
