@@ -63,7 +63,6 @@ class PanelManage extends ModuleBase {
     category: string,
     status?: 'published' | 'unpublished',
     description?: string,
-    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return Request.post(`bkvision${this.module}/panel/scene/`, {
       params,
@@ -75,12 +74,10 @@ class PanelManage extends ModuleBase {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
-    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
-    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     const { id, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/scene/${id}/`, {

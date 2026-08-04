@@ -44,9 +44,7 @@ export const normalizeDataRangeIds = (value: unknown): number[] => {
     .filter((item): item is number => Number.isFinite(item));
 };
 
-const pickFirstDataRangeParams = (
-  source: Record<string, unknown> | undefined,
-): Record<string, number[]> => {
+const pickFirstDataRangeParams = (source: Record<string, unknown> | undefined): Record<string, number[]> => {
   if (!source || typeof source !== 'object') return {};
   for (const rawName of DATA_RANGE_RAW_NAMES) {
     if (!(rawName in source)) continue;

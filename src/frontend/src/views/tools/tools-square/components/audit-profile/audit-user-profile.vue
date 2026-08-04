@@ -194,6 +194,7 @@
     parseSmartPageUrlParams,
   } from '@/views/tools/tools-square/utils/tool-url-params';
   import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import type { DataRangeToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
 
   import '@blueking/tdesign-ui/vue3/index.css';
@@ -203,7 +204,7 @@
 
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
-    toolConfig?: {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
+    toolConfig?: DataRangeToolConfig & {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
       property?: {
         scene_id?: number | string;
       };
