@@ -19,40 +19,38 @@
     ref="rootRef"
     class="audit-edit-tag">
     <template v-if="initData && initData.length">
-      <bk-tag
-        v-for="(item) in renderData"
-        :key="item"
-        @click="handlerClick">
-        <tool-tip-text
-          :data="item"
-          span-width="10px"
-          style="
-          display: inline-block;
-          max-width: 100px;
-          overflow: hidden;
-          text-overflow: ellipsis ;
-          white-space: nowrap;
-          vertical-align: middle;
-          -webkit-box-orient: vertical;" />
-      </bk-tag>
-      <bk-tag
-        v-if="moreDataText"
-        key="more"
-        ref="moreRef">
-        +{{ initData.length - renderData.length }}
-      </bk-tag>
-      <div
-        v-if="showCopy"
-        v-bk-tooltips="t('复制所有')"
-        class="copy-btn"
-        @click.stop="handleCopy">
-        <audit-icon type="copy" />
+      <div class="audit-edit-tag__main">
+        <bk-tag
+          v-for="(item) in renderData"
+          :key="item"
+          class="audit-edit-tag__label"
+          @click="handlerClick">
+          <tool-tip-text
+            class="audit-edit-tag__text"
+            :data="item" />
+        </bk-tag>
+        <bk-tag
+          v-if="moreDataText"
+          key="more"
+          ref="moreRef"
+          class="audit-edit-tag__more">
+          +{{ initData.length - renderData.length }}
+        </bk-tag>
       </div>
-      <span
-        v-if="$slots.suffix"
-        class="edit-tag-suffix">
-        <slot name="suffix" />
-      </span>
+      <div class="audit-edit-tag__actions">
+        <div
+          v-if="showCopy"
+          v-bk-tooltips="t('复制所有')"
+          class="copy-btn"
+          @click.stop="handleCopy">
+          <audit-icon type="copy" />
+        </div>
+        <span
+          v-if="$slots.suffix"
+          class="edit-tag-suffix">
+          <slot name="suffix" />
+        </span>
+      </div>
     </template>
     <template v-else>
       <span>--</span>
@@ -297,14 +295,36 @@
 <style scoped lang="postcss">
   .audit-edit-tag {
     position: relative;
-    display: block;
-    word-break: keep-all;
-    white-space: nowrap;
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    align-items: center;
 
-    .label-text {
+    .audit-edit-tag__main {
+      display: inline-flex;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: calc(100% - 28px);
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      align-items: center;
+    }
+
+    .audit-edit-tag__actions {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+    }
+
+    .audit-edit-tag__label {
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .audit-edit-tag__more {
+      flex-shrink: 0;
     }
 
     &:hover {
@@ -323,7 +343,8 @@
     }
 
     .copy-btn {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
       padding-left: 8px;
       cursor: pointer;
       opacity: 0%;
@@ -341,8 +362,31 @@
     }
   }
 
-  :deep(.bk-tag) {
-    width: auto !important;
+  :deep(.audit-edit-tag__label.bk-tag) {
+    max-width: 100%;
     margin-right: 0;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+
+  :deep(.audit-edit-tag__label .bk-tag-text),
+  :deep(.audit-edit-tag__label .bk-tag-label) {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  :deep(.audit-edit-tag__text) {
+    display: block !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: normal !important;
+    white-space: nowrap !important;
+    -webkit-box-orient: unset !important;
+  }
+
+  :deep(.audit-edit-tag__text span) {
+    display: inline;
   }
 </style>

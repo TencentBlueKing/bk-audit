@@ -109,10 +109,16 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
     {
       title: t('风险标签'),
       colKey: 'tags',
-      width: 120,
+      width: 180,
+      minWidth: 160,
       cell: (_h: any, { row }: { row: RiskManageModel }) => {
-        const tags = row.tags.map((item: string) => strategyTagMap.value[item] || item);
-        return h(EditTag, { data: tags, key: row.strategy_id });
+        const tags = (row.tags || []).map((item: string) => strategyTagMap.value[item] || item);
+        // 多标签时固定展示 1 个 +N，避免小屏宽度不足时挤占相邻列的 +N
+        return h(EditTag, {
+          data: tags,
+          key: row.risk_id,
+          max: tags.length > 1 ? 1 : 0,
+        });
       },
     },
     {
