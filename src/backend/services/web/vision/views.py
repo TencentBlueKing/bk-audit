@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import contextlib
-from typing import Tuple
+from typing import Optional, Tuple
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
@@ -35,7 +35,7 @@ from core.utils.data import get_value_by_request_or_path
 from core.utils.renderers import API200Renderer
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.common.constants import BindingResourceType
-from services.web.common.scope_permission import ScopeInstancePermission
+from services.web.common.scope_permission import ScopeContext, ScopeInstancePermission
 from services.web.scene.constants import PanelStatus
 from services.web.tool.models import Tool
 from services.web.tool.permissions import (
@@ -127,6 +127,27 @@ class UsePanelPermission(ScopeInstancePermission):
     def _get_panel_status(panel_id: str):
         panel = VisionPanel.objects.filter(id=panel_id).first()
         return panel.status if panel else None
+
+
+class UsePanelScopePermission(UsePanelPermission):
+    """检查用户是否拥有使用 Panel 的权限
+    权限校验逻辑：
+    - 当请求携带 scope_type + scope_id 参数时：按当前 scope 校验资源权限（check_resource_permission_in_scope）
+
+    使用场景：
+    - 用户侧详情接口：携带 scope 参数，按当前 scope 下发映射
+    - 兼容旧接口：缺少 scope 参数时，保持与 UsePanelPermission 相同的 any-match 行为
+    """
+
+    def _get_scope_context(self, request, view) -> Optional[ScopeContext]:
+        """从请求中解析 ScopeContext。
+
+        如果解析失败（参数缺失或格式错误），返回 None
+        """
+        try:
+            return ScopeContext.from_request(request, view)
+        except ValidationError:
+            return None
 
 
 class ShareDetailPermission(BasePermission):
@@ -390,4 +411,23 @@ class SceneReportGroupManageViewSet(SceneManageBaseViewSet):
         ResourceRoute("DELETE", resource.vision.delete_scene_report_group, pk_field="group_id"),
         ResourceRoute("POST", resource.vision.update_scene_report_group_order, endpoint="order"),
         ResourceRoute("POST", resource.vision.update_scene_report_group_panel_order, endpoint="item/order"),
+    ]
+
+
+class PanelDetailViewSet(BKVisionInstanceViewSet):
+    """用户侧报表详情 ViewSet。
+
+    报表信息
+    """
+
+    lookup_field = "panel_id"
+
+    def get_permissions(self):
+        """
+        返回 UsePanelScopePermission
+        """
+        return [UsePanelScopePermission()]
+
+    resource_routes = [
+        ResourceRoute("GET", resource.vision.get_panel_detail, pk_field="panel_id"),
     ]
