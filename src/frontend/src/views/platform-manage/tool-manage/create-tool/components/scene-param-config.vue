@@ -130,8 +130,8 @@
                 :model-value="getOverrideValue(item, row.raw_name)"
                 multiple
                 multiple-mode="tag"
-                :placeholder="t('请选择，可粘贴名称/ID批量勾选')"
-                :search-placeholder="t('请输入关键字，支持粘贴 Excel 批量勾选')"
+                :placeholder="t('请选择默认值')"
+                :search-placeholder="t('搜索或粘贴名称/ID')"
                 selected-style="checkbox"
                 show-select-all
                 show-selected-icon
@@ -154,6 +154,7 @@
                         content: getOverflowSelectedTips(row.raw_name, selected),
                         theme: 'dark',
                         placement: 'top',
+                        extCls: 'override-selected-tips-wrap',
                       }"
                       class="override-selected-overflow-tag">
                       +{{ selected.length - 1 }}
@@ -1197,5 +1198,14 @@
     &:hover {
       color: #ea3636;
     }
+  }
+</style>
+<style lang="postcss">
+  /* tooltip 挂载到 body，需非 scoped；长列表换行展示 */
+  .override-selected-tips-wrap {
+    max-width: 360px;
+    word-break: break-all;
+    white-space: normal;
+    line-height: 20px;
   }
 </style>

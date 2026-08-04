@@ -127,6 +127,7 @@
         <audit-user-profile
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
+          :key="`${tool.uid}:${props.scopeParams?.scope_type || ''}:${props.scopeParams?.scope_id || ''}`"
           :tool-config="toolDetailMap[tool.uid]?.config"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail"
@@ -135,6 +136,7 @@
         <game-detail
           v-else-if="tool.uid.startsWith('game_detail_')"
           v-show="activeUid === tool.uid"
+          :key="`${tool.uid}:${props.scopeParams?.scope_type || ''}:${props.scopeParams?.scope_id || ''}`"
           :game-data="gameDetailDataMap[tool.uid]"
           :game-name-resolving="!!gameDetailNameResolvingMap[tool.uid]"
           :initial-tab="gameDetailInitialTabMap[tool.uid]"

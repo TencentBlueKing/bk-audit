@@ -288,6 +288,7 @@
   const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value
     && (formData.config.input_variable?.length ?? 0) > 0);
 
+  // 按 scene_ids / system_ids（tag 展示顺序）映射，与可见范围 tag 顺序一致
   const selectedSceneItems = computed(() => {
     if (!formData.scene_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_scenes') return [];
@@ -295,7 +296,8 @@
     const sceneMap = new Map(allSceneList.value.map(scene => [String(scene.id), scene]));
     return formData.scene_ids
       .map(sceneId => sceneMap.get(String(sceneId)))
-      .filter((scene): scene is { id: number; name: string } => Boolean(scene));
+      .filter((scene): scene is SceneOption => Boolean(scene));
+
   });
 
   const selectedSystemItems = computed(() => {
@@ -305,6 +307,7 @@
     return formData.system_ids
       .map(systemId => systemMap.get(String(systemId)))
       .filter((system): system is { id: string; name: string } => Boolean(system));
+
   });
 
   const handleVisibleRangeChange = (val: FormData) => {

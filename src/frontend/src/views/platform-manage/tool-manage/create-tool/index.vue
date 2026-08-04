@@ -758,24 +758,27 @@
   // 是否展示覆盖参数配置（全部可见、全部场景、全部系统、未选择可见范围时不展示）
   const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value);
 
-  // 选中的场景项列表（含名称）
+  // 按 scene_ids / system_ids（tag 展示顺序）映射，与可见范围 tag 顺序一致
   const selectedSceneItems = computed(() => {
     if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_scenes') return [];
-    const sceneMap = new Map(allSceneList.value.map(scene => [scene.id, scene]));
+    // 兼容 scene_id 数字/字符串不一致导致选中场景无法映射
+    const sceneMap = new Map(allSceneList.value.map(scene => [String(scene.id), scene]));
     return formData.value.scene_ids
-      .map(sceneId => sceneMap.get(sceneId))
+      .map(sceneId => sceneMap.get(String(sceneId)))
       .filter((scene): scene is { id: number; name: string } => Boolean(scene));
+
   });
 
   // 选中的系统项列表（含名称）
   const selectedSystemItems = computed(() => {
     if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_systems') return [];
-    const systemMap = new Map(allSystemList.value.map(system => [system.id, system]));
+    const systemMap = new Map(allSystemList.value.map(system => [String(system.id), system]));
     return formData.value.system_ids
-      .map(systemId => systemMap.get(systemId))
+      .map(systemId => systemMap.get(String(systemId)))
       .filter((system): system is { id: string; name: string } => Boolean(system));
+
   });
 
   onMounted(async () => {
