@@ -283,6 +283,8 @@
     useGameDetailFetcher,
     useGameOverviewFetcher,
   } from './game-data-fetcher';
+  import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
   import {
     CHAT_DETAIL_FIELDS,
     COIN_DETAIL_FIELDS,
@@ -390,22 +392,10 @@
   };
 
   // ========== 数据加载（统一封装在 game-data-fetcher.ts） ==========
-  const getDataRangeParams = (): Record<string, number[]> => {
-    const inputVars = props.toolConfig?.input_variable;
-    if (!Array.isArray(inputVars)) return {};
-    const scopeRawNames = ['cc_ids', 'game_ids'];
-    for (const rawName of scopeRawNames) {
-      const target = inputVars.find(item => item.raw_name === rawName);
-      if (!target) continue;
-      const value = target.default_value;
-      if (!Array.isArray(value) || value.length === 0) continue;
-      const ids = value
-        .map((item: unknown) => Number(item))
-        .filter((item: number) => Number.isFinite(item));
-      if (ids.length) return { [rawName]: ids };
-    }
-    return {};
-  };
+  const getDataRangeParams = (): Record<string, number[]> => getDataRangeParamsFromToolConfig(
+    props.toolConfig,
+    getToolDetailScopeQuery(),
+  );
 
   const getCtx = () => ({
     toolUid: props.toolUid,

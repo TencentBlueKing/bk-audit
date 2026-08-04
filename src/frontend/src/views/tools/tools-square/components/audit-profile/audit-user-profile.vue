@@ -193,6 +193,8 @@
     parseSmartPageGameDetailIntent,
     parseSmartPageUrlParams,
   } from '@/views/tools/tools-square/utils/tool-url-params';
+  import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -498,25 +500,13 @@
     && !userInfo.value.username);
 
   /**
-   * 从工具详情 input_variable 读取场景/系统合并后的数据范围默认值（如 cc_ids）。
-   * 未覆盖或空数组时不传，后端按全量数据返回。
+   * 从工具详情读取当前场景/系统的数据范围覆盖值（如 cc_ids）。
+   * 未覆盖或空值时不传，后端按全量数据返回。
    */
-  const getDataRangeParams = (): Record<string, number[]> => {
-    const inputVars = props.toolConfig?.input_variable;
-    if (!Array.isArray(inputVars)) return {};
-    const scopeRawNames = ['cc_ids', 'game_ids'];
-    for (const rawName of scopeRawNames) {
-      const target = inputVars.find((item: { raw_name?: string }) => item.raw_name === rawName);
-      if (!target) continue;
-      const value = (target as { default_value?: unknown }).default_value;
-      if (!Array.isArray(value) || value.length === 0) continue;
-      const ids = value
-        .map((item: unknown) => Number(item))
-        .filter((item: number) => Number.isFinite(item));
-      if (ids.length) return { [rawName]: ids };
-    }
-    return {};
-  };
+  const getDataRangeParams = (): Record<string, number[]> => getDataRangeParamsFromToolConfig(
+    props.toolConfig,
+    getToolDetailScopeQuery(),
+  );
 
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
