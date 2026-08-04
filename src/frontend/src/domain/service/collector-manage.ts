@@ -68,10 +68,15 @@ export default {
   },
   /**
    * @desc 批量获取应用采集状态
-   * @param { String } system_ids
+   * @param { String | String[] } system_ids
    */
-  fetchBatchSystemCollectorStatusList(params: { system_ids: string }) {
-    return CollectorSource.getBatchSystemCollectorStatus(params)
+  fetchBatchSystemCollectorStatusList(params: { system_ids: string | string[] }) {
+    const systemIds = Array.isArray(params.system_ids)
+      ? params.system_ids
+      : params.system_ids.split(',').filter(Boolean);
+    return CollectorSource.getBatchSystemCollectorStatus({
+      system_ids: systemIds,
+    })
       .then(({ data }) => data);
   },
   /**
