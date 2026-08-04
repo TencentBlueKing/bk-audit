@@ -49,8 +49,6 @@ export interface Config {
     silent?: boolean,
     /** 外部传入时复用同一 CancelToken，便于批量请求一并取消 */
     cancelTokenSource?: CancelTokenSource,
-    /** 为 true 时不弹全局错误 toast，由调用方自行 catch 处理 */
-    catchError?: boolean,
   }
 }
 
