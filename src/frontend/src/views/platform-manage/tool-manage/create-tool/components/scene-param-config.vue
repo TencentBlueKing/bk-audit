@@ -156,7 +156,7 @@
                     <bk-tag
                       v-if="selected.length > 1"
                       v-bk-tooltips="{
-                        content: getOverflowSelectedTips(row.raw_name, selected),
+                        content: getOverflowSelectedTipsContent(row.raw_name, selected),
                         theme: 'dark',
                         placement: 'top',
                         extCls: 'override-selected-tips-wrap',
@@ -205,6 +205,8 @@
 <script setup lang="ts">
   import {
     computed,
+    defineComponent,
+    h,
     nextTick,
     onBeforeUnmount,
     reactive,
@@ -494,13 +496,27 @@
     return choice?.name || key;
   };
 
-  const getOverflowSelectedTips = (
+  /**
+   * bk-tooltips 基于 bk-popper（非 tippy），content 传组件可渲染可滚动内层，
+   * 避免把 overflow 写在 popper 根节点上导致箭头被裁切。
+   */
+  const getOverflowSelectedTipsContent = (
     rawName: string,
     selected: Array<{ value: string | number; label?: string | number }>,
-  ) => selected
-    .slice(1)
-    .map(item => getSelectedChoiceLabel(rawName, item.value))
-    .join(', ');
+  ) => {
+    // 逗号拼接，块内自动换行
+    const text = selected
+      .slice(1)
+      .map(item => getSelectedChoiceLabel(rawName, item.value))
+      .join(', ');
+
+    return defineComponent({
+      name: 'OverrideSelectedTipsContent',
+      setup() {
+        return () => h('div', { class: 'override-selected-tips-list' }, text);
+      },
+    });
+  };
 
   const handleRemoveSelectedValue = (
     item: ConfigItem,
@@ -1353,11 +1369,35 @@
   }
 </style>
 <style lang="postcss">
-  /* tooltip 挂载到 body，需非 scoped；长列表换行展示 */
-  .override-selected-tips-wrap {
+  /* bk-tooltips 挂载到 body，类名打在 bk-popper 上；滚动放内层 list */
+  .bk-popper.override-selected-tips-wrap {
     max-width: 360px;
+    padding: 0;
+  }
+
+  .bk-popper.override-selected-tips-wrap .override-selected-tips-list {
+    max-height: 300px;
+    padding: 8px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 20px;
     word-break: break-all;
     white-space: normal;
-    line-height: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: #63656e transparent;
+  }
+
+  .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar-thumb {
+    background-color: #63656e;
+    border-radius: 2px;
+  }
+
+  .bk-popper.override-selected-tips-wrap .override-selected-tips-list::-webkit-scrollbar-track {
+    background: transparent;
   }
 </style>
