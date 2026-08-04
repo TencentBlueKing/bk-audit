@@ -87,7 +87,9 @@
               {{ t('显示名') }}
             </div>
             <div class="field-value col-default">
-              {{ t('默认值') }}
+              <span class="col-default-label">
+                {{ t('默认值') }}<span class="required-mark">*</span>
+              </span>
             </div>
             <div class="field-value field-operation col-action" />
           </div>
@@ -119,7 +121,10 @@
                 {{ getParamDisplayName(row) }}
               </span>
             </div>
-            <div class="field-value col-default">
+            <div
+              class="field-value col-default"
+              :class="{ 'is-error': isFieldInvalid(item.key, row.raw_name) }"
+              :data-override-field="getFieldErrorKey(item.key, row.raw_name)">
               <bk-select
                 v-if="isMultiSelectVar(row.raw_name)"
                 :auto-height="false"
@@ -584,10 +589,96 @@
     overrideDisplayCache.clear();
   });
 
+  /** 已选覆盖参数的默认值必填：记录校验失败字段 */
+  const invalidFields = ref<Record<string, true>>({});
+
+  const getFieldErrorKey = (itemKey: string, rawName: string) => `${itemKey}::${rawName}`;
+
+  const isFieldInvalid = (itemKey: string, rawName: string) => (
+    !!invalidFields.value[getFieldErrorKey(itemKey, rawName)]
+  );
+
+  const isEmptyOverrideValue = (value: unknown): boolean => {
+    if (value === undefined || value === null || value === '') return true;
+    if (Array.isArray(value)) return value.length === 0;
+    return false;
+  };
+
+  const clearFieldError = (itemKey: string, rawName: string) => {
+    const key = getFieldErrorKey(itemKey, rawName);
+    if (!invalidFields.value[key]) return;
+    const next = { ...invalidFields.value };
+    delete next[key];
+    invalidFields.value = next;
+  };
+
+  const syncFieldError = (itemKey: string, rawName: string, value: unknown) => {
+    // 仅在已有错误态时同步：有值则清除；提交校验前不主动标红
+    if (!invalidFields.value[getFieldErrorKey(itemKey, rawName)]) return;
+    if (!isEmptyOverrideValue(value)) {
+      clearFieldError(itemKey, rawName);
+    }
+  };
+
+  const pruneInvalidFields = (items: ConfigItem[]) => {
+    const keys = Object.keys(invalidFields.value);
+    if (!keys.length) return;
+    const alive = new Set<string>();
+    items.forEach((item) => {
+      (item.override_keys || []).forEach((rawName) => {
+        alive.add(getFieldErrorKey(item.key, rawName));
+      });
+    });
+    const next: Record<string, true> = {};
+    keys.forEach((key) => {
+      if (alive.has(key)) next[key] = true;
+    });
+    if (Object.keys(next).length !== keys.length) {
+      invalidFields.value = next;
+    }
+  };
+
+  watch(configList, (list) => {
+    pruneInvalidFields(list);
+  });
+
+  /** 提交前校验：已选覆盖参数的默认值不可为空；失败时滚到首个未填字段 */
+  const validate = (): boolean => {
+    const next: Record<string, true> = {};
+    let firstInvalidKey = '';
+    configList.value.forEach((item) => {
+      (item.override_keys || []).forEach((rawName) => {
+        if (isEmptyOverrideValue(item.default_values[rawName])) {
+          const key = getFieldErrorKey(item.key, rawName);
+          next[key] = true;
+          if (!firstInvalidKey) {
+            firstInvalidKey = key;
+          }
+        }
+      });
+    });
+    invalidFields.value = next;
+    if (!firstInvalidKey) {
+      return true;
+    }
+    nextTick(() => {
+      const el = Array.from(document.querySelectorAll('[data-override-field]'))
+        .find(node => node.getAttribute('data-override-field') === firstInvalidKey) as HTMLElement | undefined;
+      el?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    });
+    return false;
+  };
+
   // 覆盖参数选择变更
   const handleOverrideChange = (item: ConfigItem, keys: string[]) => {
     // 清理不再选中的参数；新选中的参数自动代入第一步配置的默认值
     const newValues: Record<string, any> = {};
+    const removedKeys = (item.override_keys || []).filter(k => !keys.includes(k));
+    removedKeys.forEach(rawName => clearFieldError(item.key, rawName));
     for (const k of keys) {
       if (item.default_values[k] !== undefined) {
         newValues[k] = item.default_values[k];
@@ -597,6 +688,8 @@
       if (CANDIDATE_API_RAW_NAMES.has(k)) {
         fetchCandidates(k);
       }
+      // 新选入有默认值时，清除此前校验错误
+      syncFieldError(item.key, k, newValues[k]);
     }
     emitChange({
       key: item.key,
@@ -620,6 +713,7 @@
       nextValues[rawName] = value;
     }
     overrideDisplayCache.delete(`${item.key}::${rawName}`);
+    syncFieldError(item.key, rawName, nextValues[rawName]);
     emitChange({
       key: item.key,
       default_values: nextValues,
@@ -839,6 +933,10 @@
     }
     emit('update:paramOverrides', result);
   };
+
+  defineExpose({
+    validate,
+  });
 </script>
 
 <style lang="postcss" scoped>
@@ -1039,6 +1137,18 @@
     }
   }
 
+  /* 校验失败：默认值选择框红色边框（挂在单元格上，避免 select 根节点 class 合并丢失） */
+  .field-row .col-default.is-error {
+    :deep(.override-default-multiselect .bk-select-trigger .bk-select-tag),
+    :deep(.override-default-multiselect .bk-select-trigger .bk-select-tag:not(.collapse-tag)) {
+      border: 1px solid #ea3636 !important;
+    }
+
+    :deep(.bk-input) {
+      border: 1px solid #ea3636 !important;
+    }
+  }
+
   /* 下拉选项超出时 hover tips */
   :deep(.select-option-overflow),
   .select-option-overflow {
@@ -1111,6 +1221,20 @@
     .col-action {
       background: #f0f1f5;
     }
+
+    .col-default-label {
+      display: inline-block;
+      line-height: 20px;
+    }
+
+    .required-mark {
+      display: inline-block;
+      margin-left: 2px;
+      font-size: 12px;
+      line-height: 12px;
+      color: #ea3636;
+      vertical-align: top;
+    }
   }
 
   .field-row {
@@ -1168,6 +1292,16 @@
     background: #eff5ff !important;
     border-color: transparent !important;
     transition: none !important;
+  }
+
+  :deep(.field-row:hover .col-default.is-error .bk-input),
+  :deep(.field-row:hover .col-default.is-error .bk-input .bk-input--text),
+  :deep(.field-row:hover .col-default.is-error .bk-input input) {
+    border-color: #ea3636 !important;
+  }
+
+  :deep(.field-row:hover .col-default.is-error .override-default-multiselect .bk-select-trigger .bk-select-tag) {
+    border-color: #ea3636 !important;
   }
 
   :deep(.field-value) {
