@@ -245,9 +245,12 @@
     if (!urlPostParams.conditions) {
       return [];
     }
-    return _.isArray(urlPostParams.conditions)
+    const rawConditions = _.isArray(urlPostParams.conditions)
       ? urlPostParams.conditions
       : [urlPostParams.conditions];
+    return rawConditions.flatMap((item: UrlCondition | UrlCondition[]) => (
+      _.isArray(item) ? item : [item]
+    )).filter((condition: UrlCondition) => Boolean(condition?.field?.raw_name));
   };
   const pendingUrlConditions = ref<UrlCondition[]>(getPendingUrlConditions());
 
