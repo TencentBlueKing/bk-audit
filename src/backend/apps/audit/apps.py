@@ -23,3 +23,8 @@ from django.utils.translation import gettext_lazy
 class AuditConfig(AppConfig):
     name = "apps.audit"
     verbose_name = gettext_lazy("审计")
+
+    def ready(self):
+        from core.bk_resource_compat import apply_resource_viewset_request_data_compat
+
+        apply_resource_viewset_request_data_compat()
