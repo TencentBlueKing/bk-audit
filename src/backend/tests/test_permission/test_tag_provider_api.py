@@ -37,8 +37,8 @@ class TestTagResourceProviderAPI:
         # list_instance 无 parent / 无 search
         lr = self.provider.list_instance(FancyDict(parent=None, search=None), Page(50, 0))
         expect = [
-            {"id": a.tag_id, "display_name": a.tag_name},
-            {"id": b.tag_id, "display_name": b.tag_name},
+            {"id": str(a.tag_id), "display_name": a.tag_name},
+            {"id": str(b.tag_id), "display_name": b.tag_name},
         ]
         assert lr.count == 2
         assert sorted(lr.results, key=lambda x: x["id"]) == sorted(expect, key=lambda x: x["id"])
@@ -51,7 +51,7 @@ class TestTagResourceProviderAPI:
         # search_instance 关键字匹配
         lr = self.provider.search_instance(FancyDict(keyword="blu"), Page(50, 0))
         assert lr.count == 1
-        assert lr.results == [{"id": a.tag_id, "display_name": a.tag_name}]
+        assert lr.results == [{"id": str(a.tag_id), "display_name": a.tag_name}]
 
     def test_fetch_instance_list_and_schema(self):
         t = self._mk("red")
