@@ -762,28 +762,55 @@
     });
   });
 
-  watch(() => props.config.custom_type, () => {
+  const syncFieldSelectValue = (fieldId: string | number = '') => {
+    const nextValue = fieldId === undefined || fieldId === null ? '' : fieldId;
+    if (selectValue.value !== nextValue) {
+      selectValue.value = nextValue;
+    }
+  };
+
+  watch(() => [
+    props.config.custom_type,
+    props.config.type,
+    props.config.default_value,
+  ], () => {
     if (props.config.custom_type === 'bk_user_selector') {
       modelValue.value = {
-        field: props.config.default_value || [],
+        field: '',
         value: props.config.default_value || [],
       };
-    } else if (props.config.custom_type === 'select') {
+      return;
+    }
+    if (props.config.custom_type === 'select') {
       const defaultVal = props.config.default_value;
       selectTypeValue.value = (defaultVal !== undefined && defaultVal !== null) ? defaultVal : '';
       modelValue.value = {
         field: '',
         value: selectTypeValue.value,
       };
-    } else {
-      modelValue.value = {
-        field: props.config.default_value || '',
-        value: props.config.default_value || '',
-      };
+      return;
     }
+    if (props.config.type === 'field') {
+      const fieldId = props.config.default_value || modelValue.value.field || '';
+      syncFieldSelectValue(fieldId);
+      modelValue.value = {
+        field: fieldId,
+        value: '',
+      };
+      return;
+    }
+    modelValue.value = {
+      field: '',
+      value: props.config.default_value ?? '',
+    };
   }, {
     immediate: true,
-    deep: true,
+  });
+
+  watch(() => [props.config.type, modelValue.value.field], () => {
+    if (props.config.type === 'field') {
+      syncFieldSelectValue(modelValue.value.field || props.config.default_value || '');
+    }
   });
 
 </script>
