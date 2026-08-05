@@ -56,13 +56,15 @@ class PanelManage extends ModuleBase {
   // 创建Panel
   createPanel(params: {
     scene_id: string | number,
-    group_id: string,
+    group_id: string | number,
     vision_id: string,
-    id: string,
+    id?: string,
     name: string,
-    category: string,
+    category?: string,
     status?: 'published' | 'unpublished',
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return Request.post(`bkvision${this.module}/panel/scene/`, {
       params,
@@ -74,10 +76,13 @@ class PanelManage extends ModuleBase {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
+    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     const { id, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/scene/${id}/`, {
