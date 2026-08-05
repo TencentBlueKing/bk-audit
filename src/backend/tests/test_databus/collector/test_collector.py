@@ -294,7 +294,7 @@ class CollectorTest(TestCase):
     def test_bulk_system_snapshots_status_no_snapshot(self):
         """Test BulkSystemSnapshotsStatusResource with no snapshot"""
         result = self.resource.databus.collector.bulk_system_snapshots_status(
-            namespace=self.namespace, system_ids=str(self.system_id)
+            namespace=self.namespace, system_ids=[self.system_id]
         )
         self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.UNSET.value)
 
@@ -306,7 +306,7 @@ class CollectorTest(TestCase):
             status=SnapshotRunningStatus.RUNNING.value,
         )
         result = self.resource.databus.collector.bulk_system_snapshots_status(
-            namespace=self.namespace, system_ids=str(self.system_id)
+            namespace=self.namespace, system_ids=[self.system_id]
         )
         self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.NORMAL.value)
 
@@ -318,7 +318,7 @@ class CollectorTest(TestCase):
             status=SnapshotRunningStatus.FAILED.value,
         )
         result = self.resource.databus.collector.bulk_system_snapshots_status(
-            namespace=self.namespace, system_ids=str(self.system_id)
+            namespace=self.namespace, system_ids=[self.system_id]
         )
         self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.ABNORMAL.value)
 
