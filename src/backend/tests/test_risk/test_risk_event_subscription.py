@@ -118,7 +118,8 @@ class RiskEventSubscriptionTestMixin:
             f"{risk_join}"
             f"JOIN {strategy} `{cls.STRATEGY_ALIAS}` ON `e`.`strategy_id`=`s`.`strategy_id` "
             f"LEFT JOIN {subquery} `{cls.STRATEGY_TAG_ALIAS}` ON `s`.`strategy_id`=`st`.`strategy_id` "
-            f"WHERE `e`.`dtEventTimeStamp` BETWEEN {self.TIME_RANGE[0]} AND {self.TIME_RANGE[1]})"
+            f"WHERE `e`.`dtEventTimeStamp` BETWEEN {self.TIME_RANGE[0]} AND {self.TIME_RANGE[1]} "
+            f"AND `r`.`is_deleted`='false')"
         )
 
     def _expected_query_sql(self, limit: int = 10, where: str | None = None) -> str:
