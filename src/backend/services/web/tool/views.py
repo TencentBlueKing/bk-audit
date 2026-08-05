@@ -25,18 +25,11 @@ class ToolViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["sql_analyse_with_tool"]:
             return [UseToolPermission(get_instance_id=self.get_tool_uid)]
-        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
+        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection", "input_variable_candidates"]:
             return [
                 AnyOfPermissions(
                     CallerContextPermission(),
                     UseToolPermission(),
-                )
-            ]
-        if self.action == "input_variable_candidates":
-            return [
-                AnyOfPermissions(
-                    UseToolPermission(),
-                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
                 )
             ]
         return []
