@@ -21,7 +21,7 @@ from rest_framework import serializers
 from core.serializers import ExtraDataSerializerMixin, FlexibleListField
 from services.web.common.constants import ScopeQueryField, ScopeType
 from services.web.common.serializers import ScopeQuerySerializer
-from services.web.scene.constants import BindingType, PanelStatus
+from services.web.scene.constants import BindingType, PanelStatus, VisibilityScope
 from services.web.scene.serializers import ResourceBindingInputSerializer
 from services.web.vision.models import (
     ReportUserPreference,
@@ -40,10 +40,26 @@ class VisionPanelBaseSerializer(serializers.Serializer):
     description = serializers.CharField(allow_blank=True)
     updated_by = serializers.CharField(allow_blank=True, allow_null=True)
     updated_at = serializers.DateTimeField(allow_null=True)
+    default_value_overrides = serializers.DictField(required=False, default=dict, label="默认值覆盖")
 
 
 class VisionPanelInfoSerializer(VisionPanelBaseSerializer):
     scenario = serializers.ChoiceField(choices=Scenario.choices)
+
+    def validate_default_value_overrides(self, value):
+        """使用 DefaultValueOverrideConfig 校验嵌套结构。"""
+        if value is None or value == {}:
+            return value
+
+        from services.web.vision.constants import DefaultValueOverrideConfig
+
+        try:
+            # 使用 pydantic 模型校验嵌套结构
+            DefaultValueOverrideConfig.model_validate(value)
+        except Exception:
+            raise serializers.ValidationError({"default_value_overrides": "格式必须为有效的对象结构"})
+
+        return value
 
 
 class VisionPanelInfoQuerySerializer(ScopeQuerySerializer):
@@ -119,6 +135,21 @@ class CreatePlatformPanelRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
     visibility = ResourceBindingInputSerializer(required=False)
+    default_value_overrides = serializers.DictField(required=False, default=dict, label="默认值覆盖")
+
+    def validate_default_value_overrides(self, value):
+        """使用 DefaultValueOverrideConfig 校验嵌套结构。"""
+        if value is None or value == {}:
+            return value
+
+        from services.web.vision.constants import DefaultValueOverrideConfig
+
+        try:
+            DefaultValueOverrideConfig.model_validate(value)
+        except Exception:
+            raise serializers.ValidationError({"default_value_overrides": "格式必须为有效的对象结构"})
+
+        return value
 
 
 class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
@@ -129,6 +160,21 @@ class UpdatePlatformPanelRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
     visibility = ResourceBindingInputSerializer(required=False)
+    default_value_overrides = serializers.DictField(required=False, label="默认值覆盖")
+
+    def validate_default_value_overrides(self, value):
+        """使用 DefaultValueOverrideConfig 校验嵌套结构。"""
+        if value is None or value == {}:
+            return value
+
+        from services.web.vision.constants import DefaultValueOverrideConfig
+
+        try:
+            DefaultValueOverrideConfig.model_validate(value)
+        except Exception:
+            raise serializers.ValidationError({"default_value_overrides": "格式必须为有效的对象结构"})
+
+        return value
 
 
 class PlatformPanelOperateRequestSerializer(serializers.Serializer):
@@ -144,6 +190,21 @@ class CreateScenePanelRequestSerializer(serializers.Serializer):
     category = serializers.CharField(required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False, default=PanelStatus.UNPUBLISHED)
+    default_value_overrides = serializers.DictField(required=False, default=dict, label="默认值覆盖")
+
+    def validate_default_value_overrides(self, value):
+        """使用 DefaultValueOverrideConfig 校验嵌套结构。"""
+        if value is None or value == {}:
+            return value
+
+        from services.web.vision.constants import DefaultValueOverrideConfig
+
+        try:
+            DefaultValueOverrideConfig.model_validate(value)
+        except Exception:
+            raise serializers.ValidationError({"default_value_overrides": "格式必须为有效的对象结构"})
+
+        return value
 
 
 class UpdateScenePanelRequestSerializer(serializers.Serializer):
@@ -155,6 +216,21 @@ class UpdateScenePanelRequestSerializer(serializers.Serializer):
     category = serializers.CharField(required=False, allow_blank=True)
     description = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(choices=PanelStatus.choices, required=False)
+    default_value_overrides = serializers.DictField(required=False, label="默认值覆盖")
+
+    def validate_default_value_overrides(self, value):
+        """使用 DefaultValueOverrideConfig 校验嵌套结构。"""
+        if value is None or value == {}:
+            return value
+
+        from services.web.vision.constants import DefaultValueOverrideConfig
+
+        try:
+            DefaultValueOverrideConfig.model_validate(value)
+        except Exception:
+            raise serializers.ValidationError({"default_value_overrides": "格式必须为有效的对象结构"})
+
+        return value
 
 
 class DeleteScenePanelRequestSerializer(serializers.Serializer):
@@ -177,6 +253,13 @@ class PlatformPanelListQuerySerializer(serializers.Serializer):
     name = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="报表名称")
     description = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="报表描述")
     updated_by = FlexibleListField(child=serializers.CharField(allow_blank=True), required=False, label="更新人")
+    visibility_type = serializers.ChoiceField(
+        choices=VisibilityScope.choices,
+        required=False,
+        label="可见范围类型",
+    )
+    scene_ids = FlexibleListField(child=serializers.IntegerField(), required=False, label="场景 ID 列表")
+    system_ids = FlexibleListField(child=serializers.CharField(), required=False, label="系统 ID 列表")
 
 
 class SceneReportGroupOrderItemSerializer(serializers.Serializer):
@@ -341,3 +424,42 @@ class PanelPreferenceSerializer(serializers.ModelSerializer):
 
 class UpdatePanelPreferenceRequestSerializer(serializers.Serializer):
     config = serializers.JSONField(required=True)
+
+
+class PanelDetailResponseSerializer(serializers.Serializer):
+    """用户侧报表详情响应序列化器。
+
+    只返回本地报表信息和当前 scope 的单份映射
+    """
+
+    id = serializers.CharField()
+    vision_id = serializers.CharField(allow_blank=True, allow_null=True)
+    name = serializers.CharField(allow_blank=True, allow_null=True)
+    status = serializers.CharField()
+    category = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    updated_by = serializers.CharField(allow_blank=True, allow_null=True)
+    updated_at = serializers.DateTimeField(allow_null=True)
+    default_value_override = serializers.DictField(required=False, default=dict, label="当前 scope 命中的默认值覆盖映射")
+
+    class Meta:
+        ref_name = "panel_detail_response"
+
+
+class PanelDetailQuerySerializer(ScopeQuerySerializer):
+    """
+    用户侧报表详情查询参数序列化器。
+    """
+
+    panel_id = serializers.CharField(required=False, label="报表 ID")
+
+    def validate_panel_id(self, value):
+        """验证 panel_id 是否存在"""
+        if value:
+            from services.web.vision.models import VisionPanel
+
+            if not VisionPanel.objects.filter(id=value).exists():
+                from rest_framework.exceptions import NotFound
+
+                raise NotFound("报表不存在")
+        return value

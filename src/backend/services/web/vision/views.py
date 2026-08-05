@@ -391,3 +391,19 @@ class SceneReportGroupManageViewSet(SceneManageBaseViewSet):
         ResourceRoute("POST", resource.vision.update_scene_report_group_order, endpoint="order"),
         ResourceRoute("POST", resource.vision.update_scene_report_group_panel_order, endpoint="item/order"),
     ]
+
+
+class PanelDetailViewSet(BKVisionInstanceViewSet):
+    """用户侧报表详情 ViewSet。
+
+    报表信息
+    """
+
+    lookup_field = "panel_id"
+
+    def get_permissions(self):
+        return [UsePanelPermission()]
+
+    resource_routes = [
+        ResourceRoute("GET", resource.vision.get_panel_detail, pk_field="panel_id"),
+    ]
