@@ -740,7 +740,7 @@ class MCPToolDetailResponseSerializer(serializers.ModelSerializer):
 
 
 class GetToolInputVariableCandidatesRequestSerializer(serializers.Serializer):
-    """获取工具输入变量候选项请求序列化器（仅用于平台配置页面）"""
+    """获取工具输入变量候选项请求序列化器"""
 
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     raw_name = serializers.CharField(label=gettext_lazy("输入变量名"))
