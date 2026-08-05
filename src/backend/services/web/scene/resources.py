@@ -24,14 +24,10 @@ from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import SystemAuditStatusEnum
-from apps.meta.handlers.iam_group import (
-    SCENE_MANAGER_GROUP_ACTIONS,
-    SCENE_VIEWER_GROUP_ACTIONS,
-    IAMGroupManager,
-)
+from apps.meta.handlers.iam_group import IAMGroupManager
 from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
@@ -69,68 +65,12 @@ class SceneResource(AuditMixinResource, abc.ABC):
     @classmethod
     def _refresh_scene_members_from_iam(cls, scene, save=True):
         """从 IAM 刷新场景成员到 DB"""
-        manager_members = list(scene.managers or [])
-        if scene.iam_manager_group_id:
-            manager_members = [
-                member.get("id", "")
-                for member in IAMGroupManager.get_all_group_members(group_id=scene.iam_manager_group_id)
-                if member.get("id", "")
-            ]
-
-        user_members = list(scene.users or [])
-        if scene.iam_viewer_group_id:
-            user_members = [
-                member.get("id", "")
-                for member in IAMGroupManager.get_all_group_members(group_id=scene.iam_viewer_group_id)
-                if member.get("id", "")
-            ]
-
-        if save and (scene.managers != manager_members or scene.users != user_members):
-            scene.managers = manager_members
-            scene.users = user_members
-            scene.save(update_fields=["managers", "users"])
-        else:
-            scene.managers = manager_members
-            scene.users = user_members
-
-        return {"managers": manager_members, "users": user_members}
+        return IAMGroupManager.refresh_scene_members(scene, save=save)
 
     @classmethod
     def _sync_iam_group_members(cls, scene, validated_request_data):
-        """当 managers 或 users 变更时，同步到对应的 IAM 用户组；若用户组尚未创建则先创建"""
-
-        update_fields = []
-
-        if "managers" in validated_request_data:
-            new_group_id = IAMGroupManager.sync_group_members(
-                group_id=scene.iam_manager_group_id,
-                members=scene.managers,
-                group_name=f"{scene.name}-管理用户组",
-                group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
-                group_actions=SCENE_MANAGER_GROUP_ACTIONS,
-                scene_id=str(scene.scene_id),
-                scene_name=scene.name,
-            )
-            if new_group_id is not None:
-                scene.iam_manager_group_id = new_group_id
-                update_fields.append("iam_manager_group_id")
-
-        if "users" in validated_request_data:
-            new_group_id = IAMGroupManager.sync_group_members(
-                group_id=scene.iam_viewer_group_id,
-                members=scene.users,
-                group_name=f"{scene.name}-使用用户组",
-                group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-                group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-                scene_id=str(scene.scene_id),
-                scene_name=scene.name,
-            )
-            if new_group_id is not None:
-                scene.iam_viewer_group_id = new_group_id
-                update_fields.append("iam_viewer_group_id")
-
-        if update_fields:
-            scene.save(update_fields=update_fields)
+        """当 managers 或 users 变更时，同步到 IAM 成员授权。"""
+        IAMGroupManager.sync_scene_members(scene, validated_request_data, operator=get_request_username())
 
 
 class SceneDetailResponseContextMixin:
@@ -311,7 +251,7 @@ class GetMyRolePermissions(SceneResource):
 
     def perform_request(self, validated_request_data: dict) -> dict[str, bool]:
         username: str = get_request_username()
-        permission = Permission(username=username)
+        permission = PermissionService(username=username)
         scope_permission = ScopePermission(username)
 
         cross_scene_scope = ScopeContext(ScopeType.CROSS_SCENE)
@@ -367,24 +307,8 @@ class CreateScene(SceneResource):
         self._save_tables(scene, validated_request_data.get("tables", []))
         # 自动创建"场景管理员通知组"
         self._create_scene_manager_notice_group(scene)
-        # 创建 IAM 用户组、授权并添加成员（分别创建管理用户组和使用用户组）
-        scene.iam_manager_group_id = IAMGroupManager.create_single_group_with_members(
-            group_name=f"{scene.name}-管理用户组",
-            group_description=f"{scene.name} 场景管理用户组，拥有查看和管理场景权限",
-            group_actions=SCENE_MANAGER_GROUP_ACTIONS,
-            members=scene.managers,
-            scene_id=str(scene.scene_id),
-            scene_name=scene.name,
-        )
-        scene.iam_viewer_group_id = IAMGroupManager.create_single_group_with_members(
-            group_name=f"{scene.name}-使用用户组",
-            group_description=f"{scene.name} 场景使用用户组，拥有查看场景权限",
-            group_actions=SCENE_VIEWER_GROUP_ACTIONS,
-            members=scene.users,
-            scene_id=str(scene.scene_id),
-            scene_name=scene.name,
-        )
-        scene.save(update_fields=["iam_manager_group_id", "iam_viewer_group_id"])
+        # 创建 IAM 成员授权；底层 V3 用户组/V4 Role 授权由 IAMGroupManager 屏蔽
+        IAMGroupManager.create_scene_member_permissions(scene, operator=get_request_username())
         # 新场景补齐全可见平台报表的分组映射
         self._sync_all_visible_platform_panels(scene)
 
@@ -512,35 +436,36 @@ class UpdateScene(SceneResource):
         except Scene.DoesNotExist:
             raise SceneNotExist()
 
-        # 更新基础字段
-        for field in ["name", "description", "managers", "users"]:
-            if field in validated_request_data:
-                setattr(scene, field, validated_request_data[field])
-        scene.save()
+        with IAMGroupManager.scene_member_sync_context():
+            # 更新基础字段
+            for field in ["name", "description", "managers", "users"]:
+                if field in validated_request_data:
+                    setattr(scene, field, validated_request_data[field])
+            scene.save()
 
-        # 更新系统关联
-        if "systems" in validated_request_data:
-            SceneSystem.objects.filter(scene=scene).delete()
-            for system_data in validated_request_data["systems"]:
-                SceneSystem.objects.create(
-                    scene=scene,
-                    system_id=system_data.get("system_id", ""),
-                    is_all_systems=system_data.get("is_all_systems", False),
-                    filter_rules=system_data.get("filter_rules", []),
-                )
+            # 更新系统关联
+            if "systems" in validated_request_data:
+                SceneSystem.objects.filter(scene=scene).delete()
+                for system_data in validated_request_data["systems"]:
+                    SceneSystem.objects.create(
+                        scene=scene,
+                        system_id=system_data.get("system_id", ""),
+                        is_all_systems=system_data.get("is_all_systems", False),
+                        filter_rules=system_data.get("filter_rules", []),
+                    )
 
-        # 更新数据表关联
-        if "tables" in validated_request_data:
-            SceneDataTable.objects.filter(scene=scene).delete()
-            for table_data in validated_request_data["tables"]:
-                SceneDataTable.objects.create(
-                    scene=scene,
-                    table_id=table_data.get("table_id", ""),
-                    filter_rules=table_data.get("filter_rules", []),
-                )
+            # 更新数据表关联
+            if "tables" in validated_request_data:
+                SceneDataTable.objects.filter(scene=scene).delete()
+                for table_data in validated_request_data["tables"]:
+                    SceneDataTable.objects.create(
+                        scene=scene,
+                        table_id=table_data.get("table_id", ""),
+                        filter_rules=table_data.get("filter_rules", []),
+                    )
 
-        # 同步 IAM 用户组成员
-        self._sync_iam_group_members(scene, validated_request_data)
+            # 同步 IAM 用户组成员
+            self._sync_iam_group_members(scene, validated_request_data)
 
         return scene
 
@@ -652,13 +577,15 @@ class UpdateSceneInfo(SceneResource):
         except Scene.DoesNotExist:
             raise SceneNotExist()
 
-        for field in ["name", "description", "managers", "users"]:
-            if field in validated_request_data:
-                setattr(scene, field, validated_request_data[field])
-        scene.save()
+        def save_and_sync():
+            for field in ["name", "description", "managers", "users"]:
+                if field in validated_request_data:
+                    setattr(scene, field, validated_request_data[field])
+            scene.save()
+            self._sync_iam_group_members(scene, validated_request_data)
 
-        # 同步 IAM 用户组成员
-        self._sync_iam_group_members(scene, validated_request_data)
+        with IAMGroupManager.scene_member_sync_context():
+            save_and_sync()
 
         return scene
 
@@ -705,41 +632,10 @@ def get_scene_members_data(scene_id):
     except Scene.DoesNotExist:
         return []
 
-    members = []
-
-    # 获取管理用户组成员
-    if scene.iam_manager_group_id:
-        try:
-            manager_members = IAMGroupManager.get_all_group_members(group_id=scene.iam_manager_group_id)
-            for member in manager_members:
-                members.append(
-                    {
-                        "type": member.get("type", ""),
-                        "id": member.get("id", ""),
-                        "name": member.get("name", ""),
-                        "role": "manager",
-                    }
-                )
-        except Exception:
-            pass
-
-    # 获取使用用户组成员
-    if scene.iam_viewer_group_id:
-        try:
-            viewer_members = IAMGroupManager.get_all_group_members(group_id=scene.iam_viewer_group_id)
-            for member in viewer_members:
-                members.append(
-                    {
-                        "type": member.get("type", ""),
-                        "id": member.get("id", ""),
-                        "name": member.get("name", ""),
-                        "role": "user",
-                    }
-                )
-        except Exception:
-            pass
-
-    return members
+    try:
+        return IAMGroupManager.get_scene_members(scene)
+    except Exception:
+        return []
 
 
 class GetSceneMembers(SceneResource):

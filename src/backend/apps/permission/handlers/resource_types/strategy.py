@@ -23,11 +23,27 @@ from django.utils.translation import gettext
 from iam import Resource
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
+from apps.permission.constants import IAMV4Role
 from apps.permission.handlers.resource_types import ResourceTypeMeta
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene
 from services.web.strategy_v2.models import LinkTable as LinkTableModel
 from services.web.strategy_v2.models import Strategy as StrategyModel
+
+
+def _get_bound_scene_resource(resource: Resource, binding_resource_type: str) -> Resource:
+    scene_id = (
+        ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
+            binding__resource_type=binding_resource_type,
+            binding__resource_id=str(resource.id),
+        )
+        .values_list("scene_id", flat=True)
+        .first()
+    )
+    if not scene_id:
+        raise ValueError(f"resource {resource.type}:{resource.id} has no active scene binding")
+    return Resource(settings.BK_IAM_SYSTEM_ID, "scene", str(scene_id), {"name": str(scene_id)})
 
 
 class Strategy(ResourceTypeMeta):
@@ -36,6 +52,8 @@ class Strategy(ResourceTypeMeta):
     name = gettext("审计策略")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "strategy"}]
+    iam_v4_batch_scope = True
+    iam_v4_creator_role_id = IAMV4Role.SCENE_ADMIN
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -67,6 +85,10 @@ class Strategy(ResourceTypeMeta):
             resources.append([resource])
         return resources
 
+    @classmethod
+    def get_iam_v4_creator_authorization_resource(cls, resource: Resource) -> Resource:
+        return _get_bound_scene_resource(resource, ResourceVisibilityType.STRATEGY)
+
 
 class LinkTable(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
@@ -74,6 +96,8 @@ class LinkTable(ResourceTypeMeta):
     name = gettext("联表")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "link_table"}]
+    iam_v4_batch_scope = True
+    iam_v4_creator_role_id = IAMV4Role.SCENE_ADMIN
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -104,6 +128,10 @@ class LinkTable(ResourceTypeMeta):
             }
             resources.append([resource])
         return resources
+
+    @classmethod
+    def get_iam_v4_creator_authorization_resource(cls, resource: Resource) -> Resource:
+        return _get_bound_scene_resource(resource, ResourceVisibilityType.LINK_TABLE)
 
 
 class StrategyTag(ResourceTypeMeta):

@@ -316,7 +316,7 @@ class TestCreateIamGroupsIntegration(SimpleTestCase):
 
 
 class TestSyncIamGroupMembersIntegration(SimpleTestCase):
-    """集成测试：SceneResource._sync_iam_group_members"""
+    """集成测试：IAMGroupManager.sync_scene_members"""
 
     def _make_scene(self, manager_group_id=1001, viewer_group_id=1002):
         scene = mock.MagicMock()
@@ -328,38 +328,30 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
 
     def test_sync_both_groups(self):
         """测试同时更新 managers 和 users 时两个用户组都同步"""
-        from services.web.scene.resources import SceneResource
-
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
-            SceneResource._sync_iam_group_members(scene, {"managers": ["new_admin"], "users": ["new_user"]})
+            IAMGroupManager.sync_scene_members(scene, {"managers": ["new_admin"], "users": ["new_user"]})
             self.assertEqual(mock_sync.call_count, 2)
 
     def test_missing_users_does_not_sync_viewer_group(self):
         """测试缺失 users 字段时不会同步使用用户组"""
-        from services.web.scene.resources import SceneResource
-
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
-            SceneResource._sync_iam_group_members(scene, {"name": "新名称"})
+            IAMGroupManager.sync_scene_members(scene, {"name": "新名称"})
             mock_sync.assert_not_called()
 
     def test_no_managers_or_users_skips_sync(self):
         """测试不包含 managers/users 时不会触发任何用户组同步"""
-        from services.web.scene.resources import SceneResource
-
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
-            SceneResource._sync_iam_group_members(scene, {"name": "新名称"})
+            IAMGroupManager.sync_scene_members(scene, {"name": "新名称"})
             mock_sync.assert_not_called()
 
     def test_missing_users_only_syncs_manager_group(self):
         """测试缺失 users 字段时仅同步管理用户组"""
-        from services.web.scene.resources import SceneResource
-
         scene = self._make_scene()
         with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=None) as mock_sync:
-            SceneResource._sync_iam_group_members(scene, {"managers": ["new_admin"]})
+            IAMGroupManager.sync_scene_members(scene, {"managers": ["new_admin"]})
             mock_sync.assert_called_once_with(
                 group_id=1001,
                 members=scene.managers,
@@ -369,3 +361,90 @@ class TestSyncIamGroupMembersIntegration(SimpleTestCase):
                 scene_id=str(scene.scene_id),
                 scene_name=scene.name,
             )
+
+    def test_new_group_id_is_saved_when_group_missing(self):
+        """测试 V3 用户组缺失时新建 group_id 会回写到 scene"""
+        scene = self._make_scene(manager_group_id=None)
+        scene.save = mock.Mock()
+        with mock.patch.object(IAMGroupManager, "sync_group_members", return_value=3001):
+            IAMGroupManager.sync_scene_members(scene, {"managers": ["new_admin"]})
+
+        self.assertEqual(scene.iam_manager_group_id, 3001)
+        scene.save.assert_called_once_with(update_fields=["iam_manager_group_id"])
+
+    @mock.patch("apps.meta.handlers.iam_group.IAMGroupManager.is_v4_backend", return_value=True)
+    def test_v4_sync_uses_role_authorization(self, _mock_backend):
+        """测试 V4 后端同步场景成员走 Role 授权，不暴露给业务层"""
+        scene = self._make_scene()
+        scene.managers = ["admin"]
+        scene.users = ["viewer"]
+        with mock.patch.object(IAMGroupManager, "sync_scene_role_members", return_value=None) as mock_sync:
+            IAMGroupManager.sync_scene_members(scene, {"managers": ["admin"], "users": ["viewer"]}, operator="op")
+
+        self.assertEqual(mock_sync.call_count, 2)
+        mock_sync.assert_any_call("scene_admin", ["admin"], "1", "op")
+        mock_sync.assert_any_call("scene_user", ["viewer"], "1", "op")
+
+
+class TestIAMV4SceneRoleMembers(SimpleTestCase):
+    @mock.patch("apps.meta.handlers.iam_group.ResourceEnum.SCENE.create_instance", return_value=mock.MagicMock())
+    @mock.patch("apps.meta.handlers.iam_group.PermissionService")
+    def test_sync_scene_role_members_revokes_removed_and_grants_added(self, mock_service, _mock_resource):
+        mock_service.return_value.list_role_subjects.return_value = [
+            {"subject": {"type": "user", "id": "old_user"}},
+        ]
+
+        IAMGroupManager.sync_scene_role_members(
+            role_id="scene_admin",
+            members=["new_user"],
+            scene_id="1",
+            operator="admin",
+        )
+
+        mock_service.return_value.revoke_instance_permission.assert_called_once()
+        mock_service.return_value.grant_instance_permission.assert_called_once()
+
+    @mock.patch("apps.meta.handlers.iam_group.ResourceEnum.SCENE.create_instance", return_value=mock.MagicMock())
+    @mock.patch("apps.meta.handlers.iam_group.PermissionService")
+    def test_get_scene_role_members_returns_user_ids(self, mock_service, _mock_resource):
+        mock_service.return_value.list_role_subjects.return_value = [
+            {"subject": {"type": "user", "id": "user_a"}},
+            {"subject": {"type": "group", "id": "ignored_group"}},
+        ]
+
+        result = IAMGroupManager.get_scene_role_members(role_id="scene_user", scene_id="1")
+
+        self.assertEqual(result, ["user_a"])
+
+    @mock.patch("apps.meta.handlers.iam_group.IAMGroupManager.is_v4_backend", return_value=True)
+    @mock.patch("apps.meta.handlers.iam_group.IAMGroupManager.get_scene_role_members", side_effect=[[], []])
+    def test_refresh_scene_members_allows_empty_v4_roles_to_overwrite_local_members(self, _mock_members, _mock_backend):
+        scene = mock.Mock()
+        scene.scene_id = 1
+        scene.managers = ["admin"]
+        scene.users = ["viewer"]
+
+        result = IAMGroupManager.refresh_scene_members(scene, save=True)
+
+        self.assertEqual(result, {"managers": [], "users": []})
+        self.assertEqual(scene.managers, [])
+        self.assertEqual(scene.users, [])
+        scene.save.assert_called_once_with(update_fields=["managers", "users"])
+
+    @mock.patch("apps.meta.handlers.iam_group.IAMGroupManager.is_v4_backend", return_value=True)
+    @mock.patch(
+        "apps.meta.handlers.iam_group.IAMGroupManager.get_scene_role_members", side_effect=[["admin"], ["viewer"]]
+    )
+    def test_get_scene_members_uses_v4_role_subjects(self, _mock_members, _mock_backend):
+        scene = mock.Mock()
+        scene.scene_id = 1
+
+        result = IAMGroupManager.get_scene_members(scene)
+
+        self.assertEqual(
+            result,
+            [
+                {"type": "user", "id": "admin", "name": "", "role": "manager"},
+                {"type": "user", "id": "viewer", "name": "", "role": "user"},
+            ],
+        )

@@ -26,8 +26,8 @@ from iam import Resource
 from rest_framework import permissions
 
 from apps.permission.handlers.actions import ActionMeta
-from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types.base import ResourceTypeMeta
+from apps.permission.handlers.service import PermissionService
 from core.exceptions import ValidationError
 
 
@@ -43,7 +43,7 @@ class IAMPermission(permissions.BasePermission):
         if not self.actions:
             return True
 
-        client = Permission()
+        client = PermissionService()
         for action in self.actions:
             client.is_allowed(
                 action=action,
@@ -164,7 +164,7 @@ class ActionPermission(IAMPermission):
         if not self.actions:
             return True
 
-        client = Permission(request=request)
+        client = PermissionService(request=request)
         return any(client.has_action_any_permission(action=action) for action in self.actions)
 
 
@@ -266,7 +266,7 @@ def insert_action_permission_field(
             if not many:
                 result_list = [result_list]
 
-            client = Permission()
+            client = PermissionService()
             permission_result = {}
             for action in actions:
                 permission_result[action.id] = client.is_allowed(action, raise_exception=False)

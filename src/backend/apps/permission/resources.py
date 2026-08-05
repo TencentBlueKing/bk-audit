@@ -27,6 +27,7 @@ from apps.permission.exceptions import GetSystemInfoError
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.auth import AuthHandler
 from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.service import PermissionService
 from apps.permission.serializers import (
     BatchIsAllowRequestSerializer,
     CheckAnyPermissionRequestSerializer,
@@ -76,7 +77,7 @@ class CheckPermissionResource(IAM):
 
         result = {}
         if auth_info.system_id == settings.BK_IAM_SYSTEM_ID:
-            client = Permission()
+            client = PermissionService()
             resources = client.batch_make_resource(instances)
             for action_id in action_ids:
                 result[action_id] = client.is_allowed(action_id, resources) or self._is_system_manager_allowed(
@@ -96,7 +97,7 @@ class CheckAnyPermissionResource(IAM):
 
     def perform_request(self, validated_request_data: dict) -> dict:
         action_ids = validated_request_data["action_ids"]
-        client = Permission()
+        client = PermissionService()
         return {action_id: client.has_action_any_permission(action_id) for action_id in action_ids}
 
 
@@ -110,7 +111,7 @@ class GetApplyDataResource(IAM):
         instances = [instance.to_json() for instance in auth_info.instances]
 
         if auth_info.system_id == settings.BK_IAM_SYSTEM_ID:
-            client = Permission()
+            client = PermissionService()
             resources = client.batch_make_resource(instances)
             apply_data = client.get_apply_data(actions=action_ids, resources=resources)
             return {"permission": apply_data[0], "apply_url": apply_data[1]}
@@ -140,7 +141,7 @@ class BatchIsAllowedResource(IAM):
             # 生成资源实例信息
             instance_ids = list({instance.id for instance in auth_info.instances})
             resources = auth_info.resource_type_meta.batch_create_instance(instance_ids)
-            return Permission().batch_is_allowed(auth_info.actions, resources)
+            return PermissionService().batch_is_allowed(auth_info.actions, resources)
 
         # 日志平台
         bulk_requests = []

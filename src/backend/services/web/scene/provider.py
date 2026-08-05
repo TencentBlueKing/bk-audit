@@ -16,18 +16,21 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
 from typing import List, Optional, Tuple
 
 from iam import PathEqDjangoQuerySetConverter
-from iam.resource.provider import ListResult
+from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
 from apps.permission.provider.base import IAMResourceProvider
+from core.serializers import get_serializer_fields
+from services.web.scene.serializers import SceneSimpleListSerializer
 
 
 class SceneResourceProvider(IAMResourceProvider):
     resource_type = "scene"
-    resource_provider_serializer = None
+    resource_provider_serializer = SceneSimpleListSerializer
 
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
@@ -46,7 +49,7 @@ class SceneResourceProvider(IAMResourceProvider):
         django_filters = converter.convert(expression)
         queryset = SceneModel.objects.filter(django_filters).order_by("pk")
         scenes = queryset[page.slice_from : page.slice_to]
-        results = [{"id": str(scene.pk), "display_name": scene.name} for scene in scenes]
+        results = [{"id": str(scene.scene_id), "display_name": scene.name} for scene in scenes]
         return ListResult(results=results, count=queryset.count())
 
     def filter_list_instance_results(
@@ -57,7 +60,7 @@ class SceneResourceProvider(IAMResourceProvider):
 
             qs = SceneModel.objects.all().order_by("pk")
             scenes = qs[page.slice_from : page.slice_to]
-            results = [{"id": str(s.pk), "display_name": s.name} for s in scenes]
+            results = [{"id": str(s.scene_id), "display_name": s.name} for s in scenes]
             return results, qs.count()
         except ImportError:
             return [], 0
@@ -66,8 +69,8 @@ class SceneResourceProvider(IAMResourceProvider):
         try:
             from services.web.scene.models import Scene as SceneModel
 
-            scenes = SceneModel.objects.filter(pk__in=ids)
-            results = [{"id": str(s.pk), "display_name": s.name} for s in scenes]
+            scenes = SceneModel.objects.filter(scene_id__in=ids)
+            results = [{"id": str(s.scene_id), "display_name": s.name} for s in scenes]
             return results, scenes.count()
         except ImportError:
             return [], 0
@@ -80,7 +83,59 @@ class SceneResourceProvider(IAMResourceProvider):
 
             qs = SceneModel.objects.filter(name__icontains=keyword).order_by("pk")
             scenes = qs[page.slice_from : page.slice_to]
-            results = [{"id": str(s.pk), "display_name": s.name} for s in scenes]
+            results = [{"id": str(s.scene_id), "display_name": s.name} for s in scenes]
             return results, qs.count()
         except ImportError:
             return [], 0
+
+    def fetch_instance_list(self, filters, page, **options):
+        from services.web.scene.models import Scene as SceneModel
+
+        start_time = datetime.datetime.fromtimestamp(int(filters.start_time // 1000))
+        end_time = datetime.datetime.fromtimestamp(int(filters.end_time // 1000))
+        queryset = SceneModel._base_manager.filter(updated_at__gt=start_time, updated_at__lte=end_time).order_by("pk")
+        results = []
+        for scene in queryset[page.slice_from : page.slice_to]:
+            data = SceneSimpleListSerializer(instance=scene).data
+            data["is_deleted"] = scene.is_deleted
+            results.append(
+                {
+                    "id": str(scene.scene_id),
+                    "display_name": scene.name,
+                    "is_deleted": scene.is_deleted,
+                    "creator": scene.created_by,
+                    "created_at": int(scene.created_at.timestamp() * 1000) if scene.created_at else None,
+                    "updater": scene.updated_by,
+                    "updated_at": int(scene.updated_at.timestamp() * 1000) if scene.updated_at else None,
+                    "data": data,
+                }
+            )
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_resource_type_schema(self, **options):
+        data = get_serializer_fields(SceneSimpleListSerializer)
+        properties = {
+            item["name"]: {
+                "type": item["type"].lower(),
+                "description_en": item["name"],
+                "description": item["description"],
+            }
+            for item in data
+        }
+        properties.setdefault(
+            "scene_id",
+            {
+                "type": "integer",
+                "description_en": "scene_id",
+                "description": "场景ID",
+            },
+        )
+        properties.setdefault(
+            "is_deleted",
+            {
+                "type": "boolean",
+                "description_en": "is_deleted",
+                "description": "是否删除",
+            },
+        )
+        return SchemaResult(properties=properties)

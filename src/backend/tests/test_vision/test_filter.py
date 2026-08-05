@@ -68,13 +68,13 @@ class TestVisionFilters(TestCase):
         result = DeptFilter().check_data("Dept/Sub")
         self.assertEqual(result, "Dept/Sub")
 
-    @mock.patch("services.web.vision.handlers.filter.Permission")
+    @mock.patch("services.web.vision.handlers.filter.PermissionService")
     @mock.patch.object(DeptFilter, "get_data", return_value=[{"label": "Dept", "value": "Dept"}])
-    def test_dept_filter_check_data_raises_without_permission(self, _, mock_permission):
-        mock_permission.return_value.get_apply_data.return_value = ({"apply": True}, "url")
+    def test_dept_filter_check_data_raises_without_permission(self, _, mock_service):
+        mock_service.return_value.get_apply_data.return_value = ({"apply": True}, "url")
         with self.assertRaises(PermissionException):
             DeptFilter().check_data(["OtherDept"])
-        mock_permission.return_value.get_apply_data.assert_called_once()
+        mock_service.return_value.get_apply_data.assert_called_once()
 
     @mock.patch.object(SystemDiagnosisFilter, "_fetch_iam_permissions_systems")
     def test_system_diagnosis_filter_respects_limit(self, mock_fetch):
@@ -91,10 +91,10 @@ class TestVisionFilters(TestCase):
         result = SystemDiagnosisFilter().check_data([])
         self.assertEqual(result, ["bk_a", "bk_b"])
 
-    @mock.patch("services.web.vision.handlers.filter.Permission")
+    @mock.patch("services.web.vision.handlers.filter.PermissionService")
     @mock.patch.object(SystemDiagnosisFilter, "get_data", return_value=[{"label": "Alpha", "value": "bk_a"}])
-    def test_system_diagnosis_filter_check_data_raises(self, _, mock_permission):
-        mock_permission.return_value.get_apply_data.return_value = ({"apply": True}, "url")
+    def test_system_diagnosis_filter_check_data_raises(self, _, mock_service):
+        mock_service.return_value.get_apply_data.return_value = ({"apply": True}, "url")
         with self.assertRaises(PermissionException):
             SystemDiagnosisFilter().check_data(["bk_unknown"])
 
@@ -131,9 +131,9 @@ class TestVisionFilters(TestCase):
         data = filter_instance.get_data()
         self.assertEqual(data, [{"label": "Alpha", "value": "bk_a"}, {"label": "Beta", "value": "bk_b"}])
 
-    @mock.patch("services.web.vision.handlers.filter.Permission")
+    @mock.patch("services.web.vision.handlers.filter.PermissionService")
     @mock.patch.object(SystemScopeFilter, "get_data", return_value=[{"label": "Alpha", "value": "bk_a"}])
-    def test_system_scope_filter_check_data_raises_for_unknown_system(self, _, mock_permission):
-        mock_permission.return_value.get_apply_data.return_value = ({"apply": True}, "url")
+    def test_system_scope_filter_check_data_raises_for_unknown_system(self, _, mock_service):
+        mock_service.return_value.get_apply_data.return_value = ({"apply": True}, "url")
         with self.assertRaises(PermissionException):
             SystemScopeFilter().check_data(["bk_unknown"])
