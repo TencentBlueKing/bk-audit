@@ -66,7 +66,6 @@ class ToolViewSet(ResourceViewSet):
             "POST",
             resource.tool.get_tool_input_variable_candidates,
             endpoint="input_variable_candidates",
-            pk_field="uid",
         ),
     ]
 
