@@ -62,7 +62,7 @@ class TestTagResourceProviderAPI:
         lr = self.provider.fetch_instance_list(FancyDict(start_time=start_ms, end_time=end_ms), Page(50, 0))
         assert lr.count >= 1
         expect_item = {
-            "id": t.tag_id,
+            "id": str(t.tag_id),
             "display_name": t.tag_name,
             "creator": t.created_by,
             "created_at": int(t.created_at.timestamp() * 1000) if t.created_at else None,
