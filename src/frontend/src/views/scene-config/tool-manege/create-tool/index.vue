@@ -481,6 +481,7 @@
   onBeforeRouteLeave((to) => {
     if (to.name !== backRouteName) {
       removePageParams(backRouteName);
+      sessionStorage.removeItem('scene-tool-manage-search-state');
     }
   });
 </script>
