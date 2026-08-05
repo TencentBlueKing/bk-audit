@@ -180,6 +180,7 @@
     removePageParams,
   } = useRecordPage;
   const LIST_PAGE_KEY = 'sceneToolManege';
+  const SEARCH_STATE_KEY = 'scene-tool-manage-search-state';
   const isLoading = ref(true);
   // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
@@ -258,8 +259,41 @@
   // 预览抽屉相关
   const isPreviewShow = ref(false);
 
+  const saveSearchState = () => {
+    sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({
+      searchValue: searchValue.value,
+      statusFilter: statusFilter.value,
+    }));
+  };
+
+  const restoreSearchState = () => {
+    try {
+      const raw = sessionStorage.getItem(SEARCH_STATE_KEY);
+      if (!raw) return false;
+      const state = JSON.parse(raw) as {
+        searchValue?: SearchKey[];
+        statusFilter?: string;
+      };
+      if (state.statusFilter) {
+        statusFilter.value = state.statusFilter;
+      }
+      if (Array.isArray(state.searchValue)) {
+        searchValue.value = state.searchValue;
+      }
+      return Boolean((state.searchValue && state.searchValue.length)
+        || (state.statusFilter && state.statusFilter !== 'all'));
+    } catch {
+      return false;
+    }
+  };
+
+  const clearSearchState = () => {
+    sessionStorage.removeItem(SEARCH_STATE_KEY);
+  };
+
   // 新建工具
   const handleCreateReport = () => {
+    saveSearchState();
     recordPageParams(LIST_PAGE_KEY);
     router.push({ name: 'sceneToolCreate', query: {
       scene_id: route.query.scene_id,
@@ -270,6 +304,7 @@
 
   // 编辑工具
   const handleEdit = (row: ToolItem) => {
+    saveSearchState();
     recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'sceneToolEdit',
@@ -523,9 +558,13 @@
     fetchAllToolsData(scopeParams);
     // 初始化时获取一次状态统计
     fetchStatusCounts();
-    // 仅「编辑返回」时恢复搜索，并消费掉缓存
-    const hasKey = setSearchKey();
+    // 编辑/新建返回时恢复搜索条件
+    let hasKey = restoreSearchState();
+    if (!hasKey) {
+      hasKey = setSearchKey();
+    }
     removePageParams(LIST_PAGE_KEY);
+    clearSearchState();
     if (hasKey) {
       handleSearch(searchValue.value);
     }
