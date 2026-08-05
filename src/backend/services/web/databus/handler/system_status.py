@@ -64,7 +64,7 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, Syst
         system_ids=system_ids,
     )
     # 3. 获取资产上报信息
-    snapshot_status_map = resource.databus.collector.bulk_system_snapshots_status(system_ids=",".join(system_ids))
+    snapshot_status_map = resource.databus.collector.bulk_system_snapshots_status(system_ids=system_ids)
 
     result = {}
     for system in systems:
