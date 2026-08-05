@@ -24,6 +24,8 @@ import JsonViewer from 'vue-json-viewer';
 import RootManageService from '@service/root-manage';
 import EntryManageService from '@service/entry-manage';
 
+import { installBkSearchSelectEnhance } from '@/utils/bk-search-select-enhance';
+
 import ApplyPermissionCatch from '@components/apply-permission/catch.vue';
 import AuditForm from '@components/audit-form/index.vue';
 import AuditIcon from '@components/audit-icon';
@@ -79,6 +81,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
     const BKApp = createApp(App);
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
+    installBkSearchSelectEnhance();
     BKApp.use(i18n);
     BKApp.use(JsonViewer);
     BKApp.use(createRouter(config));
@@ -151,6 +154,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
     const BKApp = createApp(Exception);
 
     BKApp.use(BkuiVue);
+    installBkSearchSelectEnhance();
     BKApp.use(i18n);
 
     BKApp.mount('#app');
