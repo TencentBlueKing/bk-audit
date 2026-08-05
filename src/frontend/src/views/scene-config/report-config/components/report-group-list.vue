@@ -369,6 +369,10 @@
     status: 'published' | 'unpublished';
     updatedBy: string;
     updatedAt: string;
+    default_value_overrides?: {
+      scenes?: Record<string, Record<string, any>>;
+      systems?: Record<string, Record<string, any>>;
+    };
   }
 
   export interface ReportGroup {
