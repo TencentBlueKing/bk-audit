@@ -54,12 +54,14 @@ export default  {
   createPanel(params: {
     scene_id: string | number,
     vision_id: string,
-    group_id: string,
-    id: string,
+    group_id: string | number,
+    id?: string,
     name: string,
-    category: string,
+    category?: string,
     status?: 'published' | 'unpublished',
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
@@ -72,10 +74,13 @@ export default  {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
+    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: PanelDefaultValueOverrides,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);
