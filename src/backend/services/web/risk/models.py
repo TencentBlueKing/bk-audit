@@ -65,7 +65,8 @@ def generate_risk_id() -> str:
     """
     now = datetime.datetime.now()
     risk_id = f"{now.strftime('%Y%m%d%H%M%S')}{('%.6f' % now.timestamp()).split('.')[1]}"
-    if Risk.objects.filter(risk_id=risk_id).exists():
+    # 使用 _objects（原始 manager）检查冲突，避免与软删除记录的主键冲突
+    if Risk._objects.filter(risk_id=risk_id).exists():
         return generate_risk_id()
     return risk_id
 
@@ -127,9 +128,15 @@ class StrategyTagMixin:
         )
 
 
-class Risk(StrategyTagMixin, OperateRecordModel):
+class Risk(StrategyTagMixin, SoftDeleteModel):
     """
     Risk
+
+    继承 SoftDeleteModel 以获得软删除能力：
+    - is_deleted 字段标记删除
+    - objects (SoftDeleteModelManager) 自动过滤 is_deleted=False
+    - delete() 改为 UPDATE is_deleted=True，而非物理 DELETE
+    - _objects 为原始 manager，可查到软删除记录（用于审计、主键冲突检查、资产同步）
     """
 
     risk_id = models.CharField(gettext_lazy("Risk ID"), primary_key=True, max_length=255, default=generate_risk_id)

@@ -20,7 +20,7 @@ from apps.meta.models import GlobalMetaConfig
 from core.sql.builder.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.builder.functions import Concat, GroupConcat
 from core.sql.builder.generator import BkbaseDorisSqlGenerator
-from core.sql.constants import AggregateType, FieldType, JoinType, Operator
+from core.sql.constants import AggregateType, FieldType, FilterConnector, JoinType, Operator
 from core.sql.model import (
     Condition,
     Field,
@@ -184,16 +184,38 @@ class RiskEventSubscriptionSQLBuilder:
 
     def _build_time_condition(self) -> WhereCondition:
         """
-        依据订阅给定的时间范围，构造 BETWEEN 条件，限定 Doris 查询窗口。
+        构造内层查询 WHERE 条件：事件时间范围 + 风险软删除过滤。
+
+        - 时间范围：限定 Doris 查询窗口（dtEventTimeStamp BETWEEN start AND end）
+        - 软删除过滤：r.is_deleted='false'，确保软删除风险的事件不出现在订阅结果中
+          （INNER JOIN 加该过滤后，软删除风险记录被排除，其关联事件也不会返回）
         """
-        field = Field(
+        # 1. 事件时间范围
+        time_field = Field(
             table=self.EVENT_ALIAS,
             raw_name="dtEventTimeStamp",
             display_name="dtEventTimeStamp",
             field_type=FieldType.LONG,
         )
+        time_condition = WhereCondition(
+            condition=Condition(
+                field=time_field, operator=Operator.BETWEEN, filters=[self._start_time, self._end_time]
+            )
+        )
+        # 2. 风险软删除过滤（Doris 中 is_deleted 为 string，值为 "true"/"false"）
+        risk_deleted_field = Field(
+            table=self.RISK_ALIAS,
+            raw_name="is_deleted",
+            display_name="is_deleted",
+            field_type=FieldType.STRING,
+        )
+        risk_deleted_condition = WhereCondition(
+            condition=Condition(field=risk_deleted_field, operator=Operator.EQ, filter="false")
+        )
+        # 3. AND 组合
         return WhereCondition(
-            condition=Condition(field=field, operator=Operator.BETWEEN, filters=[self._start_time, self._end_time])
+            connector=FilterConnector.AND,
+            conditions=[time_condition, risk_deleted_condition],
         )
 
     #: 固定输出字段配置，便于复用元数据
