@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import os
+
 from django.db.models import TextChoices
 from django.utils.translation import gettext_lazy
+
+from apps.permission.constants import IAMV4Role
 
 
 class SceneStatus(TextChoices):
@@ -110,3 +114,69 @@ SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES = (
     "for_approve",
     "auto_process",
 )
+
+
+# 全局配置：ITSM V4 审批流程编码
+SCENE_PERMISSION_WORKFLOW_KEY = os.getenv("BKAPP_SCENE_PERMISSION_WORKFLOW_KEY", "")
+
+# 周期任务 cron 分钟
+SYNC_SCENE_PERMISSION_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_SCENE_PERMISSION_MINUTE", "*/60")
+
+# 授权失败最大重试次数
+SCENE_PERMISSION_GRANT_MAX_RETRY = int(os.getenv("BKAPP_SCENE_PERMISSION_GRANT_MAX_RETRY", "5"))
+
+# workflow 字段模板缓存秒数
+SCENE_PERMISSION_WORKFLOW_CACHE_TIMEOUT = 10 * 60
+
+# 业务角色 → V4 role_id
+SCENE_ROLE_TO_IAM_V4_ROLE = {
+    SceneRole.MANAGER: IAMV4Role.SCENE_ADMIN,
+    SceneRole.USER: IAMV4Role.SCENE_USER,
+}
+
+
+class ScenePermissionFormFields:
+    """ITSM V4 流程表单字段标识。
+    在 ITSM 创建审批流程时的表单模型：
+    | 字段标识             | 字段类型       | 说明                         |
+    |--------------------|--------------|------------------------------|
+    | ticket__title      | 单行文本        | 标题（ITSM 内置，固定不可改）        |
+    | applicant          | 单行文本        | 申请人                          |
+    | applicant_department | 单行文本      | 申请人部门                        |
+    | apply_time         | 单行文本        | 申请时间                          |
+    | scene_name         | 单行文本        | 场景名称(场景ID)                    |
+    | role               | 单行文本        | 申请角色                         |
+    | reason             | 多行文本        | 申请理由（可选）                     |
+    | approver           | 人员选择器(多选)    | 审批人（审批节点处理人取自此字段）      |
+    """
+
+    TITLE = "ticket__title"
+    APPLICANT = "applicant"
+    APPLICANT_DEPARTMENT = "applicant_department"
+    APPLY_TIME = "apply_time"
+    SCENE_NAME = "scene_name"
+    ROLE = "role"
+    REASON = "reason"
+    APPROVER = "approver"
+
+
+class ITSMV4TicketStatus(TextChoices):
+    """ITSM V4 工单状态"""
+
+    RUNNING = "running", gettext_lazy("处理中")
+    FINISHED = "finished", gettext_lazy("已结束")
+
+
+class ApplicationStatus(TextChoices):
+    """场景权限申请审批状态"""
+
+    PENDING = "pending", gettext_lazy("待审批")
+    APPROVED = "approved", gettext_lazy("审批通过")
+    REJECTED = "rejected", gettext_lazy("已驳回")
+
+
+class GrantStatus(TextChoices):
+    """场景权限授权状态"""
+
+    SUCCESS = "success", gettext_lazy("授权成功")
+    FAILED = "failed", gettext_lazy("授权失败")
