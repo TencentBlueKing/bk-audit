@@ -64,7 +64,7 @@ from services.web.scene.models import (
     SceneSystem,
 )
 from services.web.scene.permission import (
-    _extract_reject_reason,
+    _extract_reject_reason_from_logs,
     already_has_role,
     apply_ticket_result,
     parse_itsm_ticket,
@@ -894,11 +894,13 @@ class ScenePermissionApplicationCallback(SceneResource):
 
         # 5. 处理回调
         try:
-            # 如果审批被拒绝，需要查日志获取拒绝理由
+            # 如果审批被拒绝/终止，需要查日志获取理由
             reject_reason = ""
             parsed = parse_itsm_ticket(ticket_data)
-            if not parsed["approve_result"] and parsed["status"] == ITSMV4TicketStatus.FINISHED:
-                reject_reason = _extract_reject_reason(ticket_id)
+            if parsed["status"] in (ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION):
+                if not parsed["approve_result"]:
+                    logs_data = api.bk_itsm_v4.ticket_logs(ticket_id=ticket_id)
+                    reject_reason = _extract_reject_reason_from_logs(logs_data)
 
             with transaction.atomic():
                 application = ScenePermissionApplication.objects.select_for_update().get(id=application.id)

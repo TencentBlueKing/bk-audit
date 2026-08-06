@@ -125,9 +125,6 @@ SYNC_SCENE_PERMISSION_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_SCENE_PERMISS
 # 授权失败最大重试次数
 SCENE_PERMISSION_GRANT_MAX_RETRY = int(os.getenv("BKAPP_SCENE_PERMISSION_GRANT_MAX_RETRY", "5"))
 
-# workflow 字段模板缓存秒数
-SCENE_PERMISSION_WORKFLOW_CACHE_TIMEOUT = 10 * 60
-
 # 业务角色 → V4 role_id
 SCENE_ROLE_TO_IAM_V4_ROLE = {
     SceneRole.MANAGER: IAMV4Role.SCENE_ADMIN,
@@ -165,6 +162,7 @@ class ITSMV4TicketStatus(TextChoices):
 
     RUNNING = "running", gettext_lazy("处理中")
     FINISHED = "finished", gettext_lazy("已结束")
+    TERMINATION = "termination", gettext_lazy("被终止")
 
 
 class ApplicationStatus(TextChoices):
@@ -173,6 +171,7 @@ class ApplicationStatus(TextChoices):
     PENDING = "pending", gettext_lazy("待审批")
     APPROVED = "approved", gettext_lazy("审批通过")
     REJECTED = "rejected", gettext_lazy("已驳回")
+    TERMINATED = "terminated", gettext_lazy("已终止")
 
 
 class GrantStatus(TextChoices):

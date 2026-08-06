@@ -78,24 +78,26 @@ def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[
 
 
 def parse_itsm_ticket(ticket_data: dict) -> dict:
-    """解析 ITSM 工单响应，返回结构化结果。
-    :param ticket_data: ITSM API 返回的工单数据
-    :return: {"status": str, "approve_result": bool, "is_terminal": bool}
+    """解析 ITSM 工单回调数据，返回结构化结果。
+    :param ticket_data: ITSM 回调中的 ticket 数据
+    :return: {"status": str, "approve_result": bool, "is_terminal": bool, "is_terminated": bool}
     """
     status = ticket_data.get("status", "")
     approve_result = ticket_data.get("approve_result", False)
-    is_terminal = status == ITSMV4TicketStatus.FINISHED
+    is_terminal = status in (ITSMV4TicketStatus.FINISHED, ITSMV4TicketStatus.TERMINATION)
+    is_terminated = status == ITSMV4TicketStatus.TERMINATION
     return {
         "status": status,
         "approve_result": approve_result,
         "is_terminal": is_terminal,
+        "is_terminated": is_terminated,
     }
 
 
 def parse_itsm_ticket_from_logs(logs_data: dict) -> dict:
     """从 ITSM V4 工单日志推断工单状态，返回结构化结果。
     :param logs_data: ITSM V4 TicketLogs API 返回的数据 {"items": [...]}
-    :return: {"status": str, "approve_result": bool, "is_terminal": bool}
+    :return: {"status": str, "approve_result": bool, "is_terminal": bool, "is_terminated": bool}
     """
     items = logs_data.get("items", [])
 
@@ -105,10 +107,22 @@ def parse_itsm_ticket_from_logs(logs_data: dict) -> dict:
             "status": ITSMV4TicketStatus.RUNNING,
             "approve_result": False,
             "is_terminal": False,
+            "is_terminated": False,
         }
 
     # 检查流程是否结束
     has_end = any(item.get("action") == "end" for item in items)
+    # 检查是否被终止
+    has_terminate = any(item.get("action") == "terminate" for item in items)
+
+    # 被终止 → 终态
+    if has_terminate and has_end:
+        return {
+            "status": ITSMV4TicketStatus.TERMINATION,
+            "approve_result": False,
+            "is_terminal": True,
+            "is_terminated": True,
+        }
 
     # 查找审批节点（activity_type == "APPROVE_TASK"）
     approve_result = False
@@ -123,6 +137,7 @@ def parse_itsm_ticket_from_logs(logs_data: dict) -> dict:
             "status": ITSMV4TicketStatus.FINISHED,
             "approve_result": approve_result,
             "is_terminal": True,
+            "is_terminated": False,
         }
 
     # 其他情况 → 流程进行中
@@ -130,6 +145,7 @@ def parse_itsm_ticket_from_logs(logs_data: dict) -> dict:
         "status": ITSMV4TicketStatus.RUNNING,
         "approve_result": False,
         "is_terminal": False,
+        "is_terminated": False,
     }
 
 
@@ -150,7 +166,11 @@ def apply_ticket_result(
     if parsed["status"] == ITSMV4TicketStatus.FINISHED and parsed["approve_result"]:
         application.status = ApplicationStatus.APPROVED
         do_grant(application, operator=operator)
-    # ② 审批驳回（finished 但未通过）→ 记录拒绝理由
+    # ② 被终止 → 记录终止理由
+    elif parsed["status"] == ITSMV4TicketStatus.TERMINATION or parsed.get("is_terminated"):
+        application.reject_reason = reject_reason
+        _set_terminal(application, ApplicationStatus.TERMINATED)
+    # ③ 审批驳回（finished 但未通过）→ 记录拒绝理由
     elif parsed["status"] == ITSMV4TicketStatus.FINISHED:
         application.reject_reason = reject_reason
         _set_terminal(application, ApplicationStatus.REJECTED)
@@ -172,18 +192,23 @@ def _extract_reject_reason(ticket_id: str) -> str:
 
 
 def _extract_reject_reason_from_logs(logs_data: dict) -> str:
-    """从已获取的 ITSM V4 工单日志数据中提取拒绝/驳回理由。
+    """从已获取的 ITSM V4 工单日志数据中提取拒绝/终止理由。
     :param logs_data: ITSM V4 TicketLogs API 返回的数据 {"items": [...]}
     :return: 拒绝理由，获取失败返回空字符串
     """
     items = logs_data.get("items", [])
 
-    # 从后往前找最近的拒绝操作
+    # 从后往前找最近的拒绝或终止操作
     for log_item in reversed(items):
-        if log_item.get("action") == "refuse":
-            # 从 extra 中提取审批意见
+        action = log_item.get("action")
+        if action in ("refuse", "terminate"):
+            # 从 extra 中提取理由
             for extra_item in log_item.get("extra", []):
+                # 提取拒绝理由
                 if extra_item.get("type") == "name_value" and extra_item.get("name") == "审批意见":
+                    return str(extra_item.get("value", "")).strip()
+                # 提取终止原因
+                if extra_item.get("type") == "name_value" and extra_item.get("name") == "原因":
                     return str(extra_item.get("value", "")).strip()
             break
 

@@ -61,7 +61,7 @@ class Migration(migrations.Migration):
                             ("pending", "待审批"),
                             ("approved", "审批通过"),
                             ("rejected", "已驳回"),
-                            ("revoked", "已撤回"),
+                            ("terminated", "已终止"),
                         ],
                         db_index=True,
                         default="pending",
