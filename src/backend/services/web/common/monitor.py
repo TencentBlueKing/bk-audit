@@ -27,6 +27,7 @@ __all__ = [
     "AnalyseReportGenerateFailedEvent",
     "AssetSyncAnomalyEvent",
     "AssetSyncCheckAnomalyEvent",
+    "ScenePermissionGrantFailedEvent",
 ]
 
 
@@ -116,3 +117,18 @@ class AssetSyncCheckAnomalyEvent(Event):
     name = "asset_sync_data_anomaly"
     documentation = "资产同步数据异常"
     labelnames = ["system_id", "resource_type_id", "join_data_type", "reason"]
+
+
+class ScenePermissionGrantFailedEvent(Event):
+    """场景权限申请审批通过但授权失败事件
+    维度字段:
+    - application_id: 申请单ID
+    - applicant: 申请人
+    - scene_id: 场景ID
+    - role: 申请角色
+    - grant_error: 授权失败原因
+    """
+
+    name = "scene_permission_grant_failed"
+    documentation = "场景权限申请审批通过但授权失败（重试已达上限）"
+    labelnames = ["application_id", "applicant", "scene_id", "role", "grant_error"]

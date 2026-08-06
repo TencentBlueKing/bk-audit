@@ -9,8 +9,11 @@ from core.models import (
     SoftDeleteQuerySet,
 )
 from services.web.scene.constants import (
+    ApplicationStatus,
     BindingType,
+    GrantStatus,
     ResourceVisibilityType,
+    SceneRole,
     SceneStatus,
     VisibilityScope,
 )
@@ -183,3 +186,62 @@ class ResourceBindingSystem(OperateRecordModel):
 
     def __str__(self):
         return f"ResourceBindingSystem({self.binding_id}: system={self.system_id})"
+
+
+class ScenePermissionApplication(OperateRecordModel):
+    """场景权限申请单"""
+
+    scene = models.ForeignKey(Scene, on_delete=models.CASCADE, related_name="permission_applications")
+    applicant = models.CharField(gettext_lazy("申请人"), max_length=64, db_index=True)
+    role = models.CharField(gettext_lazy("申请角色"), max_length=16, choices=SceneRole.choices, db_index=True)
+    reason = models.TextField(gettext_lazy("申请理由"), blank=True, default="")
+
+    # ITSM 单据
+    itsm_sn = models.CharField(gettext_lazy("ITSM单号"), max_length=64, db_index=True)
+    itsm_ticket_id = models.CharField(gettext_lazy("ITSM工单ID"), max_length=128, unique=True, db_index=True)
+    itsm_ticket_url = models.CharField(gettext_lazy("ITSM工单链接"), max_length=512, blank=True, default="")
+    callback_token = models.CharField(gettext_lazy("回调鉴权Token"), max_length=128, blank=True, default="")
+
+    # 状态
+    status = models.CharField(
+        gettext_lazy("审批状态"),
+        max_length=16,
+        choices=ApplicationStatus.choices,
+        default=ApplicationStatus.PENDING,
+        db_index=True,
+    )
+    grant_status = models.CharField(
+        gettext_lazy("授权状态"),
+        max_length=16,
+        choices=GrantStatus.choices,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    approvers = models.JSONField(gettext_lazy("审批人"), default=list)
+    reject_reason = models.TextField(gettext_lazy("拒绝理由"), blank=True, default="")
+
+    # 授权结果
+    grant_method = models.CharField(gettext_lazy("授权方式"), max_length=32, blank=True, default="")
+    grant_error = models.TextField(gettext_lazy("授权错误"), blank=True, default="")
+    retry_count = models.IntegerField(gettext_lazy("授权重试次数"), default=0)
+    finished_at = models.DateTimeField(gettext_lazy("完结时间"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("场景权限申请")
+        verbose_name_plural = verbose_name
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["applicant", "status"], name="applicant_status_idx"),
+            models.Index(fields=["scene", "status"], name="scene_status_idx"),
+            models.Index(fields=["status", "retry_count"], name="status_retry_idx"),
+            models.Index(fields=["status", "created_at"], name="status_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"ScenePermissionApplication({self.id}: scene={self.scene_id}, applicant={self.applicant})"
+
+    @property
+    def is_terminal(self) -> bool:
+        """审批终态（审批结果已确定，不再被轮询）"""
+        return self.status != ApplicationStatus.PENDING

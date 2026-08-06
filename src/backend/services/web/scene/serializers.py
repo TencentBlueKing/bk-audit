@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
@@ -14,6 +15,7 @@ from services.web.scene.constants import (
     SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES,
     SCENE_RISK_COUNT_DEFAULT_MONTHS,
     ResourceVisibilityType,
+    SceneRole,
     SceneStatus,
     VisibilityScope,
 )
@@ -23,6 +25,7 @@ from services.web.scene.models import (
     ResourceBindingSystem,
     Scene,
     SceneDataTable,
+    ScenePermissionApplication,
     SceneSystem,
 )
 from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
@@ -429,3 +432,28 @@ class ResourceBindingInputSerializer(serializers.Serializer):
         except ValueError:
             raise serializers.ValidationError({"visibility": "可见性配置不合法"})
         return attrs
+
+
+class ApplyScenePermissionRequestSerializer(serializers.Serializer):
+    """提交场景权限申请请求"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    role = serializers.ChoiceField(label=gettext_lazy("角色"), choices=SceneRole.choices, required=True)
+    reason = serializers.CharField(label=gettext_lazy("申请理由"), required=False, allow_blank=True)
+
+
+class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
+    """场景权限申请单"""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ScenePermissionApplication
+        fields = [
+            "id",
+            "itsm_sn",
+            "status",
+            "status_display",
+            "created_at",
+        ]
+        read_only_fields = fields
