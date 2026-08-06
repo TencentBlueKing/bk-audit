@@ -35,229 +35,223 @@
       </bk-exception>
 
       <div v-else>
-        <bk-collapse
+        <!-- 交互组件 -->
+        <div
           v-if="comList.length > 0"
-          v-model="activeComIndex"
-          class="bk-collapse-demo"
-          header-icon="collapse-demo"
-          :list="collapseList">
-          <template #title>
+          class="param-section">
+          <div
+            class="section-header"
+            @click="isComExpanded = !isComExpanded">
+            <audit-icon
+              class="section-arrow"
+              :class="{ 'is-collapsed': !isComExpanded }"
+              type="angle-fill-down" />
+            <span class="title-text">{{ t('交互组件') }}</span>
+            <img
+              class="title-info-icon"
+              src="@/images/info-gray.svg">
+            <span class="title-desc">
+              {{ t('设置BKVision交互组件的默认值，用户打开图表后，可通过交互组件调整该值') }}
+            </span>
+          </div>
+          <div
+            v-show="isComExpanded"
+            class="param-list">
             <div
-              class="collapse-title"
-              @click="isRotatedCom = !isRotatedCom">
-              <audit-icon
-                :class="{ rotated: isRotatedCom }"
-                type="angle-fill-down" />
-              <span class="title-text">{{ t('交互组件') }}</span>
-              <img
-                class="title-info-icon"
-                src="@/images/info-gray.svg">
-              <span class="title-desc">
-                {{ t('设置BKVision交互组件的默认值，用户打开图表后，可通过交互组件调整该值') }}
-              </span>
-            </div>
-          </template>
-          <template #content>
-            <div class="param-list">
-              <div
-                v-for="item in comList"
-                :key="item.raw_name"
-                class="param-item">
-                <div class="param-label">
-                  <span
-                    v-bk-tooltips="{
-                      disabled: getPanelTooltip(item) === '',
-                      content: getPanelTooltip(item)
-                    }">{{ item.display_name }}({{ item.raw_name }})</span>
-                  <bk-popover
-                    :is-show="defaultTipVisibleMap[item.raw_name] === true"
-                    placement="top"
-                    theme="light"
-                    trigger="manual"
-                    :z-index="10050"
-                    @after-hidden="hideDefaultTip(item.raw_name)">
-                    <bk-checkbox
-                      class="title-right is-black-text"
-                      :disabled="false"
-                      :model-value="item.is_default_value"
-                      size="small"
-                      @change="checked => handleDefaultValueToggle(checked, item)">
-                      {{ t('使用默认值') }}
-                    </bk-checkbox>
-                    <template #content>
-                      <div class="default-value-tip-popover">
-                        <div class="default-value-tip-text">
-                          {{ t('勾选后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示') }}
-                        </div>
-                        <div class="default-value-tip-actions">
-                          <bk-button
-                            size="small"
-                            theme="primary"
-                            @click="handleConfirmDefaultTip(item)">
-                            {{ t('知道了') }}
-                          </bk-button>
-                        </div>
+              v-for="item in comList"
+              :key="item.raw_name"
+              class="param-item">
+              <div class="param-label">
+                <span
+                  v-bk-tooltips="{
+                    disabled: getPanelTooltip(item) === '',
+                    content: getPanelTooltip(item)
+                  }">{{ item.display_name }}({{ item.raw_name }})</span>
+                <bk-popover
+                  :is-show="defaultTipVisibleMap[item.raw_name] === true"
+                  placement="top"
+                  theme="light"
+                  trigger="manual"
+                  :z-index="10050"
+                  @after-hidden="hideDefaultTip(item.raw_name)">
+                  <bk-checkbox
+                    class="title-right is-black-text"
+                    :disabled="false"
+                    :model-value="item.is_default_value"
+                    size="small"
+                    @change="checked => handleDefaultValueToggle(checked, item)">
+                    {{ t('使用默认值') }}
+                  </bk-checkbox>
+                  <template #content>
+                    <div class="default-value-tip-popover">
+                      <div class="default-value-tip-text">
+                        {{ t('勾选后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示') }}
                       </div>
-                    </template>
-                  </bk-popover>
-                </div>
+                      <div class="default-value-tip-actions">
+                        <bk-button
+                          size="small"
+                          theme="primary"
+                          @click="handleConfirmDefaultTip(item)">
+                          {{ t('知道了') }}
+                        </bk-button>
+                      </div>
+                    </div>
+                  </template>
+                </bk-popover>
+              </div>
 
-                <div class="param-content">
-                  <bk-date-picker
-                    v-if="item.field_category === 'time-picker'"
-                    append-to-body
+              <div class="param-content">
+                <bk-date-picker
+                  v-if="item.field_category === 'time-picker'"
+                  append-to-body
+                  :disabled="item.is_default_value"
+                  format="yyyy-MM-dd HH:mm:ss"
+                  :model-value="getDateValue(item)"
+                  :shortcuts="dateShortCut"
+                  type="datetime"
+                  use-shortcut-text
+                  @change="val => updateItemDefaultValue(val, item)" />
+                <div
+                  v-else-if="item.field_category === 'time-ranger'"
+                  class="range-wrapper"
+                  @mouseenter="hoverDeleteKey = item.raw_name"
+                  @mouseleave="hoverDeleteKey = ''">
+                  <date-picker
                     :disabled="item.is_default_value"
-                    format="yyyy-MM-dd HH:mm:ss"
-                    :model-value="getDateValue(item)"
-                    :shortcuts="dateShortCut"
-                    type="datetime"
-                    use-shortcut-text
-                    @change="val => updateItemDefaultValue(val, item)" />
-                  <div
-                    v-else-if="item.field_category === 'time-ranger'"
-                    class="range-wrapper"
-                    @mouseenter="hoverDeleteKey = item.raw_name"
-                    @mouseleave="hoverDeleteKey = ''">
-                    <date-picker
-                      :disabled="item.is_default_value"
-                      :model-value="getRangeValue(item)"
-                      style="width: 100%;"
-                      @update:model-value="(val: string[]) => updateItemDefaultValue(val, item)" />
-                    <audit-icon
-                      v-if="hoverDeleteKey === item.raw_name && !item.is_default_value"
-                      class="delete"
-                      type="delete-fill"
-                      @click="updateItemDefaultValue([], item)" />
-                  </div>
-                  <bk-input
-                    v-else-if="item.field_category === 'inputer'"
-                    :disabled="item.is_default_value"
-                    :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
-                    @change="val => updateItemDefaultValue(val, item)" />
-                  <bk-tag-input
-                    v-else
-                    allow-create
-                    collapse-tags
-                    :disabled="item.is_default_value"
-                    has-delete-icon
-                    :list="[]"
-                    :model-value="getTagValue(item)"
-                    @change="val => updateItemDefaultValue(val, item)" />
+                    :model-value="getRangeValue(item)"
+                    style="width: 100%;"
+                    @update:model-value="(val: string[]) => updateItemDefaultValue(val, item)" />
+                  <audit-icon
+                    v-if="hoverDeleteKey === item.raw_name && !item.is_default_value"
+                    class="delete"
+                    type="delete-fill"
+                    @click="updateItemDefaultValue([], item)" />
                 </div>
+                <bk-input
+                  v-else-if="item.field_category === 'inputer'"
+                  :disabled="item.is_default_value"
+                  :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
+                  @change="val => updateItemDefaultValue(val, item)" />
+                <bk-tag-input
+                  v-else
+                  allow-create
+                  collapse-tags
+                  :disabled="item.is_default_value"
+                  has-delete-icon
+                  :list="[]"
+                  :model-value="getTagValue(item)"
+                  @change="val => updateItemDefaultValue(val, item)" />
               </div>
             </div>
-          </template>
-        </bk-collapse>
+          </div>
+        </div>
 
-        <bk-collapse
+        <!-- 变量 -->
+        <div
           v-if="variableList.length > 0"
-          v-model="activeVarIndex"
-          class="bk-collapse-demo"
-          header-icon="collapse-demo"
-          :list="collapseList">
-          <template #title>
+          class="param-section">
+          <div
+            class="section-header"
+            @click="isVarExpanded = !isVarExpanded">
+            <audit-icon
+              class="section-arrow"
+              :class="{ 'is-collapsed': !isVarExpanded }"
+              type="angle-fill-down" />
+            <span class="title-text">{{ t('变量') }}</span>
+            <img
+              class="title-info-icon"
+              src="@/images/info-gray.svg">
+            <span class="title-desc">
+              {{ t('设置BKVision变量的值，该值在图表打开后不可修改') }}
+            </span>
+          </div>
+          <div
+            v-show="isVarExpanded"
+            class="param-list">
             <div
-              class="collapse-title"
-              @click="isRotatedVar = !isRotatedVar">
-              <audit-icon
-                :class="{ rotated: isRotatedVar }"
-                type="angle-fill-down" />
-              <span class="title-text">{{ t('变量') }}</span>
-              <img
-                class="title-info-icon"
-                src="@/images/info-gray.svg">
-              <span class="title-desc">
-                {{ t('设置BKVision变量的值，该值在图表打开后不可修改') }}
-              </span>
-            </div>
-          </template>
-          <template #content>
-            <div class="param-list">
-              <div
-                v-for="item in variableList"
-                :key="item.raw_name"
-                class="param-item">
-                <div class="param-label">
-                  <span>{{ item.display_name }}({{ item.raw_name }})</span>
-                  <bk-popover
-                    :is-show="defaultTipVisibleMap[item.raw_name] === true"
-                    placement="top"
-                    theme="light"
-                    trigger="manual"
-                    :z-index="10050"
-                    @after-hidden="hideDefaultTip(item.raw_name)">
-                    <bk-checkbox
-                      class="title-right is-black-text"
-                      :disabled="false"
-                      :model-value="item.is_default_value"
-                      size="small"
-                      @change="checked => handleDefaultValueToggle(checked, item)">
-                      {{ t('使用默认值') }}
-                    </bk-checkbox>
-                    <template #content>
-                      <div class="default-value-tip-popover">
-                        <div class="default-value-tip-text">
-                          {{ t('勾选后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示') }}
-                        </div>
-                        <div class="default-value-tip-actions">
-                          <bk-button
-                            size="small"
-                            theme="primary"
-                            @click="handleConfirmDefaultTip(item)">
-                            {{ t('知道了') }}
-                          </bk-button>
-                        </div>
+              v-for="item in variableList"
+              :key="item.raw_name"
+              class="param-item">
+              <div class="param-label">
+                <span>{{ item.display_name }}({{ item.raw_name }})</span>
+                <bk-popover
+                  :is-show="defaultTipVisibleMap[item.raw_name] === true"
+                  placement="top"
+                  theme="light"
+                  trigger="manual"
+                  :z-index="10050"
+                  @after-hidden="hideDefaultTip(item.raw_name)">
+                  <bk-checkbox
+                    class="title-right is-black-text"
+                    :disabled="false"
+                    :model-value="item.is_default_value"
+                    size="small"
+                    @change="checked => handleDefaultValueToggle(checked, item)">
+                    {{ t('使用默认值') }}
+                  </bk-checkbox>
+                  <template #content>
+                    <div class="default-value-tip-popover">
+                      <div class="default-value-tip-text">
+                        {{ t('勾选后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示') }}
                       </div>
-                    </template>
-                  </bk-popover>
-                </div>
+                      <div class="default-value-tip-actions">
+                        <bk-button
+                          size="small"
+                          theme="primary"
+                          @click="handleConfirmDefaultTip(item)">
+                          {{ t('知道了') }}
+                        </bk-button>
+                      </div>
+                    </div>
+                  </template>
+                </bk-popover>
+              </div>
 
-                <div class="param-content">
-                  <bk-date-picker
-                    v-if="item.field_category === 'time-picker'"
-                    append-to-body
+              <div class="param-content">
+                <bk-date-picker
+                  v-if="item.field_category === 'time-picker'"
+                  append-to-body
+                  :disabled="item.is_default_value"
+                  format="yyyy-MM-dd HH:mm:ss"
+                  :model-value="getDateValue(item)"
+                  :shortcuts="dateShortCut"
+                  type="datetime"
+                  use-shortcut-text
+                  @change="val => updateItemDefaultValue(val, item)" />
+                <div
+                  v-else-if="item.field_category === 'time-ranger'"
+                  class="range-wrapper"
+                  @mouseenter="hoverDeleteKey = item.raw_name"
+                  @mouseleave="hoverDeleteKey = ''">
+                  <date-picker
                     :disabled="item.is_default_value"
-                    format="yyyy-MM-dd HH:mm:ss"
-                    :model-value="getDateValue(item)"
-                    :shortcuts="dateShortCut"
-                    type="datetime"
-                    use-shortcut-text
-                    @change="val => updateItemDefaultValue(val, item)" />
-                  <div
-                    v-else-if="item.field_category === 'time-ranger'"
-                    class="range-wrapper"
-                    @mouseenter="hoverDeleteKey = item.raw_name"
-                    @mouseleave="hoverDeleteKey = ''">
-                    <date-picker
-                      :disabled="item.is_default_value"
-                      :model-value="getRangeValue(item)"
-                      style="width: 100%;"
-                      @update:model-value="(val: string[]) => updateItemDefaultValue(val, item)" />
-                    <audit-icon
-                      v-if="hoverDeleteKey === item.raw_name && !item.is_default_value"
-                      class="delete"
-                      type="delete-fill"
-                      @click="updateItemDefaultValue([], item)" />
-                  </div>
-                  <bk-input
-                    v-else-if="item.field_category === 'inputer'"
-                    :disabled="item.is_default_value"
-                    :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
-                    @change="val => updateItemDefaultValue(val, item)" />
-                  <bk-tag-input
-                    v-else
-                    allow-create
-                    collapse-tags
-                    :disabled="item.is_default_value"
-                    has-delete-icon
-                    :list="[]"
-                    :model-value="getTagValue(item)"
-                    @change="val => updateItemDefaultValue(val, item)" />
+                    :model-value="getRangeValue(item)"
+                    style="width: 100%;"
+                    @update:model-value="(val: string[]) => updateItemDefaultValue(val, item)" />
+                  <audit-icon
+                    v-if="hoverDeleteKey === item.raw_name && !item.is_default_value"
+                    class="delete"
+                    type="delete-fill"
+                    @click="updateItemDefaultValue([], item)" />
                 </div>
+                <bk-input
+                  v-else-if="item.field_category === 'inputer'"
+                  :disabled="item.is_default_value"
+                  :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
+                  @change="val => updateItemDefaultValue(val, item)" />
+                <bk-tag-input
+                  v-else
+                  allow-create
+                  collapse-tags
+                  :disabled="item.is_default_value"
+                  has-delete-icon
+                  :list="[]"
+                  :model-value="getTagValue(item)"
+                  @change="val => updateItemDefaultValue(val, item)" />
               </div>
             </div>
-          </template>
-        </bk-collapse>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -292,14 +286,11 @@
   const { t } = useI18n();
 
   const now = new Date();
-  const activeComIndex = ref(0);
-  const activeVarIndex = ref(0);
-  const isRotatedCom = ref(false);
-  const isRotatedVar = ref(false);
+  const isComExpanded = ref(true);
+  const isVarExpanded = ref(true);
   const hoverDeleteKey = ref('');
   const defaultTipVisibleMap = ref<Record<string, boolean>>({});
   const localFields = ref<InputVariableItem[]>([]);
-  const collapseList = ref([{ title: '', content: '' }]);
 
   const cloneItem = (item: InputVariableItem): InputVariableItem => ({
     ...item,
@@ -422,37 +413,53 @@
   padding: 0 24px 16px;
 }
 
-.collapse-title {
+.param-section {
+  & + .param-section {
+    margin-top: 8px;
+  }
+}
+
+.section-header {
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 8px;
+  min-height: 32px;
+  gap: 6px;
+  cursor: pointer;
+
+  .section-arrow {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: #979ba5;
+    transition: transform .2s ease;
+
+    &.is-collapsed {
+      transform: rotate(-90deg);
+    }
+  }
 
   .title-text {
+    flex: 0 0 auto;
     font-size: 14px;
     font-weight: 600;
     color: #313238;
   }
 
   .title-info-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     flex: 0 0 auto;
   }
 
   .title-desc {
     flex: 1;
-    margin-left: 6px;
+    overflow: hidden;
     font-size: 12px;
     line-height: 18px;
     color: #979ba5;
-    word-break: break-word;
-    white-space: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-}
-
-.rotated {
-  transform: rotate(180deg);
 }
 
 .param-list {
@@ -519,10 +526,6 @@
     justify-content: flex-end;
     padding: 0 16px 8px;
   }
-}
-
-:deep(.bk-collapse-item) {
-  border-top: 0;
 }
 </style>
 
