@@ -97,3 +97,31 @@ class ToolNotExist(SceneException):
 class ToolCannotDelete(SceneException):
     MESSAGE = gettext_lazy("已上架的工具不可删除")
     ERROR_CODE = "007"
+
+
+class ScenePermissionApplicationException(SceneException):
+    """场景权限申请异常基类"""
+
+    MODULE_CODE = "08"
+    STATUS_CODE = 400
+
+
+class SceneNotEnabled(ScenePermissionApplicationException):
+    MESSAGE = gettext_lazy("场景已停用，无法申请权限")
+    ERROR_CODE = "010"
+
+
+class AlreadyHasPermission(ScenePermissionApplicationException):
+    MESSAGE = gettext_lazy("您已拥有该场景的该角色权限，无需重复申请")
+    ERROR_CODE = "011"
+
+
+class ApplicationPending(ScenePermissionApplicationException):
+    MESSAGE = gettext_lazy("您已有一条该角色的申请正在审批中，请勿重复申请")
+    ERROR_CODE = "012"
+    STATUS_CODE = 409
+
+
+class ApproveServiceNotConfigured(ScenePermissionApplicationException):
+    MESSAGE = gettext_lazy("场景权限审批流程未配置，请联系管理员")
+    ERROR_CODE = "013"
