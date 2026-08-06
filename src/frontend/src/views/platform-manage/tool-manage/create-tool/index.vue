@@ -83,7 +83,12 @@
         </div>
         <template #action>
           <bk-button
+            v-bk-tooltips="{
+              disabled: !isApiDoneDeBug,
+              content: t('请完成接口成功调试后再试')
+            }"
             class="w88"
+            :disabled="isApiDoneDeBug"
             theme="primary"
             @click="handleNextStep">
             {{ t('下一步') }}
@@ -325,11 +330,11 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   // 等待工具类型子组件挂载后再回填配置（编辑时 tool_type 会从默认值切换为接口返回值）
-  const restoreToolComponentConfig = () => {
+  const restoreToolComponentConfig = (options?: { needsRedebug?: boolean }) => {
     nextTick(() => {
       nextTick(() => {
         if (comRef.value?.setConfigs && formData.value.config) {
-          comRef.value.setConfigs(_.cloneDeep(formData.value.config));
+          comRef.value.setConfigs(_.cloneDeep(formData.value.config), options);
         }
       });
     });
@@ -442,14 +447,21 @@
       if (comRef.value && formData.value.tool_type !== 'api') {
         tastQueue.push(comRef.value.getValue());
       }
-      if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
-        const debugResult = comRef.value.getDebugResult();
-        if (!debugResult.isDoneDeBug) {
+      // 新建/编辑：参数名、传参方式等变更后均需重新调试成功才能进入下一步
+      if (formData.value.tool_type === 'api') {
+        // 步骤条异步切换时 comRef 可能已卸载，回退到父级调试态
+        if (comRef.value?.getDebugResult) {
+          const debugResult = comRef.value.getDebugResult();
+          if (!debugResult.isDoneDeBug) {
+            messageWarn(t('请先进行接口调试'));
+            return false;
+          }
+          if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+            messageWarn(t('接口调试失败'));
+            return false;
+          }
+        } else if (isApiDoneDeBug.value) {
           messageWarn(t('请先进行接口调试'));
-          return false;
-        }
-        if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
-          messageWarn(t('接口调试失败'));
           return false;
         }
       }
@@ -493,7 +505,7 @@
   };
 
   const syncApiDebugSubmitState = () => {
-    if (formData.value.tool_type === 'api' && !isEditMode) {
+    if (formData.value.tool_type === 'api') {
       const hasDebugSchema = !!formData.value.config?.output_config?.result_schema?.tree_data;
       isApiDoneDeBug.value = !hasDebugSchema;
     }
@@ -648,6 +660,8 @@
   };
 
   const isApiDoneDeBug = ref(false);
+  /** 步骤条校验失败回退时，避免 remount 把「需重新调试」冲成调试成功 */
+  const pendingRestoreNeedsRedebug = ref(false);
   // api工具获取是否调试成功
   const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean, isSame: boolean) => {
     if (!isEditMode) {
@@ -692,8 +706,15 @@
     }
 
     if (val === 2 && oldVal === 1) {
+      // 异步校验前先记下调试态：校验失败回退 remount 时需保留「需重新调试」
+      const needsRedebugOnRollback = formData.value.tool_type === 'api' && isApiDoneDeBug.value;
+      // 子组件可能在 await 期间卸载，先同步当前配置，避免回退丢失参数修改
+      if (comRef.value?.getFields) {
+        syncStep1Config();
+      }
       const isValid = await validateStep1();
       if (!isValid) {
+        pendingRestoreNeedsRedebug.value = needsRedebugOnRollback;
         currentStep.value = 1;
         return;
       }
@@ -702,7 +723,12 @@
     }
 
     if (val === 1 && oldVal === 2 && formData.value.tool_type !== 'bk_vision') {
-      restoreToolComponentConfig();
+      const needsRedebug = pendingRestoreNeedsRedebug.value
+        || (formData.value.tool_type === 'api' && isApiDoneDeBug.value);
+      pendingRestoreNeedsRedebug.value = false;
+      restoreToolComponentConfig({
+        needsRedebug: needsRedebug && formData.value.tool_type === 'api',
+      });
     }
   });
 
