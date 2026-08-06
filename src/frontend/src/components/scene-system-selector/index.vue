@@ -81,7 +81,10 @@
               v-for="item in filteredSceneList"
               :key="item.id"
               class="dropdown-item"
-              :class="{ 'is-selected': isSelected(item) }"
+              :class="{
+                'is-selected': isSelected(item),
+                'is-locked': isSceneLocked(item),
+              }"
               @click.stop="handleSelect(item)">
               <bk-tag
                 class="type-tag"
@@ -93,6 +96,11 @@
                 :class="{ 'is-highlight': item.type !== 'aggregate' }"
                 :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name"
                 placement="right" />
+              <div
+                v-if="isSceneLocked(item)"
+                v-cursor
+                class="lock-mask"
+                @click.stop />
             </div>
           </div>
         </div>
@@ -154,6 +162,11 @@
     id: string;
     name: string;
     type: 'aggregate' | 'scene' | 'system';
+    permission?: {
+      manage_scene?: boolean;
+      view_scene?: boolean;
+      [key: string]: boolean | undefined;
+    };
   }
 
   interface Props {
@@ -166,6 +179,7 @@
     scenePermission: 'manage_scene' | 'view_scene' | 'manage_scene,view_scene';
     isAllSystem?: boolean; // 是否展示全部接入系统
     isAllSecen?: boolean; // 是否展示全部审计场景
+    viewSceneBlock?: boolean; // 只有查看权限的场景是否上锁
   }
 
   interface Emits {
@@ -181,6 +195,7 @@
     listScope: () => ['scene', 'system'],
     isAllSecen: true,
     isAllSystem: true,
+    viewSceneBlock: false,
   });
 
   const emits = defineEmits<Emits>();
@@ -249,6 +264,13 @@
     if (!selectedItem.value) return false;
     return selectedItem.value.id === item.id && selectedItem.value.type === item.type;
   };
+
+  // viewSceneBlock 开启时，仅查看权限（无管理权限）的场景禁止选择
+  const isSceneLocked = (item: SelectorItem) => (
+    props.viewSceneBlock
+    && item.type === 'scene'
+    && item.permission?.manage_scene === false
+  );
 
   const STORAGE_KEY = 'scene-system-selector:selected';
 
@@ -330,8 +352,9 @@
     // URL 精确匹配需包含 aggregate 项（allSystem/allSecen 也是合法选择）
     const sceneItemsForMatch = showScene ? sceneList.value : [];
     const systemItemsForMatch = showSystem ? systemList.value : [];
-    // 兜底选中只选具体项（不默认选聚合项）
+    // 兜底选中只选具体项（不默认选聚合项）；上锁场景不可作为默认项
     const sceneItems = sceneItemsForMatch.filter(item => item.type !== 'aggregate');
+    const unlockedSceneItems = sceneItems.filter(item => !isSceneLocked(item));
     const systemItems = systemItemsForMatch.filter(item => item.type !== 'aggregate');
     const urlMatchId = getUrlMatchId();
 
@@ -386,9 +409,9 @@
 
     // ── 阶段3：URL无ID / 匹配失败 / 上次选择不可用时的兜底逻辑 ──
     if (!targetItem) {
-      // 优先选第一个非聚合场景；场景列表为空时退而求其次选系统
-      if (sceneItems.length > 0) {
-        [targetItem] = sceneItems;
+      // 优先选第一个可管理的非聚合场景；场景列表为空时退而求其次选系统
+      if (unlockedSceneItems.length > 0) {
+        [targetItem] = unlockedSceneItems;
       } else if (systemItems.length > 0) {
         [targetItem] = systemItems;
       }
@@ -407,6 +430,7 @@
 
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
+    if (isSceneLocked(item)) return;
     if ((!window.changeConfirm || window.changeConfirm === 'popover') && route.meta.changeSceneIsBackedList) {
       InfoBox({
         title: t('确认离开当前页？'),
@@ -562,6 +586,7 @@
           id: String(item.scene_id),
           name: item.name,
           type: 'scene' as const,
+          permission: item.permission,
         }));
       sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
       // 存储纯场景列表（不含聚合项）供 layout.vue 聚合模式使用
@@ -842,6 +867,21 @@
             }
           }
 
+          &.is-locked,
+          &.is-locked.is-selected,
+          &.is-locked:hover {
+            background-color: #2a3140;
+
+            .item-name,
+            .item-name.is-highlight {
+              color: #4f5566;
+            }
+
+            .type-tag {
+              opacity: .45;
+            }
+          }
+
           .item-name {
             color: #979ba5;
 
@@ -882,6 +922,7 @@
 
     .group-list {
       .dropdown-item {
+        position: relative;
         display: flex;
         align-items: center;
         height: 36px;
@@ -938,6 +979,29 @@
           margin-left: 4px;
           font-size: 12px;
           color: #979ba5;
+        }
+
+        &.is-locked,
+        &.is-locked.is-selected,
+        &.is-locked:hover {
+          cursor: not-allowed;
+          background-color: #f0f1f5;
+
+          .item-name,
+          .item-name.is-highlight {
+            color: #c4c6cc;
+          }
+
+          .type-tag {
+            opacity: .5;
+          }
+        }
+
+        .lock-mask {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          cursor: none;
         }
       }
     }
