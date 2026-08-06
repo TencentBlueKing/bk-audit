@@ -881,22 +881,11 @@
 
 .report-footer-actions {
   display: flex;
-  gap: 12px;
-  width: 100%;
+  gap: 8px;
 }
 
 .footer-btn {
-  flex: 1;
-  min-width: 0;
-}
-
-.confirm-btn {
-  /* 保证宽度更接近设计稿 */
-  min-width: 160px;
-}
-
-.cancel-btn {
-  min-width: 160px;
+  min-width: 88px;
 }
 </style>
 
