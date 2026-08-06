@@ -183,6 +183,62 @@
                   </span>
                 </bk-option>
               </bk-select>
+              <!-- 时间范围选择器：与第一步参数组件保持一致 -->
+              <div
+                v-else-if="isTimeRangeVar(row.raw_name)"
+                class="time-range-select-wrapper"
+                @mouseenter="hoveredTimeRangeKey = getFieldErrorKey(item.key, row.raw_name)"
+                @mouseleave="hoveredTimeRangeKey = ''">
+                <div class="time-range-inner">
+                  <date-picker
+                    class="override-time-range-picker"
+                    :model-value="getOverrideValue(item, row.raw_name)"
+                    :placeholder="t('请选择')"
+                    style="width: 100%; height: 100%; border: none;"
+                    @update:model-value="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+                  <audit-icon
+                    v-show="hoveredTimeRangeKey === getFieldErrorKey(item.key, row.raw_name)
+                      && normalizeTimeRangeValue(getOverrideValue(item, row.raw_name)).length > 0"
+                    class="delete-fill-btn"
+                    type="delete-fill"
+                    @click.stop="handleDefaultValueChange(item, row.raw_name, [])" />
+                </div>
+              </div>
+              <!-- 时间选择器：与第一步参数组件保持一致 -->
+              <bk-date-picker
+                v-else-if="isTimePickerVar(row.raw_name)"
+                append-to-body
+                class="override-time-picker"
+                clearable
+                :model-value="getOverrideValue(item, row.raw_name)"
+                style="width: 100%"
+                type="datetime"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val || '')" />
+              <!-- 数字输入框 -->
+              <bk-input
+                v-else-if="isNumberInputVar(row.raw_name)"
+                :model-value="getOverrideValue(item, row.raw_name)"
+                :placeholder="t('请输入')"
+                type="number"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+              <!-- 人员选择器 -->
+              <audit-user-selector-tenant
+                v-else-if="isPersonSelectVar(row.raw_name)"
+                allow-create
+                class="override-person-select"
+                :model-value="getOverrideValue(item, row.raw_name)"
+                :placeholder="t('请输入人员进行搜索')"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+              <!-- BKVision 等选择器：tag 输入 -->
+              <bk-tag-input
+                v-else-if="isTagInputVar(row.raw_name)"
+                allow-create
+                class="override-tag-input"
+                collapse-tags
+                has-delete-icon
+                :list="[]"
+                :model-value="getOverrideValue(item, row.raw_name)"
+                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
               <bk-input
                 v-else
                 :model-value="getOverrideValue(item, row.raw_name)"
@@ -312,6 +368,8 @@
   const candidatesMap = ref<Record<string, CandidateChoice[]>>({});
   const candidatesLoadingMap = ref<Record<string, boolean>>({});
   const candidatesFetchedSet = ref<Set<string>>(new Set());
+  /** 当前 hover 的时间范围选择器字段 key，用于显示清除图标 */
+  const hoveredTimeRangeKey = ref('');
 
   // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
@@ -409,6 +467,112 @@
   const isMultiSelectVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'multiselect'
     || CANDIDATE_API_RAW_NAMES.has(rawName);
 
+  /** 时间范围选择器（API/数据查询 time_range_select，BKVision time-ranger） */
+  const isTimeRangeVar = (rawName: string) => {
+    const category = getInputVarConfig(rawName)?.field_category;
+    return category === 'time_range_select' || category === 'time-ranger';
+  };
+
+  /** 时间选择器（API/数据查询 time_select，BKVision time-picker） */
+  const isTimePickerVar = (rawName: string) => {
+    const category = getInputVarConfig(rawName)?.field_category;
+    return category === 'time_select' || category === 'time-picker';
+  };
+
+  /** 数字输入框 */
+  const isNumberInputVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'number_input';
+
+  /** 人员选择器 */
+  const isPersonSelectVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'person_select';
+
+  /**
+   * 文本输入类（走普通 bk-input）
+   * 含 API/数据查询 input、BKVision inputer/variable
+   */
+  const isPlainInputVar = (rawName: string) => {
+    const category = getInputVarConfig(rawName)?.field_category;
+    return !category
+      || category === 'input'
+      || category === 'inputer'
+      || category === 'variable';
+  };
+
+  /**
+   * BKVision 等选择器：未单独处理的类型走 tag-input（与 tool-form-item / bk-vision-components 一致）
+   */
+  const isTagInputVar = (rawName: string) => {
+    if (isMultiSelectVar(rawName)
+      || isTimeRangeVar(rawName)
+      || isTimePickerVar(rawName)
+      || isNumberInputVar(rawName)
+      || isPersonSelectVar(rawName)
+      || isPlainInputVar(rawName)) {
+      return false;
+    }
+    return !!getInputVarConfig(rawName)?.field_category;
+  };
+
+  /** 值需按数组处理的覆盖参数（多选 / 时间范围 / 人员 / tag） */
+  const isArrayValueVar = (rawName: string) => (
+    isMultiSelectVar(rawName)
+    || isTimeRangeVar(rawName)
+    || isPersonSelectVar(rawName)
+    || isTagInputVar(rawName)
+  );
+
+  /**
+   * 规范化时间范围值：date-picker 需要 string[]；
+   * 兼容数组、逗号拼接字符串（如 now-30d,now）、JSON 数组字符串。
+   */
+  const normalizeTimeRangeValue = (val: unknown): string[] => {
+    if (Array.isArray(val)) {
+      return val
+        .map(item => (item === null || item === undefined ? '' : String(item)))
+        .filter(Boolean);
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .map(item => (item === null || item === undefined ? '' : String(item)))
+              .filter(Boolean);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const parts = trimmed.split(',').map(s => s.trim());
+      return parts.filter(Boolean);
+    }
+    if (val === null || val === undefined || val === '') return [];
+    return [String(val)];
+  };
+
+  /** 人员选择器值归一化为用户名字符串数组 */
+  const normalizePersonSelectValue = (val: unknown): string[] => {
+    if (val === undefined || val === null || val === '') return [];
+    const arr = Array.isArray(val) ? val : [val];
+    return arr
+      .map((u) => {
+        if (!u) return '';
+        if (typeof u === 'string') return u;
+        const obj = u as Record<string, any>;
+        return obj.id
+          || obj.bk_username
+          || obj.username
+          || obj.login_name
+          || obj.name
+          || obj.display_name
+          || '';
+      })
+      .filter(Boolean)
+      .map(String);
+  };
+
   const isCandidatesLoading = (rawName: string) => !!candidatesLoadingMap.value[rawName];
 
   /** 格式：名称(id)，便于名称/ID 搜索与回显（如 业务A(100)、游戏名称(gameid)） */
@@ -476,7 +640,7 @@
   const getOverrideValue = (item: ConfigItem, rawName: string) => {
     const raw = item.default_values[rawName];
     if (raw === undefined || raw === null || raw === '') {
-      return isMultiSelectVar(rawName) ? EMPTY_MULTI_VALUE : '';
+      return isArrayValueVar(rawName) ? EMPTY_MULTI_VALUE : '';
     }
     const cacheKey = `${item.key}::${rawName}`;
     // 下拉 option.id 为字符串，回显也统一转成字符串
@@ -484,6 +648,15 @@
       return getStableStringList(cacheKey, normalizeCandidateIdsValue(raw).map(String));
     }
     if (isMultiSelectVar(rawName)) {
+      return getStableStringList(cacheKey, normalizeMultiSelectValue(raw));
+    }
+    if (isTimeRangeVar(rawName)) {
+      return getStableStringList(cacheKey, normalizeTimeRangeValue(raw));
+    }
+    if (isPersonSelectVar(rawName)) {
+      return getStableStringList(cacheKey, normalizePersonSelectValue(raw));
+    }
+    if (isTagInputVar(rawName)) {
       return getStableStringList(cacheKey, normalizeMultiSelectValue(raw));
     }
     return raw;
@@ -534,15 +707,24 @@
   // 从第一步工具配置中读取参数原始默认值
   const getParamOriginalDefault = (rawName: string) => {
     const param = inputVariableList.value.find(v => v.raw_name === rawName);
-    if (!param) return isMultiSelectVar(rawName) ? [] : '';
-    if (param.default_value !== undefined && param.default_value !== '') {
-      return param.default_value;
-    }
-    if (param.raw_default_value !== undefined && param.raw_default_value !== '') {
-      return param.raw_default_value;
-    }
-    if (isMultiSelectVar(rawName)) return [];
-    return param.default_value ?? '';
+    const emptyDefault = isArrayValueVar(rawName) ? [] : '';
+    if (!param) return emptyDefault;
+
+    const pickValue = () => {
+      if (param.default_value !== undefined && param.default_value !== '') {
+        return param.default_value;
+      }
+      if (param.raw_default_value !== undefined && param.raw_default_value !== '') {
+        return param.raw_default_value;
+      }
+      return param.default_value ?? emptyDefault;
+    };
+
+    const value = pickValue();
+    if (isTimeRangeVar(rawName)) return normalizeTimeRangeValue(value);
+    if (isPersonSelectVar(rawName)) return normalizePersonSelectValue(value);
+    if (isTagInputVar(rawName)) return normalizeMultiSelectValue(value);
+    return value;
   };
 
   const applyCandidateList = (
@@ -725,6 +907,13 @@
     const nextValues = { ...item.default_values };
     if (CANDIDATE_API_RAW_NAMES.has(rawName)) {
       nextValues[rawName] = normalizeCandidateIdsValue(value);
+    } else if (isTimeRangeVar(rawName)) {
+      // date-picker 首次选择可能发出非数组值，统一规范为数组
+      nextValues[rawName] = normalizeTimeRangeValue(value);
+    } else if (isPersonSelectVar(rawName)) {
+      nextValues[rawName] = normalizePersonSelectValue(value);
+    } else if (isTagInputVar(rawName)) {
+      nextValues[rawName] = normalizeMultiSelectValue(value);
     } else {
       nextValues[rawName] = value;
     }
@@ -932,6 +1121,20 @@
     override_keys?: string[];
     default_values?: Record<string, any>;
   }) => {
+    const normalizeParamDefaults = (values: Record<string, any>) => {
+      const next: Record<string, any> = { ...values };
+      Object.keys(next).forEach((rawName) => {
+        if (isTimeRangeVar(rawName)) {
+          next[rawName] = normalizeTimeRangeValue(next[rawName]);
+        } else if (isPersonSelectVar(rawName)) {
+          next[rawName] = normalizePersonSelectValue(next[rawName]);
+        } else if (isTagInputVar(rawName)) {
+          next[rawName] = normalizeMultiSelectValue(next[rawName]);
+        }
+      });
+      return next;
+    };
+
     const result: Record<string, SceneParamOverride> = {};
     for (const item of configList.value) {
       const isPatched = patch?.key === item.key;
@@ -942,9 +1145,9 @@
         override_param_keys: isPatched && patch?.override_keys
           ? [...patch.override_keys]
           : [...item.override_keys],
-        param_default_values: isPatched && patch?.default_values
+        param_default_values: normalizeParamDefaults(isPatched && patch?.default_values
           ? { ...patch.default_values }
-          : { ...item.default_values },
+          : { ...item.default_values }),
       };
     }
     emit('update:paramOverrides', result);
@@ -1163,6 +1366,16 @@
     :deep(.bk-input) {
       border: 1px solid #ea3636 !important;
     }
+
+    :deep(.override-time-range-picker),
+    :deep(.override-time-picker),
+    :deep(.bk-date-picker-editor),
+    :deep(.override-person-select .bk-user-selector),
+    :deep(.override-person-select .user-selector-container),
+    :deep(.override-tag-input .bk-tag-input),
+    :deep(.override-tag-input .bk-tag-input-container) {
+      border: 1px solid #ea3636 !important;
+    }
   }
 
   /* 下拉选项超出时 hover tips */
@@ -1310,6 +1523,16 @@
     transition: none !important;
   }
 
+  :deep(.field-row:hover .override-time-range-picker),
+  :deep(.field-row:hover .override-time-picker),
+  :deep(.field-row:hover .bk-date-picker-editor),
+  :deep(.field-row:hover .date-picker),
+  :deep(.field-row:hover .date-picker-input) {
+    color: #313238 !important;
+    background: #eff5ff !important;
+    border-color: transparent !important;
+  }
+
   :deep(.field-row:hover .col-default.is-error .bk-input),
   :deep(.field-row:hover .col-default.is-error .bk-input .bk-input--text),
   :deep(.field-row:hover .col-default.is-error .bk-input input) {
@@ -1317,6 +1540,12 @@
   }
 
   :deep(.field-row:hover .col-default.is-error .override-default-multiselect .bk-select-trigger .bk-select-tag) {
+    border-color: #ea3636 !important;
+  }
+
+  :deep(.field-row:hover .col-default.is-error .override-time-range-picker),
+  :deep(.field-row:hover .col-default.is-error .override-time-picker),
+  :deep(.field-row:hover .col-default.is-error .bk-date-picker-editor) {
     border-color: #ea3636 !important;
   }
 
@@ -1346,6 +1575,80 @@
       border: 1px solid #3a84ff;
       outline: 0;
       box-shadow: 0 0 3px #a3c5fd;
+    }
+
+    .bk-date-picker,
+    .override-time-picker {
+      width: 100%;
+      height: 42px !important;
+    }
+
+    .bk-date-picker-editor {
+      width: 100%;
+      height: 42px !important;
+      border: none;
+      border-radius: 0;
+    }
+
+    .override-person-select,
+    .override-tag-input {
+      width: 100%;
+      height: 42px !important;
+    }
+
+    .override-person-select :deep(.bk-user-selector),
+    .override-person-select :deep(.user-selector-container),
+    .override-tag-input :deep(.bk-tag-input),
+    .override-tag-input :deep(.bk-tag-input-container) {
+      width: 100%;
+      min-height: 42px;
+      border: none;
+      border-radius: 0;
+      box-sizing: border-box;
+    }
+  }
+
+  .time-range-select-wrapper {
+    width: 100%;
+    height: 100%;
+    min-height: 42px;
+    cursor: pointer;
+
+    .time-range-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .override-time-range-picker {
+      width: 100%;
+      height: 100%;
+      min-height: 42px;
+
+      :deep(.date-content),
+      :deep(.date-picker-input) {
+        width: 100%;
+        height: 100%;
+        min-height: 42px;
+        cursor: pointer;
+        border: none;
+        border-radius: 0;
+      }
+    }
+
+    .delete-fill-btn {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      z-index: 1;
+      font-size: 14px;
+      color: #c4c6cc;
+      cursor: pointer;
+      transform: translateY(-50%);
+
+      &:hover {
+        color: #979ba5;
+      }
     }
   }
 
