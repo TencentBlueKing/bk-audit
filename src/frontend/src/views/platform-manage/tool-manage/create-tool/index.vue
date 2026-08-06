@@ -774,7 +774,6 @@
     return formData.value.scene_ids
       .map(sceneId => sceneMap.get(String(sceneId)))
       .filter((scene): scene is { id: number; name: string } => Boolean(scene));
-
   });
 
   // 选中的系统项列表（含名称）
@@ -785,7 +784,6 @@
     return formData.value.system_ids
       .map(systemId => systemMap.get(String(systemId)))
       .filter((system): system is { id: string; name: string } => Boolean(system));
-
   });
 
   onMounted(async () => {
