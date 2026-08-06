@@ -25,8 +25,9 @@
         is-default-select-first
         :list-scope="['scene']"
         :popover-width="250"
-        scene-permission="manage_scene"
+        scene-permission="manage_scene,view_scene"
         system-permission="edit_system"
+        view-scene-block
         width="250px"
         @change="handleSceneChange" />
     </div>
