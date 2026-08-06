@@ -413,7 +413,8 @@
               status: panel.status || 'unpublished',
               updatedBy: panel.updated_by || '--',
               updatedAt: panel.updated_at || '--',
-            })) as Report[],
+            }))
+            .filter((report: Report) => !shouldHidePlatformDisabledReport(report)) as Report[],
         }))
         // 保留所有分组（包括 reports 为空的，用于全量数据存储）
         .sort((a, b) => b.priority_index - a.priority_index);

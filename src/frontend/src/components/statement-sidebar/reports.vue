@@ -683,9 +683,7 @@
     run: fetchGroups,
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
-    onSuccess: (
-      data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>,
-    ) => {
+    onSuccess: (data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>) => {
       groups.value = data;
       rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     },

@@ -300,7 +300,6 @@
     return formData.scene_ids
       .map(sceneId => sceneMap.get(String(sceneId)))
       .filter((scene): scene is SceneOption => Boolean(scene));
-
   });
 
   const selectedSystemItems = computed(() => {
@@ -310,7 +309,6 @@
     return formData.system_ids
       .map(systemId => systemMap.get(String(systemId)))
       .filter((system): system is { id: string; name: string } => Boolean(system));
-
   });
 
   const handleVisibleRangeChange = (val: FormData) => {
