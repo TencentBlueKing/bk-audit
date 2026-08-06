@@ -7,6 +7,7 @@
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from core.models import get_request_username
+from services.web.tool.constants import FieldCategory
 
 
 def _is_none_or_empty_string(value) -> bool:
@@ -23,7 +24,7 @@ def _is_empty_list(value) -> bool:
     return isinstance(value, list) and len(value) == 0
 
 
-def _normalize_value_for_comparison(value: Any, field_category: Optional[str] = None) -> Any:
+def _normalize_value_for_comparison(value: Any, field_category: Optional[FieldCategory] = None) -> Any:
     """
     标准化值用于比较
 
@@ -39,7 +40,7 @@ def _normalize_value_for_comparison(value: Any, field_category: Optional[str] = 
         - input/number/time 等其他类型：严格比较，None 和空字符串视为 None，空数组保持为 []
     """
     # 只对 person_select/multiselect 做宽松比较
-    if field_category in ['person_select', 'multiselect']:
+    if field_category in [FieldCategory.PERSON_SELECT, FieldCategory.MULTISELECT]:
         # 空值处理（None、空字符串、空数组都视为 None）
         if _is_none_or_empty_string(value) or _is_empty_list(value):
             return None
@@ -345,7 +346,10 @@ class DefaultValueValidator:
 
         # 豁免时间范围选择器
         field_category = var_config.get("field_category")
-        if field_category in ["time_range_select", "time-ranger"]:
+        if field_category in [
+            FieldCategory.TIME_RANGE_SELECT,
+            "time-ranger",
+        ]:
             return True
 
         return False
@@ -391,10 +395,6 @@ class DefaultValueValidator:
             user_allowed_system_ids=user_allowed_system_ids,
         )
 
-        # 如果没有可访问范围，跳过校验
-        if not accessible_scenes and not accessible_systems:
-            return
-
         # 2. 收集允许的默认值
         default_value_overrides = tool_config.get("default_value_overrides", {})
         if not default_value_overrides:
@@ -418,7 +418,14 @@ class DefaultValueValidator:
                 continue
 
             value = var.get("value")
-            var_config = input_var_map.get(raw_name, {})
+            var_config = input_var_map.get(raw_name)
+
+            # 参数未声明，fail closed
+            if var_config is None:
+                raise PermissionException(
+                    action_name=gettext_lazy("使用未声明参数 %(var_name)s") % {"var_name": raw_name},
+                    permission=gettext_lazy("参数 %(var_name)s 未在工具中声明") % {"var_name": raw_name},
+                )
 
             # 跳过不需要校验的变量
             if self._should_skip_validation(raw_name, var_config):
