@@ -194,7 +194,6 @@
                     class="override-time-range-picker"
                     :model-value="getOverrideValue(item, row.raw_name)"
                     :placeholder="t('请选择')"
-                    style="width: 100%; height: 100%; border: none;"
                     @update:model-value="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
                   <audit-icon
                     v-show="hoveredTimeRangeKey === getFieldErrorKey(item.key, row.raw_name)
@@ -211,12 +210,12 @@
                 class="override-time-picker"
                 clearable
                 :model-value="getOverrideValue(item, row.raw_name)"
-                style="width: 100%"
                 type="datetime"
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val || '')" />
               <!-- 数字输入框 -->
               <bk-input
                 v-else-if="isNumberInputVar(row.raw_name)"
+                class="override-default-input"
                 :model-value="getOverrideValue(item, row.raw_name)"
                 :placeholder="t('请输入')"
                 type="number"
@@ -241,6 +240,7 @@
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
               <bk-input
                 v-else
+                class="override-default-input"
                 :model-value="getOverrideValue(item, row.raw_name)"
                 :placeholder="t('请输入')"
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
@@ -311,9 +311,7 @@
     selectedScenes: Array<{ id: number; name: string }>;
     selectedSystems: Array<{ id: string; name: string }>;
     inputVariables: InputVarItem[];
-    /** 当前工具 uid，用于拉取输入变量候选选项 */
     toolUid?: string;
-    /** 覆盖参数下拉是否占满容器（弹窗内为 true，编辑/新建页为 false） */
     overrideSelectFullWidth?: boolean;
     /** 是否展示「显示名」列 */
     showDisplayName?: boolean;
@@ -331,13 +329,10 @@
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
   }>();
 
-  /** 无 display_name 时的硬编码展示名映射（Story 允许临时字典） */
   const PARAM_DISPLAY_NAME_MAP: Record<string, string> = {
     cc_ids: '业务列表',
     game_ids: '游戏列表',
   };
-
-  /** 需通过候选接口拉取选项的参数（与工具详情 input_variable.raw_name 对齐） */
   const CANDIDATE_API_RAW_NAMES = new Set(['cc_ids', 'game_ids']);
 
   const { t } = useI18n();
@@ -364,22 +359,17 @@
     setTimeout(ensureSelectOverflowTipsZIndex, 20);
   };
 
-  // 候选选项缓存：raw_name -> choices
   const candidatesMap = ref<Record<string, CandidateChoice[]>>({});
   const candidatesLoadingMap = ref<Record<string, boolean>>({});
   const candidatesFetchedSet = ref<Set<string>>(new Set());
-  /** 当前 hover 的时间范围选择器字段 key，用于显示清除图标 */
   const hoveredTimeRangeKey = ref('');
 
-  // 展示第一步「参数名」：API 工具为 var_name，数据查询等为 raw_name
   const getParamName = (param: Pick<InputVarItem, 'raw_name' | 'var_name'>) => param.var_name || param.raw_name;
 
-  // 展示第一步「显示名」，无值时回退硬编码映射
   const getParamDisplayName = (param: Pick<InputVarItem, 'raw_name' | 'display_name'>) => (
     param.display_name || PARAM_DISPLAY_NAME_MAP[param.raw_name] || '--'
   );
 
-  // 覆盖参数下拉：参数名(显示名)，支持按两者搜索
   const getParamOptionLabel = (param: Pick<InputVarItem, 'raw_name' | 'var_name' | 'display_name'>) => {
     const name = getParamName(param);
     const displayName = getParamDisplayName(param);
@@ -466,29 +456,21 @@
 
   const isMultiSelectVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'multiselect'
     || CANDIDATE_API_RAW_NAMES.has(rawName);
-
-  /** 时间范围选择器（API/数据查询 time_range_select，BKVision time-ranger） */
   const isTimeRangeVar = (rawName: string) => {
     const category = getInputVarConfig(rawName)?.field_category;
     return category === 'time_range_select' || category === 'time-ranger';
   };
 
-  /** 时间选择器（API/数据查询 time_select，BKVision time-picker） */
   const isTimePickerVar = (rawName: string) => {
     const category = getInputVarConfig(rawName)?.field_category;
     return category === 'time_select' || category === 'time-picker';
   };
 
-  /** 数字输入框 */
   const isNumberInputVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'number_input';
 
-  /** 人员选择器 */
+
   const isPersonSelectVar = (rawName: string) => getInputVarConfig(rawName)?.field_category === 'person_select';
 
-  /**
-   * 文本输入类（走普通 bk-input）
-   * 含 API/数据查询 input、BKVision inputer/variable
-   */
   const isPlainInputVar = (rawName: string) => {
     const category = getInputVarConfig(rawName)?.field_category;
     return !category
@@ -497,9 +479,7 @@
       || category === 'variable';
   };
 
-  /**
-   * BKVision 等选择器：未单独处理的类型走 tag-input（与 tool-form-item / bk-vision-components 一致）
-   */
+
   const isTagInputVar = (rawName: string) => {
     if (isMultiSelectVar(rawName)
       || isTimeRangeVar(rawName)
@@ -512,7 +492,7 @@
     return !!getInputVarConfig(rawName)?.field_category;
   };
 
-  /** 值需按数组处理的覆盖参数（多选 / 时间范围 / 人员 / tag） */
+
   const isArrayValueVar = (rawName: string) => (
     isMultiSelectVar(rawName)
     || isTimeRangeVar(rawName)
@@ -520,10 +500,7 @@
     || isTagInputVar(rawName)
   );
 
-  /**
-   * 规范化时间范围值：date-picker 需要 string[]；
-   * 兼容数组、逗号拼接字符串（如 now-30d,now）、JSON 数组字符串。
-   */
+
   const normalizeTimeRangeValue = (val: unknown): string[] => {
     if (Array.isArray(val)) {
       return val
@@ -552,7 +529,6 @@
     return [String(val)];
   };
 
-  /** 人员选择器值归一化为用户名字符串数组 */
   const normalizePersonSelectValue = (val: unknown): string[] => {
     if (val === undefined || val === null || val === '') return [];
     const arr = Array.isArray(val) ? val : [val];
@@ -575,7 +551,6 @@
 
   const isCandidatesLoading = (rawName: string) => !!candidatesLoadingMap.value[rawName];
 
-  /** 格式：名称(id)，便于名称/ID 搜索与回显（如 业务A(100)、游戏名称(gameid)） */
   const formatCandidateChoiceName = (name: string, id: number | string) => `${name}(${id})`;
 
   const getMultiSelectChoices = (rawName: string): CandidateChoice[] => {
@@ -611,7 +586,7 @@
     return [String(val)];
   };
 
-  /** 候选多选提交值为数字数组；下拉展示用字符串 id 匹配 option */
+
   const normalizeCandidateIdsValue = (val: unknown): number[] => {
     const list = normalizeMultiSelectValue(val);
     return list
@@ -622,7 +597,7 @@
       .filter((item): item is number => item !== null);
   };
 
-  /** 稳定空数组，避免每次渲染新引用触发 select 重算 */
+
   const EMPTY_MULTI_VALUE: string[] = [];
   const overrideDisplayCache = new Map<string, string[]>();
 
@@ -662,22 +637,18 @@
     return raw;
   };
 
-  /** 回显标签文案：优先候选项名称(id)，避免候选未加载时只显示裸 id */
+
   const getSelectedChoiceLabel = (rawName: string, value: string | number) => {
     const key = String(value);
     const choice = getMultiSelectChoices(rawName).find(item => item.key === key);
     return choice?.name || key;
   };
 
-  /**
-   * bk-tooltips 基于 bk-popper（非 tippy），content 传组件可渲染可滚动内层，
-   * 避免把 overflow 写在 popper 根节点上导致箭头被裁切。
-   */
+
   const getOverflowSelectedTipsContent = (
     rawName: string,
     selected: Array<{ value: string | number; label?: string | number }>,
   ) => {
-    // 逗号拼接，块内自动换行
     const text = selected
       .slice(1)
       .map(item => getSelectedChoiceLabel(rawName, item.value))
@@ -704,7 +675,7 @@
     );
   };
 
-  // 从第一步工具配置中读取参数原始默认值
+
   const getParamOriginalDefault = (rawName: string) => {
     const param = inputVariableList.value.find(v => v.raw_name === rawName);
     const emptyDefault = isArrayValueVar(rawName) ? [] : '';
@@ -765,7 +736,7 @@
     }
   };
 
-  // 覆盖参数中出现需拉取候选的字段时请求接口
+
   watch(
     [() => props.toolUid, activeOverrideRawNames],
     () => {
@@ -787,7 +758,7 @@
     overrideDisplayCache.clear();
   });
 
-  /** 已选覆盖参数的默认值必填：记录校验失败字段 */
+
   const invalidFields = ref<Record<string, true>>({});
 
   const getFieldErrorKey = (itemKey: string, rawName: string) => `${itemKey}::${rawName}`;
@@ -840,7 +811,7 @@
     pruneInvalidFields(list);
   });
 
-  /** 提交前校验：已选覆盖参数的默认值不可为空；失败时滚到首个未填字段 */
+
   const validate = (): boolean => {
     const next: Record<string, true> = {};
     let firstInvalidKey = '';
@@ -871,7 +842,7 @@
     return false;
   };
 
-  // 覆盖参数选择变更
+
   const handleOverrideChange = (item: ConfigItem, keys: string[]) => {
     // 清理不再选中的参数；新选中的参数自动代入第一步配置的默认值
     const newValues: Record<string, any> = {};
@@ -1279,7 +1250,8 @@
   }
 
   :deep(.override-default-multiselect) {
-    width: 100%;
+    width: 320px;
+    max-width: 100%;
     height: 100%;
     line-height: normal;
 
@@ -1370,10 +1342,7 @@
     :deep(.override-time-range-picker),
     :deep(.override-time-picker),
     :deep(.bk-date-picker-editor),
-    :deep(.override-person-select .bk-user-selector),
-    :deep(.override-person-select .user-selector-container),
-    :deep(.override-tag-input .bk-tag-input),
-    :deep(.override-tag-input .bk-tag-input-container) {
+    :deep(.override-tag-input .bk-tag-input-trigger) {
       border: 1px solid #ea3636 !important;
     }
   }
@@ -1502,6 +1471,8 @@
     .col-default {
       background: #fff;
       border-left: 1px solid #dcdee5;
+      /* 默认值控件按内容宽度展示，垂直居中，不强制铺满列宽 */
+      justify-content: flex-start;
     }
 
     .col-action {
@@ -1526,8 +1497,7 @@
   :deep(.field-row:hover .override-time-range-picker),
   :deep(.field-row:hover .override-time-picker),
   :deep(.field-row:hover .bk-date-picker-editor),
-  :deep(.field-row:hover .date-picker),
-  :deep(.field-row:hover .date-picker-input) {
+  :deep(.field-row:hover .override-tag-input .bk-tag-input-trigger) {
     color: #313238 !important;
     background: #eff5ff !important;
     border-color: transparent !important;
@@ -1557,89 +1527,94 @@
       padding: 0 8px;
       overflow: hidden;
       font-size: 12px;
-      line-height: 20px;
+      line-height: 42px;
       color: #4d4f56;
       text-overflow: ellipsis;
       white-space: nowrap;
       box-sizing: border-box;
     }
 
-    .bk-input {
-      width: 100%;
+    /*
+     * 默认值控件：高度对齐行高；宽度不占满列（约 320px），
+     * 人员 / 时间范围保持组件默认高度，由 .col-default 的 align-items:center 垂直居中
+     */
+    .override-default-input,
+    .bk-input.override-default-input,
+    .override-time-picker,
+    .override-person-select,
+    .override-tag-input,
+    .override-default-multiselect {
+      width: 320px;
+      max-width: 100%;
+      flex-shrink: 1;
+    }
+
+    .override-default-input,
+    .bk-date-picker-editor {
       height: 42px !important;
       border: none;
       border-radius: 0;
     }
 
-    .bk-input.is-focused:not(.is-readonly) {
+    .override-default-input.is-focused:not(.is-readonly) {
       border: 1px solid #3a84ff;
       outline: 0;
       box-shadow: 0 0 3px #a3c5fd;
     }
 
-    .bk-date-picker,
+    .bk-date-picker.override-time-picker,
     .override-time-picker {
-      width: 100%;
       height: 42px !important;
     }
 
     .bk-date-picker-editor {
       width: 100%;
-      height: 42px !important;
-      border: none;
-      border-radius: 0;
     }
 
-    .override-person-select,
-    .override-tag-input {
-      width: 100%;
-      height: 42px !important;
+    .icon-wrapper {
+      top: 6px;
     }
 
-    .override-person-select :deep(.bk-user-selector),
-    .override-person-select :deep(.user-selector-container),
-    .override-tag-input :deep(.bk-tag-input),
-    .override-tag-input :deep(.bk-tag-input-container) {
-      width: 100%;
-      min-height: 42px;
-      border: none;
+    .override-tag-input :deep(.bk-tag-input-trigger) {
+      height: 42px !important;
+      min-height: 42px !important;
+      border: none !important;
       border-radius: 0;
       box-sizing: border-box;
     }
+
+    .override-default-multiselect .bk-select-tag {
+      height: 42px !important;
+      border: none;
+      border-radius: 0;
+    }
   }
 
+  /* 时间范围：内容宽度 + 垂直居中，不拉满列宽/行高 */
   .time-range-select-wrapper {
-    width: 100%;
-    height: 100%;
-    min-height: 42px;
+    display: inline-flex;
+    max-width: 100%;
+    height: auto;
     cursor: pointer;
+    flex-shrink: 0;
+    align-items: center;
 
     .time-range-inner {
       position: relative;
-      width: 100%;
-      height: 100%;
+      display: inline-flex;
+      align-items: center;
     }
 
     .override-time-range-picker {
-      width: 100%;
-      height: 100%;
-      min-height: 42px;
-
-      :deep(.date-content),
-      :deep(.date-picker-input) {
-        width: 100%;
-        height: 100%;
-        min-height: 42px;
-        cursor: pointer;
-        border: none;
-        border-radius: 0;
-      }
+      width: auto !important;
+      max-width: 100%;
+      border: none;
     }
 
     .delete-fill-btn {
       position: absolute;
       top: 50%;
-      right: 10px;
+      right: 4px;
       z-index: 1;
       font-size: 14px;
       color: #c4c6cc;
@@ -1672,6 +1647,41 @@
   }
 </style>
 <style lang="postcss">
+  /* 人员选择器：取消组件默认 width:100%，保持内容高度由单元格垂直居中 */
+  .scene-param-config .override-person-select.bk-user-selector,
+  .scene-param-config .override-person-select {
+    width: 320px !important;
+    max-width: 100%;
+    height: auto !important;
+  }
+
+  .scene-param-config .override-person-select .tags-container {
+    width: 100%;
+    border: none !important;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  /* 时间范围：保持 inline-flex 内容宽度与默认 32px 高度 */
+  .scene-param-config .time-range-select-wrapper .__bk_date_picker__,
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ {
+    width: auto !important;
+    max-width: 100%;
+    border: none !important;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+
+  .scene-param-config .field-row:hover .override-person-select .tags-container,
+  .scene-param-config .field-row:hover .time-range-select-wrapper .__bk_date_picker__ {
+    background: #eff5ff !important;
+  }
+
+  .scene-param-config .field-row .col-default.is-error .override-person-select .tags-container,
+  .scene-param-config .field-row .col-default.is-error .time-range-select-wrapper .__bk_date_picker__ {
+    border: 1px solid #ea3636 !important;
+  }
+
   /* bk-tooltips 挂载到 body，类名打在 bk-popper 上；滚动放内层 list */
   .bk-popper.override-selected-tips-wrap {
     max-width: 360px;
