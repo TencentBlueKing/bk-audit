@@ -1125,7 +1125,12 @@ class ExecuteTool(ToolBase):
         # 这样可以复用统一的 _validate_default_value_permissions 校验逻辑
         if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
             smart_params = params.get("params", {})
-            equivalent_tool_variables = [{"raw_name": k, "value": v} for k, v in smart_params.items()]
+            # 只校验在 input_variable 中声明的参数，SQL 模板参数不需要校验
+            config = tool.config or {}
+            input_var_names = {v.get("raw_name") for v in config.get("input_variable", []) if v.get("raw_name")}
+            equivalent_tool_variables = [
+                {"raw_name": k, "value": v} for k, v in smart_params.items() if k in input_var_names
+            ]
             params_for_validation = {"tool_variables": equivalent_tool_variables}
         else:
             params_for_validation = params
