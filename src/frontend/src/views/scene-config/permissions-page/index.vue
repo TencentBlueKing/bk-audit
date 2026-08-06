@@ -45,10 +45,10 @@
                 <div class="scene-name-row">
                   <span class="scene-name">{{ item.name }}</span>
                   <audit-icon
-                    v-if="managerList.length > 0"
+                    v-if="item.managers?.length"
                     class="admin-icon"
                     type="user" />
-                  <span class="admin-name"> {{ item.managers.join('、') }}</span>
+                  <span class="admin-name"> {{ (item.managers || []).join('、') }}</span>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
@@ -145,35 +145,19 @@
 
   import SceneManageService from '@service/scene-manage';
 
+  import SceneModel from '@model/scene/scene';
+
   import useRequest from '@hooks/use-request';
 
   import landingImg from '@/images/landing.png';
 
-  interface SceneItem {
-    scene_id: number;
-    name: string;
-    status: 'enabled' | 'disabled';
-    permission: Record<string, boolean>;
-    description?: string;
-    managers: string[];
-  }
-
-  interface managerItem {
-    id: string;
-    name: string;
-    role?: string;
-    type?: string;
-  }
-
   const { t } = useI18n();
 
-  const sceneList = ref<SceneItem[]>([]);
+  const sceneList = ref<SceneModel[]>([]);
   const route = useRoute();
   const selectedPerm = ref<'viewer' | 'manager'>('viewer');
   const applyReason = ref('');
   const showApplyDialog = ref(false);
-
-  const managerList = ref<Array<managerItem>>([]);
 
   const currentManagers = computed(() => sceneList.value[0]?.managers || []);
 
@@ -185,11 +169,11 @@
   });
 
   const {
-    run: fetchSceneAll,
-  } = useRequest(SceneManageService.fetchSceneAll, {
-    defaultValue: [],
+    run: fetchSceneDetail,
+  } = useRequest(SceneManageService.fetchSceneDetail, {
+    defaultValue: new SceneModel(),
     onSuccess: (data) => {
-      sceneList.value = data.filter(item => item.scene_id === Number(route.query.scene_id));
+      sceneList.value = data?.scene_id ? [data] : [];
     },
   });
 
@@ -199,10 +183,10 @@
   }
 
   onMounted(() => {
-    fetchSceneAll({
-      page_size: 100,
-      status: 'enabled',
-    });
+    const sceneId = route.query.scene_id;
+    if (sceneId) {
+      fetchSceneDetail(sceneId as unknown as object);
+    }
   });
 
 </script>
