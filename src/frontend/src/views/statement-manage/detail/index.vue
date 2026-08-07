@@ -53,6 +53,8 @@
   // 取消过期的并发 init，避免先完成的请求覆盖正确图表
   let initSeq = 0;
   let lastInitKey = '';
+  /** 进行中的 SDK 实例（尚未赋给 app），用于并发时能正确销毁 */
+  let pendingInstance: any = null;
 
   // 校验id是否为有效值
   const isValidId = (id: any): boolean => {
@@ -254,11 +256,32 @@
     return { constants, filters };
   };
 
+  const clearPanelDom = () => {
+    const panelEl = document.querySelector('#panel');
+    if (panelEl) {
+      panelEl.innerHTML = '';
+    }
+  };
+
   const destroyApp = () => {
+    if (pendingInstance) {
+      try {
+        pendingInstance.unmount?.();
+      } catch (e) {
+        console.error(e);
+      }
+      pendingInstance = null;
+    }
     if (app) {
-      app.unmount();
+      try {
+        app.unmount();
+      } catch (e) {
+        console.error(e);
+      }
       app = null;
     }
+    // 并发 init 时 app 可能尚未赋值，必须清 DOM，否则图表会叠加两次
+    clearPanelDom();
   };
 
   const init = async () => {
@@ -276,6 +299,7 @@
     initSeq += 1;
     const seq = initSeq;
     destroyApp();
+    lastInitKey = '';
 
     try {
       if (!window.BkVisionSDK) {
@@ -296,6 +320,10 @@
         filterFlags,
       );
 
+      // 再次确保容器干净，避免上一次异步渲染残留
+      clearPanelDom();
+      if (seq !== initSeq) return;
+
       const instance = await window.BkVisionSDK.init(
         '#panel',
         route.params.id,
@@ -315,15 +343,22 @@
           handleError,
         },
       );
+      pendingInstance = instance;
       if (seq !== initSeq) {
         instance?.unmount?.();
+        if (pendingInstance === instance) {
+          pendingInstance = null;
+        }
+        clearPanelDom();
         return;
       }
       app = instance;
+      pendingInstance = null;
       lastInitKey = initKey;
     } catch (error) {
       if (seq === initSeq) {
         console.error(error);
+        clearPanelDom();
       }
     }
   };
