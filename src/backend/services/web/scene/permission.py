@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 from typing import Optional, Union
 
-from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.utils import timezone
@@ -175,20 +174,6 @@ def apply_ticket_result(
         application.reject_reason = reject_reason
         _set_terminal(application, ApplicationStatus.REJECTED)
     # running → 保持 PENDING，不动
-
-
-def _extract_reject_reason(ticket_id: str) -> str:
-    """从 ITSM V4 工单日志中提取拒绝/驳回理由。
-    :param ticket_id: ITSM 工单 ID
-    :return: 拒绝理由，获取失败返回空字符串
-    """
-    try:
-        logs_data = api.bk_itsm_v4.ticket_logs(ticket_id=ticket_id)
-        return _extract_reject_reason_from_logs(logs_data)
-    except Exception as err:  # pylint: disable=broad-except
-        logger.warning("[_extract_reject_reason] 获取工单日志失败, ticket_id=%s, error=%s", ticket_id, err)
-
-    return ""
 
 
 def _extract_reject_reason_from_logs(logs_data: dict) -> str:

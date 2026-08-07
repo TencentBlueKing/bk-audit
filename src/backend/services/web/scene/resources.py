@@ -33,7 +33,6 @@ from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
-from core.serializers import FlexibleListField
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.models import Risk
@@ -72,8 +71,8 @@ from services.web.scene.permission import (
 from services.web.scene.serializers import (
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
-    ListMyScenePermissionApplicationSerializer,
     MyRolePermissionSerializer,
+    SceneBasicInfoSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
@@ -82,6 +81,7 @@ from services.web.scene.serializers import (
     ScenePermissionApplicationSerializer,
     SceneSimpleListSerializer,
     SceneStatusFilterSerializer,
+    SceneWithPermissionAndApplicationSerializer,
     UpdateSceneSerializer,
 )
 from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
@@ -692,6 +692,29 @@ class GetSceneMembers(SceneResource):
 # ==================== 场景权限自动化审批授权 ====================
 
 
+class GetSceneBasicInfoForApply(SceneResource):
+    """获取场景基本信息（用于权限申请页面，无需权限）"""
+
+    name = gettext_lazy("获取场景基本信息（申请用）")
+    ResponseSerializer = SceneBasicInfoSerializer
+
+    class RequestSerializer(serializers.Serializer):
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+
+    def perform_request(self, validated_request_data):
+        scene = Scene.objects.filter(
+            scene_id=validated_request_data["scene_id"],
+            is_deleted=False,
+        ).first()
+        if not scene:
+            raise SceneNotExist()
+        return {
+            "scene_id": scene.scene_id,
+            "scene_name": scene.name,
+            "is_enabled": scene.status == SceneStatus.ENABLED,
+        }
+
+
 class ApplyScenePermission(SceneResource):
     """提交场景权限申请"""
 
@@ -743,7 +766,7 @@ class ApplyScenePermission(SceneResource):
             logger.error("[ApplyScenePermission] BKAUDIT_CALLBACK_URL_PREFIX 未配置，无法创建 ITSM 工单")
             raise ApproveServiceNotConfigured()
 
-        # 8. 建 ITSM V4 单（operator=申请人 → 单据归属申请人，可在 ITSM 查看/撤单）
+        # 8. 建 ITSM V4 单（operator=申请人）
         ticket = self._create_itsm_ticket(
             applicant=applicant,
             scene=scene,
@@ -824,35 +847,86 @@ class ApplyScenePermission(SceneResource):
 
 
 class ListMyScenePermissionApplications(SceneResource):
-    """我的场景权限申请列表"""
+    """我的场景列表（含申请信息）"""
 
-    name = gettext_lazy("我的场景权限申请列表")
-    ResponseSerializer = ListMyScenePermissionApplicationSerializer
+    name = gettext_lazy("我的场景列表（含申请状态）")
+    ResponseSerializer = SceneWithPermissionAndApplicationSerializer
     many_response_data = True
 
     class RequestSerializer(serializers.Serializer):
-        status = FlexibleListField(
-            child=serializers.ChoiceField(choices=ApplicationStatus.choices),
-            required=False,
-        )
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
 
     def perform_request(self, validated_request_data):
+        applicant = get_request_username()
+        scene_id = validated_request_data.get("scene_id")
+
+        # 1. 获取启用的场景（支持按 scene_id 过滤）
+        scenes = Scene.objects.filter(is_deleted=False, status=SceneStatus.ENABLED)
+        if scene_id:
+            scenes = scenes.filter(scene_id=scene_id)
+
+        scene_list = list(scenes.values("scene_id", "name", "description"))
+        if not scene_list:
+            return []
+
+        # 2. 查询用户对这些场景的最新申请记录
+        scene_ids = [s["scene_id"] for s in scene_list]
         from django.db.models import Max
 
-        # 子查询：获取每个 (scene, role) 的最新申请 ID
-        latest_ids = (
-            ScenePermissionApplication.objects.filter(applicant=get_request_username())
-            .values("scene_id", "role")
+        latest_applications = (
+            ScenePermissionApplication.objects.filter(
+                applicant=applicant,
+                scene_id__in=scene_ids,
+            )
+            .values("scene_id")
             .annotate(latest_id=Max("id"))
-            .values("latest_id")
+            .values("latest_id", "scene_id")
         )
 
-        qs = ScenePermissionApplication.objects.select_related("scene").filter(id__in=Subquery(latest_ids))
+        # 构建 scene_id -> application 的映射
+        application_map = {}
+        if latest_applications:
+            application_ids = [app["latest_id"] for app in latest_applications]
+            applications = ScenePermissionApplication.objects.filter(id__in=application_ids)
+            for app in applications:
+                application_map[app.scene_id] = app
 
-        if validated_request_data.get("status"):
-            qs = qs.filter(status__in=validated_request_data["status"])
+        # 3. 组装返回数据
+        result = []
+        for scene in scene_list:
+            scene_id = scene["scene_id"]
+            application = application_map.get(scene_id)
 
-        return qs.order_by("-updated_at")
+            app_data = None
+            if application:
+                app_data = {
+                    "id": application.id,
+                    "applicant": application.applicant,
+                    "role": application.role,
+                    "role_display": application.get_role_display(),
+                    "reason": application.reason,
+                    "itsm_sn": application.itsm_sn,
+                    "itsm_ticket_url": application.itsm_ticket_url,
+                    "status": application.status,
+                    "status_display": application.get_status_display(),
+                    "grant_status": application.grant_status,
+                    "grant_status_display": application.get_grant_status_display(),
+                    "approvers": application.approvers,
+                    "reject_reason": application.reject_reason,
+                    "created_at": application.created_at,
+                }
+
+            result.append(
+                {
+                    "scene_id": scene_id,
+                    "scene_name": scene["name"],
+                    "description": scene["description"],
+                    "permission": {},
+                    "application": app_data,
+                }
+            )
+
+        return result
 
 
 class ScenePermissionApplicationCallback(SceneResource):
