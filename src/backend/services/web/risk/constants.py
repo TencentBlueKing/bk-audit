@@ -939,3 +939,12 @@ class NL2RiskFilterLogStatus(TextChoices):
     SUCCESS = "success", gettext_lazy("成功")
     PARSE_FAILED = "parse_failed", gettext_lazy("解析失败")
     API_ERROR = "api_error", gettext_lazy("接口异常")
+
+
+# fetch_instance_list 反向拉取时，对非检索大字段的截断/置 NULL 阈值（bytes）。
+# 领导决策（2026-08-07）：100KB/条（按 100MB 内存 / 1000 条估算）。
+# 通过环境变量 FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES 覆盖，便于后续无需发版即可调整。
+# 实测：123 万行中仅 <0.1% 的记录超 100KB，99.9%+ 正常数据不受影响。
+FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES = int(
+    os.environ.get("FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES", 102400)
+)
