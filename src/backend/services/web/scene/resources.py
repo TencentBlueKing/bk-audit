@@ -72,6 +72,7 @@ from services.web.scene.permission import (
 from services.web.scene.serializers import (
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
+    ListMyScenePermissionApplicationSerializer,
     MyRolePermissionSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
@@ -826,7 +827,7 @@ class ListMyScenePermissionApplications(SceneResource):
     """我的场景权限申请列表"""
 
     name = gettext_lazy("我的场景权限申请列表")
-    ResponseSerializer = ScenePermissionApplicationSerializer
+    ResponseSerializer = ListMyScenePermissionApplicationSerializer
     many_response_data = True
 
     class RequestSerializer(serializers.Serializer):
