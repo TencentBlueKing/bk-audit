@@ -20,19 +20,26 @@
       {{ t('参数配置') }}
     </div>
     <div class="param-card-body">
-      <bk-exception
+      <div
         v-if="!hasReport"
-        scene="part"
-        type="empty">
-        {{ t('请先选择BKVision报表') }}
-      </bk-exception>
+        class="param-empty-state">
+        <bk-exception
+          class="param-empty-exception"
+          :description="t('请先选择BKVision报表')"
+          scene="part"
+          :title="t('暂无参数配置')"
+          type="empty" />
+      </div>
 
-      <bk-exception
+      <div
         v-else-if="hasNoParam"
-        scene="part"
-        type="empty">
-        {{ t('当前报表暂无参数配置') }}
-      </bk-exception>
+        class="param-empty-state">
+        <bk-exception
+          class="param-empty-exception"
+          :description="t('当前报表暂无参数配置')"
+          scene="part"
+          type="empty" />
+      </div>
 
       <div v-else>
         <!-- 交互组件 -->
@@ -66,7 +73,7 @@
                   v-bk-tooltips="{
                     disabled: getPanelTooltip(item) === '',
                     content: getPanelTooltip(item)
-                  }">{{ item.display_name }}({{ item.raw_name }})</span>
+                  }">{{ item.display_name || item.raw_name }}</span>
                 <bk-popover
                   :is-show="defaultTipVisibleMap[item.raw_name] === true"
                   placement="top"
@@ -75,7 +82,7 @@
                   :z-index="10050"
                   @after-hidden="hideDefaultTip(item.raw_name)">
                   <bk-checkbox
-                    class="title-right is-black-text"
+                    class="title-right"
                     :disabled="false"
                     :model-value="item.is_default_value"
                     size="small"
@@ -102,17 +109,23 @@
 
               <div class="param-content">
                 <bk-date-picker
-                  v-if="item.field_category === 'time-picker'"
+                  v-if="isTimePicker(item)"
                   append-to-body
+                  class="param-date-picker"
+                  :class="{ 'is-hide-placeholder': shouldHidePlaceholder(item) }"
+                  clearable
                   :disabled="item.is_default_value"
-                  format="yyyy-MM-dd HH:mm:ss"
+                  :editable="false"
+                  ext-popover-cls="scene-report-date-picker-dropdown"
+                  :format="getDatePickerFormat(item)"
                   :model-value="getDateValue(item)"
+                  :placeholder="getDatePlaceholder(item)"
                   :shortcuts="dateShortCut"
-                  type="datetime"
-                  use-shortcut-text
+                  :type="resolveDatePickerMode(item)"
+                  :use-shortcut-text="resolveDatePickerMode(item) === 'datetime'"
                   @change="val => updateItemDefaultValue(val, item)" />
                 <div
-                  v-else-if="item.field_category === 'time-ranger'"
+                  v-else-if="isTimeRanger(item)"
                   class="range-wrapper"
                   @mouseenter="hoverDeleteKey = item.raw_name"
                   @mouseleave="hoverDeleteKey = ''">
@@ -128,18 +141,11 @@
                     @click="updateItemDefaultValue([], item)" />
                 </div>
                 <bk-input
-                  v-else-if="item.field_category === 'inputer'"
-                  :disabled="item.is_default_value"
-                  :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
-                  @change="val => updateItemDefaultValue(val, item)" />
-                <bk-tag-input
                   v-else
-                  allow-create
-                  collapse-tags
+                  :class="{ 'is-hide-placeholder': shouldHidePlaceholder(item) }"
                   :disabled="item.is_default_value"
-                  has-delete-icon
-                  :list="[]"
-                  :model-value="getTagValue(item)"
+                  :model-value="getInputValue(item)"
+                  :placeholder="getInputPlaceholder(item)"
                   @change="val => updateItemDefaultValue(val, item)" />
               </div>
             </div>
@@ -173,7 +179,7 @@
               :key="item.raw_name"
               class="param-item">
               <div class="param-label">
-                <span>{{ item.display_name }}({{ item.raw_name }})</span>
+                <span>{{ item.display_name || item.raw_name }}</span>
                 <bk-popover
                   :is-show="defaultTipVisibleMap[item.raw_name] === true"
                   placement="top"
@@ -182,7 +188,7 @@
                   :z-index="10050"
                   @after-hidden="hideDefaultTip(item.raw_name)">
                   <bk-checkbox
-                    class="title-right is-black-text"
+                    class="title-right"
                     :disabled="false"
                     :model-value="item.is_default_value"
                     size="small"
@@ -209,17 +215,23 @@
 
               <div class="param-content">
                 <bk-date-picker
-                  v-if="item.field_category === 'time-picker'"
+                  v-if="isTimePicker(item)"
                   append-to-body
+                  class="param-date-picker"
+                  :class="{ 'is-hide-placeholder': shouldHidePlaceholder(item) }"
+                  clearable
                   :disabled="item.is_default_value"
-                  format="yyyy-MM-dd HH:mm:ss"
+                  :editable="false"
+                  ext-popover-cls="scene-report-date-picker-dropdown"
+                  :format="getDatePickerFormat(item)"
                   :model-value="getDateValue(item)"
+                  :placeholder="getDatePlaceholder(item)"
                   :shortcuts="dateShortCut"
-                  type="datetime"
-                  use-shortcut-text
+                  :type="resolveDatePickerMode(item)"
+                  :use-shortcut-text="resolveDatePickerMode(item) === 'datetime'"
                   @change="val => updateItemDefaultValue(val, item)" />
                 <div
-                  v-else-if="item.field_category === 'time-ranger'"
+                  v-else-if="isTimeRanger(item)"
                   class="range-wrapper"
                   @mouseenter="hoverDeleteKey = item.raw_name"
                   @mouseleave="hoverDeleteKey = ''">
@@ -235,18 +247,11 @@
                     @click="updateItemDefaultValue([], item)" />
                 </div>
                 <bk-input
-                  v-else-if="item.field_category === 'inputer'"
-                  :disabled="item.is_default_value"
-                  :model-value="typeof item.default_value === 'string' ? item.default_value : ''"
-                  @change="val => updateItemDefaultValue(val, item)" />
-                <bk-tag-input
                   v-else
-                  allow-create
-                  collapse-tags
+                  :class="{ 'is-hide-placeholder': shouldHidePlaceholder(item) }"
                   :disabled="item.is_default_value"
-                  has-delete-icon
-                  :list="[]"
-                  :model-value="getTagValue(item)"
+                  :model-value="getInputValue(item)"
+                  :placeholder="getInputPlaceholder(item)"
                   @change="val => updateItemDefaultValue(val, item)" />
               </div>
             </div>
@@ -332,6 +337,142 @@
     return matched?.description || '';
   };
 
+  const DATE_ONLY_CATEGORIES = new Set([
+    'date',
+    'date-picker',
+    'date_picker',
+    'datepicker',
+  ]);
+  const DATETIME_CATEGORIES = new Set([
+    'time-picker',
+    'time_picker',
+    'time_select',
+    'time-select',
+    'datetime',
+  ]);
+  const TIME_PICKER_CATEGORIES = new Set([
+    ...DATE_ONLY_CATEGORIES,
+    ...DATETIME_CATEGORIES,
+  ]);
+  const TIME_RANGER_CATEGORIES = new Set([
+    'time-ranger',
+    'time_ranger',
+    'time_range_select',
+    'time-range-select',
+  ]);
+  const NON_TIME_CATEGORIES = new Set([
+    'selector',
+    'cascader',
+    'radios',
+    'button',
+    'multiselect',
+    'person_select',
+  ]);
+
+  type DatePickerMode = 'date' | 'datetime';
+
+  /** 优先取 panel.type，兼容 field_category；时间类别优先 */
+  const resolveFieldCategory = (item: InputVariableItem) => {
+    const panel = props.reportListsPanels.find(p => p.uid === item.description);
+    const candidates = [panel?.type, item.field_category]
+      .filter(Boolean)
+      .map((v: string) => String(v).trim()
+        .toLowerCase());
+    const timeHit = candidates.find(c => TIME_PICKER_CATEGORIES.has(c) || TIME_RANGER_CATEGORIES.has(c));
+    return timeHit || candidates[0] || '';
+  };
+
+  const looksLikeTimeRanger = (item: InputVariableItem) => {
+    const text = `${item.raw_name || ''} ${item.display_name || ''}`.toLowerCase();
+    return /time[_-]?range|date[_-]?range|时间范围|日期范围/.test(text);
+  };
+
+  const looksLikeTimeField = (item: InputVariableItem) => {
+    const rawName = (item.raw_name || '').toLowerCase();
+    const displayName = item.display_name || '';
+    if (/(^|_)(date_?time|datetime|date|time)(_|$)/.test(rawName)) {
+      return true;
+    }
+    return /时间|日期/.test(displayName);
+  };
+
+  const looksLikeDateOnlyValue = (value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) {
+      return false;
+    }
+    const v = value.trim();
+    if (/^\d{8}$/.test(v)) {
+      return true;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      return true;
+    }
+    return false;
+  };
+
+  const looksLikeDateTimeValue = (value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) {
+      return false;
+    }
+    const v = value.trim();
+    return /\d{1,2}:\d{2}/.test(v) || /^\d{4}-\d{2}-\d{2}[ T]\d/.test(v);
+  };
+
+  /**
+   * 自动选择 date / datetime：
+   * 1) 明确类型优先
+   * 2) 模糊类型看原始默认值形态
+   * 3) 都没有则默认 date
+   */
+  const resolveDatePickerMode = (item: InputVariableItem): DatePickerMode => {
+    const cat = resolveFieldCategory(item);
+    if (DATE_ONLY_CATEGORIES.has(cat)) {
+      return 'date';
+    }
+    if (DATETIME_CATEGORIES.has(cat)) {
+      return 'datetime';
+    }
+    // 用 raw_default_value 推断，避免用户编辑后模式翻转
+    const sample = item.raw_default_value ?? item.default_value;
+    if (looksLikeDateTimeValue(sample)) {
+      return 'datetime';
+    }
+    if (looksLikeDateOnlyValue(sample)) {
+      return 'date';
+    }
+    return 'date';
+  };
+
+  const getDatePickerFormat = (item: InputVariableItem) => (
+    resolveDatePickerMode(item) === 'datetime' ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd'
+  );
+
+  const isTimeRanger = (item: InputVariableItem) => {
+    const cat = resolveFieldCategory(item);
+    if (TIME_RANGER_CATEGORIES.has(cat)) {
+      return true;
+    }
+    if (TIME_PICKER_CATEGORIES.has(cat) || NON_TIME_CATEGORIES.has(cat)) {
+      return false;
+    }
+    return looksLikeTimeRanger(item);
+  };
+
+  const isTimePicker = (item: InputVariableItem) => {
+    if (isTimeRanger(item)) {
+      return false;
+    }
+    const cat = resolveFieldCategory(item);
+    if (TIME_PICKER_CATEGORIES.has(cat)) {
+      return true;
+    }
+    if (NON_TIME_CATEGORIES.has(cat)) {
+      return false;
+    }
+    // inputer / variable / 空类型：按命名识别（如 数据时间 / date_time）
+    return looksLikeTimeField(item);
+  };
+
   const findFieldIndex = (rawName: string) => localFields.value.findIndex(item => item.raw_name === rawName);
 
   const updateField = (rawName: string, patch: Partial<InputVariableItem>) => {
@@ -374,15 +515,86 @@
     });
   };
 
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  const parseDateValue = (value: string | Array<string> | Date | undefined | null) => {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? '' : value;
+    }
+    if (typeof value !== 'string' || !value) {
+      return '';
+    }
+    if (/^\d{8}$/.test(value)) {
+      const parsed = new Date(`${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`);
+      return Number.isNaN(parsed.getTime()) ? '' : parsed;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed;
+  };
+
+  /** 按模式格式化提交值；纯日期若原始为 yyyyMMdd 则保持该格式 */
+  const formatDateOutput = (val: Date | string, item: InputVariableItem) => {
+    const date = val instanceof Date ? val : parseDateValue(val);
+    if (!date || !(date instanceof Date)) {
+      return '';
+    }
+    const y = date.getFullYear();
+    const m = pad2(date.getMonth() + 1);
+    const d = pad2(date.getDate());
+    if (resolveDatePickerMode(item) === 'datetime') {
+      return `${y}-${m}-${d} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+    }
+    const rawSample = item.raw_default_value;
+    if (typeof rawSample === 'string' && /^\d{8}$/.test(rawSample.trim())) {
+      return `${y}${m}${d}`;
+    }
+    return `${y}-${m}-${d}`;
+  };
+
   const updateItemDefaultValue = (val: any, item: InputVariableItem) => {
+    let next = val;
+    if (isTimePicker(item)) {
+      next = val ? formatDateOutput(val, item) : '';
+    }
     updateField(item.raw_name, {
-      default_value: val,
+      default_value: next,
     });
   };
 
-  const getDateValue = (item: InputVariableItem) => (item.default_value instanceof Date ? item.default_value : '');
+  const getDateValue = (item: InputVariableItem) => parseDateValue(item.default_value);
   const getRangeValue = (item: InputVariableItem) => (Array.isArray(item.default_value) ? item.default_value : []);
-  const getTagValue = (item: InputVariableItem) => (Array.isArray(item.default_value) ? item.default_value : []);
+  const getInputValue = (item: InputVariableItem) => {
+    if (typeof item.default_value === 'string' || typeof item.default_value === 'number') {
+      return String(item.default_value);
+    }
+    if (Array.isArray(item.default_value)) {
+      return item.default_value.join(',');
+    }
+    return '';
+  };
+
+  /** 勾选「使用默认值」且当前无展示值时，不展示 placeholder */
+  const shouldHidePlaceholder = (item: InputVariableItem) => {
+    if (!item.is_default_value) {
+      return false;
+    }
+    if (isTimePicker(item)) {
+      return !getDateValue(item);
+    }
+    if (isTimeRanger(item)) {
+      return getRangeValue(item).length === 0;
+    }
+    return getInputValue(item) === '';
+  };
+
+  // bk-input 内部是 `props.placeholder || t.placeholder`，空字符串会回退成「请输入」
+  const HIDDEN_PLACEHOLDER = '\u00A0';
+  const getInputPlaceholder = (item: InputVariableItem) => (
+    shouldHidePlaceholder(item) ? HIDDEN_PLACEHOLDER : t('请输入')
+  );
+  const getDatePlaceholder = (item: InputVariableItem) => (
+    shouldHidePlaceholder(item) ? HIDDEN_PLACEHOLDER : t('请选择')
+  );
 
   const getFields = () => localFields.value;
 
@@ -397,6 +609,24 @@
   background: #fff;
   border-radius: 2px;
   box-shadow: 0 1px 2px 0 #00000029;
+}
+
+.param-empty-state {
+  min-height: 180px;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.param-empty-exception {
+  width: 100%;
+
+  :deep(.bk-exception-img) {
+    width: 260px;
+    height: 130px;
+  }
 }
 
 .param-card-title {
@@ -430,7 +660,7 @@
   .section-arrow {
     flex: 0 0 auto;
     font-size: 12px;
-    color: #979ba5;
+    color: #4D4F56;
     transition: transform .2s ease;
 
     &.is-collapsed {
@@ -440,14 +670,15 @@
 
   .title-text {
     flex: 0 0 auto;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 12px;
+
     color: #313238;
   }
 
   .title-info-icon {
     width: 14px;
     height: 14px;
+    margin-left: 3px; /* 与标题间距 9px（含父级 gap 6px） */
     flex: 0 0 auto;
   }
 
@@ -484,16 +715,40 @@
 }
 
 .title-right {
-  color: #4d4f56;
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: #313238 !important;
   cursor: pointer;
 
-  :deep(.bk-checkbox-label) {
-    color: #4d4f56;
+  :deep(.bk-checkbox) {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  :deep(.bk-checkbox-label),
+  :deep(span) {
+    margin-left: 4px;
+    color: #313238 !important;
   }
 }
 
 .param-content {
   width: 100%;
+
+  .param-date-picker {
+    width: 100%;
+  }
+
+  /* 勾选默认值且无值时，强制隐藏 placeholder 文案 */
+  .is-hide-placeholder {
+    :deep(input::placeholder),
+    :deep(.bk-input--text::placeholder),
+    :deep(.bk-input--textarea::placeholder),
+    :deep(.bk-date-picker-editor::placeholder) {
+      color: transparent !important;
+      opacity: 0 !important;
+    }
+  }
 }
 
 .range-wrapper {
@@ -514,18 +769,32 @@
   padding: 0;
 
   .default-value-tip-text {
-    margin: 0 16px 12px;
+    margin: 0 8px 12px;
     font-size: 12px;
     line-height: 20px;
-    color: #63656e;
+    color: #313238;
     white-space: normal;
   }
 
   .default-value-tip-actions {
     display: flex;
     justify-content: flex-end;
-    padding: 0 16px 8px;
+    padding: 0 8px 8px;
   }
+}
+</style>
+
+<!-- 侧滑 z-index=9999，日期面板需挂到更高层才能点开 -->
+<style lang="postcss">
+.scene-report-date-picker-dropdown,
+.scene-report-date-picker-dropdown.bk-date-picker-dropdown,
+.scene-report-date-picker-dropdown.bk-picker-dropdown {
+  z-index: 10050 !important;
+}
+
+body > .scene-report-date-picker-dropdown,
+body > .bk-date-picker-dropdown.scene-report-date-picker-dropdown {
+  z-index: 10050 !important;
 }
 </style>
 
