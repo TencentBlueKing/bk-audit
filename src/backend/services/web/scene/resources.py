@@ -789,7 +789,8 @@ class ApplyScenePermission(SceneResource):
     @staticmethod
     def _create_itsm_ticket(applicant, scene, role, reason, approvers, callback_token) -> dict:
         """建 ITSM V4 审批单。字段标识见 ScenePermissionFormFields。"""
-        role_label = dict(SceneRole.choices).get(role, role)
+
+        role_label = str(dict(SceneRole.choices).get(role, role))
 
         # 获取申请人部门（主岗全称）
         applicant_department = ""
@@ -801,7 +802,7 @@ class ApplyScenePermission(SceneResource):
             logger.warning("[_create_itsm_ticket] 获取用户部门失败, applicant=%s", applicant)
 
         form_data = {
-            ScenePermissionFormFields.TITLE: gettext("【审计中心】%s 申请 %s %s权限") % (applicant, scene.name, role_label),
+            ScenePermissionFormFields.TITLE: str(gettext("【审计中心】%s 申请 %s %s权限")) % (applicant, scene.name, role_label),
             ScenePermissionFormFields.APPLICANT: applicant,
             ScenePermissionFormFields.APPLICANT_DEPARTMENT: applicant_department,
             ScenePermissionFormFields.APPLY_TIME: timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -812,14 +813,30 @@ class ApplyScenePermission(SceneResource):
         }
         # 构造回调 URL（需要配置 BKAPP_BKAUDIT_CALLBACK_URL_PREFIX 环境变量）
         callback_url = f"{settings.BKAUDIT_CALLBACK_URL_PREFIX}/scene_permission_applications/callback/"
-        return api.bk_itsm_v4.ticket_create(
-            operator=applicant,
-            workflow_key=SCENE_PERMISSION_WORKFLOW_KEY,
-            form_data=form_data,
-            is_submit=True,
-            callback_url=callback_url,
-            callback_token=callback_token,
+        logger.info(
+            "[_create_itsm_ticket] workflow_key=%s, operator=%s, callback_url=%s, form_data=%s",
+            SCENE_PERMISSION_WORKFLOW_KEY,
+            applicant,
+            callback_url,
+            form_data,
         )
+        try:
+            return api.bk_itsm_v4.ticket_create(
+                operator=applicant,
+                workflow_key=SCENE_PERMISSION_WORKFLOW_KEY,
+                form_data=form_data,
+                is_submit=True,
+                callback_url=callback_url,
+                callback_token=callback_token,
+            )
+        except Exception:
+            logger.exception(
+                "[_create_itsm_ticket] ITSM V4 ticket_create failed, workflow_key=%s, operator=%s, form_data=%s",
+                SCENE_PERMISSION_WORKFLOW_KEY,
+                applicant,
+                form_data,
+            )
+            raise
 
 
 class ListMyScenePermissionApplications(SceneResource):

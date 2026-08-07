@@ -128,7 +128,7 @@ class ScenePermissionApplicationViewSet(ResourceViewSet):
                 insert_permission_field(
                     actions=[ActionEnum.VIEW_SCENE, ActionEnum.MANAGE_SCENE],
                     id_field=lambda item: item["scene_id"],
-                    data_field=lambda data: data,
+                    data_field=lambda data: data.get("results", []) if isinstance(data, dict) else data,
                 )
             ],
         ),
