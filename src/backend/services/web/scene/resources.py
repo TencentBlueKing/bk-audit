@@ -72,7 +72,6 @@ from services.web.scene.serializers import (
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
     MyRolePermissionSerializer,
-    SceneBasicInfoSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
@@ -690,29 +689,6 @@ class GetSceneMembers(SceneResource):
 
 
 # ==================== 场景权限自动化审批授权 ====================
-
-
-class GetSceneBasicInfoForApply(SceneResource):
-    """获取场景基本信息（用于权限申请页面，无需权限）"""
-
-    name = gettext_lazy("获取场景基本信息（申请用）")
-    ResponseSerializer = SceneBasicInfoSerializer
-
-    class RequestSerializer(serializers.Serializer):
-        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
-
-    def perform_request(self, validated_request_data):
-        scene = Scene.objects.filter(
-            scene_id=validated_request_data["scene_id"],
-            is_deleted=False,
-        ).first()
-        if not scene:
-            raise SceneNotExist()
-        return {
-            "scene_id": scene.scene_id,
-            "scene_name": scene.name,
-            "is_enabled": scene.status == SceneStatus.ENABLED,
-        }
 
 
 class ApplyScenePermission(SceneResource):

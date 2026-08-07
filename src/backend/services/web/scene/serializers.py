@@ -434,14 +434,6 @@ class ResourceBindingInputSerializer(serializers.Serializer):
         return attrs
 
 
-class SceneBasicInfoSerializer(serializers.Serializer):
-    """场景基本信息（用于权限申请页面）"""
-
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
-    scene_name = serializers.CharField(label=gettext_lazy("场景名称"))
-    is_enabled = serializers.BooleanField(label=gettext_lazy("是否启用"))
-
-
 class ApplyScenePermissionRequestSerializer(serializers.Serializer):
     """提交场景权限申请请求"""
 
