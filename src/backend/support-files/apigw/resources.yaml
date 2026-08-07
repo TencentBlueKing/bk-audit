@@ -1483,7 +1483,7 @@ paths:
         disabledStages: []
         descriptionEn:
 
-  /scene_permission_applications/callback/:
+  /scene_permission_application/callback/:
     post:
       operationId: scene_permission_application_callback
       description: ITSM工单状态回调接口。ITSM审批完成后主动回调此接口，更新场景权限申请单状态并触发授权。
@@ -1525,7 +1525,7 @@ paths:
         backend:
           type: HTTP
           method: post
-          path: /api/v1/scene_permission_applications/callback/
+          path: /api/v1/scene_permission_application/callback/
           matchSubpath: false
           timeout: 0
           upstreams: {}
