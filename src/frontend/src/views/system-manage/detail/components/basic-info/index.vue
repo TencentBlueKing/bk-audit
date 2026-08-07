@@ -31,11 +31,16 @@
         <div class="item-value">
           <template v-if="!edits.name">
             <span>{{ data.name || '--' }}</span>
-            <audit-icon
-              v-if="canEditSystem"
-              class="edit-icon"
-              type="edit-fill"
-              @click="toggleEdit('name')" />
+            <auth-component
+              v-if="canEditSystem && systemId"
+              action-id="edit_system"
+              :permission="hasEditSystemPermission"
+              :resource="systemId">
+              <audit-icon
+                class="edit-icon"
+                type="edit-fill"
+                @click="toggleEdit('name')" />
+            </auth-component>
           </template>
           <bk-input
             v-else
@@ -53,11 +58,16 @@
             <edit-tag
               :data="data.managers"
               :max="5" />
-            <audit-icon
-              v-if="canEditSystem"
-              class="edit-icon"
-              type="edit-fill"
-              @click="toggleEdit('managers')" />
+            <auth-component
+              v-if="canEditSystem && systemId"
+              action-id="edit_system"
+              :permission="hasEditSystemPermission"
+              :resource="systemId">
+              <audit-icon
+                class="edit-icon"
+                type="edit-fill"
+                @click="toggleEdit('managers')" />
+            </auth-component>
           </template>
           <audit-user-selector-tenant
             v-else
@@ -75,11 +85,16 @@
         <div class="item-value">
           <template v-if="!edits.system_url">
             <span>{{ data.system_url || '--' }}</span>
-            <audit-icon
-              v-if="canEditSystem"
-              class="edit-icon"
-              type="edit-fill"
-              @click="toggleEdit('system_url')" />
+            <auth-component
+              v-if="canEditSystem && systemId"
+              action-id="edit_system"
+              :permission="hasEditSystemPermission"
+              :resource="systemId">
+              <audit-icon
+                class="edit-icon"
+                type="edit-fill"
+                @click="toggleEdit('system_url')" />
+            </auth-component>
           </template>
           <bk-input
             v-else
@@ -98,11 +113,16 @@
       <div class="item-value">
         <template v-if="!edits.description">
           <tool-tip-text :data="data.description || '--' " />
-          <audit-icon
-            v-if="canEditSystem"
-            class="edit-icon"
-            type="edit-fill"
-            @click="toggleEdit('description')" />
+          <auth-component
+            v-if="canEditSystem && systemId"
+            action-id="edit_system"
+            :permission="hasEditSystemPermission"
+            :resource="systemId">
+            <audit-icon
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleEdit('description')" />
+          </auth-component>
         </template>
         <bk-input
           v-else
@@ -123,11 +143,16 @@
           <edit-tag
             :data="data.clients || []"
             :max="5" />
-          <audit-icon
-            v-if="canEditSystem"
-            class="edit-icon"
-            type="edit-fill"
-            @click="toggleEdit('clients')" />
+          <auth-component
+            v-if="canEditSystem && systemId"
+            action-id="edit_system"
+            :permission="hasEditSystemPermission"
+            :resource="systemId">
+            <audit-icon
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleEdit('clients')" />
+          </auth-component>
         </template>
         <bk-tag-input
           v-else
@@ -148,11 +173,16 @@
       <div class="item-value">
         <template v-if="!edits.callback_url">
           <span>{{ data.callback_url || '--' }}</span>
-          <audit-icon
-            v-if="canEditSystem"
-            class="edit-icon"
-            type="edit-fill"
-            @click="toggleEdit('callback_url')" />
+          <auth-component
+            v-if="canEditSystem && systemId"
+            action-id="edit_system"
+            :permission="hasEditSystemPermission"
+            :resource="systemId">
+            <audit-icon
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleEdit('callback_url')" />
+          </auth-component>
         </template>
         <bk-input
           v-else
@@ -168,33 +198,53 @@
       <div class="item-value">
         <template v-if="!viewAuthToken">
           <span>******</span>
-          <audit-icon
-            style="margin-left: 5px; cursor: pointer;"
-            type="view"
-            @click="() => viewAuthToken = !viewAuthToken" />
+          <auth-component
+            v-if="systemId"
+            action-id="edit_system"
+            :permission="hasEditSystemPermission"
+            :resource="systemId">
+            <audit-icon
+              style="margin-left: 5px; cursor: pointer;"
+              type="view"
+              @click="() => viewAuthToken = !viewAuthToken" />
+          </auth-component>
         </template>
         <span v-else>
           {{ data.auth_token || '--' }}
-          <audit-icon
+          <auth-component
+            v-if="systemId"
+            action-id="edit_system"
+            :permission="hasEditSystemPermission"
+            :resource="systemId">
+            <audit-icon
+              style="margin-left: 5px; cursor: pointer;"
+              type="unview"
+              @click="() => viewAuthToken = !viewAuthToken" />
+          </auth-component>
+        </span>
+        <auth-component
+          v-if="systemId"
+          action-id="edit_system"
+          :permission="hasEditSystemPermission"
+          :resource="systemId">
+          <span
+            v-bk-tooltips="t('复制')"
             style="margin-left: 5px; cursor: pointer;"
-            type="unview"
-            @click="() => viewAuthToken = !viewAuthToken" />
-        </span>
-        <span
-          v-bk-tooltips="t('复制')"
-          style="margin-left: 5px; cursor: pointer;"
-          @click.stop="()=>handleCopy(data.auth_token)">
-          <audit-icon type="copy" />
-        </span>
+            @click.stop="()=>handleCopy(data.auth_token)">
+            <audit-icon type="copy" />
+          </span>
+        </auth-component>
       </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
+  import IamManageService from '@service/iam-manage';
 
   import SystemModel from '@model/meta/system';
 
@@ -227,6 +277,31 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const route = useRoute();
+  /** 与 Token 操作一致，优先用路由 id，避免详情未返回时 resources 为空 */
+  const systemId = computed(() => (
+    (route.params.id as string) || props.data.system_id || ''
+  ));
+
+  const {
+    data: checkResultMap,
+    run: checkEditSystemPermission,
+  } = useRequest(IamManageService.check, {
+    defaultValue: {},
+  });
+
+  const hasEditSystemPermission = computed(() => Boolean(checkResultMap.value.edit_system));
+
+  watch(systemId, (id) => {
+    if (!id) return;
+    checkEditSystemPermission({
+      action_ids: 'edit_system',
+      resources: id,
+    });
+  }, {
+    immediate: true,
+  });
+
   const edits = ref({
     name: false,
     managers: false,
