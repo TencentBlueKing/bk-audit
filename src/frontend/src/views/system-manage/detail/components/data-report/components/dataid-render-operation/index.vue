@@ -19,8 +19,7 @@
     <auth-component
       action-id="edit_system"
       class="operation-btn"
-      :permission="permission"
-      :resource="data.system_id">
+      :resource="route.params.id">
       <audit-icon
         v-bk-tooltips="t('查看')"
         class="operation-icon"
@@ -30,8 +29,7 @@
     <auth-component
       action-id="edit_system"
       class="operation-btn"
-      :permission="permission"
-      :resource="data.system_id">
+      :resource="route.params.id">
       <audit-icon
         v-bk-tooltips="t('编辑')"
         class="operation-icon"
@@ -41,8 +39,7 @@
     <auth-component
       action-id="edit_system"
       class="operation-btn"
-      :permission="permission"
-      :resource="data.system_id">
+      :resource="route.params.id">
       <audit-popconfirm
         :confirm-handler="handleDelete"
         :content="t('删除后不可直接找回，需要重新接入')"
@@ -86,15 +83,12 @@
 
   import EditInfo from './edit-info/index.vue';
 
-  const props = withDefaults(defineProps<Props>(), {
-    permission: false,
-  });
+  const props = defineProps<Props>();
 
   const emit = defineEmits<Emits>();
 
   interface Props {
     data: CollectorModel;
-    permission?: boolean;
   }
   interface Emits {
     (e: 'getCollectorLists'): void

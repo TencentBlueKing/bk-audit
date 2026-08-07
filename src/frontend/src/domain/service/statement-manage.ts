@@ -22,7 +22,12 @@ export default {
   /**
    * @desc 获取左侧菜单
    */
-  fetchMenuList(params: { scenario: 'perapp' | 'default'; status?: string; scope_id?: string; scope_type?: string }) {
+  fetchMenuList(params: {
+    scenario: 'per_app' | 'default' | 'tool';
+    status?: string;
+    scope_id?: string;
+    scope_type?: string;
+  }) {
     return StatementManageSource.getMenuList({
       ...params,
       status: 'published',

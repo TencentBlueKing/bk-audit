@@ -80,7 +80,6 @@
           v-show="contentType === item.name"
           :can-edit-system="canEditSystem"
           :data="data"
-          :edit-system-permission="editSystemPermission"
           @update-system-detail="handleUpdateSystemDetail" />
       </template>
     </div>
@@ -164,7 +163,6 @@
     : 'systemDetail'));
 
   const canEditSystem = computed(() => data.value.source_type !== 'iam_v3' && data.value.source_type !== 'iam_v4');
-  const editSystemPermission = computed(() => Boolean(data.value.permission?.edit_system));
 
   const markVisited = (value: string) => {
     if (visitedTabs.value.has(value)) {
