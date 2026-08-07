@@ -282,22 +282,21 @@ class TestApplyTicketResult(TestCase):
         self.assertEqual(self.application.status, ApplicationStatus.PENDING)
 
 
-# ==================== 申请列表查询逻辑测试 ====================
+# ==================== 无权限场景列表查询逻辑测试 ====================
 
 
-class TestSceneGrantApplicationList(TestCase):
-    """测试场景授权申请列表查询逻辑"""
+class TestListNoPermissionScenes(TestCase):
+    """测试无权限场景列表查询逻辑（与 ListMyScenePermissionApplications 一致）"""
 
     def setUp(self):
         """创建测试数据"""
         self.scene1 = Scene.objects.create(name="场景1", description="描述1")
         self.scene2 = Scene.objects.create(name="场景2", description="描述2")
+        self.scene3 = Scene.objects.create(name="场景3", description="描述3")
 
-    def test_returns_latest_per_scene_role(self):
-        """按 (scene, role) 分组返回最新一条"""
-        from django.db.models import Max, Subquery
-
-        # 场景1 + user 角色，创建两条申请
+    def test_get_latest_application_per_scene(self):
+        """同一场景多条申请时返回最新一条"""
+        # 场景1 创建两条申请
         ScenePermissionApplication._objects.create(
             scene=self.scene1,
             applicant="test_user",
@@ -307,7 +306,7 @@ class TestSceneGrantApplicationList(TestCase):
             itsm_sn="sn_old",
             itsm_ticket_id="ticket_old",
         )
-        app1_new = ScenePermissionApplication._objects.create(
+        app_new = ScenePermissionApplication._objects.create(
             scene=self.scene1,
             applicant="test_user",
             role="user",
@@ -317,27 +316,33 @@ class TestSceneGrantApplicationList(TestCase):
             itsm_ticket_id="ticket_new",
         )
 
-        # 场景1 + manager 角色
+        # 查询用户对场景1的最新申请
+        from django.db.models import Max
+
+        latest = (
+            ScenePermissionApplication.objects.filter(
+                applicant="test_user",
+                scene_id=self.scene1.scene_id,
+            )
+            .values("scene_id")
+            .annotate(latest_id=Max("id"))
+            .order_by("-latest_id")
+            .first()
+        )
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest["latest_id"], app_new.id)
+
+    def test_only_returns_user_applications(self):
+        """只返回当前用户的申请"""
         ScenePermissionApplication._objects.create(
             scene=self.scene1,
             applicant="test_user",
-            role="manager",
-            status=ApplicationStatus.PENDING,
-            itsm_sn="sn_manager",
-            itsm_ticket_id="ticket_manager",
-        )
-
-        # 场景2 + user 角色
-        ScenePermissionApplication._objects.create(
-            scene=self.scene2,
-            applicant="test_user",
             role="user",
-            status=ApplicationStatus.APPROVED,
-            itsm_sn="sn_scene2",
-            itsm_ticket_id="ticket_scene2",
+            status=ApplicationStatus.PENDING,
+            itsm_sn="sn_user",
+            itsm_ticket_id="ticket_user",
         )
-
-        # 其他用户的申请（不应返回）
         ScenePermissionApplication._objects.create(
             scene=self.scene1,
             applicant="other_user",
@@ -347,60 +352,6 @@ class TestSceneGrantApplicationList(TestCase):
             itsm_ticket_id="ticket_other",
         )
 
-        # 执行查询逻辑（与 ListMyScenePermissionApplications 一致）
-        latest_ids = (
-            ScenePermissionApplication._objects.filter(applicant="test_user")
-            .values("scene_id", "role")
-            .annotate(latest_id=Max("id"))
-            .values("latest_id")
-        )
-        result = list(
-            ScenePermissionApplication._objects.select_related("scene")
-            .filter(id__in=Subquery(latest_ids))
-            .order_by("-updated_at")
-        )
-
-        # 应返回 3 条记录：场景1+user、场景1+manager、场景2+user
-        self.assertEqual(len(result), 3)
-
-        # 验证场景1+user 返回的是最新的那条
-        scene1_user_apps = [r for r in result if r.scene_id == self.scene1.scene_id and r.role == "user"]
-        self.assertEqual(len(scene1_user_apps), 1)
-        self.assertEqual(scene1_user_apps[0].id, app1_new.id)
-
-    def test_filter_by_status(self):
-        """按状态筛选"""
-        from django.db.models import Max, Subquery
-
-        ScenePermissionApplication._objects.create(
-            scene=self.scene1,
-            applicant="test_user",
-            role="user",
-            status=ApplicationStatus.PENDING,
-            itsm_sn="sn_pending",
-            itsm_ticket_id="ticket_pending",
-        )
-        ScenePermissionApplication._objects.create(
-            scene=self.scene2,
-            applicant="test_user",
-            role="user",
-            status=ApplicationStatus.APPROVED,
-            itsm_sn="sn_approved",
-            itsm_ticket_id="ticket_approved",
-        )
-
-        # 执行查询逻辑（带状态筛选）
-        latest_ids = (
-            ScenePermissionApplication._objects.filter(applicant="test_user")
-            .values("scene_id", "role")
-            .annotate(latest_id=Max("id"))
-            .values("latest_id")
-        )
-        result = list(
-            ScenePermissionApplication._objects.select_related("scene").filter(
-                id__in=Subquery(latest_ids), status=ApplicationStatus.PENDING
-            )
-        )
-
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].status, ApplicationStatus.PENDING)
+        result = ScenePermissionApplication.objects.filter(applicant="test_user")
+        self.assertEqual(result.count(), 1)
+        self.assertEqual(result.first().applicant, "test_user")

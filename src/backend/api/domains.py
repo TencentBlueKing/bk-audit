@@ -61,14 +61,14 @@ WATERMARK_API_URL = get_endpoint(settings.DEVSECOPS_APIGW_NAME, APIProvider.APIG
 BK_SOPS_API_URL = settings.BK_SOPS_API_URL or get_endpoint(settings.BK_SOPS_APIGW_NAME, APIProvider.APIGW, stag="stage")
 
 # BK ITSM
-BK_ITSM_API_URL = get_endpoint(settings.BK_ITSM_APIGW_NAME, APIProvider.APIGW)
+BK_ITSM_API_URL = (
+    get_endpoint(settings.BK_ITSM_APIGW_NAME, APIProvider.APIGW)
+    if APIGW_ENABLED
+    else get_endpoint(settings.ITSM_ESB_NAME, APIProvider.ESB)
+)
 
 # BK ITSM V4
-BK_ITSM_V4_API_URL = (
-    get_endpoint(settings.BK_ITSM_V4_APIGW_NAME, APIProvider.APIGW)
-    if APIGW_ENABLED
-    else get_endpoint(settings.ITSM_V4_ESB_NAME, APIProvider.ESB)
-)
+BK_ITSM_V4_API_URL = get_endpoint(settings.BK_ITSM_V4_APIGW_NAME, APIProvider.APIGW)
 
 # BK Vision
 BK_VISION_API_URL = settings.BK_VISION_API_URL
