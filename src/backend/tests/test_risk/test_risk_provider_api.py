@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+from unittest import expectedFailure
 from unittest.mock import patch
 
 from django.conf import settings
@@ -164,6 +165,364 @@ class RiskResourceProviderAPITest(TestCase):
         self.assertIsNone(payload["event_end_time_timestamp"])
         self.assertEqual(payload["event_time_timestamp"], _ms(risk.event_time))
         self.assertEqual(payload["last_operate_time_timestamp"], _ms(risk.last_operate_time))
+
+    # ────────────────────────────────────────────────────────────────────
+    # fetch_instance_list 大字段截断/置 NULL 测试（2026-08-07 502 修复）
+    # ────────────────────────────────────────────────────────────────────
+
+    def _create_risk_with_fields(
+        self,
+        *,
+        risk_id: str,
+        strategy: Strategy,
+        event_time: datetime.datetime,
+        event_content: str | None = None,
+        event_evidence: str | None = None,
+        event_data=None,
+    ) -> Risk:
+        return Risk.objects.create(
+            risk_id=risk_id,
+            raw_event_id=f"raw-{risk_id}",
+            strategy=strategy,
+            event_time=event_time,
+            event_end_time=event_time + datetime.timedelta(minutes=5),
+            event_content=event_content,
+            event_evidence=event_evidence,
+            event_data=event_data,
+        )
+
+    def test_event_content_truncated_when_oversize(self):
+        """event_content 超 100KB 被截断到阈值以内"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-trunc-content")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-content-trunc",
+            strategy=strategy,
+            event_time=event_time,
+            event_content="x" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024),  # 阈值+1KB
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertLessEqual(len(item["data"]["event_content"]), FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES)
+
+    def test_event_content_preserved_when_small(self):
+        """event_content 未超阈值保持完整"""
+        strategy = self._create_strategy("strategy-content-small")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-content-ok", strategy=strategy, event_time=event_time, event_content="short content"
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertEqual(item["data"]["event_content"], "short content")
+
+    def test_event_evidence_nullified_when_oversize(self):
+        """event_evidence 超阈值置 NULL"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-evidence-null")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-evidence-null",
+            strategy=strategy,
+            event_time=event_time,
+            event_evidence="y" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024),
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertIsNone(item["data"]["event_evidence"])
+
+    def test_event_evidence_preserved_when_small(self):
+        """event_evidence 未超阈值保持完整"""
+        strategy = self._create_strategy("strategy-evidence-ok")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-evidence-ok", strategy=strategy, event_time=event_time, event_evidence="short evidence"
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertEqual(item["data"]["event_evidence"], "short evidence")
+
+    def test_event_data_nullified_when_oversize(self):
+        """event_data 超 100KB 置 NULL（保证 JSON 合法性）"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-data-null")
+        event_time = timezone.now()
+        big_json = {"key": "v" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024)}
+        risk = self._create_risk_with_fields(
+            risk_id="risk-data-null", strategy=strategy, event_time=event_time, event_data=big_json
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertIsNone(item["data"]["event_data"])
+
+    def test_event_data_preserved_when_small(self):
+        """event_data 未超阈值保持完整 JSON"""
+        strategy = self._create_strategy("strategy-data-ok")
+        event_time = timezone.now()
+        small_json = {"key": "value", "list": [1, 2, 3]}
+        risk = self._create_risk_with_fields(
+            risk_id="risk-data-ok", strategy=strategy, event_time=event_time, event_data=small_json
+        )
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertEqual(item["data"]["event_data"], small_json)
+
+    def test_small_fields_unchanged_after_truncation(self):
+        """截断后小字段（status/risk_id/event_time_timestamp 等）不受影响"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-small-unchanged")
+        event_time = timezone.now().replace(microsecond=123000)
+        risk = self._create_risk_with_fields(
+            risk_id="risk-small-unchanged",
+            strategy=strategy,
+            event_time=event_time,
+            event_content="x" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024),
+        )
+        last_operate_time = event_time + datetime.timedelta(minutes=10)
+        Risk.objects.filter(pk=risk.pk).update(last_operate_time=last_operate_time)
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        payload = item["data"]
+
+        # 小字段完整保留
+        self.assertEqual(payload["risk_id"], risk.risk_id)
+        self.assertEqual(payload["raw_event_id"], "raw-risk-small-unchanged")
+        self.assertEqual(payload["strategy_id"], strategy.strategy_id)
+        self.assertEqual(payload["event_time_timestamp"], _ms(risk.event_time))
+        self.assertEqual(payload["last_operate_time_timestamp"], _ms(last_operate_time))
+
+    def test_is_deleted_still_returned_after_truncation(self):
+        """截断后 is_deleted 仍正确返回（顶层 + data 内）"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-del-trunc")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-del-trunc",
+            strategy=strategy,
+            event_time=event_time,
+            event_content="x" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024),
+        )
+        risk.delete()  # 软删除
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertTrue(item["is_deleted"])
+        self.assertTrue(item["data"]["is_deleted"])
+        # 截断仍生效
+        self.assertLessEqual(
+            len(item["data"]["event_content"]), FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        )
+
+    def test_schema_unchanged_after_truncation(self):
+        """fetch_resource_type_schema 仍返回完整 schema（不受截断影响）"""
+        schema = self.provider.fetch_resource_type_schema()
+        properties = schema.properties
+        # 三个大字段仍在 schema 中（BKBase 清洗配置依赖）
+        self.assertIn("event_content", properties)
+        self.assertIn("event_evidence", properties)
+        self.assertIn("event_data", properties)
+
+    def test_dynamic_fields_cover_all_serializer_fields(self):
+        """动态生成的 values 字段集合覆盖 RiskProviderSerializer 需要的全部字段"""
+        values_fields, annotations = self.provider._build_fetch_values_kwargs(102400)
+        covered = set(values_fields)  # 含 _truncated_xxx 别名 + strategy_id
+        # RiskProviderSerializer exclude=["strategy"]，但字段名是 strategy_id（FK attname）
+        # 需覆盖模型所有非 FK 字段 + strategy_id（FK attname）
+        model_field_names = {f.name for f in Risk._meta.fields if not f.is_relation}
+        model_field_names.add("strategy_id")  # FK 的 attname
+        # 截断/置 NULL 字段在 values_fields 中用别名 _truncated_<name>，需映射回原名再比对
+        resolved = {f.replace("_truncated_", "") if f.startswith("_truncated_") else f for f in covered}
+        missing = model_field_names - resolved
+        self.assertFalse(missing, f"values 漏列字段: {missing}")
+
+    # ────────────────────────────────────────────────────────────────────
+    # 边缘漏洞补测（2026-08-07）
+    # ────────────────────────────────────────────────────────────────────
+
+    @expectedFailure
+    def test_multibyte_event_content_byte_limit(self):
+        """多字节字符截断后字节数应 ≤ 阈值
+
+        已知限制：event_content 用 Substr 按字符截断（Django text.py:341），
+        utf8mb4 中文 3 字节/字符，截断 102400 字符后实际可达 ~300KB。
+        此测试标注该问题；修复后（改为字节级判断/截断）应转为 unexpected success。
+        """
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-mb-bytes")
+        event_time = timezone.now()
+        limit = FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        content = "中" * (limit + 1000)
+        risk = self._create_risk_with_fields(
+            risk_id="risk-mb-bytes", strategy=strategy, event_time=event_time, event_content=content,
+        )
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        truncated = item["data"]["event_content"]
+        self.assertLessEqual(
+            len(truncated.encode("utf-8")), limit,
+            f"event_content 截断后字节数 {len(truncated.encode('utf-8'))} 超阈值 {limit}",
+        )
+
+    def test_fields_exactly_at_threshold(self):
+        """大字段恰好等于阈值字节时不截断/不置 NULL（> 严格大于，= 不触发）"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-exact-threshold")
+        event_time = timezone.now()
+        limit = FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        # ASCII：1 字符 = 1 字节，恰好等于阈值
+        content = "x" * limit
+        evidence = "y" * limit
+        risk = self._create_risk_with_fields(
+            risk_id="risk-exact-threshold", strategy=strategy, event_time=event_time,
+            event_content=content, event_evidence=evidence,
+        )
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        # event_content: Substr 取前 limit 字符 = 全部（恰好等于阈值）
+        self.assertEqual(item["data"]["event_content"], content)
+        # event_evidence: LENGTH = limit, > limit 为 False, 返回原值
+        self.assertEqual(item["data"]["event_evidence"], evidence)
+
+    def test_null_large_fields_not_broken(self):
+        """三字段（event_content/event_evidence/event_data）均为 NULL 时不报错"""
+        strategy = self._create_strategy("strategy-null-fields")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-null-fields", strategy=strategy, event_time=event_time,
+            event_content=None, event_evidence=None, event_data=None,
+        )
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        payload = item["data"]
+        # COALESCE(NULL, '') → '' → LENGTH=0 不超阈值 → ELSE 返回原值 NULL
+        self.assertIsNone(payload["event_content"])
+        self.assertIsNone(payload["event_evidence"])
+        self.assertIsNone(payload["event_data"])
+
+    def test_empty_large_fields_preserved(self):
+        """空字符串/空 dict 保持不变"""
+        strategy = self._create_strategy("strategy-empty")
+        event_time = timezone.now()
+        risk = self._create_risk_with_fields(
+            risk_id="risk-empty", strategy=strategy, event_time=event_time,
+            event_content="", event_evidence="", event_data={},
+        )
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        payload = item["data"]
+        self.assertEqual(payload["event_content"], "")
+        self.assertEqual(payload["event_evidence"], "")
+        self.assertEqual(payload["event_data"], {})
+
+    def test_truncation_works_on_deep_page(self):
+        """深分页（slice_from > 0）时截断仍生效"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-deep-page")
+        base_time = timezone.now() - datetime.timedelta(minutes=10)
+        limit = FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        for i in range(5):
+            r = self._create_risk_with_fields(
+                risk_id=f"risk-deep-{i}", strategy=strategy,
+                event_time=base_time + datetime.timedelta(seconds=i),
+                event_content="x" * (limit + 1024),
+            )
+            Risk.objects.filter(pk=r.pk).update(updated_at=base_time + datetime.timedelta(seconds=i))
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(2, 2),
+        )
+        self.assertGreaterEqual(result.count, 5)
+        self.assertGreaterEqual(len(result.results), 1)
+        for item in result.results:
+            self.assertLessEqual(len(item["data"]["event_content"]), limit)
+
+    def test_soft_deleted_with_nullified_event_data(self):
+        """软删记录的 event_data 超阈值时置 NULL"""
+        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+
+        strategy = self._create_strategy("strategy-del-null")
+        event_time = timezone.now()
+        big_json = {"key": "v" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024)}
+        risk = self._create_risk_with_fields(
+            risk_id="risk-del-null", strategy=strategy, event_time=event_time, event_data=big_json,
+        )
+        risk.delete()
+
+        now = timezone.now()
+        result = self.provider.fetch_instance_list(
+            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            Page(50, 0),
+        )
+        item = next(data for data in result.results if data["id"] == risk.risk_id)
+        self.assertTrue(item["is_deleted"])
+        self.assertTrue(item["data"]["is_deleted"])
+        self.assertIsNone(item["data"]["event_data"])
 
 
 class ManualEventProviderAPITest(TestCase):
