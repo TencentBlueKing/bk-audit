@@ -443,7 +443,7 @@ class ApplyScenePermissionRequestSerializer(serializers.Serializer):
 
 
 class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
-    """场景权限申请单"""
+    """场景权限申请单 - 用于提交申请的响应"""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
@@ -454,6 +454,38 @@ class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
             "itsm_sn",
             "status",
             "status_display",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class ListMyScenePermissionApplicationSerializer(serializers.ModelSerializer):
+    """我的场景权限申请列表响应序列化器"""
+
+    scene_id = serializers.IntegerField(source="scene.scene_id", read_only=True)
+    scene_name = serializers.CharField(source="scene.name", read_only=True)
+    role_display = serializers.CharField(source="get_role_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    grant_status_display = serializers.CharField(source="get_grant_status_display", read_only=True)
+
+    class Meta:
+        model = ScenePermissionApplication
+        fields = [
+            "id",
+            "scene_id",
+            "scene_name",
+            "applicant",
+            "role",
+            "role_display",
+            "reason",
+            "itsm_sn",
+            "itsm_ticket_url",
+            "status",
+            "status_display",
+            "grant_status",
+            "grant_status_display",
+            "approvers",
+            "reject_reason",
             "created_at",
         ]
         read_only_fields = fields
