@@ -122,6 +122,7 @@ dev = [
     "pytest-django==4.10.0",
     "pytest-xdist==2.4.0",
     "pytest-html==3.1.1",
+    "py==1.11.0",
     "xmlrunner==1.7.7",
     "pyparsing==2.2.0",
     "PyYAML==6.0",
