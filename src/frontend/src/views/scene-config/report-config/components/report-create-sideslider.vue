@@ -890,9 +890,33 @@
 </style>
 
 <style lang="postcss">
+/* ext-cls 挂在 .bk-modal 根节点；非 scoped 勿用 :deep()，否则选择器无效 */
 .scene-report-create-sideslider {
-  .bk-modal-content {
+  .bk-modal-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
     background: #f5f7fa;
+  }
+
+  .bk-modal-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: #f5f7fa;
+  }
+
+  .bk-modal-footer {
+    flex: none;
+    background: #fafbfd;
+    box-shadow: 0 -1px 3px 0 rgb(0 0 0 / 4%);
+  }
+
+  .bk-sideslider-footer {
+    height: 52px;
+    margin-top: 0;
+    background: #fafbfd;
   }
 }
 </style>
