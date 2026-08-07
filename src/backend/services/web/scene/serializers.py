@@ -462,8 +462,8 @@ class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
 class ScenePermissionStatusSerializer(serializers.Serializer):
     """场景权限状态"""
 
-    view_scene = serializers.BooleanField(label=gettext_lazy("查看场景权限"))
-    manage_scene = serializers.BooleanField(label=gettext_lazy("管理场景权限"))
+    view_scene = serializers.BooleanField(label=gettext_lazy("查看场景权限"), required=False, default=False)
+    manage_scene = serializers.BooleanField(label=gettext_lazy("管理场景权限"), required=False, default=False)
 
 
 class ApplicationDetailSerializer(serializers.ModelSerializer):
