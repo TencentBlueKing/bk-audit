@@ -52,7 +52,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "callback_token",
-                    models.CharField(blank=True, default="", max_length=128, verbose_name="回调验证Token"),
+                    models.CharField(blank=True, default="", max_length=128, verbose_name="回调鉴权Token"),
                 ),
                 (
                     "status",
@@ -100,10 +100,10 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "场景权限申请",
                 "ordering": ["-updated_at"],
                 "indexes": [
-                    models.Index(fields=["applicant", "status"], name="spa_app_status_idx"),
-                    models.Index(fields=["scene", "status"], name="spa_scene_status_idx"),
-                    models.Index(fields=["status", "retry_count"], name="spa_status_retry_idx"),
-                    models.Index(fields=["status", "created_at"], name="spa_status_created_idx"),
+                    models.Index(fields=["applicant", "status"], name="applicant_status_idx"),
+                    models.Index(fields=["scene", "status"], name="scene_status_idx"),
+                    models.Index(fields=["status", "retry_count"], name="status_retry_idx"),
+                    models.Index(fields=["status", "created_at"], name="status_created_idx"),
                 ],
             },
         ),

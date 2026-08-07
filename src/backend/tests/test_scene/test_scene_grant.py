@@ -40,6 +40,7 @@ class TestParseItsTicketFromLogs(TestCase):
                 "status": ITSMV4TicketStatus.RUNNING,
                 "approve_result": False,
                 "is_terminal": False,
+                "is_terminated": False,
             },
         )
 
@@ -58,6 +59,7 @@ class TestParseItsTicketFromLogs(TestCase):
                 "status": ITSMV4TicketStatus.RUNNING,
                 "approve_result": False,
                 "is_terminal": False,
+                "is_terminated": False,
             },
         )
 
@@ -78,6 +80,7 @@ class TestParseItsTicketFromLogs(TestCase):
                 "status": ITSMV4TicketStatus.FINISHED,
                 "approve_result": True,
                 "is_terminal": True,
+                "is_terminated": False,
             },
         )
 
@@ -98,6 +101,7 @@ class TestParseItsTicketFromLogs(TestCase):
                 "status": ITSMV4TicketStatus.FINISHED,
                 "approve_result": False,
                 "is_terminal": True,
+                "is_terminated": False,
             },
         )
 
@@ -129,6 +133,7 @@ class TestParseItsTicketFromLogs(TestCase):
                 "status": ITSMV4TicketStatus.FINISHED,
                 "approve_result": False,
                 "is_terminal": True,
+                "is_terminated": False,
             },
         )
 
