@@ -100,7 +100,7 @@
                 v-if="isSceneLocked(item)"
                 v-cursor
                 class="lock-mask"
-                @click.stop />
+                @click.stop="handleSelect(item)" />
             </div>
           </div>
         </div>
@@ -430,7 +430,16 @@
 
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
-    if (isSceneLocked(item)) return;
+    if (isSceneLocked(item)) {
+      isPopoverShow.value = false;
+      router.push({
+        name: 'userLandingPage',
+        query: {
+          scene_id: item.id,
+        },
+      });
+      return;
+    }
     if ((!window.changeConfirm || window.changeConfirm === 'popover') && route.meta.changeSceneIsBackedList) {
       InfoBox({
         title: t('确认离开当前页？'),
