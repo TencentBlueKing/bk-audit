@@ -33,7 +33,6 @@ from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
-from core.serializers import FlexibleListField
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopeContext, ScopePermission
 from services.web.risk.models import Risk
@@ -72,7 +71,6 @@ from services.web.scene.permission import (
 from services.web.scene.serializers import (
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
-    ListMyScenePermissionApplicationSerializer,
     MyRolePermissionSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
@@ -82,6 +80,7 @@ from services.web.scene.serializers import (
     ScenePermissionApplicationSerializer,
     SceneSimpleListSerializer,
     SceneStatusFilterSerializer,
+    SceneWithPermissionAndApplicationSerializer,
     UpdateSceneSerializer,
 )
 from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
@@ -743,7 +742,7 @@ class ApplyScenePermission(SceneResource):
             logger.error("[ApplyScenePermission] BKAUDIT_CALLBACK_URL_PREFIX 未配置，无法创建 ITSM 工单")
             raise ApproveServiceNotConfigured()
 
-        # 8. 建 ITSM V4 单（operator=申请人 → 单据归属申请人，可在 ITSM 查看/撤单）
+        # 8. 建 ITSM V4 单（operator=申请人）
         ticket = self._create_itsm_ticket(
             applicant=applicant,
             scene=scene,
@@ -790,7 +789,7 @@ class ApplyScenePermission(SceneResource):
     @staticmethod
     def _create_itsm_ticket(applicant, scene, role, reason, approvers, callback_token) -> dict:
         """建 ITSM V4 审批单。字段标识见 ScenePermissionFormFields。"""
-        role_label = dict(SceneRole.choices).get(role, role)
+        role_label = str(dict(SceneRole.choices).get(role, role))
 
         # 获取申请人部门（主岗全称）
         applicant_department = ""
@@ -802,7 +801,7 @@ class ApplyScenePermission(SceneResource):
             logger.warning("[_create_itsm_ticket] 获取用户部门失败, applicant=%s", applicant)
 
         form_data = {
-            ScenePermissionFormFields.TITLE: gettext("【审计中心】%s 申请 %s %s权限") % (applicant, scene.name, role_label),
+            ScenePermissionFormFields.TITLE: str(gettext("【审计中心】%s 申请 %s %s权限")) % (applicant, scene.name, role_label),
             ScenePermissionFormFields.APPLICANT: applicant,
             ScenePermissionFormFields.APPLICANT_DEPARTMENT: applicant_department,
             ScenePermissionFormFields.APPLY_TIME: timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -812,47 +811,95 @@ class ApplyScenePermission(SceneResource):
             ScenePermissionFormFields.REASON: reason,
         }
         # 构造回调 URL（需要配置 BKAPP_BKAUDIT_CALLBACK_URL_PREFIX 环境变量）
-        callback_url = f"{settings.BKAUDIT_CALLBACK_URL_PREFIX}/scene_permission_applications/callback/"
-        return api.bk_itsm_v4.ticket_create(
-            operator=applicant,
-            workflow_key=SCENE_PERMISSION_WORKFLOW_KEY,
-            form_data=form_data,
-            is_submit=True,
-            callback_url=callback_url,
-            callback_token=callback_token,
+        callback_url = f"{settings.BKAUDIT_CALLBACK_URL_PREFIX}/scene_permission_application/callback/"
+        logger.info(
+            "[_create_itsm_ticket] workflow_key=%s, operator=%s, callback_url=%s, form_data=%s",
+            SCENE_PERMISSION_WORKFLOW_KEY,
+            applicant,
+            callback_url,
+            form_data,
         )
+        try:
+            return api.bk_itsm_v4.ticket_create(
+                operator=applicant,
+                workflow_key=SCENE_PERMISSION_WORKFLOW_KEY,
+                form_data=form_data,
+                is_submit=True,
+                callback_url=callback_url,
+                callback_token=callback_token,
+            )
+        except Exception:
+            logger.exception(
+                "[_create_itsm_ticket] ITSM V4 ticket_create failed, workflow_key=%s, operator=%s, form_data=%s",
+                SCENE_PERMISSION_WORKFLOW_KEY,
+                applicant,
+                form_data,
+            )
+            raise
 
 
 class ListMyScenePermissionApplications(SceneResource):
-    """我的场景权限申请列表"""
+    """我的场景列表（含申请信息）"""
 
-    name = gettext_lazy("我的场景权限申请列表")
-    ResponseSerializer = ListMyScenePermissionApplicationSerializer
+    name = gettext_lazy("我的场景列表（含申请状态）")
+    ResponseSerializer = SceneWithPermissionAndApplicationSerializer
     many_response_data = True
 
     class RequestSerializer(serializers.Serializer):
-        status = FlexibleListField(
-            child=serializers.ChoiceField(choices=ApplicationStatus.choices),
-            required=False,
-        )
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False)
 
     def perform_request(self, validated_request_data):
+        applicant = get_request_username()
+        scene_id = validated_request_data.get("scene_id")
+
+        # 1. 获取启用的场景（支持按 scene_id 过滤）
+        scenes = Scene.objects.filter(is_deleted=False, status=SceneStatus.ENABLED)
+        if scene_id:
+            scenes = scenes.filter(scene_id=scene_id)
+
+        scene_list = list(scenes.values("scene_id", "name", "description"))
+        if not scene_list:
+            return []
+
+        # 2. 查询用户对这些场景的最新申请记录
+        scene_ids = [s["scene_id"] for s in scene_list]
         from django.db.models import Max
 
-        # 子查询：获取每个 (scene, role) 的最新申请 ID
-        latest_ids = (
-            ScenePermissionApplication.objects.filter(applicant=get_request_username())
-            .values("scene_id", "role")
+        latest_applications = (
+            ScenePermissionApplication.objects.filter(
+                applicant=applicant,
+                scene_id__in=scene_ids,
+            )
+            .values("scene_id")
             .annotate(latest_id=Max("id"))
-            .values("latest_id")
+            .values("latest_id", "scene_id")
         )
 
-        qs = ScenePermissionApplication.objects.select_related("scene").filter(id__in=Subquery(latest_ids))
+        # 构建 scene_id -> application 的映射
+        application_map = {}
+        if latest_applications:
+            application_ids = [app["latest_id"] for app in latest_applications]
+            applications = ScenePermissionApplication.objects.filter(id__in=application_ids)
+            for app in applications:
+                application_map[app.scene_id] = app
 
-        if validated_request_data.get("status"):
-            qs = qs.filter(status__in=validated_request_data["status"])
+        # 3. 组装返回数据
+        result = []
+        for scene in scene_list:
+            scene_id = scene["scene_id"]
+            application = application_map.get(scene_id)
 
-        return qs.order_by("-updated_at")
+            result.append(
+                {
+                    "scene_id": scene_id,
+                    "scene_name": scene["name"],
+                    "description": scene["description"],
+                    "permission": {},
+                    "application": application,  # 直接传模型实例，由序列化器处理
+                }
+            )
+
+        return result
 
 
 class ScenePermissionApplicationCallback(SceneResource):

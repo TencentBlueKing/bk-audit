@@ -459,11 +459,16 @@ class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ListMyScenePermissionApplicationSerializer(serializers.ModelSerializer):
-    """我的场景权限申请列表响应序列化器"""
+class ScenePermissionStatusSerializer(serializers.Serializer):
+    """场景权限状态"""
 
-    scene_id = serializers.IntegerField(source="scene.scene_id", read_only=True)
-    scene_name = serializers.CharField(source="scene.name", read_only=True)
+    view_scene = serializers.BooleanField(label=gettext_lazy("查看场景权限"), required=False, default=False)
+    manage_scene = serializers.BooleanField(label=gettext_lazy("管理场景权限"), required=False, default=False)
+
+
+class ApplicationDetailSerializer(serializers.ModelSerializer):
+    """申请详细信息（用于无权限场景列表）"""
+
     role_display = serializers.CharField(source="get_role_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     grant_status_display = serializers.CharField(source="get_grant_status_display", read_only=True)
@@ -472,8 +477,6 @@ class ListMyScenePermissionApplicationSerializer(serializers.ModelSerializer):
         model = ScenePermissionApplication
         fields = [
             "id",
-            "scene_id",
-            "scene_name",
             "applicant",
             "role",
             "role_display",
@@ -489,3 +492,13 @@ class ListMyScenePermissionApplicationSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class SceneWithPermissionAndApplicationSerializer(serializers.Serializer):
+    """无权限场景 + 权限状态 + 申请状态"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
+    scene_name = serializers.CharField(label=gettext_lazy("场景名称"))
+    description = serializers.CharField(label=gettext_lazy("场景描述"), allow_blank=True, allow_null=True, default="")
+    permission = ScenePermissionStatusSerializer(label=gettext_lazy("权限状态"))
+    application = ApplicationDetailSerializer(label=gettext_lazy("申请信息"), allow_null=True)
