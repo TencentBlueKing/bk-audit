@@ -812,7 +812,7 @@ class ApplyScenePermission(SceneResource):
             ScenePermissionFormFields.REASON: reason,
         }
         # 构造回调 URL（需要配置 BKAPP_BKAUDIT_CALLBACK_URL_PREFIX 环境变量）
-        callback_url = f"{settings.BKAUDIT_CALLBACK_URL_PREFIX}/scene_permission_applications/callback/"
+        callback_url = f"{settings.BKAUDIT_CALLBACK_URL_PREFIX}/scene_permission_application/callback/"
         logger.info(
             "[_create_itsm_ticket] workflow_key=%s, operator=%s, callback_url=%s, form_data=%s",
             SCENE_PERMISSION_WORKFLOW_KEY,
