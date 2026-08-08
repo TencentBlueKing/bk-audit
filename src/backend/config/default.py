@@ -199,6 +199,8 @@ BK_SOPS_API_URL = os.getenv("BKAPP_BK_SOPS_API_URL")
 BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
 BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
+# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
+BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
@@ -300,6 +302,18 @@ BK_IAM_SYSTEM_NAME = os.getenv("BKAPP_IAM_SYSTEM_NAME", "审计中心")
 BK_IAM_USE_APIGATEWAY = True
 BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL")
 BK_IAM_RESOURCE_API_HOST = os.getenv("BKAPP_BK_IAM_RESOURCE_API_HOST")
+# 权限主链路后端：v3 使用现有 IAM V3 SDK，v4 使用审计中心 IAM V4 兼容层。
+IAM_PERMISSION_BACKEND = os.getenv("BKAPP_IAM_PERMISSION_BACKEND", "v3")
+# V3 主链路下是否额外执行 V4 影子鉴权对比；仅记录差异，不影响线上返回结果。
+IAM_V4_SHADOW_COMPARE = strtobool(os.getenv("BKAPP_IAM_V4_SHADOW_COMPARE", "False"))
+# V4 影子鉴权采样率，取值 0-100；0 表示关闭采样，100 表示全量对比。
+IAM_V4_SHADOW_SAMPLE_RATE = int(os.getenv("BKAPP_IAM_V4_SHADOW_SAMPLE_RATE", "0"))
+# IAM V4 角色授权有效期天数，用于创建者授权和本地用户组同步写入。
+IAM_V4_AUTHORIZATION_EXPIRED_DAYS = int(os.getenv("BKAPP_IAM_V4_AUTHORIZATION_EXPIRED_DAYS", "365"))
+# IAM V4 批量鉴权接口单次请求大小，避免大候选集触发网关/接口 payload 限制。
+IAM_V4_BATCH_AUTH_CHUNK_SIZE = int(os.getenv("BKAPP_IAM_V4_BATCH_AUTH_CHUNK_SIZE", "20"))
+# IAM V4 Role 成员分页拉取大小。
+IAM_V4_LIST_ROLE_SUBJECTS_PAGE_SIZE = int(os.getenv("BKAPP_IAM_V4_LIST_ROLE_SUBJECTS_PAGE_SIZE", "100"))
 
 # Version
 VERSION_MD_DIR = "version_md"
