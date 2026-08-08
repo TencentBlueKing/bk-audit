@@ -102,3 +102,39 @@ class SceneViewSet(ResourceViewSet):
             pk_field="scene_id",
         ),
     ]
+
+
+class ScenePermissionApplicationViewSet(ResourceViewSet):
+    """
+    场景权限自助申请
+        POST /api/v1/scene_permission_applications/apply/      场景管理/使用权限申请
+        GET  /api/v1/scene_permission_applications/mine/       我的场景列表（含申请信息）
+        POST /api/v1/scene_permission_applications/callback/   ITSM工单回调
+    """
+
+    def get_permissions(self):
+        if self.action == "callback":
+            return []
+        return super().get_permissions()
+
+    resource_routes = [
+        ResourceRoute("POST", resource.scene.apply_scene_permission, endpoint="apply"),
+        ResourceRoute(
+            "GET",
+            resource.scene.list_my_scene_permission_applications,
+            endpoint="mine",
+            enable_paginate=True,
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.VIEW_SCENE, ActionEnum.MANAGE_SCENE],
+                    id_field=lambda item: item["scene_id"],
+                    data_field=lambda data: data.get("results", []) if isinstance(data, dict) else data,
+                )
+            ],
+        ),
+        ResourceRoute(
+            "POST",
+            resource.scene.scene_permission_application_callback,
+            endpoint="callback",
+        ),
+    ]

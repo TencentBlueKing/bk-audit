@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.13"
+  version: "0.0.14"
   # 版本标题
-  title: "0.0.13"
+  title: "0.0.14"
   # 版本描述
-  comment: "MCP 请求体格式异常返回明确 4xx，并收敛风险下钻上下文说明"
+  comment: "新增 ITSM 工单回调接口，用于场景自动化审批回调"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:

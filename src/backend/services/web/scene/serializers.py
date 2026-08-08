@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
@@ -14,6 +15,7 @@ from services.web.scene.constants import (
     SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES,
     SCENE_RISK_COUNT_DEFAULT_MONTHS,
     ResourceVisibilityType,
+    SceneRole,
     SceneStatus,
     VisibilityScope,
 )
@@ -23,6 +25,7 @@ from services.web.scene.models import (
     ResourceBindingSystem,
     Scene,
     SceneDataTable,
+    ScenePermissionApplication,
     SceneSystem,
 )
 from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
@@ -429,3 +432,69 @@ class ResourceBindingInputSerializer(serializers.Serializer):
         except ValueError:
             raise serializers.ValidationError({"visibility": "可见性配置不合法"})
         return attrs
+
+
+class ApplyScenePermissionRequestSerializer(serializers.Serializer):
+    """提交场景权限申请请求"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    role = serializers.ChoiceField(label=gettext_lazy("角色"), choices=SceneRole.choices, required=True)
+    reason = serializers.CharField(label=gettext_lazy("申请理由"), required=False, allow_blank=True)
+
+
+class ScenePermissionApplicationSerializer(serializers.ModelSerializer):
+    """场景权限申请单 - 用于提交申请的响应"""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ScenePermissionApplication
+        fields = [
+            "id",
+            "itsm_sn",
+            "status",
+            "status_display",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class ScenePermissionStatusSerializer(serializers.Serializer):
+    """场景权限状态"""
+
+    view_scene = serializers.BooleanField(label=gettext_lazy("查看场景权限"), required=False, default=False)
+    manage_scene = serializers.BooleanField(label=gettext_lazy("管理场景权限"), required=False, default=False)
+
+
+class ApplicationDetailSerializer(serializers.Serializer):
+    """申请详细信息（用于无权限场景列表）"""
+
+    id = serializers.IntegerField(label=gettext_lazy("申请ID"))
+    applicant = serializers.CharField(label=gettext_lazy("申请人"))
+    role = serializers.CharField(label=gettext_lazy("申请角色"))
+    role_display = serializers.CharField(label=gettext_lazy("角色名称"), source="get_role_display")
+    reason = serializers.CharField(label=gettext_lazy("申请理由"), allow_blank=True)
+    itsm_sn = serializers.CharField(label=gettext_lazy("ITSM单号"))
+    itsm_ticket_url = serializers.CharField(label=gettext_lazy("ITSM工单链接"), allow_blank=True)
+    status = serializers.CharField(label=gettext_lazy("审批状态"))
+    status_display = serializers.CharField(label=gettext_lazy("状态名称"), source="get_status_display")
+    grant_status = serializers.CharField(label=gettext_lazy("授权状态"), allow_blank=True)
+    grant_status_display = serializers.CharField(
+        label=gettext_lazy("授权状态名称"),
+        source="get_grant_status_display",
+        allow_null=True,
+        allow_blank=True,
+    )
+    approvers = serializers.JSONField(label=gettext_lazy("审批人"))
+    reject_reason = serializers.CharField(label=gettext_lazy("拒绝理由"), allow_blank=True)
+    created_at = serializers.DateTimeField(label=gettext_lazy("申请时间"))
+
+
+class SceneWithPermissionAndApplicationSerializer(serializers.Serializer):
+    """无权限场景 + 权限状态 + 申请状态"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
+    scene_name = serializers.CharField(label=gettext_lazy("场景名称"))
+    description = serializers.CharField(label=gettext_lazy("场景描述"), allow_blank=True, allow_null=True, default="")
+    permission = ScenePermissionStatusSerializer(label=gettext_lazy("权限状态"))
+    application = ApplicationDetailSerializer(label=gettext_lazy("申请信息"), allow_null=True)
