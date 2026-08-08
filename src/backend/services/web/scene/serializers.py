@@ -466,32 +466,28 @@ class ScenePermissionStatusSerializer(serializers.Serializer):
     manage_scene = serializers.BooleanField(label=gettext_lazy("管理场景权限"), required=False, default=False)
 
 
-class ApplicationDetailSerializer(serializers.ModelSerializer):
+class ApplicationDetailSerializer(serializers.Serializer):
     """申请详细信息（用于无权限场景列表）"""
 
-    role_display = serializers.CharField(source="get_role_display", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-    grant_status_display = serializers.CharField(source="get_grant_status_display", read_only=True)
-
-    class Meta:
-        model = ScenePermissionApplication
-        fields = [
-            "id",
-            "applicant",
-            "role",
-            "role_display",
-            "reason",
-            "itsm_sn",
-            "itsm_ticket_url",
-            "status",
-            "status_display",
-            "grant_status",
-            "grant_status_display",
-            "approvers",
-            "reject_reason",
-            "created_at",
-        ]
-        read_only_fields = fields
+    id = serializers.IntegerField(label=gettext_lazy("申请ID"))
+    applicant = serializers.CharField(label=gettext_lazy("申请人"))
+    role = serializers.CharField(label=gettext_lazy("申请角色"))
+    role_display = serializers.CharField(label=gettext_lazy("角色名称"), source="get_role_display")
+    reason = serializers.CharField(label=gettext_lazy("申请理由"), allow_blank=True)
+    itsm_sn = serializers.CharField(label=gettext_lazy("ITSM单号"))
+    itsm_ticket_url = serializers.CharField(label=gettext_lazy("ITSM工单链接"), allow_blank=True)
+    status = serializers.CharField(label=gettext_lazy("审批状态"))
+    status_display = serializers.CharField(label=gettext_lazy("状态名称"), source="get_status_display")
+    grant_status = serializers.CharField(label=gettext_lazy("授权状态"), allow_blank=True)
+    grant_status_display = serializers.CharField(
+        label=gettext_lazy("授权状态名称"),
+        source="get_grant_status_display",
+        allow_null=True,
+        allow_blank=True,
+    )
+    approvers = serializers.JSONField(label=gettext_lazy("审批人"))
+    reject_reason = serializers.CharField(label=gettext_lazy("拒绝理由"), allow_blank=True)
+    created_at = serializers.DateTimeField(label=gettext_lazy("申请时间"))
 
 
 class SceneWithPermissionAndApplicationSerializer(serializers.Serializer):

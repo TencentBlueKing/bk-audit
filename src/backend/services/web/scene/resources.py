@@ -72,6 +72,7 @@ from services.web.scene.serializers import (
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
     MyRolePermissionSerializer,
+    ApplicationDetailSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
@@ -887,15 +888,21 @@ class ListMyScenePermissionApplications(SceneResource):
         result = []
         for scene in scene_list:
             scene_id = scene["scene_id"]
-            application = application_map.get(scene_id)
+            application_obj = application_map.get(scene_id)
+            # 需要先用序列化器把 model 实例转为 dict，否则外层 ResponseSerializer
+            # 走 is_valid() 校验时会因入参不是 Mapping 而抛 ValidationError
+            application_data = (
+                ApplicationDetailSerializer(application_obj).data if application_obj else None
+            )
 
             result.append(
                 {
                     "scene_id": scene_id,
                     "scene_name": scene["name"],
                     "description": scene["description"],
+                    # 该字段将由 insert_permission_field 装饰器覆盖为真实权限结果
                     "permission": {},
-                    "application": application,  # 直接传模型实例，由序列化器处理
+                    "application": application_data,
                 }
             )
 
