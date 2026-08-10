@@ -666,10 +666,22 @@
     return overrides;
   };
 
+  /** 是否明确带回了 default 覆盖层（含空 {}） */
+  const hasExplicitDefaultLayer = (saved?: PanelDefaultValueOverrides | null): boolean => (
+    !!saved
+    && typeof saved === 'object'
+    && !Array.isArray(saved)
+    && Object.prototype.hasOwnProperty.call(saved, 'default')
+    && !!saved.default
+    && typeof saved.default === 'object'
+    && !Array.isArray(saved.default)
+  );
+
   /** 用已保存的 default 覆盖回填到参数配置（编辑态）
    * - 出现在 default 中：自定义值，取消勾选「使用默认值」
-   * - 未出现在 default 中：新建时勾选了「使用默认值」，回显勾选并还原 BKVision 原始默认值
-   * 注意：空对象 {} 也需要处理（全部勾选默认值的场景）
+   * - 未出现在 default 中：勾选「使用默认值」，还原 BKVision 原始默认值
+   * - 调用方仅在明确存在 default 层时调用；传入空 {} 表示全部使用默认值
+   * - 旧报表无 default 键时不要调用，避免误把全部勾选上
    */
   const applyDefaultOverridesToInputVariables = (savedDefault: Record<string, any>) => {
     if (!inputVariables.value.length) {
@@ -750,8 +762,11 @@
     if (hasListOverrides) {
       // 管理列表返回完整 default_value_overrides（含 default），编辑回显优先使用
       overrides = listOverrides;
-      // 仅列表带回完整 default 层时回填参数配置勾选态；scope 详情不含 default
-      applyDefaultOverridesToInputVariables(overrides?.default ?? {});
+      // 仅明确带回 default 层时回填勾选态（含 default: {} = 全部使用默认值）
+      // 旧报表常为 {} 或仅有 scenes/systems，无 default 键，保持 share_detail 未勾选态
+      if (hasExplicitDefaultLayer(overrides)) {
+        applyDefaultOverridesToInputVariables(overrides!.default as Record<string, any>);
+      }
     } else if (data.id && (sceneIds.length > 0 || systemIds.length > 0)) {
       // 列表未带回时，按 scope 调报表详情接口组装 scenes/systems
       overrides = await fetchDefaultValueOverridesByScopes(data.id, sceneIds, systemIds);
