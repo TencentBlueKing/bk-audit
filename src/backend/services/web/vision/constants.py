@@ -82,14 +82,17 @@ class DefaultValueOverrideConfig(BaseModel):
 
     用于定义 VisionPanel 的 default_value_overrides 字段结构。
     配置协议：
+    - 场景报表：{"default": {"time_filter_panel_uid": ["now-7d/d", "now"]}}
+    - 平台报表：
     {
-        "scenes": {
+    "default": {...},
+     "scenes": {
             "1001": {
                 "time_filter_panel_uid": ["now-7d/d", "now"],
                 "custom_variable_uid": ["value_a"]
             }
         },
-        "systems": {
+     "systems": {
             "bk_monitor": {
                 "time_filter_panel_uid": ["now-1d/d", "now"]
             }
@@ -97,6 +100,7 @@ class DefaultValueOverrideConfig(BaseModel):
     }
     """
 
+    default: Dict[str, OverrideValue] = Field(default_factory=dict, description="全局默认值覆盖，key 为变量 uid，value 为默认值")
     scenes: Dict[str, Dict[str, OverrideValue]] = Field(
         default_factory=dict, description="场景级别的默认值覆盖，key 为场景 ID，value 为变量 uid 到默认值的映射"
     )
