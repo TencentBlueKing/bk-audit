@@ -469,6 +469,17 @@
     !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
   );
 
+  /** 是否明确带回了 default 覆盖层（含空 {}）；旧数据无此键时不应误勾「使用默认值」 */
+  const hasExplicitDefaultLayer = (saved: unknown): boolean => (
+    !!saved
+    && typeof saved === 'object'
+    && !Array.isArray(saved)
+    && Object.prototype.hasOwnProperty.call(saved, 'default')
+    && !!(saved as Record<string, any>).default
+    && typeof (saved as Record<string, any>).default === 'object'
+    && !Array.isArray((saved as Record<string, any>).default)
+  );
+
   /** 用已保存的覆盖配置回填到 inputVariables（编辑态）
    * - 出现在覆盖 map 中：自定义值，取消勾选「使用默认值」
    * - 未出现：勾选「使用默认值」，还原 BKVision 原始默认值
@@ -496,7 +507,8 @@
 
   /**
    * 编辑回显：优先列表带回的非空覆盖；否则拉详情。
-   * 注意：空对象 {} 不能当有效来源，否则会误判为「全部使用默认值」。
+   * 仅「明确存在 default 层」的空覆盖才表示全部使用默认值；
+   * 旧报表 {} / 仅有 scenes·systems 时不回填勾选态。
    */
   const resolveEditOverrides = async (data: ReportFormData): Promise<ReportFormData['default_value_override'] | undefined> => {
     const fromListOverride = resolveSavedParamMap(data.default_value_override);
@@ -508,11 +520,9 @@
       return { default: fromListOverrides };
     }
 
-    // 列表明确带回了空覆盖（例如 { default: {} }），表示全部使用 BKVision 默认值
-    // 注意：{ default: {} } 对 isNonEmptyPlainObject 为 true（有 default 键），
-    // 但 resolveSavedParamMap 得到空 map，故需在此显式识别
-    if (isNonEmptyPlainObject(data.default_value_override)
-      || isNonEmptyPlainObject(data.default_value_overrides)) {
+    // 列表明确带回 default 层且内容为空（{ default: {} }）→ 全部使用 BKVision 默认值
+    if (hasExplicitDefaultLayer(data.default_value_override)
+      || hasExplicitDefaultLayer(data.default_value_overrides)) {
       return { default: {} };
     }
 
@@ -528,7 +538,15 @@
       if (!isNonEmptyPlainObject(override)) {
         return undefined;
       }
-      return { default: resolveSavedParamMap(override) };
+      // 明确带回 default 层（含空 {}）→ 按覆盖回显；否则仅当有实际覆盖 key 时回填
+      if (hasExplicitDefaultLayer(override)) {
+        return { default: resolveSavedParamMap(override) };
+      }
+      const paramMap = resolveSavedParamMap(override);
+      if (!Object.keys(paramMap).length) {
+        return undefined;
+      }
+      return { default: paramMap };
     } catch (e) {
       console.error('获取报表参数覆盖失败:', e);
       return undefined;
