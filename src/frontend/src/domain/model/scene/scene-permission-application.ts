@@ -14,40 +14,44 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+
+export interface ScenePermissionApplicationDetail {
+  id?: number | string;
+  applicant?: string;
+  role?: string;
+  role_display?: string;
+  reason?: string;
+  itsm_sn?: string;
+  itsm_ticket_url?: string;
+  status?: string;
+  status_display?: string;
+  grant_status?: string;
+  grant_status_display?: string;
+  approvers?: string | string[];
+  reject_reason?: string;
+  created_at?: string;
+}
+
 export default class ScenePermissionApplication {
-  id: number | string;
   scene_id: number;
   scene_name: string;
-  applicant: string;
-  role: string;
-  role_display: string;
-  reason: string;
-  itsm_sn: string;
-  itsm_ticket_url: string;
-  status: string;
-  status_display: string;
-  grant_status: string;
-  grant_status_display: string;
-  approvers: string | string[];
-  reject_reason: string;
-  created_at: string;
+  description: string;
+  application: ScenePermissionApplicationDetail | null;
+  permission: {
+    view_scene: boolean;
+    manage_scene: boolean;
+  };
+  scene_managers: string[];
 
   constructor(payload = {} as ScenePermissionApplication) {
-    this.id = payload.id;
     this.scene_id = payload.scene_id;
     this.scene_name = payload.scene_name;
-    this.applicant = payload.applicant;
-    this.role = payload.role;
-    this.role_display = payload.role_display;
-    this.reason = payload.reason;
-    this.itsm_sn = payload.itsm_sn;
-    this.itsm_ticket_url = payload.itsm_ticket_url;
-    this.status = payload.status;
-    this.status_display = payload.status_display;
-    this.grant_status = payload.grant_status;
-    this.grant_status_display = payload.grant_status_display;
-    this.approvers = payload.approvers;
-    this.reject_reason = payload.reject_reason;
-    this.created_at = payload.created_at;
+    this.description = payload.description || '';
+    this.application = payload.application || null;
+    this.permission = {
+      view_scene: Boolean(payload.permission?.view_scene),
+      manage_scene: Boolean(payload.permission?.manage_scene),
+    };
+    this.scene_managers = payload.scene_managers || [];
   }
 }
