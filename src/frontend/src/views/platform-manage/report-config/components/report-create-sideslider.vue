@@ -1068,7 +1068,28 @@
 
   /* +n hover tips：v-bk-tooltips 默认 z-index≈8000，低于侧滑 9999 */
   .bk-select-tooltips,
-  .bk-popper.visible-range-overflow-tips {
+  .bk-popper.visible-range-overflow-tips,
+  .bk-popper.scene-param-overflow-tips {
+    z-index: 10060 !important;
+  }
+
+  /* 时间范围(@blueking/date-picker) / 日期(bk-date-picker) 弹出层默认低于侧滑 9999 */
+  .__bk-date-picker-popover__,
+  .bk-date-picker-dropdown.scene-param-date-picker-dropdown,
+  body > .bk-date-picker-dropdown.scene-param-date-picker-dropdown {
+    z-index: 10060 !important;
+  }
+
+  /* 补偿 date-picker 默认 alignmentAxis=-32，避免弹层相对触发器左偏 */
+  .__bk-date-picker-popover__.__bk-date-picker-popover__scene-param-config {
+    margin-left: 32px !important;
+  }
+
+  /* date-picker 内置 tip（与 BKVision 一致），侧滑内抬高层级 */
+  .__date-tooltips__,
+  .bk-popper:has(.__date-tooltips__),
+  .bk-popover:has(.__date-tooltips__),
+  .bk-pop2-content:has(.__date-tooltips__) {
     z-index: 10060 !important;
   }
 </style>
