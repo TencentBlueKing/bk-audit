@@ -496,5 +496,6 @@ class SceneWithPermissionAndApplicationSerializer(serializers.Serializer):
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
     scene_name = serializers.CharField(label=gettext_lazy("场景名称"))
     description = serializers.CharField(label=gettext_lazy("场景描述"), allow_blank=True, allow_null=True, default="")
+    scene_managers = serializers.ListField(child=serializers.CharField(), required=False)
     permission = ScenePermissionStatusSerializer(label=gettext_lazy("权限状态"))
     application = ApplicationDetailSerializer(label=gettext_lazy("申请信息"), allow_null=True)

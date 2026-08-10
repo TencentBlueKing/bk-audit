@@ -858,7 +858,7 @@ class ListMyScenePermissionApplications(SceneResource):
         if scene_id:
             scenes = scenes.filter(scene_id=scene_id)
 
-        scene_list = list(scenes.values("scene_id", "name", "description"))
+        scene_list = list(scenes.values("scene_id", "name", "description", "managers"))
         if not scene_list:
             return []
 
@@ -876,8 +876,6 @@ class ListMyScenePermissionApplications(SceneResource):
         for scene in scene_list:
             scene_id = scene["scene_id"]
             application_obj = application_map.get(scene_id)
-            # 需要先用序列化器把 model 实例转为 dict，否则外层 ResponseSerializer
-            # 走 is_valid() 校验时会因入参不是 Mapping 而抛 ValidationError
             application_data = ApplicationDetailSerializer(application_obj).data if application_obj else None
 
             result.append(
@@ -887,6 +885,7 @@ class ListMyScenePermissionApplications(SceneResource):
                     "description": scene["description"],
                     # 该字段将由 insert_permission_field 装饰器覆盖为真实权限结果
                     "permission": {},
+                    "scene_managers": scene["managers"],
                     "application": application_data,
                 }
             )
