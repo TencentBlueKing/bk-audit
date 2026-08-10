@@ -21,7 +21,11 @@ from django.utils.dateparse import parse_datetime
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
-from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD
+from services.web.risk.constants import (
+    EVENT_BASIC_COLUMN_MAP,
+    RISK_LEVEL_ORDER_FIELD,
+    EventBasicField,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +58,7 @@ class EventFilterSpec:
     value: Any
     json_path: str
     requires_numeric: bool
+    column: Optional[str] = None  # 新增：基本字段命中白名单时的 Doris 列名；None = event_data JSON 下钻
 
     @classmethod
     def from_raw(cls, item: Dict[str, Any], *, prefix: str) -> Optional["EventFilterSpec"]:
@@ -69,6 +74,26 @@ class EventFilterSpec:
             normalized = normalized[len(prefix) :].strip()
         if not normalized:
             return None
+
+        # 基本信息字段
+        column = EVENT_BASIC_COLUMN_MAP.get(raw_field)
+        if column is not None:
+            requires_numeric = (
+                EventBasicField(raw_field).is_numeric
+                and operator in NUMERIC_EVENT_OPERATORS
+                and _convert_to_float(value) is not None
+            )
+            return cls(
+                raw_field=raw_field,
+                normalized_field=raw_field,
+                operator=operator,
+                value=value,
+                json_path="",  # 列模式不使用 JSON path
+                requires_numeric=requires_numeric,
+                column=column,
+            )
+
+        # event_data.xxx JSON 下钻
         json_path = build_event_json_path(normalized)
         requires_numeric = operator in NUMERIC_EVENT_OPERATORS and _convert_to_float(value) is not None
         return cls(
@@ -668,11 +693,16 @@ class MatchedEventSubqueryBuilder(SQLHelper):
         for filter_spec in self.resolver.event_filters:
             if (isinstance(filter_spec.value, str) and not filter_spec.value) or filter_spec.value is None:
                 continue
-            field_expr = exp.func(
-                "JSON_EXTRACT_STRING",
-                self.column(alias, "event_data"),
-                exp.Literal.string(filter_spec.json_path),
-            )
+            if filter_spec.column is not None:
+                # 基本信息字段（列模式）：直接引用事件表顶层列
+                field_expr = self.column(alias, filter_spec.column)
+            else:
+                # event_data.xxx → JSON 下钻
+                field_expr = exp.func(
+                    "JSON_EXTRACT_STRING",
+                    self.column(alias, "event_data"),
+                    exp.Literal.string(filter_spec.json_path),
+                )
             comparison = self._build_event_filter_expression(field_expr, filter_spec)
             if comparison is not None:
                 comparisons.append(comparison)
@@ -737,6 +767,9 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             }[operator]
             numeric_value = _convert_to_float(value)
             if numeric_value is not None:
+                # 列模式（基本字段列）：仅数值型字段允许 CAST；
+                if filter_spec.column is not None and not EventBasicField(filter_spec.raw_field).is_numeric:
+                    return comparator(this=field_expr.copy(), expression=self.literal(value))
                 # Cast JSON string to DOUBLE before comparing to avoid lexicographical ordering.
                 cast_expr = exp.Cast(this=field_expr.copy(), to=exp.DataType.build("DOUBLE"))
                 literal = exp.Literal.number(repr(numeric_value))
