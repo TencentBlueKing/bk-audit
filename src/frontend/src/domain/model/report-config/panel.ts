@@ -37,7 +37,7 @@ export interface PanelDefaultValueOverrides {
   systems?: Record<string, Record<string, any>>;
 }
 
-/** 场景报表创建/编辑提交的参数覆盖（scene_id 已在请求体，无需再套 scenes） */
+/** 场景报表创建/编辑提交的 default_value_overrides（scene_id 已在请求体，无需再套 scenes） */
 export interface ScenePanelDefaultValueOverride {
   default?: Record<string, any>;
 }

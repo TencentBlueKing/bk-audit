@@ -66,7 +66,7 @@ class PanelManage extends ModuleBase {
     description?: string,
     input_variable?: Array<Record<string, any>>,
     /** 场景报表：{ default: { [raw_name]: value } } */
-    default_value_override?: ScenePanelDefaultValueOverride,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return Request.post(`bkvision${this.module}/panel/scene/`, {
       params,
@@ -85,7 +85,7 @@ class PanelManage extends ModuleBase {
     description?: string,
     input_variable?: Array<Record<string, any>>,
     /** 场景报表：{ default: { [raw_name]: value } } */
-    default_value_override?: ScenePanelDefaultValueOverride,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     const { id, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/scene/${id}/`, {

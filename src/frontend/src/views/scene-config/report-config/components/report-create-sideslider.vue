@@ -414,7 +414,7 @@
   };
 
   /**
-   * 将参数配置转为场景报表协议中的 default_value_override
+   * 将参数配置转为场景报表协议中的 default_value_overrides
    * 协议：{ default: { [raw_name]: value } }（scene_id 已在请求体，不再套 scenes）
    * 仅提交未勾选「使用默认值」的自定义值
    */
@@ -821,7 +821,7 @@
           name: formData.value.name,
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || undefined,
-          default_value_override: defaultValueOverride,
+          default_value_overrides: defaultValueOverride,
         });
       } else {
         createPanel({
@@ -831,7 +831,7 @@
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || '',
           scene_id: sceneId,
-          default_value_override: defaultValueOverride,
+          default_value_overrides: defaultValueOverride,
         });
       }
     });
