@@ -28,18 +28,23 @@ export interface PanelVisibilityPayload {
  * {
  *   default: { [raw_name]: value },
  *   scenes: { [scene_id]: { [raw_name]: value } },
- *   systems: { [system_id]: { [raw_name]: value } }
+ *   systems: { [system_id]: { [raw_name]: value } },
+ *   use_bkvision_default: { [raw_name]: boolean }
  * }
  */
 export interface PanelDefaultValueOverrides {
   default?: Record<string, any>;
   scenes?: Record<string, Record<string, any>>;
   systems?: Record<string, Record<string, any>>;
+  /** 是否勾选「使用默认值」：key=raw_name，value=boolean */
+  use_bkvision_default?: Record<string, boolean>;
 }
 
 /** 场景报表创建/编辑提交的 default_value_overrides（scene_id 已在请求体，无需再套 scenes） */
 export interface ScenePanelDefaultValueOverride {
   default?: Record<string, any>;
+  /** 是否勾选「使用默认值」：key=raw_name，value=boolean */
+  use_bkvision_default?: Record<string, boolean>;
 }
 
 /** 用户侧报表详情（按当前 scope 返回已合并的单份参数映射） */

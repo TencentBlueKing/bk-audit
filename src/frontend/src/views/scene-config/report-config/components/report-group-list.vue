@@ -373,10 +373,12 @@
       default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
+      use_bkvision_default?: Record<string, boolean>;
     };
     /** 场景报表新协议列表字段 */
     default_value_override?: {
       default?: Record<string, any>;
+      use_bkvision_default?: Record<string, boolean>;
     };
   }
 
