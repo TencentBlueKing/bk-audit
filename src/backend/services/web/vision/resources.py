@@ -1246,7 +1246,9 @@ class GetPanelDetail(BKVision):
             systems_overrides = default_value_overrides.get("systems", {})
             if str(scope.scope_id) in systems_overrides:
                 default_value_override = systems_overrides[str(scope.scope_id)] or {}
-        # cross_scene / cross_system 不命中覆盖，返回空对象
+        else:
+            default_value_override = default_value_overrides.get("default", {})
+
         return {
             "id": panel.id,
             "vision_id": panel.vision_id,

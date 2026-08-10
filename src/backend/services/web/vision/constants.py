@@ -85,7 +85,7 @@ class DefaultValueOverrideConfig(BaseModel):
     - 场景报表：{"default": {"time_filter_panel_uid": ["now-7d/d", "now"]}}
     - 平台报表：
     {
-    "default": {...},
+    "default": {"time_filter_panel_uid": ["now-7d/d", "now"]},
      "scenes": {
             "1001": {
                 "time_filter_panel_uid": ["now-7d/d", "now"],
@@ -96,6 +96,10 @@ class DefaultValueOverrideConfig(BaseModel):
             "bk_monitor": {
                 "time_filter_panel_uid": ["now-1d/d", "now"]
             }
+        },
+     "use_bkvision_default": {
+            "time_filter_panel_uid": true,
+            "custom_variable_uid": false
         }
     }
     """
@@ -106,6 +110,9 @@ class DefaultValueOverrideConfig(BaseModel):
     )
     systems: Dict[str, Dict[str, OverrideValue]] = Field(
         default_factory=dict, description="系统级别的默认值覆盖，key 为系统 ID，value 为变量 uid 到默认值的映射"
+    )
+    use_bkvision_default: Dict[str, bool] = Field(
+        default_factory=dict, description="是否使用 bkvision 默认值，key 为变量 uid，value 为 true/false"
     )
 
     class Config:
