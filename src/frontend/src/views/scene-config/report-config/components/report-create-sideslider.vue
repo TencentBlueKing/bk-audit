@@ -221,17 +221,20 @@
     status?: 'published' | 'unpublished';
     enabled: boolean;
     /**
-     * 场景报表参数覆盖（新协议）：{ default: { [raw_name]: value } }
+     * 场景报表参数覆盖（新协议）：
+     * { default: { [raw_name]: value }, use_bkvision_default: { [raw_name]: boolean } }
      * 兼容列表仍回旧结构 default_value_overrides.scenes[sceneId]
      */
     default_value_override?: {
       default?: Record<string, any>;
+      use_bkvision_default?: Record<string, boolean>;
     };
     /** @deprecated 旧列表字段，回显兼容用 */
     default_value_overrides?: {
       default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
+      use_bkvision_default?: Record<string, boolean>;
     };
   }
 
@@ -415,14 +418,18 @@
 
   /**
    * 将参数配置转为场景报表协议中的 default_value_overrides
-   * 协议：{ default: { [raw_name]: value } }（scene_id 已在请求体，不再套 scenes）
-   * 仅提交未勾选「使用默认值」的自定义值
+   * 协议：{ default, use_bkvision_default }（scene_id 已在请求体，不再套 scenes）
+   * default：仅提交未勾选「使用默认值」的自定义值
+   * use_bkvision_default：各参数复选框勾选态
    */
   const buildSceneDefaultValueOverride = () => {
     const fields = paramConfigRef.value?.getFields?.() || inputVariables.value;
     const overrides: Record<string, any> = {};
+    const useBkvisionDefault: Record<string, boolean> = {};
     fields.forEach((item) => {
-      if (!item.raw_name || item.is_default_value) return;
+      if (!item.raw_name) return;
+      useBkvisionDefault[item.raw_name] = !!item.is_default_value;
+      if (item.is_default_value) return;
       const value = item.default_value;
       const isEmpty = value === '' || value === undefined || value === null
         || (Array.isArray(value) && value.length === 0);
@@ -431,6 +438,7 @@
     });
     return {
       default: overrides,
+      use_bkvision_default: useBkvisionDefault,
     };
   };
 
@@ -457,12 +465,27 @@
       return { ...((saved.scenes as Record<string, Record<string, any>>)[sceneId] || {}) };
     }
     // 扁平 map（列表/详情直接回 { [raw_name]: value }）
-    const reserved = new Set(['default', 'scenes', 'systems']);
+    const reserved = new Set(['default', 'scenes', 'systems', 'use_bkvision_default']);
     const flatEntries = Object.entries(saved).filter(([key]) => !reserved.has(key));
     if (flatEntries.length) {
       return Object.fromEntries(flatEntries);
     }
     return {};
+  };
+
+  /** 解析列表/详情带回的 use_bkvision_default（复选框勾选态） */
+  const resolveUseBkvisionDefaultMap = (saved?: ReportFormData['default_value_override']
+    | ReportFormData['default_value_overrides']
+    | Record<string, any>
+    | null): Record<string, boolean> | null => {
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      return null;
+    }
+    const map = (saved as { use_bkvision_default?: unknown }).use_bkvision_default;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) {
+      return null;
+    }
+    return map as Record<string, boolean>;
   };
 
   const isNonEmptyPlainObject = (value: unknown): value is Record<string, any> => (
@@ -480,16 +503,44 @@
     && !Array.isArray((saved as Record<string, any>).default)
   );
 
+  /** 组装回填用的覆盖对象（保留 use_bkvision_default） */
+  const buildOverridePayload = (
+    paramMap: Record<string, any>,
+    useBkvisionDefault?: Record<string, boolean> | null,
+  ): ReportFormData['default_value_override'] => ({
+    default: paramMap,
+    ...(useBkvisionDefault ? { use_bkvision_default: useBkvisionDefault } : {}),
+  });
+
   /** 用已保存的覆盖配置回填到 inputVariables（编辑态）
-   * - 出现在覆盖 map 中：自定义值，取消勾选「使用默认值」
-   * - 未出现：勾选「使用默认值」，还原 BKVision 原始默认值
+   * - 优先用 use_bkvision_default 决定复选框勾选态
+   * - 无该字段时回退：出现在覆盖 map → 取消勾选；未出现 → 勾选并还原 BKVision 原始默认值
    * - saved 为空/undefined：不改动（避免误把全部勾选上）
    */
   const applySavedOverridesToInputVariables = (saved?: ReportFormData['default_value_override'] | ReportFormData['default_value_overrides'] | null) => {
     if (saved === null || saved === undefined || !inputVariables.value.length) return;
     const paramMap = resolveSavedParamMap(saved);
+    const useBkvisionDefaultMap = resolveUseBkvisionDefaultMap(saved);
+    const hasUseFlag = !!useBkvisionDefaultMap;
 
     inputVariables.value = inputVariables.value.map((item) => {
+      if (hasUseFlag && item.raw_name in useBkvisionDefaultMap!) {
+        const isDefault = !!useBkvisionDefaultMap![item.raw_name];
+        if (isDefault) {
+          return {
+            ...item,
+            is_default_value: true,
+            default_value: item.raw_default_value ?? '',
+          };
+        }
+        return {
+          ...item,
+          is_default_value: false,
+          default_value: item.raw_name in paramMap
+            ? paramMap[item.raw_name]
+            : (item.default_value ?? ''),
+        };
+      }
       if (item.raw_name in paramMap) {
         return {
           ...item,
@@ -506,24 +557,22 @@
   };
 
   /**
-   * 编辑回显：优先列表带回的非空覆盖；否则拉详情。
-   * 仅「明确存在 default 层」的空覆盖才表示全部使用默认值；
+   * 编辑回显：优先列表带回的覆盖 / use_bkvision_default；否则拉详情。
+   * 仅「明确存在 default 层」或带回 use_bkvision_default 时回填勾选态；
    * 旧报表 {} / 仅有 scenes·systems 时不回填勾选态。
    */
   const resolveEditOverrides = async (data: ReportFormData): Promise<ReportFormData['default_value_override'] | undefined> => {
-    const fromListOverride = resolveSavedParamMap(data.default_value_override);
-    if (Object.keys(fromListOverride).length) {
-      return { default: fromListOverride };
-    }
-    const fromListOverrides = resolveSavedParamMap(data.default_value_overrides);
-    if (Object.keys(fromListOverrides).length) {
-      return { default: fromListOverrides };
-    }
-
-    // 列表明确带回 default 层且内容为空（{ default: {} }）→ 全部使用 BKVision 默认值
-    if (hasExplicitDefaultLayer(data.default_value_override)
-      || hasExplicitDefaultLayer(data.default_value_overrides)) {
-      return { default: {} };
+    const listSources = [data.default_value_override, data.default_value_overrides];
+    for (const source of listSources) {
+      const paramMap = resolveSavedParamMap(source);
+      const useFlag = resolveUseBkvisionDefaultMap(source);
+      if (Object.keys(paramMap).length || useFlag) {
+        return buildOverridePayload(paramMap, useFlag);
+      }
+      // 列表明确带回 default 层且内容为空（{ default: {} }）→ 全部使用 BKVision 默认值
+      if (hasExplicitDefaultLayer(source)) {
+        return buildOverridePayload({}, useFlag);
+      }
     }
 
     if (!data.id) return undefined;
@@ -538,15 +587,16 @@
       if (!isNonEmptyPlainObject(override)) {
         return undefined;
       }
-      // 明确带回 default 层（含空 {}）→ 按覆盖回显；否则仅当有实际覆盖 key 时回填
-      if (hasExplicitDefaultLayer(override)) {
-        return { default: resolveSavedParamMap(override) };
+      const useFlag = resolveUseBkvisionDefaultMap(override);
+      // 明确带回 default 层（含空 {}）或 use_bkvision_default → 按覆盖回显
+      if (hasExplicitDefaultLayer(override) || useFlag) {
+        return buildOverridePayload(resolveSavedParamMap(override), useFlag);
       }
       const paramMap = resolveSavedParamMap(override);
       if (!Object.keys(paramMap).length) {
         return undefined;
       }
-      return { default: paramMap };
+      return buildOverridePayload(paramMap, useFlag);
     } catch (e) {
       console.error('获取报表参数覆盖失败:', e);
       return undefined;
