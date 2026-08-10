@@ -472,10 +472,11 @@
       ? buildDefaultValueOverrides(formState.value.scene_param_overrides)
       : { scenes: {}, systems: {} };
     const defaultValueOverrides: PanelDefaultValueOverrides = {
-      // 可见范围弹窗不改参数配置，保留列表带回的 default
+      // 可见范围弹窗不改参数配置，保留列表带回的 default / use_bkvision_default
       default: props.target?.default_value_overrides?.default || {},
       scenes: sceneSystemOverrides.scenes || {},
       systems: sceneSystemOverrides.systems || {},
+      use_bkvision_default: props.target?.default_value_overrides?.use_bkvision_default || {},
     };
 
     updatePlatformPanel({

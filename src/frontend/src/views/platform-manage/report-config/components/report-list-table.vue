@@ -54,6 +54,7 @@
       default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
+      use_bkvision_default?: Record<string, boolean>;
     };
   }
 

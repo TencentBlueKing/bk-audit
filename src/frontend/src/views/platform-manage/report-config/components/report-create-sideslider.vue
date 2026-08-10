@@ -666,6 +666,19 @@
     return overrides;
   };
 
+  /** 各参数「使用默认值」复选框勾选态，提交给 use_bkvision_default */
+  const buildUseBkvisionDefault = (): Record<string, boolean> => {
+    const fields = paramConfigRef.value?.getFields?.()
+      || sceneOverrideParamOptions.value
+      || inputVariables.value;
+    const map: Record<string, boolean> = {};
+    (fields || []).forEach((item) => {
+      if (!item.raw_name) return;
+      map[item.raw_name] = !!item.is_default_value;
+    });
+    return map;
+  };
+
   /** 是否明确带回了 default 覆盖层（含空 {}） */
   const hasExplicitDefaultLayer = (saved?: PanelDefaultValueOverrides | null): boolean => (
     !!saved
@@ -677,17 +690,37 @@
     && !Array.isArray(saved.default)
   );
 
-  /** 用已保存的 default 覆盖回填到参数配置（编辑态）
-   * - 出现在 default 中：自定义值，取消勾选「使用默认值」
-   * - 未出现在 default 中：勾选「使用默认值」，还原 BKVision 原始默认值
-   * - 调用方仅在明确存在 default 层时调用；传入空 {} 表示全部使用默认值
-   * - 旧报表无 default 键时不要调用，避免误把全部勾选上
+  /** 用已保存的 default / use_bkvision_default 回填到参数配置（编辑态）
+   * - 优先用 use_bkvision_default 决定复选框勾选态
+   * - 无该字段时回退：出现在 default → 取消勾选；未出现 → 勾选并还原 BKVision 原始默认值
+   * - 调用方在明确存在 default 层或 use_bkvision_default 时调用
    */
-  const applyDefaultOverridesToInputVariables = (savedDefault: Record<string, any>) => {
+  const applyDefaultOverridesToInputVariables = (
+    savedDefault: Record<string, any>,
+    useBkvisionDefault?: Record<string, boolean> | null,
+  ) => {
     if (!inputVariables.value.length) {
       return;
     }
+    const hasUseFlag = !!useBkvisionDefault && typeof useBkvisionDefault === 'object';
     inputVariables.value = inputVariables.value.map((item) => {
+      if (hasUseFlag && item.raw_name in useBkvisionDefault!) {
+        const isDefault = !!useBkvisionDefault![item.raw_name];
+        if (isDefault) {
+          return {
+            ...item,
+            is_default_value: true,
+            default_value: item.raw_default_value ?? '',
+          };
+        }
+        return {
+          ...item,
+          is_default_value: false,
+          default_value: item.raw_name in savedDefault
+            ? savedDefault[item.raw_name]
+            : (item.default_value ?? ''),
+        };
+      }
       if (item.raw_name in savedDefault) {
         return {
           ...item,
@@ -760,12 +793,16 @@
     let overrides: PanelDefaultValueOverrides | undefined;
 
     if (hasListOverrides) {
-      // 管理列表返回完整 default_value_overrides（含 default），编辑回显优先使用
+      // 管理列表返回完整 default_value_overrides（含 default / use_bkvision_default）
       overrides = listOverrides;
-      // 仅明确带回 default 层时回填勾选态（含 default: {} = 全部使用默认值）
-      // 旧报表常为 {} 或仅有 scenes/systems，无 default 键，保持 share_detail 未勾选态
-      if (hasExplicitDefaultLayer(overrides)) {
-        applyDefaultOverridesToInputVariables(overrides!.default as Record<string, any>);
+      const useFlag = listOverrides?.use_bkvision_default;
+      const hasUseFlag = !!useFlag && typeof useFlag === 'object' && !Array.isArray(useFlag);
+      // 优先用 use_bkvision_default 回填勾选态；否则回退 default 层推断
+      if (hasUseFlag || hasExplicitDefaultLayer(overrides)) {
+        applyDefaultOverridesToInputVariables(
+          (overrides?.default || {}) as Record<string, any>,
+          hasUseFlag ? useFlag : null,
+        );
       }
     } else if (data.id && (sceneIds.length > 0 || systemIds.length > 0)) {
       // 列表未带回时，按 scope 调报表详情接口组装 scenes/systems
@@ -1050,8 +1087,9 @@
       payload.visibility = buildVisibilityPayload(formData.value);
     }
 
-    // 协议：{ default, scenes, systems }
+    // 协议：{ default, scenes, systems, use_bkvision_default }
     // default ← 参数配置；scenes/systems ← 可见范围下的覆盖参数配置
+    // use_bkvision_default ← 「使用默认值」复选框勾选态
     const sceneSystemOverrides = hasVisibleRangeSelection.value
       ? buildDefaultValueOverrides(formData.value.scene_param_overrides)
       : { scenes: {}, systems: {} };
@@ -1059,6 +1097,7 @@
       default: buildDefaultParamValues(),
       scenes: sceneSystemOverrides.scenes || {},
       systems: sceneSystemOverrides.systems || {},
+      use_bkvision_default: buildUseBkvisionDefault(),
     } as PanelDefaultValueOverrides;
 
     return payload;
