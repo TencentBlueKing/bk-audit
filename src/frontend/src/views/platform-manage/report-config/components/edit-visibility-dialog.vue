@@ -81,7 +81,10 @@
   import ReportConfigService from '@service/report-config';
   import ToolManageService from '@service/tool-manage';
 
-  import type { PanelVisibilityType } from '@model/report-config/panel';
+  import type {
+    PanelDefaultValueOverrides,
+    PanelVisibilityType,
+  } from '@model/report-config/panel';
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
@@ -97,7 +100,6 @@
     shouldSubmitVisibilityPayload,
   } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
   import type {
-    DefaultValueOverrides,
     FormData as ToolFormData,
     SceneParamOverride,
   } from '@views/platform-manage/tool-manage/create-tool/types';
@@ -109,7 +111,7 @@
     visibility_type?: PanelVisibilityType;
     scene_ids?: Array<number | string>;
     system_ids?: Array<number | string>;
-    default_value_overrides?: DefaultValueOverrides;
+    default_value_overrides?: PanelDefaultValueOverrides;
   }
 
   interface SceneOption {
@@ -293,8 +295,8 @@
     panelId: string,
     sceneIds: number[],
     systemIds: string[],
-  ): Promise<DefaultValueOverrides> => {
-    const result: DefaultValueOverrides = { scenes: {}, systems: {} };
+  ): Promise<PanelDefaultValueOverrides> => {
+    const result: PanelDefaultValueOverrides = { scenes: {}, systems: {} };
 
     const sceneTasks = sceneIds.map(async (sceneId) => {
       try {
@@ -358,7 +360,7 @@
       const listOverrides = target?.default_value_overrides;
       const hasListOverrides = listOverrides !== undefined && listOverrides !== null;
 
-      let overrides: DefaultValueOverrides = { scenes: {}, systems: {} };
+      let overrides: PanelDefaultValueOverrides = { scenes: {}, systems: {} };
       if (hasListOverrides) {
         overrides = listOverrides || { scenes: {}, systems: {} };
       } else if (sceneIds.length > 0 || systemIds.length > 0) {
@@ -466,9 +468,15 @@
         scene_ids: [],
         system_ids: [],
       };
-    const defaultValueOverrides = hasVisibilitySelection
+    const sceneSystemOverrides = hasVisibilitySelection
       ? buildDefaultValueOverrides(formState.value.scene_param_overrides)
       : { scenes: {}, systems: {} };
+    const defaultValueOverrides: PanelDefaultValueOverrides = {
+      // 可见范围弹窗不改参数配置，保留列表带回的 default
+      default: props.target?.default_value_overrides?.default || {},
+      scenes: sceneSystemOverrides.scenes || {},
+      systems: sceneSystemOverrides.systems || {},
+    };
 
     updatePlatformPanel({
       panel_id: props.target.id,

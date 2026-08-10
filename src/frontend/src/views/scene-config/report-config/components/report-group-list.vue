@@ -370,8 +370,13 @@
     updatedBy: string;
     updatedAt: string;
     default_value_overrides?: {
+      default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
+    };
+    /** 场景报表新协议列表字段 */
+    default_value_override?: {
+      default?: Record<string, any>;
     };
   }
 

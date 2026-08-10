@@ -329,6 +329,7 @@
     top: '0px',
     left: '0px',
     width: '',
+    maxHeight: '',
     zIndex: props.popoverZIndex as number | string,
   });
 
@@ -420,6 +421,9 @@
       optionsLoaded.value = true;
     } finally {
       listLoading.value = false;
+      if (popoverVisible.value) {
+        nextTick(() => updatePopoverPosition());
+      }
     }
   };
 
@@ -646,10 +650,33 @@
       const el = selectorRef.value;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      popoverStyle.top = `${rect.bottom + 4}px`;
+      const gap = 4;
+      const viewportPadding = 8;
+      // 先按下方定位，测量实际高度后再决定是否上翻
       popoverStyle.left = `${rect.left}px`;
       popoverStyle.width = props.matchSelectorWidth ? `${rect.width}px` : '';
       popoverStyle.zIndex = props.popoverZIndex;
+      popoverStyle.top = `${rect.bottom + gap}px`;
+      popoverStyle.maxHeight = '';
+
+      nextTick(() => {
+        const popover = popoverRef.value;
+        if (!popover) return;
+        const popoverHeight = popover.offsetHeight || 320;
+        const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPadding;
+        const spaceAbove = rect.top - gap - viewportPadding;
+        const placeAbove = spaceBelow < popoverHeight && spaceAbove > spaceBelow;
+        const available = Math.max(120, placeAbove ? spaceAbove : spaceBelow);
+
+        if (placeAbove) {
+          const top = Math.max(viewportPadding, rect.top - Math.min(popoverHeight, available) - gap);
+          popoverStyle.top = `${top}px`;
+        } else {
+          popoverStyle.top = `${rect.bottom + gap}px`;
+        }
+        // 空间不足时限制高度，内部列表自行滚动
+        popoverStyle.maxHeight = `${available}px`;
+      });
     });
   };
 
@@ -991,6 +1018,7 @@
     position: fixed;
     z-index: 2100;
     width: 640px;
+    overflow: hidden auto;
     background: #fff;
     border: 1px solid #dcdee5;
     border-radius: 2px;

@@ -18,6 +18,7 @@ import PanelModel, {
   type PanelDefaultValueOverrides,
   type PanelDetail,
   type PanelVisibilityPayload,
+  type ScenePanelDefaultValueOverride,
 } from '@model/report-config/panel';
 
 import PanelModelSource from '../source/report-config';
@@ -61,7 +62,7 @@ export default  {
     status?: 'published' | 'unpublished',
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_overrides?: PanelDefaultValueOverrides,
+    default_value_override?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
@@ -80,7 +81,7 @@ export default  {
     category?: string,
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_overrides?: PanelDefaultValueOverrides,
+    default_value_override?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);

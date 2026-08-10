@@ -220,8 +220,16 @@
     description: string;
     status?: 'published' | 'unpublished';
     enabled: boolean;
-    /** 列表/详情带回的参数覆盖，编辑回显用 */
+    /**
+     * 场景报表参数覆盖（新协议）：{ default: { [raw_name]: value } }
+     * 兼容列表仍回旧结构 default_value_overrides.scenes[sceneId]
+     */
+    default_value_override?: {
+      default?: Record<string, any>;
+    };
+    /** @deprecated 旧列表字段，回显兼容用 */
     default_value_overrides?: {
+      default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
     };
@@ -406,12 +414,11 @@
   };
 
   /**
-   * 将参数配置转为接口协议中的 default_value_overrides
-   * 协议结构：{ scenes: { [scene_id]: { [raw_name]: value } }, systems: {} }
+   * 将参数配置转为场景报表协议中的 default_value_override
+   * 协议：{ default: { [raw_name]: value } }（scene_id 已在请求体，不再套 scenes）
    * 仅提交未勾选「使用默认值」的自定义值
    */
-  const buildSceneDefaultValueOverrides = () => {
-    const sceneId = getSceneSystemParams().scope_id;
+  const buildSceneDefaultValueOverride = () => {
     const fields = paramConfigRef.value?.getFields?.() || inputVariables.value;
     const overrides: Record<string, any> = {};
     fields.forEach((item) => {
@@ -422,42 +429,97 @@
       if (isEmpty) return;
       overrides[item.raw_name] = value;
     });
-    // 始终传完整结构，与平台报表 / 后端 DefaultValueOverrideConfig 一致
     return {
-      scenes: (Object.keys(overrides).length && sceneId)
-        ? { [String(sceneId)]: overrides }
-        : {},
-      systems: {},
+      default: overrides,
     };
   };
 
-  /** 用已保存的覆盖配置回填到 inputVariables（编辑态） */
-  const applySavedOverridesToInputVariables = (savedOverrides?: ReportFormData['default_value_overrides']) => {
-    if (!savedOverrides || !inputVariables.value.length) return;
-    const sceneId = String(getSceneSystemParams().scope_id || '');
-    const sceneOverrides = savedOverrides.scenes?.[sceneId] || {};
-    if (!Object.keys(sceneOverrides).length) return;
+  /** 从列表/详情多种回包结构中解析出参数 map */
+  const resolveSavedParamMap = (saved?: ReportFormData['default_value_override']
+    | ReportFormData['default_value_overrides']
+    | Record<string, any>
+    | null): Record<string, any> => {
+    if (!saved || typeof saved !== 'object') {
+      return {};
+    }
+    // 新协议：{ default: { ... } }
+    if (
+      'default' in saved
+      && saved.default
+      && typeof saved.default === 'object'
+      && !Array.isArray(saved.default)
+    ) {
+      return { ...saved.default };
+    }
+    // 旧协议：{ scenes: { [sceneId]: {...} }, systems: {} }
+    if ('scenes' in saved && saved.scenes && typeof saved.scenes === 'object') {
+      const sceneId = String(getSceneSystemParams().scope_id || '');
+      return { ...((saved.scenes as Record<string, Record<string, any>>)[sceneId] || {}) };
+    }
+    // 扁平 map（列表/详情直接回 { [raw_name]: value }）
+    const reserved = new Set(['default', 'scenes', 'systems']);
+    const flatEntries = Object.entries(saved).filter(([key]) => !reserved.has(key));
+    if (flatEntries.length) {
+      return Object.fromEntries(flatEntries);
+    }
+    return {};
+  };
+
+  const isNonEmptyPlainObject = (value: unknown): value is Record<string, any> => (
+    !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
+  );
+
+  /** 用已保存的覆盖配置回填到 inputVariables（编辑态）
+   * - 出现在覆盖 map 中：自定义值，取消勾选「使用默认值」
+   * - 未出现：勾选「使用默认值」，还原 BKVision 原始默认值
+   * - saved 为空/undefined：不改动（避免误把全部勾选上）
+   */
+  const applySavedOverridesToInputVariables = (
+    saved?: ReportFormData['default_value_override'] | ReportFormData['default_value_overrides'] | null,
+  ) => {
+    if (saved == null || !inputVariables.value.length) return;
+    const paramMap = resolveSavedParamMap(saved);
 
     inputVariables.value = inputVariables.value.map((item) => {
-      if (!(item.raw_name in sceneOverrides)) {
-        return item;
+      if (item.raw_name in paramMap) {
+        return {
+          ...item,
+          is_default_value: false,
+          default_value: paramMap[item.raw_name],
+        };
       }
       return {
         ...item,
-        is_default_value: false,
-        default_value: sceneOverrides[item.raw_name],
+        is_default_value: true,
+        default_value: item.raw_default_value ?? '',
       };
     });
   };
 
   /**
-   * 编辑回显：优先用列表带回的 default_value_overrides；
-   * 若无，则按当前 scope 拉详情接口组装为 scenes 结构
+   * 编辑回显：优先列表带回的非空覆盖；否则拉详情。
+   * 注意：空对象 {} 不能当有效来源，否则会误判为「全部使用默认值」。
    */
-  const resolveEditOverrides = async (data: ReportFormData): Promise<ReportFormData['default_value_overrides'] | undefined> => {
-    if (data.default_value_overrides) {
-      return data.default_value_overrides;
+  const resolveEditOverrides = async (
+    data: ReportFormData,
+  ): Promise<ReportFormData['default_value_override'] | undefined> => {
+    const fromListOverride = resolveSavedParamMap(data.default_value_override);
+    if (Object.keys(fromListOverride).length) {
+      return { default: fromListOverride };
     }
+    const fromListOverrides = resolveSavedParamMap(data.default_value_overrides);
+    if (Object.keys(fromListOverrides).length) {
+      return { default: fromListOverrides };
+    }
+
+    // 列表明确带回了空覆盖（例如 { default: {} }），表示全部使用 BKVision 默认值
+    if (isNonEmptyPlainObject(data.default_value_override)
+      || isNonEmptyPlainObject(data.default_value_overrides)
+      || data.default_value_override?.default !== undefined
+      || data.default_value_overrides?.default !== undefined) {
+      return { default: {} };
+    }
+
     if (!data.id) return undefined;
     try {
       const scopeId = String(getSceneSystemParams().scope_id || '');
@@ -466,16 +528,33 @@
         scope_type: 'scene',
         scope_id: scopeId,
       });
-      const override = detail?.default_value_override || {};
-      if (!Object.keys(override).length) return { scenes: {}, systems: {} };
-      return {
-        scenes: { [scopeId]: override },
-        systems: {},
-      };
+      const override = detail?.default_value_override;
+      if (!isNonEmptyPlainObject(override)) {
+        return undefined;
+      }
+      return { default: resolveSavedParamMap(override) };
     } catch (e) {
       console.error('获取报表参数覆盖失败:', e);
       return undefined;
     }
+  };
+
+  let editBootstrapSeq = 0;
+
+  /** 编辑态统一引导：避免 isShow / editData 双 watch 竞态导致覆盖未回填 */
+  const bootstrapEditForm = async (data: ReportFormData) => {
+    editBootstrapSeq += 1;
+    const seq = editBootstrapSeq;
+    fillEditFormData(data);
+    if (!data.bkvisionReport) {
+      clearParamState();
+      return;
+    }
+    await loadShareDetailVariables(data.bkvisionReport);
+    if (seq !== editBootstrapSeq) return;
+    const overrides = await resolveEditOverrides(data);
+    if (seq !== editBootstrapSeq) return;
+    applySavedOverridesToInputVariables(overrides);
   };
 
   // 新建模式，重置表单
@@ -523,6 +602,7 @@
       description: data.description === '--' ? '' : (data.description || ''),
       status: data.status || 'unpublished',
       enabled: (data.status ?? 'unpublished') === 'published',
+      default_value_override: data.default_value_override,
       default_value_overrides: data.default_value_overrides,
     };
   };
@@ -550,15 +630,9 @@
   watch(() => props.isShow, async (val) => {
     if (val) {
       if (props.editData) {
-        fillEditFormData(props.editData);
-        if (formData.value.bkvisionReport) {
-          await loadShareDetailVariables(formData.value.bkvisionReport);
-          const overrides = await resolveEditOverrides(props.editData);
-          applySavedOverridesToInputVariables(overrides);
-        } else {
-          clearParamState();
-        }
+        await bootstrapEditForm(props.editData);
       } else {
+        editBootstrapSeq += 1;
         resetCreateFormData();
       }
       // 打开时清除校验状态，避免立即显示错误提示
@@ -570,6 +644,7 @@
         }, 100);
       });
     } else {
+      editBootstrapSeq += 1;
       paramLoadSeq += 1;
       paramLoading.value = false;
     }
@@ -578,15 +653,9 @@
   // 监听 editData 变化（双重保障，解决 isShow 与 editData 更新时序竞态问题）
   watch(() => props.editData, async (data) => {
     if (props.isShow && data) {
-      fillEditFormData(data);
-      if (data.bkvisionReport) {
-        await loadShareDetailVariables(data.bkvisionReport);
-        const overrides = await resolveEditOverrides(data);
-        applySavedOverridesToInputVariables(overrides);
-      } else {
-        clearParamState();
-      }
+      await bootstrapEditForm(data);
     } else if (props.isShow && !data) {
+      editBootstrapSeq += 1;
       resetCreateFormData();
     }
   });
@@ -726,7 +795,7 @@
       const groupId = Number(selectedGroup?.id);
       const sceneId = Number(getSceneSystemParams().scope_id);
       const visionId = formData.value.bkvisionReport;
-      const defaultValueOverrides = buildSceneDefaultValueOverrides();
+      const defaultValueOverride = buildSceneDefaultValueOverride();
 
       if (isEditMode.value && formData.value.id) {
         updatePanel({
@@ -738,7 +807,7 @@
           name: formData.value.name,
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || undefined,
-          default_value_overrides: defaultValueOverrides,
+          default_value_override: defaultValueOverride,
         });
       } else {
         createPanel({
@@ -748,7 +817,7 @@
           status: formData.value.enabled ? 'published' : 'unpublished',
           description: formData.value.description || '',
           scene_id: sceneId,
-          default_value_overrides: defaultValueOverrides,
+          default_value_override: defaultValueOverride,
         });
       }
     });
