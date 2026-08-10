@@ -28,15 +28,33 @@ class TestVisionPanelDefaultValueOverrides(TestCase):
         )
         self.assertEqual(panel.default_value_overrides, {})
 
+    def test_default_field_only_config(self):
+        """测试只有 default 字段的配置（场景报表）"""
+        config = {
+            "default": {"time_filter_panel_uid": ["now-7d/d", "now"]},
+        }
+        panel = VisionPanel.objects.create(
+            id="test_panel_default_only_001",
+            name="只有 default 配置的报表",
+            default_value_overrides=config,
+        )
+        self.assertEqual(
+            panel.default_value_overrides["default"],
+            {"time_filter_panel_uid": ["now-7d/d", "now"]},
+        )
+        self.assertNotIn("scenes", panel.default_value_overrides)
+        self.assertNotIn("systems", panel.default_value_overrides)
+
     def test_valid_json_structure(self):
         """合法 JSON 结构可正常保存"""
         config = {
+            "default": {"time_filter_panel_uid": ["now-7d/d", "now"]},
             "scenes": {
-                "1001": {"time_filter": ["now-7d", "now"]},
-                "1002": {"time_filter": ["now-1d", "now"]},
+                "1001": {"time_filter_panel_uid": ["now-7d/d", "now"]},
+                "1002": {"time_filter_panel_uid": ["now-1d/d", "now"]},
             },
             "systems": {
-                "bk_cmdb": {"time_filter": ["now-30d", "now"]},
+                "bk_cmdb": {"time_filter_panel_uid": ["now-30d/d", "now"]},
             },
         }
         panel = VisionPanel.objects.create(
@@ -45,8 +63,12 @@ class TestVisionPanelDefaultValueOverrides(TestCase):
             default_value_overrides=config,
         )
         self.assertEqual(
+            panel.default_value_overrides["default"],
+            {"time_filter_panel_uid": ["now-7d/d", "now"]},
+        )
+        self.assertEqual(
             panel.default_value_overrides["scenes"]["1001"],
-            {"time_filter": ["now-7d", "now"]},
+            {"time_filter_panel_uid": ["now-7d/d", "now"]},
         )
 
     def test_invalid_structure_validation(self):
