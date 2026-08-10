@@ -58,7 +58,7 @@ class EventFilterSpec:
     value: Any
     json_path: str
     requires_numeric: bool
-    column: Optional[str] = None  # 新增：基本字段命中白名单时的 Doris 列名；None = event_data JSON 下钻
+    column: Optional[str] = None  # 新增：基本字段命中白名单时的 数据表 列名；None = event_data JSON 下钻
 
     @classmethod
     def from_raw(cls, item: Dict[str, Any], *, prefix: str) -> Optional["EventFilterSpec"]:

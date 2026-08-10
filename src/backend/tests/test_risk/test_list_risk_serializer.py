@@ -481,7 +481,7 @@ class TestEventFilterBasicColumnMode(SimpleTestCase):
                     "field": "operator",
                     "display_name": "责任人",
                     "operator": EventFilterOperator.EQUAL.value,
-                    "value": "rajawwang",
+                    "value": "xxx",
                 }
             ]
         )
@@ -531,7 +531,7 @@ class TestEventFilterBasicColumnMode(SimpleTestCase):
                     "field": "operator",
                     "display_name": "责任人",
                     "operator": EventFilterOperator.EQUAL.value,
-                    "value": "rajawwang",
+                    "value": "xxx",
                 }
             ]
         )
@@ -561,7 +561,7 @@ class TestEventFilterBasicColumnMode(SimpleTestCase):
                     "field": "operator",
                     "display_name": "责任人",
                     "operator": EventFilterOperator.EQUAL.value,
-                    "value": "rajawwang",
+                    "value": "xxx",
                 },
                 {
                     "field": "event_data.ip",

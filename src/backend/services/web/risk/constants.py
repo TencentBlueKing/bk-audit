@@ -800,23 +800,22 @@ class EventBasicField(TextChoices):
     EVENT_CONTENT = "event_content", gettext_lazy("事件内容(event_content)")
     EVENT_TYPE = "event_type", gettext_lazy("事件类型(event_type)")
 
-    # 数值型基本字段（Doris 数值列，列模式下允许数值 CAST 比较）；其余字段默认字符串比较
-    NUMERIC_FIELDS = frozenset({STRATEGY_ID.value})
-
     @property
     def is_numeric(self) -> bool:
-        """该基本字段在 Doris 中是否为数值列（列模式下允许数值 CAST 比较）"""
+        """该基本字段在数据库表中是否为数值列（列模式下允许数值 CAST 比较）"""
         return self.value in self.NUMERIC_FIELDS
 
     @property
     def column(self) -> str:
-        """对应 risk_event(Doris) 物理列名：event_time → dtEventTime（字符串时间列，字典序==时间序），其余同名列"""
+        """对应 risk_event物理列名：event_time → dtEventTime（字符串时间列，字典序==时间序），其余同名列"""
         return "dtEventTime" if self.value == "event_time" else self.value
 
 
-# 事件基本信息字段 risk_event(Doris) 顶层物理列 映射（列模式 SQL 直接引用事件表列）
+# 事件基本信息字段 risk_event 顶层物理列 映射（列模式 SQL 直接引用事件表列）
 EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField}
 
+# 数值型基本字段, 其余字段默认字符串比较
+EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
