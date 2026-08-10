@@ -26,177 +26,213 @@
     @closed="handleSliderClosed">
     <template #default>
       <div class="report-create-content">
-        <bk-form
-          ref="formRef"
-          class="report-create-form"
-          form-type="vertical"
-          :model="formData"
-          :rules="formRules">
-          <!-- 关联 BKVision 报表 -->
-          <bk-form-item
-            :label="t('关联 BKVision 报表')"
-            property="bkvisionReport"
-            required>
-            <div class="bkvision-select-wrapper">
-              <bk-select
-                v-model="formData.bkvisionReport"
-                :clearable="false"
-                filterable
-                :placeholder="t('选择项目')"
-                :popover-options="{
-                  boundary: 'parent',
-                  zIndex: 10050
-                }"
-                style="width: 500px;"
-                @change="handleReportChange">
-                <bk-option-group
-                  v-for="group in chartGroupedLists"
-                  :key="group.uid"
-                  collapsible
-                  :label="group.name">
-                  <bk-option
-                    v-for="item in group.share"
-                    :id="item.uid"
-                    :key="item.uid"
-                    :name="`【${group.name}】${item.name}`">
-                    <template #default>
-                      <div class="report-option-content">
-                        <span class="option-name">{{ item.name }}</span>
-                        <audit-icon
-                          class="preview-icon"
-                          type="jump-link"
-                          @click.stop="handlePreviewReport(item)" />
+        <!-- 基本信息 -->
+        <div class="report-card">
+          <div class="report-card-title">
+            {{ t('基本信息') }}
+          </div>
+          <div class="report-card-body">
+            <bk-form
+              ref="formRef"
+              class="report-create-form"
+              form-type="vertical"
+              :model="formData"
+              :rules="formRules">
+              <!-- 关联 BKVision 报表 -->
+              <bk-form-item
+                :label="t('关联 BKVision 报表')"
+                property="bkvisionReport"
+                required>
+                <div class="bkvision-select-wrapper">
+                  <bk-select
+                    v-model="formData.bkvisionReport"
+                    :clearable="false"
+                    filterable
+                    :placeholder="t('选择项目')"
+                    :popover-options="{
+                      boundary: 'parent',
+                      zIndex: 10050
+                    }"
+                    @change="handleReportChange">
+                    <bk-option-group
+                      v-for="group in chartGroupedLists"
+                      :key="group.uid"
+                      collapsible
+                      :label="group.name">
+                      <bk-option
+                        v-for="item in group.share"
+                        :id="item.uid"
+                        :key="item.uid"
+                        :name="`【${group.name}】${item.name}`">
+                        <template #default>
+                          <div class="report-option-content">
+                            <span class="option-name">{{ item.name }}</span>
+                            <audit-icon
+                              class="preview-icon"
+                              type="jump-link"
+                              @click.stop="handlePreviewReport(item)" />
+                          </div>
+                        </template>
+                      </bk-option>
+                    </bk-option-group>
+                  </bk-select>
+                  <bk-button
+                    v-if="formData.bkvisionReport"
+                    class="preview-btn"
+                    @click="handlePreview">
+                    {{ t('预览') }}
+                    <audit-icon
+                      class="ml4"
+                      type="jump-link" />
+                  </bk-button>
+                </div>
+              </bk-form-item>
+
+              <!-- 报表名称 -->
+              <bk-form-item
+                :label="t('报表名称')"
+                property="name"
+                required>
+                <bk-input
+                  v-model="formData.name"
+                  :placeholder="t('请输入报表名称（选择报表后自动填充）')"
+                  @change="handleNameChange" />
+              </bk-form-item>
+
+              <!-- 描述 -->
+              <bk-form-item
+                :label="t('描述')"
+                property="description">
+                <bk-input
+                  v-model="formData.description"
+                  :maxlength="100"
+                  :placeholder="t('请输入')"
+                  :rows="3"
+                  show-word-limit
+                  type="textarea" />
+              </bk-form-item>
+
+              <!-- 是否启用 -->
+              <bk-form-item
+                :label="t('是否启用')"
+                property="status">
+                <div class="status-field">
+                  <bk-popover
+                    :is-show="enablePopoverVisible"
+                    placement="bottom-start"
+                    theme="light"
+                    trigger="manual"
+                    :z-index="10050"
+                    @after-hidden="enablePopoverVisible = false">
+                    <bk-switcher
+                      :before-change="handleStatusBeforeChange"
+                      :model-value="formData.enabled"
+                      size="small"
+                      theme="primary" />
+                    <template #content>
+                      <div class="report-enable-popover">
+                        <div class="report-enable-popover-title">
+                          {{ t('确认启用该报表？') }}
+                        </div>
+                        <div class="report-enable-popover-text">
+                          {{ t('启用后，可见范围内的空间将可以查看和使用该报表，确认启用吗？') }}
+                        </div>
+                        <div class="report-status-popover-actions">
+                          <bk-button
+                            class="mr8"
+                            size="small"
+                            theme="primary"
+                            @click="handleConfirmEnable">
+                            {{ t('启用') }}
+                          </bk-button>
+                          <bk-button
+                            size="small"
+                            @click="enablePopoverVisible = false">
+                            {{ t('取消') }}
+                          </bk-button>
+                        </div>
                       </div>
                     </template>
-                  </bk-option>
-                </bk-option-group>
-              </bk-select>
-              <bk-button
-                v-if="formData.bkvisionReport"
-                class="preview-btn"
-                @click="handlePreview">
-                {{ t('预览') }}
-                <audit-icon
-                  class="ml4"
-                  type="jump-link" />
-              </bk-button>
-            </div>
-          </bk-form-item>
+                  </bk-popover>
+                  <span class="status-label">{{ formData.enabled ? t('启用') : t('停用') }}</span>
+                </div>
+              </bk-form-item>
+            </bk-form>
+          </div>
+        </div>
 
-          <!-- 报表名称 -->
-          <bk-form-item
-            :label="t('报表名称')"
-            property="name"
-            required>
-            <bk-input
-              v-model="formData.name"
-              :placeholder="t('请输入报表名称（选择报表后自动填充）')"
-              @change="handleNameChange" />
-          </bk-form-item>
+        <!-- 参数配置：复用场景侧 bkvision-param-config -->
+        <bk-loading
+          :loading="paramLoading"
+          size="small">
+          <bkvision-param-config
+            ref="paramConfigRef"
+            :has-report="!!formData.bkvisionReport"
+            :input-variables="paramConfigInputVariables"
+            :report-lists-panels="reportListsPanels"
+            @change="handleParamFieldsChange" />
+        </bk-loading>
 
-          <!-- 可见范围：复用工具管理 VisibleRangeField（非必选，未选时后端默认全部可见） -->
-          <bk-form-item
-            :label="t('可见范围')"
-            property="visibility_type">
-            <visible-range-field
-              :form-data="visibilityFormData"
-              match-selector-width
-              popover-class="is-compact"
+        <!-- 可见范围 -->
+        <div class="report-card">
+          <div class="report-card-title">
+            {{ t('可见范围') }}
+          </div>
+          <div class="report-card-body report-card-body--visibility">
+            <bk-form
+              class="report-create-form"
+              form-type="vertical"
+              :model="formData">
+              <bk-form-item
+                :label="t('可见范围')"
+                property="visibility_type">
+                <visible-range-field
+                  :form-data="visibilityFormData"
+                  match-selector-width
+                  popover-class="is-compact"
+                  :popover-z-index="10080"
+                  @update:form-data="handleVisibleRangeChange" />
+              </bk-form-item>
+            </bk-form>
+
+            <!-- 覆盖参数配置：加载中展示 loading，避免空态闪屏 -->
+            <bk-loading
+              v-if="visibilityParamLoading"
+              class="visibility-param-loading"
+              loading
+              size="small">
+              <div class="visibility-param-loading-placeholder" />
+            </bk-loading>
+            <scene-param-config
+              v-else-if="showParamOverrideConfig"
+              class="visibility-param-config"
+              :form-data="paramConfigFormData"
+              :input-variables="sceneOverrideParamOptions"
+              override-select-full-width
               :popover-z-index="10050"
-              @update:form-data="handleVisibleRangeChange" />
-          </bk-form-item>
-
-          <!-- 覆盖参数配置：加载中展示 loading，避免空态闪屏 -->
-          <bk-loading
-            v-if="visibilityParamLoading"
-            class="visibility-param-loading"
-            loading
-            size="small">
-            <div class="visibility-param-loading-placeholder" />
-          </bk-loading>
-          <scene-param-config
-            v-else-if="showParamOverrideConfig"
-            class="visibility-param-config"
-            :form-data="paramConfigFormData"
-            :input-variables="inputVariables"
-            override-select-full-width
-            :popover-z-index="10050"
-            :selected-scenes="selectedSceneItems"
-            :selected-systems="selectedSystemItems"
-            @update:param-overrides="handleParamOverridesChange" />
-
-          <!-- 描述 -->
-          <bk-form-item
-            :label="t('描述')"
-            property="description">
-            <bk-input
-              v-model="formData.description"
-              :maxlength="100"
-              :placeholder="t('请输入')"
-              :rows="3"
-              show-word-limit
-              type="textarea" />
-          </bk-form-item>
-
-          <!-- 是否启用 -->
-          <bk-form-item
-            :label="t('是否启用')"
-            property="status">
-            <div class="status-field">
-              <bk-popover
-                :is-show="enablePopoverVisible"
-                placement="bottom-start"
-                theme="light"
-                trigger="manual"
-                :z-index="10050"
-                @after-hidden="enablePopoverVisible = false">
-                <bk-switcher
-                  :before-change="handleStatusBeforeChange"
-                  :model-value="formData.enabled"
-                  size="small"
-                  theme="primary" />
-                <template #content>
-                  <div class="report-enable-popover">
-                    <div class="report-enable-popover-title">
-                      {{ t('确认启用该报表？') }}
-                    </div>
-                    <div class="report-enable-popover-text">
-                      {{ t('启用后，可见范围内的空间将可以查看和使用该报表，确认启用吗？') }}
-                    </div>
-                    <div class="report-status-popover-actions">
-                      <bk-button
-                        class="mr8"
-                        size="small"
-                        theme="primary"
-                        @click="handleConfirmEnable">
-                        {{ t('启用') }}
-                      </bk-button>
-                      <bk-button
-                        size="small"
-                        @click="enablePopoverVisible = false">
-                        {{ t('取消') }}
-                      </bk-button>
-                    </div>
-                  </div>
-                </template>
-              </bk-popover>
-              <span class="status-label">{{ formData.enabled ? t('启用') : t('停用') }}</span>
-            </div>
-          </bk-form-item>
-        </bk-form>
+              :selected-scenes="selectedSceneItems"
+              :selected-systems="selectedSystemItems"
+              :show-display-name="false"
+              @update:param-overrides="handleParamOverridesChange" />
+          </div>
+        </div>
       </div>
     </template>
     <template #footer>
-      <bk-button
-        class="mr8"
-        :loading="submitLoading"
-        theme="primary"
-        @click="handleSubmit">
-        {{ t('提交') }}
-      </bk-button>
-      <bk-button @click="handleClose">
-        {{ t('取消') }}
-      </bk-button>
+      <div class="report-footer-actions">
+        <bk-button
+          class="footer-btn confirm-btn"
+          :loading="submitLoading"
+          theme="primary"
+          @click="handleSubmit">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button
+          class="footer-btn cancel-btn"
+          @click="handleClose">
+          {{ t('取消') }}
+        </bk-button>
+      </div>
     </template>
   </bk-sideslider>
 </template>
@@ -212,7 +248,10 @@
   import ToolManageService from '@service/tool-manage';
 
   import ConfigModel from '@model/root/config';
-  import type { PanelVisibilityType } from '@model/report-config/panel';
+  import type {
+    PanelDefaultValueOverrides,
+    PanelVisibilityType,
+  } from '@model/report-config/panel';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -227,10 +266,12 @@
     buildVisibilityPayload,
   } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
   import type {
-    DefaultValueOverrides,
     FormData as ToolFormData,
     SceneParamOverride,
   } from '@views/platform-manage/tool-manage/create-tool/types';
+  import BkvisionParamConfig, {
+    type InputVariableItem,
+  } from '@views/scene-config/report-config/components/bkvision-param-config.vue';
 
   import { showReportDisableConfirm } from '../show-report-disable-confirm';
 
@@ -245,8 +286,8 @@
     scene_ids: number[];
     system_ids: string[];
     scene_param_overrides?: Record<string, SceneParamOverride>;
-    /** 管理列表带回的完整覆盖配置 */
-    default_value_overrides?: DefaultValueOverrides;
+    /** 管理列表带回的完整覆盖配置（含 default / scenes / systems） */
+    default_value_overrides?: PanelDefaultValueOverrides;
   }
 
   interface ChartListModel {
@@ -285,6 +326,7 @@
   const chartGroupedLists = computed(() => chartLists.value);
   const { messageSuccess } = useMessage();
   const formRef = ref();
+  const paramConfigRef = ref<InstanceType<typeof BkvisionParamConfig>>();
   const enablePopoverVisible = ref(false);
 
   const formData = ref<ReportFormData>({
@@ -299,13 +341,33 @@
     scene_param_overrides: {},
   });
 
-  // 参数列表：由 share_detail 填充（与 BKVision 工具第一步一致）
+  // 参数列表：由 share_detail 填充（与 BKVision 工具第一步一致），喂给参数配置组件
   const inputVariables = ref<ToolFormData['config']['input_variable']>([]);
+  /** 规范化后供 bkvision-param-config 使用（保证 is_default_value 为 boolean） */
+  const paramConfigInputVariables = computed<InputVariableItem[]>(() => (
+    (inputVariables.value || []).map(item => ({
+      raw_name: item.raw_name,
+      display_name: item.display_name,
+      description: item.description || '',
+      required: item.required ?? true,
+      field_category: item.field_category || '',
+      is_default_value: item.is_default_value ?? false,
+      default_value: item.default_value ?? '',
+      raw_default_value: item.raw_default_value,
+      choices: item.choices || [],
+    }))
+  ));
+  /** 参数配置编辑结果，供可见范围下场景覆盖使用（避免回写 inputVariables 触发子组件重置） */
+  const sceneOverrideParamOptions = ref<ToolFormData['config']['input_variable']>([]);
+  const reportListsPanels = ref<Array<Record<string, any>>>([]);
   const allSceneList = ref<Array<{ id: number; name: string }>>([]);
   const allSystemList = ref<Array<{ id: string; name: string }>>([]);
+  /** 参数配置区加载中 */
+  const paramLoading = ref(false);
   /** 可见范围参数区加载中（避免覆盖配置回显前空态闪屏） */
   const visibilityParamLoading = ref(false);
   let visibilityParamLoadSeq = 0;
+  let paramLoadSeq = 0;
 
   const runVisibilityParamLoad = async (task: () => Promise<void>) => {
     visibilityParamLoadSeq += 1;
@@ -399,18 +461,43 @@
     return result;
   };
 
+  const clearParamState = () => {
+    inputVariables.value = [];
+    sceneOverrideParamOptions.value = [];
+    reportListsPanels.value = [];
+  };
+
+  const syncSceneOverrideParamOptions = (fields?: InputVariableItem[]) => {
+    const next = fields
+      || paramConfigRef.value?.getFields?.()
+      || inputVariables.value;
+    sceneOverrideParamOptions.value = (next || []) as ToolFormData['config']['input_variable'];
+  };
+
   const loadShareDetailVariables = async (shareUid: string) => {
     if (!shareUid) {
-      inputVariables.value = [];
+      clearParamState();
       return;
     }
+    paramLoadSeq += 1;
+    const seq = paramLoadSeq;
+    paramLoading.value = true;
     try {
       const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
+      if (seq !== paramLoadSeq) return;
+      reportListsPanels.value = Array.isArray(res?.data?.panels) ? res.data.panels : [];
       inputVariables.value = buildInputVariablesFromShareDetail(res);
+      syncSceneOverrideParamOptions(inputVariables.value as InputVariableItem[]);
       reconcileParamOverrides();
     } catch (e) {
       console.error('获取报表参数列表失败:', e);
-      inputVariables.value = [];
+      if (seq === paramLoadSeq) {
+        clearParamState();
+      }
+    } finally {
+      if (seq === paramLoadSeq) {
+        paramLoading.value = false;
+      }
     }
   };
 
@@ -430,7 +517,7 @@
     scene_param_overrides: formData.value.scene_param_overrides || {},
     config: {
       referenced_tables: [],
-      input_variable: inputVariables.value,
+      input_variable: sceneOverrideParamOptions.value,
       output_fields: [],
       sql: '',
       uid: '',
@@ -446,7 +533,7 @@
   const reconcileParamOverrides = () => {
     formData.value.scene_param_overrides = reconcileSceneParamOverrides(
       formData.value.scene_param_overrides,
-      inputVariables.value,
+      sceneOverrideParamOptions.value,
       formData.value.visibility_type,
       formData.value.scene_ids || [],
       formData.value.system_ids || [],
@@ -465,10 +552,18 @@
     return (formData.value.scene_ids?.length ?? 0) > 0 || (formData.value.system_ids?.length ?? 0) > 0;
   });
 
+  /** 参数配置变更：只同步给场景覆盖选项，不回写 inputVariables，避免子组件 deep watch 重置 */
+  const handleParamFieldsChange = (fields: InputVariableItem[]) => {
+    syncSceneOverrideParamOptions(fields);
+    if (hasVisibleRangeSelection.value) {
+      reconcileParamOverrides();
+    }
+  };
+
   // 无参数时不展示覆盖参数配置（避免「无数据」空态）
   const showParamOverrideConfig = computed(() => !visibilityParamLoading.value
     && hasVisibleRangeSelection.value
-    && inputVariables.value.length > 0);
+    && sceneOverrideParamOptions.value.length > 0);
 
   const selectedSceneItems = computed(() => {
     if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
@@ -537,6 +632,7 @@
   };
 
   const handleVisibleRangeChange = (value: ToolFormData) => {
+    syncSceneOverrideParamOptions();
     formData.value = {
       ...formData.value,
       visibility_type: (value.visibility_type || 'scenes_and_systems') as PanelVisibilityType,
@@ -551,6 +647,52 @@
   };
 
   /**
+   * 将「参数配置」转为协议中的 default 层
+   * 仅提交未勾选「使用默认值」的自定义值
+   */
+  const buildDefaultParamValues = (): Record<string, any> => {
+    const fields = paramConfigRef.value?.getFields?.()
+      || sceneOverrideParamOptions.value
+      || inputVariables.value;
+    const overrides: Record<string, any> = {};
+    (fields || []).forEach((item) => {
+      if (!item.raw_name || item.is_default_value) return;
+      const value = item.default_value;
+      const isEmpty = value === '' || value === undefined || value === null
+        || (Array.isArray(value) && value.length === 0);
+      if (isEmpty) return;
+      overrides[item.raw_name] = value;
+    });
+    return overrides;
+  };
+
+  /** 用已保存的 default 覆盖回填到参数配置（编辑态）
+   * - 出现在 default 中：自定义值，取消勾选「使用默认值」
+   * - 未出现在 default 中：新建时勾选了「使用默认值」，回显勾选并还原 BKVision 原始默认值
+   * 注意：空对象 {} 也需要处理（全部勾选默认值的场景）
+   */
+  const applyDefaultOverridesToInputVariables = (savedDefault: Record<string, any>) => {
+    if (!inputVariables.value.length) {
+      return;
+    }
+    inputVariables.value = inputVariables.value.map((item) => {
+      if (item.raw_name in savedDefault) {
+        return {
+          ...item,
+          is_default_value: false,
+          default_value: savedDefault[item.raw_name],
+        };
+      }
+      return {
+        ...item,
+        is_default_value: true,
+        default_value: item.raw_default_value ?? '',
+      };
+    });
+    syncSceneOverrideParamOptions(inputVariables.value as InputVariableItem[]);
+  };
+
+  /**
    * 通过报表详情接口按 scope 拉取默认值覆盖，组装为 scenes/systems 结构
    * GET /bkvision/api/v1/panel/{panel_id}/?scope_type=&scope_id=
    */
@@ -558,8 +700,8 @@
     panelId: string,
     sceneIds: number[],
     systemIds: string[],
-  ): Promise<DefaultValueOverrides> => {
-    const result: DefaultValueOverrides = { scenes: {}, systems: {} };
+  ): Promise<PanelDefaultValueOverrides> => {
+    const result: PanelDefaultValueOverrides = { scenes: {}, systems: {} };
 
     const sceneTasks = sceneIds.map(async (sceneId) => {
       try {
@@ -603,13 +745,15 @@
     const listOverrides = data.default_value_overrides;
     const hasListOverrides = listOverrides !== undefined && listOverrides !== null;
 
-    let overrides: DefaultValueOverrides | undefined;
+    let overrides: PanelDefaultValueOverrides | undefined;
 
     if (hasListOverrides) {
-      // 管理列表返回完整 default_value_overrides，编辑回显优先使用
+      // 管理列表返回完整 default_value_overrides（含 default），编辑回显优先使用
       overrides = listOverrides;
+      // 仅列表带回完整 default 层时回填参数配置勾选态；scope 详情不含 default
+      applyDefaultOverridesToInputVariables(overrides?.default ?? {});
     } else if (data.id && (sceneIds.length > 0 || systemIds.length > 0)) {
-      // 列表未带回时，按 scope 调报表详情接口组装
+      // 列表未带回时，按 scope 调报表详情接口组装 scenes/systems
       overrides = await fetchDefaultValueOverridesByScopes(data.id, sceneIds, systemIds);
     }
 
@@ -658,7 +802,7 @@
       system_ids: [],
       scene_param_overrides: {},
     };
-    inputVariables.value = [];
+    clearParamState();
   };
 
   watch(() => props.isShow, async (val) => {
@@ -683,7 +827,7 @@
         if (formData.value.bkvisionReport) {
           await loadShareDetailVariables(formData.value.bkvisionReport);
         } else {
-          inputVariables.value = [];
+          clearParamState();
         }
         if (props.editData) {
           await loadEditParamOverrides(props.editData);
@@ -706,6 +850,8 @@
     } else {
       visibilityParamLoadSeq += 1;
       visibilityParamLoading.value = false;
+      paramLoadSeq += 1;
+      paramLoading.value = false;
     }
   });
 
@@ -718,7 +864,7 @@
         if (data.bkvisionReport) {
           await loadShareDetailVariables(data.bkvisionReport);
         } else {
-          inputVariables.value = [];
+          clearParamState();
         }
         await loadEditParamOverrides(data);
       };
@@ -783,7 +929,7 @@
       formData.value.bkvisionReport = '';
       formData.value.name = '';
       formData.value.scene_param_overrides = {};
-      inputVariables.value = [];
+      clearParamState();
       visibilityParamLoading.value = false;
     }
     formRef.value?.validate('bkvisionReport');
@@ -889,16 +1035,24 @@
       payload.visibility = buildVisibilityPayload(formData.value);
     }
 
-    // 显式传覆盖配置：有可见范围选择时按表单组装，否则传 {} 以清空
-    payload.default_value_overrides = hasVisibleRangeSelection.value
+    // 协议：{ default, scenes, systems }
+    // default ← 参数配置；scenes/systems ← 可见范围下的覆盖参数配置
+    const sceneSystemOverrides = hasVisibleRangeSelection.value
       ? buildDefaultValueOverrides(formData.value.scene_param_overrides)
       : { scenes: {}, systems: {} };
+    payload.default_value_overrides = {
+      default: buildDefaultParamValues(),
+      scenes: sceneSystemOverrides.scenes || {},
+      systems: sceneSystemOverrides.systems || {},
+    } as PanelDefaultValueOverrides;
 
     return payload;
   };
 
   const handleSubmit = async () => {
     formRef.value?.validate().then(() => {
+      syncSceneOverrideParamOptions();
+      reconcileParamOverrides();
       const payload = buildSubmitPayload();
 
       if (isEditMode.value && formData.value.id) {
@@ -924,7 +1078,34 @@
 
 <style lang="postcss" scoped>
 .report-create-content {
-  padding: 24px 40px;
+  min-height: 100%;
+  padding: 16px 24px 24px;
+  background: #f5f7fa;
+}
+
+.report-card {
+  margin-bottom: 16px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px 0 #00000029;
+}
+
+.report-card-title {
+  display: flex;
+  height: 52px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #313238;
+  align-items: center;
+}
+
+.report-card-body {
+  padding: 0 24px 16px;
+}
+
+.report-card-body--visibility {
+  padding-bottom: 24px;
 }
 
 .ml4 {
@@ -1022,48 +1203,75 @@
 
 .visibility-param-loading {
   min-height: 120px;
-  margin-top: 16px;
-  margin-bottom: 24px;
+  margin-top: 8px;
 }
 
 .visibility-param-config {
-  margin-bottom: 24px;
+  margin-top: 8px;
+  margin-bottom: 0;
+
+  /* 仅侧滑可见范围内去掉场景参数块外边框，不影响工具管理等其他场景 */
+  :deep(.param-config-block) {
+    border: none;
+  }
 }
 
 .visibility-param-loading-placeholder {
   min-height: 120px;
 }
+
+.report-footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.footer-btn {
+  min-width: 88px;
+}
 </style>
 
 <style lang="postcss">
-  .report-create-sideslider .bk-modal-content {
+/* ext-cls 挂在 .bk-modal 根节点；非 scoped 勿用 :deep()，否则选择器无效 */
+.report-create-sideslider {
+  .bk-modal-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: #f5f7fa;
+  }
+
+  .bk-modal-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: #f5f7fa;
     scrollbar-width: thin;
     scrollbar-color: #c4c6cc transparent;
   }
 
-  .report-create-sideslider .bk-modal-content::-webkit-scrollbar {
+  .bk-modal-content::-webkit-scrollbar {
     width: 6px;
     appearance: none;
   }
 
-  .report-create-sideslider .bk-modal-content::-webkit-scrollbar-track {
+  .bk-modal-content::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .report-create-sideslider .bk-modal-content::-webkit-scrollbar-thumb {
+  .bk-modal-content::-webkit-scrollbar-thumb {
     background-color: #c4c6cc;
     border-radius: 3px;
   }
 
-  .report-create-sideslider .bk-modal-content::-webkit-scrollbar-thumb:hover {
+  .bk-modal-content::-webkit-scrollbar-thumb:hover {
     background-color: #979ba5;
   }
 
-  /* InfoBox 未透传 zIndex，侧滑 z-index=9999 时需用样式抬高层级，保证可关闭 */
-  .bk-infobox.report-disable-infobox-above-sideslider,
-  .bk-infobox.report-disable-infobox-above-sideslider .bk-modal-wrapper,
-  .bk-infobox.report-disable-infobox-above-sideslider .bk-modal-mask {
-    z-index: 10060 !important;
+  .bk-modal-footer {
+    flex: none;
+    background: #fafbfd;
+    box-shadow: 0 -1px 3px 0 rgb(0 0 0 / 4%);
   }
 
   /* +n hover tips：v-bk-tooltips 默认 z-index≈8000，低于侧滑 9999 */
@@ -1092,4 +1300,24 @@
   .bk-pop2-content:has(.__date-tooltips__) {
     z-index: 10060 !important;
   }
+
+  .bk-sideslider-footer {
+    height: 52px;
+    margin-top: 0;
+    background: #fafbfd;
+  }
+}
+
+/* InfoBox 未透传 zIndex，侧滑 z-index=9999 时需用样式抬高层级，保证可关闭 */
+.bk-infobox.report-disable-infobox-above-sideslider,
+.bk-infobox.report-disable-infobox-above-sideslider .bk-modal-wrapper,
+.bk-infobox.report-disable-infobox-above-sideslider .bk-modal-mask {
+  z-index: 10060 !important;
+}
+
+/* +n hover tips：v-bk-tooltips 默认 z-index≈8000，低于侧滑 9999 */
+.bk-select-tooltips,
+.bk-popper.visible-range-overflow-tips {
+  z-index: 10060 !important;
+}
 </style>

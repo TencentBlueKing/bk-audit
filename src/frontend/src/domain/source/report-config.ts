@@ -22,6 +22,7 @@ import PanelModel, {
   type PanelDefaultValueOverrides,
   type PanelDetail,
   type PanelVisibilityPayload,
+  type ScenePanelDefaultValueOverride,
 } from './../model/report-config/panel';
 import ModuleBase from './module-base';
 
@@ -64,7 +65,8 @@ class PanelManage extends ModuleBase {
     status?: 'published' | 'unpublished',
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_overrides?: PanelDefaultValueOverrides,
+    /** 场景报表：{ default: { [raw_name]: value } } */
+    default_value_override?: ScenePanelDefaultValueOverride,
   }) {
     return Request.post(`bkvision${this.module}/panel/scene/`, {
       params,
@@ -82,7 +84,8 @@ class PanelManage extends ModuleBase {
     category?: string,
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_overrides?: PanelDefaultValueOverrides,
+    /** 场景报表：{ default: { [raw_name]: value } } */
+    default_value_override?: ScenePanelDefaultValueOverride,
   }) {
     const { id, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/scene/${id}/`, {
