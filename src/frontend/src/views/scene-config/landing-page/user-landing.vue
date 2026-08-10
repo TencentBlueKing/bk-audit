@@ -223,6 +223,7 @@
     <!-- 申请弹窗 -->
     <bk-dialog
       v-model:is-show="showApplyDialog"
+      :quick-close="false"
       :title="t('申请场景配置权限')"
       :width="480"
       @closed="handleDialogClosed">
@@ -248,11 +249,14 @@
       <template #footer>
         <bk-button
           class="mr8"
+          :loading="isApplying"
           theme="primary"
           @click="handleConfirmApply">
           {{ t('确定申请') }}
         </bk-button>
-        <bk-button @click="showApplyDialog = false">
+        <bk-button
+          :disabled="isApplying"
+          @click="showApplyDialog = false">
           {{ t('取消') }}
         </bk-button>
       </template>
@@ -324,13 +328,6 @@
     manual: true,
   });
 
-  const normalizeApprovers = (approvers: string | string[] | undefined): string[] => {
-    if (!approvers) return [];
-    if (Array.isArray(approvers)) return approvers.filter(Boolean);
-    return approvers.split(/[,，]/).map(item => item.trim())
-      .filter(Boolean);
-  };
-
   const mapApplyStatus = (status = '', statusDisplay = ''): ApplyStatus => {
     const normalized = status.toLowerCase();
     if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
@@ -343,29 +340,28 @@
   };
 
   const applyApplicationList = (list: ScenePermissionApplicationModel[]) => {
-    // 同一场景保留最新一条申请
-    const latestByScene = new Map<number, ScenePermissionApplicationModel>();
-    list.forEach((item) => {
-      if (!latestByScene.has(item.scene_id)) {
-        latestByScene.set(item.scene_id, item);
-      }
-    });
+    // 仅展示有使用权限、无配置权限的场景
+    const filtered = list.filter(item => (
+      item.permission?.view_scene && !item.permission?.manage_scene
+    ));
 
-    sceneList.value = Array.from(latestByScene.values()).map(item => ({
+    sceneList.value = filtered.map(item => ({
       scene_id: item.scene_id,
       name: item.scene_name,
-      managers: normalizeApprovers(item.approvers),
-      description: '',
+      managers: item.scene_managers || [],
+      description: item.description,
     }));
 
     Object.keys(applyStateMap).forEach((key) => {
       delete applyStateMap[Number(key)];
     });
-    latestByScene.forEach((item, sceneId) => {
-      applyStateMap[sceneId] = {
-        status: mapApplyStatus(item.status, item.status_display),
-        rejectReason: item.reject_reason,
-        ticketUrl: item.itsm_ticket_url,
+    filtered.forEach((item) => {
+      const { application } = item;
+      if (!application) return;
+      applyStateMap[item.scene_id] = {
+        status: mapApplyStatus(application.status, application.status_display),
+        rejectReason: application.reject_reason,
+        ticketUrl: application.itsm_ticket_url,
       };
     });
   };
@@ -374,13 +370,33 @@
     run: fetchMineApplicationList,
   } = useRequest(ScenePermissionApplicationService.fetchMineList, {
     defaultValue: {
-      count: 0,
-      next: null,
-      previous: null,
+      page: 1,
+      num_pages: 0,
+      total: 0,
       results: [],
     },
     onSuccess: (data) => {
       applyApplicationList(data.results || []);
+    },
+  });
+
+  const {
+    loading: isApplying,
+    run: submitApply,
+  } = useRequest(ScenePermissionApplicationService.apply, {
+    defaultValue: null,
+    manual: false,
+    onSuccess: () => {
+      const scene = currentScene.value;
+      if (scene) {
+        messageSuccess(`${t('已发起')}「${scene.name}」${t('场景配置权限 ITSM 单据申请')}`);
+      }
+      showApplyDialog.value = false;
+      handleDialogClosed();
+      fetchMineApplicationList({
+        page: 1,
+        page_size: 1000,
+      });
     },
   });
 
@@ -414,23 +430,21 @@
   };
 
   const handleConfirmApply = () => {
-    if (!currentScene.value) return;
+    if (!currentScene.value || isApplying.value) return;
     applyFormRef.value?.validate().then(() => {
       const scene = currentScene.value!;
-      applyStateMap[scene.scene_id] = {
-        status: 'applying',
-        ticketUrl: getTicketUrl(scene.scene_id),
-      };
-      messageSuccess(`${t('已发起')}「${scene.name}」${t('场景配置权限 ITSM 单据申请')}`);
-      showApplyDialog.value = false;
-      handleDialogClosed();
+      submitApply({
+        scene_id: scene.scene_id,
+        role: 'manager',
+        reason: applyForm.reason.trim(),
+      });
     });
   };
 
   onMounted(() => {
     fetchMineApplicationList({
       page: 1,
-      page_size: 100,
+      page_size: 1000,
     });
   });
 

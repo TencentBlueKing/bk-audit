@@ -35,11 +35,25 @@ class ScenePermissionApplication extends ModuleBase {
   getMineList(params: {
     page?: number;
     page_size?: number;
+    scene_id?: number | string;
     status?: string;
   } = {}, payload = {} as IRequestPayload) {
     return Request.get<IRequestResponsePaginationData<ScenePermissionApplicationModel>>(`${this.module}/mine/`, {
       params,
       payload,
+    });
+  }
+
+  /**
+   * @desc 提交场景权限申请
+   */
+  apply(params: {
+    scene_id: number;
+    role: string;
+    reason: string;
+  }) {
+    return Request.post(`${this.module}/apply/`, {
+      params,
     });
   }
 }

@@ -25,6 +25,7 @@ export default {
   fetchMineList(params: {
     page?: number;
     page_size?: number;
+    scene_id?: number | string;
     status?: string;
   } = {}) {
     return ScenePermissionApplicationSource.getMineList(params)
@@ -32,5 +33,17 @@ export default {
         ...data,
         results: data.results.map(item => new ScenePermissionApplicationModel(item)),
       }));
+  },
+
+  /**
+   * @desc 提交场景权限申请
+   */
+  apply(params: {
+    scene_id: number;
+    role: string;
+    reason: string;
+  }) {
+    return ScenePermissionApplicationSource.apply(params)
+      .then(({ data }) => data);
   },
 };
