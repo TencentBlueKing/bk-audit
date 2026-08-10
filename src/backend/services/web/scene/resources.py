@@ -69,10 +69,10 @@ from services.web.scene.permission import (
     parse_itsm_ticket,
 )
 from services.web.scene.serializers import (
+    ApplicationDetailSerializer,
     ApplyScenePermissionRequestSerializer,
     CreateSceneSerializer,
     MyRolePermissionSerializer,
-    ApplicationDetailSerializer,
     SceneDetailRequestSerializer,
     SceneDetailSerializer,
     SceneFilterSerializer,
@@ -862,27 +862,14 @@ class ListMyScenePermissionApplications(SceneResource):
         if not scene_list:
             return []
 
-        # 2. 查询用户对这些场景的最新申请记录
+        # 2. 查询用户对这些场景的最新申请记录（按 id 倒序，setdefault 自动取最新）
         scene_ids = [s["scene_id"] for s in scene_list]
-        from django.db.models import Max
 
-        latest_applications = (
-            ScenePermissionApplication.objects.filter(
-                applicant=applicant,
-                scene_id__in=scene_ids,
-            )
-            .values("scene_id")
-            .annotate(latest_id=Max("id"))
-            .values("latest_id", "scene_id")
-        )
-
-        # 构建 scene_id -> application 的映射
         application_map = {}
-        if latest_applications:
-            application_ids = [app["latest_id"] for app in latest_applications]
-            applications = ScenePermissionApplication.objects.filter(id__in=application_ids)
-            for app in applications:
-                application_map[app.scene_id] = app
+        for app in ScenePermissionApplication.objects.filter(applicant=applicant, scene_id__in=scene_ids).order_by(
+            "-id"
+        ):
+            application_map.setdefault(app.scene_id, app)
 
         # 3. 组装返回数据
         result = []
@@ -891,9 +878,7 @@ class ListMyScenePermissionApplications(SceneResource):
             application_obj = application_map.get(scene_id)
             # 需要先用序列化器把 model 实例转为 dict，否则外层 ResponseSerializer
             # 走 is_valid() 校验时会因入参不是 Mapping 而抛 ValidationError
-            application_data = (
-                ApplicationDetailSerializer(application_obj).data if application_obj else None
-            )
+            application_data = ApplicationDetailSerializer(application_obj).data if application_obj else None
 
             result.append(
                 {

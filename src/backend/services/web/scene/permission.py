@@ -41,6 +41,7 @@ from services.web.scene.models import Scene, ScenePermissionApplication
 
 def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[str] = None) -> dict:
     """授予场景角色（V3/V4 自适应）。仅授予单人，不影响其他成员。
+    授权成功后即时回写 scene.managers/users，确保审批人列表实时可用。
     :param scene: Scene 实例
     :param role: SceneRole.MANAGER / SceneRole.USER
     :param username: 被授权人
@@ -48,6 +49,14 @@ def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[
     :return: {"success": bool, "method": str, ...}
     """
     operator = operator or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+    result = _grant_scene_role_to_iam(scene, role, username, operator)
+    if result.get("success"):
+        _sync_scene_member_to_db(scene, role, username)
+    return result
+
+
+def _grant_scene_role_to_iam(scene: Scene, role: str, username: str, operator: str) -> dict:
+    """实际调 IAM 授予场景角色（V3/V4 自适应）。"""
 
     # ---- V4：授 role ----
     if IAMGroupManager.is_v4_backend():
@@ -74,6 +83,22 @@ def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[
     IAMGroupManager.add_group_members(group_id=group_id, members=[username])
     logger.info("[grant_scene_role] V3 加组成员 %s -> group %s", username, group_id)
     return {"success": True, "method": "v3_group_add", "group_id": group_id}
+
+
+def _sync_scene_member_to_db(scene: Scene, role: str, username: str) -> None:
+    """授权成功后即时回写 scene.managers/users，避免等待定时任务同步。"""
+    if role == SceneRole.MANAGER:
+        managers = list(scene.managers or [])
+        if username not in managers:
+            managers.append(username)
+            scene.managers = managers
+            scene.save(update_fields=["managers"])
+    elif role == SceneRole.USER:
+        users = list(scene.users or [])
+        if username not in users:
+            users.append(username)
+            scene.users = users
+            scene.save(update_fields=["users"])
 
 
 def parse_itsm_ticket(ticket_data: dict) -> dict:
