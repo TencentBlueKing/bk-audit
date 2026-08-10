@@ -474,10 +474,8 @@
    * - 未出现：勾选「使用默认值」，还原 BKVision 原始默认值
    * - saved 为空/undefined：不改动（避免误把全部勾选上）
    */
-  const applySavedOverridesToInputVariables = (
-    saved?: ReportFormData['default_value_override'] | ReportFormData['default_value_overrides'] | null,
-  ) => {
-    if (saved == null || !inputVariables.value.length) return;
+  const applySavedOverridesToInputVariables = (saved?: ReportFormData['default_value_override'] | ReportFormData['default_value_overrides'] | null) => {
+    if (saved === null || saved === undefined || !inputVariables.value.length) return;
     const paramMap = resolveSavedParamMap(saved);
 
     inputVariables.value = inputVariables.value.map((item) => {
@@ -500,9 +498,7 @@
    * 编辑回显：优先列表带回的非空覆盖；否则拉详情。
    * 注意：空对象 {} 不能当有效来源，否则会误判为「全部使用默认值」。
    */
-  const resolveEditOverrides = async (
-    data: ReportFormData,
-  ): Promise<ReportFormData['default_value_override'] | undefined> => {
+  const resolveEditOverrides = async (data: ReportFormData): Promise<ReportFormData['default_value_override'] | undefined> => {
     const fromListOverride = resolveSavedParamMap(data.default_value_override);
     if (Object.keys(fromListOverride).length) {
       return { default: fromListOverride };
@@ -513,10 +509,10 @@
     }
 
     // 列表明确带回了空覆盖（例如 { default: {} }），表示全部使用 BKVision 默认值
+    // 注意：{ default: {} } 对 isNonEmptyPlainObject 为 true（有 default 键），
+    // 但 resolveSavedParamMap 得到空 map，故需在此显式识别
     if (isNonEmptyPlainObject(data.default_value_override)
-      || isNonEmptyPlainObject(data.default_value_overrides)
-      || data.default_value_override?.default !== undefined
-      || data.default_value_overrides?.default !== undefined) {
+      || isNonEmptyPlainObject(data.default_value_overrides)) {
       return { default: {} };
     }
 
