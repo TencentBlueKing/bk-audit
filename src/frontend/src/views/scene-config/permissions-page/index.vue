@@ -48,144 +48,313 @@
                     v-if="item.managers?.length"
                     class="admin-icon"
                     type="user" />
-                  <span class="admin-name"> {{ (item.managers || []).join('、') }}</span>
+                  <span
+                    v-if="item.managers?.length"
+                    class="admin-name">
+                    {{ (item.managers || []).join('、') }}
+                  </span>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- 选择申请权限 -->
-          <div class="apply-section">
-            <div class="apply-label">
-              {{ t('选择申请权限') }}
-            </div>
-            <div class="permission-options">
               <div
-                class="option-card"
-                :class="{ active: selectedPerm === 'viewer' }"
-                @click="selectedPerm = 'viewer'">
-                <audit-icon type="user" />
-                {{ t('使用者') }}
+                v-if="item.applyStatus === 'applying'"
+                class="scene-action">
+                <span class="status-applying">
+                  <audit-icon
+                    class="status-icon rotate-loading"
+                    svg
+                    type="loading" />
+                  {{ t('申请中...') }}
+                </span>
+                <a
+                  v-if="item.ticketUrl"
+                  class="itsm-link"
+                  :href="item.ticketUrl"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  @click.stop>
+                  {{ t('查看 ITSM 单据') }}
+                  <audit-icon
+                    class="link-icon"
+                    type="jump-link" />
+                </a>
               </div>
               <div
-                class="option-card"
-                :class="{ active: selectedPerm === 'manager' }"
-                @click="selectedPerm = 'manager'">
-                <audit-icon type="insert" />
-                {{ t('管理者') }}
+                v-else-if="item.applyStatus === 'rejected'"
+                class="scene-action">
+                <bk-popover
+                  placement="top"
+                  theme="dark"
+                  trigger="hover">
+                  <span class="status-rejected">
+                    <audit-icon
+                      class="status-icon"
+                      type="delete-fill" />
+                    <span class="status-text">{{ t('已拒绝') }}</span>
+                  </span>
+                  <template #content>
+                    <div class="reject-tip">
+                      <div class="reject-tip-title">
+                        {{ t('拒绝原因') }}
+                      </div>
+                      <div class="reject-tip-reason">
+                        {{ item.rejectReason || t('暂无') }}
+                      </div>
+                      <a
+                        v-if="item.ticketUrl"
+                        class="itsm-link"
+                        :href="item.ticketUrl"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                        @click.stop>
+                        <audit-icon
+                          class="link-icon"
+                          type="jump-link" />
+                        {{ t('查看 ITSM 单据') }}
+                      </a>
+                    </div>
+                  </template>
+                </bk-popover>
+                <bk-button
+                  v-if="!isReapplying"
+                  class="apply-btn"
+                  @click="handleReapply">
+                  {{ t('重新申请') }}
+                </bk-button>
               </div>
             </div>
-            <div class="perm-hint">
-              <audit-icon
-                class="info-fill"
-                type="info-fill" />
-              <span>{{ permHintText }}</span>
-            </div>
           </div>
 
-          <!-- 申请理由 -->
-          <div class="reason-section">
-            <div class="apply-label">
-              {{ t('申请理由') }}
+          <template v-if="showApplyForm">
+            <!-- 选择申请权限 -->
+            <div class="apply-section">
+              <div class="apply-label">
+                {{ t('选择申请权限') }}
+              </div>
+              <div class="permission-options">
+                <div
+                  class="option-card"
+                  :class="{ active: selectedPerm === 'user' }"
+                  @click="selectedPerm = 'user'">
+                  <audit-icon type="user" />
+                  {{ t('使用者') }}
+                </div>
+                <div
+                  class="option-card"
+                  :class="{ active: selectedPerm === 'manager' }"
+                  @click="selectedPerm = 'manager'">
+                  <audit-icon type="insert" />
+                  {{ t('管理者') }}
+                </div>
+              </div>
+              <div class="perm-hint">
+                <audit-icon
+                  class="info-fill"
+                  type="info-fill" />
+                <span>{{ permHintText }}</span>
+              </div>
             </div>
-            <bk-input
-              v-model="applyReason"
-              :placeholder="t('请输入')"
-              :rows="3"
-              type="textarea" />
-          </div>
 
-          <!-- 申请按钮 -->
-          <bk-button
-            class="submit-btn"
-            theme="primary"
-            @click="handleApply">
-            {{ t('申请权限') }}
-          </bk-button>
+            <!-- 申请理由 -->
+            <bk-form
+              :key="applyFormKey"
+              ref="applyFormRef"
+              class="reason-section"
+              form-type="vertical"
+              :model="applyForm"
+              :rules="applyFormRules">
+              <bk-form-item
+                :label="t('申请理由')"
+                property="reason"
+                required>
+                <bk-input
+                  v-model="applyForm.reason"
+                  :maxlength="100"
+                  :placeholder="t('请输入')"
+                  :rows="3"
+                  show-word-limit
+                  type="textarea" />
+              </bk-form-item>
+            </bk-form>
+
+            <!-- 申请按钮 -->
+            <bk-button
+              class="submit-btn"
+              :loading="isSubmitting"
+              theme="primary"
+              @click="handleApply">
+              {{ t('申请权限') }}
+            </bk-button>
+          </template>
         </div>
       </div>
     </div>
-
-    <!-- 申请权限提示弹窗 -->
-    <bk-dialog
-      v-model:is-show="showApplyDialog"
-      theme="primary"
-      :title="t('权限申请提示')"
-      :width="480">
-      <div class="apply-dialog-body">
-        <audit-icon
-          class="dialog-tip-icon"
-          type="info-circle" />
-        <p>{{ t('请联系以下管理员添加权限') }}：</p>
-        <div class="manager-list">
-          <span
-            v-for="(name, idx) in currentManagers"
-            :key="idx"
-            class="manager-tag">{{ name }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <bk-button
-          theme="primary"
-          @click="showApplyDialog = false">
-          {{ t('我知道了') }}
-        </bk-button>
-      </template>
-    </bk-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
-  import SceneManageService from '@service/scene-manage';
+  import ScenePermissionApplicationService from '@service/scene-permission-application';
 
-  import SceneModel from '@model/scene/scene';
-
+  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
   import landingImg from '@/images/landing.png';
 
+  type ApplyStatus = 'idle' | 'applying' | 'rejected';
+
+  interface SceneItem {
+    scene_id: number;
+    name: string;
+    description?: string;
+    managers: string[];
+    applyStatus: ApplyStatus;
+    ticketUrl?: string;
+    rejectReason?: string;
+  }
+
+  /** 审批中状态 */
+  const APPLYING_STATUS = ['pending', 'running', 'processing', 'approving', 'applying'];
+  /** 已拒绝状态 */
+  const REJECTED_STATUS = ['rejected', 'refused', 'failed'];
+
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
 
-  const sceneList = ref<SceneModel[]>([]);
+  const sceneList = ref<SceneItem[]>([]);
   const route = useRoute();
-  const selectedPerm = ref<'viewer' | 'manager'>('viewer');
-  const applyReason = ref('');
-  const showApplyDialog = ref(false);
+  const selectedPerm = ref<'user' | 'manager'>('user');
+  const isReapplying = ref(false);
+  const applyFormRef = ref();
+  const applyFormKey = ref(0);
+  const applyForm = reactive({
+    reason: '',
+  });
+  const applyFormRules = {
+    reason: [
+      {
+        validator: (value: string) => Boolean(value?.trim()),
+        message: t('申请理由不能为空'),
+        trigger: 'change',
+      },
+    ],
+  };
 
-  const currentManagers = computed(() => sceneList.value[0]?.managers || []);
+  const currentScene = computed(() => sceneList.value[0] || null);
+
+  const isApplyingStatus = computed(() => currentScene.value?.applyStatus === 'applying');
+  const isRejectedStatus = computed(() => currentScene.value?.applyStatus === 'rejected');
+
+  const showApplyForm = computed(() => {
+    if (isApplyingStatus.value) return false;
+    if (isRejectedStatus.value) return isReapplying.value;
+    return true;
+  });
 
   const permHintText = computed(() => {
-    if (selectedPerm.value === 'viewer') {
+    if (selectedPerm.value === 'user') {
       return t('可查看场景下的报表与工具，并使用检索功能查询系统操作数据');
     }
     return t('在使用者权限基础上，额外可管理审计策略、新增报表、创建工具等配置能力');
   });
 
+  const mapApplyStatus = (status = '', statusDisplay = ''): ApplyStatus => {
+    const normalized = status.toLowerCase();
+    if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
+      return 'applying';
+    }
+    if (REJECTED_STATUS.includes(normalized) || statusDisplay.includes('拒绝')) {
+      return 'rejected';
+    }
+    return 'idle';
+  };
+
   const {
-    run: fetchSceneDetail,
-  } = useRequest(SceneManageService.fetchSceneDetail, {
-    defaultValue: new SceneModel(),
+    run: fetchMineApplicationList,
+  } = useRequest(ScenePermissionApplicationService.fetchMineList, {
+    defaultValue: {
+      page: 1,
+      num_pages: 0,
+      total: 0,
+      results: [],
+    },
     onSuccess: (data) => {
-      sceneList.value = data?.scene_id ? [data] : [];
+      sceneList.value = (data.results || []).map(item => ({
+        scene_id: item.scene_id,
+        name: item.scene_name,
+        description: item.description,
+        managers: item.scene_managers || [],
+        applyStatus: mapApplyStatus(item.application?.status, item.application?.status_display),
+        ticketUrl: item.application?.itsm_ticket_url,
+        rejectReason: item.application?.reject_reason,
+      }));
+      if (sceneList.value[0]?.applyStatus !== 'rejected') {
+        isReapplying.value = false;
+      }
     },
   });
 
+  const {
+    loading: isSubmitting,
+    run: submitApply,
+  } = useRequest(ScenePermissionApplicationService.apply, {
+    defaultValue: null,
+    manual: false,
+    onSuccess: () => {
+      const scene = currentScene.value;
+      if (scene) {
+        messageSuccess(`${t('已发起')}「${scene.name}」${t('场景权限 ITSM 单据申请')}`);
+      }
+      applyForm.reason = '';
+      applyFormKey.value += 1;
+      isReapplying.value = false;
+      nextTick(() => {
+        applyFormRef.value?.clearValidate();
+      });
+      const sceneId = route.query.scene_id;
+      if (sceneId) {
+        fetchMineApplicationList({
+          page: 1,
+          page_size: 1000,
+          scene_id: sceneId as string,
+        });
+      }
+    },
+  });
 
-  function handleApply() {
-    showApplyDialog.value = true;
-  }
+  const handleReapply = () => {
+    isReapplying.value = true;
+    applyForm.reason = '';
+    applyFormKey.value += 1;
+    nextTick(() => {
+      applyFormRef.value?.clearValidate();
+    });
+  };
+
+  const handleApply = () => {
+    if (!currentScene.value || isSubmitting.value) return;
+    applyFormRef.value?.validate().then(() => {
+      submitApply({
+        scene_id: currentScene.value!.scene_id,
+        role: selectedPerm.value,
+        reason: applyForm.reason.trim(),
+      });
+    });
+  };
 
   onMounted(() => {
     const sceneId = route.query.scene_id;
     if (sceneId) {
-      fetchSceneDetail(sceneId as unknown as object);
+      fetchMineApplicationList({
+        page: 1,
+        page_size: 1000,
+        scene_id: sceneId as string,
+      });
     }
   });
 
@@ -330,6 +499,122 @@
   white-space: nowrap;
 }
 
+.scene-action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.apply-btn {
+  min-width: 64px;
+  color: #63656e;
+  background: #fff;
+  border-color: #c4c6cc;
+}
+
+.status-applying,
+.status-rejected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: default;
+
+  .status-icon {
+    font-size: 14px;
+  }
+}
+
+.status-applying {
+  color: #3a84ff;
+}
+
+.status-rejected {
+  color: #63656e;
+  cursor: pointer;
+
+  .status-icon {
+    font-size: 14px;
+    color: #ea3636;
+
+    :deep(svg),
+    :deep(svg path) {
+      fill: #ea3636;
+    }
+  }
+
+  .status-text {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 3px;
+    text-decoration-color: #c4c6cc;
+  }
+}
+
+.itsm-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #3a84ff;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    color: #699df4;
+  }
+
+  .link-icon {
+    font-size: 12px;
+  }
+}
+
+.reject-tip {
+  max-width: 240px;
+  padding: 4px 0;
+
+  .reject-tip-title {
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 20px;
+    color: #fff;
+  }
+
+  .reject-tip-reason {
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #fff;
+    word-break: break-all;
+  }
+
+  .itsm-link {
+    color: #699df4;
+
+    &:hover {
+      color: #a3c5fd;
+    }
+  }
+}
+
+.rotate-loading {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 申请权限区域 */
 .apply-section {
   margin-top: 20px;
@@ -337,6 +622,10 @@
 
 .reason-section {
   margin-top: 16px;
+
+  :deep(.bk-form-item) {
+    margin-bottom: 0;
+  }
 }
 
 .apply-label {
@@ -396,42 +685,5 @@
 
 .submit-btn {
   margin-top: 24px;
-}
-
-/* 申请权限弹窗 */
-.apply-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
-
-  .dialog-tip-icon {
-    font-size: 32px;
-    color: #ff9c01;
-  }
-
-  p {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #21293b;
-  }
-
-  .manager-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px 16px;
-    background-color: #f5f7fa;
-    border-radius: 4px;
-  }
-
-  .manager-tag {
-    padding: 4px 12px;
-    font-size: 13px;
-    color: #3b7eff;
-    background-color: #ecf2fe;
-    border-radius: 2px;
-  }
 }
 </style>
