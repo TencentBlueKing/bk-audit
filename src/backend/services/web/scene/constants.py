@@ -179,3 +179,9 @@ class GrantStatus(TextChoices):
 
     SUCCESS = "success", gettext_lazy("授权成功")
     FAILED = "failed", gettext_lazy("授权失败")
+
+
+# ITSM 回调 URL（需要配置 BKAPP_BKAUDIT_CALLBACK_URL_PREFIX 环境变量）
+SCENE_PERMISSION_CALLBACK_URL = (
+    f'{os.getenv("BKAPP_BKAUDIT_CALLBACK_URL_PREFIX", "")}/scene_permission_callback/callback/'
+)

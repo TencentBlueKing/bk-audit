@@ -490,12 +490,41 @@ class ApplicationDetailSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(label=gettext_lazy("申请时间"))
 
 
-class SceneWithPermissionAndApplicationSerializer(serializers.Serializer):
+class SceneWithPermissionAndApplicationSerializer(serializers.ModelSerializer):
     """无权限场景 + 权限状态 + 申请状态"""
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"))
-    scene_name = serializers.CharField(label=gettext_lazy("场景名称"))
-    description = serializers.CharField(label=gettext_lazy("场景描述"), allow_blank=True, allow_null=True, default="")
-    scene_managers = serializers.ListField(child=serializers.CharField(), required=False)
-    permission = ScenePermissionStatusSerializer(label=gettext_lazy("权限状态"))
-    application = ApplicationDetailSerializer(label=gettext_lazy("申请信息"), allow_null=True)
+    scene_name = serializers.CharField(source="name", label=gettext_lazy("场景名称"))
+    scene_managers = serializers.ListField(
+        source="managers",
+        child=serializers.CharField(),
+    )
+    permission = serializers.SerializerMethodField(label=gettext_lazy("权限状态"))
+    application = serializers.SerializerMethodField(label=gettext_lazy("申请信息"))
+
+    class Meta:
+        model = Scene
+        fields = [
+            "scene_id",
+            "scene_name",
+            "description",
+            "permission",
+            "scene_managers",
+            "application",
+        ]
+
+    def get_permission(self, obj):
+        # 后续由 insert_permission_field 装饰器覆盖为真实权限结果
+        return {}
+
+    def get_application(self, obj):
+        applications = obj.latest_permission_applications
+        if not applications:
+            return None
+        return ApplicationDetailSerializer(applications[0]).data
+
+
+class ScenePermissionCallbackResponseSerializer(serializers.Serializer):
+    """ITSM 回调响应"""
+
+    result = serializers.BooleanField(label=gettext_lazy("是否成功"))
+    message = serializers.CharField(label=gettext_lazy("结果信息"))

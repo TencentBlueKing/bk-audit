@@ -41,17 +41,26 @@ from services.web.scene.models import Scene, ScenePermissionApplication
 
 def grant_scene_role(scene: Scene, role: str, username: str, operator: Optional[str] = None) -> dict:
     """授予场景角色（V3/V4 自适应）。仅授予单人，不影响其他成员。
-    授权成功后即时回写 scene.managers/users，确保审批人列表实时可用。
+    授权成功后即时从 IAM 刷新当前 scene 的成员到本地，确保审批人列表与授权结果实时可见。
     :param scene: Scene 实例
     :param role: SceneRole.MANAGER / SceneRole.USER
     :param username: 被授权人
-    :param operator: 操作人（用于 IAM 审计）
+    :param operator: 授权操作人（默认平台账号）
     :return: {"success": bool, "method": str, ...}
     """
     operator = operator or bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
     result = _grant_scene_role_to_iam(scene, role, username, operator)
     if result.get("success"):
-        _sync_scene_member_to_db(scene, role, username)
+        try:
+            IAMGroupManager.refresh_scene_members(scene, save=True)
+        except Exception:  # NOCC:broad-except
+            # 本地刷新失败不影响 IAM 侧授权结果，交由定时任务兜底
+            logger.exception(
+                "[grant_scene_role] 刷新场景成员到本地失败, scene=%s, role=%s, username=%s",
+                scene.scene_id,
+                role,
+                username,
+            )
     return result
 
 
@@ -83,22 +92,6 @@ def _grant_scene_role_to_iam(scene: Scene, role: str, username: str, operator: s
     IAMGroupManager.add_group_members(group_id=group_id, members=[username])
     logger.info("[grant_scene_role] V3 加组成员 %s -> group %s", username, group_id)
     return {"success": True, "method": "v3_group_add", "group_id": group_id}
-
-
-def _sync_scene_member_to_db(scene: Scene, role: str, username: str) -> None:
-    """授权成功后即时回写 scene.managers/users，避免等待定时任务同步。"""
-    if role == SceneRole.MANAGER:
-        managers = list(scene.managers or [])
-        if username not in managers:
-            managers.append(username)
-            scene.managers = managers
-            scene.save(update_fields=["managers"])
-    elif role == SceneRole.USER:
-        users = list(scene.users or [])
-        if username not in users:
-            users.append(username)
-            scene.users = users
-            scene.save(update_fields=["users"])
 
 
 def parse_itsm_ticket(ticket_data: dict) -> dict:
@@ -226,7 +219,7 @@ def _extract_reject_reason_from_logs(logs_data: dict) -> str:
 
 
 def do_grant(application: ScenePermissionApplication, operator: Optional[str] = None) -> None:
-    """执行授权。成功→grant_status=SUCCESS；失败→grant_status=FAILED(retry_count++)"""
+    """执行授权，并更新授权状态。成功→grant_status=SUCCESS；失败→grant_status=FAILED(retry_count++)"""
     try:
         result = grant_scene_role(
             scene=application.scene,

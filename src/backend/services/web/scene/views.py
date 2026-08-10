@@ -9,6 +9,7 @@ from apps.permission.handlers.drf import (
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.view_sets import APIGWViewSet
 
 
 class SceneViewSet(ResourceViewSet):
@@ -109,13 +110,7 @@ class ScenePermissionApplicationViewSet(ResourceViewSet):
     场景权限自助申请
         POST /api/v1/scene_permission_applications/apply/      场景管理/使用权限申请
         GET  /api/v1/scene_permission_applications/mine/       我的场景列表（含申请信息）
-        POST /api/v1/scene_permission_applications/callback/   ITSM工单回调
     """
-
-    def get_permissions(self):
-        if self.action == "callback":
-            return []
-        return super().get_permissions()
 
     resource_routes = [
         ResourceRoute("POST", resource.scene.apply_scene_permission, endpoint="apply"),
@@ -132,6 +127,16 @@ class ScenePermissionApplicationViewSet(ResourceViewSet):
                 )
             ],
         ),
+    ]
+
+
+class ScenePermissionCallbackViewSet(APIGWViewSet):
+    """
+    ITSM 工单回调（仅限 APIGW 调用）
+        POST /api/v1/scene_permission_callback/callback/
+    """
+
+    resource_routes = [
         ResourceRoute(
             "POST",
             resource.scene.scene_permission_application_callback,
