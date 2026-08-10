@@ -62,7 +62,7 @@ export default  {
     status?: 'published' | 'unpublished',
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_override?: ScenePanelDefaultValueOverride,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
@@ -81,7 +81,7 @@ export default  {
     category?: string,
     description?: string,
     input_variable?: Array<Record<string, any>>,
-    default_value_override?: ScenePanelDefaultValueOverride,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);
