@@ -23,13 +23,26 @@ export interface PanelVisibilityPayload {
   system_ids: string[];
 }
 
-/** 平台报表默认值覆盖（创建/编辑提交 & 管理列表回显） */
+/** 平台报表默认值覆盖（创建/编辑提交 & 管理列表回显）
+ * 协议结构：
+ * {
+ *   default: { [raw_name]: value },
+ *   scenes: { [scene_id]: { [raw_name]: value } },
+ *   systems: { [system_id]: { [raw_name]: value } }
+ * }
+ */
 export interface PanelDefaultValueOverrides {
+  default?: Record<string, any>;
   scenes?: Record<string, Record<string, any>>;
   systems?: Record<string, Record<string, any>>;
 }
 
-/** 用户侧报表详情（按当前 scope 返回单份映射） */
+/** 场景报表创建/编辑提交的参数覆盖（scene_id 已在请求体，无需再套 scenes） */
+export interface ScenePanelDefaultValueOverride {
+  default?: Record<string, any>;
+}
+
+/** 用户侧报表详情（按当前 scope 返回已合并的单份参数映射） */
 export interface PanelDetail {
   id: string;
   vision_id: string;
@@ -39,6 +52,7 @@ export interface PanelDetail {
   description: string;
   updated_by?: string;
   updated_at?: string;
+  /** 已按 scope 合并后的参数 map：{ [raw_name]: value } */
   default_value_override?: Record<string, any>;
 }
 
@@ -61,7 +75,10 @@ export default class PanelModel {
   visibility_type?: PanelVisibilityType;
   scene_ids?: number[];
   system_ids?: string[];
+  /** 平台报表列表回显（含 default/scenes/systems） */
   default_value_overrides?: PanelDefaultValueOverrides;
+  /** 场景报表列表回显（{ default: {...} }）；以后端实际返回为准 */
+  default_value_override?: ScenePanelDefaultValueOverride | Record<string, any>;
 
   constructor(payload: PanelModel) {
     this.id = payload.id;
@@ -83,5 +100,6 @@ export default class PanelModel {
     this.scene_ids = payload.scene_ids;
     this.system_ids = payload.system_ids;
     this.default_value_overrides = payload.default_value_overrides;
+    this.default_value_override = payload.default_value_override;
   }
 }

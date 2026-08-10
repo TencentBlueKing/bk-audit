@@ -51,6 +51,7 @@
     scene_ids?: Array<number | string>;
     system_ids?: Array<number | string>;
     default_value_overrides?: {
+      default?: Record<string, any>;
       scenes?: Record<string, Record<string, any>>;
       systems?: Record<string, Record<string, any>>;
     };

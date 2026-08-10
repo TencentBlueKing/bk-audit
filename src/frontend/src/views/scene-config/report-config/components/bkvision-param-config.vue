@@ -288,6 +288,10 @@
   }
 
   const props = defineProps<Props>();
+  // eslint-disable-next-line func-call-spacing
+  const emit = defineEmits<{
+    change: [value: InputVariableItem[]]
+  }>();
   const { t } = useI18n();
 
   const now = new Date();
@@ -484,6 +488,7 @@
       ...localFields.value[index],
       ...patch,
     };
+    emit('change', localFields.value);
   };
 
   const hideDefaultTip = (rawName: string) => {
