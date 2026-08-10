@@ -183,7 +183,7 @@
                   </span>
                 </bk-option>
               </bk-select>
-              <!-- 时间范围选择器：与第一步参数组件保持一致 -->
+              <!-- 时间范围选择器：与 BKVision 一致，使用组件内置 tip + hover 清除 -->
               <div
                 v-else-if="isTimeRangeVar(row.raw_name)"
                 class="time-range-select-wrapper"
@@ -191,12 +191,13 @@
                 @mouseleave="hoveredTimeRangeKey = ''">
                 <div class="time-range-inner">
                   <date-picker
+                    :id="TIME_RANGE_PICKER_ID"
                     class="override-time-range-picker"
                     :model-value="getOverrideValue(item, row.raw_name)"
                     :placeholder="t('请选择')"
                     @update:model-value="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
                   <audit-icon
-                    v-show="hoveredTimeRangeKey === getFieldErrorKey(item.key, row.raw_name)
+                    v-if="hoveredTimeRangeKey === getFieldErrorKey(item.key, row.raw_name)
                       && normalizeTimeRangeValue(getOverrideValue(item, row.raw_name)).length > 0"
                     class="delete-fill-btn"
                     type="delete-fill"
@@ -204,22 +205,46 @@
                 </div>
               </div>
               <!-- 时间选择器：与第一步参数组件保持一致 -->
-              <bk-date-picker
+              <div
                 v-else-if="isTimePickerVar(row.raw_name)"
-                append-to-body
-                class="override-time-picker"
-                clearable
-                :model-value="getOverrideValue(item, row.raw_name)"
-                type="datetime"
-                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val || '')" />
+                v-bk-tooltips="getOverflowTips(
+                  getDefaultValueTipContent(item, row.raw_name),
+                  `param-default-${item.key}-${row.raw_name}`,
+                )"
+                class="default-value-tip-wrap"
+                @mouseenter="(e: MouseEvent) => checkDefaultValueOverflow(
+                  `param-default-${item.key}-${row.raw_name}`,
+                  e,
+                )">
+                <bk-date-picker
+                  append-to-body
+                  class="override-time-picker"
+                  clearable
+                  ext-popover-cls="scene-param-date-picker-dropdown"
+                  format="yyyy-MM-dd HH:mm:ss"
+                  :model-value="getOverrideValue(item, row.raw_name)"
+                  type="datetime"
+                  @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val || '')" />
+              </div>
               <!-- 数字输入框 -->
-              <bk-input
+              <div
                 v-else-if="isNumberInputVar(row.raw_name)"
-                class="override-default-input"
-                :model-value="getOverrideValue(item, row.raw_name)"
-                :placeholder="t('请输入')"
-                type="number"
-                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+                v-bk-tooltips="getOverflowTips(
+                  getDefaultValueTipContent(item, row.raw_name),
+                  `param-default-${item.key}-${row.raw_name}`,
+                )"
+                class="default-value-tip-wrap"
+                @mouseenter="(e: MouseEvent) => checkDefaultValueOverflow(
+                  `param-default-${item.key}-${row.raw_name}`,
+                  e,
+                )">
+                <bk-input
+                  class="override-default-input"
+                  :model-value="getOverrideValue(item, row.raw_name)"
+                  :placeholder="t('请输入')"
+                  type="number"
+                  @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+              </div>
               <!-- 人员选择器 -->
               <audit-user-selector-tenant
                 v-else-if="isPersonSelectVar(row.raw_name)"
@@ -238,12 +263,23 @@
                 :list="[]"
                 :model-value="getOverrideValue(item, row.raw_name)"
                 @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
-              <bk-input
+              <div
                 v-else
-                class="override-default-input"
-                :model-value="getOverrideValue(item, row.raw_name)"
-                :placeholder="t('请输入')"
-                @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+                v-bk-tooltips="getOverflowTips(
+                  getDefaultValueTipContent(item, row.raw_name),
+                  `param-default-${item.key}-${row.raw_name}`,
+                )"
+                class="default-value-tip-wrap"
+                @mouseenter="(e: MouseEvent) => checkDefaultValueOverflow(
+                  `param-default-${item.key}-${row.raw_name}`,
+                  e,
+                )">
+                <bk-input
+                  class="override-default-input"
+                  :model-value="getOverrideValue(item, row.raw_name)"
+                  :placeholder="t('请输入')"
+                  @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
+              </div>
             </div>
             <div class="field-value field-operation col-action">
               <audit-icon
@@ -265,6 +301,7 @@
     h,
     nextTick,
     onBeforeUnmount,
+    onMounted,
     reactive,
     ref,
     watch,
@@ -274,6 +311,8 @@
   import ToolManageService from '@service/tool-manage';
 
   import useMessage from '@hooks/use-message';
+
+  import { DateRange } from '@blueking/date-picker';
 
   import type { SceneParamOverride, FormData } from '../types';
 
@@ -329,6 +368,11 @@
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
   }>();
 
+  /** 侧滑 z-index=9999 时，时间类弹出层需抬升；用 id/cls 限定作用域 */
+  const TIME_RANGE_PICKER_ID = 'scene-param-config';
+  const DATE_PICKER_ZINDEX_STYLE_ID = 'scene-param-config-date-picker-zindex';
+  const DATE_PICKER_DROPDOWN_CLS = 'scene-param-date-picker-dropdown';
+
   const PARAM_DISPLAY_NAME_MAP: Record<string, string> = {
     cc_ids: '业务列表',
     game_ids: '游戏列表',
@@ -339,6 +383,41 @@
   const { messageSuccess, messageWarn } = useMessage();
 
   const inputVariableList = computed(() => props.inputVariables || []);
+
+  /** 按 popoverZIndex 抬升时间范围 / 日期选择器挂载到 body 的弹出层 */
+  const syncDatePickerPopoverZIndex = () => {
+    const z = (Number(props.popoverZIndex) || 2500) + 10;
+    let styleEl = document.getElementById(DATE_PICKER_ZINDEX_STYLE_ID) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = DATE_PICKER_ZINDEX_STYLE_ID;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+      .__bk-date-picker-popover__.__bk-date-picker-popover__${TIME_RANGE_PICKER_ID},
+      .bk-date-picker-dropdown.${DATE_PICKER_DROPDOWN_CLS},
+      body > .bk-date-picker-dropdown.${DATE_PICKER_DROPDOWN_CLS} {
+        z-index: ${z} !important;
+      }
+      /* @blueking/date-picker 默认 offset.alignmentAxis=-32，表格内会明显左偏，回正对齐触发器 */
+      .__bk-date-picker-popover__.__bk-date-picker-popover__${TIME_RANGE_PICKER_ID} {
+        margin-left: 32px !important;
+      }
+      /* 组件内置 hover tip（BKVision 同款），侧滑内需抬高层级 */
+      .__date-tooltips__,
+      .bk-popper:has(.__date-tooltips__),
+      .bk-popover:has(.__date-tooltips__),
+      .bk-pop2-content:has(.__date-tooltips__) {
+        z-index: ${z} !important;
+      }
+    `;
+  };
+
+  onMounted(syncDatePickerPopoverZIndex);
+  watch(() => props.popoverZIndex, syncDatePickerPopoverZIndex);
+  onBeforeUnmount(() => {
+    document.getElementById(DATE_PICKER_ZINDEX_STYLE_ID)?.remove();
+  });
 
   // bk-select +n tips 默认 z-index≈8000，侧滑内需抬高
   const ensureSelectOverflowTipsZIndex = () => {
@@ -388,6 +467,19 @@
     textOverflowMap[key] = el.scrollWidth > el.clientWidth + 1;
   };
 
+  /** 默认值控件内部文本溢出检测（日期看 input） */
+  const checkDefaultValueOverflow = (key: string, e: MouseEvent) => {
+    const root = e.currentTarget as HTMLElement | null;
+    if (!root) return;
+    const candidates = [
+      root.querySelector('.bk-date-picker-editor') as HTMLElement | null,
+      root.querySelector('.bk-input--text') as HTMLElement | null,
+      root.querySelector('input') as HTMLElement | null,
+      root,
+    ].filter(Boolean) as HTMLElement[];
+    textOverflowMap[key] = candidates.some(el => el.scrollWidth > el.clientWidth + 1);
+  };
+
   const getOverflowTips = (
     content: string,
     key: string,
@@ -397,7 +489,8 @@
     placement,
     theme: 'dark' as const,
     delay: 200,
-    disabled: !isTextOverflow(key),
+    disabled: !content || !isTextOverflow(key),
+    extCls: 'scene-param-overflow-tips',
   });
 
   // 构建配置列表：每个选中的场景/系统对应一个配置区块
@@ -635,6 +728,28 @@
       return getStableStringList(cacheKey, normalizeMultiSelectValue(raw));
     }
     return raw;
+  };
+
+  /** 默认值完整文案（截断时 hover tips 用） */
+  const getDefaultValueTipContent = (item: ConfigItem, rawName: string): string => {
+    const val = getOverrideValue(item, rawName);
+    if (isTimeRangeVar(rawName)) {
+      const range = normalizeTimeRangeValue(val);
+      if (range.length < 2) return range.join(' ~ ');
+      try {
+        return new DateRange(range as [string, string], 'YYYY-MM-DD HH:mm:ss', window.timezone)
+          .toDisplayString();
+      } catch {
+        return range.join(' ~ ');
+      }
+    }
+    if (Array.isArray(val)) {
+      return val.map(String)
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (val === undefined || val === null || val === '') return '';
+    return String(val);
   };
 
 
@@ -1543,10 +1658,24 @@
     .override-time-picker,
     .override-person-select,
     .override-tag-input,
-    .override-default-multiselect {
+    .override-default-multiselect,
+    .default-value-tip-wrap {
       width: 320px;
       max-width: 100%;
       flex-shrink: 1;
+      min-width: 0;
+    }
+
+    .default-value-tip-wrap {
+      display: flex;
+      align-items: center;
+
+      .override-default-input,
+      .bk-input.override-default-input,
+      .override-time-picker {
+        width: 100%;
+        max-width: 100%;
+      }
     }
 
     .override-default-input,
@@ -1554,6 +1683,14 @@
       height: 42px !important;
       border: none;
       border-radius: 0;
+    }
+
+    /* 纯文本默认值过长时输入框内截断 */
+    .override-default-input :deep(input),
+    .override-default-input :deep(.bk-input--text) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .override-default-input.is-focused:not(.is-readonly) {
@@ -1590,32 +1727,45 @@
     }
   }
 
-  /* 时间范围：内容宽度 + 垂直居中，不拉满列宽/行高 */
+  /*
+   * 时间范围：占满默认值列，保证弹层锚点稳定；
+   * 预留右侧清除按钮空间，避免叠在文案上；长文案省略。
+   */
   .time-range-select-wrapper {
-    display: inline-flex;
+    display: flex;
+    width: 100%;
     max-width: 100%;
-    height: auto;
+    height: 100%;
+    min-width: 0;
     cursor: pointer;
-    flex-shrink: 0;
+    flex-shrink: 1;
     align-items: center;
+    line-height: normal;
 
     .time-range-inner {
       position: relative;
-      display: inline-flex;
+      display: flex;
+      width: 100%;
+      min-width: 0;
       align-items: center;
     }
 
     .override-time-range-picker {
-      width: auto !important;
+      width: 100% !important;
       max-width: 100%;
+      min-width: 0;
+      /* 给绝对定位的清除按钮留空，避免贴着/挡住文案 */
+      padding-right: 28px !important;
+      line-height: 20px;
       border: none;
+      box-sizing: border-box;
     }
 
     .delete-fill-btn {
       position: absolute;
       top: 50%;
-      right: 4px;
-      z-index: 1;
+      right: 10px;
+      z-index: 2;
       font-size: 14px;
       color: #c4c6cc;
       cursor: pointer;
@@ -1662,14 +1812,52 @@
     box-sizing: border-box;
   }
 
-  /* 时间范围：保持 inline-flex 内容宽度与默认 32px 高度 */
+  /* 时间范围：占满列宽 + 固定行高，避免继承 field-row 的 42px line-height 把长值撑破 */
   .scene-param-config .time-range-select-wrapper .__bk_date_picker__,
   .scene-param-config .override-time-range-picker.__bk_date_picker__ {
-    width: auto !important;
+    display: inline-flex !important;
+    width: 100% !important;
     max-width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding-right: 28px !important;
+    overflow: hidden;
+    line-height: 20px;
     border: none !important;
     border-radius: 0;
     box-sizing: border-box;
+    align-items: center;
+  }
+
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    justify-content: flex-start;
+  }
+
+  /* date-content: svg + 文案 span，ellipsis 打在文案上 */
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-content > svg,
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-content-icon {
+    flex-shrink: 0;
+  }
+
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-content > span:not(.date-content-utc) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-content-utc {
+    flex-shrink: 0;
+  }
+
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-icon-left,
+  .scene-param-config .override-time-range-picker.__bk_date_picker__ .date-icon-right {
+    flex-shrink: 0;
   }
 
   .scene-param-config .field-row:hover .override-person-select .tags-container,
@@ -1680,6 +1868,14 @@
   .scene-param-config .field-row .col-default.is-error .override-person-select .tags-container,
   .scene-param-config .field-row .col-default.is-error .time-range-select-wrapper .__bk_date_picker__ {
     border: 1px solid #ea3636 !important;
+  }
+
+  /* 显示名 / 默认值溢出 tips：侧滑内需高于 9999 */
+  .bk-popper.scene-param-overflow-tips {
+    z-index: 10060 !important;
+    max-width: 420px;
+    word-break: break-all;
+    white-space: normal;
   }
 
   /* bk-tooltips 挂载到 body，类名打在 bk-popper 上；滚动放内层 list */
