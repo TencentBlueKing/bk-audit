@@ -229,7 +229,7 @@ export default  {
     return PanelModelSource.deletePlatformPanel(params);
   },
   /**
-   * @desc 上架/下架平台级报表
+   * @desc 启用/停用平台级报表
    */
   publishPlatformPanel(params: {
     panel_id: string,

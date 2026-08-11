@@ -159,7 +159,7 @@
     cursor: 'pointer',
   };
 
-  // 上架/下架 or 启用/停用 — 使用全局 InfoBox
+  // 启用/停用 — 使用全局 InfoBox
   const showToggleStatusInfoBox = (target?: ToolItem | null, actionType?: ActionType) => {
     const currentTarget = target || props.target;
     const currentActionType = actionType || props.actionType;
