@@ -152,7 +152,7 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.delete(`${this.path}/tool/scene/${params.uid}/`, { params });
   }
-  // 上架/下架场景级工具
+  // 启用/停用场景级工具
   publishPlatformTool(params: {
     uid: string,
     scene_id: number,
@@ -182,7 +182,7 @@ class ToolManage extends ModuleBase {
   deletePlatformTool(params: { uid: string }) {
     return Request.delete(`${this.path}/tool/platform/${params.uid}/`);
   }
-  // 上架/下架平台级工具
+  // 启用/停用平台级工具
   publishPlatformToolStatus(params: { id: string, status: 'published' | 'unpublished' }) {
     return Request.post(`${this.path}/tool/platform/${params.id}/publish/`, {
       params: {

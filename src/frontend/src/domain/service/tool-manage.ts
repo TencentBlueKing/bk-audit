@@ -141,7 +141,7 @@ export default  {
     }));
   },
   /**
-     * @desc 上架/下架平台级场景工具
+     * @desc 启用/停用平台级场景工具
      * @param { Object } params
      */
   publishPlatformTool(params: {
@@ -172,7 +172,7 @@ export default  {
     return ToolManageSources.deletePlatformTool({ uid }).then(({ data }) => data);
   },
   /**
-     * @desc 上架/下架平台级工具
+     * @desc 启用/停用平台级工具
      * @param { Object } params - { uid, status }
      */
   publishPlatformToolStatus(params: {

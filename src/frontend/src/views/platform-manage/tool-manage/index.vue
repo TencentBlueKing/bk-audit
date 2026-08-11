@@ -52,7 +52,7 @@
                 class="mr4"
                 svg
                 type="normal" />
-              {{ t('已上架') }}
+              {{ t('启用') }}
               <bk-tag
                 class="status-count"
                 theme="info">
@@ -64,7 +64,7 @@
                 class="mr4"
                 svg
                 type="unknown" />
-              {{ t('未上架') }}
+              {{ t('停用') }}
               <bk-tag
                 class="status-count"
                 theme="info">
@@ -115,7 +115,7 @@
     :all-tools-data="allToolsData"
     :tags-enums="tagsEnums" />
 
-  <!-- 确认操作弹窗（删除/上架/下架） -->
+  <!-- 确认操作弹窗（删除/启用/停用） -->
   <confirm-action-dialog
     ref="confirmDialogRef"
     :action-type="confirmActionType"

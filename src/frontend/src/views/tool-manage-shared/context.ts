@@ -42,12 +42,12 @@ export interface ToolManageContext {
   refreshToolsAfterTags: boolean;
   /** 删除工具 */
   deleteTool: (uid: string) => Promise<any>;
-  /** 启停/上下架 */
+  /** 启用/停用 */
   toggleToolStatus: (params: {
     uid: string;
     enable: boolean;
   }) => Promise<any>;
-  /** 启停文案：上架/下架 vs 启用/停用 */
+  /** 启停文案 */
   statusActionLabels: {
     enableTitle: string;
     disableTitle: string;
@@ -63,14 +63,14 @@ export interface ToolManageContext {
 export const TOOL_MANAGE_CONTEXT_KEY: InjectionKey<ToolManageContext> = Symbol('toolManageContext');
 
 const platformStatusLabels: ToolManageContext['statusActionLabels'] = {
-  enableTitle: '确认上架该工具？',
-  disableTitle: '确认下架该工具？',
-  enableSubTitle: '上架后，该工具将在「工具广场」中展示',
-  disableSubTitle: '下架后，该工具将从「工具广场」中隐藏',
-  enableConfirm: '上架',
-  disableConfirm: '下架',
-  enableSuccess: '上架成功',
-  disableSuccess: '下架成功',
+  enableTitle: '确认启用该工具？',
+  disableTitle: '确认停用该工具？',
+  enableSubTitle: '启用后，该工具将在「工具广场」中展示',
+  disableSubTitle: '停用后，该工具将从「工具广场」中隐藏',
+  enableConfirm: '启用',
+  disableConfirm: '停用',
+  enableSuccess: '启用成功',
+  disableSuccess: '停用成功',
 };
 
 const sceneStatusLabels: ToolManageContext['statusActionLabels'] = {

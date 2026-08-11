@@ -227,7 +227,7 @@ class PanelManage extends ModuleBase {
       params,
     });
   }
-  // 上架/下架平台级报表
+  // 启用/停用平台级报表
   publishPlatformPanel(params: {
     panel_id: string,
     status?: 'published' | 'unpublished',

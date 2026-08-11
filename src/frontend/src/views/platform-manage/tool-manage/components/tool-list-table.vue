@@ -636,9 +636,9 @@
       cell: (_h: any, { row }: { row: ToolModel }) => (
         <span>
           {row.status === 'published' ? (
-            <bk-tag radius="4px" theme="success">{t('已上架')}</bk-tag>
+            <bk-tag radius="4px" theme="success">{t('启用')}</bk-tag>
           ) : (
-            <bk-tag radius="4px" theme="default">{t('未上架')}</bk-tag>
+            <bk-tag radius="4px" theme="default">{t('停用')}</bk-tag>
           )}
         </span>
       ),
@@ -690,7 +690,7 @@
               theme="primary"
               class="mr8"
               onClick={() => emit('toggle-status', row)}>
-              {isPublished ? t('下架') : t('上架')}
+              {isPublished ? t('停用') : t('启用')}
             </bk-button>
             <bk-popover
               extCls="tool-more-action-popover"
@@ -710,7 +710,7 @@
                     {isPublished ? (
                       <span
                         v-bk-tooltips={{
-                          content: t('请先下架后再删除'),
+                          content: t('请先停用后再删除'),
                           placement: 'bottom',
                         }}>
                         <span class="delete-disabled">{t('删除')}</span>
