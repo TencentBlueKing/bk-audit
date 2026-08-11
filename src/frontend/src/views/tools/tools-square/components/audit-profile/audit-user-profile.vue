@@ -501,7 +501,7 @@
     && !userInfo.value.username);
 
   /**
-   * 从工具详情读取当前场景/系统的数据范围覆盖值（如 cc_ids）。
+   * 从工具详情读取当前场景/系统的数据范围覆盖值（cc_ids / game_ids）。
    * 未覆盖或空值时不传，后端按全量数据返回。
    */
   const getDataRangeParams = (): Record<string, number[]> => getDataRangeParamsFromToolConfig(
@@ -799,7 +799,7 @@
     });
   };
 
-  // 执行数据源查询（透传详情合并后的数据范围默认值，如 cc_ids）
+  // 执行数据源查询（透传详情合并后的数据范围默认值，如 cc_ids / game_ids）
   const executeDataSource = (dataSourceName: string, params: Record<string, any>, runner: typeof fetchUserInfo) => {
     if (!props.toolUid) return;
     runner({
