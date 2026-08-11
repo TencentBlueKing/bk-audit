@@ -232,5 +232,6 @@ export default {
     启用成功: 'Enabled successfully',
     停用成功: 'Disabled successfully',
     请先停用后再删除: 'Please disable before deleting',
+    '此工具暂不支持编辑，如需调整可见范围，请直接在“可见范围”列进行操作': 'This tool does not support editing. To adjust visibility, please operate in the Visibility column.',
   },
 };

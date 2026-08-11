@@ -674,17 +674,25 @@
 
         return (
           <div class="action-cell">
-            <bk-button
-              text
-              theme="primary"
-              class="mr8"
-              disabled={isSmartPage}
-              onClick={() => {
-                // 用户画像类型禁用“编辑”，避免触发平台创建/编辑流程
-                if (!isSmartPage) emit('edit', row);
+            <span
+              v-bk-tooltips={{
+                content: t('此工具暂不支持编辑，如需调整可见范围，请直接在“可见范围”列进行操作'),
+                disabled: !isSmartPage,
+                placement: 'top',
+                extCls: 'smart-page-edit-disabled-tips',
               }}>
-              {t('编辑')}
-            </bk-button>
+              <bk-button
+                text
+                theme="primary"
+                class="mr8"
+                disabled={isSmartPage}
+                onClick={() => {
+                  // 用户画像类型禁用“编辑”，避免触发平台创建/编辑流程
+                  if (!isSmartPage) emit('edit', row);
+                }}>
+                {t('编辑')}
+              </bk-button>
+            </span>
             <bk-button
               text
               theme="primary"
@@ -898,6 +906,12 @@
 </style>
 
 <style lang="postcss">
+  .smart-page-edit-disabled-tips {
+    max-width: 280px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
   .tool-jump-scope-popover.bk-popover.bk-pop2-content {
     width: 240px !important;
     max-width: 240px !important;
