@@ -1535,7 +1535,7 @@ class ListEventFieldsByStrategy(RiskMeta):
                 "field_name": field_name,
                 "display_name": display_name,
                 "id": f"{display_name}:{field_name}",
-                "type": "event_field",
+                "type": "basic_event_field",
             }
             for field_name, display_name in basic
         ]
