@@ -499,8 +499,10 @@ class ListRisk(RiskMeta):
         strategy_queryset = Strategy.objects.filter(strategy_id__in=strategy_ids)
 
         for item in data_filter_items:
-            field = item.get("field")
+            field = item.get("field") or ""
             display_name = item.get("display_name")
+            if field.startswith(BkBaseFieldResolver.EVENT_DATA_PREFIX):
+                field = field[len(BkBaseFieldResolver.EVENT_DATA_PREFIX) :].strip()
             strategy_queryset = strategy_queryset.filter(
                 event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
             )

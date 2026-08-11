@@ -79,6 +79,14 @@ class TestListEventFieldsByStrategy(TestCase):
         self.assertEqual(len(result), 7)
         self._basic_results(result)
 
+    def test_strategy_ids_empty_list_same_as_not_passing(self):
+        """strategy_ids=[] 与不传等价：空列表视为"无筛选"，返回所有策略扩展字段（跨策略 set 去重）"""
+        result = resource.risk.list_event_fields_by_strategy(strategy_ids=[])
+
+        self._basic_results(result)
+        extended_names = {item["field_name"] for item in result[7:]}
+        self.assertEqual(extended_names, {"ip", "操作人用户名", "domain"})
+
     def test_basic_field_id_format(self):
         """基本信息字段 id 为 {display_name}:{field_name}"""
         result = resource.risk.list_event_fields_by_strategy(strategy_ids=[self.strategy_1.strategy_id])
