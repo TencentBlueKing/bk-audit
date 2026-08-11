@@ -51,12 +51,13 @@ class TagBaseProvider(BaseResourceProvider):
 
         if not with_path:
             results = [
-                {"id": item.tag_id, "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+                {"id": str(item.tag_id), "display_name": item.tag_name}
+                for item in queryset[page.slice_from : page.slice_to]
             ]
         else:
             results = [
                 {
-                    "id": item.tag_id,
+                    "id": str(item.tag_id),
                     "display_name": item.tag_name,
                     "_bk_iam_path_": [],
                 }
@@ -72,7 +73,7 @@ class TagBaseProvider(BaseResourceProvider):
 
         queryset = Tag.objects.filter(tag_id__in=ids)
 
-        results = [{"id": item.tag_id, "display_name": item.tag_name} for item in queryset]
+        results = [{"id": str(item.tag_id), "display_name": item.tag_name} for item in queryset]
         return ListResult(results=results, count=queryset.count())
 
     def list_instance_by_policy(self, filters, page, **options):
@@ -87,7 +88,8 @@ class TagBaseProvider(BaseResourceProvider):
         filters = converter.convert(expression)
         queryset = Tag.objects.filter(filters)
         results = [
-            {"id": item.tag_id, "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+            {"id": str(item.tag_id), "display_name": item.tag_name}
+            for item in queryset[page.slice_from : page.slice_to]
         ]
 
         return ListResult(results=results, count=queryset.count())
@@ -95,7 +97,8 @@ class TagBaseProvider(BaseResourceProvider):
     def search_instance(self, filters, page, **options):
         queryset = Tag.objects.filter(tag_name__icontains=filters.keyword)
         results = [
-            {"id": item.tag_id, "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+            {"id": str(item.tag_id), "display_name": item.tag_name}
+            for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 
@@ -105,7 +108,7 @@ class TagBaseProvider(BaseResourceProvider):
         queryset = Tag.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
         results = [
             {
-                "id": item.tag_id,
+                "id": str(item.tag_id),
                 "display_name": item.tag_name,
                 "creator": item.created_by,
                 "created_at": int(item.created_at.timestamp() * 1000) if item.created_at else None,
