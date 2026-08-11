@@ -234,6 +234,12 @@
         || item.field_name.toLowerCase().includes(keyword));
     }
     return list.sort((first, second) => {
+      const firstIsBasic = first.type === 'basic_event_field';
+      const secondIsBasic = second.type === 'basic_event_field';
+      if (firstIsBasic !== secondIsBasic) {
+        return firstIsBasic ? -1 : 1;
+      }
+
       const displayNameCompare = compareFieldName(first.display_name, second.display_name);
 
       if (displayNameCompare !== 0) return displayNameCompare;
