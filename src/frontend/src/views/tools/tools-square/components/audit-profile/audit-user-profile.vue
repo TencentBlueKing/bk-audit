@@ -84,7 +84,7 @@
                   :condition="[]"
                   :data="gameSearchSelectData"
                   :defaut-using-item="{ inputHtml: t('请选择') }"
-                  :placeholder="t('搜索 游戏名称、账号、openid')"
+                  :placeholder="t('搜索 游戏名称、账号、openid、是否测试号')"
                   unique-select
                   @update:model-value="handleGameSearch" />
                 <bk-popover
@@ -146,17 +146,20 @@
               class="game-list-table"
               :columns="gameColumns"
               :data="paginatedGameList"
+              :filter-row="null"
+              :filter-value="gameColumnFilter"
               hover
               :row-key="getGameRowKey as any"
               :sort="tableSort"
+              @filter-change="handleGameFilterChange"
               @sort-change="handleSortChange" />
             <div
-              v-if="filteredGameList.length > 0"
+              v-if="displayGameList.length > 0"
               class="game-list-pagination">
               <bk-pagination
                 v-model="pagination.current"
                 align="left"
-                :count="filteredGameList.length"
+                :count="displayGameList.length"
                 :layout="['total', 'limit', 'list']"
                 :limit="pagination.limit"
                 :limit-list="paginationLimitList"
@@ -183,8 +186,14 @@
 
   import { execCopy } from '@utils/assist';
 
-  import { PROFILE_FIELDS } from '../game/game-field-keys';
+  import {
+    getAccountNatureValue,
+    getExchangeRateValue,
+    getIsTestAccountText,
+    PROFILE_FIELDS,
+  } from '../game/game-field-keys';
 
+  import ColumnEnumFilter from './column-enum-filter.vue';
   import ProfileQueryInput from './profile-query-input.vue';
   import ProfileUserInfo from './profile-user-info.vue';
 
@@ -274,7 +283,8 @@
     values?: Array<{ id: string; name: string }>;
   }
 
-  const GAME_SEARCH_FIELD_IDS = ['gameName', 'platformAccount', 'openid'] as const;
+  const GAME_TEXT_SEARCH_FIELD_IDS = ['gameName', 'platformAccount', 'openid'] as const;
+  const GAME_SEARCH_FIELD_IDS = [...GAME_TEXT_SEARCH_FIELD_IDS, 'isTestAccount'] as const;
 
   const gameSearchSelectData = [
     {
@@ -291,6 +301,16 @@
       name: 'openid',
       id: 'openid',
       placeholder: t('请输入'),
+    },
+    {
+      name: t('是否测试号'),
+      id: 'isTestAccount',
+      placeholder: t('请选择'),
+      children: [
+        { name: t('是'), id: '是' },
+        { name: t('否'), id: '否' },
+      ],
+      onlyRecommendChildren: true,
     },
   ];
 
@@ -407,6 +427,9 @@
       const value = String(row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '').toLowerCase();
       return value.includes(kw);
     }
+    if (fieldId === 'isTestAccount') {
+      return getIsTestAccountText(getAccountNatureValue(row), t('是'), t('否')) === keyword;
+    }
     const value = String(row.openid || '').toLowerCase();
     return value.includes(kw);
   };
@@ -437,8 +460,37 @@
       }
 
       // 未选择列时的自由输入：匹配游戏名称、账号、openid 任意一列
-      return GAME_SEARCH_FIELD_IDS.some(fieldId => matchGameRowByField(row, fieldId, kw));
+      return GAME_TEXT_SEARCH_FIELD_IDS.some(fieldId => matchGameRowByField(row, fieldId, kw));
     }));
+  });
+
+  // 表头筛选（是否测试号）与搜索叠加，作用于全量列表后再分页
+  const gameColumnFilter = ref<Record<string, any>>({});
+
+  const handleGameFilterChange = (filters: Record<string, any>) => {
+    gameColumnFilter.value = filters || {};
+    pagination.value.current = 1;
+  };
+
+  const getTestAccountFilterValues = () => {
+    const value = gameColumnFilter.value.isTestAccount;
+    if (Array.isArray(value)) {
+      return value.filter(item => item === t('是') || item === t('否'));
+    }
+    if (value === t('是') || value === t('否')) {
+      return [value];
+    }
+    return [];
+  };
+
+  const displayGameList = computed(() => {
+    const selected = getTestAccountFilterValues();
+    if (selected.length === 0) {
+      return filteredGameList.value;
+    }
+    return filteredGameList.value.filter(row => (
+      selected.includes(getIsTestAccountText(getAccountNatureValue(row), t('是'), t('否')))
+    ));
   });
 
   const handleGameSearch = (keyword: GameSearchKey[]) => {
@@ -457,7 +509,7 @@
 
   // 排序后的列表
   const sortedGameList = computed(() => {
-    const list = [...filteredGameList.value];
+    const list = [...displayGameList.value];
     const { column, type } = sortState.value;
     if (!column || !type || type === 'null') return list;
     list.sort((a, b) => {
@@ -699,7 +751,11 @@
     onSuccess: (data) => {
       const results = getResults(data);
       if (Array.isArray(results)) {
-        gameList.value = results;
+        gameList.value = results.map((row: Record<string, any>) => ({
+          ...row,
+          [PROFILE_FIELDS.EXCHANGE_RATE]: getExchangeRateValue(row),
+          [PROFILE_FIELDS.ACCOUNT_NATURE]: getAccountNatureValue(row),
+        }));
         pagination.value.count = data?.data?.result?.total
           || data?.result?.total || data?.data?.total || results.length;
 
@@ -772,11 +828,11 @@
     totalTopup: row[PROFILE_FIELDS.TOTAL_TOPUP] || row.totalTopup || 0,
     source: row.source || '',
     platformAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
-    exchangeRate: row[PROFILE_FIELDS.EXCHANGE_RATE] || row.exchangeRate || '',
+    exchangeRate: getExchangeRateValue(row),
     // 账号宽表新增字段
     platformAccountType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     totalRechargeYuan: row[PROFILE_FIELDS.TOTAL_RECHARGE_YUAN] || row.totalRechargeYuan || 0,
-    accountNature: row[PROFILE_FIELDS.ACCOUNT_NATURE] || row.accountNature || '',
+    accountNature: getAccountNatureValue(row),
     // 平台账号类型和平台账号（用于游戏详情顶栏动态展示微信/QQ）
     platType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     platAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
@@ -853,8 +909,8 @@
   //   window.open(routeData.href, '_blank');
   // };
 
-  // 表格列配置（按设计稿：游戏名称 | openid | 代币存量(元) | 累计充值(元)
-  // | 累计发放(¥) | 累计赠送次数(隐藏) | 累计交易次数(隐藏) | 登录次数/月(隐藏) | 责任单数(隐藏) | 操作）
+  // 表格列配置：游戏名称 | 账号 | openid | 代币存量(¥) | 代币兑换比 | 累计充值(¥)
+  // | 累计发放(¥) | 登录天数（31天） | 是否测试号 | 操作
   // 代币字段已替换为元，null时醒目提示"未设代币兑换比例"
   const isEmptyCoinUnitValue = (val: unknown) => val === null || val === undefined || val === '';
   const COIN_UNIT_EMPTY_TEXT = () => t('未设代币兑换比例');
@@ -903,7 +959,7 @@
         }),
       ]),
       colKey: 'platformAccount',
-      minWidth: 180,
+      width: 250,
       ellipsis: true,
       cell: (_h: any, { row }: { row: Record<string, any> }) => {
         const account = row.platformAccount || row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || '';
@@ -963,12 +1019,24 @@
       title: () => `${t('代币存量')} (¥)`,
       colKey: PROFILE_FIELDS.COIN_BALANCE_UNIT,
       sorter: true,
+      width: 250,
       cell: (_h: any, { row }: { row: Record<string, any> }) => renderCoinField(row, PROFILE_FIELDS.COIN_BALANCE_UNIT),
+    },
+    {
+      title: () => t('代币兑换比'),
+      colKey: PROFILE_FIELDS.EXCHANGE_RATE,
+      sorter: true,
+      width: 200,
+      cell: (_h: any, { row }: { row: Record<string, any> }) => renderCoinField(
+        { [PROFILE_FIELDS.EXCHANGE_RATE]: getExchangeRateValue(row) },
+        PROFILE_FIELDS.EXCHANGE_RATE,
+      ),
     },
     {
       title: () => `${t('累计充值')} (¥)`,
       colKey: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT,
       sorter: true,
+      width: 300,
       cell: (_h: any, { row }: { row: Record<string, any> }) => (
         renderCoinField(row, PROFILE_FIELDS.TOTAL_RECHARGE_UNIT)
       ),
@@ -977,13 +1045,46 @@
       title: () => `${t('累计发放')} (¥)`,
       colKey: PROFILE_FIELDS.TOTAL_ISSUE_YUAN,
       sorter: true,
+      width: 250,
       cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.TOTAL_ISSUE_YUAN] ?? '--'),
     },
     {
       title: () => t('登录天数（31天）'),
       colKey: PROFILE_FIELDS.LOGIN_DAYS_31,
       sorter: true,
+      width: 250,
       cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--'),
+    },
+    {
+      title: () => t('是否测试号'),
+      colKey: 'isTestAccount',
+      width: 160,
+      filter: {
+        component: ColumnEnumFilter,
+        resetValue: [],
+        confirmEvents: ['onConfirm'],
+        list: [
+          { label: t('是'), value: '是' },
+          { label: t('否'), value: '否' },
+        ],
+        props: {
+          options: [
+            { label: t('是'), value: '是' },
+            { label: t('否'), value: '否' },
+          ],
+        },
+        // 前端分页，筛选在全量列表上自行处理，避免只过滤当前页
+        filterMethod: () => true,
+        popupProps: {
+          attach: 'body',
+          overlayClassName: 'audit-profile-enum-filter-pop',
+        },
+      },
+      cell: (_h: any, { row }: { row: Record<string, any> }) => h(
+        'span',
+        {},
+        getIsTestAccountText(getAccountNatureValue(row), t('是'), t('否')),
+      ),
     },
     {
       title: () => t('操作'),
@@ -1048,6 +1149,7 @@
     // 重置中间变量
     openidListFirstCtx.value = '';
     gameList.value = [];
+    gameColumnFilter.value = {};
     // 重置排序状态为默认：按代币存量降序
     sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.current = 1;
@@ -1120,6 +1222,7 @@
     // 重置游戏列表
     gameList.value = [];
     gameSearchKey.value = [];
+    gameColumnFilter.value = {};
     sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.count = 0;
     pagination.value.current = 1;
@@ -1151,9 +1254,11 @@
     },
     { id: 'openid', name: 'openid', field: 'openid', fallbackField: '' },
     { id: 'coinBalance', name: `${t('代币存量')}(¥)`, field: PROFILE_FIELDS.COIN_BALANCE_UNIT, fallbackField: 'coinBalance' },
+    { id: 'exchangeRate', name: t('代币兑换比'), field: PROFILE_FIELDS.EXCHANGE_RATE, fallbackField: 'exchangeRate' },
     { id: 'totalRecharge', name: `${t('累计充值')}(¥)`, field: PROFILE_FIELDS.TOTAL_RECHARGE_UNIT, fallbackField: 'totalRecharge' },
     { id: 'totalIssue', name: `${t('累计发放')}(¥)`, field: PROFILE_FIELDS.TOTAL_ISSUE_YUAN, fallbackField: 'totalIssue' },
     { id: 'loginDays', name: t('登录天数（31天）'), field: PROFILE_FIELDS.LOGIN_DAYS_31, fallbackField: '' },
+    { id: 'isTestAccount', name: t('是否测试号'), field: PROFILE_FIELDS.ACCOUNT_NATURE, fallbackField: 'accountNature' },
     // TODO: 后端暂未返回以下字段，待接口支持后取消注释
     // { id: 'totalGiftCount', name: t('累计赠送次数'),
     //   field: PROFILE_FIELDS.TOTAL_GIFT_COUNT, fallbackField: '' },
@@ -1202,7 +1307,7 @@
   // 导出关联游戏列表（导出表格列数据）
   const handleExportGameList = () => {
     if (exportContentChecked.value.length === 0) return;
-    if (filteredGameList.value.length === 0) return;
+    if (displayGameList.value.length === 0) return;
 
     isExporting.value = true;
     try {
@@ -1210,11 +1315,19 @@
       const selectedColumns = exportContentOptions.filter(col => exportContentChecked.value.includes(col.id));
 
       // 构建导出数据
-      const exportData = filteredGameList.value.map((game) => {
+      const exportData = displayGameList.value.map((game) => {
         const row: Record<string, any> = {};
         selectedColumns.forEach((col) => {
           if (col.id === 'coinBalance' || col.id === 'totalRecharge') {
             row[col.name] = formatCoinUnitExportValue(game[col.field]);
+            return;
+          }
+          if (col.id === 'exchangeRate') {
+            row[col.name] = formatCoinUnitExportValue(getExchangeRateValue(game));
+            return;
+          }
+          if (col.id === 'isTestAccount') {
+            row[col.name] = getIsTestAccountText(getAccountNatureValue(game), t('是'), t('否'));
             return;
           }
           row[col.name] = game[col.field] ?? (col.fallbackField ? game[col.fallbackField] : '') ?? '';
@@ -1526,5 +1639,22 @@
   /* 导出弹窗：消除 bk-popover 默认的 12px padding（仅作用于当前导出弹窗，不影响其他 popover） */
   .bk-popover.bk-pop2-content.export-popover-wrapper {
     padding: 0 !important;
+  }
+
+  /* 是否测试号筛选弹窗：去掉 TDesign 默认内边距，与画像页其它是否类筛选项一致 */
+  .t-table__filter-pop.audit-profile-enum-filter-pop {
+    padding: 5px 0 0;
+    overflow: hidden;
+    background: #fff;
+
+    .t-table__filter-pop-content,
+    .t-table__filter-pop-content-inner {
+      padding: 0;
+    }
+
+    .t-table__sort-icon,
+    .t-fake-arrow {
+      display: none;
+    }
   }
 </style>
