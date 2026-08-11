@@ -44,6 +44,7 @@ class ActionEnum:
         related_resource_types=[ResourceEnum.SENSITIVE_OBJECT],
         related_actions=[],
         version=1,
+        iam_v4_no_resource=True,
     )
 
     # 系统接入

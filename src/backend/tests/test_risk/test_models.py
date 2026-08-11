@@ -19,13 +19,9 @@ def test_authed_risk_filter_enabled(settings):
         mock.patch(
             "services.web.risk.models.TicketPermission.objects.filter", return_value=ticket_queryset
         ) as ticket_filter,
-        mock.patch("services.web.risk.models.Permission") as permission_cls,
+        mock.patch("services.web.risk.models.PermissionService") as permission_service_cls,
     ):
-        permission_instance = mock.Mock()
-        permission_instance.make_request.return_value = mock.sentinel.request
-        permission_instance.iam_client = mock.Mock()
-        permission_instance.iam_client._do_policy_query.return_value = []
-        permission_cls.return_value = permission_instance
+        permission_service_cls.return_value.get_risk_filter.return_value = Q(pk__in=[])
 
         result = Risk.authed_risk_filter(ActionEnum.LIST_RISK)
 
