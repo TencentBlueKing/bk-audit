@@ -151,9 +151,11 @@ export const EXPORT_USER_FIELDS = {
   WECHAT: '微信',
   QQ: 'QQ',
   COIN_BALANCE: '代币存量',
+  CURRENCY_EXCHANGE_RATIO: '代币兑换比',
   TOTAL_RECHARGE: '累计充值',
   TOTAL_GIFT: '累计赠送',
   TOTAL_ISSUE: '累计发放',
+  IS_TEST_ACCOUNT: '是否测试号',
 } as const;
 
 // ========== 用户画像相关字段 ==========
@@ -181,6 +183,9 @@ export const PROFILE_FIELDS = {
   TOTAL_TOPUP: '总充值',
   PLATFORM_ACCOUNT: '平台账号',
   EXCHANGE_RATE: '人民币代币兑换比',
+  TOKEN_EXCHANGE_RATE: '代币汇率',
+  CURRENCY_EXCHANGE_RATIO: '代币兑换比',
+  IS_TEST_ACCOUNT: '是否测试号',
   // 账号宽表新增字段（main_openid_list 调整后返回）
   PLATFORM_ACCOUNT_TYPE: '平台账号类型',
   TOTAL_RECHARGE_YUAN: '总充值（元）',
@@ -192,3 +197,27 @@ export const PROFILE_FIELDS = {
   TOTAL_TRADE_COUNT: '累计交易次数',
   ACCOUNT_HISTORY_LIST: '历史账号列表',
 } as const;
+
+/** 账号性质：测试号 */
+export const ACCOUNT_NATURE_TEST = 'test_account';
+
+/** 读取后端返回的代币汇率（优先人民币代币兑换比，兼容代币汇率） */
+export const getExchangeRateValue = (row: Record<string, any> = {}) => (
+  row[PROFILE_FIELDS.EXCHANGE_RATE]
+    ?? row[PROFILE_FIELDS.TOKEN_EXCHANGE_RATE]
+    ?? row.exchangeRate
+    ?? ''
+);
+
+/** 读取后端返回的账号性质 */
+export const getAccountNatureValue = (row: Record<string, any> = {}) => (
+  row[PROFILE_FIELDS.ACCOUNT_NATURE] || row.accountNature || row.accountability || ''
+);
+
+/** 账号性质为 test_account 时视为测试号 */
+export const isTestAccountNature = (nature: unknown) => nature === ACCOUNT_NATURE_TEST;
+
+/** 是否测试号展示文案 */
+export const getIsTestAccountText = (nature: unknown, yes = '是', no = '否') => (
+  isTestAccountNature(nature) ? yes : no
+);
