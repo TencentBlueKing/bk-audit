@@ -335,7 +335,7 @@
     gameData?: GameData;
     initialTab?: string;
     toolUid?: string;
-    /** 智能用户画像工具配置，用于透传数据范围参数（如 cc_ids） */
+    /** 智能用户画像工具配置，用于透传数据范围参数（如 cc_ids / game_ids） */
     toolConfig?: {
       input_variable?: Array<{ raw_name: string; default_value?: unknown }>;
       [key: string]: any;
