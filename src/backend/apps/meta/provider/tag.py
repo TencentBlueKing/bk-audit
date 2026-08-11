@@ -51,7 +51,8 @@ class TagBaseProvider(BaseResourceProvider):
 
         if not with_path:
             results = [
-                {"id": str(item.tag_id), "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+                {"id": str(item.tag_id), "display_name": item.tag_name}
+                for item in queryset[page.slice_from : page.slice_to]
             ]
         else:
             results = [
@@ -87,7 +88,8 @@ class TagBaseProvider(BaseResourceProvider):
         filters = converter.convert(expression)
         queryset = Tag.objects.filter(filters)
         results = [
-            {"id": str(item.tag_id), "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+            {"id": str(item.tag_id), "display_name": item.tag_name}
+            for item in queryset[page.slice_from : page.slice_to]
         ]
 
         return ListResult(results=results, count=queryset.count())
@@ -95,7 +97,8 @@ class TagBaseProvider(BaseResourceProvider):
     def search_instance(self, filters, page, **options):
         queryset = Tag.objects.filter(tag_name__icontains=filters.keyword)
         results = [
-            {"id": str(item.tag_id), "display_name": item.tag_name} for item in queryset[page.slice_from : page.slice_to]
+            {"id": str(item.tag_id), "display_name": item.tag_name}
+            for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 

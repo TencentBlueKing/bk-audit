@@ -164,7 +164,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.13")
+        self.assertEqual(definition["release"]["version"], "0.0.14")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
 
     def _get_operations(self):

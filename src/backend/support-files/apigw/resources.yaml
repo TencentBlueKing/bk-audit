@@ -1483,6 +1483,59 @@ paths:
         disabledStages: []
         descriptionEn:
 
+  /scene_permission_callback/callback/:
+    post:
+      operationId: scene_permission_callback_callback
+      description: ITSM工单状态回调接口。ITSM审批完成后主动回调此接口，更新场景权限申请单状态并触发授权。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - callback_token
+              - ticket
+            properties:
+              callback_token:
+                type: string
+                description: 回调鉴权Token，用于验证回调来源合法性
+              ticket:
+                type: object
+                description: 工单详情，包含工单ID、状态、审批结果等信息
+      responses:
+        "200":
+          description: 成功
+          schema:
+            type: object
+            properties:
+              result:
+                type: boolean
+                description: 处理结果
+              message:
+                type: string
+                description: 结果消息
+        default:
+          description: ""
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/scene_permission_callback/callback/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: false
+        disabledStages: []
+        descriptionEn: ITSM ticket status callback API. ITSM actively calls this API after approval is completed to update the scene permission application ticket status and trigger authorization.
+
   /{namespace}/tools/{uid}/execute/:
     post:
       operationId: execute_tool

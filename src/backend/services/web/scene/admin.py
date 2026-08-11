@@ -8,6 +8,7 @@ from services.web.scene.models import (
     ResourceBindingSystem,
     Scene,
     SceneDataTable,
+    ScenePermissionApplication,
     SceneSystem,
 )
 
@@ -79,3 +80,33 @@ class ResourceBindingSystemAdmin(admin.ModelAdmin):
     list_filter = ["binding__resource_type", "binding__binding_type"]
     search_fields = ["system_id", "binding__resource_id"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+
+
+@admin.register(ScenePermissionApplication)
+class ScenePermissionApplicationAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "scene",
+        "applicant",
+        "role",
+        "status",
+        "grant_status",
+        "itsm_sn",
+        "grant_method",
+        "retry_count",
+        "reject_reason",
+        "created_at",
+    ]
+    list_filter = ["status", "grant_status", "role"]
+    search_fields = ["applicant", "itsm_sn", "scene__name"]
+    readonly_fields = [
+        "created_at",
+        "created_by",
+        "updated_at",
+        "updated_by",
+        "finished_at",
+        "grant_error",
+        "grant_method",
+        "retry_count",
+        "itsm_ticket_id",
+    ]
