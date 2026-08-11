@@ -24,7 +24,7 @@
           ref="sceneSystemSelectorRef"
           v-model="selectedScene"
           dark
-          :list-scope="['scene']"
+          :list-scope="['scene', 'system']"
           :popover-width="250"
           scene-permission="view_scene"
           system-permission="view_system"
@@ -621,10 +621,70 @@
     }
   };
 
+  /** 当前选中是否为系统空间（单系统 / 我的所有系统） */
+  const isSystemScopeSelection = (item: SceneItem | null | undefined) => {
+    if (!item) return false;
+    return item.type === 'system' || (item.type === 'aggregate' && item.id === 'allSystem');
+  };
+
+  /**
+   * 系统视角下分组接口固定返回空；用菜单数据组装默认分组，保证侧栏可展示报表
+   */
+  const buildSystemScopeSideRoutes = () => {
+    if (!sceneChangeItem.value) {
+      sideRoutes.value = [];
+      allSideRoutes.value = [];
+      return;
+    }
+    const children = [...props.menuData]
+      .map(menuItem => ({
+        ...menuItem,
+        priorityIndexForSort: menuItem.priority_index ?? 0,
+      }))
+      .sort((a, b) => (b.priorityIndexForSort ?? 0) - (a.priorityIndexForSort ?? 0));
+
+    if (children.length === 0) {
+      sideRoutes.value = [];
+      allSideRoutes.value = [];
+      return;
+    }
+
+    const defaultGroup: SideRouteItem = {
+      id: -1,
+      name: t('全部'),
+      priority_index: 0,
+      children,
+    };
+    sideRoutes.value = [defaultGroup];
+    allSideRoutes.value = [{
+      scene_id: sceneChangeItem.value.id,
+      id: sceneChangeItem.value.id,
+      name: sceneChangeItem.value.name,
+      type: sceneChangeItem.value.type,
+      children: [defaultGroup],
+    }];
+  };
+
   /** 用当前 groups + menuData 组装目录树（菜单异步到达后可再次调用） */
   const rebuildSideRoutes = (options?: { navigateToFirst?: boolean }) => {
     if (!sceneChangeItem.value) {
       allSideRoutes.value = [];
+      return;
+    }
+
+    // 系统空间无场景分组，直接按菜单扁平展示
+    if (isSystemScopeSelection(sceneChangeItem.value)) {
+      buildSystemScopeSideRoutes();
+      applyExpandedPreference();
+      // 系统默认分组不在历史偏好中时，默认展开
+      sideRoutes.value.forEach((group) => {
+        if (!expandedGroups.value.includes(group.id)) {
+          expandedGroups.value.push(group.id);
+        }
+      });
+      if (options?.navigateToFirst && navigateToFirstChild()) {
+        pendingSceneChangeNavigate = false;
+      }
       return;
     }
 
@@ -648,9 +708,7 @@
       .filter(group => group.children.length > 0);
 
     if (sceneChangeItem.value.type === 'aggregate') {
-      const selectType = sceneChangeItem.value.id === 'allSecen'
-        ? sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen')
-        : sceneSystemSelectorList.value.systemList.filter(i => i.id !== 'allSystem');
+      const selectType = sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen');
       allSideRoutes.value = selectType.map((scene: SceneItem) => {
         const children = sideRoutes.value.filter(side => side.scene_id === Number(scene.id));
         return {
@@ -690,8 +748,10 @@
   });
 
   // 菜单异步晚于分组到达时，用已有 groups 重建目录树
+  // 系统空间分组恒为空，仍需在菜单到达后重建
   watch(() => props.menuData, () => {
-    if (groups.value.length > 0 && sceneChangeItem.value) {
+    if (!sceneChangeItem.value) return;
+    if (groups.value.length > 0 || isSystemScopeSelection(sceneChangeItem.value)) {
       rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     }
   }, { deep: true });
