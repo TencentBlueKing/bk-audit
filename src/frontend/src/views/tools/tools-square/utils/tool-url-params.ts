@@ -385,6 +385,8 @@ export interface GameDetailRouteData {
   totalRecharge: number;
   totalGift: number;
   totalIssue: number;
+  exchangeRate?: string | number;
+  accountNature?: string;
 }
 
 type ParsedGameDetailRoute = {
@@ -421,6 +423,12 @@ export const buildGameDetailRouteQuery = (
   if (gameData.totalIssue !== undefined && gameData.totalIssue !== null) {
     query.total_issue = String(gameData.totalIssue);
   }
+  if (gameData.exchangeRate !== undefined && gameData.exchangeRate !== null && gameData.exchangeRate !== '') {
+    query.exchange_rate = String(gameData.exchangeRate);
+  }
+  if (gameData.accountNature) {
+    query.account_nature = String(gameData.accountNature);
+  }
   return query;
 };
 
@@ -449,6 +457,8 @@ export const parseGameDetailFromRoute = (
       totalRecharge: toRouteNumber(getRouteQueryValue(routeQuery.total_recharge)),
       totalGift: 0,
       totalIssue: toRouteNumber(getRouteQueryValue(routeQuery.total_issue)),
+      exchangeRate: getRouteQueryValue(routeQuery.exchange_rate),
+      accountNature: getRouteQueryValue(routeQuery.account_nature),
     },
     toolUid,
     initialTab: getRouteQueryValue(routeQuery.initial_tab) || 'overview',
