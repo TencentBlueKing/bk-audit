@@ -52,7 +52,12 @@ export interface FlatToolParamsOptions {
 
 export const getRouteQueryValue = (value: unknown): string => {
   if (Array.isArray(value)) {
-    return value[0] ? String(value[0]) : '';
+    // 对于时间范围/多值类参数，URL 可能以数组形式传入（如 filters[time_range]）。
+    // 之前只取第 0 项会丢失第二个值，导致刷新后与手动打开的数据结构不一致。
+    return value
+      .filter(v => v !== undefined && v !== null && v !== '')
+      .map(v => String(v))
+      .join(',');
   }
   if (value === undefined || value === null) {
     return '';
@@ -101,7 +106,8 @@ const parseUrlValueByFieldCategory = (
     return urlValue.split(',').map(item => item.trim())
       .filter(Boolean);
   }
-  if (fieldCategory === 'time_range_select') {
+  // time_range_select / time-ranger：URL 里通常是 `a,b` 两段表达式，需要解析成数组给日期选择器
+  if (fieldCategory === 'time_range_select' || fieldCategory === 'time-ranger') {
     const parts = urlValue.split(',').map(item => item.trim())
       .filter(Boolean);
     return parts.length >= 2 ? parts.slice(0, 2) : parts;
